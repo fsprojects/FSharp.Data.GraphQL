@@ -1,0 +1,6 @@
+source https://www.myget.org/F/akkadotnet/api/v2
+source https://www.nuget.org/api/v2/
+nuget FAKE
+nuget FParsec
+nuget FsCheck
+nuget xUnit
