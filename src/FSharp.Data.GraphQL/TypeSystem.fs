@@ -7,21 +7,23 @@ open System
 open FSharp.Data.GraphQL.Ast
 
 //NOTE: For references, see https://facebook.github.io/graphql/
-
+type GraphQLError = |GraphQLError of string
 type Resolver<'Value> = unit -> Async<'Value>
 
 /// 3.1.1.1 Build-in Scalars
-type [<CustomEquality;NoComparison>] Scalar = 
+type [<CustomEquality;NoComparison>] ScalarType = 
     {
         Name: string
         Description: string option
         CoerceInput: Value -> obj
+        CoerceOutput: obj -> Value option
+        CoerceValue: obj -> obj
     }
-    interface IEquatable<Scalar> with
+    interface IEquatable<ScalarType> with
       member x.Equals s = x.Name = s.Name
     override x.Equals y = 
         match y with
-        | :? Scalar as s -> (x :> IEquatable<Scalar>).Equals(s)
+        | :? ScalarType as s -> (x :> IEquatable<ScalarType>).Equals(s)
         | _ -> false
     override x.GetHashCode() = x.Name.GetHashCode()
     override x.ToString() = x.Name
@@ -49,13 +51,13 @@ and ObjectType =
         Name: string
         Description: string option
         Fields: Field list
-        Implements: Interface list
+        Implements: string list
     }
     override x.ToString() =
         let sb = System.Text.StringBuilder("type ")
         sb.Append(x.Name) |> ignore
         if not (List.isEmpty x.Implements) then 
-            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> List.map (fun x -> x.Name))) |> ignore
+            sb.Append(" implements ").Append(String.Join(", ", x.Implements)) |> ignore
         sb.Append("{") |> ignore
         x.Fields
         |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
@@ -92,7 +94,7 @@ and [<CustomEquality;NoComparison>] Field =
         s
 
 /// 3.1.3 Interfaces
-and Interface =
+and InterfaceType =
     {
         Name: string
         Description: string option
@@ -105,22 +107,22 @@ and Interface =
         sb.Append("\n}").ToString()        
 
 /// 3.1.4 Unions
-and Union = 
+and UnionType = 
     {
         Name: string
         Description: string option
-        Options: GraphQLType list
+        Options: string list
     }
     override x.ToString() =
         "union " + x.Name + " = " + String.Join(" | ", x.Options)
 
 /// 3.1 Types
 and GraphQLType =
-    | Scalar of Scalar
+    | Scalar of ScalarType
     | Enum of EnumType
     | Object of ObjectType
-    | Interface of Interface
-    | Union of Union
+    | Interface of InterfaceType
+    | Union of UnionType
     | ListOf of GraphQLType
     | NonNull of GraphQLType
     | InputObject of ObjectType
@@ -134,6 +136,16 @@ and GraphQLType =
         | ListOf y      -> "[" + y.ToString() + "]"
         | NonNull y     -> y.ToString() + "!"
         | InputObject y -> y.ToString()
+    member x.Name with get() =
+        match x with
+        | Scalar s      -> s.Name
+        | Enum e        -> e.Name
+        | Object o      -> o.Name
+        | Interface i   -> i.Name
+        | Union u       -> u.Name
+        | ListOf i      -> i.Name
+        | NonNull i     -> i.Name
+        | InputObject o -> o.Name
 
 /// 3.1.6 Input Objects
 and InputObject = 
@@ -159,61 +171,8 @@ and Variable =
     }
     override x.ToString() =
         "$" + x.Name + ": " + x.Schema.ToString() + (if x.DefaultValue <> null then " = " + x.DefaultValue.ToString() else "")
-
-/// 3.2 Directives
-and Directive =
-    /// 3.2.1 @skip
-    | Skip of Argument list
-    /// 3.2.2 @include
-    | Include of Argument list
-    override x.ToString() =
-        match x with
-        | Skip args -> "@skip(" + String.Join(", ", args) + ")"
-        | Include args -> "@include(" + String.Join(", ", args) + ")"
-
-and QueryField = 
-    {
-        Name: string
-        Directive: Directive option
-    }
-
-and Query = 
-    {
-        Name: Variable list
-        Fields: QueryField list
-    }
-
-and Mutation = 
-    {
-        Name: string
-    }
-
-/// 3.3 Starting types
-and OperationType =
-    | Query of Query
-    | Mutation of Mutation
-
-and Selection =
-    | Field of string
-    | Alias of string * string
-
-/// 5.4 Fragments
-and FragmentDefinition = 
-    {
-        Name: string option
-        TypeCondition: string
-        Directives: Directive list option
-        Selections: Selection list
-    }
-
-/// 5.4.2 Fragment Spreads
-and FragmentSpread = 
-    {
-        Name: string
-        Directives: Directive list option
-    }
-
-type TypeViolationException(msg) = 
+                    
+type GraphQLException(msg) = 
     inherit Exception(msg)
     
 [<AutoOpen>]
@@ -221,8 +180,9 @@ module SchemaDefinitions =
 
     open System.Globalization
 
-    let private coerceIntResult (x: obj) : int option = 
+    let internal coerceIntValue (x: obj) : int option = 
         match x with
+        | null -> None
         | :? int as i -> Some i
         | :? int64 as l -> Some (int l)
         | :? double as d -> Some (int d)
@@ -236,6 +196,66 @@ module SchemaDefinitions =
                 Some (System.Convert.ToInt32 other)
             with
             | _ -> None
+            
+    let internal coerceFloatValue (x: obj) : float option = 
+        match x with
+        | null -> None
+        | :? int as i -> Some (double i)
+        | :? int64 as l -> Some (double l)
+        | :? double as d -> Some d
+        | :? string as s -> 
+            match Double.TryParse(s) with
+            | true, i -> Some i
+            | false, _ -> None
+        | :? bool as b -> Some (if b then 1. else 0.)
+        | other ->
+            try
+                Some (System.Convert.ToDouble other)
+            with
+            | _ -> None
+            
+    let internal coerceBoolValue (x: obj) : bool option = 
+        match x with
+        | null -> None
+        | :? int as i -> Some (i <> 0)
+        | :? int64 as l -> Some (l <> 0L)
+        | :? double as d -> Some (d <> 0.)
+        | :? string as s -> 
+            match Boolean.TryParse(s) with
+            | true, i -> Some i
+            | false, _ -> None
+        | :? bool as b -> Some b
+        | other ->
+            try
+                Some (System.Convert.ToBoolean other)
+            with
+            | _ -> None
+
+    let private coerceIntOuput (x: obj) =
+        match x with
+        | :? int as y -> Some (IntValue y)
+        | _ -> None
+        
+    let private coerceFloatOuput (x: obj) =
+        match x with
+        | :? float as y -> Some (FloatValue y)
+        | _ -> None
+        
+    let private coerceBoolOuput (x: obj) =
+        match x with
+        | :? bool as y -> Some (BooleanValue y)
+        | _ -> None
+        
+    let private coerceStringOuput (x: obj) =
+        match x with
+        | :? string as y -> Some (StringValue y)
+        | _ -> None
+
+    let private coerceStringValue (x: obj) : obj = 
+        match x with
+        | null -> null
+        | :? bool as b -> upcast (if b then "true" else "false")
+        | other -> upcast other.ToString()
 
     let private coerceIntInput = function
         | IntValue i -> Some i
@@ -285,6 +305,8 @@ module SchemaDefinitions =
             Name = "Int"
             Description = Some "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
             CoerceInput = coerceIntInput >> box
+            CoerceValue = coerceIntValue >> box
+            CoerceOutput = coerceIntOuput
         }
 
     /// GraphQL type of boolean
@@ -293,6 +315,8 @@ module SchemaDefinitions =
             Name = "Boolean"
             Description = Some "The `Boolean` scalar type represents `true` or `false`."
             CoerceInput = coerceBoolInput >> box
+            CoerceValue = coerceBoolValue >> box
+            CoerceOutput = coerceBoolOuput
         }
 
     /// GraphQL type of float
@@ -301,6 +325,8 @@ module SchemaDefinitions =
             Name = "Float"
             Description = Some "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point)."
             CoerceInput = coerceFloatInput >> box
+            CoerceValue = coerceFloatValue >> box
+            CoerceOutput = coerceFloatOuput
         }
     
     /// GraphQL type of string
@@ -309,6 +335,8 @@ module SchemaDefinitions =
             Name = "String"
             Description = Some "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
             CoerceInput = coerceStringInput >> box
+            CoerceValue = coerceStringValue >> box
+            CoerceOutput = coerceStringOuput
         }
     
     /// GraphQL type for custom identifier
@@ -317,16 +345,37 @@ module SchemaDefinitions =
             Name = "ID"
             Description = Some "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
             CoerceInput = coerceIdInput >> box
+            CoerceValue = coerceStringValue >> box
+            CoerceOutput = coerceStringOuput
         }
 
+    let rec internal coerceAstValue (variables: Map<string, obj>) (value: Value) : obj =
+        match value with
+        | IntValue i -> upcast i
+        | StringValue s -> upcast s
+        | FloatValue f -> upcast f
+        | BooleanValue b -> upcast b
+        | EnumValue e -> upcast e
+        | ListValue values ->
+            let mapped =
+                values
+                |> List.map (coerceAstValue variables)
+            upcast mapped
+        | ObjectValue fields ->
+            let mapped =
+                fields
+                |> Map.map (fun k v -> coerceAstValue variables v)
+            upcast mapped
+        | Variable variable -> variables.[variable]
+
     /// Adds a single field to existing object type, returning new object type in result.
-    let inline mergeField (objectType: ObjectType) (field: Field) : ObjectType = 
+    let mergeField (objectType: ObjectType) (field: Field) : ObjectType = 
         match objectType.Fields |> Seq.tryFind (fun x -> x.Name = field.Name) with
         | None ->  { objectType with Fields = objectType.Fields @ [ field ] }     // we must append to the end
         | Some x when x = field -> objectType
         | Some x -> 
             let msg = sprintf "Cannot merge field %A into object type %s, because it already has field %A sharing the same name, but having a different signature." field objectType.Name x
-            raise (TypeViolationException msg)
+            raise (GraphQLException msg)
 
     /// Adds list of fields to existing object type, returning new object type in result.
     let mergeFields (objectType: ObjectType) (fields: Field list) : ObjectType = 
@@ -335,10 +384,10 @@ module SchemaDefinitions =
 
     /// Orders object type to implement collection of interfaces, applying all of their field to it.
     /// Returns new object type implementing all of the fields in result.
-    let implements (objectType: GraphQLType) (interfaces: Interface list) : GraphQLType =
+    let implements (objectType: GraphQLType) (interfaces: InterfaceType list) : GraphQLType =
         let o = 
             match objectType with
-            | Object x -> { x with Implements = x.Implements @ interfaces }
+            | Object x -> { x with Implements = x.Implements @ (interfaces |> List.map (fun x -> x.Name)) }
             | other -> failwith ("Expected GrapQL type to be an object but got " + other.ToString())
         let modified = 
             interfaces

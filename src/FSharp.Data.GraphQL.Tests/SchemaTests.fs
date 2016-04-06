@@ -44,4 +44,4 @@ let ``Object type should not be able to merge fields with matching names but dif
     ])
 
     (fun () -> implements person [ movable; movable2 ] |> ignore)
-    |> throws<TypeViolationException>
+    |> throws<GraphQLException>

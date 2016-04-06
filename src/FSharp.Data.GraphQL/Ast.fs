@@ -96,10 +96,12 @@ and InputType =
     | NonNullType of InputType
 
 /// 2.2.10 Directives
-and Directive = {
-    Name: string
-    Arguments: Argument list
-}
+and Directive = 
+    {
+        Name: string
+        Arguments: Argument list
+    }
+    member x.If with get () = x.Arguments |> List.find (fun arg -> arg.Name = "if")
 
 // Type System Definition
 
