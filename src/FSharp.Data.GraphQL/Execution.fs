@@ -77,8 +77,22 @@ let private getVariableValues schema variableDefs inputs =
         (variable.VariableName, value))
     |> Map.ofList
    
-let private getArgumentValue schema argument =
-    ()
+let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
+    let argMap =
+        args
+        |> List.map (fun arg -> (arg.Name, arg))
+        |> Map.ofList
+    argDefs
+    |> List.fold (fun acc argdef -> 
+        match Map.tryFind argdef.Name argMap with
+        | Some argument ->
+            let value = coerceAstValue variables argument.Value
+            Map.add argdef.Name value acc
+        | None -> 
+            match argdef.DefaultValue with
+            | Some defVal -> Map.add argdef.Name defVal acc
+            | None -> acc
+    ) Map.empty
 
 /// Data that must be available at all points during query execution. 
 /// Namely, schema of the type system that is currently executing,
@@ -91,7 +105,7 @@ type ExecutionContext =
         ContextValue: obj
         Operation: OperationDefinition
         Variables: Map<string, obj>
-        Errors: GraphQLError list
+        mutable Errors: GraphQLError list
     }
     static member Create(schema: Schema, document: Document, rootValue: obj, contextValue: obj, rawVariables: Map<string, obj>, operationName: string option) =
         let (o, f) = 
@@ -127,7 +141,7 @@ type ExecutionContext =
 /// non-empty array if an error occurred.
 type ExecutionResult =
     {
-        Data: obj option
+        Data: Map<string, obj> option
         Errors: GraphQLError list option
     }
 
@@ -142,8 +156,8 @@ let private getOperationRootType (schema: Schema) operation =
 let private shouldIncludeNode ctx (directives: Directive list) =
     let shouldInclude (directive: Directive) = 
         match directive.Name with
-        | "skip" -> not (coerceBoolValue(getArgumentValue ctx directive.If).Value)
-        | "include" -> coerceBoolValue(getArgumentValue ctx directive.If).Value
+        | "skip" -> not (coerceBoolValue(coerceAstValue ctx.Variables directive.If.Value)).Value
+        | "include" -> coerceBoolValue(coerceAstValue ctx.Variables directive.If.Value).Value
 
     directives
     |> List.forall shouldInclude
@@ -165,19 +179,114 @@ and collectField ctx fields = function
         else fields
     | FragmentSpread spread -> fields
     | InlineFragment fragdef -> fields
+    
+let getFieldDefinition (schema: Schema) typedef fieldName =
+    match typedef with
+    | Object objdef -> 
+        objdef.Fields
+        |> List.tryFind (fun f -> f.Name = fieldName)
+    | _ -> None
 
-let private executeFields ctx typedef sourceVal fields = obj()
+let private resolveOrError resolve source args ctxValue info =
+    try
+        Choice1Of2 (resolve source args info)
+    with
+    | ex -> Choice2Of2 (GraphQLError ex.Message)
+  
+/// Implements the instructions for completeValue as defined in the
+/// "Field entries" section of the spec.
+/// 
+/// If the field type is Non-Null, then this recursively completes the value
+/// for the inner type. It throws a field error if that completion returns null,
+/// as per the "Nullability" section of the spec.
+/// 
+/// If the field type is a List, then this recursively completes the value
+/// for the inner type on each item in the list.
+/// 
+/// If the field type is a Scalar or Enum, ensures the completed value is a legal
+/// value of the type by calling the `serialize` method of GraphQL type
+/// definition.
+/// 
+/// If the field is an abstract type, determine the runtime type of the value
+/// and then complete based on that type
+/// 
+/// Otherwise, the field type expects a sub-selection set, and will complete the
+/// value by evaluating all sub-selections.
+let private completeValue ctx returnType filedAsts info result =
+    match result with
+    | Choice1Of2 resolved ->  resolved
+    | Choice2Of2 (GraphQLError error) -> failwith error //FIXME: no need to throw error from returned value
 
-let executeOperation context (operation: OperationDefinition) rootValue = async {
+/// This is a small wrapper around completeValue which detects and logs errors
+/// in the execution context.
+let private completeValueCatchingError (ctx: ExecutionContext) returnType fieldAsts info (result: Choice<obj, GraphQLError>): obj option =
+    // If the field type is non-nullable, then it is resolved without any
+    // protection from errors. Otherwise, error protection is applied, 
+    // logging the error and resolving a null value for this field if one is encountered.
+    match returnType with
+    | NonNull _ -> 
+        let completed = completeValue ctx returnType fieldAsts info result
+        Some completed
+    | _ ->
+        try 
+            let completed = completeValue ctx returnType fieldAsts info result
+            Some completed
+        with
+        | ex -> 
+            ctx.Errors <- (GraphQLError ex.Message) :: ctx.Errors
+            None
+    
+/// Resolves the field on the given source object. In particular, this
+/// figures out the value that the field returns by calling its resolve function,
+/// then calls completeValue to complete promises, serialize scalars, or execute
+/// the sub-selection-set for objects.
+let private resolveField (ctx: ExecutionContext) typedef sourceVal (fieldAsts: Field list): obj option = 
+    let field = fieldAsts.Head
+    match getFieldDefinition ctx.Schema typedef field.Name with
+    | Some fdef -> 
+        // TODO: find a way to memoize, in case this field is within a List type.
+        let args = getArgumentValues fdef.Arguments field.Arguments ctx.Variables
+        
+        // The resolve function's optional third argument is a context value that
+        // is provided to every resolve function within an execution. It is commonly
+        // used to represent an authenticated user, or request-specific caches.
+        let ctxval = ctx.ContextValue
+        let info = {
+            FieldName = field.Name
+            Fields = fieldAsts
+            ReturnType = fdef.Schema
+            ParentType = typedef
+            Fragments = ctx.Fragments
+            RootValue = ctx.RootValue
+            Operation = ctx.Operation
+            Variables = ctx.Variables
+        }
+        
+        // Get the resolve function, regardless of if its result is normal
+        // or abrupt (error).
+        let result = resolveOrError fdef.Resolve.Value sourceVal args ctxval info
+        completeValueCatchingError ctx fdef.Schema fieldAsts info result
+    | None -> None
+
+
+let private resolveFields (ctx: ExecutionContext) typedef sourceVal (fields: Map<string, Field list>) = 
+    fields
+    |> Map.fold (fun acc fname fieldAsts -> 
+        match resolveField ctx typedef sourceVal fieldAsts with
+        | None -> acc
+        | Some result -> Map.add fname result acc
+    ) Map.empty
+
+let executeOperation (context: ExecutionContext) (operation: OperationDefinition) rootValue = async {
     let rootType = getOperationRootType context.Schema operation
     let fields = collectFields context rootType operation.SelectionSet Map.empty Map.empty
     match operation.OperationType with
-    | Query -> return executeFields context rootType rootValue fields
+    | Query -> return resolveFields context rootType rootValue fields
     | Mutation -> return raise (NotSupportedException "Mutations are not supported yet")
 }
 
 type FSharp.Data.GraphQL.Schema with
-    member x.Execute(document: Document, ?rootValue: obj, ?contextValue: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
+    member x.Execute(document: Document, rootValue: obj, ?contextValue: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
         let v =
             match variables with
             | Some vars -> vars

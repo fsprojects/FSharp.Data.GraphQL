@@ -23,6 +23,16 @@ type DirectiveLocation =
     | FRAGMENT_SPREAD = 6
     | INLINE_FRAGMENT = 7
 
+let graphQLKind = function
+    | Scalar _ -> TypeKind.SCALAR
+    | Enum _ -> TypeKind.ENUM
+    | Object _ -> TypeKind.OBJECT
+    | Interface _ -> TypeKind.INTERFACE
+    | Union _ -> TypeKind.UNION
+    | ListOf _ -> TypeKind.LIST
+    | NonNull _ -> TypeKind.NON_NULL
+    | InputObject _ -> TypeKind.INPUT_OBJECT
+
 let __TypeKind = Schema.Enum(
     name = "__TypeKind", 
     description = "An enum describing what kind of type a given __Type is.",
@@ -58,8 +68,8 @@ let mutable __Type = Schema.ObjectType(
     Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.
     """,
     fields = [
-        Schema.Field("kind", NonNull __TypeKind)
-        Schema.Field("name", NonNull String)
+        Schema.Field("kind", NonNull __TypeKind, graphQLKind)
+        Schema.Field("name", NonNull String, fun (typedef: GraphQLType) -> typedef.Name)
         Schema.Field("description", String)
     ])
     
@@ -144,7 +154,7 @@ let TypeMetaFieldDef = Schema.Field(
     description = "Request the type information of a single type.",
     schema = __Type,
     arguments = [
-        { Name = "Name"; Value = (NonNull String) }
+        { Name = "Name"; Type = (NonNull String); Description = None; DefaultValue = None }
     ])
     
 let TypeNameMetaFieldDef = Schema.Field(

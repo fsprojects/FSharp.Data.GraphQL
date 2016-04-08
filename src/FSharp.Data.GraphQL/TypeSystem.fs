@@ -6,12 +6,24 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open FSharp.Data.GraphQL.Ast
 
+type ResolveInfo = 
+    {
+        FieldName: string
+        Fields: Field list
+        ReturnType: GraphQLType
+        ParentType: GraphQLType
+        Fragments: Map<string, FragmentDefinition>
+        RootValue: obj
+        Operation: OperationDefinition
+        Variables: Map<string, obj>
+    }
+
 //NOTE: For references, see https://facebook.github.io/graphql/
-type GraphQLError = |GraphQLError of string
-type Resolver<'Value> = unit -> Async<'Value>
+and GraphQLError = |GraphQLError of string
+and Args = Map<string, obj>
 
 /// 3.1.1.1 Build-in Scalars
-type [<CustomEquality;NoComparison>] ScalarType = 
+and [<CustomEquality;NoComparison>] ScalarType = 
     {
         Name: string
         Description: string option
@@ -50,8 +62,8 @@ and ObjectType =
     {
         Name: string
         Description: string option
-        Fields: Field list
-        Implements: string list
+        Fields: FieldDefinition list
+        Implements: GraphQLType list
     }
     override x.ToString() =
         let sb = System.Text.StringBuilder("type ")
@@ -63,15 +75,15 @@ and ObjectType =
         |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
 
-and [<CustomEquality;NoComparison>] Field = 
+and [<CustomEquality;NoComparison>] FieldDefinition = 
     {
         Name: string
         Description: string option
         Schema: GraphQLType
-        Resolver: Resolver<obj> option
-        Arguments: Argument list
+        Resolve: (obj -> Args -> ResolveInfo -> obj) option
+        Arguments: ArgumentDefinition list
     }
-    interface IEquatable<Field> with
+    interface IEquatable<FieldDefinition> with
       member x.Equals f = 
             x.Name = f.Name && 
             x.Description = f.Description &&
@@ -79,7 +91,7 @@ and [<CustomEquality;NoComparison>] Field =
             x.Arguments = f.Arguments
     override x.Equals y = 
         match y with
-        | :? Field as f -> (x :> IEquatable<Field>).Equals(f)
+        | :? FieldDefinition as f -> (x :> IEquatable<FieldDefinition>).Equals(f)
         | _ -> false
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
@@ -98,7 +110,7 @@ and InterfaceType =
     {
         Name: string
         Description: string option
-        Fields: Field list
+        Fields: FieldDefinition list
     }
     override x.ToString() = 
         let sb = System.Text.StringBuilder("interface ").Append(x.Name).Append(" {")
@@ -111,10 +123,12 @@ and UnionType =
     {
         Name: string
         Description: string option
-        Options: string list
+        Options: GraphQLType list
     }
     override x.ToString() =
         "union " + x.Name + " = " + String.Join(" | ", x.Options)
+
+
 
 /// 3.1 Types
 and GraphQLType =
@@ -151,16 +165,18 @@ and GraphQLType =
 and InputObject = 
     {
         Name: string
-        Fields: Field list
+        Fields: FieldDefinition list
     }
 
 /// 3.1.2.1 Object Field Arguments
-and Argument = 
+and ArgumentDefinition = 
     {
         Name: string
-        Value: obj
+        Description: string option
+        Type: GraphQLType
+        DefaultValue: obj option
     }
-    override x.ToString() = x.Name + ": " + x.Value.ToString()
+    override x.ToString() = x.Name + ": " + x.Type.ToString() + (if x.DefaultValue.IsSome then " = " + x.DefaultValue.Value.ToString() else "")
 
 /// 5.7 Variables
 and Variable = 
@@ -369,7 +385,7 @@ module SchemaDefinitions =
         | Variable variable -> variables.[variable]
 
     /// Adds a single field to existing object type, returning new object type in result.
-    let mergeField (objectType: ObjectType) (field: Field) : ObjectType = 
+    let mergeField (objectType: ObjectType) (field: FieldDefinition) : ObjectType = 
         match objectType.Fields |> Seq.tryFind (fun x -> x.Name = field.Name) with
         | None ->  { objectType with Fields = objectType.Fields @ [ field ] }     // we must append to the end
         | Some x when x = field -> objectType
@@ -378,7 +394,7 @@ module SchemaDefinitions =
             raise (GraphQLException msg)
 
     /// Adds list of fields to existing object type, returning new object type in result.
-    let mergeFields (objectType: ObjectType) (fields: Field list) : ObjectType = 
+    let mergeFields (objectType: ObjectType) (fields: FieldDefinition list) : ObjectType = 
         fields
         |> List.fold mergeField objectType      //TODO: optimize
 
@@ -387,7 +403,7 @@ module SchemaDefinitions =
     let implements (objectType: GraphQLType) (interfaces: InterfaceType list) : GraphQLType =
         let o = 
             match objectType with
-            | Object x -> { x with Implements = x.Implements @ (interfaces |> List.map (fun x -> x.Name)) }
+            | Object x -> { x with Implements = x.Implements @ (interfaces |> List.map (fun x -> Interface x)) }
             | other -> failwith ("Expected GrapQL type to be an object but got " + other.ToString())
         let modified = 
             interfaces
