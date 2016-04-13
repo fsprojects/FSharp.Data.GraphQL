@@ -21,17 +21,23 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         | Object objdef -> 
             let ns' =
                 objdef.Fields
-                |> List.map (fun x -> x.Schema)
+                |> List.map (fun x -> x.Type)
                 |> List.fold (fun n t -> insert n t) ns
-            objdef.Implements
-            |> List.fold (fun n t -> insert n t) ns'
+            let interfaces' = 
+                objdef.Implements
+                |> List.fold (fun n t -> insert n t) ns'
+            addOrReturn typedef.Name typedef interfaces'
         | Interface interfacedef ->
-            interfacedef.Fields
-            |> List.map (fun x -> x.Schema)
-            |> List.fold (fun n t -> insert n t) ns
+            let ns' = 
+                interfacedef.Fields
+                |> List.map (fun x -> x.Type)
+                |> List.fold (fun n t -> insert n t) ns
+            addOrReturn typedef.Name typedef ns' 
         | Union uniondef ->
-            uniondef.Options
-            |> List.fold (fun n t -> insert n t) ns
+            let ns' =
+                uniondef.Options
+                |> List.fold (fun n t -> insert n t) ns
+            addOrReturn typedef.Name typedef ns' 
         | ListOf innerdef -> insert ns innerdef 
         | NonNull innerdef -> insert ns innerdef
         | InputObject innerdef -> insert ns (Object innerdef)
@@ -53,7 +59,7 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = (types |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
 
-    static member Scalar (name: string, coerceInput: Value -> 'T option, coerceOutput: 'T -> Value option, coerceValue: obj -> 'T, ?description: string) = 
+    static member Scalar (name: string, coerceInput: Value -> 'T option, coerceOutput: 'T -> Value option, coerceValue: obj -> 'T option, ?description: string) = 
         {
             Name = name
             Description = description
@@ -84,27 +90,27 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         | Some i -> implements o i
 
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object -> Args -> ResolveInfo -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition = {
+    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Map<string, obj> * ResolveInfo -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition = {
         Name = name
         Description = description
-        Schema = schema
+        Type = schema
         Resolve = 
             let modified (x: obj) (args: Args) (info:ResolveInfo) : obj = 
-                upcast (resolve (x :?> 'Object) args info)
-            Some modified
+                upcast resolve (x :?> 'Object, args, info)
+            modified
         Arguments = if arguments.IsNone then [] else arguments.Value
     }
     
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object -> Args -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
+    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Map<string, obj> -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
         {
             Name = name
             Description = description
-            Schema = schema
+            Type = schema
             Resolve = 
                 let modified (x: obj) (args: Args) (_:ResolveInfo) : obj = 
-                    upcast (resolve (x :?> 'Object) args)
-                Some modified
+                    upcast resolve (x :?> 'Object, args)
+                modified
             Arguments = if arguments.IsNone then [] else arguments.Value
         }
         
@@ -113,21 +119,21 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         {
             Name = name
             Description = description
-            Schema = schema
+            Type = schema
             Resolve = 
                 let modified (x: obj) _ (_:ResolveInfo) : obj = 
                     upcast (resolve (x :?> 'Object))
-                Some modified
+                modified
             Arguments = if arguments.IsNone then [] else arguments.Value
         }
         
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
+    static member Field<'Object> (name: string, schema: GraphQLType, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
         {
             Name = name
             Description = description
-            Schema = schema
-            Resolve = None
+            Type = schema
+            Resolve = defaultResolve<'Object> name
             Arguments = if arguments.IsNone then [] else arguments.Value
         }
 

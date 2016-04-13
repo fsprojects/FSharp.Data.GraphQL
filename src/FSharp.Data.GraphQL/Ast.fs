@@ -12,6 +12,10 @@ type Document = {
 and Definition =
     | OperationDefinition of OperationDefinition
     | FragmentDefinition of FragmentDefinition
+    member x.Name with get () =
+        match x with 
+        | OperationDefinition op -> op.Name
+        | FragmentDefinition frag -> frag.Name
 
 /// 2.2.1 Operations
 and OperationDefinition = {
@@ -32,16 +36,26 @@ and Selection =
     | FragmentSpread of FragmentSpread
     /// 2.2.6.2 Inline Fragments
     | InlineFragment of FragmentDefinition
+    member x.Directives with get() =
+        match x with
+        | Field f -> f.Directives
+        | FragmentSpread s -> s.Directives
+        | InlineFragment f -> f.Directives
 
 /// 2.2.3 Fields
-and Field = {
-    /// 2.2.5 Field Alias
-    Alias: string option
-    Name: string
-    Arguments: Argument list
-    Directives: Directive list
-    SelectionSet: Selection list
-}
+and Field = 
+    {
+        /// 2.2.5 Field Alias
+        Alias: string option
+        Name: string
+        Arguments: Argument list
+        Directives: Directive list
+        SelectionSet: Selection list
+    }
+    member x.AliasOrName with get() = 
+        match x.Alias with
+        | Some alias -> alias
+        | None -> x.Name
 
 /// 2.2.4 Arguments
 and Argument = {

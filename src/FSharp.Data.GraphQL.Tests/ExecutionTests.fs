@@ -11,10 +11,15 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
-let sync = Async.RunSynchronously
-let field name typedef (resolve: 'a -> 'b) = Schema.Field(name = name, schema = typedef, resolve = resolve)
-let arg name typedef = Schema.Argument(name, typedef)
-let objdef name fields = Schema.ObjectType(name, fields)
+let private sync = Async.RunSynchronously
+let private field name typedef (resolve: 'a -> 'b) = Schema.Field(name = name, schema = typedef, resolve = resolve)
+let private arg name typedef = Schema.Argument(name, typedef)
+let private objdef name fields = Schema.ObjectType(name, fields)
+let private (<??) opt other =
+    match opt with
+    | None -> Some other
+    | _ -> opt
+
 
 type TestSubject = {
     a: string
@@ -91,12 +96,12 @@ let ``Execution executes arbitrary code`` () =
           "e", upcast "Egg"
           "f", upcast "Fish"
           "pic", upcast "Pic of size: 100"
-          "promise", upcast Map.ofList [ "a", "Apple" ]
-          "deep", upcast Map.ofList [
+          //"promise", upcast (Map.ofList [ "a", "Apple" :> obj ])
+          "deep", upcast (Map.ofList [
             "a", "Already Been Done" :> obj
             "b", "Boring" :> obj
             "c", [ "Contrived"; null; "Confusing" ] :> obj
-          ]
+          ])
         ]
 
     let DeepDataType = objdef "DeepDataType" [
@@ -105,19 +110,18 @@ let ``Execution executes arbitrary code`` () =
         field "c" (ListOf String) (fun dt -> dt.c)
     ]
     let DataType = objdef "DataType" [
-        field "a" String (fun (dt: TestSubject) -> dt.a)
-        field "b" String (fun (dt: TestSubject) -> dt.b)
-        field "c" String (fun (dt: TestSubject) -> dt.c)
-        field "d" String (fun (dt: TestSubject) -> dt.d)
-        field "e" String (fun (dt: TestSubject) -> dt.e)
-        field "f" String (fun (dt: TestSubject) -> dt.f)
-        //Schema.Field("pic", String, (fun (dt: TestSubject) args -> dt.pic(args.["pic"] :?> int)), "", [arg "size" Int])
-        field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep)
+        field "a" String (fun (dt: TestSubject) -> dt.a);
+        field "b" String (fun (dt: TestSubject) -> dt.b);
+        field "c" String (fun (dt: TestSubject) -> dt.c);
+        field "d" String (fun (dt: TestSubject) -> dt.d);
+        field "e" String (fun (dt: TestSubject) -> dt.e);
+        field "f" String (fun (dt: TestSubject) -> dt.f);
+        Schema.Field<TestSubject, string>("pic", String, arguments = [arg "size" Int], resolve = (fun (dt, args) -> dt.pic(None)));
+        field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
-    let result = sync <| schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
+    let result = schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
     equals result.Data.Value (upcast expected)
-
 
 [<Fact>]
 let ``Execution merges parallel fragments`` () =

@@ -7,35 +7,39 @@ open System
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 
+let private option = function
+    | null -> None
+    | other -> Some other
+
 let rec private getTypeName = function
     | NamedType name -> name
     | ListType inner -> getTypeName inner
     | NonNullType inner -> getTypeName inner
-
-let rec private isValidValue (schema: Schema) typedef value =
-    match typedef with
-    | Scalar scalardef -> scalardef.CoerceValue(value) <> null
-    | NonNull innerdef -> if value = null then false else isValidValue schema innerdef value
-    | ListOf innerdef  -> 
-        match value with
-        | null -> true
-        | :? System.Collections.IEnumerable as iter -> 
-            iter
-            |> Seq.cast<obj>
-            |> Seq.forall (fun v -> isValidValue schema innerdef v)
-        | _ -> false
-    | Object objdef | InputObject objdef ->
-        let map = value :?> Map<string, obj>
-        objdef.Fields
-        |> List.forall (fun field -> isValidValue schema field.Schema map.[field.Name])
-    | _ -> false
-            
-
-let rec private coerceValue schema typedef (input: obj) variables = 
+//
+//let rec private isValidValue (schema: Schema) typedef value =
+//    match typedef with
+//    | Scalar scalardef -> scalardef.CoerceValue(value) <> null
+//    | NonNull innerdef -> if value = null then false else isValidValue schema innerdef value
+//    | ListOf innerdef  -> 
+//        match value with
+//        | null -> true
+//        | :? System.Collections.IEnumerable as iter -> 
+//            iter
+//            |> Seq.cast<obj>
+//            |> Seq.forall (fun v -> isValidValue schema innerdef v)
+//        | _ -> false
+//    | Object objdef | InputObject objdef ->
+//        let map = value :?> Map<string, obj>
+//        objdef.Fields
+//        |> List.forall (fun field -> isValidValue schema field.Type map.[field.Name])
+//    | _ -> false
+//            
+//
+let rec private coerceValue typedef (input: obj) = 
     match typedef with
     | Scalar scalardef -> scalardef.CoerceValue input
     | NonNull innerdef -> 
-        match coerceValue schema innerdef input variables with
+        match coerceValue innerdef input with
         | null -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
         | other -> other
     | ListOf innerdef ->
@@ -45,46 +49,22 @@ let rec private coerceValue schema typedef (input: obj) variables =
             let mapped =
                 iter
                 |> Seq.cast<obj>
-                |> Seq.map (fun elem -> coerceValue schema innerdef elem variables)
+                |> Seq.map (fun elem -> coerceValue innerdef elem)
             upcast mapped
         | other -> raise (GraphQLException (sprintf "Value '%A' was expected to be an enumberable collection" input))
     | Object objdef | InputObject objdef ->
         let map = input :?> Map<string, obj>
         let mapped = 
             objdef.Fields
-            |> List.map (fun field -> (field.Name, coerceValue schema field.Schema map.[field.Name] variables))
+            |> List.map (fun field -> (field.Name, coerceValue field.Type map.[field.Name]))
             |> Map.ofList
         upcast mapped
     | other -> raise (GraphQLException (sprintf "Cannot coerce defintion '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other))
 
-let private getVariableValue (schema: Schema) (variable: VariableDefinition) raw =
-    let typeName = getTypeName variable.Type
-    match schema.TryFindType typeName with
-    | Some typedef when isValidValue schema typedef raw -> coerceValue schema typedef raw Map.empty
-    | Some typedef -> raise (GraphQLException (sprintf "Value '%A' is not valid for variable of type '%s'" raw typedef.Name))
-    | None -> raise (GraphQLException (sprintf "Couldn't find definition of type '%s' in current schema" typeName))
-
-let private getVariableValues schema variableDefs inputs =
-    variableDefs
-    |> List.map (fun variable ->
-        let value = 
-            match Map.tryFind variable.VariableName inputs with
-            | Some v -> getVariableValue schema variable v
-            | None ->
-                match variable.DefaultValue with
-                | Some v -> getVariableValue schema variable v
-                | None -> raise (GraphQLException (sprintf "Variable '$%s' has no value specified in current context" variable.VariableName))
-        (variable.VariableName, value))
-    |> Map.ofList
-   
 let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
-    let argMap =
-        args
-        |> List.map (fun arg -> (arg.Name, arg))
-        |> Map.ofList
     argDefs
     |> List.fold (fun acc argdef -> 
-        match Map.tryFind argdef.Name argMap with
+        match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
             let value = coerceAstValue variables argument.Value
             Map.add argdef.Name value acc
@@ -94,211 +74,231 @@ let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument
             | None -> acc
     ) Map.empty
 
-/// Data that must be available at all points during query execution. 
-/// Namely, schema of the type system that is currently executing,
-/// and the fragments defined in the query document
-type ExecutionContext = 
-    {
-        Schema: Schema
-        Fragments: Map<string, FragmentDefinition>
-        RootValue: obj
-        ContextValue: obj
-        Operation: OperationDefinition
-        Variables: Map<string, obj>
-        mutable Errors: GraphQLError list
-    }
-    static member Create(schema: Schema, document: Document, rootValue: obj, contextValue: obj, rawVariables: Map<string, obj>, operationName: string option) =
-        let (o, f) = 
-            document.Definitions
-            |> List.partition (fun def -> 
-                match def with
-                | OperationDefinition _ -> true
-                | FragmentDefinition _ -> false)
-        let operations = o |> List.map (fun x -> match x with | OperationDefinition def -> def)
-        let fragments = 
-            f 
-            |> List.map (fun x -> match x with | FragmentDefinition def -> (def.Name.Value, def))
-            |> Map.ofList
-        if operations.Length > 1 && operationName.IsNone
-        then raise (GraphQLException "Must provide operation name if query contains multiple operations.")
-        let operation = 
-            match operationName with
-            | Some name -> operations |> List.find (fun o -> o.Name.IsSome && o.Name.Value = name)
-            | _ -> operations.Head
-        let variables = getVariableValues schema operation.VariableDefinitions rawVariables
-        {
-            Schema = schema
-            Fragments = fragments
-            RootValue = rootValue
-            ContextValue = contextValue   
-            Operation = operation
-            Variables = variables
-            Errors = []
-        }
-
 /// The result of execution. `Data` is the result of executing the
 /// query, `Errors` is null if no errors occurred, and is a
 /// non-empty array if an error occurred.
 type ExecutionResult =
     {
-        Data: Map<string, obj> option
+        Data: obj option
         Errors: GraphQLError list option
     }
 
-let private getOperationRootType (schema: Schema) operation = 
-    match operation.OperationType with
-    | Query -> schema.Query
-    | Mutation -> 
-        match schema.Mutation with
-        | Some mutationType -> mutationType
-        | None -> raise (NotSupportedException "This GraphQL schema has not root mutation type defined")
+type ExecutionContext = 
+    {
+        Schema: Schema
+        RootValue: obj
+        Document: Document
+        Variables: Map<string, obj>
+    }
 
-let private shouldIncludeNode ctx (directives: Directive list) =
-    let shouldInclude (directive: Directive) = 
-        match directive.Name with
-        | "skip" -> not (coerceBoolValue(coerceAstValue ctx.Variables directive.If.Value)).Value
-        | "include" -> coerceBoolValue(coerceAstValue ctx.Variables directive.If.Value).Value
-
-    directives
-    |> List.forall shouldInclude
-
-let rec private collectFields ctx typedef selectionSet fields visitedFragments = 
-    selectionSet
-    |> List.fold (fun acc field -> collectField ctx acc field) fields
-and collectField ctx fields = function
-    | Field field ->
-        if shouldIncludeNode ctx field.Directives
-        then 
-            let name = 
-                match field.Alias with
-                | Some alias -> alias
-                | None -> field.Name
-            match Map.tryFind name fields with
-            | Some list -> Map.add name (field::list) fields
-            | None -> Map.add name [field] fields
-        else fields
-    | FragmentSpread spread -> fields
-    | InlineFragment fragdef -> fields
-    
-let getFieldDefinition (schema: Schema) typedef fieldName =
-    match typedef with
-    | Object objdef -> 
-        objdef.Fields
-        |> List.tryFind (fun f -> f.Name = fieldName)
+let private findOperation (schema: Schema) doc opName =
+    match doc.Definitions, opName with
+    | [OperationDefinition def], _ -> Some def
+    | defs, name -> 
+        defs
+        |> List.choose (fun def -> 
+            match def with
+            | OperationDefinition o -> Some o
+            | _ -> None)
+        |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
-
-let private resolveOrError resolve source args ctxValue info =
-    try
-        Choice1Of2 (resolve source args info)
-    with
-    | ex -> Choice2Of2 (GraphQLError ex.Message)
-  
-/// Implements the instructions for completeValue as defined in the
-/// "Field entries" section of the spec.
-/// 
-/// If the field type is Non-Null, then this recursively completes the value
-/// for the inner type. It throws a field error if that completion returns null,
-/// as per the "Nullability" section of the spec.
-/// 
-/// If the field type is a List, then this recursively completes the value
-/// for the inner type on each item in the list.
-/// 
-/// If the field type is a Scalar or Enum, ensures the completed value is a legal
-/// value of the type by calling the `serialize` method of GraphQL type
-/// definition.
-/// 
-/// If the field is an abstract type, determine the runtime type of the value
-/// and then complete based on that type
-/// 
-/// Otherwise, the field type expects a sub-selection set, and will complete the
-/// value by evaluating all sub-selections.
-let private completeValue ctx returnType filedAsts info result =
-    match result with
-    | Choice1Of2 resolved ->  resolved
-    | Choice2Of2 (GraphQLError error) -> failwith error //FIXME: no need to throw error from returned value
-
-/// This is a small wrapper around completeValue which detects and logs errors
-/// in the execution context.
-let private completeValueCatchingError (ctx: ExecutionContext) returnType fieldAsts info (result: Choice<obj, GraphQLError>): obj option =
-    // If the field type is non-nullable, then it is resolved without any
-    // protection from errors. Otherwise, error protection is applied, 
-    // logging the error and resolving a null value for this field if one is encountered.
-    match returnType with
-    | NonNull _ -> 
-        let completed = completeValue ctx returnType fieldAsts info result
-        Some completed
-    | _ ->
-        try 
-            let completed = completeValue ctx returnType fieldAsts info result
-            Some completed
-        with
-        | ex -> 
-            ctx.Errors <- (GraphQLError ex.Message) :: ctx.Errors
-            None
-    
-/// Resolves the field on the given source object. In particular, this
-/// figures out the value that the field returns by calling its resolve function,
-/// then calls completeValue to complete promises, serialize scalars, or execute
-/// the sub-selection-set for objects.
-let private resolveField (ctx: ExecutionContext) typedef sourceVal (fieldAsts: Field list): obj option = 
-    let field = fieldAsts.Head
-    match getFieldDefinition ctx.Schema typedef field.Name with
-    | Some fdef -> 
-        // TODO: find a way to memoize, in case this field is within a List type.
-        let args = getArgumentValues fdef.Arguments field.Arguments ctx.Variables
+   
+let private coerceVariables (schema: Schema) variables inputs =
+    match inputs with
+    | None -> Map.empty
+    | Some vars -> 
+        variables
+        |> List.fold (fun acc (var: VariableDefinition) -> 
+            let typedef = 
+                match schema.TryFindType (getTypeName var.Type) with
+                | None -> raise (GraphQLException (sprintf "Variable '%s' is of type '%A', which is not defined in current schema" var.VariableName var.Type ))
+                | Some t -> t
+            let value = 
+                match Map.tryFind var.VariableName vars with
+                | None -> coerceValue typedef var.DefaultValue.Value // this may throw if variable has no input and no default value defined
+                | Some input -> coerceValue typedef input
+            Map.add var.VariableName value acc) Map.empty
         
-        // The resolve function's optional third argument is a context value that
-        // is provided to every resolve function within an execution. It is commonly
-        // used to represent an authenticated user, or request-specific caches.
-        let ctxval = ctx.ContextValue
-        let info = {
-            FieldName = field.Name
-            Fields = fieldAsts
-            ReturnType = fdef.Schema
-            ParentType = typedef
-            Fragments = ctx.Fragments
-            RootValue = ctx.RootValue
-            Operation = ctx.Operation
-            Variables = ctx.Variables
+let inline private coerceArgument ctx (arg: Argument) =
+    coerceBoolValue(coerceAstValue ctx.Variables arg.Value).Value
+
+let private shouldSkip ctx (directive: Directive) =
+    match directive.Name with
+    | "skip" when coerceArgument ctx directive.If -> false
+    | "include" when not <| coerceArgument ctx directive.If -> false
+    | _ -> true
+
+let private doesFragmentTypeApply ctx typedef = function
+    | Some typeName ->
+        match ctx.Schema.TryFindType typeName with
+        | Some fragmentType ->
+            match fragmentType, typedef with
+            | Object x, Object y -> x = y
+            | Interface _, Object o -> 
+                o.Implements
+                |> List.exists (fun i -> i = fragmentType)
+            | Union u, Object o ->
+                u.Options 
+                |> List.exists (fun o -> o = fragmentType)
+            | _, _ -> false
+        | None -> false
+    | None -> false
+
+// 6.5 Evaluating selection sets
+let rec private collectFields ctx typedef selectionSet visitedFragments =
+    selectionSet
+    |> List.fold (collectField ctx typedef visitedFragments) Map.empty 
+
+and collectField ctx typedef visitedFragments groupedFields (selection: Selection) =
+    if List.exists (shouldSkip ctx) selection.Directives
+    then groupedFields
+    else match selection with
+        | Field field ->
+            let name = field.AliasOrName
+            match Map.tryFind name groupedFields with
+            | Some groupForResponseKey -> Map.add name (field::groupForResponseKey) groupedFields
+            | None -> Map.add name [field] groupedFields
+        | FragmentSpread spread ->
+            let fragmentSpreadName = spread.Name
+            if List.exists (fun fragmentName -> fragmentName = fragmentSpreadName) !visitedFragments 
+            then groupedFields
+            else
+                visitedFragments := (fragmentSpreadName::!visitedFragments)
+                let found =
+                    ctx.Document.Definitions
+                    |> List.tryFind (fun def -> 
+                        match def with
+                        | FragmentDefinition f when f.Name.Value = fragmentSpreadName -> true
+                        | _ -> false)
+                match found with
+                | Some (FragmentDefinition fragment) -> 
+                    collectFragment ctx typedef visitedFragments groupedFields fragment
+                | _ -> groupedFields
+        | InlineFragment fragment -> 
+            collectFragment ctx typedef visitedFragments groupedFields fragment
+
+// this is a common part for inline framgent and fragents spread
+and collectFragment ctx typedef visitedFragments groupedFields fragment =
+    let fragmentType = fragment.TypeCondition
+    if not <| doesFragmentTypeApply ctx ctx.Schema.Query fragmentType
+    then groupedFields
+    else 
+        let fragmentSelectionSet = fragment.SelectionSet
+        let fragmentGroupedFieldSet = collectFields ctx typedef fragmentSelectionSet visitedFragments
+        fragmentGroupedFieldSet
+        |> Map.fold (fun acc responseKey fragmentGroup -> 
+            match Map.tryFind responseKey acc with
+            | Some groupForResponseKey -> Map.add responseKey (fragmentGroup @ groupForResponseKey) acc
+            | None -> Map.add responseKey (fragmentGroup) acc
+        ) groupedFields    
+                
+/// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
+let private resolveField ctx fieldDef value args resolveInfo =
+    let resolved = fieldDef.Resolve value args resolveInfo
+    match resolved with
+    | null -> None
+    | o -> Some o
+
+open FSharp.Data.GraphQL.Introspection
+/// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
+let private getFieldDefinition ctx typedef (field: Field) =
+    match field.Name with
+    | "__schema" when ctx.Schema.Query = typedef -> Some SchemaMetaFieldDef
+    | "__type" when ctx.Schema.Query = typedef -> Some TypeMetaFieldDef
+    | "__typename" -> Some TypeNameMetaFieldDef
+    | fieldName ->
+        match typedef with
+        | Object objectType -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
+        | _ -> raise (GraphQLException (sprintf "Tried to retrieve '%s' field from non-object type '%s'" fieldName typedef.Name))
+        
+let private resolveInterfaceType interfaceType objectValue = failwith "Not implemented"
+
+let private resolveUnionType unionType objectValue = failwith "Not implemented"
+
+/// Complete an ObjectType value by executing all sub-selections
+let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = 
+    let typedef = Object objectType
+    let groupedFieldSet = 
+        fields
+        |> List.fold (fun subFields field -> collectFields ctx typedef field.SelectionSet (ref [])) Map.empty
+    let res = executeFields ctx typedef result groupedFieldSet 
+    res
+
+and completeValue ctx fieldType fields (result: obj)  =
+    match fieldType with
+    | NonNull innerType ->
+        match completeValue ctx innerType fields result  with
+        | null -> raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" fieldType.Name))
+        | completedResult -> completedResult
+    | ListOf innerType ->
+        match result with
+        | :? System.Collections.IEnumerable as enumerable ->
+            enumerable
+            |> Seq.cast<obj>
+            |> Seq.map (completeValue ctx innerType fields)
+            |> List.ofSeq
+            |> box
+        | _ -> raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" fieldType.Name))
+    | Scalar scalarType -> 
+        scalarType.CoerceValue result
+    | Enum enumType -> 
+        coerceStringValue result
+    | InputObject objectType | Object objectType ->
+        completeObjectValue ctx objectType fields result
+    | Interface typedef ->
+        let objectType = resolveInterfaceType typedef result
+        completeObjectValue ctx objectType fields result
+    | Union typedef ->
+        let objectType = resolveUnionType typedef result
+        completeObjectValue ctx objectType fields result
+
+// 6.6.1 Field entries
+and getFieldEntry ctx typedef value (fields: Field list) = 
+    let firstField::_ = fields
+    match getFieldDefinition ctx typedef firstField with
+    | None -> null
+    | Some fieldDef -> 
+        let resolveInfo = {
+            FieldDefinition = fieldDef
+            Fields = fields
+            Fragments = Map.empty
+            RootValue = value
         }
-        
-        // Get the resolve function, regardless of if its result is normal
-        // or abrupt (error).
-        let result = resolveOrError fdef.Resolve.Value sourceVal args ctxval info
-        completeValueCatchingError ctx fdef.Schema fieldAsts info result
-    | None -> None
+        let args = getArgumentValues fieldDef.Arguments firstField.Arguments ctx.Variables
+        match resolveField ctx fieldDef value args resolveInfo with
+        | None -> null
+        | Some resolvedObject ->
+            completeValue ctx fieldDef.Type fields resolvedObject
 
+and executeFields ctx typedef value (groupedFieldSet): obj = 
+    let result = 
+        groupedFieldSet
+        |> Map.fold (fun acc responseKey fields -> Map.add responseKey (getFieldEntry ctx typedef value fields) acc) Map.empty
+    upcast result
 
-let private resolveFields (ctx: ExecutionContext) typedef sourceVal (fields: Map<string, Field list>) = 
-    fields
-    |> Map.fold (fun acc fname fieldAsts -> 
-        match resolveField ctx typedef sourceVal fieldAsts with
-        | None -> acc
-        | Some result -> Map.add fname result acc
-    ) Map.empty
-
-let executeOperation (context: ExecutionContext) (operation: OperationDefinition) rootValue = async {
-    let rootType = getOperationRootType context.Schema operation
-    let fields = collectFields context rootType operation.SelectionSet Map.empty Map.empty
+let private evaluate (schema: Schema) doc operation variables root = 
+    let variables = coerceVariables schema operation.VariableDefinitions variables
     match operation.OperationType with
-    | Query -> return resolveFields context rootType rootValue fields
-    | Mutation -> return raise (NotSupportedException "Mutations are not supported yet")
-}
+    | Mutation -> failwith "Not implemented"
+    | Query ->
+        let ctx = {
+            Schema = schema
+            RootValue = root
+            Document = doc
+            Variables = variables
+        }
+        let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
+        executeFields ctx schema.Query ctx.RootValue groupedFieldSet
+
+let execute (schema: Schema) doc operationName variables root = 
+    match findOperation schema doc operationName with
+    | Some operation -> evaluate schema doc operation variables root
+    | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
 
 type FSharp.Data.GraphQL.Schema with
-    member x.Execute(document: Document, rootValue: obj, ?contextValue: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
-        let v =
-            match variables with
-            | Some vars -> vars
-            | None -> Map.empty
-        let ctx = ExecutionContext.Create(x, document, rootValue, contextValue, v, operationName)
-        async {
-            try
-                let! result = executeOperation ctx ctx.Operation rootValue
-                match ctx.Errors with
-                | []    -> return { Data = Some result; Errors = None }
-                | other -> return { Data = None; Errors = Some other }
-            with
-            | :? GraphQLException as error -> 
-                return { Data = None; Errors = Some ((GraphQLError error.Message) :: ctx.Errors) }
-        }
+    member schema.Execute(ast: Document, data: obj, ?variables: Map<string, obj>, ?operationName: string): ExecutionResult =
+        try
+            let result = execute schema ast operationName variables data 
+            { Data = Some result; Errors = None }
+        with 
+        | ex -> { Data = None; Errors = Some [ GraphQLError ex.Message ]}
