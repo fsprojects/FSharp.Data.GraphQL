@@ -8,16 +8,12 @@ open FSharp.Data.GraphQL.Ast
 
 type ResolveInfo = 
     {
-        FieldName: string
+        FieldDefinition: FieldDefinition
         Fields: Field list
-        ReturnType: GraphQLType
-        ParentType: GraphQLType
         Fragments: Map<string, FragmentDefinition>
         RootValue: obj
-        Operation: OperationDefinition
-        Variables: Map<string, obj>
     }
-
+    
 //NOTE: For references, see https://facebook.github.io/graphql/
 and GraphQLError = |GraphQLError of string
 and Args = Map<string, obj>
@@ -79,15 +75,15 @@ and [<CustomEquality;NoComparison>] FieldDefinition =
     {
         Name: string
         Description: string option
-        Schema: GraphQLType
-        Resolve: (obj -> Args -> ResolveInfo -> obj) option
+        Type: GraphQLType
+        Resolve: obj -> Args -> ResolveInfo -> obj
         Arguments: ArgumentDefinition list
     }
     interface IEquatable<FieldDefinition> with
       member x.Equals f = 
             x.Name = f.Name && 
             x.Description = f.Description &&
-            x.Schema = f.Schema &&
+            x.Type = f.Type &&
             x.Arguments = f.Arguments
     override x.Equals y = 
         match y with
@@ -96,11 +92,11 @@ and [<CustomEquality;NoComparison>] FieldDefinition =
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
         hash <- (hash*397) ^^^ (match x.Description with | None -> 0 | Some d -> d.GetHashCode())
-        hash <- (hash*397) ^^^ (x.Schema.GetHashCode())
+        hash <- (hash*397) ^^^ (x.Type.GetHashCode())
         hash <- (hash*397) ^^^ (x.Arguments.GetHashCode())
         hash
     override x.ToString() = 
-        let mutable s = x.Name + ": " + x.Schema.ToString()
+        let mutable s = x.Name + ": " + x.Type.ToString()
         if not (List.isEmpty x.Arguments) then
             s <- "(" + String.Join(", ", x.Arguments) + ")"
         s
@@ -267,7 +263,7 @@ module SchemaDefinitions =
         | :? string as y -> Some (StringValue y)
         | _ -> None
 
-    let private coerceStringValue (x: obj) : obj = 
+    let internal coerceStringValue (x: obj) : obj = 
         match x with
         | null -> null
         | :? bool as b -> upcast (if b then "true" else "false")
@@ -410,3 +406,7 @@ module SchemaDefinitions =
             |> List.map (fun i -> i.Fields)
             |> List.fold mergeFields o
         Object modified
+
+    let internal defaultResolve<'t> (fieldName: string): (obj -> Args -> ResolveInfo -> obj) = 
+        let getter = typeof<'t>.GetProperty(fieldName).GetMethod
+        (fun v args info -> getter.Invoke(v, [||]))

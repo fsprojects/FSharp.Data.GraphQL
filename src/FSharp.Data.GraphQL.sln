@@ -5,7 +5,8 @@ VisualStudioVersion = 14.0.24720.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{4050F7DA-587A-48D6-A242-160366194F2C}"
 	ProjectSection(SolutionItems) = preProject
-		paket.dependencies = paket.dependencies
+		..\paket.dependencies = ..\paket.dependencies
+		..\paket.lock = ..\paket.lock
 	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL", "FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj", "{D69074A8-1A70-4263-A5C5-085A5A5FB362}"
