@@ -1,6 +1,19 @@
-source https://www.myget.org/F/akkadotnet/api/v2
-source https://www.nuget.org/api/v2/
-nuget FAKE
+source https://nuget.org/api/v2
 nuget FParsec
-nuget FsCheck
-nuget xUnit
+
+group Build
+  source https://nuget.org/api/v2
+  
+  nuget SourceLink.Fake
+  nuget FAKE
+  nuget FSharp.Formatting
+  nuget FParsec
+
+  github fsharp/FAKE modules/Octokit/Octokit.fsx
+
+group Test
+  source https://nuget.org/api/v2
+  
+nuget FSCheck
+nuget xunit 1.9.2
+  nuget xUnit.runners 1.9.2
