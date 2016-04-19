@@ -26,10 +26,9 @@ Example
 This example demonstrates using a function defined in this sample library.
 
 *)
-#r "FSharp.Data.GraphQL.dll"
+#r "FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll"
 open FSharp.Data.GraphQL
 
-printfn "hello = %i" <| Library.hello 0
 
 (**
 Some more info
@@ -59,9 +58,9 @@ The library is available under Public Domain license, which allows modification 
 redistribution for both commercial and non-commercial purposes. For more information see the 
 [License file][license] in the GitHub repository. 
 
-  [content]: https://github.com/fsprojects/FSharp.Data.GraphQL/tree/master/docs/content
-  [gh]: https://github.com/fsprojects/FSharp.Data.GraphQL
-  [issues]: https://github.com/fsprojects/FSharp.Data.GraphQL/issues
-  [readme]: https://github.com/fsprojects/FSharp.Data.GraphQL/blob/master/README.md
-  [license]: https://github.com/fsprojects/FSharp.Data.GraphQL/blob/master/LICENSE.txt
+  [content]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/docs/content
+  [gh]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL
+  [issues]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/issues
+  [readme]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/master/README.md
+  [license]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/master/LICENSE.txt
 *)
