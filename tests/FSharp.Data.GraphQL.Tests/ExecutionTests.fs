@@ -30,7 +30,7 @@ type TestSubject = {
     f: string
     deep: DeepTestSubject
     pic: int option -> string
-    promise: Async<TestSubject option>
+    promise: Async<TestSubject>
 }
 and DeepTestSubject = {
     a: string
@@ -50,13 +50,14 @@ let ``Execution executes arbitrary code`` () =
             e = "Egg"
             f = "Fish"
             pic = (fun size -> "Pic of size: " + (if size.IsSome then size.Value else 50).ToString())
-            promise = (async { return Some data })
-            deep = 
-                {
-                    a = "Already Been Done"
-                    b = "Boring"
-                    c = ["Contrived"; null; "Confusing"]
-                }
+            promise = async { return data }
+            deep = deep
+        }
+    and deep = 
+        {
+            a = "Already Been Done"
+            b = "Boring"
+            c = ["Contrived"; null; "Confusing"]
         }
 
     let ast = parse """query Example($size: Int) {
@@ -75,10 +76,6 @@ let ``Execution executes arbitrary code`` () =
             a
             b
             c
-            deeper {
-              a
-              b
-            }
           }
         }
 
@@ -89,19 +86,18 @@ let ``Execution executes arbitrary code`` () =
 
     let (expected: Map<string, obj>) = 
         Map.ofList [
-          "a", upcast "Apple"
-          "b", upcast "Banana"
-          "x", upcast "Cookie"
-          "d", upcast "Donut"
-          "e", upcast "Egg"
-          "f", upcast "Fish"
-          "pic", upcast "Pic of size: 100"
-          //"promise", upcast (Map.ofList [ "a", "Apple" :> obj ])
-          "deep", upcast (Map.ofList [
-            "a", "Already Been Done" :> obj
-            "b", "Boring" :> obj
-            "c", [ "Contrived"; null; "Confusing" ] :> obj
-          ])
+            ("a", upcast "Apple"); 
+            ("b", upcast "Banana"); 
+            ("d", upcast "Donut");
+            ("deep", upcast Map.ofList [
+                ("a", "Already Been Done" :> obj); 
+                ("b", upcast "Boring");
+                ("c", upcast ["Contrived" :> obj; null; upcast "Confusing"])]); 
+            ("e", upcast "Egg"); 
+            ("f", upcast "Fish");
+            ("pic", upcast "Pic of size: 100"); 
+            ("promise", null); 
+            ("x", upcast "Cookie")
         ]
 
     let DeepDataType = objdef "DeepDataType" [
@@ -116,46 +112,9 @@ let ``Execution executes arbitrary code`` () =
         field "d" String (fun (dt: TestSubject) -> dt.d);
         field "e" String (fun (dt: TestSubject) -> dt.e);
         field "f" String (fun (dt: TestSubject) -> dt.f);
-        Schema.Field<TestSubject, string>("pic", String, arguments = [arg "size" Int], resolve = (fun (dt, args) -> dt.pic(None)));
+        Schema.Field<TestSubject, string>("pic", String, arguments = [arg "size" Int], resolve = (fun (dt, args:Args) -> dt.pic(args.Arg("size"))));
         field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
     let result = schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
-    equals result.Data.Value (upcast expected)
-
-[<Fact>]
-let ``Execution merges parallel fragments`` () =
-    ()
-
-[<Fact>]
-let ``Execution uses root value context`` () =
-    ()
-
-[<Fact>]
-let ``Execution uses arguments`` () =
-    ()
-
-[<Fact>]
-let ``Execution uses inline operator if no operation name was provided`` () =
-    ()
-
-[<Fact>]
-let ``Execution uses operation defined by name if provided`` () =
-    ()
-
-[<Fact>]
-let ``Execution throws if no operation was provided`` () =
-    ()
-    
-[<Fact>]
-let ``Execution throws if no operation name was provided for document with multiple operations`` () =
-    ()
-    
-[<Fact>]
-let ``Execution throws if no operation with provided name was found`` () =
-    ()
-    
-[<Fact>]
-let ``Execution avoids recursion`` () =
-    ()
-    
+    equals result.Data.Value expected

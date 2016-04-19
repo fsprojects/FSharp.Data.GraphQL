@@ -40,17 +40,17 @@ let rec private coerceValue typedef (input: obj) =
     | Scalar scalardef -> scalardef.CoerceValue input
     | NonNull innerdef -> 
         match coerceValue innerdef input with
-        | null -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
+        | None -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
         | other -> other
     | ListOf innerdef ->
         match input with
-        | null -> null
+        | null -> None
         | :? System.Collections.IEnumerable as iter -> 
             let mapped =
                 iter
                 |> Seq.cast<obj>
                 |> Seq.map (fun elem -> coerceValue innerdef elem)
-            upcast mapped
+            Some(upcast mapped)
         | other -> raise (GraphQLException (sprintf "Value '%A' was expected to be an enumberable collection" input))
     | Object objdef | InputObject objdef ->
         let map = input :?> Map<string, obj>
@@ -58,16 +58,17 @@ let rec private coerceValue typedef (input: obj) =
             objdef.Fields
             |> List.map (fun field -> (field.Name, coerceValue field.Type map.[field.Name]))
             |> Map.ofList
-        upcast mapped
+        Some(upcast mapped)
     | other -> raise (GraphQLException (sprintf "Cannot coerce defintion '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other))
 
-let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
+let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument list) (variables: Map<string, obj option>) : Map<string, obj> = 
     argDefs
     |> List.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
-            let value = coerceAstValue variables argument.Value
-            Map.add argdef.Name value acc
+            match coerceAstValue variables argument.Value with
+            | null -> acc
+            | value -> Map.add argdef.Name value acc
         | None -> 
             match argdef.DefaultValue with
             | Some defVal -> Map.add argdef.Name defVal acc
@@ -79,7 +80,7 @@ let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument
 /// non-empty array if an error occurred.
 type ExecutionResult =
     {
-        Data: obj option
+        Data: Map<string,obj> option
         Errors: GraphQLError list option
     }
 
@@ -88,7 +89,7 @@ type ExecutionContext =
         Schema: Schema
         RootValue: obj
         Document: Document
-        Variables: Map<string, obj>
+        Variables: Map<string, obj option>
     }
 
 let private findOperation (schema: Schema) doc opName =
@@ -152,7 +153,8 @@ let rec private collectFields ctx typedef selectionSet visitedFragments =
 and collectField ctx typedef visitedFragments groupedFields (selection: Selection) =
     if List.exists (shouldSkip ctx) selection.Directives
     then groupedFields
-    else match selection with
+    else 
+        match selection with
         | Field field ->
             let name = field.AliasOrName
             match Map.tryFind name groupedFields with
@@ -193,7 +195,7 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
         ) groupedFields    
                 
 /// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
-let private resolveField ctx fieldDef value args resolveInfo =
+let private resolveField _ fieldDef value args resolveInfo =
     let resolved = fieldDef.Resolve value args resolveInfo
     match resolved with
     | null -> None
@@ -240,17 +242,19 @@ and completeValue ctx fieldType fields (result: obj)  =
             |> box
         | _ -> raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" fieldType.Name))
     | Scalar scalarType -> 
-        scalarType.CoerceValue result
+        scalarType.CoerceValue result |> Option.toObj
     | Enum enumType -> 
-        coerceStringValue result
+        match coerceStringValue result with
+        | Some s -> upcast s
+        | None -> null
     | InputObject objectType | Object objectType ->
-        completeObjectValue ctx objectType fields result
+        upcast completeObjectValue ctx objectType fields result
     | Interface typedef ->
         let objectType = resolveInterfaceType typedef result
-        completeObjectValue ctx objectType fields result
+        upcast completeObjectValue ctx objectType fields result
     | Union typedef ->
         let objectType = resolveUnionType typedef result
-        completeObjectValue ctx objectType fields result
+        upcast completeObjectValue ctx objectType fields result
 
 // 6.6.1 Field entries
 and getFieldEntry ctx typedef value (fields: Field list) = 
@@ -265,28 +269,33 @@ and getFieldEntry ctx typedef value (fields: Field list) =
             RootValue = value
         }
         let args = getArgumentValues fieldDef.Arguments firstField.Arguments ctx.Variables
-        match resolveField ctx fieldDef value args resolveInfo with
+        match resolveField ctx fieldDef value {Args = args} resolveInfo with
         | None -> null
         | Some resolvedObject ->
             completeValue ctx fieldDef.Type fields resolvedObject
 
-and executeFields ctx typedef value (groupedFieldSet): obj = 
+and executeFields ctx typedef value (groupedFieldSet): Map<string, obj> = 
     let result = 
         groupedFieldSet
         |> Map.fold (fun acc responseKey fields -> Map.add responseKey (getFieldEntry ctx typedef value fields) acc) Map.empty
-    upcast result
+    result
 
 let private evaluate (schema: Schema) doc operation variables root = 
     let variables = coerceVariables schema operation.VariableDefinitions variables
+    let ctx = {
+        Schema = schema
+        RootValue = root
+        Document = doc
+        Variables = variables
+    }
     match operation.OperationType with
-    | Mutation -> failwith "Not implemented"
+    | Mutation -> 
+        // at the moment both execution procedures works the same
+        // ultimately only difference is that mutation requires to 
+        // maintain order of executed resolve invocations, while query doesn't
+        let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
+        executeFields ctx schema.Query ctx.RootValue groupedFieldSet
     | Query ->
-        let ctx = {
-            Schema = schema
-            RootValue = root
-            Document = doc
-            Variables = variables
-        }
         let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
         executeFields ctx schema.Query ctx.RootValue groupedFieldSet
 
