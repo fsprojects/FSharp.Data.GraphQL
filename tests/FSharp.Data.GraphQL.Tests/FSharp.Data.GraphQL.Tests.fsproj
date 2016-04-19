@@ -112,7 +112,6 @@
     </When>
   </Choose>
   <ItemGroup>
-    <None Include="paket.references" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="ValidationTests.fs" />
@@ -122,6 +121,7 @@
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ExecutionTests.fs" />
+    <None Include="paket.references" />
     <Content Include="App.config" />
   </ItemGroup>
   <ItemGroup>
