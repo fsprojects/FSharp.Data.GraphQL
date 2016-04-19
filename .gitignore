@@ -173,6 +173,7 @@ docs/output/
 temp/
 
 # Test results produced by build
+*TestResults.html
 *TestResults.xml
 TestResults.xml
 
