@@ -15,8 +15,15 @@ type ResolveInfo =
     }
     
 //NOTE: For references, see https://facebook.github.io/graphql/
-and GraphQLError = |GraphQLError of string
-and Args = Map<string, obj>
+and GraphQLError = GraphQLError of string
+and Args = 
+    {
+        Args: Map<string, obj>
+    }
+    member x.Arg(name: string): 't option =
+        match Map.tryFind name x.Args with
+        | Some o -> Some (o :?> 't)
+        | None -> None
 
 /// 3.1.1.1 Build-in Scalars
 and [<CustomEquality;NoComparison>] ScalarType = 
@@ -25,7 +32,7 @@ and [<CustomEquality;NoComparison>] ScalarType =
         Description: string option
         CoerceInput: Value -> obj
         CoerceOutput: obj -> Value option
-        CoerceValue: obj -> obj
+        CoerceValue: obj -> obj option
     }
     interface IEquatable<ScalarType> with
       member x.Equals s = x.Name = s.Name
@@ -146,7 +153,7 @@ and GraphQLType =
         | ListOf y      -> "[" + y.ToString() + "]"
         | NonNull y     -> y.ToString() + "!"
         | InputObject y -> y.ToString()
-    member x.Name with get() =
+    member x.Name =
         match x with
         | Scalar s      -> s.Name
         | Enum e        -> e.Name
@@ -209,7 +216,7 @@ module SchemaDefinitions =
             with
             | _ -> None
             
-    let internal coerceFloatValue (x: obj) : float option = 
+    let internal coerceFloatValue (x: obj) : double option = 
         match x with
         | null -> None
         | :? int as i -> Some (double i)
@@ -263,11 +270,11 @@ module SchemaDefinitions =
         | :? string as y -> Some (StringValue y)
         | _ -> None
 
-    let internal coerceStringValue (x: obj) : obj = 
+    let internal coerceStringValue (x: obj) : string option = 
         match x with
-        | null -> null
-        | :? bool as b -> upcast (if b then "true" else "false")
-        | other -> upcast other.ToString()
+        | null -> None
+        | :? bool as b -> Some (if b then "true" else "false")
+        | other -> Some (other.ToString())
 
     let private coerceIntInput = function
         | IntValue i -> Some i
@@ -317,7 +324,7 @@ module SchemaDefinitions =
             Name = "Int"
             Description = Some "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
             CoerceInput = coerceIntInput >> box
-            CoerceValue = coerceIntValue >> box
+            CoerceValue = coerceIntValue >> Option.map box
             CoerceOutput = coerceIntOuput
         }
 
@@ -327,7 +334,7 @@ module SchemaDefinitions =
             Name = "Boolean"
             Description = Some "The `Boolean` scalar type represents `true` or `false`."
             CoerceInput = coerceBoolInput >> box
-            CoerceValue = coerceBoolValue >> box
+            CoerceValue = coerceBoolValue >> Option.map box
             CoerceOutput = coerceBoolOuput
         }
 
@@ -337,7 +344,7 @@ module SchemaDefinitions =
             Name = "Float"
             Description = Some "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point)."
             CoerceInput = coerceFloatInput >> box
-            CoerceValue = coerceFloatValue >> box
+            CoerceValue = coerceFloatValue >> Option.map box
             CoerceOutput = coerceFloatOuput
         }
     
@@ -347,7 +354,7 @@ module SchemaDefinitions =
             Name = "String"
             Description = Some "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
             CoerceInput = coerceStringInput >> box
-            CoerceValue = coerceStringValue >> box
+            CoerceValue = coerceStringValue >> Option.map box
             CoerceOutput = coerceStringOuput
         }
     
@@ -357,11 +364,11 @@ module SchemaDefinitions =
             Name = "ID"
             Description = Some "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
             CoerceInput = coerceIdInput >> box
-            CoerceValue = coerceStringValue >> box
+            CoerceValue = coerceStringValue >> Option.map box
             CoerceOutput = coerceStringOuput
         }
 
-    let rec internal coerceAstValue (variables: Map<string, obj>) (value: Value) : obj =
+    let rec internal coerceAstValue (variables: Map<string, obj option>) (value: Value) : obj =
         match value with
         | IntValue i -> upcast i
         | StringValue s -> upcast s
@@ -378,7 +385,7 @@ module SchemaDefinitions =
                 fields
                 |> Map.map (fun k v -> coerceAstValue variables v)
             upcast mapped
-        | Variable variable -> variables.[variable]
+        | Variable variable -> variables.[variable] |> Option.toObj
 
     /// Adds a single field to existing object type, returning new object type in result.
     let mergeField (objectType: ObjectType) (field: FieldDefinition) : ObjectType = 
@@ -409,4 +416,4 @@ module SchemaDefinitions =
 
     let internal defaultResolve<'t> (fieldName: string): (obj -> Args -> ResolveInfo -> obj) = 
         let getter = typeof<'t>.GetProperty(fieldName).GetMethod
-        (fun v args info -> getter.Invoke(v, [||]))
+        (fun v _ _ -> getter.Invoke(v, [||]))

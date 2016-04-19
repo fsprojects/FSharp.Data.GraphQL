@@ -36,7 +36,7 @@ and Selection =
     | FragmentSpread of FragmentSpread
     /// 2.2.6.2 Inline Fragments
     | InlineFragment of FragmentDefinition
-    member x.Directives with get() =
+    member x.Directives =
         match x with
         | Field f -> f.Directives
         | FragmentSpread s -> s.Directives
@@ -52,7 +52,7 @@ and Field =
         Directives: Directive list
         SelectionSet: Selection list
     }
-    member x.AliasOrName with get() = 
+    member x.AliasOrName = 
         match x.Alias with
         | Some alias -> alias
         | None -> x.Name
@@ -115,7 +115,7 @@ and Directive =
         Name: string
         Arguments: Argument list
     }
-    member x.If with get () = x.Arguments |> List.find (fun arg -> arg.Name = "if")
+    member x.If = x.Arguments |> List.find (fun arg -> arg.Name = "if")
 
 // Type System Definition
 

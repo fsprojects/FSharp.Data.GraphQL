@@ -68,7 +68,7 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
                 match x with
                 | :? 'T as t -> coerceOutput t
                 | _ -> None)
-            CoerceValue = coerceValue >> box
+            CoerceValue = coerceValue >> Option.map box
         }
         
     /// GraphQL type for user defined enums
@@ -90,7 +90,7 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         | Some i -> implements o i
 
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Map<string, obj> * ResolveInfo -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition = {
+    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Args * ResolveInfo -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition = {
         Name = name
         Description = description
         Type = schema
@@ -102,7 +102,7 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
     }
     
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Map<string, obj> -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
+    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Args -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
         {
             Name = name
             Description = description
