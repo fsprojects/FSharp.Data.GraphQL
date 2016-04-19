@@ -117,6 +117,7 @@ Target "RunTests" (fun _ ->
     |> xUnit (fun p ->
         { p with
             ShadowCopy = false
+            XmlOutputPath = Some "TestResults.xml"
             TimeOut = TimeSpan.FromMinutes 20. })
 )
 
