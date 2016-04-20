@@ -11,16 +11,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
-let private sync = Async.RunSynchronously
-let private field name typedef (resolve: 'a -> 'b) = Schema.Field(name = name, schema = typedef, resolve = resolve)
-let private arg name typedef = Schema.Argument(name, typedef)
-let private objdef name fields = Schema.ObjectType(name, fields)
-let private (<??) opt other =
-    match opt with
-    | None -> Some other
-    | _ -> opt
-
-
 type TestSubject = {
     a: string
     b: string
@@ -38,9 +28,8 @@ and DeepTestSubject = {
     c: string list
 }
 
-
 [<Fact>]
-let ``Execution executes arbitrary code`` () =
+let ``Execution handles basic tasks: executes arbitrary code`` () =
     let rec data = 
         {
             a = "Apple"
@@ -86,18 +75,19 @@ let ``Execution executes arbitrary code`` () =
 
     let (expected: Map<string, obj>) = 
         Map.ofList [
-            ("a", upcast "Apple"); 
-            ("b", upcast "Banana"); 
-            ("d", upcast "Donut");
-            ("deep", upcast Map.ofList [
-                ("a", "Already Been Done" :> obj); 
-                ("b", upcast "Boring");
-                ("c", upcast ["Contrived" :> obj; null; upcast "Confusing"])]); 
-            ("e", upcast "Egg"); 
-            ("f", upcast "Fish");
-            ("pic", upcast "Pic of size: 100"); 
-            ("promise", null); 
-            ("x", upcast "Cookie")
+            "a", upcast "Apple" 
+            "b", upcast "Banana"
+            "d", upcast "Donut"
+            "deep", upcast Map.ofList [
+               "a", "Already Been Done" :> obj
+               "b", upcast "Boring"
+               "c", upcast ["Contrived" :> obj; null; upcast "Confusing"]
+            ] 
+            "e", upcast "Egg"
+            "f", upcast "Fish"
+            "pic", upcast "Pic of size: 100"
+            "promise", null
+            "x", upcast "Cookie"
         ]
 
     let DeepDataType = objdef "DeepDataType" [
@@ -112,9 +102,107 @@ let ``Execution executes arbitrary code`` () =
         field "d" String (fun (dt: TestSubject) -> dt.d);
         field "e" String (fun (dt: TestSubject) -> dt.e);
         field "f" String (fun (dt: TestSubject) -> dt.f);
-        Schema.Field<TestSubject, string>("pic", String, arguments = [arg "size" Int], resolve = (fun (dt, args:Args) -> dt.pic(args.Arg("size"))));
+        fieldA "pic" String [arg "size" Int] (fun (dt, args) -> dt.pic(args.Arg("size")));
         field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
     let result = schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
-    equals result.Data.Value expected
+    equals expected result.Data.Value
+
+type TestThing = { Thing: string }
+
+[<Fact>]
+let ``Execution handles basic tasks: merges parallel fragments`` () = 
+    let ast = parse """{ a, ...FragOne, ...FragTwo }
+
+      fragment FragOne on Type {
+        b
+        deep { b, deeper: deep { b } }
+      }
+
+      fragment FragTwo on Type {
+        c
+        deep { c, deeper: deep { c } }
+      }"""
+
+    let mutable Type = objdef "Type" [
+        field "a" String (fun () -> "Apple")
+        field "b" String (fun () -> "Banana")
+        field "c" String (fun () -> "Cherry")
+    ]
+    //TODO: API fix - self referencing data type
+    let (Object x) = Type
+    x.AddField (field "deep" Type id)
+
+    let schema = Schema(Type)
+    let expected: Map<string, obj> = Map.ofList [
+        "a", upcast "Apple"
+        "b", upcast "Banana"
+        "c", upcast "Cherry"
+        "deep", upcast Map.ofList [
+            "b", "Banana" :> obj
+            "c", upcast "Cherry"
+            "deeper", upcast Map.ofList [
+                "b", "Banana" :> obj
+                "c", upcast "Cherry"
+            ]
+        ]
+    ]
+    let result = schema.Execute(ast, obj())
+    equals expected result.Data.Value
+    
+[<Fact>]
+let ``Execution handles basic tasks: threads root value context correctly`` () = 
+    let query = "query Example { a }"
+    let data = { Thing = "thing" }
+    let mutable resolved = {Thing = ""};
+    let Thing = objdef "Type" [
+        field "a" String (fun r -> resolved <- data)
+    ]
+    let result = Schema(Thing).Execute(parse query, data)
+    equals "thing" resolved.Thing
+    
+[<Fact>]
+let ``Execution handles basic tasks: correctly threads arguments`` () =
+    let query = """query Example {
+        b(numArg: 123, stringArg: "foo")
+      }"""
+    let mutable numArg = None;
+    let mutable stringArg = None;
+    let Type = objdef "Type" [
+        fieldA "b" String [arg "numArg" Int; arg "stringArg" String] 
+            (fun (_, args) -> 
+                numArg <- args.Arg("numArg")
+                stringArg <- args.Arg("stringArg")) 
+    ]
+
+    let result = Schema(Type).Execute(parse query, ())
+    equals (Some 123) numArg
+    equals (Some "foo") stringArg
+    
+type InlineTest = { A: string }
+
+[<Fact>]
+let ``Execution handles basic tasks: uses the inline operation if no operation name is provided`` () =
+    let schema =  Schema(objdef "Type" [
+        field "a" String (fun x -> x.A)
+    ])
+    let result = schema.Execute(parse "{ a }", { A = "b" })
+    equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
+    
+[<Fact>]
+let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
+    let schema =  Schema(objdef "Type" [
+        field "a" String (fun x -> x.A)
+    ])
+    let result = schema.Execute(parse "query Example { a }", { A = "b" })
+    equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
+    
+[<Fact>]
+let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
+    let schema =  Schema(objdef "Type" [
+        field "a" String (fun x -> x.A)
+    ])
+    let query = "query Example { first: a } query OtherExample { second: a }"
+    let result = schema.Execute(parse query, { A = "b" }, operationName = "OtherExample")
+    equals (Map.ofList ["second", "b" :> obj]) result.Data.Value

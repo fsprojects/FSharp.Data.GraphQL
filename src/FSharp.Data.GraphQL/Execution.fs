@@ -134,7 +134,7 @@ let private doesFragmentTypeApply ctx typedef = function
         match ctx.Schema.TryFindType typeName with
         | Some fragmentType ->
             match fragmentType, typedef with
-            | Object x, Object y -> x = y
+            | Object x, Object y -> Object.ReferenceEquals(x, y)
             | Interface _, Object o -> 
                 o.Implements
                 |> List.exists (fun i -> i = fragmentType)
@@ -196,10 +196,7 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
                 
 /// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
 let private resolveField _ fieldDef value args resolveInfo =
-    let resolved = fieldDef.Resolve value args resolveInfo
-    match resolved with
-    | null -> None
-    | o -> Some o
+    fieldDef.Resolve value args resolveInfo |> Option.ofObj
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type

@@ -5,6 +5,9 @@ namespace FSharp.Data.GraphQL.Types
 
 open System
 open FSharp.Data.GraphQL.Ast
+                    
+type GraphQLException(msg) = 
+    inherit Exception(msg)
 
 type ResolveInfo = 
     {
@@ -65,9 +68,15 @@ and ObjectType =
     {
         Name: string
         Description: string option
-        Fields: FieldDefinition list
-        Implements: GraphQLType list
+        mutable Fields: FieldDefinition list
+        mutable Implements: GraphQLType list
     }
+    member x.AddField(field: FieldDefinition) = 
+        match List.tryFind<FieldDefinition> (fun f -> f.Name = field.Name) x.Fields with
+        | Some _ -> 
+            let msg = sprintf "Cannot merge field %A into object type %s, because it already has field %A sharing the same name." field x.Name x
+            raise (GraphQLException msg)
+        | None -> x.Fields <- x.Fields @ [field]
     override x.ToString() =
         let sb = System.Text.StringBuilder("type ")
         sb.Append(x.Name) |> ignore
@@ -113,7 +122,7 @@ and InterfaceType =
     {
         Name: string
         Description: string option
-        Fields: FieldDefinition list
+        mutable Fields: FieldDefinition list
     }
     override x.ToString() = 
         let sb = System.Text.StringBuilder("interface ").Append(x.Name).Append(" {")
@@ -190,9 +199,6 @@ and Variable =
     }
     override x.ToString() =
         "$" + x.Name + ": " + x.Schema.ToString() + (if x.DefaultValue <> null then " = " + x.DefaultValue.ToString() else "")
-                    
-type GraphQLException(msg) = 
-    inherit Exception(msg)
     
 [<AutoOpen>]
 module SchemaDefinitions =

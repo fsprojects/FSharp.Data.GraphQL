@@ -121,6 +121,7 @@
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ExecutionTests.fs" />
+    <Compile Include="MutationTests.fs" />
     <None Include="paket.references" />
     <Content Include="App.config" />
   </ItemGroup>
