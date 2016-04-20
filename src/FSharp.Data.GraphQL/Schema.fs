@@ -19,18 +19,19 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         | Scalar scalardef -> addOrReturn scalardef.Name typedef ns
         | Enum enumdef -> addOrReturn enumdef.Name typedef ns
         | Object objdef -> 
-            let ns' =
+            let ns' = addOrReturn typedef.Name typedef ns
+            let withFields' =
                 objdef.Fields
                 |> List.map (fun x -> x.Type)
-                |> List.fold (fun n t -> insert n t) ns
-            let interfaces' = 
-                objdef.Implements
+                |> List.filter (fun x -> not (Map.containsKey x.Name ns'))
                 |> List.fold (fun n t -> insert n t) ns'
-            addOrReturn typedef.Name typedef interfaces'
+            objdef.Implements
+            |> List.fold (fun n t -> insert n t) withFields'
         | Interface interfacedef ->
             let ns' = 
                 interfacedef.Fields
                 |> List.map (fun x -> x.Type)
+                |> List.filter (fun x -> not (Map.containsKey x.Name ns))
                 |> List.fold (fun n t -> insert n t) ns
             addOrReturn typedef.Name typedef ns' 
         | Union uniondef ->
