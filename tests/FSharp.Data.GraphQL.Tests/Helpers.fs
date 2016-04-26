@@ -12,11 +12,11 @@ let equals (expected : 'x) (actual : 'x) =
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
-let field name typedef (resolve : 'a -> 'b) = Schema.Field(name = name, schema = typedef, resolve = (fun _ a -> resolve a))
+let field name typedef (resolve : 'a -> 'b) = Define.Field(name = name, schema = typedef, resolve = (fun _ a -> resolve a))
 let fieldA name typedef args (resolve : ResolveFieldContext -> 'a -> 'b) = 
-    Schema.Field(name = name, schema = typedef, arguments = args, resolve = resolve)
-let arg name typedef = Schema.Argument(name, typedef)
-let objdef name fields = Schema.ObjectType(name, fields)
+    Define.Field(name = name, schema = typedef, arguments = args, resolve = resolve)
+let arg name typedef = Define.Argument(name, typedef)
+let objdef name fields = Define.ObjectType(name, fields)
 
 let (<??) opt other = 
     match opt with

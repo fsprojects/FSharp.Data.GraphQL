@@ -48,10 +48,10 @@
     <Compile Include="Ast.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Validation.fs" />
+    <Compile Include="Introspection.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="ReflectedSchema.fs" />
-    <Compile Include="Introspection.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Relay.fs" />
     <None Include="paket.references" />

@@ -14,7 +14,7 @@ open FSharp.Data.GraphQL.Execution
 [<Fact>]
 let ``Introspection executes an introspection query`` () =
     let root = objdef "QueryRoot" [
-        Schema.Field("onlyField", String)
+        Define.Field("onlyField", String)
     ]
     let schema = Schema(root)
     let (Object raw) = root

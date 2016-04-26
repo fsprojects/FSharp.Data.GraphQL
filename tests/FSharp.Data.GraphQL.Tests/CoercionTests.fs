@@ -35,11 +35,11 @@ let ``Float coerces input`` () =
 
 [<Fact>]
 let ``Boolean coerces input`` () = 
-    testCoercion Bool true (IntValue 123)
-    testCoercion Bool false (IntValue 0)
-    testCoercion Bool true (FloatValue 123.4)
-    testCoercion Bool true (BooleanValue true)
-    testCoercion Bool false (BooleanValue false)
+    testCoercion Boolean true (IntValue 123)
+    testCoercion Boolean false (IntValue 0)
+    testCoercion Boolean true (FloatValue 123.4)
+    testCoercion Boolean true (BooleanValue true)
+    testCoercion Boolean false (BooleanValue false)
 
 [<Fact>]
 let ``String coerces input`` () = 

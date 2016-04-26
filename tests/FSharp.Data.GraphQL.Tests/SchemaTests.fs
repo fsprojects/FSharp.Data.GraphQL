@@ -11,36 +11,36 @@ open FSharp.Data.GraphQL.Types
 
 [<Fact>]
 let ``Object type should be able to merge fields with matching signatures from different interfaces`` () = 
-    let person = Schema.ObjectType("Person", [
-        Schema.Field("name", String)
+    let person = Define.ObjectType("Person", [
+        Define.Field("name", String)
     ])
-    let movable = Schema.Interface("Movable", [
-        Schema.Field("speed", Int)
+    let movable = Define.Interface("Movable", [
+        Define.Field("speed", Int)
     ])
-    let movable2 = Schema.Interface("Movable2", [
-        Schema.Field("speed", Int)
-        Schema.Field("acceleration", Int)
+    let movable2 = Define.Interface("Movable2", [
+        Define.Field("speed", Int)
+        Define.Field("acceleration", Int)
     ])
     let objectType = implements person [ movable; movable2 ]
-    let expected = Schema.ObjectType("Person", [
-        Schema.Field("name", String)
-        Schema.Field("speed", Int)
-        Schema.Field("acceleration", Int)
+    let expected = Define.ObjectType("Person", [
+        Define.Field("name", String)
+        Define.Field("speed", Int)
+        Define.Field("acceleration", Int)
     ], interfaces = [movable; movable2])
     equals expected objectType
 
 
 [<Fact>]
 let ``Object type should not be able to merge fields with matching names but different types from different interfaces`` () = 
-    let person = Schema.ObjectType("Person", [
-        Schema.Field("name", String)
+    let person = Define.ObjectType("Person", [
+        Define.Field("name", String)
     ])
-    let movable = Schema.Interface("Movable", [
-        Schema.Field("speed", String)
+    let movable = Define.Interface("Movable", [
+        Define.Field("speed", String)
     ])
-    let movable2 = Schema.Interface("Movable2", [
-        Schema.Field("speed", Int)
-        Schema.Field("acceleration", Int)
+    let movable2 = Define.Interface("Movable2", [
+        Define.Field("speed", Int)
+        Define.Field("acceleration", Int)
     ])
 
     (fun () -> implements person [ movable; movable2 ] |> ignore)

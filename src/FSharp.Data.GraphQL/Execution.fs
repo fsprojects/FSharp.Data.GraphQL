@@ -61,7 +61,7 @@ let rec private coerceValue typedef (input: obj) =
         Some(upcast mapped)
     | other -> raise (GraphQLException (sprintf "Cannot coerce defintion '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other))
 
-let private getArgumentValues (argDefs: ArgumentDefinition list) (args: Argument list) (variables: Map<string, obj option>) : Map<string, obj> = 
+let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (variables: Map<string, obj option>) : Map<string, obj> = 
     argDefs
     |> List.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
@@ -86,7 +86,7 @@ type ExecutionResult =
 
 type ExecutionContext = 
     {
-        Schema: Schema
+        Schema: ISchema
         RootValue: obj
         Document: Document
         Operation: OperationDefinition
@@ -98,7 +98,7 @@ let private getOperation = function
     | OperationDefinition odef -> Some odef
     | _ -> None
 
-let private findOperation (schema: Schema) doc opName =
+let private findOperation (schema: #ISchema) doc opName =
     match doc.Definitions |> List.choose getOperation, opName with
     | [def], _ -> Some def
     | defs, name -> 
@@ -106,7 +106,7 @@ let private findOperation (schema: Schema) doc opName =
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
    
-let private coerceVariables (schema: Schema) variables inputs =
+let private coerceVariables (schema: #ISchema) variables inputs =
     match inputs with
     | None -> Map.empty
     | Some vars -> 
@@ -268,6 +268,7 @@ and getFieldEntry ctx typedef value (fields: Field list) =
             FieldType = fieldDef
             ReturnType = fieldDef.Type
             ParentType = typedef
+            Schema = ctx.Schema
             Args = args
             Operation = ctx.Operation
             Fragments = ctx.Fragments
@@ -284,7 +285,7 @@ and executeFields ctx typedef value (groupedFieldSet): Map<string, obj> =
         |> Map.fold (fun acc responseKey fields -> Map.add responseKey (getFieldEntry ctx typedef value fields) acc) Map.empty
     result
 
-let private evaluate (schema: Schema) doc operation variables root = 
+let private evaluate (schema: #ISchema) doc operation variables root = 
     let variables = coerceVariables schema operation.VariableDefinitions variables
     let ctx = {
         Schema = schema
@@ -305,7 +306,7 @@ let private evaluate (schema: Schema) doc operation variables root =
         let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
         executeFields ctx schema.Query ctx.RootValue groupedFieldSet
 
-let execute (schema: Schema) doc operationName variables root = 
+let execute (schema: #ISchema) doc operationName variables root = 
     match findOperation schema doc operationName with
     | Some operation -> evaluate schema doc operation variables root
     | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
