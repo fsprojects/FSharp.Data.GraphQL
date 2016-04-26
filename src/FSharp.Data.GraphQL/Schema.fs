@@ -89,44 +89,16 @@ type Schema(query: GraphQLType, ?mutation: GraphQLType) =
         match interfaces with
         | None -> o
         | Some i -> implements o i
-
+                
     /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Args * ResolveInfo -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition = {
-        Name = name
-        Description = description
-        Type = schema
-        Resolve = 
-            let modified (x: obj) (args: Args) (info:ResolveInfo) : obj = 
-                upcast resolve (x :?> 'Object, args, info)
-            modified
-        Arguments = if arguments.IsNone then [] else arguments.Value
-    }
-    
-    /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object * Args -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
+    static member Field (name: string, schema: GraphQLType, resolve: ResolveFieldContext -> 'Object  -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
         {
             Name = name
             Description = description
             Type = schema
-            Resolve = 
-                let modified (x: obj) (args: Args) (_:ResolveInfo) : obj = 
-                    upcast resolve (x :?> 'Object, args)
-                modified
+            Resolve = fun ctx v -> upcast resolve ctx (v :?> 'Object)
             Arguments = if arguments.IsNone then [] else arguments.Value
-        }
-        
-    /// Single field defined inside either object types or interfaces
-    static member Field (name: string, schema: GraphQLType, resolve: 'Object  -> 'Value, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =
-        {
-            Name = name
-            Description = description
-            Type = schema
-            Resolve = 
-                let modified (x: obj) _ (_:ResolveInfo) : obj = 
-                    upcast (resolve (x :?> 'Object))
-                modified
-            Arguments = if arguments.IsNone then [] else arguments.Value
-        }
+        } 
         
     /// Single field defined inside either object types or interfaces
     static member Field<'Object> (name: string, schema: GraphQLType, ?description: string, ?arguments: ArgumentDefinition list): FieldDefinition =

@@ -102,7 +102,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         field "d" String (fun (dt: TestSubject) -> dt.d);
         field "e" String (fun (dt: TestSubject) -> dt.e);
         field "f" String (fun (dt: TestSubject) -> dt.f);
-        fieldA "pic" String [arg "size" Int] (fun (dt, args) -> dt.pic(args.Arg("size")));
+        fieldA "pic" String [arg "size" Int] (fun ctx dt -> dt.pic(ctx.Arg("size")));
         field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
@@ -171,9 +171,9 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     let mutable stringArg = None;
     let Type = objdef "Type" [
         fieldA "b" String [arg "numArg" Int; arg "stringArg" String] 
-            (fun (_, args) -> 
-                numArg <- args.Arg("numArg")
-                stringArg <- args.Arg("stringArg")) 
+            (fun ctx _ -> 
+                numArg <- ctx.Arg("numArg")
+                stringArg <- ctx.Arg("stringArg")) 
     ]
 
     let result = Schema(Type).Execute(parse query, ())

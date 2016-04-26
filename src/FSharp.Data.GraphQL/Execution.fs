@@ -89,18 +89,20 @@ type ExecutionContext =
         Schema: Schema
         RootValue: obj
         Document: Document
+        Operation: OperationDefinition
+        Fragments: FragmentDefinition list
         Variables: Map<string, obj option>
     }
 
+let private getOperation = function
+    | OperationDefinition odef -> Some odef
+    | _ -> None
+
 let private findOperation (schema: Schema) doc opName =
-    match doc.Definitions, opName with
-    | [OperationDefinition def], _ -> Some def
+    match doc.Definitions |> List.choose getOperation, opName with
+    | [def], _ -> Some def
     | defs, name -> 
         defs
-        |> List.choose (fun def -> 
-            match def with
-            | OperationDefinition o -> Some o
-            | _ -> None)
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
    
@@ -195,8 +197,8 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
         ) groupedFields    
                 
 /// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
-let private resolveField _ fieldDef value args resolveInfo =
-    fieldDef.Resolve value args resolveInfo |> Option.ofObj
+let private resolveField value ctx fieldDef =
+    fieldDef.Resolve ctx value |> Option.ofObj
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
@@ -259,14 +261,19 @@ and getFieldEntry ctx typedef value (fields: Field list) =
     match getFieldDefinition ctx typedef firstField with
     | None -> null
     | Some fieldDef -> 
-        let resolveInfo = {
-            FieldDefinition = fieldDef
-            Fields = fields
-            Fragments = Map.empty
-            RootValue = value
-        }
         let args = getArgumentValues fieldDef.Arguments firstField.Arguments ctx.Variables
-        match resolveField ctx fieldDef value {Args = args} resolveInfo with
+        let resolveFieldCtx = {
+            FieldName = fieldDef.Name
+            Fields = fields
+            FieldType = fieldDef
+            ReturnType = fieldDef.Type
+            ParentType = typedef
+            Args = args
+            Operation = ctx.Operation
+            Fragments = ctx.Fragments
+            Variables = ctx.Variables
+        }
+        match resolveField value resolveFieldCtx fieldDef with
         | None -> null
         | Some resolvedObject ->
             completeValue ctx fieldDef.Type fields resolvedObject
@@ -281,9 +288,11 @@ let private evaluate (schema: Schema) doc operation variables root =
     let variables = coerceVariables schema operation.VariableDefinitions variables
     let ctx = {
         Schema = schema
-        RootValue = root
+        RootValue = match root with None -> null | Some x -> x
         Document = doc
         Variables = variables
+        Operation = operation
+        Fragments = doc.Definitions |> List.choose (fun x -> match x with FragmentDefinition f -> Some f | _ -> None)
     }
     match operation.OperationType with
     | Mutation -> 
@@ -302,7 +311,7 @@ let execute (schema: Schema) doc operationName variables root =
     | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
 
 type FSharp.Data.GraphQL.Schema with
-    member schema.Execute(ast: Document, data: obj, ?variables: Map<string, obj>, ?operationName: string): ExecutionResult =
+    member schema.Execute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): ExecutionResult =
         try
             let result = execute schema ast operationName variables data 
             { Data = Some result; Errors = None }

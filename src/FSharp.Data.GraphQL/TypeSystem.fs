@@ -9,24 +9,25 @@ open FSharp.Data.GraphQL.Ast
 type GraphQLException(msg) = 
     inherit Exception(msg)
 
-type ResolveInfo = 
+type ResolveFieldContext =
     {
-        FieldDefinition: FieldDefinition
+        FieldName: string
         Fields: Field list
-        Fragments: Map<string, FragmentDefinition>
-        RootValue: obj
-    }
-    
-//NOTE: For references, see https://facebook.github.io/graphql/
-and GraphQLError = GraphQLError of string
-and Args = 
-    {
+        FieldType: FieldDefinition
+        ReturnType: GraphQLType
+        ParentType: GraphQLType
         Args: Map<string, obj>
+        Operation: OperationDefinition
+        Fragments: FragmentDefinition list
+        Variables: Map<string, obj option>
     }
     member x.Arg(name: string): 't option =
         match Map.tryFind name x.Args with
         | Some o -> Some (o :?> 't)
         | None -> None
+    
+//NOTE: For references, see https://facebook.github.io/graphql/
+and GraphQLError = GraphQLError of string
 
 /// 3.1.1.1 Build-in Scalars
 and [<CustomEquality;NoComparison>] ScalarType = 
@@ -92,7 +93,7 @@ and [<CustomEquality;NoComparison>] FieldDefinition =
         Name: string
         Description: string option
         Type: GraphQLType
-        Resolve: obj -> Args -> ResolveInfo -> obj
+        Resolve: ResolveFieldContext -> obj -> obj
         Arguments: ArgumentDefinition list
     }
     interface IEquatable<FieldDefinition> with
@@ -420,6 +421,8 @@ module SchemaDefinitions =
             |> List.fold mergeFields o
         Object modified
 
-    let internal defaultResolve<'t> (fieldName: string): (obj -> Args -> ResolveInfo -> obj) = 
-        let getter = typeof<'t>.GetProperty(fieldName).GetMethod
-        (fun v _ _ -> getter.Invoke(v, [||]))
+    let internal defaultResolve<'t> (fieldName: string): (ResolveFieldContext -> obj -> obj) = 
+        (fun _ v -> 
+            match v with
+            | null -> null
+            | o -> o.GetType().GetProperty(fieldName).GetValue(o, null))

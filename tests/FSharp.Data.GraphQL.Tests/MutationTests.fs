@@ -35,10 +35,10 @@ let NumberHolder = objdef "NumberHolder" [ field "theNumber" Int (fun x -> x.Num
 let schema = Schema(
     query = objdef "Query" [ field "numberHolder" NumberHolder (fun x -> x.NumberHolder) ],
     mutation = objdef "Mutation" [
-        fieldA "immediatelyChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun (x: Root, args) -> x.ChangeImmediatelly(args.Arg("newNumber").Value))
-        fieldA "promiseToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun (x: Root, args) -> x.ChangeAsync(args.Arg("newNumber").Value))
-        fieldA "failToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun (x: Root, args) -> x.ChangeFail(args.Arg("newNumber").Value))
-        fieldA "promiseAndFailToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun (x: Root, args) -> x.ChangeFailAsync(args.Arg("newNumber").Value))
+        fieldA "immediatelyChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber").Value))
+        fieldA "promiseToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeAsync(ctx.Arg("newNumber").Value))
+        fieldA "failToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber").Value))
+        fieldA "promiseAndFailToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeFailAsync(ctx.Arg("newNumber").Value))
     ])
 
 [<Fact>]

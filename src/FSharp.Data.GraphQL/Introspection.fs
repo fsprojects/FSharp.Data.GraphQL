@@ -23,7 +23,7 @@ type DirectiveLocation =
     | FRAGMENT_SPREAD = 6
     | INLINE_FRAGMENT = 7
 
-let graphQLKind = function
+let graphQLKind (_: ResolveFieldContext) = function
     | Scalar _ -> TypeKind.SCALAR
     | Enum _ -> TypeKind.ENUM
     | Object _ -> TypeKind.OBJECT
@@ -68,8 +68,8 @@ let mutable __Type = Schema.ObjectType(
     Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.
     """,
     fields = [
-        Schema.Field("kind", NonNull __TypeKind, graphQLKind)
-        Schema.Field("name", NonNull String, fun (typedef: GraphQLType) -> typedef.Name)
+        Schema.Field("kind", NonNull __TypeKind, resolve = graphQLKind)
+        Schema.Field("name", NonNull String)
         Schema.Field("description", String)
     ])
     
