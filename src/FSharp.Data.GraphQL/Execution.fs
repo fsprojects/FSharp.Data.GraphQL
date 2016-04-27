@@ -4,6 +4,7 @@
 module FSharp.Data.GraphQL.Execution
 
 open System
+open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 
@@ -81,7 +82,7 @@ let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (vari
 type ExecutionResult =
     {
         Data: Map<string,obj> option
-        Errors: GraphQLError list option
+        Errors: GraphQLError [] option
     }
 
 type ExecutionContext = 
@@ -92,6 +93,7 @@ type ExecutionContext =
         Operation: OperationDefinition
         Fragments: FragmentDefinition list
         Variables: Map<string, obj option>
+        Errors: ConcurrentBag<GraphQLError>
     }
 
 let private getOperation = function
@@ -190,8 +192,12 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
         ) groupedFields    
                 
 /// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
-let private resolveField value ctx fieldDef =
-    fieldDef.Resolve ctx value |> Option.ofObj
+let private resolveField value ctx fieldDef = async {
+    try
+        let! resolved = fieldDef.Resolve ctx value 
+        return Choice1Of2 (Option.ofObj resolved )
+    with
+    | ex -> return Choice2Of2 (GraphQLError ex.Message) }
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
@@ -210,49 +216,54 @@ let private resolveInterfaceType interfaceType objectValue = failwith "Not imple
 let private resolveUnionType unionType objectValue = failwith "Not implemented"
 
 /// Complete an ObjectType value by executing all sub-selections
-let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = 
+let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = async {
     let typedef = Object objectType
     let groupedFieldSet = 
         fields
         |> List.fold (fun subFields field -> collectFields ctx typedef field.SelectionSet (ref [])) Map.empty
-    let res = executeFields ctx typedef result groupedFieldSet 
-    res
+    let! res = executeFields ctx typedef result groupedFieldSet 
+    return res }
 
-and completeValue ctx fieldType fields (result: obj)  =
+and private completeValue ctx fieldType fields (result: obj): Async<obj> = async {
     match fieldType with
     | NonNull innerType ->
-        match completeValue ctx innerType fields result  with
-        | null -> raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" fieldType.Name))
-        | completedResult -> completedResult
+        let! completed = completeValue ctx innerType fields result
+        match completed with
+        | null -> return raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" fieldType.Name))
+        | completedResult -> return completedResult
     | ListOf innerType ->
         match result with
         | :? System.Collections.IEnumerable as enumerable ->
-            enumerable
-            |> Seq.cast<obj>
-            |> Seq.map (completeValue ctx innerType fields)
-            |> List.ofSeq
-            |> box
-        | _ -> raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" fieldType.Name))
+            let! completed=
+                enumerable
+                |> Seq.cast<obj>
+                |> Seq.map (completeValue ctx innerType fields)
+                |> Async.Parallel
+            return upcast (completed |> List.ofArray)
+        | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" fieldType.Name))
     | Scalar scalarType -> 
-        scalarType.CoerceValue result |> Option.toObj
+        return scalarType.CoerceValue result |> Option.toObj
     | Enum enumType -> 
         match coerceStringValue result with
-        | Some s -> upcast s
-        | None -> null
+        | Some s -> return (upcast s)
+        | None -> return null
     | InputObject objectType | Object objectType ->
-        upcast completeObjectValue ctx objectType fields result
+        let! completed = completeObjectValue ctx objectType fields result
+        return upcast completed
     | Interface typedef ->
         let objectType = resolveInterfaceType typedef result
-        upcast completeObjectValue ctx objectType fields result
+        let! completed = completeObjectValue ctx objectType fields result
+        return upcast completed
     | Union typedef ->
         let objectType = resolveUnionType typedef result
-        upcast completeObjectValue ctx objectType fields result
+        let! completed = completeObjectValue ctx objectType fields result
+        return upcast completed }
 
 // 6.6.1 Field entries
-and getFieldEntry ctx typedef value (fields: Field list) = 
+and private getFieldEntry ctx typedef value (fields: Field list) : Async<obj> = async {
     let firstField::_ = fields
     match getFieldDefinition ctx typedef firstField with
-    | None -> null
+    | None -> return null
     | Some fieldDef -> 
         let args = getArgumentValues fieldDef.Args firstField.Arguments ctx.Variables
         let resolveFieldCtx = {
@@ -267,18 +278,33 @@ and getFieldEntry ctx typedef value (fields: Field list) =
             Fragments = ctx.Fragments
             Variables = ctx.Variables
         }
-        match resolveField value resolveFieldCtx fieldDef with
-        | None -> null
-        | Some resolvedObject ->
-            completeValue ctx fieldDef.Type fields resolvedObject
+        let! resolved = resolveField value resolveFieldCtx fieldDef 
+        match resolved with
+        | Choice1Of2 None -> return null
+        | Choice1Of2 (Some resolvedObject) ->
+            return! completeValue ctx fieldDef.Type fields resolvedObject
+        | Choice2Of2 error ->
+            ctx.Errors.Add error
+            return null }
 
-and executeFields ctx typedef value (groupedFieldSet): Map<string, obj> = 
+and private executeFields ctx typedef value (groupedFieldSet): Async<Map<string, obj>> = async {
+    let! whenAll = 
+        groupedFieldSet
+        |> Map.toSeq
+        |> Seq.map (fun (responseKey, fields) -> async { 
+            let! res = getFieldEntry ctx typedef value fields
+            return responseKey, res })
+        |> Async.Parallel
+    return whenAll
+        |> Array.fold (fun acc (responseKey, res) -> Map.add responseKey res acc) Map.empty }
+
+and private executeFieldsSync ctx typedef value (groupedFieldSet): Async<Map<string, obj>> = async {
     let result = 
         groupedFieldSet
-        |> Map.fold (fun acc responseKey fields -> Map.add responseKey (getFieldEntry ctx typedef value fields) acc) Map.empty
-    result
+        |> Map.fold (fun acc responseKey fields -> Map.add responseKey ((getFieldEntry ctx typedef value fields) |> Async.RunSynchronously) acc) Map.empty
+    return result }
 
-let private evaluate (schema: #ISchema) doc operation variables root = 
+let private evaluate (schema: #ISchema) doc operation variables root errors = async {
     let variables = coerceVariables schema operation.VariableDefinitions variables
     let ctx = {
         Schema = schema
@@ -287,27 +313,29 @@ let private evaluate (schema: #ISchema) doc operation variables root =
         Variables = variables
         Operation = operation
         Fragments = doc.Definitions |> List.choose (fun x -> match x with FragmentDefinition f -> Some f | _ -> None)
+        Errors = errors
     }
     match operation.OperationType with
     | Mutation -> 
-        // at the moment both execution procedures works the same
-        // ultimately only difference is that mutation requires to 
-        // maintain order of executed resolve invocations, while query doesn't
         let groupedFieldSet = collectFields ctx schema.Mutation.Value operation.SelectionSet  (ref [])
-        executeFields ctx schema.Mutation.Value ctx.RootValue groupedFieldSet
+        return! executeFieldsSync ctx schema.Mutation.Value ctx.RootValue groupedFieldSet
     | Query ->
         let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
-        executeFields ctx schema.Query ctx.RootValue groupedFieldSet
+        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet }
 
-let execute (schema: #ISchema) doc operationName variables root = 
+let private execute (schema: #ISchema) doc operationName variables root errors = async {
     match findOperation schema doc operationName with
-    | Some operation -> evaluate schema doc operation variables root
-    | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
+    | Some operation -> return! evaluate schema doc operation variables root errors
+    | None -> return raise (GraphQLException "No operation with specified name has been found for provided document") }
 
 type FSharp.Data.GraphQL.Schema with
-    member schema.Execute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): ExecutionResult =
-        try
-            let result = execute schema ast operationName variables data 
-            { Data = Some result; Errors = None }
-        with 
-        | ex -> { Data = None; Errors = Some [ GraphQLError ex.Message ]}
+    member schema.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
+        async {
+            try
+                let errors = ConcurrentBag()
+                let! result = execute schema ast operationName variables data errors
+                return { Data = Some result; Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
+            with 
+            | ex -> 
+                let msg = ex.Message
+                return { Data = None; Errors = Some [| GraphQLError msg |]} }

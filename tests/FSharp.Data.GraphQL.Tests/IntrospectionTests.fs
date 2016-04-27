@@ -18,7 +18,7 @@ let ``Introspection executes an introspection query`` () =
     ]
     let schema = Schema(root)
     let (Object raw) = root
-    let result = schema.Execute(parse introspectionQuery, raw)
+    let result = sync <| schema.AsyncExecute(parse introspectionQuery, raw)
     noErrors result
     let expected: Map<string,obj> =
         Map.ofList<string, obj> [

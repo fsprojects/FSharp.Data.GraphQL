@@ -17,7 +17,10 @@ let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action
 let sync = Async.RunSynchronously
 let field name typedef (resolve : 'a -> 'b) = Define.Field(name = name, schema = typedef, resolve = (fun _ a -> resolve a))
 let fieldA name typedef args (resolve : ResolveFieldContext -> 'a -> 'b) = 
-    Define.Field(name = name, schema = typedef, arguments = args, resolve = resolve)
+    Define.Field(name = name, schema = typedef, arguments = args, resolve = resolve)    
+let asyncField name typedef (resolve : 'a -> Async<'b>) = Define.AsyncField(name = name, schema = typedef, resolve = (fun _ a -> resolve a))
+let asyncFieldA name typedef args (resolve : ResolveFieldContext -> 'a -> Async<'b>) = 
+    Define.AsyncField(name = name, schema = typedef, arguments = args, resolve = resolve)
 let arg name typedef = Define.Argument(name, typedef)
 let objdef name fields = Define.ObjectType(name, fields)
 
