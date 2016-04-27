@@ -102,7 +102,7 @@ and [<CustomEquality; NoComparison>] FieldDef =
     { Name : string
       Description : string option
       Type : TypeDef
-      Resolve : ResolveFieldContext -> obj -> obj
+      Resolve : ResolveFieldContext -> obj -> Async<obj>
       Args : ArgDef list
       DeprecationReason: string option }
     
@@ -487,16 +487,22 @@ module SchemaDefinitions =
         
         Object modified
     
-    let internal defaultResolve<'t> (fieldName : string) : ResolveFieldContext -> obj -> obj = 
+    let internal getProperty o pname =
+        let t = o.GetType()
+        let property = t.GetProperty(pname, BindingFlags.IgnoreCase|||BindingFlags.Public|||BindingFlags.Instance)
+        if property = null 
+        then raise (GraphQLException (sprintf "Default resolve function failed. Couldn't find property '%s' inside definition of type '%s'." pname t.FullName))
+        else property
+        
+    let internal defaultResolve<'t> (fieldName : string) : ResolveFieldContext -> obj -> Async<obj> = 
         (fun _ v -> 
-        match v with
-        | null -> null
-        | o -> 
-            let t = o.GetType()
-            let property = t.GetProperty(fieldName, BindingFlags.IgnoreCase|||BindingFlags.Public|||BindingFlags.Instance)
-            if property = null 
-            then raise (GraphQLException (sprintf "Default resolve function failed. Couldn't find property '%s' inside definition of type '%s'." fieldName t.FullName))
-            else property.GetValue(o, null))        
+            async {
+                if v = null
+                then return null
+                else
+                    let property = getProperty v fieldName
+                    return property.GetValue(v, null)
+            }) 
 
     type Define private() =
         static member Scalar (name: string, coerceInput: Value -> 'T option, coerceOutput: 'T -> Value option, coerceValue: obj -> 'T option, ?description: string) = 
@@ -535,7 +541,21 @@ module SchemaDefinitions =
                 Name = name
                 Description = description
                 Type = schema
-                Resolve = fun ctx v -> upcast resolve ctx (v :?> 'Object)
+                Resolve = fun ctx v -> async { return upcast resolve ctx (v :?> 'Object) }
+                Args = if arguments.IsNone then [] else arguments.Value
+                DeprecationReason = deprecationReason
+            } 
+            
+        /// Single field defined inside either object types or interfaces, with asynchronous resolution function
+        static member AsyncField (name: string, schema: TypeDef, resolve: ResolveFieldContext -> 'Object  -> Async<'Value>, ?description: string, ?arguments: ArgDef list, ?deprecationReason: string): FieldDef =
+            {
+                Name = name
+                Description = description
+                Type = schema
+                Resolve = fun ctx v -> 
+                    async { 
+                        let! value = resolve ctx (v :?> 'Object) 
+                        return upcast value }
                 Args = if arguments.IsNone then [] else arguments.Value
                 DeprecationReason = deprecationReason
             } 

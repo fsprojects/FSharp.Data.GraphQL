@@ -18,15 +18,15 @@ type Root =
     }
     member x.ChangeImmediatelly num = 
         x.NumberHolder.Number <- num
-        x.NumberHolder.Number
-    member x.ChangeAsync num = 
+        x.NumberHolder
+    member x.AsyncChange num = 
         async { 
             x.NumberHolder.Number <- num 
-            return x.NumberHolder.Number
+            return x.NumberHolder
         }    
     member x.ChangeFail(num): int = 
         failwith "Cannot change number"
-    member x.ChangeFailAsync(num): Async<int> = 
+    member x.AsyncChangeFail(num): Async<int> = 
         async { 
             return failwith "Cannot change number"
         }
@@ -36,9 +36,9 @@ let schema = Schema(
     query = objdef "Query" [ field "numberHolder" NumberHolder (fun x -> x.NumberHolder) ],
     mutation = objdef "Mutation" [
         fieldA "immediatelyChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber").Value))
-        fieldA "promiseToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeAsync(ctx.Arg("newNumber").Value))
+        asyncFieldA "promiseToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber").Value))
         fieldA "failToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber").Value))
-        fieldA "promiseAndFailToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeFailAsync(ctx.Arg("newNumber").Value))
+        asyncFieldA "promiseAndFailToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber").Value))
     ])
 
 [<Fact>]
@@ -61,7 +61,7 @@ let ``Execute: Handles mutation execution ordering: evaluates mutations serially
       }
     }"""
 
-    let mutationResult = schema.Execute(parse query, {NumberHolder = {Number = 6}})
+    let mutationResult = sync <| schema.AsyncExecute(parse query, {NumberHolder = {Number = 6}})
     let expected: Map<string, obj> = Map.ofList [
         "first",  upcast Map.ofList [ "theNumber", 1 :> obj]
         "second", upcast Map.ofList [ "theNumber", 2 :> obj]
@@ -69,6 +69,7 @@ let ``Execute: Handles mutation execution ordering: evaluates mutations serially
         "fourth", upcast Map.ofList [ "theNumber", 4 :> obj]
         "fifth",  upcast Map.ofList [ "theNumber", 5 :> obj]
     ]
+    noErrors mutationResult
     equals expected mutationResult.Data.Value
     
 [<Fact>]
@@ -94,7 +95,8 @@ let ``Execute: Handles mutation execution ordering: evaluates mutations correctl
       }
     }"""
 
-    let mutationResult = schema.Execute(parse query, {NumberHolder = {Number = 6}})
+    let data = {NumberHolder = {Number = 6}}
+    let mutationResult = sync <| schema.AsyncExecute(parse query, data)
     let expected: Map<string, obj> = Map.ofList [
         "first",  upcast Map.ofList [ "theNumber", 1 :> obj]
         "second", upcast Map.ofList [ "theNumber", 2 :> obj]

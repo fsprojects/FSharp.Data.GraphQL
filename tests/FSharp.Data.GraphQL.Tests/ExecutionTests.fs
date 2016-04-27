@@ -106,7 +106,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
-    let result = schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
+    let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
     noErrors result
     equals expected result.Data.Value
 
@@ -149,7 +149,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
             ]
         ]
     ]
-    let result = schema.Execute(ast, obj())
+    let result = sync <| schema.AsyncExecute(ast, obj())
     noErrors result
     equals expected result.Data.Value
     
@@ -161,7 +161,7 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     let Thing = objdef "Type" [
         field "a" String (fun r -> resolved <- data)
     ]
-    let result = Schema(Thing).Execute(parse query, data)
+    let result = sync <| Schema(Thing).AsyncExecute(parse query, data)
     noErrors result
     equals "thing" resolved.Thing
     
@@ -179,7 +179,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
                 stringArg <- ctx.Arg("stringArg")) 
     ]
 
-    let result = Schema(Type).Execute(parse query, ())
+    let result = sync <| Schema(Type).AsyncExecute(parse query, ())
     noErrors result
     equals (Some 123) numArg
     equals (Some "foo") stringArg
@@ -191,7 +191,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     let schema =  Schema(objdef "Type" [
         field "a" String (fun x -> x.A)
     ])
-    let result = schema.Execute(parse "{ a }", { A = "b" })
+    let result = sync <| schema.AsyncExecute(parse "{ a }", { A = "b" })
     noErrors result
     equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
     
@@ -200,7 +200,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     let schema =  Schema(objdef "Type" [
         field "a" String (fun x -> x.A)
     ])
-    let result = schema.Execute(parse "query Example { a }", { A = "b" })
+    let result = sync <| schema.AsyncExecute(parse "query Example { a }", { A = "b" })
     noErrors result
     equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
     
@@ -210,6 +210,6 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
         field "a" String (fun x -> x.A)
     ])
     let query = "query Example { first: a } query OtherExample { second: a }"
-    let result = schema.Execute(parse query, { A = "b" }, operationName = "OtherExample")
+    let result = sync <| schema.AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
     noErrors result
     equals (Map.ofList ["second", "b" :> obj]) result.Data.Value
