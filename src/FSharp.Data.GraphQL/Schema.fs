@@ -83,6 +83,10 @@ type Schema(query: TypeDef, ?mutation: TypeDef, ?types:TypeDef list, ?directives
             | Union u -> u.Options
             | Interface i -> Map.find i.Name implementations
             | _ -> []
+        member x.IsPossibleType abstractdef possibledef =
+            match (x :> ISchema).GetPossibleTypes abstractdef with
+            | [] -> false
+            | possibleTypes -> possibleTypes |> List.exists (fun t -> t.Name = possibledef.Name)
 
     interface System.Collections.Generic.IEnumerable<TypeDef> with
         member x.GetEnumerator() = (types |> Map.toSeq |> Seq.map snd).GetEnumerator()

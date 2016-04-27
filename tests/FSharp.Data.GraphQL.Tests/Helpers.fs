@@ -7,9 +7,12 @@ open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Execution
 
 let equals (expected : 'x) (actual : 'x) = 
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
+let noErrors (result: ExecutionResult) =
+    Assert.True((None = result.Errors), sprintf "expected ExecutionResult to have no errors but got %+A" result.Errors)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let field name typedef (resolve : 'a -> 'b) = Define.Field(name = name, schema = typedef, resolve = (fun _ a -> resolve a))

@@ -131,21 +131,14 @@ let private shouldSkip ctx (directive: Directive) =
     | "include" when not <| coerceArgument ctx directive.If -> false
     | _ -> true
 
-let private doesFragmentTypeApply ctx typedef = function
-    | Some typeName ->
-        match ctx.Schema.TryFindType typeName with
-        | Some fragmentType ->
-            match fragmentType, typedef with
-            | Object x, Object y -> Object.ReferenceEquals(x, y)
-            | Interface _, Object o -> 
-                o.Implements
-                |> List.exists (fun i -> i = fragmentType)
-            | Union u, Object o ->
-                u.Options 
-                |> List.exists (fun o -> o = fragmentType)
-            | _, _ -> false
+let private doesFragmentTypeApply ctx fragment (typedef:TypeDef) = 
+    match fragment.TypeCondition with
+    | None -> true
+    | Some typeCondition ->
+        match ctx.Schema.TryFindType typeCondition with
         | None -> false
-    | None -> false
+        | Some conditionalType when conditionalType.Name = typedef.Name -> true
+        | Some conditionalType -> ctx.Schema.IsPossibleType conditionalType typedef
 
 // 6.5 Evaluating selection sets
 let rec private collectFields ctx typedef selectionSet visitedFragments =
@@ -184,7 +177,7 @@ and collectField ctx typedef visitedFragments groupedFields (selection: Selectio
 // this is a common part for inline framgent and fragents spread
 and collectFragment ctx typedef visitedFragments groupedFields fragment =
     let fragmentType = fragment.TypeCondition
-    if not <| doesFragmentTypeApply ctx ctx.Schema.Query fragmentType
+    if not <| doesFragmentTypeApply ctx fragment typedef
     then groupedFields
     else 
         let fragmentSelectionSet = fragment.SelectionSet
@@ -261,7 +254,7 @@ and getFieldEntry ctx typedef value (fields: Field list) =
     match getFieldDefinition ctx typedef firstField with
     | None -> null
     | Some fieldDef -> 
-        let args = getArgumentValues fieldDef.Arguments firstField.Arguments ctx.Variables
+        let args = getArgumentValues fieldDef.Args firstField.Arguments ctx.Variables
         let resolveFieldCtx = {
             FieldName = fieldDef.Name
             Fields = fields

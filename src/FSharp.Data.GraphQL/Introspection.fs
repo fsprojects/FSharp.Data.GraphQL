@@ -28,7 +28,7 @@ let internal graphQLKind (_: ResolveFieldContext) = function
     | ListOf _ -> TypeKind.LIST
     | NonNull _ -> TypeKind.NON_NULL
     | InputObject _ -> TypeKind.INPUT_OBJECT
-
+    
 let __TypeKind = Define.Enum(
     name = "__TypeKind", 
     description = "An enum describing what kind of type a given __Type is.",
@@ -68,7 +68,8 @@ let mutable __Type = Define.ObjectType(
         Define.Field("name", NonNull String)
         Define.Field("description", String)
     ])
-    
+   
+open System.Reflection
 let __InputValue = Define.ObjectType(
     name = "__InputValue",
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
@@ -76,7 +77,12 @@ let __InputValue = Define.ObjectType(
         Define.Field("name", NonNull String)
         Define.Field("description", String)
         Define.Field("type", NonNull __Type)
-        Define.Field("defaultValue", String)
+        Define.Field("defaultValue", String, 
+            resolve = fun _ input ->
+                let property = input.GetType().GetProperty("defaultValue", BindingFlags.IgnoreCase|||BindingFlags.Public|||BindingFlags.Instance)
+                if property = null 
+                then null
+                else property.GetValue(input, null))
     ])
     
 let __Field = Define.ObjectType(

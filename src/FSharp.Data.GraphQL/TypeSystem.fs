@@ -17,6 +17,7 @@ type ISchema =
         abstract Directives: DirectiveDef list
         abstract TryFindType: string -> TypeDef option
         abstract GetPossibleTypes: TypeDef -> TypeDef list
+        abstract IsPossibleType: TypeDef -> TypeDef -> bool
     end
 
 and ResolveFieldContext = 
@@ -102,12 +103,12 @@ and [<CustomEquality; NoComparison>] FieldDef =
       Description : string option
       Type : TypeDef
       Resolve : ResolveFieldContext -> obj -> obj
-      Arguments : ArgDef list
+      Args : ArgDef list
       DeprecationReason: string option }
     
     interface IEquatable<FieldDef> with
         member x.Equals f = 
-            x.Name = f.Name && x.Description = f.Description && x.Type = f.Type && x.Arguments = f.Arguments
+            x.Name = f.Name && x.Description = f.Description && x.Type = f.Type && x.Args = f.Args
     
     override x.Equals y = 
         match y with
@@ -120,12 +121,12 @@ and [<CustomEquality; NoComparison>] FieldDef =
                                   | None -> 0
                                   | Some d -> d.GetHashCode())
         hash <- (hash * 397) ^^^ (x.Type.GetHashCode())
-        hash <- (hash * 397) ^^^ (x.Arguments.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
         hash
     
     override x.ToString() = 
         let mutable s = x.Name + ": " + x.Type.ToString()
-        if not (List.isEmpty x.Arguments) then s <- "(" + String.Join(", ", x.Arguments) + ")"
+        if not (List.isEmpty x.Args) then s <- "(" + String.Join(", ", x.Args) + ")"
         s
 
 /// 3.1.3 Interfaces
@@ -177,6 +178,17 @@ and TypeDef =
         | ListOf i -> i.Name
         | NonNull i -> i.Name
         | InputObject o -> o.Name
+
+    member x.Description = 
+        match x with
+        | Scalar scalardef -> scalardef.Description
+        | Enum enumdef -> enumdef.Description
+        | Object objdef -> objdef.Description
+        | Interface idef -> idef.Description
+        | Union udef -> udef.Description
+        | ListOf _ -> None
+        | NonNull _ -> None
+        | InputObject indef -> indef.Description
 
 /// 3.1.6 Input Objects
 and InputObject = 
@@ -479,7 +491,12 @@ module SchemaDefinitions =
         (fun _ v -> 
         match v with
         | null -> null
-        | o -> o.GetType().GetProperty(fieldName, BindingFlags.IgnoreCase|||BindingFlags.Public|||BindingFlags.Instance).GetValue(o, null))        
+        | o -> 
+            let t = o.GetType()
+            let property = t.GetProperty(fieldName, BindingFlags.IgnoreCase|||BindingFlags.Public|||BindingFlags.Instance)
+            if property = null 
+            then raise (GraphQLException (sprintf "Default resolve function failed. Couldn't find property '%s' inside definition of type '%s'." fieldName t.FullName))
+            else property.GetValue(o, null))        
 
     type Define private() =
         static member Scalar (name: string, coerceInput: Value -> 'T option, coerceOutput: 'T -> Value option, coerceValue: obj -> 'T option, ?description: string) = 
@@ -519,7 +536,7 @@ module SchemaDefinitions =
                 Description = description
                 Type = schema
                 Resolve = fun ctx v -> upcast resolve ctx (v :?> 'Object)
-                Arguments = if arguments.IsNone then [] else arguments.Value
+                Args = if arguments.IsNone then [] else arguments.Value
                 DeprecationReason = deprecationReason
             } 
         
@@ -530,7 +547,7 @@ module SchemaDefinitions =
                 Description = description
                 Type = schema
                 Resolve = defaultResolve<'Object> name
-                Arguments = if arguments.IsNone then [] else arguments.Value
+                Args = if arguments.IsNone then [] else arguments.Value
                 DeprecationReason = deprecationReason
             }
 

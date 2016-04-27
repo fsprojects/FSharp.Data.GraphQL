@@ -107,6 +107,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     ]
     let schema = Schema(DataType)
     let result = schema.Execute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
+    noErrors result
     equals expected result.Data.Value
 
 type TestThing = { Thing: string }
@@ -149,6 +150,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         ]
     ]
     let result = schema.Execute(ast, obj())
+    noErrors result
     equals expected result.Data.Value
     
 [<Fact>]
@@ -160,6 +162,7 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
         field "a" String (fun r -> resolved <- data)
     ]
     let result = Schema(Thing).Execute(parse query, data)
+    noErrors result
     equals "thing" resolved.Thing
     
 [<Fact>]
@@ -177,6 +180,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     ]
 
     let result = Schema(Type).Execute(parse query, ())
+    noErrors result
     equals (Some 123) numArg
     equals (Some "foo") stringArg
     
@@ -188,6 +192,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
         field "a" String (fun x -> x.A)
     ])
     let result = schema.Execute(parse "{ a }", { A = "b" })
+    noErrors result
     equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
     
 [<Fact>]
@@ -196,6 +201,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
         field "a" String (fun x -> x.A)
     ])
     let result = schema.Execute(parse "query Example { a }", { A = "b" })
+    noErrors result
     equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
     
 [<Fact>]
@@ -205,4 +211,5 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     ])
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = schema.Execute(parse query, { A = "b" }, operationName = "OtherExample")
+    noErrors result
     equals (Map.ofList ["second", "b" :> obj]) result.Data.Value
