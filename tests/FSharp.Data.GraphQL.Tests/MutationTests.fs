@@ -18,11 +18,11 @@ type Root =
     }
     member x.ChangeImmediatelly num = 
         x.NumberHolder.Number <- num
-        x.NumberHolder.Number
+        x.NumberHolder
     member x.ChangeAsync num = 
         async { 
             x.NumberHolder.Number <- num 
-            return x.NumberHolder.Number
+            return x.NumberHolder
         }    
     member x.ChangeFail(num): int = 
         failwith "Cannot change number"
@@ -69,6 +69,7 @@ let ``Execute: Handles mutation execution ordering: evaluates mutations serially
         "fourth", upcast Map.ofList [ "theNumber", 4 :> obj]
         "fifth",  upcast Map.ofList [ "theNumber", 5 :> obj]
     ]
+    noErrors mutationResult
     equals expected mutationResult.Data.Value
     
 [<Fact>]

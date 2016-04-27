@@ -293,8 +293,8 @@ let private evaluate (schema: #ISchema) doc operation variables root =
         // at the moment both execution procedures works the same
         // ultimately only difference is that mutation requires to 
         // maintain order of executed resolve invocations, while query doesn't
-        let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
-        executeFields ctx schema.Query ctx.RootValue groupedFieldSet
+        let groupedFieldSet = collectFields ctx schema.Mutation.Value operation.SelectionSet  (ref [])
+        executeFields ctx schema.Mutation.Value ctx.RootValue groupedFieldSet
     | Query ->
         let groupedFieldSet = collectFields ctx schema.Query operation.SelectionSet  (ref [])
         executeFields ctx schema.Query ctx.RootValue groupedFieldSet
