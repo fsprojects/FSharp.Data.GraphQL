@@ -20,7 +20,7 @@ type Connection<'Node> =
       Edges : Edge<'Node> list }
     member x.Items = x.Edges |> List.map (fun e -> e.Node)
 
-let Edge nodeType = Define.ObjectType(
+let Edge nodeType = Define.Object(
     name = nodeType.ToString() + "Edge",
     description = "An edge in a connection from an object to another object of type " + nodeType.ToString(),
     fields = [
@@ -28,7 +28,7 @@ let Edge nodeType = Define.ObjectType(
         Define.Field("node", nodeType, fun _ edge -> edge.Node, "The item at the end of the edge")
     ]) 
 
-let PageInfo = Define.ObjectType(
+let PageInfo = Define.Object(
     name = "PageInfo",
     description = "Information about pagination in a connection.",
     fields = [
@@ -38,7 +38,7 @@ let PageInfo = Define.ObjectType(
         Define.Field("endCursor ", String, fun _ pageInfo -> pageInfo.EndCursor, "When paginating forwards, the cursor to continue.")
     ])
 
-let ConnectionType nodeType = Define.ObjectType(
+let ConnectionType nodeType = Define.Object(
     name = nodeType.ToString(),
     description = "A connection from an object to a list of objects of type " + nodeType.ToString(),
     fields = [

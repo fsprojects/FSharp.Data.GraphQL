@@ -9,56 +9,60 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Introspection
 
-type Schema(query: TypeDef, ?mutation: TypeDef, ?types:TypeDef list, ?directives: DirectiveDef list) =
+type Schema(query: ObjectType, ?mutation: ObjectType, ?types: NamedDef list, ?directives: DirectiveDef list) =
     let rec insert ns typedef =
-        let inline addOrReturn name typedef' ns' =
-            if Map.containsKey name ns' 
-            then ns' 
-            else Map.add name typedef' ns'
+        let inline addOrReturn tname (tdef: NamedDef) acc =
+            if Map.containsKey tname acc 
+            then acc 
+            else Map.add tname tdef acc
 
         match typedef with
         | Scalar scalardef -> addOrReturn scalardef.Name typedef ns
         | Enum enumdef -> addOrReturn enumdef.Name typedef ns
         | Object objdef -> 
-            let ns' = addOrReturn typedef.Name typedef ns
+            let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
                 objdef.Fields
                 |> List.map (fun x -> x.Type)
-                |> List.filter (fun x -> not (Map.containsKey x.Name ns'))
-                |> List.fold (fun n t -> insert n t) ns'
+                |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+                |> List.fold (fun n (Named t) -> insert n t) ns'
             objdef.Implements
             |> List.fold (fun n t -> insert n t) withFields'
         | Interface interfacedef ->
             let ns' = 
                 interfacedef.Fields
                 |> List.map (fun x -> x.Type)
-                |> List.filter (fun x -> not (Map.containsKey x.Name ns))
-                |> List.fold (fun n t -> insert n t) ns
+                |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns))
+                |> List.fold (fun n (Named t) -> insert n t) ns
             addOrReturn typedef.Name typedef ns' 
         | Union uniondef ->
             let ns' =
                 uniondef.Options
                 |> List.fold (fun n t -> insert n t) ns
             addOrReturn typedef.Name typedef ns' 
-        | ListOf innerdef -> insert ns innerdef 
-        | NonNull innerdef -> insert ns innerdef
-        | InputObject innerdef -> insert ns (Object innerdef)
+        | List (Named innerdef) -> insert ns innerdef 
+        | NonNull (Named innerdef) -> insert ns innerdef
+        | InputObject innerdef -> insert ns innerdef
         
-    let initialTypes = [ 
+    let initialTypes: NamedDef list = [ 
         Int
         String
         Boolean
         Float
         ID
         __Schema
-        query] 
+        query]
 
-    let mutable types: Map<string, TypeDef> = 
-        initialTypes @ (Option.toList mutation)
+    let mutable typeMap: Map<string, NamedDef> = 
+        let m = 
+            mutation 
+            |> Option.map (fun (Named n) -> n) 
+            |> Option.toList
+        initialTypes @ m @ (match types with None -> [] | Some t -> t)
         |> List.fold insert Map.empty
 
     let implementations =
-        types
+        typeMap
         |> Map.toSeq
         |> Seq.choose (fun (_, v) ->
             match v with
@@ -68,16 +72,16 @@ type Schema(query: TypeDef, ?mutation: TypeDef, ?types:TypeDef list, ?directives
             objdef.Implements
             |> List.fold (fun acc' iface ->
                 match Map.tryFind iface.Name acc' with
-                | Some list -> Map.add iface.Name (iface::list) acc'
-                | None -> Map.add iface.Name [iface] acc') acc
+                | Some list -> Map.add iface.Name (objdef::list) acc'
+                | None -> Map.add iface.Name [objdef] acc') acc
             ) Map.empty
 
     interface ISchema with
-        member val TypeMap = types
+        member val TypeMap = typeMap
         member val Query = query
         member val Mutation = mutation
         member val Directives = match directives with None -> [IncludeDirective; SkipDirective] | Some d -> d
-        member x.TryFindType typeName = Map.tryFind typeName types
+        member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = 
             match typedef with
             | Union u -> u.Options
@@ -88,10 +92,10 @@ type Schema(query: TypeDef, ?mutation: TypeDef, ?types:TypeDef list, ?directives
             | [] -> false
             | possibleTypes -> possibleTypes |> List.exists (fun t -> t.Name = possibledef.Name)
 
-    interface System.Collections.Generic.IEnumerable<TypeDef> with
-        member x.GetEnumerator() = (types |> Map.toSeq |> Seq.map snd).GetEnumerator()
+    interface System.Collections.Generic.IEnumerable<NamedDef> with
+        member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (types |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
 
     
