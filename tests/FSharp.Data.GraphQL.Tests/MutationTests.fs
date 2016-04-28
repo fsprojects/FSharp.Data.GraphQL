@@ -42,7 +42,7 @@ let schema = Schema(
     ])
 
 [<Fact>]
-let ``Execute: Handles mutation execution ordering: evaluates mutations serially`` () =
+let ``Execute handles mutation execution ordering: evaluates mutations serially`` () =
     let query = """mutation M {
       first: immediatelyChangeTheNumber(newNumber: 1) {
         theNumber
@@ -73,7 +73,7 @@ let ``Execute: Handles mutation execution ordering: evaluates mutations serially
     equals expected mutationResult.Data.Value
     
 [<Fact>]
-let ``Execute: Handles mutation execution ordering: evaluates mutations correctly in the presense of a failed mutation`` () =
+let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
     let query = """mutation M {
       first: immediatelyChangeTheNumber(newNumber: 1) {
         theNumber

@@ -16,7 +16,7 @@ type Cat = { Name: string; Meows: bool }
 type Human = { Name: string; }
 
 [<Fact>]
-let ``Execute: Handles execution of abstract types: isTypeOf used to resolve runtime type for Interface`` () = 
+let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () = 
     let PetType = Define.Interface("Pet", [ Define.Field("name", String) ])
     let DogType = Define.Object(
         name = "Dog", 
@@ -64,7 +64,7 @@ let ``Execute: Handles execution of abstract types: isTypeOf used to resolve run
     equals expected result.Data.Value
     
 [<Fact>]
-let ``Execute: Handles execution of abstract types: isTypeOf used to resolve runtime type for Union`` () = 
+let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
     let DogType = Define.Object(
         name = "Dog", 
         isTypeOf = is<Dog>,

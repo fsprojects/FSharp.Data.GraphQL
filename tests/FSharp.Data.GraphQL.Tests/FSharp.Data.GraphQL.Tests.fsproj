@@ -124,6 +124,7 @@
     <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ExecutionTests.fs" />
     <Compile Include="MutationTests.fs" />
+    <Compile Include="ResolveTests.fs" />
     <None Include="paket.references" />
     <Content Include="App.config" />
   </ItemGroup>
