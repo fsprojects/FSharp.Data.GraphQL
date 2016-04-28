@@ -132,8 +132,8 @@ let inline private coerceArgument ctx (arg: Argument) =
 
 let private shouldSkip ctx (directive: Directive) =
     match directive.Name with
-    | "skip" when coerceArgument ctx directive.If -> false
-    | "include" when not <| coerceArgument ctx directive.If -> false
+    | "skip" when not <| coerceArgument ctx directive.If -> false
+    | "include" when  coerceArgument ctx directive.If -> false
     | _ -> true
 
 let private doesFragmentTypeApply ctx fragment (objectType: ObjectType) = 
