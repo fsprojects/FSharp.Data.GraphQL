@@ -28,6 +28,10 @@ let internal graphQLKind (_: ResolveFieldContext) = function
     | List _ -> TypeKind.LIST
     | NonNull _ -> TypeKind.NON_NULL
     | InputObject _ -> TypeKind.INPUT_OBJECT
+
+open System.Reflection
+let internal getProperty o name =
+    o.GetType().GetProperty(name, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
     
 let __TypeKind = Define.Enum(
     name = "__TypeKind", 
@@ -65,7 +69,13 @@ let mutable __Type = Define.Object(
     """,
     fields = [
         Define.Field("kind", NonNull __TypeKind, resolve = graphQLKind)
-        Define.Field("name", NonNull String)
+        Define.Field("name", NonNull String, resolve = fun _ t ->
+            match t with
+            | Named namedType -> namedType.Name :> obj
+            | _ -> 
+                match getProperty t "name" with
+                | null -> null
+                | property -> property.GetValue(t, null))
         Define.Field("description", String)
     ])
    
@@ -120,7 +130,7 @@ __Type <-  mergeFields __Type [
             then fields
             else fields |> List.filter (fun f -> Option.isNone f.DeprecationReason))
     Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
-    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> ctx.Schema.GetPossibleTypes t)
+    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> ctx.Schema.GetPossibleTypes a | _ -> [])
     Define.Field("enumValues", ListOf (NonNull __EnumValue),
         arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
@@ -133,7 +143,6 @@ __Type <-  mergeFields __Type [
             | _ -> [])
     Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
         match t with
-        | Object odef -> odef.Fields
         | InputObject idef -> idef.Fields
         | _ -> [])
     Define.Field("ofType", __Type)

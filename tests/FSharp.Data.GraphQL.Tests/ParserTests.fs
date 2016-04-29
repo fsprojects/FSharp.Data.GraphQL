@@ -602,6 +602,6 @@ fragment frag on Friend {
   query
 }"""
 
-[<Fact>]
+[<Fact(Skip = "Open when new parser will be deployed")>]
 let ``parser should parse kitchen sink``() =
     parse KitchenSink
