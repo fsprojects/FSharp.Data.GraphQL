@@ -11,7 +11,7 @@ open FSharp.Data.GraphQL.Types
 
 [<Fact>]
 let ``Object type should be able to merge fields with matching signatures from different interfaces`` () = 
-    let person = Define.ObjectType("Person", [
+    let person = Define.Object("Person", [
         Define.Field("name", String)
     ])
     let movable = Define.Interface("Movable", [
@@ -22,7 +22,7 @@ let ``Object type should be able to merge fields with matching signatures from d
         Define.Field("acceleration", Int)
     ])
     let objectType = implements person [ movable; movable2 ]
-    let expected = Define.ObjectType("Person", [
+    let expected = Define.Object("Person", [
         Define.Field("name", String)
         Define.Field("speed", Int)
         Define.Field("acceleration", Int)
@@ -32,7 +32,7 @@ let ``Object type should be able to merge fields with matching signatures from d
 
 [<Fact>]
 let ``Object type should not be able to merge fields with matching names but different types from different interfaces`` () = 
-    let person = Define.ObjectType("Person", [
+    let person = Define.Object("Person", [
         Define.Field("name", String)
     ])
     let movable = Define.Interface("Movable", [

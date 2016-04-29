@@ -43,7 +43,7 @@ let rec private coerceValue typedef (input: obj) =
         match coerceValue innerdef input with
         | None -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
         | other -> other
-    | ListOf innerdef ->
+    | List innerdef ->
         match input with
         | null -> None
         | :? System.Collections.IEnumerable as iter -> 
@@ -53,14 +53,17 @@ let rec private coerceValue typedef (input: obj) =
                 |> Seq.map (fun elem -> coerceValue innerdef elem)
             Some(upcast mapped)
         | other -> raise (GraphQLException (sprintf "Value '%A' was expected to be an enumberable collection" input))
-    | Object objdef | InputObject objdef ->
-        let map = input :?> Map<string, obj>
-        let mapped = 
-            objdef.Fields
-            |> List.map (fun field -> (field.Name, coerceValue field.Type map.[field.Name]))
-            |> Map.ofList
-        Some(upcast mapped)
+    | Object objdef -> coerceObjectValue objdef.Fields input
+    | InputObject objdef -> coerceObjectValue objdef.Fields input
     | other -> raise (GraphQLException (sprintf "Cannot coerce defintion '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other))
+
+and private coerceObjectValue (fields: FieldDef list) (input: obj) =
+    let map = input :?> Map<string, obj>
+    let mapped = 
+        fields
+        |> List.map (fun field -> (field.Name, coerceValue field.Type map.[field.Name]))
+        |> Map.ofList
+    Some(mapped :> obj)
 
 let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (variables: Map<string, obj option>) : Map<string, obj> = 
     argDefs
@@ -129,18 +132,19 @@ let inline private coerceArgument ctx (arg: Argument) =
 
 let private shouldSkip ctx (directive: Directive) =
     match directive.Name with
-    | "skip" when coerceArgument ctx directive.If -> false
-    | "include" when not <| coerceArgument ctx directive.If -> false
+    | "skip" when not <| coerceArgument ctx directive.If -> false
+    | "include" when  coerceArgument ctx directive.If -> false
     | _ -> true
 
-let private doesFragmentTypeApply ctx fragment (typedef:TypeDef) = 
+let private doesFragmentTypeApply ctx fragment (objectType: ObjectType) = 
     match fragment.TypeCondition with
     | None -> true
     | Some typeCondition ->
         match ctx.Schema.TryFindType typeCondition with
         | None -> false
-        | Some conditionalType when conditionalType.Name = typedef.Name -> true
-        | Some conditionalType -> ctx.Schema.IsPossibleType conditionalType typedef
+        | Some conditionalType when conditionalType.Name = objectType.Name -> true
+        | Some (Abstract conditionalType) -> ctx.Schema.IsPossibleType conditionalType objectType
+        | _ -> false
 
 // 6.5 Evaluating selection sets
 let rec private collectFields ctx typedef selectionSet visitedFragments =
@@ -201,37 +205,45 @@ let private resolveField value ctx fieldDef = async {
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-let private getFieldDefinition ctx typedef (field: Field) =
+let private getFieldDefinition ctx objectType (field: Field) =
     match field.Name with
-    | "__schema" when ctx.Schema.Query = typedef -> Some SchemaMetaFieldDef
-    | "__type" when ctx.Schema.Query = typedef -> Some TypeMetaFieldDef
+    | "__schema" when ctx.Schema.Query = objectType -> Some SchemaMetaFieldDef
+    | "__type" when ctx.Schema.Query = objectType -> Some TypeMetaFieldDef
     | "__typename" -> Some TypeNameMetaFieldDef
-    | fieldName ->
-        match typedef with
-        | Object objectType -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
-        | _ -> raise (GraphQLException (sprintf "Tried to retrieve '%s' field from non-object type '%s'" fieldName typedef.Name))
-        
-let private resolveInterfaceType interfaceType objectValue = failwith "Not implemented"
+    | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
 
-let private resolveUnionType unionType objectValue = failwith "Not implemented"
+let private defaultResolveType ctx abstractDef objectValue =
+    let possibleTypes = ctx.Schema.GetPossibleTypes abstractDef
+    possibleTypes
+    |> List.find (fun objdef ->
+        match objdef.IsTypeOf with
+        | Some isTypeOf ->
+            isTypeOf(objectValue)
+        | None -> false)
+        
+let private resolveInterfaceType ctx (interfaceType: InterfaceType) objectValue = 
+    match interfaceType.ResolveType with
+    | Some resolveType -> resolveType(objectValue)
+    | None -> defaultResolveType ctx interfaceType objectValue
+
+let private resolveUnionType ctx (unionType: UnionType) objectValue = defaultResolveType ctx unionType objectValue
 
 /// Complete an ObjectType value by executing all sub-selections
 let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = async {
-    let typedef = Object objectType
     let groupedFieldSet = 
         fields
-        |> List.fold (fun subFields field -> collectFields ctx typedef field.SelectionSet (ref [])) Map.empty
-    let! res = executeFields ctx typedef result groupedFieldSet 
+        |> List.fold (fun subFields field -> collectFields ctx objectType field.SelectionSet (ref [])) Map.empty
+    let! res = executeFields ctx objectType result groupedFieldSet 
     return res }
 
-and private completeValue ctx fieldType fields (result: obj): Async<obj> = async {
-    match fieldType with
+and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async {
+    match fieldDef with
     | NonNull innerType ->
         let! completed = completeValue ctx innerType fields result
         match completed with
-        | null -> return raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" fieldType.Name))
+        | null -> return raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" (fieldDef.ToString())))
         | completedResult -> return completedResult
-    | ListOf innerType ->
+    | List innerType ->
         match result with
         | :? System.Collections.IEnumerable as enumerable ->
             let! completed=
@@ -240,22 +252,22 @@ and private completeValue ctx fieldType fields (result: obj): Async<obj> = async
                 |> Seq.map (completeValue ctx innerType fields)
                 |> Async.Parallel
             return upcast (completed |> List.ofArray)
-        | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" fieldType.Name))
+        | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" (fieldDef.ToString())))
     | Scalar scalarType -> 
         return scalarType.CoerceValue result |> Option.toObj
-    | Enum enumType -> 
+    | Enum _ -> 
         match coerceStringValue result with
         | Some s -> return (upcast s)
         | None -> return null
-    | InputObject objectType | Object objectType ->
+    | Object objectType ->
         let! completed = completeObjectValue ctx objectType fields result
         return upcast completed
     | Interface typedef ->
-        let objectType = resolveInterfaceType typedef result
+        let objectType = resolveInterfaceType ctx typedef result
         let! completed = completeObjectValue ctx objectType fields result
         return upcast completed
     | Union typedef ->
-        let objectType = resolveUnionType typedef result
+        let objectType = resolveUnionType ctx typedef result
         let! completed = completeObjectValue ctx objectType fields result
         return upcast completed }
 

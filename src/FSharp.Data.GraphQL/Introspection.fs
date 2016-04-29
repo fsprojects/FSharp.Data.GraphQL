@@ -25,7 +25,7 @@ let internal graphQLKind (_: ResolveFieldContext) = function
     | Object _ -> TypeKind.OBJECT
     | Interface _ -> TypeKind.INTERFACE
     | Union _ -> TypeKind.UNION
-    | ListOf _ -> TypeKind.LIST
+    | List _ -> TypeKind.LIST
     | NonNull _ -> TypeKind.NON_NULL
     | InputObject _ -> TypeKind.INPUT_OBJECT
     
@@ -56,7 +56,7 @@ let __DirectiveLocation = Define.Enum(
         Define.EnumValue("INLINE_FRAGMENT", DirectiveLocation.INLINE_FRAGMENT, "Location adjacent to an inline fragment.")
     ])
     
-let mutable __Type = Define.ObjectType(
+let mutable __Type = Define.Object(
     name = "__Type",
     description = """
     The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum.
@@ -70,7 +70,7 @@ let mutable __Type = Define.ObjectType(
     ])
    
 open System.Reflection
-let __InputValue = Define.ObjectType(
+let __InputValue = Define.Object(
     name = "__InputValue",
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
     fields = [
@@ -85,7 +85,7 @@ let __InputValue = Define.ObjectType(
                 else property.GetValue(input, null))
     ])
     
-let __Field = Define.ObjectType(
+let __Field = Define.Object(
     name = "__Field",
     description = "Object and Interface types are described by a list of Fields, each of which has a name, potentially a list of arguments, and a return type.",
     fields = [
@@ -97,7 +97,7 @@ let __Field = Define.ObjectType(
         Define.Field("deprecationReason", String)
     ])
     
-let __EnumValue = Define.ObjectType(
+let __EnumValue = Define.Object(
     name = "__EnumValue",
     description = "One possible value for a given Enum. Enum values are unique values, not a placeholder for a string or numeric value. However an Enum value is returned in a JSON response as a string.",
     fields = [
@@ -107,41 +107,39 @@ let __EnumValue = Define.ObjectType(
         Define.Field("deprecationReason", String)
     ])
     
-match __Type with
-    | Object o ->
-        __Type <-  mergeFields o [
-            Define.Field("fields", ListOf (NonNull __Field), 
-                arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
-                resolve = fun ctx t ->
-                    let fields = 
-                        match t with
-                        | Object odef -> odef.Fields
-                        | Interface idef -> idef.Fields
-                        | _ -> []
-                    if ctx.Arg("includeDeprecated").Value
-                    then fields
-                    else fields |> List.filter (fun f -> Option.isNone f.DeprecationReason))
-            Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
-            Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> ctx.Schema.GetPossibleTypes t)
-            Define.Field("enumValues", ListOf (NonNull __EnumValue),
-                arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
-                resolve = fun ctx t ->
-                    match t with
-                    | Enum e ->
-                        let values = e.Options
-                        if ctx.Arg("includeDeprecated").Value
-                        then values
-                        else values |> List.filter (fun v -> Option.isNone v.DeprecationReason)
-                    | _ -> [])
-            Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
+__Type <-  mergeFields __Type [
+    Define.Field("fields", ListOf (NonNull __Field), 
+        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        resolve = fun ctx t ->
+            let fields = 
                 match t with
                 | Object odef -> odef.Fields
-                | InputObject idef -> idef.Fields
-                | _ -> [])
-            Define.Field("ofType", __Type)
-        ] |> Object
+                | Interface idef -> idef.Fields
+                | _ -> []
+            if ctx.Arg("includeDeprecated").Value
+            then fields
+            else fields |> List.filter (fun f -> Option.isNone f.DeprecationReason))
+    Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
+    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> ctx.Schema.GetPossibleTypes t)
+    Define.Field("enumValues", ListOf (NonNull __EnumValue),
+        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        resolve = fun ctx t ->
+            match t with
+            | Enum e ->
+                let values = e.Options
+                if ctx.Arg("includeDeprecated").Value
+                then values
+                else values |> List.filter (fun v -> Option.isNone v.DeprecationReason)
+            | _ -> [])
+    Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
+        match t with
+        | Object odef -> odef.Fields
+        | InputObject idef -> idef.Fields
+        | _ -> [])
+    Define.Field("ofType", __Type)
+]
 
-let __Directive = Define.ObjectType(
+let __Directive = Define.Object(
     name = "__Directive",
     description = """
     A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document.' +
@@ -160,11 +158,11 @@ let __Directive = Define.ObjectType(
         Define.Field("onField", NonNull Boolean, resolve = fun _ (d: DirectiveDef) -> d.Locations.HasFlag(DirectiveLocation.FIELD))
     ])
     
-let __Schema = Define.ObjectType(
+let __Schema = Define.Object(
     name = "__Schema",
     description = "A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all available types and directives on the server, as well as the entry points for query, mutation, and subscription operations.",
     fields = [
-        Define.Field("types", NonNull (ListOf (NonNull __Type)), description = "A list of all types supported by this server.", resolve = fun _ (schema: ISchema) -> (schema :> System.Collections.Generic.IEnumerable<TypeDef>))
+        Define.Field("types", NonNull (ListOf (NonNull __Type)), description = "A list of all types supported by this server.", resolve = fun _ (schema: ISchema) -> (schema :> System.Collections.Generic.IEnumerable<NamedDef>))
         Define.Field("queryType", NonNull __Type, description = "The type that query operations will be rooted at.", resolve = fun _ (schema: ISchema) -> schema.Query)
         Define.Field("mutationType", __Type, description = "If this server supports mutation, the type that mutation operations will be rooted at.", resolve = fun _ (schema: ISchema) -> schema.Mutation)
         Define.Field("subscriptionType", __Type, description = "If this server support subscription, the type that subscription operations will be rooted at.", resolve = fun _ _ -> null)
@@ -174,13 +172,13 @@ let __Schema = Define.ObjectType(
 let SchemaMetaFieldDef = Define.Field(
     name = "__schema",
     description = "Access the current type schema of this server.",
-    schema = NonNull __Schema,
+    typedef = NonNull __Schema,
     resolve = fun ctx _ -> ctx.Schema)
     
 let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
-    schema = __Type,
+    typedef = __Type,
     arguments = [
         { Name = "name"; Type = (NonNull String); Description = None; DefaultValue = None }
     ],
@@ -189,5 +187,5 @@ let TypeMetaFieldDef = Define.Field(
 let TypeNameMetaFieldDef = Define.Field(
     name = "__typename",
     description = "The name of the current Object type at runtime.",
-    schema = NonNull String,
+    typedef = NonNull String,
     resolve = fun ctx _ -> ctx.ParentType.Name)
