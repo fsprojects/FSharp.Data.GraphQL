@@ -12,14 +12,15 @@ type ISchema =
     interface
         inherit System.Collections.Generic.IEnumerable<NamedDef>
         abstract TypeMap : Map<string, NamedDef>
-        abstract Query : ObjectType
-        abstract Mutation : ObjectType option
+        abstract Query : ObjectDef
+        abstract Mutation : ObjectDef option
         abstract Directives : DirectiveDef list
         abstract TryFindType : string -> NamedDef option
-        abstract GetPossibleTypes : AbstractDef -> ObjectType list
-        abstract IsPossibleType : AbstractDef -> ObjectType -> bool
+        abstract GetPossibleTypes : AbstractDef -> ObjectDef list
+        abstract IsPossibleType : AbstractDef -> ObjectDef -> bool
     end
 
+// 3.1 Types
 and TypeDef = 
     interface 
     end
@@ -54,7 +55,7 @@ and ResolveFieldContext =
       Fields : Field list
       FieldType : FieldDef
       ReturnType : TypeDef
-      ParentType : ObjectType
+      ParentType : ObjectDef
       Schema : ISchema
       Args : Map<string, obj>
       Operation : OperationDefinition
@@ -101,7 +102,7 @@ and EnumValue =
       DeprecationReason : string option }
     override x.ToString() = x.Name
 
-and EnumType = 
+and EnumDef = 
     { Name : string
       Description : string option
       Options : EnumValue list }
@@ -116,11 +117,11 @@ and EnumType =
     override x.ToString() = sprintf "enum %s {\n    %s\n}" x.Name (String.Join("\n    ", x.Options))
 
 /// 3.1.2 Objects
-and [<CustomEquality; NoComparison>] ObjectType = 
+and [<CustomEquality; NoComparison>] ObjectDef = 
     { Name : string
       Description : string option
       mutable Fields : FieldDef list
-      mutable Implements : InterfaceType list
+      mutable Implements : InterfaceDef list
       mutable IsTypeOf : (obj -> bool) option }
 
     interface TypeDef
@@ -139,12 +140,12 @@ and [<CustomEquality; NoComparison>] ObjectType =
             raise (GraphQLException msg)
         | None -> x.Fields <- x.Fields @ [ field ]
     
-    interface IEquatable<ObjectType> with
+    interface IEquatable<ObjectDef> with
         member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Fields = f.Fields
     
     override x.Equals y = 
         match y with
-        | :? ObjectType as f -> (x :> IEquatable<ObjectType>).Equals(f)
+        | :? ObjectDef as f -> (x :> IEquatable<ObjectDef>).Equals(f)
         | _ -> false
     
     override x.GetHashCode() = 
@@ -195,11 +196,11 @@ and [<CustomEquality; NoComparison>] FieldDef =
         s
 
 /// 3.1.3 Interfaces
-and [<CustomEquality; NoComparison>]InterfaceType = 
+and [<CustomEquality; NoComparison>]InterfaceDef = 
     { Name : string
       Description : string option
       mutable Fields : FieldDef list
-      mutable ResolveType: (obj -> ObjectType) option }
+      mutable ResolveType: (obj -> ObjectDef) option }
 
     interface TypeDef
     interface OutputDef
@@ -208,12 +209,12 @@ and [<CustomEquality; NoComparison>]InterfaceType =
     interface NamedDef with
         member x.Name = x.Name
       
-    interface IEquatable<InterfaceType> with
+    interface IEquatable<InterfaceDef> with
         member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Fields = f.Fields
     
     override x.Equals y = 
         match y with
-        | :? InterfaceType as f -> (x :> IEquatable<InterfaceType>).Equals(f)
+        | :? InterfaceDef as f -> (x :> IEquatable<InterfaceDef>).Equals(f)
         | _ -> false
     
     override x.GetHashCode() = 
@@ -230,10 +231,10 @@ and [<CustomEquality; NoComparison>]InterfaceType =
         sb.Append("\n}").ToString()
 
 /// 3.1.4 Unions
-and UnionType = 
+and UnionDef = 
     { Name : string
       Description : string option
-      Options : ObjectType list }
+      Options : ObjectDef list }
       
     interface TypeDef
     interface OutputDef
@@ -243,51 +244,7 @@ and UnionType =
         member x.Name = x.Name
 
     override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options)
-
-/// 3.1 Types
-//and TypeDef = 
-//    | Scalar of ScalarType
-//    | Enum of EnumType
-//    | Object of ObjectType
-//    | Interface of InterfaceType
-//    | Union of UnionType
-//    | ListOf of TypeDef
-//    | NonNull of TypeDef
-//    | InputObject of ObjectType
-//    
-//    override x.ToString() = 
-//        match x with
-//        | Scalar y -> y.ToString()
-//        | Enum y -> y.ToString()
-//        | Object y -> y.ToString()
-//        | Interface y -> y.ToString()
-//        | Union y -> y.ToString()
-//        | ListOf y -> "[" + y.ToString() + "]"
-//        | NonNull y -> y.ToString() + "!"
-//        | InputObject y -> y.ToString()
-//    
-//    member x.Name = 
-//        match x with
-//        | Scalar s -> s.Name
-//        | Enum e -> e.Name
-//        | Object o -> o.Name
-//        | Interface i -> i.Name
-//        | Union u -> u.Name
-//        | ListOf i -> i.Name
-//        | NonNull i -> i.Name
-//        | InputObject o -> o.Name
-//    
-//    member x.Description = 
-//        match x with
-//        | Scalar scalardef -> scalardef.Description
-//        | Enum enumdef -> enumdef.Description
-//        | Object objdef -> objdef.Description
-//        | Interface idef -> idef.Description
-//        | Union udef -> udef.Description
-//        | ListOf _ -> None
-//        | NonNull _ -> None
-//        | InputObject indef -> indef.Description
-
+    
 and ListOfDef = 
     { Type: TypeDef }
     interface TypeDef
@@ -494,19 +451,19 @@ module SchemaDefinitions =
         | _ -> None
     let (|Object|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ObjectType as x -> Some x
+        | :? ObjectDef as x -> Some x
         | _ -> None        
     let (|Interface|_|) (tdef: TypeDef) =
         match tdef with
-        | :? InterfaceType as x -> Some x
+        | :? InterfaceDef as x -> Some x
         | _ -> None        
     let (|Union|_|) (tdef: TypeDef) =
         match tdef with
-        | :? UnionType as x -> Some x
+        | :? UnionDef as x -> Some x
         | _ -> None        
     let (|Enum|_|) (tdef: TypeDef) =
         match tdef with
-        | :? EnumType as x -> Some x
+        | :? EnumDef as x -> Some x
         | _ -> None        
     let (|InputObject|_|) (tdef: TypeDef) =
         match tdef with
@@ -522,23 +479,23 @@ module SchemaDefinitions =
         | _ -> None
     let (|Input|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumType | :? InputObjectDef -> Some tdef
+        | :? ScalarType | :? EnumDef | :? InputObjectDef -> Some tdef
         | _ -> None
     let (|Output|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumType | :? ObjectType | :? InterfaceType | :? UnionType -> Some tdef
+        | :? ScalarType | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
         | _ -> None
     let (|Leaf|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumType -> Some tdef
+        | :? ScalarType | :? EnumDef -> Some tdef
         | _ -> None
     let (|Composite|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ObjectType | :? InterfaceType | :? UnionType -> Some tdef
+        | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
         | _ -> None
     let (|Abstract|_|) (tdef: TypeDef) =
         match tdef with
-        | :? InterfaceType | :? UnionType -> Some (tdef :?> AbstractDef)
+        | :? InterfaceDef | :? UnionDef -> Some (tdef :?> AbstractDef)
         | _ -> None
 
     let rec private named (tdef: TypeDef) =
@@ -636,7 +593,7 @@ module SchemaDefinitions =
         | Variable variable -> variables.[variable] |> Option.toObj
     
     /// Adds a single field to existing object type, returning new object type in result.
-    let mergeField (objectType : ObjectType) (field : FieldDef) : ObjectType = 
+    let mergeField (objectType : ObjectDef) (field : FieldDef) : ObjectDef = 
         match objectType.Fields |> Seq.tryFind (fun x -> x.Name = field.Name) with
         | None -> { objectType with Fields = objectType.Fields @ [ field ] } // we must append to the end
         | Some x when x = field -> objectType
@@ -648,37 +605,40 @@ module SchemaDefinitions =
             raise (GraphQLException msg)
     
     /// Adds list of fields to existing object type, returning new object type in result.
-    let mergeFields (objectType : ObjectType) (fields : FieldDef list) : ObjectType = 
+    let mergeFields (objectType : ObjectDef) (fields : FieldDef list) : ObjectDef = 
         fields |> List.fold mergeField objectType //TODO: optimize
     
     /// Orders object type to implement collection of interfaces, applying all of their field to it.
     /// Returns new object type implementing all of the fields in result.
-    let implements (objectType : ObjectType) (interfaces : InterfaceType list) : ObjectType = 
+    let implements (objectType : ObjectDef) (interfaces : InterfaceDef list) : ObjectDef = 
         let o = { objectType with Implements = objectType.Implements @ interfaces }        
         let modified = 
             interfaces
             |> List.map (fun i -> i.Fields)
             |> List.fold mergeFields o
         modified
-    
-    let internal getProperty o pname = 
-        let t = o.GetType()
-        let property = t.GetProperty(pname, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
-        if property = null then 
-            raise 
-                (GraphQLException
-                     (sprintf 
-                          "Default resolve function failed. Couldn't find property '%s' inside definition of type '%s'." 
-                          pname t.FullName))
-        else property
-    
+                
+    let internal matchParameters (methodInfo: MethodInfo) (ctx: ResolveFieldContext) =
+        methodInfo.GetParameters()
+        |> Array.map (fun param -> ctx.Arg<obj>(param.Name).Value)
+                
     let internal defaultResolve<'t> (fieldName : string) : ResolveFieldContext -> obj -> Async<obj> = 
-        (fun _ v -> 
+        (fun ctx v -> 
         async { 
             if v = null then return null
             else 
-                let property = getProperty v fieldName
-                return property.GetValue(v, null)
+                let t = v.GetType()
+                let memberInfo = t.GetMember(fieldName, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
+                match memberInfo with
+                | [||] -> return raise (GraphQLException (sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName))
+                | found ->
+                    match found.[0] with
+                    | :? PropertyInfo as property -> return property.GetValue(v, null)
+                    | :? MethodInfo as methodInfo -> 
+                        let parameters = matchParameters methodInfo ctx
+                        return methodInfo.Invoke(v, parameters)
+                    | :? FieldInfo as field -> return field.GetValue(v)
+            
         })
     
     type Define private () = 
@@ -696,7 +656,7 @@ module SchemaDefinitions =
               CoerceValue = coerceValue >> Option.map box }
         
         /// GraphQL type for user defined enums
-        static member Enum(name : string, options : EnumValue list, ?description : string) : EnumType = 
+        static member Enum(name : string, options : EnumValue list, ?description : string) : EnumDef = 
             { Name = name
               Description = description
               Options = options }
@@ -710,7 +670,7 @@ module SchemaDefinitions =
         
         /// GraphQL custom object type
         static member Object(name : string, fields : FieldDef list, ?description : string, 
-                                 ?interfaces : InterfaceType list, ?isTypeOf : obj -> bool) : ObjectType = 
+                                 ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
             let o = 
                 { Name = name
                          Description = description
@@ -765,14 +725,14 @@ module SchemaDefinitions =
                   | None -> None }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fields : FieldDef list, ?description : string, ?resolveType: obj -> ObjectType) : InterfaceType = 
+        static member Interface(name : string, fields : FieldDef list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef = 
             { Name = name
               Description = description
               Fields = fields
               ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectType list, ?description : string) : UnionType = 
+        static member Union(name : string, options : ObjectDef list, ?description : string) : UnionDef = 
             { Name = name
               Description = description
               Options = options }

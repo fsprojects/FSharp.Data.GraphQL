@@ -136,7 +136,7 @@ let private shouldSkip ctx (directive: Directive) =
     | "include" when  coerceArgument ctx directive.If -> false
     | _ -> true
 
-let private doesFragmentTypeApply ctx fragment (objectType: ObjectType) = 
+let private doesFragmentTypeApply ctx fragment (objectType: ObjectDef) = 
     match fragment.TypeCondition with
     | None -> true
     | Some typeCondition ->
@@ -221,12 +221,12 @@ let private defaultResolveType ctx abstractDef objectValue =
             isTypeOf(objectValue)
         | None -> false)
         
-let private resolveInterfaceType ctx (interfaceType: InterfaceType) objectValue = 
+let private resolveInterfaceType ctx (interfaceType: InterfaceDef) objectValue = 
     match interfaceType.ResolveType with
     | Some resolveType -> resolveType(objectValue)
     | None -> defaultResolveType ctx interfaceType objectValue
 
-let private resolveUnionType ctx (unionType: UnionType) objectValue = defaultResolveType ctx unionType objectValue
+let private resolveUnionType ctx (unionType: UnionDef) objectValue = defaultResolveType ctx unionType objectValue
 
 /// Complete an ObjectType value by executing all sub-selections
 let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = async {

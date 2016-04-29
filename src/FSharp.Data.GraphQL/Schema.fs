@@ -9,7 +9,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Introspection
 
-type Schema(query: ObjectType, ?mutation: ObjectType, ?types: NamedDef list, ?directives: DirectiveDef list) =
+type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?directives: DirectiveDef list) =
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
