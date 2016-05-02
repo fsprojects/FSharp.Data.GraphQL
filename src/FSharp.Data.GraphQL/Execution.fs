@@ -55,7 +55,7 @@ let rec private coerceValue typedef (input: obj) =
         | other -> raise (GraphQLException (sprintf "Value '%A' was expected to be an enumberable collection" input))
     | Object objdef -> coerceObjectValue objdef.Fields input
     | InputObject objdef -> coerceObjectValue objdef.Fields input
-    | other -> raise (GraphQLException (sprintf "Cannot coerce defintion '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other))
+    | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other typedef))
 
 and private coerceObjectValue (fields: FieldDef list) (input: obj) =
     let map = input :?> Map<string, obj>
@@ -238,37 +238,37 @@ let rec private completeObjectValue ctx objectType (fields: Field list) (result:
 
 and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async {
     match fieldDef with
-    | NonNull innerType ->
-        let! completed = completeValue ctx innerType fields result
+    | NonNull innerdef ->
+        let! completed = completeValue ctx innerdef fields result
         match completed with
         | null -> return raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" (fieldDef.ToString())))
         | completedResult -> return completedResult
-    | List innerType ->
+    | List innerdef ->
         match result with
         | :? System.Collections.IEnumerable as enumerable ->
             let! completed=
                 enumerable
                 |> Seq.cast<obj>
-                |> Seq.map (completeValue ctx innerType fields)
+                |> Seq.map (completeValue ctx innerdef fields)
                 |> Async.Parallel
             return upcast (completed |> List.ofArray)
         | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value on the list field '%s'" (fieldDef.ToString())))
-    | Scalar scalarType -> 
-        return scalarType.CoerceValue result |> Option.toObj
+    | Scalar scalardef -> 
+        return scalardef.CoerceValue result |> Option.toObj
     | Enum _ -> 
         match coerceStringValue result with
         | Some s -> return (upcast s)
         | None -> return null
-    | Object objectType ->
-        let! completed = completeObjectValue ctx objectType fields result
+    | Object objectdef ->
+        let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed
     | Interface typedef ->
-        let objectType = resolveInterfaceType ctx typedef result
-        let! completed = completeObjectValue ctx objectType fields result
+        let objectdef = resolveInterfaceType ctx typedef result
+        let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed
     | Union typedef ->
-        let objectType = resolveUnionType ctx typedef result
-        let! completed = completeObjectValue ctx objectType fields result
+        let objectdef = resolveUnionType ctx typedef result
+        let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed }
 
 // 6.6.1 Field entries
@@ -340,10 +340,24 @@ let private execute (schema: #ISchema) doc operationName variables root errors =
     | Some operation -> return! evaluate schema doc operation variables root errors
     | None -> return raise (GraphQLException "No operation with specified name has been found for provided document") }
 
+open FSharp.Data.GraphQL.Parser
 type FSharp.Data.GraphQL.Schema with
+
     member schema.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
         async {
             try
+                let errors = ConcurrentBag()
+                let! result = execute schema ast operationName variables data errors
+                return { Data = Some result; Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
+            with 
+            | ex -> 
+                let msg = ex.Message
+                return { Data = None; Errors = Some [| GraphQLError msg |]} }
+
+    member schema.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
+        async {
+            try
+                let ast = parse queryOrMutation
                 let errors = ConcurrentBag()
                 let! result = execute schema ast operationName variables data errors
                 return { Data = Some result; Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }

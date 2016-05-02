@@ -119,7 +119,7 @@ let __EnumValue = Define.Object(
     
 __Type <-  mergeFields __Type [
     Define.Field("fields", ListOf (NonNull __Field), 
-        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
             let fields = 
                 match t with
@@ -132,7 +132,7 @@ __Type <-  mergeFields __Type [
     Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
     Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> ctx.Schema.GetPossibleTypes a | _ -> [])
     Define.Field("enumValues", ListOf (NonNull __EnumValue),
-        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
             match t with
             | Enum e ->
@@ -188,7 +188,7 @@ let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
     typedef = __Type,
-    arguments = [
+    args = [
         { Name = "name"; Type = (NonNull String); Description = None; DefaultValue = None }
     ],
     resolve = fun ctx _ -> ctx.Schema.TryFindType(ctx.Arg("name").Value))

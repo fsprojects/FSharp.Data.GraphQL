@@ -27,9 +27,9 @@ let ``Execute uses default resolve to accesses properties`` () =
     
 [<Fact>]
 let ``Execute uses default resolve to invoke methods`` () =
-    let schema = testSchema [ Define.Field("testMethod", String, arguments = [
-        Define.Argument("a", String)
-        Define.Argument("b", Int)
+    let schema = testSchema [ Define.Field("testMethod", String, args = [
+        Define.Arg("a", String)
+        Define.Arg("b", Int)
     ]) ]
     let expected = Map.ofList [ "testMethod", "testValueArg123" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ testMethod(a: \"Arg\", b: 123) }", { Test = "testValue" })
@@ -39,7 +39,7 @@ let ``Execute uses default resolve to invoke methods`` () =
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema = testSchema [ 
-        Define.Field("test", String, arguments = [Define.Argument("a", String)], resolve = fun ctx d -> d.Test + ctx.Arg("a").Value) ]
+        Define.Field("test", String, args = [Define.Arg("a", String)], resolve = fun ctx d -> d.Test + ctx.Arg("a").Value) ]
     let expected = Map.ofList [ "test", "testValueString" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
     noErrors actual

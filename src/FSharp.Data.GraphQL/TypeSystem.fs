@@ -71,7 +71,7 @@ and GraphQLError =
     | GraphQLError of string
 
 /// 3.1.1.1 Build-in Scalars
-and [<CustomEquality; NoComparison>] ScalarType = 
+and [<CustomEquality; NoComparison>] ScalarDef = 
     { Name : string
       Description : string option
       CoerceInput : Value -> obj
@@ -84,12 +84,12 @@ and [<CustomEquality; NoComparison>] ScalarType =
     interface LeafDef
     interface NamedDef with
         member x.Name = x.Name
-    interface IEquatable<ScalarType> with
+    interface IEquatable<ScalarDef> with
         member x.Equals s = x.Name = s.Name
     
     override x.Equals y = 
         match y with
-        | :? ScalarType as s -> (x :> IEquatable<ScalarType>).Equals(s)
+        | :? ScalarDef as s -> (x :> IEquatable<ScalarDef>).Equals(s)
         | _ -> false
     
     override x.GetHashCode() = x.Name.GetHashCode()
@@ -447,7 +447,7 @@ module SchemaDefinitions =
 
     let (|Scalar|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType as x -> Some x
+        | :? ScalarDef as x -> Some x
         | _ -> None
     let (|Object|_|) (tdef: TypeDef) =
         match tdef with
@@ -479,15 +479,15 @@ module SchemaDefinitions =
         | _ -> None
     let (|Input|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef | :? InputObjectDef -> Some tdef
+        | :? ScalarDef | :? EnumDef | :? InputObjectDef -> Some tdef
         | _ -> None
     let (|Output|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
+        | :? ScalarDef | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
         | _ -> None
     let (|Leaf|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef -> Some tdef
+        | :? ScalarDef | :? EnumDef -> Some tdef
         | _ -> None
     let (|Composite|_|) (tdef: TypeDef) =
         match tdef with
@@ -507,7 +507,7 @@ module SchemaDefinitions =
     let rec (|Named|_|) (tdef: TypeDef) = named tdef
         
     /// GraphQL type of int
-    let Int : ScalarType = 
+    let Int : ScalarDef = 
         { Name = "Int"
           Description = 
               Some 
@@ -517,7 +517,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceIntOuput }
     
     /// GraphQL type of boolean
-    let Boolean : ScalarType = 
+    let Boolean : ScalarDef = 
         { Name = "Boolean"
           Description = Some "The `Boolean` scalar type represents `true` or `false`."
           CoerceInput = coerceBoolInput >> box
@@ -525,7 +525,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceBoolOuput }
     
     /// GraphQL type of float
-    let Float : ScalarType = 
+    let Float : ScalarDef = 
         { Name = "Float"
           Description = 
               Some 
@@ -535,7 +535,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceFloatOuput }
     
     /// GraphQL type of string
-    let String : ScalarType = 
+    let String : ScalarDef = 
         { Name = "String"
           Description = 
               Some 
@@ -545,7 +545,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceStringOuput }
     
     /// GraphQL type for custom identifier
-    let ID : ScalarType = 
+    let ID : ScalarDef = 
         { Name = "ID"
           Description = 
               Some 
@@ -643,8 +643,8 @@ module SchemaDefinitions =
     
     type Define private () = 
         
-        static member Scalar(name : string, coerceInput : Value -> 'T option, coerceOutput : 'T -> Value option, 
-                             coerceValue : obj -> 'T option, ?description : string) : ScalarType = 
+        static member Scalar(name : string, coerceInput : (Value -> 'T option), coerceOutput : ('T -> Value option), 
+                             coerceValue : (obj -> 'T option), ?description : string) : ScalarDef = 
             { Name = name
               Description = description
               CoerceInput = coerceInput >> box
@@ -682,14 +682,14 @@ module SchemaDefinitions =
             | Some i -> implements o i
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?arguments : ArgDef list, ?deprecationReason : string) : FieldDef = 
+        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
             { Name = name
               Description = description
               Type = typedef
               Resolve = fun ctx v -> async { return upcast resolve ctx (v :?> 'Object) }
               Args = 
-                  if arguments.IsNone then []
-                  else arguments.Value
+                  if args.IsNone then []
+                  else args.Value
               DeprecationReason = deprecationReason }
         
         /// Single field defined inside either object types or interfaces, with asynchronous resolution function
@@ -705,17 +705,17 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
         
         /// Single field defined inside either object types or interfaces
-        static member Field<'Object>(name : string, typedef : OutputDef, ?description : string, ?arguments : ArgDef list, ?deprecationReason : string) : FieldDef = 
+        static member Field<'Object>(name : string, typedef : OutputDef, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
             { Name = name
               Description = description
               Type = typedef
               Resolve = defaultResolve<'Object> name
               Args = 
-                  if arguments.IsNone then []
-                  else arguments.Value
+                  if args.IsNone then []
+                  else args.Value
               DeprecationReason = deprecationReason }
         
-        static member Argument(name : string, schema : TypeDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
+        static member Arg(name : string, schema : TypeDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
             { Name = name
               Description = description
               Type = schema

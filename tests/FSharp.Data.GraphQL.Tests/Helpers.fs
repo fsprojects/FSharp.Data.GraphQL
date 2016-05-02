@@ -17,13 +17,18 @@ let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action
 let sync = Async.RunSynchronously
 let field name typedef (resolve : 'a -> 'b) = Define.Field(name = name, typedef = typedef, resolve = (fun _ a -> resolve a))
 let fieldA name typedef args (resolve : ResolveFieldContext -> 'a -> 'b) = 
-    Define.Field(name = name, typedef = typedef, arguments = args, resolve = resolve)    
+    Define.Field(name = name, typedef = typedef, args = args, resolve = resolve)    
 let asyncField name typedef (resolve : 'a -> Async<'b>) = Define.AsyncField(name = name, typedef = typedef, resolve = (fun _ a -> resolve a))
 let asyncFieldA name typedef args (resolve : ResolveFieldContext -> 'a -> Async<'b>) = 
     Define.AsyncField(name = name, typedef = typedef, arguments = args, resolve = resolve)
-let arg name typedef = Define.Argument(name, typedef)
+let arg name typedef = Define.Arg(name, typedef)
 let objdef name fields = Define.Object(name, fields)
 let is<'t> (o: obj) = o :? 't
+let hasError errMsg errors =
+    let containsMessage = 
+        errors
+        |> Array.exists (fun (GraphQLError e) -> e.Contains(errMsg))
+    Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found" errMsg)
 
 let (<??) opt other = 
     match opt with

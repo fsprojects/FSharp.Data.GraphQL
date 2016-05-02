@@ -106,7 +106,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         field "deep" DeepDataType (fun (dt: TestSubject) -> dt.deep);
     ]
     let schema = Schema(DataType)
-    let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", upcast 100 ], operationName = "Example")
+    let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
     noErrors result
     equals expected result.Data.Value
 
