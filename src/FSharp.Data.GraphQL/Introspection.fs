@@ -62,11 +62,7 @@ let __DirectiveLocation = Define.Enum(
     
 let mutable __Type = Define.Object(
     name = "__Type",
-    description = """
-    The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum.
-
-    Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.
-    """,
+    description = """The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.""",
     fields = [
         Define.Field("kind", NonNull __TypeKind, resolve = graphQLKind)
         Define.Field("name", NonNull String, resolve = fun _ t ->
@@ -119,7 +115,7 @@ let __EnumValue = Define.Object(
     
 __Type <-  mergeFields __Type [
     Define.Field("fields", ListOf (NonNull __Field), 
-        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
             let fields = 
                 match t with
@@ -132,7 +128,7 @@ __Type <-  mergeFields __Type [
     Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
     Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> ctx.Schema.GetPossibleTypes a | _ -> [])
     Define.Field("enumValues", ListOf (NonNull __EnumValue),
-        arguments = [ Define.Argument("includeDeprecated", Boolean, false) ],
+        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
             match t with
             | Enum e ->
@@ -150,11 +146,7 @@ __Type <-  mergeFields __Type [
 
 let __Directive = Define.Object(
     name = "__Directive",
-    description = """
-    A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document.' +
-    
-    In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.
-    """,
+    description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fields = [
         Define.Field("name", NonNull String)
         Define.Field("description", String)
@@ -188,10 +180,10 @@ let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
     typedef = __Type,
-    arguments = [
+    args = [
         { Name = "name"; Type = (NonNull String); Description = None; DefaultValue = None }
     ],
-    resolve = fun ctx _ -> ctx.Schema.TryFindType(ctx.Arg("name").Value))
+    resolve = fun ctx _ -> ctx.Schema.TryFindType(ctx.Arg("name").Value) |> Option.map box |> Option.toObj)
     
 let TypeNameMetaFieldDef = Define.Field(
     name = "__typename",

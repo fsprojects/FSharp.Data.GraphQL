@@ -71,7 +71,7 @@ and GraphQLError =
     | GraphQLError of string
 
 /// 3.1.1.1 Build-in Scalars
-and [<CustomEquality; NoComparison>] ScalarType = 
+and [<CustomEquality; NoComparison>] ScalarDef = 
     { Name : string
       Description : string option
       CoerceInput : Value -> obj
@@ -84,12 +84,12 @@ and [<CustomEquality; NoComparison>] ScalarType =
     interface LeafDef
     interface NamedDef with
         member x.Name = x.Name
-    interface IEquatable<ScalarType> with
+    interface IEquatable<ScalarDef> with
         member x.Equals s = x.Name = s.Name
     
     override x.Equals y = 
         match y with
-        | :? ScalarType as s -> (x :> IEquatable<ScalarType>).Equals(s)
+        | :? ScalarDef as s -> (x :> IEquatable<ScalarDef>).Equals(s)
         | _ -> false
     
     override x.GetHashCode() = x.Name.GetHashCode()
@@ -160,7 +160,7 @@ and [<CustomEquality; NoComparison>] ObjectDef =
         let sb = System.Text.StringBuilder("type ")
         sb.Append(x.Name) |> ignore
         if not (List.isEmpty x.Implements) then 
-            sb.Append(" implements ").Append(String.Join(", ", x.Implements)) |> ignore
+            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> List.map (fun i -> i.Name))) |> ignore
         sb.Append("{") |> ignore
         x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
@@ -231,10 +231,11 @@ and [<CustomEquality; NoComparison>]InterfaceDef =
         sb.Append("\n}").ToString()
 
 /// 3.1.4 Unions
-and UnionDef = 
+and [<CustomEquality; NoComparison>]UnionDef = 
     { Name : string
       Description : string option
-      Options : ObjectDef list }
+      Options : ObjectDef list
+      ResolveType : (obj -> ObjectDef) option }
       
     interface TypeDef
     interface OutputDef
@@ -242,20 +243,44 @@ and UnionDef =
     interface AbstractDef
     interface NamedDef with
         member x.Name = x.Name
+        
+    interface IEquatable<UnionDef> with
+        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Options = f.Options
+    
+    override x.Equals y = 
+        match y with
+        | :? InterfaceDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
+        | _ -> false
+    
+    override x.GetHashCode() = 
+        let mutable hash = x.Name.GetHashCode()
+        hash <- (hash * 397) ^^^ (match x.Description with
+                                  | None -> 0
+                                  | Some d -> d.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
+        hash
 
-    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options)
+    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> List.map (fun o -> o.Name))
     
 and ListOfDef = 
     { Type: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
+    override x.ToString() = 
+        match x.Type with
+        | :? NamedDef as named -> "[" + named.Name + "]"
+        | other -> "[" + other.ToString() + "]"
 
 and NonNullDef = 
     { Type: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
+    override x.ToString() = 
+        match x.Type with
+        | :? NamedDef as named -> named.Name + "!"
+        | other -> other.ToString() + "!"
 
 /// 3.1.6 Input Objects
 and InputObjectDef = 
@@ -447,7 +472,7 @@ module SchemaDefinitions =
 
     let (|Scalar|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType as x -> Some x
+        | :? ScalarDef as x -> Some x
         | _ -> None
     let (|Object|_|) (tdef: TypeDef) =
         match tdef with
@@ -479,15 +504,15 @@ module SchemaDefinitions =
         | _ -> None
     let (|Input|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef | :? InputObjectDef -> Some tdef
+        | :? ScalarDef | :? EnumDef | :? InputObjectDef -> Some tdef
         | _ -> None
     let (|Output|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
+        | :? ScalarDef | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
         | _ -> None
     let (|Leaf|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ScalarType | :? EnumDef -> Some tdef
+        | :? ScalarDef | :? EnumDef -> Some tdef
         | _ -> None
     let (|Composite|_|) (tdef: TypeDef) =
         match tdef with
@@ -507,7 +532,7 @@ module SchemaDefinitions =
     let rec (|Named|_|) (tdef: TypeDef) = named tdef
         
     /// GraphQL type of int
-    let Int : ScalarType = 
+    let Int : ScalarDef = 
         { Name = "Int"
           Description = 
               Some 
@@ -517,7 +542,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceIntOuput }
     
     /// GraphQL type of boolean
-    let Boolean : ScalarType = 
+    let Boolean : ScalarDef = 
         { Name = "Boolean"
           Description = Some "The `Boolean` scalar type represents `true` or `false`."
           CoerceInput = coerceBoolInput >> box
@@ -525,7 +550,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceBoolOuput }
     
     /// GraphQL type of float
-    let Float : ScalarType = 
+    let Float : ScalarDef = 
         { Name = "Float"
           Description = 
               Some 
@@ -535,7 +560,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceFloatOuput }
     
     /// GraphQL type of string
-    let String : ScalarType = 
+    let String : ScalarDef = 
         { Name = "String"
           Description = 
               Some 
@@ -545,7 +570,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceStringOuput }
     
     /// GraphQL type for custom identifier
-    let ID : ScalarType = 
+    let ID : ScalarDef = 
         { Name = "ID"
           Description = 
               Some 
@@ -643,8 +668,8 @@ module SchemaDefinitions =
     
     type Define private () = 
         
-        static member Scalar(name : string, coerceInput : Value -> 'T option, coerceOutput : 'T -> Value option, 
-                             coerceValue : obj -> 'T option, ?description : string) : ScalarType = 
+        static member Scalar(name : string, coerceInput : (Value -> 'T option), coerceOutput : ('T -> Value option), 
+                             coerceValue : (obj -> 'T option), ?description : string) : ScalarDef = 
             { Name = name
               Description = description
               CoerceInput = coerceInput >> box
@@ -682,14 +707,14 @@ module SchemaDefinitions =
             | Some i -> implements o i
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?arguments : ArgDef list, ?deprecationReason : string) : FieldDef = 
+        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
             { Name = name
               Description = description
               Type = typedef
               Resolve = fun ctx v -> async { return upcast resolve ctx (v :?> 'Object) }
               Args = 
-                  if arguments.IsNone then []
-                  else arguments.Value
+                  if args.IsNone then []
+                  else args.Value
               DeprecationReason = deprecationReason }
         
         /// Single field defined inside either object types or interfaces, with asynchronous resolution function
@@ -705,17 +730,17 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
         
         /// Single field defined inside either object types or interfaces
-        static member Field<'Object>(name : string, typedef : OutputDef, ?description : string, ?arguments : ArgDef list, ?deprecationReason : string) : FieldDef = 
+        static member Field<'Object>(name : string, typedef : OutputDef, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
             { Name = name
               Description = description
               Type = typedef
               Resolve = defaultResolve<'Object> name
               Args = 
-                  if arguments.IsNone then []
-                  else arguments.Value
+                  if args.IsNone then []
+                  else args.Value
               DeprecationReason = deprecationReason }
         
-        static member Argument(name : string, schema : TypeDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
+        static member Arg(name : string, schema : TypeDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
             { Name = name
               Description = description
               Type = schema
@@ -732,7 +757,8 @@ module SchemaDefinitions =
               ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectDef list, ?description : string) : UnionDef = 
+        static member Union(name : string, options : ObjectDef list, ?resolveType: obj -> ObjectDef, ?description : string) : UnionDef = 
             { Name = name
               Description = description
-              Options = options }
+              Options = options
+              ResolveType = resolveType }
