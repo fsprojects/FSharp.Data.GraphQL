@@ -46,13 +46,16 @@ let rec private coerceValue typedef (input: obj) =
     | List innerdef ->
         match input with
         | null -> None
+        //FIXME: according to specs single elements should be convertible to list.
+        // Problem is that while string should be wrapped with list,
+        // it's actually treated as IEnumerable, converting itself to list of chars.
         | :? System.Collections.IEnumerable as iter -> 
             let mapped =
                 iter
                 |> Seq.cast<obj>
                 |> Seq.map (fun elem -> coerceValue innerdef elem)
             Some(upcast mapped)
-        | other -> raise (GraphQLException (sprintf "Value '%A' was expected to be an enumberable collection" input))
+        | other -> Some(upcast [coerceValue innerdef other])
     | Object objdef -> coerceObjectValue objdef.Fields input
     | InputObject objdef -> coerceObjectValue objdef.Fields input
     | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other typedef))
@@ -103,7 +106,7 @@ let private getOperation = function
     | OperationDefinition odef -> Some odef
     | _ -> None
 
-let private findOperation (schema: #ISchema) doc opName =
+let private findOperation doc opName =
     match doc.Definitions |> List.choose getOperation, opName with
     | [def], _ -> Some def
     | defs, name -> 
@@ -111,21 +114,23 @@ let private findOperation (schema: #ISchema) doc opName =
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
    
+let private coerceVariable (schema: #ISchema) variables acc (var: VariableDefinition) = 
+    let typedef = 
+        match schema.TryFindType (getTypeName var.Type) with
+        | None -> raise (GraphQLException (sprintf "Variable '%s' is of type '%A', which is not defined in current schema" var.VariableName var.Type ))
+        | Some t -> t
+    let value = 
+        match Map.tryFind var.VariableName variables with
+        | None -> coerceValue typedef var.DefaultValue.Value // this may throw if variable has no input and no default value defined
+        | Some input -> coerceValue typedef input
+    Map.add var.VariableName value acc
+
 let private coerceVariables (schema: #ISchema) variables inputs =
     match inputs with
     | None -> Map.empty
     | Some vars -> 
         variables
-        |> List.fold (fun acc (var: VariableDefinition) -> 
-            let typedef = 
-                match schema.TryFindType (getTypeName var.Type) with
-                | None -> raise (GraphQLException (sprintf "Variable '%s' is of type '%A', which is not defined in current schema" var.VariableName var.Type ))
-                | Some t -> t
-            let value = 
-                match Map.tryFind var.VariableName vars with
-                | None -> coerceValue typedef var.DefaultValue.Value // this may throw if variable has no input and no default value defined
-                | Some input -> coerceValue typedef input
-            Map.add var.VariableName value acc) Map.empty
+        |> List.fold (coerceVariable schema vars) Map.empty
         
 let inline private coerceArgument ctx (arg: Argument) =
     coerceBoolValue(coerceAstValue ctx.Variables arg.Value).Value
@@ -151,7 +156,7 @@ let rec private collectFields ctx typedef selectionSet visitedFragments =
     selectionSet
     |> List.fold (collectField ctx typedef visitedFragments) Map.empty 
 
-and collectField ctx typedef visitedFragments groupedFields (selection: Selection) =
+and collectField ctx (typedef: ObjectDef) visitedFragments groupedFields (selection: Selection) =
     if List.exists (shouldSkip ctx) selection.Directives
     then groupedFields
     else 
@@ -206,11 +211,16 @@ let private resolveField value ctx fieldDef = async {
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 let private getFieldDefinition ctx objectType (field: Field) =
-    match field.Name with
-    | "__schema" when ctx.Schema.Query = objectType -> Some SchemaMetaFieldDef
-    | "__type" when ctx.Schema.Query = objectType -> Some TypeMetaFieldDef
-    | "__typename" -> Some TypeNameMetaFieldDef
-    | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
+    let result =
+        match field.Name with
+        | "__schema" when ctx.Schema.Query = objectType -> Some SchemaMetaFieldDef
+        //FIXME: once hit case below, matching is propagated further 
+        // until the last case to be executed and returned as a result.
+        // It looks like a very unique and hard to reproduce compiler bug.
+        | "__type" when ctx.Schema.Query = objectType -> Some TypeMetaFieldDef
+        | "__typename" -> Some TypeNameMetaFieldDef
+        | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
+    result
 
 let private defaultResolveType ctx abstractDef objectValue =
     let possibleTypes = ctx.Schema.GetPossibleTypes abstractDef
@@ -221,12 +231,15 @@ let private defaultResolveType ctx abstractDef objectValue =
             isTypeOf(objectValue)
         | None -> false)
         
-let private resolveInterfaceType ctx (interfaceType: InterfaceDef) objectValue = 
-    match interfaceType.ResolveType with
+let private resolveInterfaceType ctx (interfacedef: InterfaceDef) objectValue = 
+    match interfacedef.ResolveType with
     | Some resolveType -> resolveType(objectValue)
-    | None -> defaultResolveType ctx interfaceType objectValue
+    | None -> defaultResolveType ctx interfacedef objectValue
 
-let private resolveUnionType ctx (unionType: UnionDef) objectValue = defaultResolveType ctx unionType objectValue
+let private resolveUnionType ctx (uniondef: UnionDef) objectValue = 
+    match uniondef.ResolveType with
+    | Some resolveType -> resolveType(objectValue)
+    | None -> defaultResolveType ctx uniondef objectValue
 
 /// Complete an ObjectType value by executing all sub-selections
 let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = async {
@@ -336,7 +349,7 @@ let private evaluate (schema: #ISchema) doc operation variables root errors = as
         return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet }
 
 let private execute (schema: #ISchema) doc operationName variables root errors = async {
-    match findOperation schema doc operationName with
+    match findOperation doc operationName with
     | Some operation -> return! evaluate schema doc operation variables root errors
     | None -> return raise (GraphQLException "No operation with specified name has been found for provided document") }
 

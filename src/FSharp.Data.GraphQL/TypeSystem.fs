@@ -160,7 +160,7 @@ and [<CustomEquality; NoComparison>] ObjectDef =
         let sb = System.Text.StringBuilder("type ")
         sb.Append(x.Name) |> ignore
         if not (List.isEmpty x.Implements) then 
-            sb.Append(" implements ").Append(String.Join(", ", x.Implements)) |> ignore
+            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> List.map (fun i -> i.Name))) |> ignore
         sb.Append("{") |> ignore
         x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
@@ -231,10 +231,11 @@ and [<CustomEquality; NoComparison>]InterfaceDef =
         sb.Append("\n}").ToString()
 
 /// 3.1.4 Unions
-and UnionDef = 
+and [<CustomEquality; NoComparison>]UnionDef = 
     { Name : string
       Description : string option
-      Options : ObjectDef list }
+      Options : ObjectDef list
+      ResolveType : (obj -> ObjectDef) option }
       
     interface TypeDef
     interface OutputDef
@@ -242,20 +243,44 @@ and UnionDef =
     interface AbstractDef
     interface NamedDef with
         member x.Name = x.Name
+        
+    interface IEquatable<UnionDef> with
+        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Options = f.Options
+    
+    override x.Equals y = 
+        match y with
+        | :? InterfaceDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
+        | _ -> false
+    
+    override x.GetHashCode() = 
+        let mutable hash = x.Name.GetHashCode()
+        hash <- (hash * 397) ^^^ (match x.Description with
+                                  | None -> 0
+                                  | Some d -> d.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
+        hash
 
-    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options)
+    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> List.map (fun o -> o.Name))
     
 and ListOfDef = 
     { Type: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
+    override x.ToString() = 
+        match x.Type with
+        | :? NamedDef as named -> "[" + named.Name + "]"
+        | other -> "[" + other.ToString() + "]"
 
 and NonNullDef = 
     { Type: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
+    override x.ToString() = 
+        match x.Type with
+        | :? NamedDef as named -> named.Name + "!"
+        | other -> other.ToString() + "!"
 
 /// 3.1.6 Input Objects
 and InputObjectDef = 
@@ -732,7 +757,8 @@ module SchemaDefinitions =
               ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectDef list, ?description : string) : UnionDef = 
+        static member Union(name : string, options : ObjectDef list, ?resolveType: obj -> ObjectDef, ?description : string) : UnionDef = 
             { Name = name
               Description = description
-              Options = options }
+              Options = options
+              ResolveType = resolveType }
