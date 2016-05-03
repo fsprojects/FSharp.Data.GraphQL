@@ -120,28 +120,18 @@ and EnumDef =
 and [<CustomEquality; NoComparison>] ObjectDef = 
     { Name : string
       Description : string option
-      mutable Fields : FieldDef list
-      mutable Implements : InterfaceDef list
-      mutable IsTypeOf : (obj -> bool) option }
+      Fields : FieldDef list
+      Implements : InterfaceDef list
+      IsTypeOf : (obj -> bool) option }
 
     interface TypeDef
     interface OutputDef
     interface CompositeDef
     interface NamedDef with
         member x.Name = x.Name
-    
-    member x.AddField(field : FieldDef) = 
-        match List.tryFind<FieldDef> (fun f -> f.Name = field.Name) x.Fields with
-        | Some _ -> 
-            let msg = 
-                sprintf 
-                    "Cannot merge field %A into object type %s, because it already has field %A sharing the same name." 
-                    field x.Name x
-            raise (GraphQLException msg)
-        | None -> x.Fields <- x.Fields @ [ field ]
-    
+        
     interface IEquatable<ObjectDef> with
-        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Fields = f.Fields
+        member x.Equals f = x.Name = f.Name && x.Fields = f.Fields
     
     override x.Equals y = 
         match y with
@@ -174,7 +164,7 @@ and [<CustomEquality; NoComparison>] FieldDef =
       DeprecationReason : string option }
     
     interface IEquatable<FieldDef> with
-        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Type = f.Type && x.Args = f.Args
+        member x.Equals f = x.Name = f.Name && x.Type = f.Type && x.Args = f.Args
     
     override x.Equals y = 
         match y with
@@ -199,8 +189,8 @@ and [<CustomEquality; NoComparison>] FieldDef =
 and [<CustomEquality; NoComparison>]InterfaceDef = 
     { Name : string
       Description : string option
-      mutable Fields : FieldDef list
-      mutable ResolveType: (obj -> ObjectDef) option }
+      Fields : FieldDef list
+      ResolveType: (obj -> ObjectDef) option }
 
     interface TypeDef
     interface OutputDef
@@ -210,7 +200,7 @@ and [<CustomEquality; NoComparison>]InterfaceDef =
         member x.Name = x.Name
       
     interface IEquatable<InterfaceDef> with
-        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Fields = f.Fields
+        member x.Equals f = x.Name = f.Name && x.Fields = f.Fields
     
     override x.Equals y = 
         match y with
@@ -401,14 +391,23 @@ module SchemaDefinitions =
         match x with
         | :? string as y -> Some(StringValue y)
         | _ -> None
+        
+    /// Check if provided obj value is an Option and extract its wrapped value as object if possible
+    let (|Option|_|) (x: obj) =
+        let t = x.GetType()
+        if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> 
+        then
+            let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(x, t)
+            Some (fields.[0])
+        else None
     
     let internal coerceStringValue (x : obj) : string option = 
         match x with
         | null -> None
-        | :? bool as b -> 
-            Some(if b then "true"
-                 else "false")
-        | other -> Some(other.ToString())
+        | :? string as s -> Some s
+        | :? bool as b -> Some(if b then "true" else "false")
+        | Option o -> Some(o.ToString())
+        | _ -> Some(x.ToString())
     
     let private coerceIntInput = 
         function 
@@ -694,20 +693,34 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
         
         /// GraphQL custom object type
-        static member Object(name : string, fields : FieldDef list, ?description : string, 
-                                 ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
+        static member Object(name : string, fields : unit -> FieldDef list, ?description : string, ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
             let o = 
                 { Name = name
-                         Description = description
-                         Fields = fields
-                         Implements = []
-                         IsTypeOf = isTypeOf }
+                  Description = description
+                  Fields = fields()
+                  Implements = []
+                  IsTypeOf = isTypeOf }
+            match interfaces with
+            | None -> o
+            | Some i -> implements o i
+
+        /// GraphQL custom object type
+        static member Object(name : string, fields : FieldDef list, ?description : string, ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
+            let o = 
+                { Name = name
+                  Description = description
+                  Fields = fields
+                  Implements = []
+                  IsTypeOf = isTypeOf }
             match interfaces with
             | None -> o
             | Some i -> implements o i
             
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : FieldDef list) : InputObjectDef = { Name = name; Fields = fields}
+        static member InputObject(name : string, fields : unit -> FieldDef list) : InputObjectDef = { Name = name; Fields = fields() }
+        
+        /// GraphQL custom input object type
+        static member InputObject(name : string, fields : FieldDef list) : InputObjectDef = { Name = name; Fields = fields }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
@@ -751,6 +764,13 @@ module SchemaDefinitions =
                   match defaultValue with
                   | Some value -> Some(upcast value)
                   | None -> None }
+        
+        /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
+        static member Interface(name : string, fields : unit -> FieldDef list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef = 
+            { Name = name
+              Description = description
+              Fields = fields()
+              ResolveType = resolveType }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fields : FieldDef list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef = 

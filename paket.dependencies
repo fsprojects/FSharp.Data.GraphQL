@@ -1,5 +1,7 @@
 source https://nuget.org/api/v2
 nuget FParsec
+nuget Newtonsoft.Json
+nuget Suave
 
 group Build
   source https://nuget.org/api/v2

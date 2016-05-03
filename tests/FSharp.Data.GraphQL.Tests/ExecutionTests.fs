@@ -126,14 +126,12 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         deep { c, deeper: deep { c } }
       }"""
 
-    let mutable Type = objdef "Type" [
+    let rec Type = Define.Object("Type", (fun () -> [
         field "a" String (fun () -> "Apple")
         field "b" String (fun () -> "Banana")
         field "c" String (fun () -> "Cherry")
-    ]
-    //TODO: API fix - self referencing data type
-    let (Object x) = Type
-    x.AddField (field "deep" Type id)
+        field "deep" Type id
+    ]))
 
     let schema = Schema(Type)
     let expected: Map<string, obj> = Map.ofList [

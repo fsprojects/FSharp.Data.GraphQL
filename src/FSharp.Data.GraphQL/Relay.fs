@@ -23,7 +23,7 @@ type Connection<'Node> =
 let Edge nodeType = Define.Object(
     name = nodeType.ToString() + "Edge",
     description = "An edge in a connection from an object to another object of type " + nodeType.ToString(),
-    fields = [
+    fields = fun () -> [
         Define.Field("cursor", NonNull String, fun _ edge -> edge.Cursor, "A cursor for use in pagination")
         Define.Field("node", nodeType, fun _ edge -> edge.Node, "The item at the end of the edge")
     ]) 
@@ -31,7 +31,7 @@ let Edge nodeType = Define.Object(
 let PageInfo = Define.Object(
     name = "PageInfo",
     description = "Information about pagination in a connection.",
-    fields = [
+    fields = fun () -> [
         Define.Field("hasNextPage", NonNull Boolean, fun _ pageInfo -> pageInfo.HasNextPage, "When paginating forwards, are there more items?")
         Define.Field("hasPreviousPage", NonNull Boolean, fun _ pageInfo -> pageInfo.HasPreviousPage, "When paginating backwards, are there more items?")
         Define.Field("startCursor", String, fun _ pageInfo -> pageInfo.StartCursor, "When paginating backwards, the cursor to continue.")
@@ -41,7 +41,7 @@ let PageInfo = Define.Object(
 let ConnectionType nodeType = Define.Object(
     name = nodeType.ToString(),
     description = "A connection from an object to a list of objects of type " + nodeType.ToString(),
-    fields = [
+    fields = fun () -> [
         Define.Field("totalCount", Int, fun _ conn -> conn.TotalCount , """A count of the total number of objects in this connection, ignoring pagination. 
                     This allows a client to fetch the first five objects by passing \"5\" as the argument 
                     to `first`, then fetch the total count so it could display \"5 of 83\", for example. 
