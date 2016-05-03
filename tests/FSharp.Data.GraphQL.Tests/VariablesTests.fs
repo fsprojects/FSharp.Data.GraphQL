@@ -18,7 +18,7 @@ let TestComplexScalar = Define.Scalar(
     coerceOutput = (fun value -> if value = "DeserializedValue" then Some (StringValue "SerializedValue") else None),
     coerceValue = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
-let TestInputObject = Define.Object(
+let TestInputObject = Define.InputObject(
     name = "TestInputObject",
     fields = [
         Define.Field("a", String)
@@ -27,7 +27,7 @@ let TestInputObject = Define.Object(
         Define.Field("d", TestComplexScalar)
     ])
 
-let TestNestedInputObject = Define.Object(
+let TestNestedInputObject = Define.InputObject(
     name = "TestNestedInputObject",
     fields = [
         Define.Field("na", NonNull TestInputObject)
@@ -447,7 +447,7 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
 let ``Execute uses argument default value when no argument was provided`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue }"""
     let actual = sync <| schema.AsyncExecute(ast)
-    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast [ "hello world" ]]
+    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
     equals expected actual.Data.Value
     
@@ -457,7 +457,7 @@ let ``Execute uses argument default value when nullable variable provided`` () =
         fieldWithDefaultArgumentValue(input: $optional)
       }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList ["optional", null ])
-    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast [ "hello world" ]]
+    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
     equals expected actual.Data.Value
     
@@ -465,6 +465,6 @@ let ``Execute uses argument default value when nullable variable provided`` () =
 let ``Execute uses argument default value when argument provided cannot be parsed`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue(input: WRONG_TYPE) }"""
     let actual = sync <| schema.AsyncExecute(ast)
-    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast [ "hello world" ]]
+    let expected: Map<string, obj> = Map.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
     equals expected actual.Data.Value

@@ -95,12 +95,12 @@ let ``Execute can introspect on union and intersection types`` () =
             "kind", box "INTERFACE"
             "name", upcast "Named"
             "fields", upcast [
-                "name", box "name"]
+                box (Map.ofList [ "name", box "name"])]
             "interfaces", null
             "possibleTypes", upcast [
-                "name", box "Person"
-                "name", box "Dog"
-                "name", box "Cat"]
+                box (Map.ofList ["name", box "Person"])
+                upcast Map.ofList ["name", box "Dog"]
+                upcast Map.ofList ["name", box "Cat"]]
             "enumValues", null
             "inputFields", null]
         "Pet", upcast Map.ofList [
@@ -109,8 +109,8 @@ let ``Execute can introspect on union and intersection types`` () =
             "fields", null
             "interfaces", null
             "possibleTypes", upcast [
-                "name", box "Dog"
-                "name", box "Cat"]
+                box (Map.ofList ["name", box "Cat"])
+                upcast Map.ofList ["name", box "Dog"]]
             "enumValues", null
             "inputFields", null]]
     noErrors actual

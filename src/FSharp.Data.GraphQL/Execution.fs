@@ -36,26 +36,27 @@ let rec private getTypeName = function
 //    | _ -> false
 //            
 //
-let rec private coerceValue typedef (input: obj) = 
+let rec private coerceValue typedef (input: obj) : obj = 
     match typedef with
-    | Scalar scalardef -> scalardef.CoerceValue input
+    | Scalar scalardef -> scalardef.CoerceValue input |> Option.toObj
     | NonNull innerdef -> 
         match coerceValue innerdef input with
-        | None -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
+        | null -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
         | other -> other
     | List innerdef ->
         match input with
-        | null -> None
-        //FIXME: according to specs single elements should be convertible to list.
-        // Problem is that while string should be wrapped with list,
-        // it's actually treated as IEnumerable, converting itself to list of chars.
+        | null -> null
+        // special case - while single values should be wrapped with a list in this scenario,
+        // string would be treat as IEnumerable and coerced into a list of chars
+        | :? string as s -> upcast [coerceValue innerdef s]
         | :? System.Collections.IEnumerable as iter -> 
             let mapped =
                 iter
                 |> Seq.cast<obj>
                 |> Seq.map (fun elem -> coerceValue innerdef elem)
-            Some(upcast mapped)
-        | other -> Some(upcast [coerceValue innerdef other])
+                |> List.ofSeq
+            upcast mapped
+        | other -> upcast [coerceValue innerdef other]
     | Object objdef -> coerceObjectValue objdef.Fields input
     | InputObject objdef -> coerceObjectValue objdef.Fields input
     | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other typedef))
@@ -64,22 +65,26 @@ and private coerceObjectValue (fields: FieldDef list) (input: obj) =
     let map = input :?> Map<string, obj>
     let mapped = 
         fields
-        |> List.map (fun field -> (field.Name, coerceValue field.Type map.[field.Name]))
+        |> List.map (fun field -> 
+            let valueFound = Map.tryFind field.Name map |> Option.toObj
+            (field.Name, coerceValue field.Type valueFound))
         |> Map.ofList
-    Some(mapped :> obj)
+    upcast mapped
+    
+let inline private collectDefaultArgValue acc (argdef: ArgDef) =
+    match argdef.DefaultValue with
+    | Some defVal -> Map.add argdef.Name defVal acc
+    | None -> acc
 
-let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (variables: Map<string, obj option>) : Map<string, obj> = 
+let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
     argDefs
     |> List.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
             match coerceAstValue variables argument.Value with
-            | null -> acc
+            | null -> collectDefaultArgValue acc argdef
             | value -> Map.add argdef.Name value acc
-        | None -> 
-            match argdef.DefaultValue with
-            | Some defVal -> Map.add argdef.Name defVal acc
-            | None -> acc
+        | None -> collectDefaultArgValue acc argdef
     ) Map.empty
 
 /// The result of execution. `Data` is the result of executing the
@@ -98,7 +103,7 @@ type ExecutionContext =
         Document: Document
         Operation: OperationDefinition
         Fragments: FragmentDefinition list
-        Variables: Map<string, obj option>
+        Variables: Map<string, obj>
         Errors: ConcurrentBag<GraphQLError>
     }
 
@@ -114,23 +119,28 @@ let private findOperation doc opName =
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
    
-let private coerceVariable (schema: #ISchema) variables acc (var: VariableDefinition) = 
+let private coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (input: obj option) = 
     let typedef = 
-        match schema.TryFindType (getTypeName var.Type) with
-        | None -> raise (GraphQLException (sprintf "Variable '%s' is of type '%A', which is not defined in current schema" var.VariableName var.Type ))
-        | Some t -> t
-    let value = 
-        match Map.tryFind var.VariableName variables with
-        | None -> coerceValue typedef var.DefaultValue.Value // this may throw if variable has no input and no default value defined
-        | Some input -> coerceValue typedef input
-    Map.add var.VariableName value acc
+        match schema.TryFindType (getTypeName vardef.Type) with
+        | None -> raise (GraphQLException (sprintf "Variable '%s' expected value of type '%A', which cannot be used as an input type." vardef.VariableName vardef.Type))
+        | Some t when not (t :? InputDef) -> raise (GraphQLException (sprintf "Variable '%s' expected value of type '%A', which cannot be used as an input type." vardef.VariableName vardef.Type))
+        | Some t -> t :?> InputDef
+    match input with
+    | None -> 
+        match vardef.DefaultValue with
+        | Some defaultValue -> coerceValue typedef defaultValue
+        | None -> raise (GraphQLException (sprintf "Variable '%s' of required type '%A' was not provided." vardef.VariableName vardef.Type))
+    | Some input -> coerceValue typedef input
 
-let private coerceVariables (schema: #ISchema) variables inputs =
+let private coerceVariables (schema: #ISchema) variables (inputs: Map<string, obj> option) =
     match inputs with
     | None -> Map.empty
     | Some vars -> 
         variables
-        |> List.fold (coerceVariable schema vars) Map.empty
+        |> List.fold (fun acc vardef ->
+            let variableName = vardef.VariableName
+            let input = Map.tryFind variableName vars
+            Map.add variableName (coerceVariable schema vardef input) acc) Map.empty
         
 let inline private coerceArgument ctx (arg: Argument) =
     coerceBoolValue(coerceAstValue ctx.Variables arg.Value).Value
@@ -210,14 +220,11 @@ let private resolveField value ctx fieldDef = async {
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-let private getFieldDefinition ctx objectType (field: Field) =
+let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) =
     let result =
         match field.Name with
-        | "__schema" when ctx.Schema.Query = objectType -> Some SchemaMetaFieldDef
-        //FIXME: once hit case below, matching is propagated further 
-        // until the last case to be executed and returned as a result.
-        // It looks like a very unique and hard to reproduce compiler bug.
-        | "__type" when ctx.Schema.Query = objectType -> Some TypeMetaFieldDef
+        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some SchemaMetaFieldDef
+        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some TypeMetaFieldDef
         | "__typename" -> Some TypeNameMetaFieldDef
         | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
     result

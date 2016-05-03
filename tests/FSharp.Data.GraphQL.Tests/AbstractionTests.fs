@@ -17,12 +17,12 @@ type Human = { Name: string; }
 
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () = 
-    let PetType = Define.Interface("Pet", [ Define.Field("name", String) ])
+    let PetType = Define.Interface("Pet", fun () -> [ Define.Field("name", String) ])
     let DogType = Define.Object(
         name = "Dog", 
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
-        fields = [
+        fields = fun () -> [
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
@@ -30,15 +30,14 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         name = "Cat", 
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
-        fields = [
+        fields = fun () -> [
             Define.Field("name", String)
             Define.Field("meows", Boolean)
         ])
     let schema = Schema(
         types = [CatType; DogType],
-        query = Define.Object("Query", [
-            Define.Field("pets", ListOf PetType, resolve = fun _ _ -> 
-                [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
+        query = Define.Object("Query", fun () -> [
+            Define.Field("pets", ListOf PetType, resolve = fun _ _ -> [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
         ]))
     let query = """{
       pets {
@@ -68,20 +67,20 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     let DogType = Define.Object(
         name = "Dog", 
         isTypeOf = is<Dog>,
-        fields = [
+        fields = fun () -> [
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
     let CatType = Define.Object(
         name = "Cat", 
         isTypeOf = is<Cat>,
-        fields = [
+        fields = fun () -> [
             Define.Field("name", String)
             Define.Field("meows", Boolean)
         ])
     let PetType = Define.Union("Pet", [ DogType; CatType ])
     let schema = Schema(
-        query = Define.Object("Query", [
+        query = Define.Object("Query", fun () -> [
             Define.Field("pets", ListOf PetType, resolve = fun _ _ -> 
                 [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
         ]))

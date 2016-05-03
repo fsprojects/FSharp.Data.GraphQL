@@ -62,6 +62,39 @@
   </Target>
   -->
   <Import Project="..\..\.paket\paket.targets" />
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Helpers.fs" />
+    <Compile Include="AbstractionTests.fs" />
+    <Compile Include="DirectivesTests.fs" />
+    <Compile Include="ValidationTests.fs" />
+    <Compile Include="ParserTests.fs" />
+    <Compile Include="SchemaTests.fs" />
+    <Compile Include="CoercionTests.fs" />
+    <Compile Include="IntrospectionTests.fs" />
+    <Compile Include="ReflectedSchemaTests.fs" />
+    <Compile Include="ExecutionTests.fs" />
+    <Compile Include="MutationTests.fs" />
+    <Compile Include="ResolveTests.fs" />
+    <Compile Include="UnionInterfaceTests.fs" />
+    <Compile Include="VariablesTests.fs" />
+    <None Include="paket.references" />
+    <Content Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
+      <Name>FSharp.Data.GraphQL</Name>
+      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <Choose>
     <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6' Or $(TargetFrameworkVersion) == 'v4.6.1')">
       <ItemGroup>
@@ -111,37 +144,4 @@
       </ItemGroup>
     </When>
   </Choose>
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Helpers.fs" />
-    <Compile Include="AbstractionTests.fs" />
-    <Compile Include="DirectivesTests.fs" />
-    <Compile Include="ValidationTests.fs" />
-    <Compile Include="ParserTests.fs" />
-    <Compile Include="SchemaTests.fs" />
-    <Compile Include="CoercionTests.fs" />
-    <Compile Include="IntrospectionTests.fs" />
-    <Compile Include="ReflectedSchemaTests.fs" />
-    <Compile Include="ExecutionTests.fs" />
-    <Compile Include="MutationTests.fs" />
-    <Compile Include="ResolveTests.fs" />
-    <Compile Include="UnionInterfaceTests.fs" />
-    <Compile Include="VariablesTests.fs" />
-    <None Include="paket.references" />
-    <Content Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
-      <Name>FSharp.Data.GraphQL</Name>
-      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-  </ItemGroup>
 </Project>

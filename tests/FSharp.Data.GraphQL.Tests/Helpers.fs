@@ -22,7 +22,7 @@ let asyncField name typedef (resolve : 'a -> Async<'b>) = Define.AsyncField(name
 let asyncFieldA name typedef args (resolve : ResolveFieldContext -> 'a -> Async<'b>) = 
     Define.AsyncField(name = name, typedef = typedef, arguments = args, resolve = resolve)
 let arg name typedef = Define.Arg(name, typedef)
-let objdef name fields = Define.Object(name, fields)
+let objdef name (fields: FieldDef list) = Define.Object(name, fields)
 let is<'t> (o: obj) = o :? 't
 let hasError errMsg errors =
     let containsMessage = 
