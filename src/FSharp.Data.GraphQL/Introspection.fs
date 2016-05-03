@@ -117,30 +117,31 @@ __Type <-  mergeFields __Type [
     Define.Field("fields", ListOf (NonNull __Field), 
         args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
-            let fields = 
+            let fieldsOpt = 
                 match t with
-                | Object odef -> odef.Fields
-                | Interface idef -> idef.Fields
-                | _ -> []
-            if ctx.Arg("includeDeprecated").Value
-            then fields
-            else fields |> List.filter (fun f -> Option.isNone f.DeprecationReason))
-    Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> o.Implements | _ -> [])
-    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> ctx.Schema.GetPossibleTypes a | _ -> [])
+                | Object odef -> Some odef.Fields
+                | Interface idef -> Some idef.Fields
+                | _ -> None
+            match fieldsOpt with
+            | None -> null
+            | Some fields when ctx.Arg("includeDeprecated").Value -> box fields
+            | Some fields -> 
+                fields 
+                |> List.filter (fun f -> Option.isNone f.DeprecationReason)
+                |> box)
+    Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> box o.Implements | _ -> null)
+    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> box (ctx.Schema.GetPossibleTypes a) | _ -> null)
     Define.Field("enumValues", ListOf (NonNull __EnumValue),
         args = [ Define.Arg("includeDeprecated", Boolean, false) ],
         resolve = fun ctx t ->
             match t with
-            | Enum e ->
-                let values = e.Options
-                if ctx.Arg("includeDeprecated").Value
-                then values
-                else values |> List.filter (fun v -> Option.isNone v.DeprecationReason)
-            | _ -> [])
+            | Enum e when ctx.Arg("includeDeprecated").Value -> box e.Options
+            | Enum e -> e.Options |> List.filter (fun v -> Option.isNone v.DeprecationReason) |> box
+            | _ -> null)
     Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
         match t with
-        | InputObject idef -> idef.Fields
-        | _ -> [])
+        | InputObject idef -> box idef.Fields
+        | _ -> null)
     Define.Field("ofType", __Type)
 ]
 

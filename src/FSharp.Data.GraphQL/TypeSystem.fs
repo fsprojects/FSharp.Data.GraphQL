@@ -60,7 +60,7 @@ and ResolveFieldContext =
       Args : Map<string, obj>
       Operation : OperationDefinition
       Fragments : FragmentDefinition list
-      Variables : Map<string, obj option> }
+      Variables : Map<string, obj> }
     member x.Arg(name : string) : 't option = 
         match Map.tryFind name x.Args with
         | Some o -> Some(o :?> 't)
@@ -602,7 +602,7 @@ module SchemaDefinitions =
                   Type = NonNull Boolean
                   DefaultValue = None } ] }
     
-    let rec internal coerceAstValue (variables : Map<string, obj option>) (value : Value) : obj = 
+    let rec internal coerceAstValue (variables : Map<string, obj>) (value : Value) : obj = 
         match value with
         | IntValue i -> upcast i
         | StringValue s -> upcast s
@@ -615,7 +615,7 @@ module SchemaDefinitions =
         | ObjectValue fields -> 
             let mapped = fields |> Map.map (fun k v -> coerceAstValue variables v)
             upcast mapped
-        | Variable variable -> variables.[variable] |> Option.toObj
+        | Variable variable -> variables.[variable]
     
     /// Adds a single field to existing object type, returning new object type in result.
     let mergeField (objectType : ObjectDef) (field : FieldDef) : ObjectDef = 
@@ -705,6 +705,9 @@ module SchemaDefinitions =
             match interfaces with
             | None -> o
             | Some i -> implements o i
+            
+        /// GraphQL custom input object type
+        static member InputObject(name : string, fields : FieldDef list) : InputObjectDef = { Name = name; Fields = fields}
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 

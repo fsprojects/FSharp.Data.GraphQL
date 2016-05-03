@@ -42,7 +42,12 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
             addOrReturn typedef.Name typedef ns' 
         | List (Named innerdef) -> insert ns innerdef 
         | NonNull (Named innerdef) -> insert ns innerdef
-        | InputObject innerdef -> insert ns innerdef
+        | InputObject objdef -> 
+            let ns' = addOrReturn objdef.Name typedef ns
+            objdef.Fields
+            |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> a.Type)))
+            |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> List.fold (fun n (Named t) -> insert n t) ns'
         
     let initialTypes: NamedDef list = [ 
         Int
