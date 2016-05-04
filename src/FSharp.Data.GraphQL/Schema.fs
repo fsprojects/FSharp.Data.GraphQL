@@ -23,7 +23,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
             let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
                 objdef.Fields
-                |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> a.Type)))
+                |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> upcast a.Type)))
                 |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
                 |> List.fold (fun n (Named t) -> insert n t) ns'
             objdef.Implements
@@ -43,7 +43,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.FieldsFn()
-            |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> a.Type)))
+            |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> upcast a.Type)))
             |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
             |> List.fold (fun n (Named t) -> insert n t) ns'
         

@@ -272,7 +272,7 @@ and InputObjectDef =
 and ArgDef = 
     { Name : string
       Description : string option
-      Type : TypeDef
+      Type : InputDef
       DefaultValue : obj option }
     override x.ToString() = 
         x.Name + ": " + x.Type.ToString() + (if x.DefaultValue.IsSome then " = " + x.DefaultValue.Value.ToString()
@@ -735,7 +735,7 @@ module SchemaDefinitions =
                   else args.Value
               DeprecationReason = deprecationReason }
         
-        static member Arg(name : string, schema : TypeDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
+        static member Arg(name : string, schema : InputDef, ?defaultValue : 'T, ?description : string) : ArgDef = 
             { Name = name
               Description = description
               Type = schema
