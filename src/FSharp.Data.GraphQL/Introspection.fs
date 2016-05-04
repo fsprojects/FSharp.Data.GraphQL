@@ -14,10 +14,11 @@ type TypeKind =
     | LIST = 7
     | NON_NULL = 8
 
-let internal flagsToList (e:'enum) =
-    System.Enum.GetValues(typeof<'enum>)
-    |> Seq.cast<'enum>
+let internal flagsToList (e:'TEnum) =
+    System.Enum.GetValues(typeof<'TEnum>)
+    |> Seq.cast<'TEnum>
     |> Seq.filter (fun v -> int(e) &&& int(v) <> 0)
+    |> List.ofSeq
     
 let internal graphQLKind (_: ResolveFieldContext) = function
     | Scalar _ -> TypeKind.SCALAR
@@ -101,7 +102,10 @@ let rec __Type = Define.Object(
             match t with
             | InputObject idef -> box idef.FieldsFn
             | _ -> null)
-        Define.Field("ofType", __Type)
+        Define.Field("ofType", __Type, resolve = fun _ typedef ->
+            match typedef with
+            | NonNull inner | List inner -> box inner
+            | _ -> null)
     ])
    
 and __InputValue = Define.Object(

@@ -239,22 +239,22 @@ and [<CustomEquality; NoComparison>]UnionDef =
     override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> List.map (fun o -> o.Name))
     
 and ListOfDef = 
-    { Type: TypeDef }
+    { OfType: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
     override x.ToString() = 
-        match x.Type with
+        match x.OfType with
         | :? NamedDef as named -> "[" + named.Name + "]"
         | other -> "[" + other.ToString() + "]"
 
 and NonNullDef = 
-    { Type: TypeDef }
+    { OfType: TypeDef }
     interface TypeDef
     interface InputDef
     interface OutputDef
     override x.ToString() = 
-        match x.Type with
+        match x.OfType with
         | :? NamedDef as named -> named.Name + "!"
         | other -> other.ToString() + "!"
 
@@ -453,8 +453,8 @@ module SchemaDefinitions =
         | StringValue s -> Some s
         | _ -> None
 
-    let NonNull (innerDef: #TypeDef): NonNullDef = { Type = innerDef }
-    let ListOf (innerDef: #TypeDef): ListOfDef = { Type = innerDef }
+    let NonNull (innerDef: #TypeDef): NonNullDef = { OfType = innerDef }
+    let ListOf (innerDef: #TypeDef): ListOfDef = { OfType = innerDef }
 
     let (|Scalar|_|) (tdef: TypeDef) =
         match tdef with
@@ -482,11 +482,11 @@ module SchemaDefinitions =
         | _ -> None        
     let (|List|_|) (tdef: TypeDef) =
         match tdef with
-        | :? ListOfDef as x -> Some x.Type
+        | :? ListOfDef as x -> Some x.OfType
         | _ -> None        
     let (|NonNull|_|) (tdef: TypeDef) =
         match tdef with
-        | :? NonNullDef as x -> Some x.Type
+        | :? NonNullDef as x -> Some x.OfType
         | _ -> None
     let (|Input|_|) (tdef: TypeDef) =
         match tdef with
@@ -570,7 +570,7 @@ module SchemaDefinitions =
           Description = 
               Some "Directs the executor to include this field or fragment only when the `if` argument is true."
           Locations = 
-              DirectiveLocation.FIELD &&& DirectiveLocation.FRAGMENT_SPREAD &&& DirectiveLocation.INLINE_FRAGMENT
+              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
               [ { Name = "if"
                   Description = Some "Included when true."
@@ -581,7 +581,7 @@ module SchemaDefinitions =
         { Name = "skip"
           Description = Some "Directs the executor to skip this field or fragment when the `if` argument is true."
           Locations = 
-              DirectiveLocation.FIELD &&& DirectiveLocation.FRAGMENT_SPREAD &&& DirectiveLocation.INLINE_FRAGMENT
+              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
               [ { Name = "if"
                   Description = Some "Skipped when true."
