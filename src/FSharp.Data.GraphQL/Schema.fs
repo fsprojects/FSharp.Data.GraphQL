@@ -29,22 +29,20 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
             objdef.Implements
             |> List.fold (fun n t -> insert n t) withFields'
         | Interface interfacedef ->
-            let ns' = 
-                interfacedef.Fields
-                |> List.map (fun x -> x.Type)
-                |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns))
-                |> List.fold (fun n (Named t) -> insert n t) ns
-            addOrReturn typedef.Name typedef ns' 
+            let ns' = addOrReturn typedef.Name typedef ns
+            interfacedef.Fields
+            |> List.map (fun x -> x.Type)
+            |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> List.fold (fun n (Named t) -> insert n t) ns'            
         | Union uniondef ->
-            let ns' =
-                uniondef.Options
-                |> List.fold (fun n t -> insert n t) ns
-            addOrReturn typedef.Name typedef ns' 
+            let ns' = addOrReturn typedef.Name typedef ns
+            uniondef.Options
+            |> List.fold (fun n t -> insert n t) ns'            
         | List (Named innerdef) -> insert ns innerdef 
         | NonNull (Named innerdef) -> insert ns innerdef
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
-            objdef.Fields
+            objdef.FieldsFn()
             |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> a.Type)))
             |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
             |> List.fold (fun n (Named t) -> insert n t) ns'

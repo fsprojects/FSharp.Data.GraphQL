@@ -63,8 +63,23 @@ let droids =
         AppearsIn = [ Episode.NewHope; Episode.Empire; Episode.Jedi ]
         PrimaryFunction = Some "Astromech" } ]
 
-let getHuman id = humans |> List.find (fun human -> human.Id = id)
-let getDroid id = droids |> List.find (fun droid -> droid.Id = id)
+let getHuman id = humans |> List.find (fun h -> h.Id = id)
+let getDroid id = droids |> List.find (fun d -> d.Id = id)
+
+type Character =
+    | Human of Human
+    | Droid of Droid
+
+let characters = (humans |> List.map Human) @ (droids |> List.map Droid)
+
+let matchesId id = function
+    | Human h -> h.Id = id
+    | Droid d -> d.Id = id
+let getCharacter id =
+    match characters |> List.tryFind (matchesId id) with
+    | Some (Human h) -> box h
+    | Some (Droid d) -> box d
+    | None -> null
 
 // Schema definition
 open FSharp.Data.GraphQL
@@ -90,7 +105,7 @@ let rec CharacterType = Define.Interface(
     fields = fun () -> [
         Define.Field("id", NonNull String, "The id of the character.")
         Define.Field("name", String, "The name of the character.")
-        Define.Field("friends", ListOf String, "The friends of the character, or an empty list if they have none.")
+        Define.Field("friends", ListOf CharacterType, "The friends of the character, or an empty list if they have none.")
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")])
 
 and HumanType = Define.Object(
@@ -101,7 +116,8 @@ and HumanType = Define.Object(
     fields = [
         Define.Field("id", NonNull String, "The id of the human.")
         Define.Field("name", String, "The name of the human.")
-        Define.Field("friends", ListOf String, "The friends of the human, or an empty list if they have none.")
+        Define.Field("friends", ListOf CharacterType, description = "The friends of the human, or an empty list if they have none.",
+            resolve = fun _ (human: Human) -> human.Friends |> List.map getCharacter)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
         Define.Field("homePlanet", String, "The home planet of the human, or null if unknown.")])
         
@@ -113,7 +129,8 @@ and DroidType = Define.Object(
     fields = [
         Define.Field("id", NonNull String, "The id of the droid.")
         Define.Field("name", String, "The name of the Droid.")
-        Define.Field("friends", ListOf String, "The friends of the Droid, or an empty list if they have none.")
+        Define.Field("friends", ListOf CharacterType, description = "The friends of the Droid, or an empty list if they have none.",
+            resolve = fun ctx (droid: Droid) -> printfn "%+A" ctx; droid.Friends |> List.map getCharacter)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
         Define.Field("primaryFunction", String, "The primary function of the droid.")])
 

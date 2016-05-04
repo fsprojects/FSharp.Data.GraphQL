@@ -216,7 +216,9 @@ let private resolveField value ctx fieldDef = async {
         let! resolved = fieldDef.Resolve ctx value 
         return Choice1Of2 (Option.ofObj resolved )
     with
-    | ex -> return Choice2Of2 (GraphQLError ex.Message) }
+    | ex -> 
+        let error = (value, ctx, fieldDef)
+        return Choice2Of2 (GraphQLError ex.Message) }
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type

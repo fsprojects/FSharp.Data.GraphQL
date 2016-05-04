@@ -120,10 +120,10 @@ and EnumDef =
 and [<CustomEquality; NoComparison>] ObjectDef = 
     { Name : string
       Description : string option
-      Fields : FieldDef list
+      FieldsFn : unit -> FieldDef list
       Implements : InterfaceDef list
       IsTypeOf : (obj -> bool) option }
-
+    member x.Fields = x.FieldsFn()
     interface TypeDef
     interface OutputDef
     interface CompositeDef
@@ -131,7 +131,7 @@ and [<CustomEquality; NoComparison>] ObjectDef =
         member x.Name = x.Name
         
     interface IEquatable<ObjectDef> with
-        member x.Equals f = x.Name = f.Name && x.Fields = f.Fields
+        member x.Equals f = x.Name = f.Name
     
     override x.Equals y = 
         match y with
@@ -140,10 +140,6 @@ and [<CustomEquality; NoComparison>] ObjectDef =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (match x.Description with
-                                  | None -> 0
-                                  | Some d -> d.GetHashCode())
-        hash <- (hash * 397) ^^^ (x.Fields.GetHashCode())
         hash
     
     override x.ToString() = 
@@ -152,7 +148,7 @@ and [<CustomEquality; NoComparison>] ObjectDef =
         if not (List.isEmpty x.Implements) then 
             sb.Append(" implements ").Append(String.Join(", ", x.Implements |> List.map (fun i -> i.Name))) |> ignore
         sb.Append("{") |> ignore
-        x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
+        //x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
 
 and [<CustomEquality; NoComparison>] FieldDef = 
@@ -173,9 +169,6 @@ and [<CustomEquality; NoComparison>] FieldDef =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (match x.Description with
-                                  | None -> 0
-                                  | Some d -> d.GetHashCode())
         hash <- (hash * 397) ^^^ (x.Type.GetHashCode())
         hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
         hash
@@ -189,9 +182,9 @@ and [<CustomEquality; NoComparison>] FieldDef =
 and [<CustomEquality; NoComparison>]InterfaceDef = 
     { Name : string
       Description : string option
-      Fields : FieldDef list
+      FieldsFn : unit -> FieldDef list
       ResolveType: (obj -> ObjectDef) option }
-
+    member x.Fields = x.FieldsFn()
     interface TypeDef
     interface OutputDef
     interface CompositeDef
@@ -200,7 +193,7 @@ and [<CustomEquality; NoComparison>]InterfaceDef =
         member x.Name = x.Name
       
     interface IEquatable<InterfaceDef> with
-        member x.Equals f = x.Name = f.Name && x.Fields = f.Fields
+        member x.Equals f = x.Name = f.Name
     
     override x.Equals y = 
         match y with
@@ -209,15 +202,11 @@ and [<CustomEquality; NoComparison>]InterfaceDef =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (match x.Description with
-                                  | None -> 0
-                                  | Some d -> d.GetHashCode())
-        hash <- (hash * 397) ^^^ (x.Fields.GetHashCode())
         hash
 
     override x.ToString() = 
         let sb = System.Text.StringBuilder("interface ").Append(x.Name).Append(" {")
-        x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
+       // x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
 
 /// 3.1.4 Unions
@@ -244,9 +233,6 @@ and [<CustomEquality; NoComparison>]UnionDef =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (match x.Description with
-                                  | None -> 0
-                                  | Some d -> d.GetHashCode())
         hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
         hash
 
@@ -275,7 +261,8 @@ and NonNullDef =
 /// 3.1.6 Input Objects
 and InputObjectDef = 
     { Name : string
-      Fields : FieldDef list }
+      FieldsFn : unit -> FieldDef list }
+    member x.Fields = x.FieldsFn()
     interface TypeDef
     interface InputDef
     interface NamedDef with
@@ -617,30 +604,30 @@ module SchemaDefinitions =
         | Variable variable -> variables.[variable]
     
     /// Adds a single field to existing object type, returning new object type in result.
-    let mergeField (objectType : ObjectDef) (field : FieldDef) : ObjectDef = 
-        match objectType.Fields |> Seq.tryFind (fun x -> x.Name = field.Name) with
-        | None -> { objectType with Fields = objectType.Fields @ [ field ] } // we must append to the end
-        | Some x when x = field -> objectType
-        | Some x -> 
-            let msg = 
-                sprintf 
-                    "Cannot merge field %A into object type %s, because it already has field %A sharing the same name, but having a different signature." 
-                    field objectType.Name x
-            raise (GraphQLException msg)
+//    let mergeField (objectType : ObjectDef) (field : FieldDef) : ObjectDef = 
+//        match objectType.Fields |> Seq.tryFind (fun x -> x.Name = field.Name) with
+//        | None -> { objectType with Fields = objectType.Fields @ [ field ] } // we must append to the end
+//        | Some x when x = field -> objectType
+//        | Some x -> 
+//            let msg = 
+//                sprintf 
+//                    "Cannot merge field %A into object type %s, because it already has field %A sharing the same name, but having a different signature." 
+//                    field objectType.Name x
+//            raise (GraphQLException msg)
     
     /// Adds list of fields to existing object type, returning new object type in result.
-    let mergeFields (objectType : ObjectDef) (fields : FieldDef list) : ObjectDef = 
-        fields |> List.fold mergeField objectType //TODO: optimize
+//    let mergeFields (objectType : ObjectDef) (fields : FieldDef list) : ObjectDef = 
+//        fields |> List.fold mergeField objectType //TODO: optimize
     
     /// Orders object type to implement collection of interfaces, applying all of their field to it.
     /// Returns new object type implementing all of the fields in result.
-    let implements (objectType : ObjectDef) (interfaces : InterfaceDef list) : ObjectDef = 
-        let o = { objectType with Implements = objectType.Implements @ interfaces }        
-        let modified = 
-            interfaces
-            |> List.map (fun i -> i.Fields)
-            |> List.fold mergeFields o
-        modified
+//    let implements (objectType : ObjectDef) (interfaces : InterfaceDef list) : ObjectDef = 
+//        let o = { objectType with Implements = objectType.Implements @ interfaces }        
+//        let modified = 
+//            interfaces
+//            |> List.map (fun i -> i.Fields)
+//            |> List.fold mergeFields o
+//        modified
                 
     let internal matchParameters (methodInfo: MethodInfo) (ctx: ResolveFieldContext) =
         methodInfo.GetParameters()
@@ -694,40 +681,32 @@ module SchemaDefinitions =
         
         /// GraphQL custom object type
         static member Object(name : string, fields : unit -> FieldDef list, ?description : string, ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
-            let o = 
-                { Name = name
-                  Description = description
-                  Fields = fields()
-                  Implements = []
-                  IsTypeOf = isTypeOf }
-            match interfaces with
-            | None -> o
-            | Some i -> implements o i
+            { Name = name
+              Description = description
+              FieldsFn = fields
+              Implements = match interfaces with None -> [] | Some i -> i
+              IsTypeOf = isTypeOf }
 
         /// GraphQL custom object type
         static member Object(name : string, fields : FieldDef list, ?description : string, ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef = 
-            let o = 
-                { Name = name
-                  Description = description
-                  Fields = fields
-                  Implements = []
-                  IsTypeOf = isTypeOf }
-            match interfaces with
-            | None -> o
-            | Some i -> implements o i
+            { Name = name
+              Description = description
+              FieldsFn = fun () -> fields
+              Implements = match interfaces with None -> [] | Some i -> i
+              IsTypeOf = isTypeOf }
             
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : unit -> FieldDef list) : InputObjectDef = { Name = name; Fields = fields() }
+        static member InputObject(name : string, fields : unit -> FieldDef list) : InputObjectDef = { Name = name; FieldsFn = fields }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : FieldDef list) : InputObjectDef = { Name = name; Fields = fields }
+        static member InputObject(name : string, fields : FieldDef list) : InputObjectDef = { Name = name; FieldsFn = fun () -> fields }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Object -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
+        static member Field(name : string, typedef : OutputDef, resolve : ResolveFieldContext -> 'Root -> 'Value, ?description : string, ?args : ArgDef list, ?deprecationReason : string) : FieldDef = 
             { Name = name
               Description = description
               Type = typedef
-              Resolve = fun ctx v -> async { return upcast resolve ctx (v :?> 'Object) }
+              Resolve = fun ctx v -> async { return upcast resolve ctx (v :?> 'Root) }
               Args = 
                   if args.IsNone then []
                   else args.Value
@@ -769,14 +748,14 @@ module SchemaDefinitions =
         static member Interface(name : string, fields : unit -> FieldDef list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef = 
             { Name = name
               Description = description
-              Fields = fields()
+              FieldsFn = fields
               ResolveType = resolveType }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fields : FieldDef list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef = 
             { Name = name
               Description = description
-              Fields = fields
+              FieldsFn = fun () -> fields
               ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
