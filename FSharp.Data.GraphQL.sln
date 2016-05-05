@@ -42,6 +42,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql", "graphiql", "{5D
 		samples\graphiql\server.fsx = samples\graphiql\server.fsx
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{751357AE-F2B2-4B38-956E-81E0B8606C73}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -56,6 +58,10 @@ Global
 		{54AAFE43-FA5F-485A-AD40-0240165FC633}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{54AAFE43-FA5F-485A-AD40-0240165FC633}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{54AAFE43-FA5F-485A-AD40-0240165FC633}.Release|Any CPU.Build.0 = Release|Any CPU
+		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -65,5 +71,6 @@ Global
 		{8E6D5255-776D-4B61-85F9-73C37AA1FB9A} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
 		{54AAFE43-FA5F-485A-AD40-0240165FC633} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{5DC4AE38-2814-4E36-9E75-95AA1FC384EB} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
+		{751357AE-F2B2-4B38-956E-81E0B8606C73} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 	EndGlobalSection
 EndGlobal

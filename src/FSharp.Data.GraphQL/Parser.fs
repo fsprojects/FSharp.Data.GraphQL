@@ -24,9 +24,9 @@ let private BP (p: Parser<_,_>) stream =
 
 let private (<!>) (p: Parser<_,_>) label : Parser<_,_> =
     fun stream ->
-        printfn "%A: Entering %s" stream.Position label
+       // printfn "%A: Entering %s" stream.Position label
         let reply = p stream
-        printfn "%A: Leaving %s (%A)" stream.Position label reply.Status
+       // printfn "%A: Leaving %s (%A)" stream.Position label reply.Status
         reply
 
 let private pSelection, pSelectionRef = createParserForwardedToRef<_, unit>()

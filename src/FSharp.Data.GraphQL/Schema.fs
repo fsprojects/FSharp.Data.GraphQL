@@ -9,7 +9,14 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Introspection
 
-type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?directives: DirectiveDef list) =
+type SchemaConfig =
+    { Types : NamedDef list
+      Directives : DirectiveDef list }
+    static member Default = 
+        { Types = []
+          Directives = [IncludeDirective; SkipDirective] }
+
+type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) =
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -56,12 +63,13 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
         __Schema
         query]
 
+    let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
     let mutable typeMap: Map<string, NamedDef> = 
         let m = 
             mutation 
             |> Option.map (fun (Named n) -> n) 
             |> Option.toList
-        initialTypes @ m @ (match types with None -> [] | Some t -> t)
+        initialTypes @ m @ schemaConfig.Types
         |> List.fold insert Map.empty
 
     let implementations =
@@ -83,7 +91,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
         member val TypeMap = typeMap
         member val Query = query
         member val Mutation = mutation
-        member val Directives = match directives with None -> [IncludeDirective; SkipDirective] | Some d -> d
+        member val Directives = schemaConfig.Directives
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = 
             match typedef with
@@ -100,5 +108,3 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?types: NamedDef list, ?dire
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
-
-    

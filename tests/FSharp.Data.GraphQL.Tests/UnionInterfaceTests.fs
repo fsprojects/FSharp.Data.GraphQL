@@ -60,7 +60,7 @@ let PersonType = Define.Object(
         Define.Field("friends", ListOf NamedType)
     ])
 
-let schema = Schema(query = PersonType, types = [ PetType ])
+let schema = Schema(query = PersonType, config = { SchemaConfig.Default with Types = [ PetType ] })
 
 let garfield = { Name = "Garfield"; Meows = false }
 let odie = { Name = "Odie"; Barks = true }

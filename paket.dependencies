@@ -1,4 +1,5 @@
 source https://nuget.org/api/v2
+nuget BenchmarkDotNet
 nuget FParsec
 nuget Newtonsoft.Json
 nuget Suave

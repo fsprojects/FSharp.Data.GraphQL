@@ -35,10 +35,10 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             Define.Field("meows", Boolean)
         ])
     let schema = Schema(
-        types = [CatType; DogType],
         query = Define.Object("Query", fun () -> [
             Define.Field("pets", ListOf PetType, resolve = fun _ _ -> [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
-        ]))
+        ]), 
+        config = { SchemaConfig.Default with Types = [CatType; DogType] })
     let query = """{
       pets {
         name
