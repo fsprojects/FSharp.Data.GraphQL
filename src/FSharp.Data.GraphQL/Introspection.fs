@@ -14,10 +14,11 @@ type TypeKind =
     | LIST = 7
     | NON_NULL = 8
 
-let internal flagsToList (e:'enum) =
-    System.Enum.GetValues(typeof<'enum>)
-    |> Seq.cast<'enum>
+let internal flagsToList (e:'TEnum) =
+    System.Enum.GetValues(typeof<'TEnum>)
+    |> Seq.cast<'TEnum>
     |> Seq.filter (fun v -> int(e) &&& int(v) <> 0)
+    |> List.ofSeq
     
 let internal graphQLKind (_: ResolveFieldContext) = function
     | Scalar _ -> TypeKind.SCALAR
@@ -60,7 +61,7 @@ let __DirectiveLocation = Define.Enum(
         Define.EnumValue("INLINE_FRAGMENT", DirectiveLocation.INLINE_FRAGMENT, "Location adjacent to an inline fragment.")
     ])
     
-let mutable __Type = Define.Object(
+let rec __Type = Define.Object(
     name = "__Type",
     description = """The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.""",
     fields = fun () -> [
@@ -73,9 +74,41 @@ let mutable __Type = Define.Object(
                 | null -> null
                 | property -> property.GetValue(t, null))
         Define.Field("description", String)
+        Define.Field("fields", ListOf (NonNull __Field), 
+            args = [ Define.Arg("includeDeprecated", Boolean, false) ],
+            resolve = fun ctx t ->
+                let fieldsOpt = 
+                    match t with
+                    | Object odef -> Some odef.Fields
+                    | Interface idef -> Some idef.Fields
+                    | _ -> None
+                match fieldsOpt with
+                | None -> null
+                | Some fields when ctx.Arg("includeDeprecated").Value -> box fields
+                | Some fields -> 
+                    fields
+                    |> List.filter (fun f -> Option.isNone f.DeprecationReason)
+                    |> box)
+        Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> box o.Implements | _ -> null)
+        Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> box (ctx.Schema.GetPossibleTypes a) | _ -> null)
+        Define.Field("enumValues", ListOf (NonNull __EnumValue),
+            args = [ Define.Arg("includeDeprecated", Boolean, false) ],
+            resolve = fun ctx t ->
+                match t with
+                | Enum e when ctx.Arg("includeDeprecated").Value -> box e.Options
+                | Enum e -> e.Options |> List.filter (fun v -> Option.isNone v.DeprecationReason) |> box
+                | _ -> null)
+        Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
+            match t with
+            | InputObject idef -> box idef.FieldsFn
+            | _ -> null)
+        Define.Field("ofType", __Type, resolve = fun _ typedef ->
+            match typedef with
+            | NonNull inner | List inner -> box inner
+            | _ -> null)
     ])
    
-let __InputValue = Define.Object(
+and __InputValue = Define.Object(
     name = "__InputValue",
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
     fields = fun () -> [
@@ -90,7 +123,7 @@ let __InputValue = Define.Object(
                 else property.GetValue(input, null))
     ])
     
-let __Field = Define.Object(
+and __Field = Define.Object(
     name = "__Field",
     description = "Object and Interface types are described by a list of Fields, each of which has a name, potentially a list of arguments, and a return type.",
     fields = fun () -> [
@@ -102,7 +135,7 @@ let __Field = Define.Object(
         Define.Field("deprecationReason", String)
     ])
     
-let __EnumValue = Define.Object(
+and __EnumValue = Define.Object(
     name = "__EnumValue",
     description = "One possible value for a given Enum. Enum values are unique values, not a placeholder for a string or numeric value. However an Enum value is returned in a JSON response as a string.",
     fields = fun () -> [
@@ -111,40 +144,8 @@ let __EnumValue = Define.Object(
         Define.Field("isDeprecated", NonNull Boolean, resolve = fun _ (e: EnumValue) -> Option.isSome e.DeprecationReason)
         Define.Field("deprecationReason", String)
     ])
-    
-__Type <-  mergeFields __Type [
-    Define.Field("fields", ListOf (NonNull __Field), 
-        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
-        resolve = fun ctx t ->
-            let fieldsOpt = 
-                match t with
-                | Object odef -> Some odef.Fields
-                | Interface idef -> Some idef.Fields
-                | _ -> None
-            match fieldsOpt with
-            | None -> null
-            | Some fields when ctx.Arg("includeDeprecated").Value -> box fields
-            | Some fields -> 
-                fields 
-                |> List.filter (fun f -> Option.isNone f.DeprecationReason)
-                |> box)
-    Define.Field("interfaces", ListOf (NonNull __Type), resolve = fun _ t -> match t with Object o -> box o.Implements | _ -> null)
-    Define.Field("possibleTypes", ListOf (NonNull __Type), resolve = fun ctx t -> match t with Abstract a -> box (ctx.Schema.GetPossibleTypes a) | _ -> null)
-    Define.Field("enumValues", ListOf (NonNull __EnumValue),
-        args = [ Define.Arg("includeDeprecated", Boolean, false) ],
-        resolve = fun ctx t ->
-            match t with
-            | Enum e when ctx.Arg("includeDeprecated").Value -> box e.Options
-            | Enum e -> e.Options |> List.filter (fun v -> Option.isNone v.DeprecationReason) |> box
-            | _ -> null)
-    Define.Field("inputFields", ListOf (NonNull __InputValue), resolve = fun _ t ->
-        match t with
-        | InputObject idef -> box idef.Fields
-        | _ -> null)
-    Define.Field("ofType", __Type)
-]
 
-let __Directive = Define.Object(
+and __Directive = Define.Object(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fields = fun () -> [
@@ -159,7 +160,7 @@ let __Directive = Define.Object(
         Define.Field("onField", NonNull Boolean, resolve = fun _ (d: DirectiveDef) -> d.Locations.HasFlag(DirectiveLocation.FIELD))
     ])
     
-let __Schema = Define.Object(
+and __Schema = Define.Object(
     name = "__Schema",
     description = "A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all available types and directives on the server, as well as the entry points for query, mutation, and subscription operations.",
     fields = fun () -> [

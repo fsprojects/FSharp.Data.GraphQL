@@ -11,37 +11,19 @@ open FSharp.Data.GraphQL.Types
 
 [<Fact>]
 let ``Object type should be able to merge fields with matching signatures from different interfaces`` () = 
-    let person = Define.Object("Person", [
-        Define.Field("name", String)
-    ])
-    let movable = Define.Interface("Movable", [
+    let MovableType = Define.Interface("Movable", [
         Define.Field("speed", Int)
     ])
-    let movable2 = Define.Interface("Movable2", [
+    let Movable2Type = Define.Interface("Movable2", [
         Define.Field("speed", Int)
         Define.Field("acceleration", Int)
     ])
-    let objectType = implements person [ movable; movable2 ]
-    let expected = Define.Object("Person", [
-        Define.Field("name", String)
-        Define.Field("speed", Int)
-        Define.Field("acceleration", Int)
-    ], interfaces = [movable; movable2])
-    equals expected objectType
-
-
-[<Fact>]
-let ``Object type should not be able to merge fields with matching names but different types from different interfaces`` () = 
-    let person = Define.Object("Person", [
-        Define.Field("name", String)
-    ])
-    let movable = Define.Interface("Movable", [
-        Define.Field("speed", String)
-    ])
-    let movable2 = Define.Interface("Movable2", [
-        Define.Field("speed", Int)
-        Define.Field("acceleration", Int)
-    ])
-
-    (fun () -> implements person [ movable; movable2 ] |> ignore)
-    |> throws<GraphQLException>
+    let PersonType = Define.Object(
+        name = "Person",
+        interfaces = [MovableType; Movable2Type],
+        fields = [
+            Define.Field("name", String)
+            Define.Field("speed", Int)
+            Define.Field("acceleration", Int)])
+    equals [MovableType; Movable2Type] PersonType.Implements
+    equals [Define.Field("name", String); Define.Field("speed", Int); Define.Field("acceleration", Int)] PersonType.Fields
