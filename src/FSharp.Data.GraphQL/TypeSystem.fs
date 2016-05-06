@@ -214,7 +214,8 @@ and [<CustomEquality; NoComparison>]UnionDef =
     { Name : string
       Description : string option
       Options : ObjectDef list
-      ResolveType : (obj -> ObjectDef) option }
+      ResolveType : (obj -> ObjectDef) option
+      ResolveValue: obj -> obj }
       
     interface TypeDef
     interface OutputDef
@@ -381,12 +382,15 @@ module SchemaDefinitions =
         
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
     let (|Option|_|) (x: obj) =
-        let t = x.GetType()
-        if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> 
-        then
-            let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(x, t)
-            Some (fields.[0])
-        else None
+        if x = null 
+        then None
+        else 
+            let t = x.GetType()
+            if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> 
+            then
+                let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(x, t)
+                Some (fields.[0])
+            else None
     
     let internal coerceStringValue (x : obj) : string option = 
         match x with
@@ -632,6 +636,8 @@ module SchemaDefinitions =
     let internal matchParameters (methodInfo: MethodInfo) (ctx: ResolveFieldContext) =
         methodInfo.GetParameters()
         |> Array.map (fun param -> ctx.Arg<obj>(param.Name).Value)
+
+    let inline strip (fn: 'In -> 'Out): (obj -> obj) = fun (i) -> upcast fn(i :?> 'In) 
                 
     let internal defaultResolve<'t> (fieldName : string) : ResolveFieldContext -> obj -> Async<obj> = 
         (fun ctx v -> 
@@ -759,8 +765,9 @@ module SchemaDefinitions =
               ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectDef list, ?resolveType: obj -> ObjectDef, ?description : string) : UnionDef = 
+        static member Union(name : string, options : ObjectDef list, ?resolveType: 'In -> ObjectDef, ?description : string, ?resolveValue: 'In -> 'Out) : UnionDef = 
             { Name = name
               Description = description
               Options = options
-              ResolveType = resolveType }
+              ResolveType = match resolveType with None -> None | Some fn -> Some (fun i -> fn (i :?> 'In))
+              ResolveValue = match resolveValue with None -> id | Some fn -> strip fn }

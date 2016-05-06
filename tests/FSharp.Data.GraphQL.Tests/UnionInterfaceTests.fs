@@ -44,10 +44,14 @@ let CatType = Define.Object(
 let PetType = Define.Union(
     name = "Pet",
     options = [ CatType; DogType ],
-    resolveType = fun pet ->
+    resolveType = (fun pet ->
         match pet with
-        | :? Cat -> CatType
-        | :? Dog -> DogType)
+        | Cat _ -> CatType
+        | Dog _ -> DogType),
+    resolveValue = (fun pet ->
+        match pet with
+        | Cat cat -> box cat
+        | Dog dog -> box dog))
 
 let PersonType = Define.Object(
     name = "Person",
@@ -56,7 +60,7 @@ let PersonType = Define.Object(
     fields = [
         Define.Field("name", String)
         Define.Field("pets", ListOf PetType, 
-            resolve = fun _ person -> person.Pets |> List.map (fun pet -> match pet with Dog d -> box d | Cat c -> box c))
+            resolve = fun _ person -> person.Pets)
         Define.Field("friends", ListOf NamedType)
     ])
 

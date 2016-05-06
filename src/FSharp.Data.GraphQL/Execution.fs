@@ -210,15 +210,17 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
             | None -> Map.add responseKey (fragmentGroup) acc
         ) groupedFields    
                 
-/// Takes an object type, a field, and an object, and returns the result of resolving that field on the object
+/// Takes an object, current execution context and a field definition, and returns the result of resolving that field on the object
 let private resolveField value ctx fieldDef = async {
     try
         let! resolved = fieldDef.Resolve ctx value 
-        return Choice1Of2 (Option.ofObj resolved )
+        let unboxed = 
+            match resolved with
+            | Option o -> o     // if resolved value was an option unwrap it to object
+            | o -> o
+        return Choice1Of2 unboxed
     with
-    | ex -> 
-        let error = (value, ctx, fieldDef)
-        return Choice2Of2 (GraphQLError ex.Message) }
+    | ex -> return Choice2Of2 (GraphQLError ex.Message) }
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
@@ -288,9 +290,9 @@ and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async 
         let objectdef = resolveInterfaceType ctx typedef result
         let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed
-    | Union typedef ->
-        let objectdef = resolveUnionType ctx typedef result
-        let! completed = completeObjectValue ctx objectdef fields result
+    | Union uniondef ->
+        let objectdef = resolveUnionType ctx uniondef result
+        let! completed = completeObjectValue ctx objectdef fields (uniondef.ResolveValue result)
         return upcast completed }
 
 // 6.6.1 Field entries
@@ -314,8 +316,8 @@ and private getFieldEntry ctx typedef value (fields: Field list) : Async<obj> = 
         }
         let! resolved = resolveField value resolveFieldCtx fieldDef 
         match resolved with
-        | Choice1Of2 None -> return null
-        | Choice1Of2 (Some resolvedObject) ->
+        | Choice1Of2 null -> return null
+        | Choice1Of2 resolvedObject ->
             return! completeValue ctx fieldDef.Type fields resolvedObject
         | Choice2Of2 error ->
             ctx.Errors.Add error
