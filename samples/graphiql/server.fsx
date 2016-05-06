@@ -1,6 +1,6 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
+#r "../../src/FSharp.Data.GraphQL/bin/Release/FSharp.Data.GraphQL.dll"
 
 open System
 
@@ -130,7 +130,7 @@ and DroidType = Define.Object(
         Define.Field("id", NonNull String, "The id of the droid.")
         Define.Field("name", String, "The name of the Droid.")
         Define.Field("friends", ListOf CharacterType, description = "The friends of the Droid, or an empty list if they have none.",
-            resolve = fun ctx (droid: Droid) -> printfn "%+A" ctx; droid.Friends |> List.map getCharacter)
+            resolve = fun ctx (droid: Droid) -> droid.Friends |> List.map getCharacter)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
         Define.Field("primaryFunction", String, "The primary function of the droid.")])
 
