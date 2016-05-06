@@ -49,7 +49,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) =
         | NonNull (Named innerdef) -> insert ns innerdef
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
-            objdef.FieldsFn()
+            objdef.Fields
             |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> upcast a.Type)))
             |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
             |> List.fold (fun n (Named t) -> insert n t) ns'

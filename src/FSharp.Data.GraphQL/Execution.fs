@@ -211,7 +211,7 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
         ) groupedFields    
                 
 /// Takes an object, current execution context and a field definition, and returns the result of resolving that field on the object
-let private resolveField value ctx fieldDef = async {
+let private resolveField value ctx (fieldDef: FieldDef) = async {
     try
         let! resolved = fieldDef.Resolve ctx value 
         let unboxed = 
@@ -224,14 +224,12 @@ let private resolveField value ctx fieldDef = async {
 
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) =
-    let result =
+let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : FieldDef option =
         match field.Name with
-        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some SchemaMetaFieldDef
-        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some TypeMetaFieldDef
-        | "__typename" -> Some TypeNameMetaFieldDef
+        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
+        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
+        | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
-    result
 
 let private defaultResolveType ctx abstractDef objectValue =
     let possibleTypes = ctx.Schema.GetPossibleTypes abstractDef
