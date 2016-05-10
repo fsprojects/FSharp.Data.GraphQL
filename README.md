@@ -5,12 +5,12 @@ F# implementation of Facebook [GraphQL query language specification](https://fac
 
 [![Build status](https://ci.appveyor.com/api/projects/status/yjsen9xyvqhyak4b?svg=true)](https://ci.appveyor.com/project/johnberzy-bazinga/fsharp-data-graphql)
 
-## Example
+## Quick start
 
 ```fsharp
-type Person = {
-    FirstName: string
-    LastName: string }
+type Person = 
+    { FirstName: string
+      LastName: string }
 
 // define GraphQL type 
 let PersonType = Define.Object(
@@ -31,9 +31,17 @@ let reply = schema.AsyncExecute(parse "{ firstName, lastName }", johnSnow) |> As
 // #> map [("firstName", "John"); ("lastName", "Snow")] 
 ```
 
+It's type safe. Things like invalid fields or invalid return types will be checked at compile time.
+
+## Demo
+
+You can checkout this project in work, by running [example Suave server](samples/graphiql/server.fsx) from your FSI, and calling it by sending example request:
+
+    curl --form 'query={ hero(id: "1000") { id, name, appearsIn, friends { id,name } } }' http://localhost:8083/
+
 ## Implementation progress
 
 Missing parts:
 
-- Fully functional Introspection API
+- Introspection API
 - Query validation

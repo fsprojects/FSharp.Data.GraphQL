@@ -25,5 +25,5 @@ let ``Object type should be able to merge fields with matching signatures from d
             Define.Field("name", String)
             Define.Field("speed", Int)
             Define.Field("acceleration", Int)])
-    equals [MovableType; Movable2Type] PersonType.Implements
-    equals [Define.Field("name", String); Define.Field("speed", Int); Define.Field("acceleration", Int)] PersonType.Fields
+    equals [MovableType :> InterfaceDef; upcast Movable2Type] PersonType.Implements
+    equals [Define.Field("name", String) :> FieldDef; upcast Define.Field("speed", Int); upcast Define.Field("acceleration", Int)] ( PersonType :> ObjectDef).Fields

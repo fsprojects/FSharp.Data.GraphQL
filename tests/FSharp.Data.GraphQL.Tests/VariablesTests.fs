@@ -18,34 +18,41 @@ let TestComplexScalar = Define.Scalar(
     coerceOutput = (fun value -> if value = "DeserializedValue" then Some (StringValue "SerializedValue") else None),
     coerceValue = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
-let TestInputObject = Define.InputObject(
+let TestInputObject = Define.InputObject<Map<string, obj>>(
     name = "TestInputObject",
     fields = [
-        Define.Field("a", String)
-        Define.Field("b", ListOf String)
-        Define.Field("c", NonNull String)
-        Define.Field("d", TestComplexScalar)
+        Define.Input("a", Nullable String)
+        Define.Input("b", Nullable(ListOf (Nullable String)))
+        Define.Input("c", String)
+        Define.Input("d", Nullable TestComplexScalar)
     ])
 
-let TestNestedInputObject = Define.InputObject(
+let TestNestedInputObject = Define.InputObject<Map<string, obj>>(
     name = "TestNestedInputObject",
     fields = [
-        Define.Field("na", NonNull TestInputObject)
-        Define.Field("nb", NonNull String)
+        Define.Input("na", TestInputObject)
+        Define.Input("nb", String)
     ])
+
+let stringifyArg name (ctx: ResolveFieldContext) () =
+    match ctx.Arg name |> Option.toObj with
+    | null -> null
+    | other -> other.ToString()
+
+let stringifyInput = stringifyArg "input"
 
 let TestType = Define.Object(
     name = "TestType",
     fields = [
-        Define.Field("fieldWithObjectInput", String, args = [ Define.Arg("input", TestInputObject) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("fieldWithNullableStringInput", String, args = [ Define.Arg("input", String) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("fieldWithNonNullableStringInput", String, args = [ Define.Arg("input", NonNull String) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("fieldWithDefaultArgumentValue", String, args = [ Define.Arg("input", String, "hello world") ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("fieldWithNestedInputObject", String, args = [ Define.Arg("input", TestNestedInputObject, "hello world") ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("list", String, args = [ Define.Arg("input", ListOf String) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("nnList", String, args = [ Define.Arg("input", NonNull (ListOf String)) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("listNN", String, args = [ Define.Arg("input", ListOf (NonNull String)) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
-        Define.Field("nnListNN", String, args = [ Define.Arg("input", NonNull (ListOf (NonNull String))) ], resolve = fun ctx _ -> ctx.Arg("input") |> Option.toObj)
+        Define.Field("fieldWithObjectInput", String, "", [ Define.Input("input", Nullable TestInputObject) ], stringifyInput)
+        Define.Field("fieldWithNullableStringInput", String, "", [ Define.Input("input", Nullable String) ], stringifyInput)
+        Define.Field("fieldWithNonNullableStringInput", String, "", [ Define.Input("input", String) ], stringifyInput)
+        Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
+        Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, Map.ofList ["", upcast "hello world"]) ], stringifyInput)
+        Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
+        Define.Field("nnList", String, "", [ Define.Input("input", ListOf (Nullable String)) ], stringifyInput)
+        Define.Field("listNN", String, "", [ Define.Input("input", Nullable (ListOf String)) ], stringifyInput)
+        Define.Field("nnListNN", String, "", [ Define.Input("input", ListOf String) ], stringifyInput)
     ])
 
 let schema = Schema(TestType)

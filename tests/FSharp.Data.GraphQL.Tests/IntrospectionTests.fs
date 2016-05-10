@@ -13,9 +13,9 @@ open FSharp.Data.GraphQL.Execution
 
 [<Fact>]
 let ``Introspection executes an introspection query`` () =
-    let root = objdef "QueryRoot" [
+    let root = Define.Object("QueryRoot", [
         Define.Field("onlyField", String)
-    ]
+    ])
     let schema = Schema(root)
     let (Object raw) = root
     let result = sync <| schema.AsyncExecute(parse introspectionQuery, raw)

@@ -46,11 +46,11 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) =
             uniondef.Options
             |> List.fold (fun n t -> insert n t) ns'            
         | List (Named innerdef) -> insert ns innerdef 
-        | NonNull (Named innerdef) -> insert ns innerdef
+        | Nullable (Named innerdef) -> insert ns innerdef
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
-            |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> upcast a.Type)))
+            |> List.collect (fun x -> [x.Type :> TypeDef])
             |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
             |> List.fold (fun n (Named t) -> insert n t) ns'
         

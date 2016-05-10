@@ -11,32 +11,53 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
-type Dog = { Name: string; Woofs: bool }
-type Cat = { Name: string; Meows: bool }
+type IPet =
+    interface
+        abstract Name : string
+    end 
+
+type Dog = 
+    { Name: string; Woofs: bool }
+    interface IPet with
+        member x.Name = x.Name
+
+type Cat = 
+    { Name: string; Meows: bool }
+    interface IPet with
+        member x.Name = x.Name
+
 type Human = { Name: string; }
+
+type Pet =
+    | Dog of Dog
+    | Cat of Cat
+
+let resolvePet = function
+    | Dog d -> box d
+    | Cat c -> upcast c
 
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () = 
     let PetType = Define.Interface("Pet", fun () -> [ Define.Field("name", String) ])
-    let DogType = Define.Object(
+    let DogType = Define.Object<Dog>(
         name = "Dog", 
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
-        fields = fun () -> [
+        fields = [
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
-    let CatType = Define.Object(
+    let CatType = Define.Object<Cat>(
         name = "Cat", 
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
-        fields = fun () -> [
+        fields = [
             Define.Field("name", String)
             Define.Field("meows", Boolean)
         ])
     let schema = Schema(
         query = Define.Object("Query", fun () -> [
-            Define.Field("pets", ListOf PetType, resolve = fun _ _ -> [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
+            Define.Field("pets", ListOf PetType, fun _ _ -> upcast [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
         ]), 
         config = { SchemaConfig.Default with Types = [CatType; DogType] })
     let query = """{
@@ -64,25 +85,24 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
-    let DogType = Define.Object(
+    let DogType = Define.Object<Dog>(
         name = "Dog", 
         isTypeOf = is<Dog>,
-        fields = fun () -> [
+        fields = [
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
-    let CatType = Define.Object(
+    let CatType = Define.Object<Cat>(
         name = "Cat", 
         isTypeOf = is<Cat>,
-        fields = fun () -> [
+        fields = [
             Define.Field("name", String)
             Define.Field("meows", Boolean)
         ])
-    let PetType = Define.Union("Pet", [ DogType; CatType ])
+    let PetType = Define.Union("Pet", [ DogType; CatType ], resolvePet)
     let schema = Schema(
         query = Define.Object("Query", fun () -> [
-            Define.Field("pets", ListOf PetType, resolve = fun _ _ -> 
-                [ { Name = "Odie"; Woofs = true } :> obj; upcast { Name = "Garfield"; Meows = false } ])
+            Define.Field("pets", ListOf PetType, fun _ _ -> upcast [ Dog { Name = "Odie"; Woofs = true }; Cat { Name = "Garfield"; Meows = false } ])
         ]))
     let query = """{
       pets {

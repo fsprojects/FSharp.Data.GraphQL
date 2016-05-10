@@ -16,50 +16,43 @@ let rec private getTypeName = function
     | NamedType name -> name
     | ListType inner -> getTypeName inner
     | NonNullType inner -> getTypeName inner
-//
-//let rec private isValidValue (schema: Schema) typedef value =
-//    match typedef with
-//    | Scalar scalardef -> scalardef.CoerceValue(value) <> null
-//    | NonNull innerdef -> if value = null then false else isValidValue schema innerdef value
-//    | ListOf innerdef  -> 
-//        match value with
-//        | null -> true
-//        | :? System.Collections.IEnumerable as iter -> 
-//            iter
-//            |> Seq.cast<obj>
-//            |> Seq.forall (fun v -> isValidValue schema innerdef v)
-//        | _ -> false
-//    | Object objdef | InputObject objdef ->
-//        let map = value :?> Map<string, obj>
-//        objdef.Fields
-//        |> List.forall (fun field -> isValidValue schema field.Type map.[field.Name])
-//    | _ -> false
-//            
-//
-let rec private coerceValue typedef (input: obj) : obj = 
+    
+let rec private coerceValue allowNull typedef (input: obj) : obj = 
     match typedef with
-    | Scalar scalardef -> scalardef.CoerceValue input |> Option.toObj
-    | NonNull innerdef -> 
-        match coerceValue innerdef input with
-        | null -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
-        | other -> other
+    | Scalar scalardef -> 
+        match scalardef.CoerceValue input with
+        | None when allowNull -> null
+        | None -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
+        | Some res -> res
+    | Nullable innerdef -> coerceValue true innerdef input 
     | List innerdef ->
         match input with
         | null -> null
         // special case - while single values should be wrapped with a list in this scenario,
         // string would be treat as IEnumerable and coerced into a list of chars
-        | :? string as s -> upcast [coerceValue innerdef s]
+        | :? string as s -> upcast [coerceValue false innerdef s]
         | :? System.Collections.IEnumerable as iter -> 
             let mapped =
                 iter
                 |> Seq.cast<obj>
-                |> Seq.map (fun elem -> coerceValue innerdef elem)
+                |> Seq.map (fun elem -> coerceValue false innerdef elem)
                 |> List.ofSeq
             upcast mapped
-        | other -> upcast [coerceValue innerdef other]
+        | other -> upcast [coerceValue false innerdef other]
     | Object objdef -> coerceObjectValue objdef.Fields input
-    | InputObject objdef -> coerceObjectValue objdef.Fields input
-    | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, NonNulls, Lists and Objects are valid type definitions." other typedef))
+    | InputObject objdef -> coerceInputObjectValue objdef.Fields input
+    | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, Nullables, Lists and Objects are valid type definitions." other typedef))
+    
+and private coerceInputObjectValue (fields: InputFieldDef list) (input: obj) =
+    //TODO: this should be eventually coerced to complex object
+    let map = input :?> Map<string, obj>
+    let mapped = 
+        fields
+        |> List.map (fun field -> 
+            let valueFound = Map.tryFind field.Name map |> Option.toObj
+            (field.Name, coerceValue false field.Type valueFound))
+        |> Map.ofList
+    upcast mapped
 
 and private coerceObjectValue (fields: FieldDef list) (input: obj) =
     let map = input :?> Map<string, obj>
@@ -67,16 +60,16 @@ and private coerceObjectValue (fields: FieldDef list) (input: obj) =
         fields
         |> List.map (fun field -> 
             let valueFound = Map.tryFind field.Name map |> Option.toObj
-            (field.Name, coerceValue field.Type valueFound))
+            (field.Name, coerceValue false field.Type valueFound))
         |> Map.ofList
     upcast mapped
     
-let inline private collectDefaultArgValue acc (argdef: ArgDef) =
+let inline private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
     | Some defVal -> Map.add argdef.Name defVal acc
     | None -> acc
 
-let private getArgumentValues (argDefs: ArgDef list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
+let private getArgumentValues (argDefs: InputFieldDef list) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
     argDefs
     |> List.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
@@ -128,9 +121,9 @@ let private coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (inpu
     match input with
     | None -> 
         match vardef.DefaultValue with
-        | Some defaultValue -> coerceValue typedef defaultValue
+        | Some defaultValue -> coerceValue false typedef defaultValue
         | None -> raise (GraphQLException (sprintf "Variable '%s' of required type '%A' was not provided." vardef.VariableName vardef.Type))
-    | Some input -> coerceValue typedef input
+    | Some input -> coerceValue false typedef input
 
 let private coerceVariables (schema: #ISchema) variables (inputs: Map<string, obj> option) =
     match inputs with
@@ -220,8 +213,8 @@ let private resolveField value ctx (fieldDef: FieldDef) = async {
             | o -> o
         return Choice1Of2 unboxed
     with
-    | ex -> return Choice2Of2 (GraphQLError ex.Message) }
-
+    | ex -> return Choice2Of2 (GraphQLError (ex.ToString())) }
+    
 open FSharp.Data.GraphQL.Introspection
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : FieldDef option =
@@ -233,11 +226,12 @@ let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : Fiel
 
 let private defaultResolveType ctx abstractDef objectValue =
     let possibleTypes = ctx.Schema.GetPossibleTypes abstractDef
+    let mapper = match abstractDef with Union u -> u.ResolveValue | _ -> id
     possibleTypes
     |> List.find (fun objdef ->
         match objdef.IsTypeOf with
         | Some isTypeOf ->
-            isTypeOf(objectValue)
+            isTypeOf(mapper objectValue)
         | None -> false)
         
 let private resolveInterfaceType ctx (interfacedef: InterfaceDef) objectValue = 
@@ -260,13 +254,14 @@ let rec private completeObjectValue ctx objectType (fields: Field list) (result:
 
 and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async {
     match fieldDef with
-    | NonNull innerdef ->
-        let! completed = completeValue ctx innerdef fields result
-        match completed with
-        | null -> return raise (GraphQLException (sprintf "Null value is not allowed on the field '%s'" (fieldDef.ToString())))
-        | completedResult -> return completedResult
+    | Nullable innerdef -> 
+        let unwrapped = match result with Option o -> o | o -> o
+        return! completeValue ctx innerdef fields unwrapped
     | List innerdef ->
         match result with
+        | :? string as s -> 
+            let! res = completeValue ctx innerdef fields s
+            return upcast [res]
         | :? System.Collections.IEnumerable as enumerable ->
             let! completed=
                 enumerable
@@ -284,7 +279,7 @@ and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async 
     | Object objectdef ->
         let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed
-    | Interface typedef ->
+    | Interface typedef -> 
         let objectdef = resolveInterfaceType ctx typedef result
         let! completed = completeObjectValue ctx objectdef fields result
         return upcast completed
@@ -373,7 +368,7 @@ type FSharp.Data.GraphQL.Schema with
                 return { Data = Some result; Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
             with 
             | ex -> 
-                let msg = ex.Message
+                let msg = ex.ToString()
                 return { Data = None; Errors = Some [| GraphQLError msg |]} }
 
     member schema.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
@@ -385,5 +380,5 @@ type FSharp.Data.GraphQL.Schema with
                 return { Data = Some result; Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
             with 
             | ex -> 
-                let msg = ex.Message
+                let msg = ex.ToString()
                 return { Data = None; Errors = Some [| GraphQLError msg |]} }
