@@ -7,6 +7,7 @@ open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Execution
 
 let equals (expected : 'x) (actual : 'x) = 

@@ -202,27 +202,8 @@ and collectFragment ctx typedef visitedFragments groupedFields fragment =
             | Some groupForResponseKey -> Map.add responseKey (fragmentGroup @ groupForResponseKey) acc
             | None -> Map.add responseKey (fragmentGroup) acc
         ) groupedFields    
-                
-/// Takes an object, current execution context and a field definition, and returns the result of resolving that field on the object
-let private resolveField value ctx (fieldDef: FieldDef) = async {
-    try
-        let! resolved = fieldDef.Resolve ctx value 
-        let unboxed = 
-            match resolved with
-            | Option o -> o     // if resolved value was an option unwrap it to object
-            | o -> o
-        return Choice1Of2 unboxed
-    with
-    | ex -> return Choice2Of2 (GraphQLError (ex.ToString())) }
     
 open FSharp.Data.GraphQL.Introspection
-/// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-let private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : FieldDef option =
-        match field.Name with
-        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
-        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
-        | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-        | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
 
 let private defaultResolveType ctx abstractDef objectValue =
     let possibleTypes = ctx.Schema.GetPossibleTypes abstractDef
@@ -243,6 +224,9 @@ let private resolveUnionType ctx (uniondef: UnionDef) objectValue =
     match uniondef.ResolveType with
     | Some resolveType -> resolveType(objectValue)
     | None -> defaultResolveType ctx uniondef objectValue
+
+//---------------------------
+// ENTRY: 6.6.1 Field entries
 
 /// Complete an ObjectType value by executing all sub-selections
 let rec private completeObjectValue ctx objectType (fields: Field list) (result: obj) = async {
@@ -287,8 +271,27 @@ and private completeValue ctx fieldDef fields (result: obj): Async<obj> = async 
         let objectdef = resolveUnionType ctx uniondef result
         let! completed = completeObjectValue ctx objectdef fields (uniondef.ResolveValue result)
         return upcast completed }
+                
+/// Takes an object, current execution context and a field definition, and returns the result of resolving that field on the object
+and private resolveField value ctx (fieldDef: FieldDef) = async {
+    try
+        let! resolved = fieldDef.Resolve ctx value 
+        let unboxed = 
+            match resolved with
+            | Option o -> o     // if resolved value was an option unwrap it to object
+            | o -> o
+        return Choice1Of2 unboxed
+    with
+    | ex -> return Choice2Of2 (GraphQLError (ex.ToString())) }
 
-// 6.6.1 Field entries
+/// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
+and private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : FieldDef option =
+        match field.Name with
+        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
+        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
+        | "__typename" -> Some (upcast TypeNameMetaFieldDef)
+        | fieldName -> objectType.Fields |> List.tryFind (fun f -> f.Name = fieldName)
+
 and private getFieldEntry ctx typedef value (fields: Field list) : Async<obj> = async {
     let firstField::_ = fields
     match getFieldDefinition ctx typedef firstField with
@@ -326,6 +329,9 @@ and private executeFields ctx typedef value (groupedFieldSet): Async<Map<string,
         |> Async.Parallel
     return whenAll
         |> Array.fold (fun acc (responseKey, res) -> Map.add responseKey res acc) Map.empty }
+
+// EXIT
+//---------------------------
 
 and private executeFieldsSync ctx typedef value (groupedFieldSet): Async<Map<string, obj>> = async {
     let result = 

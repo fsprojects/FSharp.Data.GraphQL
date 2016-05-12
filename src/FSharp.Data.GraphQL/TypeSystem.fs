@@ -5,6 +5,99 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open FSharp.Data.GraphQL.Ast
 
+type [<Flags>] DirectiveLocation = 
+    | QUERY = 1
+    | MUTATION = 2
+    | SUBSCRIPTION = 4
+    | FIELD = 8
+    | FRAGMENT_DEFINITION = 16
+    | FRAGMENT_SPREAD = 32
+    | INLINE_FRAGMENT = 64
+
+module Introspection =
+    
+    type TypeKind = 
+        | SCALAR = 1
+        | OBJECT  = 2
+        | INTERFACE = 3
+        | UNION = 4
+        | ENUM = 5
+        | INPUT_OBJECT = 6
+        | LIST = 7
+        | NON_NULL = 8
+
+    type IntrospectionDirective =
+        { Name : string
+          Description : string option
+          Locations : DirectiveLocation seq
+          Args : IntrospectionInputVal seq }
+
+    and IntrospectionType =
+        | IntrospectionScalar of name:string * description:string option
+        | IntrospectionObject of name:string * description:string option * fields:IntrospectionField seq * interfaces:IntrospectionNamedType seq
+        | IntrospectionInputObject of name:string * description:string option * inputFields:IntrospectionInputVal seq
+        | IntrospectionInterface of name:string * description:string option * fields:IntrospectionField seq * possibleTypes:IntrospectionNamedType seq
+        | IntrospectionUnion of name:string * description:string option * possibleTypes:IntrospectionNamedType seq
+        | IntrospectionEnum of name:string * description:string option * enumValues:IntrospectionEnumVal seq
+        member x.Name = 
+            match x with
+            | IntrospectionScalar(name, _) -> name
+            | IntrospectionObject(name, _, _, _) -> name
+            | IntrospectionInputObject(name, _, _) -> name
+            | IntrospectionInterface(name, _, _, _) -> name
+            | IntrospectionUnion(name, _, _) -> name
+            | IntrospectionEnum(name, _, _) -> name
+        member x.Description =
+            match x with
+            | IntrospectionScalar(_, desc) -> desc
+            | IntrospectionObject(_, desc, _, _) -> desc
+            | IntrospectionInputObject(_, desc, _) -> desc
+            | IntrospectionInterface(_, desc, _, _) -> desc
+            | IntrospectionUnion(_, desc, _) -> desc
+            | IntrospectionEnum(_, desc, _) -> desc
+        member x.Kind =
+            match x with
+            | IntrospectionScalar(_, _) -> TypeKind.SCALAR
+            | IntrospectionObject(_, _, _, _) -> TypeKind.OBJECT
+            | IntrospectionInputObject(_, _, _) -> TypeKind.INPUT_OBJECT
+            | IntrospectionInterface(_, _, _, _) -> TypeKind.INTERFACE
+            | IntrospectionUnion(_, _, _) -> TypeKind.UNION
+            | IntrospectionEnum(_, _, _) -> TypeKind.ENUM
+
+    and IntrospectionNamedType = { Kind: TypeKind; Name: string; Description: string option}
+
+    and IntrospectionTypeRef =
+        | NamedTypeRef of IntrospectionNamedType
+        | ListTypeRef of ofType:IntrospectionTypeRef
+        | NonNullTypeRef of ofType:IntrospectionTypeRef
+
+    and IntrospectionInputVal =
+        { Name : string
+          Description : string option
+          Type : IntrospectionTypeRef
+          DefaultValue : string option }
+
+    and IntrospectionEnumVal =
+        { Name : string
+          Description : string option
+          IsDeprecated : bool
+          DeprecationReason : string option }
+
+    and IntrospectionField = 
+        { Name : string
+          Description : string option
+          Args : IntrospectionInputVal seq
+          Type : IntrospectionTypeRef
+          IsDeprecated : bool
+          DeprecationReason : string option }
+
+    and IntrospectionSchema =
+        { QueryType : IntrospectionNamedType
+          MutationType : IntrospectionNamedType option
+          SubscriptionType : IntrospectionNamedType option
+          Types : IntrospectionType seq
+          Directives : IntrospectionDirective seq }
+
 type GraphQLException(msg) = 
     inherit Exception(msg)
 
@@ -18,6 +111,7 @@ type ISchema =
         abstract TryFindType : string -> NamedDef option
         abstract GetPossibleTypes : AbstractDef -> ObjectDef list
         abstract IsPossibleType : AbstractDef -> ObjectDef -> bool
+        abstract Introspected : Introspection.IntrospectionSchema
     end
 
 // 3.1 Types
@@ -102,6 +196,7 @@ and GraphQLError =
 and ScalarDef =
     interface
         abstract Name : string
+        abstract Description : string option
         abstract CoerceInput : Value -> obj
         abstract CoerceOutput : obj -> Value option
         abstract CoerceValue : obj -> obj option
@@ -123,6 +218,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
     
     interface ScalarDef with
         member x.Name = x.Name
+        member x.Description = x.Description
         member x.CoerceInput input = upcast (x.CoerceInput input)
         member x.CoerceOutput output = x.CoerceOutput (output :?> 'Val)
         member x.CoerceValue value = (x.CoerceValue value) |> Option.map box
@@ -166,6 +262,7 @@ and EnumValue<'Val> =
 and EnumDef =
     interface 
         abstract Name : string
+        abstract Description : string option
         abstract Options : EnumVal list
         inherit TypeDef
         inherit InputDef
@@ -193,6 +290,7 @@ and EnumDefinition<'Val> =
 
     interface EnumDef with
         member x.Name = x.Name
+        member x.Description = x.Description
         member x.Options = x.Options |> Seq.ofList |> Seq.cast<EnumVal> |> Seq.toList
 
     interface NamedDef with
@@ -204,6 +302,7 @@ and EnumDefinition<'Val> =
 and ObjectDef =
     interface
         abstract Name : string
+        abstract Description : string option
         abstract Fields : FieldDef list
         abstract Implements : InterfaceDef list
         abstract IsTypeOf : (obj -> bool) option
@@ -230,6 +329,7 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
 
     interface ObjectDef with
         member x.Name = x.Name
+        member x.Description = x.Description
         member x.Fields = x.FieldsFn() |> Seq.ofList |> Seq.cast<FieldDef> |> List.ofSeq
         member x.Implements = x.Implements
         member x.IsTypeOf = x.IsTypeOf
@@ -482,6 +582,7 @@ and NullableDefinition<'Val> =
 and InputObjectDef =
     interface 
         abstract Name : string
+        abstract Description : string option
         abstract Fields : InputFieldDef list
         inherit NamedDef
         inherit InputDef
@@ -490,10 +591,12 @@ and InputObjectDef =
 /// 3.1.6 Input Objects
 and InputObjectDefinition<'Val> = 
     { Name : string
+      Description : string option
       FieldsFn : unit -> InputFieldDef list }
     
     interface InputObjectDef with
         member x.Name = x.Name
+        member x.Description = x.Description
         member x.Fields = x.FieldsFn()
 
     interface TypeDef<'Val>
@@ -556,15 +659,6 @@ and DirectiveDef =
       Description : string option
       Locations : DirectiveLocation
       Args : InputFieldDef list }
-
-and [<Flags>] DirectiveLocation = 
-    | QUERY = 1
-    | MUTATION = 2
-    | SUBSCRIPTION = 4
-    | FIELD = 8
-    | FRAGMENT_DEFINITION = 16
-    | FRAGMENT_SPREAD = 32
-    | INLINE_FRAGMENT = 64
 
 [<AutoOpen>]
 module SchemaDefinitions = 
@@ -938,10 +1032,12 @@ module SchemaDefinitions =
                   IsTypeOf = isTypeOf }
             
         /// GraphQL custom input object type
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list) : InputObjectDefinition<'Out> = { Name = name; FieldsFn = fieldsFn }
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
+            { Name = name; FieldsFn = fieldsFn; Description = description }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : InputFieldDef list) : InputObjectDefinition<'Out> = { Name = name; FieldsFn = fun () -> fields }
+        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
+            { Name = name; Description = description; FieldsFn = fun () -> fields }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
