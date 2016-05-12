@@ -11,8 +11,8 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 
 let private testCoercion graphQLType (expected: 't) actual =
-    let (Scalar {CoerceInput = coerce; Name = _; Description = _}) = graphQLType
-    let result = (coerce actual) :?> ('t option)
+    let (Scalar scalar) = graphQLType
+    let result = (scalar.CoerceInput actual) :?> ('t option)
     match result with
     | Some x -> equals expected x
     

@@ -9,7 +9,7 @@ type Episode =
     | NewHope = 1
     | Empire = 2
     | Jedi = 3
-
+    
 type Human = 
     { Id : string
       Name : string option
@@ -63,8 +63,8 @@ let droids =
         AppearsIn = [ Episode.NewHope; Episode.Empire; Episode.Jedi ]
         PrimaryFunction = Some "Astromech" } ]
 
-let getHuman id = humans |> List.find (fun h -> h.Id = id)
-let getDroid id = droids |> List.find (fun d -> d.Id = id)
+let getHuman id = humans |> List.tryFind (fun h -> h.Id = id)
+let getDroid id = droids |> List.tryFind (fun d -> d.Id = id)
 
 type Character =
     | Human of Human
@@ -75,11 +75,8 @@ let characters = (humans |> List.map Human) @ (droids |> List.map Droid)
 let matchesId id = function
     | Human h -> h.Id = id
     | Droid d -> d.Id = id
-let getCharacter id =
-    match characters |> List.tryFind (matchesId id) with
-    | Some (Human h) -> box h
-    | Some (Droid d) -> box d
-    | None -> null
+
+let getCharacter id = characters |> List.tryFind (matchesId id)
 
 // Schema definition
 open FSharp.Data.GraphQL
@@ -94,51 +91,53 @@ let EpisodeType = Define.Enum(
         Define.EnumValue("EMPIRE", Episode.Empire, "Released in 1980.")
         Define.EnumValue("JEDI", Episode.Jedi, "Released in 1983.")])
 
-let rec CharacterType = Define.Interface(
+let rec CharacterType = Define.Union(
     name = "Character",
     description = "A character in the Star Wars Trilogy",
+    options = [ HumanType; DroidType ],
+    resolveValue = (fun o ->
+        match o with
+        | Human h -> box h
+        | Droid d -> upcast d),
     resolveType = (fun o ->
         match o with
-        | :? Human -> HumanType
-        | :? Droid -> DroidType
-        | _ -> failwithf "Value of type '%s' is not a Character type" (o.GetType().FullName)),
-    fields = fun () -> [
-        Define.Field("id", NonNull String, "The id of the character.")
-        Define.Field("name", String, "The name of the character.")
-        Define.Field("friends", ListOf CharacterType, "The friends of the character, or an empty list if they have none.")
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")])
+        | Human _ -> upcast HumanType
+        | Droid _ -> upcast DroidType))
 
-and HumanType = Define.Object(
+and HumanType : ObjectDef<Human> = Define.Object<Human>(
     name = "Human",
     description = "A humanoid creature in the Star Wars universe.",
-    interfaces = [ CharacterType ],
     isTypeOf = (fun o -> o :? Human),
-    fields = [
-        Define.Field("id", NonNull String, "The id of the human.")
-        Define.Field("name", String, "The name of the human.")
-        Define.Field("friends", ListOf CharacterType, description = "The friends of the human, or an empty list if they have none.",
-            resolve = fun _ (human: Human) -> human.Friends |> List.map getCharacter)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
-        Define.Field("homePlanet", String, "The home planet of the human, or null if unknown.")])
+    fieldsFn = fun () -> [
+        Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
+        Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
+        Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
+            fun _ h -> 
+                h.Friends
+                |> List.map getCharacter 
+                |> List.toSeq)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> upcast h.AppearsIn)
+        Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
+    ])
         
-and DroidType = Define.Object(
+and DroidType = Define.Object<Droid>(
     name = "Droid",
     description = "A mechanical creature in the Star Wars universe.",
-    interfaces = [ CharacterType ],
     isTypeOf = (fun o -> o :? Droid),
-    fields = [
-        Define.Field("id", NonNull String, "The id of the droid.")
-        Define.Field("name", String, "The name of the Droid.")
-        Define.Field("friends", ListOf CharacterType, description = "The friends of the Droid, or an empty list if they have none.",
-            resolve = fun ctx (droid: Droid) -> droid.Friends |> List.map getCharacter)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
-        Define.Field("primaryFunction", String, "The primary function of the droid.")])
+    fieldsFn = fun () -> [
+        Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
+        Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
+        Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.", 
+            fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> upcast d.AppearsIn)
+        Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)]
+    )
 
 let Query = Define.Object(
     name = "Query",
     fields = [
-        Define.Field("hero", CharacterType, args = [ Define.Arg("id", String) ], resolve = fun ctx _ -> getHuman (ctx.Arg("id").Value))
-        Define.Field("droid", CharacterType, args = [ Define.Arg("id", String) ], resolve = fun ctx _ -> getDroid (ctx.Arg("id").Value))])
+        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx () -> getHuman (ctx.Arg("id").Value))
+        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx () -> getDroid (ctx.Arg("id").Value))])
 
 let schema = Schema(Query)
 
@@ -181,4 +180,4 @@ let graphiql : WebPart =
 
 startWebServer defaultConfig (graphiql >=> Writers.setMimeType "application/json")
 // Example:
-// curl --form 'query={ hero(id: "1000") { id, name, appearsIn } }' http://localhost:8083/
+// curl --form 'query={ hero(id: "1000") { id, name, appearsIn, friends { id,name } } }' http://localhost:8083/

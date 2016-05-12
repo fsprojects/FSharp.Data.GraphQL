@@ -24,22 +24,22 @@ type Root =
             x.NumberHolder.Number <- num 
             return x.NumberHolder
         }    
-    member x.ChangeFail(num): int = 
+    member x.ChangeFail(num): NumberHolder = 
         failwith "Cannot change number"
-    member x.AsyncChangeFail(num): Async<int> = 
+    member x.AsyncChangeFail(num): Async<NumberHolder> = 
         async { 
             return failwith "Cannot change number"
         }
 
-let NumberHolder = objdef "NumberHolder" [ field "theNumber" Int (fun x -> x.Number)]
+let NumberHolder = Define.Object("NumberHolder", [ Define.Field("theNumber", Int, fun _ x -> x.Number)])
 let schema = Schema(
-    query = objdef "Query" [ field "numberHolder" NumberHolder (fun x -> x.NumberHolder) ],
-    mutation = objdef "Mutation" [
-        fieldA "immediatelyChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber").Value))
-        asyncFieldA "promiseToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber").Value))
-        fieldA "failToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber").Value))
-        asyncFieldA "promiseAndFailToChangeTheNumber" NumberHolder [arg "newNumber" Int] (fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber").Value))
-    ])
+    query = Define.Object("Query", [ Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) ]),
+    mutation = Define.Object("Mutation", [
+        Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [Define.Input("newNumber", Int)], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber").Value))
+        Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [Define.Input("newNumber", Int)], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber").Value))
+        Define.Field("failToChangeTheNumber", NumberHolder, "", [Define.Input("newNumber", Int)], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber").Value))
+        Define.AsyncField("promiseAndFailToChangeTheNumber", NumberHolder, "", [Define.Input("newNumber", Int)], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber").Value))
+    ]))
 
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations serially`` () =

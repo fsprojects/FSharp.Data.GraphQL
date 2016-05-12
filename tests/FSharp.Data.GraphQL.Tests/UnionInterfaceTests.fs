@@ -12,18 +12,36 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
-type Dog = { Name: string; Barks: bool }
-type Cat = { Name: string; Meows: bool }
+type INamed =
+    interface
+        abstract Name : string
+    end 
+
+type Dog = 
+    { Name: string; Barks: bool }
+    interface INamed with
+        member x.Name = x.Name
+
+type Cat = 
+    { Name: string; Meows: bool }
+    interface INamed with
+        member x.Name = x.Name
+        
 type Pet =
     | Cat of Cat
     | Dog of Dog
-type Person = { Name: string; Pets: Pet list; Friends: obj list }
 
-let NamedType = Define.Interface(
+type Person = 
+    { Name: string; Pets: Pet list; Friends: INamed list }
+    interface INamed with
+        member x.Name = x.Name
+
+
+let NamedType = Define.Interface<INamed>(
     name = "Named",
     fields = [ Define.Field("name", String) ])
 
-let DogType = Define.Object(
+let DogType = Define.Object<Dog>(
     name = "Dog",
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
@@ -32,7 +50,7 @@ let DogType = Define.Object(
         Define.Field("barks", Boolean)
     ])
     
-let CatType = Define.Object(
+let CatType = Define.Object<Cat>(
     name = "Cat",
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
@@ -44,10 +62,14 @@ let CatType = Define.Object(
 let PetType = Define.Union(
     name = "Pet",
     options = [ CatType; DogType ],
-    resolveType = fun pet ->
+    resolveType = (fun pet ->
         match pet with
-        | :? Cat -> CatType
-        | :? Dog -> DogType)
+        | Cat _ -> upcast CatType
+        | Dog _ -> upcast DogType),
+    resolveValue = (fun pet ->
+        match pet with
+        | Cat cat -> box cat
+        | Dog dog -> box dog))
 
 let PersonType = Define.Object(
     name = "Person",
@@ -55,8 +77,7 @@ let PersonType = Define.Object(
     interfaces = [ NamedType ],
     fields = [
         Define.Field("name", String)
-        Define.Field("pets", ListOf PetType, 
-            resolve = fun _ person -> person.Pets |> List.map (fun pet -> match pet with Dog d -> box d | Cat c -> box c))
+        Define.Field("pets", ListOf PetType, fun _ person -> upcast person.Pets)
         Define.Field("friends", ListOf NamedType)
     ])
 

@@ -7,6 +7,7 @@ open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Execution
 
 let equals (expected : 'x) (actual : 'x) = 
@@ -15,14 +16,6 @@ let noErrors (result: ExecutionResult) =
     Assert.True((None = result.Errors), sprintf "expected ExecutionResult to have no errors but got %+A" result.Errors)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
-let field name typedef (resolve : 'a -> 'b) = Define.Field(name = name, typedef = typedef, resolve = (fun _ a -> resolve a))
-let fieldA name typedef args (resolve : ResolveFieldContext -> 'a -> 'b) = 
-    Define.Field(name = name, typedef = typedef, args = args, resolve = resolve)    
-let asyncField name typedef (resolve : 'a -> Async<'b>) = Define.AsyncField(name = name, typedef = typedef, resolve = (fun _ a -> resolve a))
-let asyncFieldA name typedef args (resolve : ResolveFieldContext -> 'a -> Async<'b>) = 
-    Define.AsyncField(name = name, typedef = typedef, arguments = args, resolve = resolve)
-let arg name typedef = Define.Arg(name, typedef)
-let objdef name (fields: FieldDef list) = Define.Object(name, fields)
 let is<'t> (o: obj) = o :? 't
 let hasError errMsg errors =
     let containsMessage = 

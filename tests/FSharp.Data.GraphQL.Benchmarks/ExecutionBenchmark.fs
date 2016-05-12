@@ -37,19 +37,22 @@ let humans =
         Friends = [ "1001" ]
         HomePlanet = None } ]
 
-let getPerson id = humans |> List.find (fun h -> h.Id = id)
+let getPerson id = humans |> List.tryFind (fun h -> h.Id = id)
 
 let rec Person = Define.Object(
     name = "Person",
     isTypeOf = (fun o -> o :? Person),
-    fields = fun() -> [
-        Define.Field("id", NonNull String, resolve = fun _ person -> person.Id)
-        Define.Field("name", String, resolve = fun _ person -> person.Name)
-        Define.Field("friends", ListOf Person, resolve = fun _ person -> person.Friends |> List.map getPerson)
+    fieldsFn = fun() -> [
+        Define.Field("id", String, resolve = fun _ person -> person.Id)
+        Define.Field("name", Nullable String, resolve = fun _ person -> person.Name)
+        Define.Field("friends", Nullable (ListOf (Nullable Person)), resolve = fun _ person -> person.Friends |> List.map getPerson |> List.toSeq |> Some)
         Define.Field("homePlanet", String)])
+
 let Query = Define.Object(
     name = "Query",
-    fields = [Define.Field("hero", Person, args = [ Define.Arg("id", String) ], resolve = fun ctx _ -> getPerson (ctx.Arg("id").Value))])
+    fields = [
+        Define.Field("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", String) ], fun ctx () -> getPerson (ctx.Arg("id").Value))
+    ])
 
 let schema = Schema(Query)
 
