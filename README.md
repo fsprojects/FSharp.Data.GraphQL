@@ -35,9 +35,30 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ## Demo
 
-You can checkout this project in work, by running [example Suave server](samples/graphiql/server.fsx) from your FSI, and calling it by sending example request:
+You can checkout this project in work, by running [example Suave server](samples/server.fsx) from your FSI. It will run GraphQL server running of http://localhost:8083. You may decide to query it directly or by using [GraphiQL client](samples/graphiql). 
 
-    curl --form 'query={ hero(id: "1000") { id, name, appearsIn, friends { id,name } } }' http://localhost:8083/
+To run GraphiQL, simply run `npm i & npm start` from your console, and open your browser at http://localhost:8090/.
+
+Example query:
+
+```graphql
+{
+  hero(id:"1000") {
+    id,
+    name,
+    appearsIn,
+    homePlanet,
+    friends {
+      ... on Human {
+        name
+      }
+      ... on Droid {
+        name
+      }
+    }
+  }
+}
+```
 
 ## Implementation progress
 

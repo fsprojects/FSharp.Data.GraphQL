@@ -1,6 +1,6 @@
-#r "../../packages/Suave/lib/net40/Suave.dll"
-#r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Release/FSharp.Data.GraphQL.dll"
+#r "../packages/Suave/lib/net40/Suave.dll"
+#r "../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
+#r "../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
 
 open System
 
@@ -167,17 +167,34 @@ settings.Converters <- [| OptionConverter() :> JsonConverter |]
 settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
 let json o = JsonConvert.SerializeObject(o, settings)
     
+let tryParse fieldName data =
+    let raw = Text.Encoding.UTF8.GetString data
+    if raw <> null && raw <> ""
+    then
+        let map = JsonConvert.DeserializeObject<Map<string,string>>(raw)
+        Map.tryFind fieldName map
+    else None
+
 let graphiql : WebPart =
     fun http ->
         async {
-            match http.request.fieldData "query" with
-            | Choice1Of2 query ->
-                let! result = schema.AsyncExecute(query)   
+            match tryParse "query" http.request.rawForm with
+            | Some query ->
+                // at the moment parser is not parsing new lines correctly, so we need to get rid of them
+                let q = query.Trim().Replace("\r\n", " ")
+                printfn "Query: %s" q
+                let! result = schema.AsyncExecute(q)   
                 return! http |> Successful.OK (json result)
-            | Choice2Of2 err ->
-                return! http |> ServerErrors.INTERNAL_ERROR err
+            | None ->
+                let! schemaResult = schema.AsyncExecute(Introspection.introspectionQuery)
+                return! http |> Successful.OK (json schemaResult)
         }
 
-startWebServer defaultConfig (graphiql >=> Writers.setMimeType "application/json")
+let setCorsHeaders = 
+    Writers.setHeader  "Access-Control-Allow-Origin" "*"
+    >=> Writers.setHeader "Access-Control-Allow-Headers" "content-type"
+
+
+startWebServer defaultConfig (setCorsHeaders >=> graphiql >=> Writers.setMimeType "application/json")
 // Example:
 // curl --form 'query={ hero(id: "1000") { id, name, appearsIn, friends { id,name } } }' http://localhost:8083/
