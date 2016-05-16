@@ -111,31 +111,31 @@ let ``Execute can introspect on union and intersection types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast)
-    let expected: Map<string, obj> = Map.ofList [
-        "Named", upcast Map.ofList [
+    let expected = NameValueLookup.ofList [
+        "Named", upcast NameValueLookup.ofList [
             "kind", box "INTERFACE"
             "name", upcast "Named"
             "fields", upcast [
-                box (Map.ofList [ "name", box "name"])]
+                box (NameValueLookup.ofList [ "name", box "name"])]
             "interfaces", null
             "possibleTypes", upcast [
-                box (Map.ofList ["name", box "Person"])
-                upcast Map.ofList ["name", box "Dog"]
-                upcast Map.ofList ["name", box "Cat"]]
+                box (NameValueLookup.ofList ["name", box "Person"])
+                upcast NameValueLookup.ofList ["name", box "Dog"]
+                upcast NameValueLookup.ofList ["name", box "Cat"]]
             "enumValues", null
             "inputFields", null]
-        "Pet", upcast Map.ofList [
+        "Pet", upcast NameValueLookup.ofList [
             "kind", box "UNION"
             "name", upcast "Pet"
             "fields", null
             "interfaces", null
             "possibleTypes", upcast [
-                box (Map.ofList ["name", box "Cat"])
-                upcast Map.ofList ["name", box "Dog"]]
+                box (NameValueLookup.ofList ["name", box "Cat"])
+                upcast NameValueLookup.ofList ["name", box "Dog"]]
             "enumValues", null
             "inputFields", null]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes union types`` () =
@@ -151,22 +151,22 @@ let ``Executes union types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Cat"
                 "name", upcast "Garfield"
                 "barks", null
                 "meows", upcast false]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true
                 "meows", null]]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -187,20 +187,20 @@ let ``Executes union types with inline fragments`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Cat"
                 "name", upcast "Garfield"
                 "meows", upcast false]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes interface types`` () =
@@ -216,22 +216,22 @@ let ``Executes interface types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "friends", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Person"
                 "name", upcast "Liz"
                 "barks", null
                 "meows", null]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true
                 "meows", null]]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -251,19 +251,19 @@ let ``Executes interface types with inline fragments`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "friends", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Person"
                 "name", upcast "Liz"]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -297,26 +297,26 @@ let ``Execute allows fragment conditions to be abstract types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Cat"
                 "name", upcast "Garfield"
                 "meows", upcast false]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]
         "friends", upcast [
-            box <| Map.ofList [
+            box <| NameValueLookup.ofList [
                 "__typename", box "Person"
                 "name", upcast "Liz"]
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
     

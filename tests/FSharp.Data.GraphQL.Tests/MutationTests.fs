@@ -62,15 +62,15 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
     }"""
 
     let mutationResult = sync <| schema.AsyncExecute(parse query, {NumberHolder = {Number = 6}})
-    let expected: Map<string, obj> = Map.ofList [
-        "first",  upcast Map.ofList [ "theNumber", 1 :> obj]
-        "second", upcast Map.ofList [ "theNumber", 2 :> obj]
-        "third",  upcast Map.ofList [ "theNumber", 3 :> obj]
-        "fourth", upcast Map.ofList [ "theNumber", 4 :> obj]
-        "fifth",  upcast Map.ofList [ "theNumber", 5 :> obj]
+    let expected = NameValueLookup.ofList [
+        "first",  upcast NameValueLookup.ofList [ "theNumber", 1 :> obj]
+        "second", upcast NameValueLookup.ofList [ "theNumber", 2 :> obj]
+        "third",  upcast NameValueLookup.ofList [ "theNumber", 3 :> obj]
+        "fourth", upcast NameValueLookup.ofList [ "theNumber", 4 :> obj]
+        "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
     ]
     noErrors mutationResult
-    equals expected mutationResult.Data.Value
+    mutationResult.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
@@ -97,13 +97,13 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 
     let data = {NumberHolder = {Number = 6}}
     let mutationResult = sync <| schema.AsyncExecute(parse query, data)
-    let expected: Map<string, obj> = Map.ofList [
-        "first",  upcast Map.ofList [ "theNumber", 1 :> obj]
-        "second", upcast Map.ofList [ "theNumber", 2 :> obj]
+    let expected = NameValueLookup.ofList [
+        "first",  upcast NameValueLookup.ofList [ "theNumber", 1 :> obj]
+        "second", upcast NameValueLookup.ofList [ "theNumber", 2 :> obj]
         "third",  null
-        "fourth", upcast Map.ofList [ "theNumber", 4 :> obj]
-        "fifth",  upcast Map.ofList [ "theNumber", 5 :> obj]
+        "fourth", upcast NameValueLookup.ofList [ "theNumber", 4 :> obj]
+        "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
         "sixth",  null
     ]
-    equals expected mutationResult.Data.Value
+    mutationResult.Data.Value |> equals (upcast expected)
     equals 2 mutationResult.Errors.Value.Length

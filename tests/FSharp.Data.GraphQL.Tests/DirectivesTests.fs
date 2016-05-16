@@ -22,29 +22,29 @@ let schema = Schema(Define.Object("TestType", [
 let private execAndCompare query expected =
     let actual = sync <| schema.AsyncExecute(parse query, data)
     noErrors actual
-    equals expected actual.Data.Value
+    actual.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute works without directives``() = 
-    execAndCompare "{ a, b }" (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+    execAndCompare "{ a, b }" (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
     
 // SCALARS
 
 [<Fact>]
 let ``Execute with include works on scalars: if true, includes scalar``() = 
-    execAndCompare "{ a, b @include(if: true) }" (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+    execAndCompare "{ a, b @include(if: true) }" (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
 
 [<Fact>]
 let ``Execute with include works on scalars: if false, excludes scalar``() = 
-    execAndCompare "{ a, b @include(if: false) }" (Map.ofList [("a", "a" :> obj)])
+    execAndCompare "{ a, b @include(if: false) }" (NameValueLookup.ofList [("a", "a" :> obj)])
     
 [<Fact>]
 let ``Execute with skip works on scalars: if false, includes scalar``() = 
-    execAndCompare "{ a, b @skip(if: false) }" (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+    execAndCompare "{ a, b @skip(if: false) }" (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
     
 [<Fact>]
 let ``Execute with skip works on scalars: if true, excludes scalar``() = 
-    execAndCompare "{ a, b @skip(if: true) }" (Map.ofList [("a", "a" :> obj)])
+    execAndCompare "{ a, b @skip(if: true) }" (NameValueLookup.ofList [("a", "a" :> obj)])
     
 // FRAGMENT SPREADS
 
@@ -58,7 +58,7 @@ let ``Execute with include works on fragment spreads: if true, includes fragment
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+        (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
 
 [<Fact>]
 let ``Execute with include works on fragment spreads: if false, excludes fragment spread``() = 
@@ -70,7 +70,7 @@ let ``Execute with include works on fragment spreads: if false, excludes fragmen
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj)])
+        (NameValueLookup.ofList [("a", "a" :> obj)])
     
 [<Fact>]
 let ``Execute with skip works on fragment spreads: if false, includes fragment spread``() = 
@@ -82,7 +82,7 @@ let ``Execute with skip works on fragment spreads: if false, includes fragment s
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+        (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
     
 [<Fact>]
 let ``Execute with skip works on fragment spreads: if true, excludes fragment spread``() = 
@@ -94,7 +94,7 @@ let ``Execute with skip works on fragment spreads: if true, excludes fragment sp
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj)])
+        (NameValueLookup.ofList [("a", "a" :> obj)])
     
 // INLINE FRAGMENTS
 
@@ -110,7 +110,7 @@ let ``Execute with include works on inline fragments: if true, includes inline f
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+        (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
 
 [<Fact>]
 let ``Execute with include works on inline fragments: if false, excludes inline fragment``() = 
@@ -124,7 +124,7 @@ let ``Execute with include works on inline fragments: if false, excludes inline 
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj)])
+        (NameValueLookup.ofList [("a", "a" :> obj)])
     
 [<Fact>]
 let ``Execute with skip works on inline fragments: if false, includes inline fragment``() = 
@@ -138,7 +138,7 @@ let ``Execute with skip works on inline fragments: if false, includes inline fra
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj); ("b", upcast "b")])
+        (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
     
 [<Fact>]
 let ``Execute with skip works on inline fragments: if true, excludes inline fragment``() = 
@@ -152,5 +152,5 @@ let ``Execute with skip works on inline fragments: if true, excludes inline frag
         fragment Frag on TestType {
           b
         }""" 
-        (Map.ofList [("a", "a" :> obj)])
+        (NameValueLookup.ofList [("a", "a" :> obj)])
     
