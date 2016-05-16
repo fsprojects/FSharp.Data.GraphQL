@@ -1,1 +1,2 @@
 BenchmarkDotNet
+BenchmarkDotNet.Diagnostics.Windows

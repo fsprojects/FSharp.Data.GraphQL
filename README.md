@@ -64,5 +64,5 @@ Example query:
 
 Missing parts:
 
-- Introspection API
-- Query validation
+- Complex objects as input arguments
+- Friendly query validation messages
