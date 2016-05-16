@@ -35,7 +35,7 @@ let PageInfo = Define.Object<PageInfo>(
         Define.Field("hasNextPage", Boolean, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
         Define.Field("hasPreviousPage", Boolean, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
         Define.Field("startCursor", Nullable String, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
-        Define.Field("endCursor ", Nullable String, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor)
+        Define.Field("endCursor", Nullable String, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor)
     ])
 
 let Connection(nodeType: #OutputDef<'Node>) = Define.Object<Connection<'Node>>(
