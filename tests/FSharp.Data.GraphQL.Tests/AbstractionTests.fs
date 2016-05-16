@@ -72,16 +72,16 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "pets", upcast [
-            Map.ofList [
+            NameValueLookup.ofList [
                 "name", "Odie" :> obj
                 "woofs", upcast true ] :> obj
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     noErrors result
-    equals expected result.Data.Value
+    result.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
@@ -117,13 +117,13 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "pets", upcast [
-            Map.ofList [
+            NameValueLookup.ofList [
                 "name", "Odie" :> obj
                 "woofs", upcast true ] :> obj
-            upcast Map.ofList [
+            upcast NameValueLookup.ofList [
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     noErrors result
-    equals expected result.Data.Value
+    result.Data.Value |> equals (upcast expected)

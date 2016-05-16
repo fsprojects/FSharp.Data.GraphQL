@@ -73,21 +73,21 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
           e
         }"""
 
-    let (expected: Map<string, obj>) = 
-        Map.ofList [
+    let expected = 
+        NameValueLookup.ofList [
             "a", upcast "Apple" 
             "b", upcast "Banana"
+            "x", upcast "Cookie"
             "d", upcast "Donut"
-            "deep", upcast Map.ofList [
-               "a", "Already Been Done" :> obj
-               "b", upcast "Boring"
-               "c", upcast ["Contrived" :> obj; null; upcast "Confusing"]
-            ] 
             "e", upcast "Egg"
             "f", upcast "Fish"
             "pic", upcast "Pic of size: 100"
             "promise", null
-            "x", upcast "Cookie"
+            "deep", upcast NameValueLookup.ofList [
+               "a", "Already Been Done" :> obj
+               "b", upcast "Boring"
+               "c", upcast ["Contrived" :> obj; null; upcast "Confusing"]
+            ] 
         ]
 
     let DeepDataType = Define.Object<DeepTestSubject>("DeepDataType", [
@@ -109,7 +109,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let schema = Schema(DataType)
     let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
     noErrors result
-    equals expected result.Data.Value
+    result.Data.Value |> equals (upcast expected)
 
 type TestThing = { Thing: string }
 
@@ -137,14 +137,14 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         ])
 
     let schema = Schema(Type)
-    let expected: Map<string, obj> = Map.ofList [
+    let expected = NameValueLookup.ofList [
         "a", upcast "Apple"
         "b", upcast "Banana"
         "c", upcast "Cherry"
-        "deep", upcast Map.ofList [
+        "deep", upcast NameValueLookup.ofList [
             "b", "Banana" :> obj
             "c", upcast "Cherry"
-            "deeper", upcast Map.ofList [
+            "deeper", upcast NameValueLookup.ofList [
                 "b", "Banana" :> obj
                 "c", upcast "Cherry"
             ]
@@ -152,7 +152,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     ]
     let result = sync <| schema.AsyncExecute(ast, obj())
     noErrors result
-    equals expected result.Data.Value
+    result.Data.Value |> equals (upcast expected)
     
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () = 
@@ -195,7 +195,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     ]))
     let result = sync <| schema.AsyncExecute(parse "{ a }", { A = "b" })
     noErrors result
-    equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
+    result.Data.Value |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
@@ -204,7 +204,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     ]))
     let result = sync <| schema.AsyncExecute(parse "query Example { a }", { A = "b" })
     noErrors result
-    equals (Map.ofList ["a", "b" :> obj]) result.Data.Value
+    result.Data.Value |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
@@ -214,4 +214,4 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| schema.AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
     noErrors result
-    equals (Map.ofList ["second", "b" :> obj]) result.Data.Value
+    result.Data.Value |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
