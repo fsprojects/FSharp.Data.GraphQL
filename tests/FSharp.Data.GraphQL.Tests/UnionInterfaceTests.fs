@@ -135,7 +135,7 @@ let ``Execute can introspect on union and intersection types`` () =
             "enumValues", null
             "inputFields", null]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes union types`` () =
@@ -166,7 +166,7 @@ let ``Executes union types`` () =
                 "barks", upcast true
                 "meows", null]]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -200,7 +200,7 @@ let ``Executes union types with inline fragments`` () =
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes interface types`` () =
@@ -231,7 +231,7 @@ let ``Executes interface types`` () =
                 "barks", upcast true
                 "meows", null]]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -263,7 +263,7 @@ let ``Executes interface types with inline fragments`` () =
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -318,5 +318,5 @@ let ``Execute allows fragment conditions to be abstract types`` () =
                 "name", upcast "Odie"
                 "barks", upcast true]]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     

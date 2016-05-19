@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.24720.0
+VisualStudioVersion = 14.0.25123.0
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B98-5CED-492C-A5B7-A5B4F73CF142}"
 	ProjectSection(SolutionItems) = preProject
@@ -36,9 +36,6 @@ EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Tests", "tests\FSharp.Data.GraphQL.Tests\FSharp.Data.GraphQL.Tests.fsproj", "{54AAFE43-FA5F-485A-AD40-0240165FC633}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{B0C25450-74BF-40C2-9E02-09AADBAE2C2F}"
-	ProjectSection(SolutionItems) = preProject
-		samples\server.fsx = samples\server.fsx
-	EndProjectSection
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{751357AE-F2B2-4B38-956E-81E0B8606C73}"
 EndProject
@@ -48,7 +45,30 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql-client", "graphiql
 		samples\graphiql-client\index.html = samples\graphiql-client\index.html
 		samples\graphiql-client\index.jsx = samples\graphiql-client\index.jsx
 		samples\graphiql-client\package.json = samples\graphiql-client\package.json
+		samples\graphiql-client\server.fsx = samples\graphiql-client\server.fsx
 		samples\graphiql-client\webpack.config.js = samples\graphiql-client\webpack.config.js
+	EndProjectSection
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Relay", "src\FSharp.Data.GraphQL.Relay\FSharp.Data.GraphQL.Relay.fsproj", "{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "relay-starter-kit", "relay-starter-kit", "{9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}"
+	ProjectSection(SolutionItems) = preProject
+		samples\relay-starter-kit\.babelrc = samples\relay-starter-kit\.babelrc
+		samples\relay-starter-kit\index.html = samples\relay-starter-kit\index.html
+		samples\relay-starter-kit\index.jsx = samples\relay-starter-kit\index.jsx
+		samples\relay-starter-kit\package.json = samples\relay-starter-kit\package.json
+		samples\relay-starter-kit\server.fsx = samples\relay-starter-kit\server.fsx
+		samples\relay-starter-kit\webpack.config.js = samples\relay-starter-kit\webpack.config.js
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{E7139F5F-22CA-4392-8C1C-481A39EEB554}"
+	ProjectSection(SolutionItems) = preProject
+		samples\relay-starter-kit\data\schema.json = samples\relay-starter-kit\data\schema.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF-31B8-4203-822C-8ACC4D7A7D74}"
+	ProjectSection(SolutionItems) = preProject
+		samples\relay-starter-kit\build\babelRelayPlugin.js = samples\relay-starter-kit\build\babelRelayPlugin.js
 	EndProjectSection
 EndProject
 Global
@@ -69,6 +89,10 @@ Global
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -79,5 +103,8 @@ Global
 		{54AAFE43-FA5F-485A-AD40-0240165FC633} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{751357AE-F2B2-4B38-956E-81E0B8606C73} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{CAE5916B-1415-4982-B705-7318D77C029C} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
+		{9B25360F-2CE4-43D2-AFF0-5EAA693E98F7} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
+		{E7139F5F-22CA-4392-8C1C-481A39EEB554} = {9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}
+		{DFA5AAFF-31B8-4203-822C-8ACC4D7A7D74} = {9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}
 	EndGlobalSection
 EndGlobal

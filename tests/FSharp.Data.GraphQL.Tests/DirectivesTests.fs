@@ -22,7 +22,7 @@ let schema = Schema(Define.Object("TestType", [
 let private execAndCompare query expected =
     let actual = sync <| schema.AsyncExecute(parse query, data)
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute works without directives``() = 

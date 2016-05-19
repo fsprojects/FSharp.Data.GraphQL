@@ -66,7 +66,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
         "b", upcast ["bar"]
         "c", upcast "baz" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
@@ -77,7 +77,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
         "b", upcast ["bar"]
         "c", upcast "baz" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and doesn't use incorrect value`` () =
@@ -85,7 +85,7 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and proprely coerces complex scalar types`` () =
@@ -95,7 +95,7 @@ let ``Execute handles objects and nullability using inline structs and proprely 
         "a", "foo" :> obj
         "d", upcast "DeserializedValue" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables with complex inputs`` () =
@@ -113,7 +113,7 @@ let ``Execute handles variables with complex inputs`` () =
         "b", upcast ["bar"]
         "c", upcast "baz" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables with default value when no value was provided`` () =
@@ -126,7 +126,7 @@ let ``Execute handles variables with default value when no value was provided`` 
         "b", upcast ["bar"]
         "c", upcast "baz" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and properly parses single value to list`` () =
@@ -144,7 +144,7 @@ let ``Execute handles variables and properly parses single value to list`` () =
         "b", upcast ["bar"]
         "c", upcast "baz" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables with complex scalar input`` () =
@@ -160,7 +160,7 @@ let ``Execute handles variables with complex scalar input`` () =
         "a", "foo" :> obj
         "d", upcast "DeserializedValue" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute handles variables and errors on null for nested non-nulls`` () =
@@ -174,7 +174,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
             "c", null]]
     let actual = sync <| schema.AsyncExecute(ast, variables = params)
     let errMsg = "Variable '$input' got invalid value: in field 'c': Expected String!, but got null"
-    hasError errMsg actual.Errors.Value
+    hasError errMsg (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles variables and errors on incorrect type`` () =
@@ -184,7 +184,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
     let params : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
     let actual = sync <| schema.AsyncExecute(ast, variables = params)
     let errMsg = "Variable '$input' got invalid value: expected 'TestInputObject', found not an object"
-    hasError errMsg actual.Errors.Value
+    hasError errMsg (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles variables and errors on omission of nested non-nulls`` () =
@@ -196,9 +196,9 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
             "a", "foo" :> obj
             "b", upcast ["bar"]]]
     let actual = sync <| schema.AsyncExecute(ast, variables = params)
-    equals 1 actual.Errors.Value.Length
+    equals 1 (Seq.length (downcast actual.["errors"]))
     let errMsg = "Variable '$input' got invalid value: in field 'c': Expected String!, but got null"
-    equals (GraphQLError errMsg) (actual.Errors.Value.[0])
+    equals errMsg (Seq.head (downcast actual.["errors"]))
     
 [<Fact>]
 let ``Execute handles variables and errors on deep nested errors and with many errors`` () =
@@ -208,9 +208,9 @@ let ``Execute handles variables and errors on deep nested errors and with many e
     let params : Map<string, obj> = Map.ofList [
         "input", upcast Map.ofList [ "na", Map.ofList [ "a", "foo" :> obj ] :> obj ]]
     let actual = sync <| schema.AsyncExecute(ast, variables = params)
-    equals 1 actual.Errors.Value.Length
+    equals 1 (Seq.length (downcast actual.["errors"]))
     let errMsg = "Variable '$input' got invalid value: in field 'na.c': Expected String!, but got null. in field 'nb': Expected String!, but got null."
-    equals (GraphQLError errMsg) (actual.Errors.Value.[0])
+    equals errMsg (Seq.head (downcast actual.["errors"]))
     
 [<Fact>]
 let ``Execute handles variables and errors on addition of unknown input field`` () =
@@ -228,9 +228,9 @@ let ``Execute handles variables and errors on addition of unknown input field`` 
         "b", upcast ["bar"]
         "c", upcast "baz" 
         "extra", upcast "dog"]]
-    equals 1 actual.Errors.Value.Length
+    equals 1 (Seq.length (downcast actual.["errors"]))
     let errMsg = "Variable '$input' got invalid value: in field 'extra': unknown field."
-    equals (GraphQLError errMsg) (actual.Errors.Value.[0])
+    equals errMsg (Seq.head (downcast actual.["errors"]))
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted`` () =
@@ -238,7 +238,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted`` () =
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted in a variable`` () =
@@ -248,7 +248,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted in an unlisted variable`` () =
@@ -258,7 +258,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in an u
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to null in a variable`` () =
@@ -268,7 +268,7 @@ let ``Execute handles variables and allows nullable inputs to be set to null in 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "value", null ])
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value in a variable`` () =
@@ -278,7 +278,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "value", "a" :> obj ])
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "a" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value directly`` () =
@@ -286,7 +286,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "a" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute handles non-nullable scalars and does not allow non-nullable inputs to be omitted in a variable`` () =
@@ -294,7 +294,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
           fieldWithNonNullableStringInput(input: $value)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "value", null ])
-    hasError "Variable '$value' of required type String! was not provided." actual.Errors.Value
+    hasError "Variable '$value' of required type String! was not provided." (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value in a variable`` () =
@@ -304,7 +304,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "value", "a" :> obj ])
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast "a" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value directly`` () =
@@ -312,7 +312,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast "a" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles non-nullable scalars and passes along null for non-nullable inputs if explcitly set in the query`` () =
@@ -320,7 +320,7 @@ let ``Execute handles non-nullable scalars and passes along null for non-nullabl
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to be null`` () =
@@ -330,7 +330,7 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", null ])
     let expected = NameValueLookup.ofList [ "list", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain values`` () =
@@ -340,7 +340,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
     let expected = NameValueLookup.ofList [ "list", upcast [ "A" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain null`` () =
@@ -350,7 +350,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, null, "B" :> obj ] :> obj ])
     let expected = NameValueLookup.ofList [ "list", upcast [ "A":> obj, null, "B" :> obj ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists to be null`` () =
@@ -358,7 +358,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
           nnList(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", null ])
-    hasError "Variable '$input' of required type [String]! was not provided." actual.Errors.Value
+    hasError "Variable '$input' of required type [String]! was not provided." (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain values`` () =
@@ -368,7 +368,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
     let expected = NameValueLookup.ofList [ "nnList", upcast [ "A" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain null`` () =
@@ -378,7 +378,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, null, "B" :> obj ] :> obj ])
     let expected = NameValueLookup.ofList [ "nnList", upcast [ "A":> obj, null, "B" :> obj ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to be null`` () =
@@ -388,7 +388,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", null ])
     let expected = NameValueLookup.ofList [ "listNN", null ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to contain values`` () =
@@ -398,7 +398,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
     let expected = NameValueLookup.ofList [ "listNN", upcast [ "A" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow lists of non-nulls to contain null`` () =
@@ -406,7 +406,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
           listNN(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, null, "B" :> obj ] :> obj ])
-    hasError "Variable '$input' got invalid value. In element #1 expected String!, but got null." actual.Errors.Value
+    hasError "Variable '$input' got invalid value. In element #1 expected String!, but got null." (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
@@ -414,7 +414,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
           nnListNN(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", null ])
-    hasError "Variable '$input' of required type [String!]! was not provided." actual.Errors.Value
+    hasError "Variable '$input' of required type [String!]! was not provided." (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain values`` () =
@@ -424,7 +424,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
     let expected = NameValueLookup.ofList [ "nnListNN", upcast [ "A" ]]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain null`` () =
@@ -432,7 +432,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
           nnListNN(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, null, "B" :> obj ] :> obj ])
-    hasError "Variable '$input' got invalid value. In element #1 expected String!, but got null." actual.Errors.Value
+    hasError "Variable '$input' got invalid value. In element #1 expected String!, but got null." (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow invalid types to be used as values`` () =
@@ -440,7 +440,7 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
           fieldWithObjectInput(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, "B" :> obj ] :> obj ])
-    hasError "Variable '$input' expected value of type TestType! which cannot be used as an input type" actual.Errors.Value
+    hasError "Variable '$input' expected value of type TestType! which cannot be used as an input type" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow unknown types to be used as values`` () =
@@ -448,7 +448,7 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
           fieldWithObjectInput(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ])
-    hasError "Variable '$input' expected value of type UnknownType! which cannot be used as an input type" actual.Errors.Value
+    hasError "Variable '$input' expected value of type UnknownType! which cannot be used as an input type" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =
@@ -456,7 +456,7 @@ let ``Execute uses argument default value when no argument was provided`` () =
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute uses argument default value when nullable variable provided`` () =
@@ -466,7 +466,7 @@ let ``Execute uses argument default value when nullable variable provided`` () =
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList ["optional", null ])
     let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute uses argument default value when argument provided cannot be parsed`` () =
@@ -474,4 +474,4 @@ let ``Execute uses argument default value when argument provided cannot be parse
     let actual = sync <| schema.AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "hello world" ]
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
