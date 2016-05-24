@@ -188,11 +188,7 @@ and ResolveFieldContext =
         match Map.tryFind name x.Args with
         | Some o -> Some(o :?> 't)
         | None -> None
-
-//NOTE: For references, see https://facebook.github.io/graphql/
-and GraphQLError = 
-    | GraphQLError of string
-
+        
 and ScalarDef =
     interface
         abstract Name : string
@@ -1137,11 +1133,11 @@ module SchemaDefinitions =
                   DefaultValue = defaultValue }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fields : unit -> FieldDef<'Val> list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef<'Val> = 
+        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, ?resolveType: obj -> ObjectDef) : InterfaceDef<'Val> = 
             upcast 
                 { Name = name
                   Description = description
-                  FieldsFn = fields
+                  FieldsFn = fieldsFn
                   ResolveType = resolveType }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.

@@ -9,7 +9,8 @@ open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 
-type internal NameValueLookup(kvals: KeyValuePair<string, obj> []) =
+type internal NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
+    let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
     let setValue key value =
         let mutable i = 0
         while i < kvals.Length do
@@ -100,7 +101,7 @@ type internal NameValueLookup(kvals: KeyValuePair<string, obj> []) =
     new(t: (string * obj) list) = 
         NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
     new(t: string []) = 
-        NameValueLookup(Array.map (fun k -> KeyValuePair<string,obj>(k, null)) t)
+        NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
 
 let private option = function
     | null -> None
@@ -174,15 +175,6 @@ let private getArgumentValues (argDefs: InputFieldDef list) (args: Argument list
         | None -> collectDefaultArgValue acc argdef
     ) Map.empty
 
-/// The result of execution. `Data` is the result of executing the
-/// query, `Errors` is null if no errors occurred, and is a
-/// non-empty array if an error occurred.
-type ExecutionResult =
-    {
-        Data: IDictionary<string, obj> option
-        Errors: GraphQLError [] option
-    }
-
 type ExecutionContext = 
     {
         Schema: ISchema
@@ -191,7 +183,7 @@ type ExecutionContext =
         Operation: OperationDefinition
         Fragments: FragmentDefinition list
         Variables: Map<string, obj>
-        Errors: ConcurrentBag<GraphQLError>
+        Errors: ConcurrentBag<string>
     }
 
 let private getOperation = function
@@ -377,7 +369,7 @@ and private resolveField value ctx (fieldDef: FieldDef) = async {
             | o -> o
         return Choice1Of2 unboxed
     with
-    | ex -> return Choice2Of2 (GraphQLError (ex.ToString())) }
+    | ex -> return Choice2Of2 (ex.ToString()) }
 
 /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition ctx (objectType: ObjectDef) (field: Field) : FieldDef option =
@@ -471,25 +463,29 @@ let private execute (schema: #ISchema) doc operationName variables root errors =
 open FSharp.Data.GraphQL.Parser
 type FSharp.Data.GraphQL.Schema with
 
-    member schema.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
+    member schema.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         async {
             try
                 let errors = ConcurrentBag()
                 let! result = execute schema ast operationName variables data errors
-                return { Data = Some (upcast result); Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
+                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast errors ]
+                return upcast NameValueLookup.ofList output
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return { Data = None; Errors = Some [| GraphQLError msg |]} }
+                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
+        }
 
-    member schema.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<ExecutionResult> =
+    member schema.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         async {
             try
                 let ast = parse queryOrMutation
                 let errors = ConcurrentBag()
                 let! result = execute schema ast operationName variables data errors
-                return { Data = Some (upcast result); Errors = if errors.IsEmpty then None else Some (errors.ToArray()) }
+                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast errors ]
+                return upcast NameValueLookup.ofList output
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return { Data = None; Errors = Some [| GraphQLError msg |]} }
+                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
+        }

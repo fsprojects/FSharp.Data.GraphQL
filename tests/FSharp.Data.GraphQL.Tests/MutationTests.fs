@@ -70,7 +70,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
     ]
     noErrors mutationResult
-    mutationResult.Data.Value |> equals (upcast expected)
+    mutationResult.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
@@ -105,5 +105,5 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
         "sixth",  null
     ]
-    mutationResult.Data.Value |> equals (upcast expected)
-    equals 2 mutationResult.Errors.Value.Length
+    mutationResult.["data"] |> equals (upcast expected)
+    equals 2 (Seq.length (downcast mutationResult.["errors"]))

@@ -23,7 +23,7 @@ let ``Execute uses default resolve to accesses properties`` () =
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ test }", { Test = "testValue" })
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)
             
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
@@ -32,4 +32,4 @@ let ``Execute uses provided resolve function to accesses properties`` () =
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
     noErrors actual
-    actual.Data.Value |> equals (upcast expected)
+    actual.["data"] |> equals (upcast expected)

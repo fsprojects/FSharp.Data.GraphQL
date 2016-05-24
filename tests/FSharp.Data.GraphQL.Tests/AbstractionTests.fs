@@ -81,7 +81,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     noErrors result
-    result.Data.Value |> equals (upcast expected)
+    result.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
@@ -126,4 +126,4 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     noErrors result
-    result.Data.Value |> equals (upcast expected)
+    result.["data"] |> equals (upcast expected)

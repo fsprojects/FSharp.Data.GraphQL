@@ -1,6 +1,6 @@
-#r "../packages/Suave/lib/net40/Suave.dll"
-#r "../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
+#r "../../packages/Suave/lib/net40/Suave.dll"
+#r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
+#r "../../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
 
 open System
 

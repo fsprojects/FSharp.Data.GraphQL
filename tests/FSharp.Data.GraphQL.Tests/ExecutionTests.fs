@@ -109,11 +109,11 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let schema = Schema(DataType)
     let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
     noErrors result
-    result.Data.Value |> equals (upcast expected)
+    result.["data"] |> equals (upcast expected)
 
 type TestThing = { Thing: string }
 
-[<Fact(Skip = "Fix recursive TypeDef")>]
+[<Fact(Skip="Fixme")>]
 let ``Execution handles basic tasks: merges parallel fragments`` () = 
     let ast = parse """{ a, ...FragOne, ...FragTwo }
 
@@ -130,9 +130,9 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     let rec Type = Define.Object(
         name = "Type", 
         fieldsFn = fun () -> [
-            Define.Field("a", String, fun _ () -> "Apple")
-            Define.Field("b", String, fun _ () -> "Banana")
-            Define.Field("c", String, fun _ () -> "Cherry")
+            Define.Field("a", String, fun _ _ -> "Apple")
+            Define.Field("b", String, fun _ _ -> "Banana")
+            Define.Field("c", String, fun _ _ -> "Cherry")
             Define.Field("deep", Type, fun _ v -> v)
         ])
 
@@ -142,7 +142,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         "b", upcast "Banana"
         "c", upcast "Cherry"
         "deep", upcast NameValueLookup.ofList [
-            "b", "Banana" :> obj
+            "b", upcast "Banana"
             "c", upcast "Cherry"
             "deeper", upcast NameValueLookup.ofList [
                 "b", "Banana" :> obj
@@ -152,7 +152,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     ]
     let result = sync <| schema.AsyncExecute(ast, obj())
     noErrors result
-    result.Data.Value |> equals (upcast expected)
+    result.["data"] |> equals (upcast expected)
     
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () = 
@@ -195,7 +195,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     ]))
     let result = sync <| schema.AsyncExecute(parse "{ a }", { A = "b" })
     noErrors result
-    result.Data.Value |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+    result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
@@ -204,7 +204,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     ]))
     let result = sync <| schema.AsyncExecute(parse "query Example { a }", { A = "b" })
     noErrors result
-    result.Data.Value |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
+    result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
@@ -214,4 +214,20 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| schema.AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
     noErrors result
-    result.Data.Value |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
+    result.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
+
+type TwiceTest = { A : string; B : int }
+
+[<Fact>]
+let ``Execution when querying the same field twice will return it`` () =
+    let schema = Schema(Define.Object<TwiceTest>("Type", [
+        Define.Field("a", String, fun _ x -> x.A)
+        Define.Field("b", Int, fun _ x -> x.B)
+    ]))
+    let query = "query Example { a, b, a }"
+    let result = sync <| schema.AsyncExecute(query, { A = "aa"; B = 2 });
+    let expected = NameValueLookup.ofList [
+        "a", upcast "aa"
+        "b", upcast 2]
+    noErrors result
+    result.["data"] |> equals (upcast expected)

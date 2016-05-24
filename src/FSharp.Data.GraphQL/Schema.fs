@@ -96,15 +96,15 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
 
     let rec introspectTypeRef isNullable namedTypes typedef =
         match typedef with
-        | Named named -> 
-            if isNullable
-            then NamedTypeRef(Map.find named.Name namedTypes)
-            else NonNullTypeRef(introspectTypeRef true namedTypes typedef)
+        | Nullable inner -> introspectTypeRef true namedTypes inner
         | List inner -> 
             if isNullable 
             then ListTypeRef(introspectTypeRef false namedTypes inner)
             else NonNullTypeRef(introspectTypeRef true namedTypes typedef)
-        | Nullable inner -> introspectTypeRef true namedTypes inner
+        | Named named -> 
+            if isNullable
+            then NamedTypeRef(Map.find named.Name namedTypes)
+            else NonNullTypeRef(introspectTypeRef true namedTypes typedef)
 
     let introspectInput namedTypes (inputDef: InputFieldDef) : IntrospectionInputVal =
         { Name = inputDef.Name
