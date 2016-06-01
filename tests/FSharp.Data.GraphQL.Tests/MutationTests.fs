@@ -107,3 +107,18 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
     ]
     mutationResult.["data"] |> equals (upcast expected)
     equals 2 (Seq.length (downcast mutationResult.["errors"]))
+
+[<Fact>]
+let ``Execute handles mutation with multiple arguments`` () =
+    let query = """mutation M ($arg1: Int,, $arg2: Int) {
+      immediatelyChangeTheNumber(newNumber: $arg2) {
+        theNumber
+      }
+    }"""
+
+    let mutationResult = sync <| schema.AsyncExecute(parse query, {NumberHolder = {Number = 6}}, Map.ofList [ "arg1", box 3; "arg2", box 33])
+    let expected = NameValueLookup.ofList [
+        "immediatelyChangeTheNumber", upcast NameValueLookup.ofList [ "theNumber", box 33]
+        ]
+    noErrors mutationResult
+    mutationResult.["data"] |> equals (upcast expected)
