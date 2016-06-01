@@ -311,7 +311,7 @@ let private pVariableDefinition: Parser<VariableDefinition, _> =
     <?> "Variable Definition"
     
 
-let private pVariableDefinitions = between (wsstr "(") (wsstr ")") (many pVariableDefinition)
+let private pVariableDefinitions = between (wsstr "(") (wsstr ")") (sepByIgnored pVariableDefinition)
 
 
 // 2.2.1 Operations
