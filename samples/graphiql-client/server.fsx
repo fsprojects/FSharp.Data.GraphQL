@@ -1,6 +1,7 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
+#r "../../src/FSharp.Data.GraphQL/bin/Release/Hopac.dll"
+#r "../../src/FSharp.Data.GraphQL/bin/Release/FSharp.Data.GraphQL.dll"
 
 open System
 
@@ -86,15 +87,15 @@ open FSharp.Data.GraphQL.Execution
 let EpisodeType = Define.Enum(
     name = "Episode",
     description = "One of the films in the Star Wars Trilogy",
-    options = [
+    options = [|
         Define.EnumValue("NEWHOPE", Episode.NewHope, "Released in 1977.")
         Define.EnumValue("EMPIRE", Episode.Empire, "Released in 1980.")
-        Define.EnumValue("JEDI", Episode.Jedi, "Released in 1983.")])
+        Define.EnumValue("JEDI", Episode.Jedi, "Released in 1983.") |])
 
 let rec CharacterType = Define.Union(
     name = "Character",
     description = "A character in the Star Wars Trilogy",
-    options = [ HumanType; DroidType ],
+    options = [| HumanType; DroidType |],
     resolveValue = (fun o ->
         match o with
         | Human h -> box h
@@ -108,7 +109,7 @@ and HumanType : ObjectDef<Human> = Define.Object<Human>(
     name = "Human",
     description = "A humanoid creature in the Star Wars universe.",
     isTypeOf = (fun o -> o :? Human),
-    fieldsFn = fun () -> [
+    fieldsFn = fun () -> [|
         Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
         Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
         Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
@@ -117,27 +118,25 @@ and HumanType : ObjectDef<Human> = Define.Object<Human>(
                 |> List.map getCharacter 
                 |> List.toSeq)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> upcast h.AppearsIn)
-        Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
-    ])
+        Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet) |])
         
 and DroidType = Define.Object<Droid>(
     name = "Droid",
     description = "A mechanical creature in the Star Wars universe.",
     isTypeOf = (fun o -> o :? Droid),
-    fieldsFn = fun () -> [
+    fieldsFn = fun () -> [|
         Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
         Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
         Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.", 
             fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> upcast d.AppearsIn)
-        Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)]
-    )
+        Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) |])
 
 let Query = Define.Object(
     name = "Query",
-    fields = [
-        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx () -> getHuman (ctx.Arg("id").Value))
-        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx () -> getDroid (ctx.Arg("id").Value))])
+    fields = [|
+        Define.Field("hero", Nullable HumanType, "Gets human hero", [| Define.Input("id", String) |], fun ctx () -> getHuman (ctx.Arg("id").Value))
+        Define.Field("droid", Nullable DroidType, "Gets droid", [| Define.Input("id", String) |], fun ctx () -> getDroid (ctx.Arg("id").Value)) |])
 
 let schema = Schema(Query)
 

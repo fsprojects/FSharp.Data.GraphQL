@@ -90,21 +90,21 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             ] 
         ]
 
-    let DeepDataType = Define.Object<DeepTestSubject>("DeepDataType", [
+    let DeepDataType = Define.Object<DeepTestSubject>("DeepDataType", [|
         Define.Field("a", String, (fun _ dt -> dt.a))
         Define.Field("b", String, (fun _ dt -> dt.b))
         Define.Field("c", (ListOf String), (fun _ dt -> upcast dt.c))
-    ])
-    let DataType = Define.Object<TestSubject>("DataType", fields = [
+    |])
+    let DataType = Define.Object<TestSubject>("DataType", fields = [|
         Define.Field("a", String, fun _ dt -> dt.a)
         Define.Field("b", String, fun _ dt -> dt.b)
         Define.Field("c", String, fun _ dt -> dt.c)
         Define.Field("d", String, fun _ dt -> dt.d)
         Define.Field("e", String, fun _ dt -> dt.e)
         Define.Field("f", String, fun _ dt -> dt.f)
-        Define.Field("pic", String, "Picture resizer", [Define.Input("size", Int)], fun ctx dt -> dt.pic(ctx.Arg("size")))
+        Define.Field("pic", String, "Picture resizer", [| Define.Input("size", Int) |], fun ctx dt -> dt.pic(ctx.Arg("size")))
         Define.Field("deep", DeepDataType, fun _ dt -> dt.deep) 
-    ])
+    |])
 
     let schema = Schema(DataType)
     let result = sync <| schema.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
@@ -129,12 +129,12 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
 
     let rec Type = Define.Object(
         name = "Type", 
-        fieldsFn = fun () -> [
+        fieldsFn = fun () -> [|
             Define.Field("a", String, fun _ _ -> "Apple")
             Define.Field("b", String, fun _ _ -> "Banana")
             Define.Field("c", String, fun _ _ -> "Cherry")
             Define.Field("deep", Type, fun _ v -> v)
-        ])
+        |])
 
     let schema = Schema(Type)
     let expected = NameValueLookup.ofList [
@@ -159,9 +159,9 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     let query = "query Example { a }"
     let data = { Thing = "thing" }
     let mutable resolved = {Thing = ""};
-    let Thing = Define.Object<TestThing>("Type", [
+    let Thing = Define.Object<TestThing>("Type", [|
         Define.Field("a", String, fun _ _ -> resolved <- data; resolved.Thing)
-    ])
+    |])
     let result = sync <| Schema(Thing).AsyncExecute(parse query, data)
     noErrors result
     equals "thing" resolved.Thing
@@ -173,13 +173,13 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
       }"""
     let mutable numArg = None;
     let mutable stringArg = None;
-    let Type = Define.Object("Type", [
-        Define.Field("b", Nullable String, "", [Define.Input("numArg", Int); Define.Input("stringArg", String)], 
+    let Type = Define.Object("Type", [|
+        Define.Field("b", Nullable String, "", [| Define.Input("numArg", Int); Define.Input("stringArg", String) |], 
             fun ctx _ -> 
                 numArg <- ctx.Arg("numArg")
                 stringArg <- ctx.Arg("stringArg")
                 stringArg) 
-    ])
+    |])
 
     let result = sync <| Schema(Type).AsyncExecute(parse query, ())
     noErrors result
@@ -190,27 +190,27 @@ type InlineTest = { A: string }
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the inline operation if no operation name is provided`` () =
-    let schema =  Schema(Define.Object<InlineTest>("Type", [
+    let schema =  Schema(Define.Object<InlineTest>("Type", [|
         Define.Field("a", String, fun _ x -> x.A)
-    ]))
+    |]))
     let result = sync <| schema.AsyncExecute(parse "{ a }", { A = "b" })
     noErrors result
     result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
-    let schema =  Schema(Define.Object<InlineTest>("Type", [
+    let schema =  Schema(Define.Object<InlineTest>("Type", [|
         Define.Field("a", String, fun _ x -> x.A)
-    ]))
+    |]))
     let result = sync <| schema.AsyncExecute(parse "query Example { a }", { A = "b" })
     noErrors result
     result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
-    let schema =  Schema(Define.Object<InlineTest>("Type", [
+    let schema =  Schema(Define.Object<InlineTest>("Type", [|
         Define.Field("a", String, fun _ x -> x.A)
-    ]))
+    |]))
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| schema.AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
     noErrors result
@@ -220,10 +220,10 @@ type TwiceTest = { A : string; B : int }
 
 [<Fact>]
 let ``Execution when querying the same field twice will return it`` () =
-    let schema = Schema(Define.Object<TwiceTest>("Type", [
+    let schema = Schema(Define.Object<TwiceTest>("Type", [|
         Define.Field("a", String, fun _ x -> x.A)
         Define.Field("b", Int, fun _ x -> x.B)
-    ]))
+    |]))
     let query = "query Example { a, b, a }"
     let result = sync <| schema.AsyncExecute(query, { A = "aa"; B = 2 });
     let expected = NameValueLookup.ofList [

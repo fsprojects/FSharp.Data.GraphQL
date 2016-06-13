@@ -4,11 +4,13 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.Collections.Generic
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
-open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL.Execution
 
 type SchemaConfig =
     { Types : NamedDef list
@@ -17,7 +19,7 @@ type SchemaConfig =
         { Types = []
           Directives = [IncludeDirective; SkipDirective] }
 
-type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as this =
+type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as this =
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -31,29 +33,29 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
             let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
                 objdef.Fields
-                |> List.collect (fun x -> (x.Type :> TypeDef) :: (x.Args |> List.map (fun a -> upcast a.Type)))
-                |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-                |> List.fold (fun n (Named t) -> insert n t) ns'
+                |> Array.collect (fun x -> Array.append [| x.Type :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.Type)))
+                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+                |> Array.fold (fun n (Named t) -> insert n t) ns'
             objdef.Implements
-            |> List.fold (fun n t -> insert n t) withFields'
+            |> Array.fold (fun n t -> insert n t) withFields'
         | Interface interfacedef ->
             let ns' = addOrReturn typedef.Name typedef ns
             interfacedef.Fields
-            |> List.map (fun x -> x.Type)
-            |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> List.fold (fun n (Named t) -> insert n t) ns'            
+            |> Array.map (fun x -> x.Type)
+            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (fun n (Named t) -> insert n t) ns'            
         | Union uniondef ->
             let ns' = addOrReturn typedef.Name typedef ns
             uniondef.Options
-            |> List.fold (fun n t -> insert n t) ns'            
+            |> Array.fold (fun n t -> insert n t) ns'            
         | List (Named innerdef) -> insert ns innerdef 
         | Nullable (Named innerdef) -> insert ns innerdef
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
-            |> List.collect (fun x -> [x.Type :> TypeDef])
-            |> List.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> List.fold (fun n (Named t) -> insert n t) ns'
+            |> Array.collect (fun x -> [| x.Type :> TypeDef |])
+            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (fun n (Named t) -> insert n t) ns'
         
     let initialTypes: NamedDef list = [ 
         Int
@@ -61,6 +63,8 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
         Boolean
         Float
         ID
+        Date
+        Uri
         __Schema
         query]
 
@@ -82,7 +86,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
             | _ -> None)
         |> Seq.fold (fun acc objdef -> 
             objdef.Implements
-            |> List.fold (fun acc' iface ->
+            |> Array.fold (fun acc' iface ->
                 match Map.tryFind iface.Name acc' with
                 | Some list -> Map.add iface.Name (objdef::list) acc'
                 | None -> Map.add iface.Name [objdef] acc') acc
@@ -91,8 +95,10 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
     let getPossibleTypes abstractDef =
         match abstractDef with
         | Union u -> u.Options
-        | Interface i -> Map.find i.Name implementations
-        | _ -> []
+        | Interface i -> Map.find i.Name implementations |> Array.ofList
+        | _ -> [||]
+
+    //-- INTROSPECTION SCHEMA GENERATION
 
     let rec introspectTypeRef isNullable (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
@@ -115,7 +121,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
           Description = fdef.Description
-          Args = fdef.Args |> List.map (introspectInput namedTypes) |> List.toArray
+          Args = fdef.Args |> Array.map (introspectInput namedTypes) 
           Type = introspectTypeRef false namedTypes fdef.Type
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
@@ -136,7 +142,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
         { Name = directive.Name
           Description = directive.Description
           Locations = locationToList directive.Locations
-          Args = directive.Args |> List.map (introspectInput namedTypes) |> List.toArray }
+          Args = directive.Args |> Array.map (introspectInput namedTypes) }
 
     let introspectType (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
@@ -145,40 +151,33 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
         | Object objdef -> 
             let fields = 
                 objdef.Fields 
-                |> List.map (introspectField namedTypes)
-                |> List.toArray
+                |> Array.map (introspectField namedTypes)
             let interfaces = 
                 objdef.Implements 
-                |> List.map (fun idef -> Map.find idef.Name namedTypes)
-                |> List.toArray
+                |> Array.map (fun idef -> Map.find idef.Name namedTypes)
             IntrospectionType.Object(objdef.Name, objdef.Description, fields, interfaces)
         | InputObject inObjDef -> 
             let inputs = 
                 inObjDef.Fields 
-                |> List.map (introspectInput namedTypes)
-                |> List.toArray
+                |> Array.map (introspectInput namedTypes)
             IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
         | Union uniondef -> 
             let possibleTypes = 
                 getPossibleTypes uniondef
-                |> List.map (fun tdef -> Map.find tdef.Name namedTypes)
-                |> List.toArray
+                |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Union(uniondef.Name, uniondef.Description, possibleTypes)
         | Enum enumdef -> 
             let enumVals = 
                 enumdef.Options
-                |> List.map introspectEnumVal
-                |> List.toArray
+                |> Array.map introspectEnumVal
             IntrospectionType.Enum(enumdef.Name, enumdef.Description, enumVals)
         | Interface idef ->
             let fields = 
                 idef.Fields 
-                |> List.map (introspectField namedTypes)
-                |> List.toArray
+                |> Array.map (introspectField namedTypes)
             let possibleTypes = 
                 getPossibleTypes idef
-                |> List.map (fun tdef -> Map.find tdef.Name namedTypes)
-                |> List.toArray
+                |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes )
 
     let introspectSchema types : IntrospectionSchema =
@@ -210,120 +209,54 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
               Types = itypes
               Directives = idirectives }
         ischema
+        
+    let introspected = introspectSchema typeMap      
+    do
+        compileSchema getPossibleTypes typeMap
+        
+    member this.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        async {
+            try
+                let errors = System.Collections.Concurrent.ConcurrentBag()
+                let! result = execute this ast operationName variables data errors
+                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast errors ]
+                return upcast NameValueLookup.ofList output
+            with 
+            | ex -> 
+                let msg = ex.ToString()
+                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
+        }
 
-    let introspected = introspectSchema typeMap
+    member this.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        async {
+            try
+                let ast = parse queryOrMutation
+                let errors = System.Collections.Concurrent.ConcurrentBag()
+                let! result = execute this ast operationName variables data errors
+                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
+                return upcast NameValueLookup.ofList output
+            with 
+            | ex -> 
+                let msg = ex.ToString()
+                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
+        }
 
-    interface ISchema with
+
+    interface ISchema with        
         member val TypeMap = typeMap
         member val Query = query
-        member val Mutation = mutation
-        member val Directives = schemaConfig.Directives
+        member val Mutation: ObjectDef option = mutation
+        member val Directives = schemaConfig.Directives |> List.toArray
         member val Introspected = introspected
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
-        member x.IsPossibleType abstractdef possibledef =
+        member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
-            | [] -> false
-            | possibleTypes -> possibleTypes |> List.exists (fun t -> t.Name = possibledef.Name)
+            | [||] -> false
+            | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
-
-open System.Collections.Generic
-
-type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
-    let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
-    let setValue key value =
-        let mutable i = 0
-        while i < kvals.Length do
-            if kvals.[i].Key = key then
-                kvals.[i] <- KeyValuePair<string, obj>(key, value) 
-                i <- Int32.MaxValue
-            else i <- i+1
-    let getValue key = (kvals |> Array.find (fun kv -> kv.Key = key)).Value
-    let rec structEq (x: NameValueLookup) (y: NameValueLookup) =
-        if Object.ReferenceEquals(x, y) then true
-        elif Object.ReferenceEquals(y, null) then false
-        elif x.Count <> y.Count then false
-        else
-            x.Buffer
-            |> Array.forall2 (fun (a: KeyValuePair<string, obj>) (b: KeyValuePair<string, obj>) ->
-                if a.Key <> b.Key then false
-                else 
-                    match a.Value, b.Value with
-                    | :? NameValueLookup, :? NameValueLookup as o -> structEq (downcast fst o) (downcast snd o)
-                    | a1, b1 -> a1 = b1) y.Buffer
-    let pad (sb: System.Text.StringBuilder) times = for i in 0..times do sb.Append("\t") |> ignore
-    let rec stringify (sb: System.Text.StringBuilder) deep (o:obj) =
-        match o with
-        | :? NameValueLookup as lookup ->
-            sb.Append("{ ") |> ignore
-            lookup.Buffer
-            |> Array.iter (fun kv -> 
-                sb.Append(kv.Key).Append(": ") |> ignore
-                stringify sb (deep+1) kv.Value
-                sb.Append(",\r\n") |> ignore
-                pad sb deep)
-            sb.Remove(sb.Length - 4 - deep, 4 + deep).Append(" }") |> ignore
-        | :? string as s ->
-            sb.Append("\"").Append(s).Append("\"") |> ignore
-        | :? System.Collections.IEnumerable as s -> 
-            sb.Append("[") |> ignore
-            for i in s do 
-                stringify sb (deep+1) i
-                sb.Append(", ") |> ignore
-            sb.Append("]") |> ignore
-        | other -> 
-            if other <> null 
-            then sb.Append(other.ToString()) |> ignore
-            else sb.Append("null") |> ignore
-        ()
-    static member ofList (l: (string * obj) list) = NameValueLookup(l)
-    member private x.Buffer : KeyValuePair<string, obj> [] = kvals
-    member x.Count = kvals.Length
-    member x.Update key value = setValue key value
-    override x.Equals(other) = 
-        match other with
-        | :? NameValueLookup as lookup -> structEq x lookup
-        | _ -> false
-    override x.ToString() = 
-        let sb =Text.StringBuilder()
-        stringify sb 1 x
-        sb.ToString()
-    interface IEquatable<NameValueLookup> with
-        member x.Equals(other) = structEq x other
-    interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
-    interface IEnumerable<KeyValuePair<string, obj>> with
-        member x.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
-    interface IDictionary<string, obj> with
-        member x.Add(key, value) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Add(item) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Contains(item) = kvals |> Array.exists ((=) item)
-        member x.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
-        member x.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
-        member x.Count = x.Count
-        member x.IsReadOnly = true
-        member x.Item
-            with get (key) = getValue key
-            and set (key) v = setValue key v
-        member x.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
-        member x.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
-        member x.Remove(_:string) = 
-            raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-            false
-        member x.Remove(_:KeyValuePair<string,obj>) = 
-            raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-            false
-        member x.TryGetValue(key, value) = 
-            match kvals |> Array.tryFind (fun kv -> kv.Key = key) with
-            | Some kv -> value <- kv.Value; true
-            | None -> value <- null; false
-    new(t: (string * obj) list) = 
-        NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
-    new(t: string []) = 
-        NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))

@@ -54,12 +54,12 @@ module Definitions =
     let PageInfo = Define.Object<PageInfo>(
         name = "PageInfo",
         description = "Information about pagination in a connection.",
-        fields = [
+        fields = [|
             Define.Field("hasNextPage", Boolean, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
             Define.Field("hasPreviousPage", Boolean, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
             Define.Field("startCursor", Nullable String, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
             Define.Field("endCursor", Nullable String, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor)
-        ])
+        |])
     
     /// Converts existing output type defintion into an edge in a Relay connection.
     /// <paramref name="nodeType"/> must not be a List.
@@ -70,9 +70,9 @@ module Definitions =
             Define.Object<Edge<'Node>>(
                 name = n.Name + "Edge",
                 description = "An edge in a connection from an object to another object of type " + n.Name,
-                fields = [
+                fields = [|
                     Define.Field("cursor", String, "A cursor for use in pagination", fun _ edge -> edge.Cursor)
-                    Define.Field("node", nodeType, "The item at the end of the edge. Must NOT be an enumerable collection.", fun _ edge -> edge.Node) ]) 
+                    Define.Field("node", nodeType, "The item at the end of the edge. Must NOT be an enumerable collection.", fun _ edge -> edge.Node) |]) 
     
     /// Converts existing output type definition into Relay-compatible connection.
     /// <paramref name="nodeType"/> must not be a List.
@@ -81,23 +81,23 @@ module Definitions =
         Define.Object<Connection<'Node>>(
             name = n.Name + "Connection",
             description = "A connection from an object to a list of objects of type " + n.Name,
-            fields = [
+            fields = [|
                 Define.Field("totalCount", Nullable Int, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""", fun _ conn -> conn.TotalCount)
                 Define.Field("pageInfo", PageInfo, "Information to aid in pagination.", fun _ conn -> conn.PageInfo)
-                Define.Field("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges)])
+                Define.Field("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges)|])
 
 [<RequireQualifiedAccess>]
 module Connection =
 
-    let forwardArgs = [ 
+    let forwardArgs = [| 
         Define.Input("first", Nullable Int)
-        Define.Input("after", Nullable String) ]
+        Define.Input("after", Nullable String) |]
     
-    let backwardArgs = [ 
+    let backwardArgs = [| 
         Define.Input("last", Nullable Int)
-        Define.Input("before", Nullable String) ]
+        Define.Input("before", Nullable String) |]
     
-    let allArgs = forwardArgs @ backwardArgs
+    let allArgs = Array.append forwardArgs backwardArgs
     
     let ofArraySlice meta (SliceInfo args) (array: 't []) = 
         let startOffset, endOffset =
