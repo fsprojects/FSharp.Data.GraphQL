@@ -71,6 +71,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF
 		samples\relay-starter-kit\build\babelRelayPlugin.js = samples\relay-starter-kit\build\babelRelayPlugin.js
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Client", "src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj", "{7C9CC625-FB4E-4215-9F7C-494AA6043821}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -93,6 +95,10 @@ Global
 		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

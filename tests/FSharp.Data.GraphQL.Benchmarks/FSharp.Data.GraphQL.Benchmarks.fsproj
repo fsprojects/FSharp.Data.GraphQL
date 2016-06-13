@@ -61,6 +61,39 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <ItemGroup>
+    <Content Include="TraceEvent.ReadMe.txt">
+      <Paket>True</Paket>
+    </Content>
+    <Content Include="TraceEvent.ReleaseNotes.txt">
+      <Paket>True</Paket>
+    </Content>
+    <Content Include="_TraceEventProgrammersGuide.docx">
+      <Paket>True</Paket>
+    </Content>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Prolog.fs" />
+    <Compile Include="ParsingBenchmark.fs" />
+    <Compile Include="ExecutionBenchmark.fs" />
+    <Compile Include="Program.fs" />
+    <None Include="App.config" />
+    <None Include="paket.references" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="Microsoft.Build" />
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
+      <Name>FSharp.Data.GraphQL</Name>
+      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <Choose>
     <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.0')">
       <ItemGroup>
@@ -141,28 +174,4 @@
     </When>
   </Choose>
   <Import Project="..\..\packages\Microsoft.Diagnostics.Tracing.TraceEvent\build\$(__paket__Microsoft_Diagnostics_Tracing_TraceEvent_targets).targets" Condition="Exists('..\..\packages\Microsoft.Diagnostics.Tracing.TraceEvent\build\$(__paket__Microsoft_Diagnostics_Tracing_TraceEvent_targets).targets')" Label="Paket" />
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Prolog.fs" />
-    <Compile Include="ParsingBenchmark.fs" />
-    <Compile Include="ExecutionBenchmark.fs" />
-    <Compile Include="Program.fs" />
-    <None Include="App.config" />
-    <None Include="paket.references" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="Microsoft.Build" />
-    <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
-      <Name>FSharp.Data.GraphQL</Name>
-      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-  </ItemGroup>
 </Project>

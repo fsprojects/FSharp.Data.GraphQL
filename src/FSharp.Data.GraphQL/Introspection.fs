@@ -115,73 +115,52 @@ let __DirectiveLocation = Define.Enum(
     ])
     
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
-let inline private introspectToNamed (t: IntrospectionType) = NamedTypeRef { Kind = t.Kind; Name = t.Name; Description = t.Description }
 
 let rec __Type = Define.Object<IntrospectionTypeRef>(
     name = "__Type",
     description = """The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.""",
     fieldsFn = fun () -> [
-        Define.Field("kind", __TypeKind, fun _ t -> 
-            match t with 
-            | NamedTypeRef n -> n.Kind 
-            | ListTypeRef _ -> TypeKind.LIST
-            | NonNullTypeRef _ -> TypeKind.NON_NULL)
-        Define.Field("name", Nullable String, resolve = fun _ t -> 
-            match t with
-            | NamedTypeRef n -> Some n.Name
-            | _ -> None)
-        Define.Field("description", Nullable String, fun _ t -> 
-            match t with
-            | NamedTypeRef n -> n.Description
-            | _ -> None)
+        Define.Field("kind", __TypeKind, fun _ t -> t.Kind)
+        Define.Field("name", Nullable String, resolve = fun _ t -> t.Name)
+        Define.Field("description", Nullable String, fun _ t -> t.Description)
         Define.Field("fields", Nullable (ListOf __Field), description = null,
             args = [ Define.Input("includeDeprecated", Boolean, false) ],
             resolve = fun ctx t ->
-                match t with
-                | NamedTypeRef n ->
-                    match findIntrospected ctx n.Name  with
-                    | IntrospectionObject(_, _, fields, _) | IntrospectionInterface(_, _, fields, _) ->
-                        match ctx.Arg "includeDeprecated" with
-                        | None | Some false -> Some fields
-                        | Some true -> fields |> Seq.filter (fun f -> not f.IsDeprecated) |> Some
-                    | _ -> None
-                | _ -> None)
+                match t.Name with
+                | None -> None
+                | Some name ->
+                    let found = findIntrospected ctx name
+                    match ctx.Arg "includeDeprecated" with
+                    | None | Some false -> found.Fields |> Option.map Array.toSeq
+                    | Some true -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
         Define.Field("interfaces", Nullable (ListOf __Type), fun ctx t -> 
-            match t with 
-            | NamedTypeRef n ->
-                match findIntrospected ctx n.Name with
-                | IntrospectionObject(_, _, _, interfaces) -> Some (interfaces |> Seq.map NamedTypeRef)
-                | _ -> None
-            | _ -> None)
+            match t.Name with 
+            | None -> None
+            | Some name ->
+                let found = findIntrospected ctx name
+                found.Interfaces |> Option.map Array.toSeq )
         Define.Field("possibleTypes", Nullable (ListOf __Type), resolve = fun ctx t -> 
-            match t with 
-            | NamedTypeRef n ->
-                match findIntrospected ctx n.Name with
-                | IntrospectionInterface(_, _, _, possibleTypes) | IntrospectionUnion(_, _, possibleTypes) -> Some (possibleTypes |> Seq.map NamedTypeRef)
-                | _ -> None
-            | _ -> None)
+            match t.Name with 
+            | None -> None
+            | Some name ->
+                let found = findIntrospected ctx name
+                found.PossibleTypes |> Option.map Array.toSeq)
         Define.Field("enumValues", Nullable (ListOf __EnumValue), description = null,
             args = [ Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
-            match t with 
-            | NamedTypeRef n ->
-                match findIntrospected ctx n.Name with
-                | IntrospectionEnum(_, _, enumVals) ->
-                    match ctx.Arg "includeDeprecated" with
-                    | None | Some false -> Some enumVals
-                    | Some true -> enumVals |> Seq.filter (fun f -> not f.IsDeprecated) |> Some
-                | _ -> None
-            | _ -> None)
+            match t.Name with 
+            | None -> None
+            | Some name ->
+                let found = findIntrospected ctx name
+                match ctx.Arg "includeDeprecated" with
+                | None | Some false -> found.EnumValues |> Option.map Array.toSeq
+                | Some true -> found.EnumValues |> Option.map (fun x -> upcast  (x |> Array.filter (fun f -> not f.IsDeprecated))))
         Define.Field("inputFields", Nullable (ListOf __InputValue), resolve = fun ctx t ->
-            match t with 
-            | NamedTypeRef n ->
-                match findIntrospected ctx n.Name with
-                | IntrospectionInputObject(_, _, inputs) -> Some inputs
-                | _ -> None
-            | _ -> None)
-        Define.Field("ofType", Nullable __Type, resolve = fun _ t ->
-            match t with
-            | ListTypeRef(ofType) | NonNullTypeRef(ofType) -> Some ofType
-            | _ -> None)
+            match t.Name with 
+            | None -> None
+            | Some name ->
+                let found = findIntrospected ctx name
+                found.InputFields |> Option.map Array.toSeq)
+        Define.Field("ofType", Nullable __Type, resolve = fun _ t -> t.OfType)
     ])
    
 and __InputValue = Define.Object<IntrospectionInputVal>(
@@ -200,7 +179,7 @@ and __Field = Define.Object<IntrospectionField>(
     fieldsFn = fun () -> [
         Define.Field("name", String, fun _ f -> f.Name)
         Define.Field("description", Nullable String, fun _ f -> f.Description)
-        Define.Field("args", ListOf __InputValue, fun _ f -> f.Args)
+        Define.Field("args", ListOf __InputValue, fun _ f -> upcast f.Args)
         Define.Field("type", __Type, fun _ f -> f.Type)
         Define.Field("isDeprecated", Boolean, resolve = fun _ f -> f.IsDeprecated)
         Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
@@ -222,8 +201,8 @@ and __Directive = Define.Object<IntrospectionDirective>(
     fieldsFn = fun () -> [
         Define.Field("name", String, fun _ directive -> directive.Name)
         Define.Field("description", Nullable String, fun _ directive -> directive.Description)
-        Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> directive.Locations)
-        Define.Field("args", ListOf __InputValue, fun _ directive -> directive.Args)
+        Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> upcast directive.Locations)
+        Define.Field("args", ListOf __InputValue, fun _ directive -> upcast directive.Args)
         Define.Field("onOperation", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.QUERY ||| DirectiveLocation.MUTATION ||| DirectiveLocation.SUBSCRIPTION)))
         Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION)))
         Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.FIELD)))
@@ -233,11 +212,11 @@ and __Schema = Define.Object<IntrospectionSchema>(
     name = "__Schema",
     description = "A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all available types and directives on the server, as well as the entry points for query, mutation, and subscription operations.",
     fieldsFn = fun () -> [
-        Define.Field("types", ListOf __Type, description = "A list of all types supported by this server.", resolve = fun _ schema -> schema.Types |> Seq.map introspectToNamed)
-        Define.Field("queryType", __Type, description = "The type that query operations will be rooted at.", resolve = fun _ schema -> NamedTypeRef(schema.QueryType))
-        Define.Field("mutationType", Nullable __Type, description = "If this server supports mutation, the type that mutation operations will be rooted at.", resolve = fun _ schema -> schema.MutationType |> Option.map NamedTypeRef)
+        Define.Field("types", ListOf __Type, description = "A list of all types supported by this server.", resolve = fun _ schema -> upcast (schema.Types |> Array.map IntrospectionTypeRef.Named))
+        Define.Field("queryType", __Type, description = "The type that query operations will be rooted at.", resolve = fun _ schema -> schema.QueryType)
+        Define.Field("mutationType", Nullable __Type, description = "If this server supports mutation, the type that mutation operations will be rooted at.", resolve = fun _ schema -> schema.MutationType)
         Define.Field("subscriptionType", Nullable __Type, description = "If this server support subscription, the type that subscription operations will be rooted at.", resolve = fun _ _ -> None)
-        Define.Field("directives", ListOf __Directive, description = "A list of all directives supported by this server.", resolve = fun _  schema -> schema.Directives)
+        Define.Field("directives", ListOf __Directive, description = "A list of all directives supported by this server.", resolve = fun _  schema -> upcast schema.Directives)
     ])
 
 let SchemaMetaFieldDef = Define.Field(
@@ -256,7 +235,7 @@ let TypeMetaFieldDef = Define.Field(
     resolve = fun ctx (_:obj) -> 
         ctx.Schema.Introspected.Types 
         |> Seq.find (fun t -> t.Name = ctx.Arg("name").Value) 
-        |> introspectToNamed)
+        |> IntrospectionTypeRef.Named)
     
 let TypeNameMetaFieldDef = Define.Field(
     name = "__typename",
