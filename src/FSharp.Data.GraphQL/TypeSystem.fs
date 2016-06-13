@@ -31,18 +31,18 @@ module Introspection =
     type IntrospectionDirective = 
         { Name : string
           Description : string option
-          Locations : DirectiveLocation seq
-          Args : IntrospectionInputVal seq }
+          Locations : DirectiveLocation []
+          Args : IntrospectionInputVal [] }
     
     and [<Serializable>] IntrospectionType = 
         { Kind : TypeKind
           Name : string
           Description : string option
-          Fields : IntrospectionField seq option
-          Interfaces : IntrospectionTypeRef seq option
-          PossibleTypes : IntrospectionTypeRef seq option
-          EnumValues : IntrospectionEnumVal seq option
-          InputFields : IntrospectionInputVal seq option
+          Fields : IntrospectionField [] option
+          Interfaces : IntrospectionTypeRef [] option
+          PossibleTypes : IntrospectionTypeRef [] option
+          EnumValues : IntrospectionEnumVal [] option
+          InputFields : IntrospectionInputVal [] option
           OfType : IntrospectionTypeRef option }
         static member Scalar(name: string, description: string option) = 
             { Kind = TypeKind.SCALAR
@@ -54,7 +54,7 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member Object(name: string, description: string option, fields: IntrospectionField seq, interfaces: IntrospectionTypeRef seq) = 
+        static member Object(name: string, description: string option, fields: IntrospectionField [], interfaces: IntrospectionTypeRef []) = 
             { Kind = TypeKind.OBJECT
               Name = name
               Description = description
@@ -64,7 +64,7 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member InputObject(name: string, description: string option, inputFields: IntrospectionInputVal seq) = 
+        static member InputObject(name: string, description: string option, inputFields: IntrospectionInputVal []) = 
             { Kind = TypeKind.INPUT_OBJECT
               Name = name
               Description = description
@@ -74,7 +74,7 @@ module Introspection =
               EnumValues = None
               InputFields = Some inputFields
               OfType = None }
-        static member Union(name: string, description: string option, possibleTypes: IntrospectionTypeRef seq) = 
+        static member Union(name: string, description: string option, possibleTypes: IntrospectionTypeRef []) = 
             { Kind = TypeKind.UNION
               Name = name
               Description = description
@@ -84,7 +84,7 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member Enum(name: string, description: string option, enumValues: IntrospectionEnumVal seq) = 
+        static member Enum(name: string, description: string option, enumValues: IntrospectionEnumVal []) = 
             { Kind = TypeKind.ENUM
               Name = name
               Description = description
@@ -94,7 +94,7 @@ module Introspection =
               EnumValues = Some enumValues
               InputFields = None
               OfType = None }
-        static member Interface(name: string, description: string option, fields: IntrospectionField seq, possibleTypes: IntrospectionTypeRef seq) = 
+        static member Interface(name: string, description: string option, fields: IntrospectionField [], possibleTypes: IntrospectionTypeRef []) = 
             { Kind = TypeKind.INTERFACE
               Name = name
               Description = description
@@ -129,7 +129,7 @@ module Introspection =
     and [<Serializable>] IntrospectionField = 
         { Name : string
           Description : string option
-          Args : IntrospectionInputVal seq
+          Args : IntrospectionInputVal []
           Type : IntrospectionTypeRef
           IsDeprecated : bool
           DeprecationReason : string option }
@@ -138,8 +138,8 @@ module Introspection =
         { QueryType : IntrospectionTypeRef
           MutationType : IntrospectionTypeRef option
           SubscriptionType : IntrospectionTypeRef option
-          Types : IntrospectionType seq
-          Directives : IntrospectionDirective seq }
+          Types : IntrospectionType []
+          Directives : IntrospectionDirective [] }
 
 type GraphQLException(msg) = 
     inherit Exception(msg)

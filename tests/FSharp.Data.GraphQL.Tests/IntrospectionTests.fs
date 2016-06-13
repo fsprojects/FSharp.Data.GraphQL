@@ -10,6 +10,17 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Client
+
+[<Fact>]
+let ``Introspection schema should be serializable back and forth using json`` () =
+    let root = Define.Object("Query", [
+        Define.Field("onlyField", String)])
+    let schema = Schema(root)
+    let introResult = schema.AsyncExecute(Introspection.introspectionQuery) |> sync
+    let json = Client.Serialization.toJson introResult
+    let deserialized = Client.Serialization.fromJson json
+    deserialized.Data.__schema |> equals (schema :> ISchema).Introspected
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =

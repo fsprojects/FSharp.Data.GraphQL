@@ -115,7 +115,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
           Description = fdef.Description
-          Args = fdef.Args |> List.map (introspectInput namedTypes)
+          Args = fdef.Args |> List.map (introspectInput namedTypes) |> List.toArray
           Type = introspectTypeRef false namedTypes fdef.Type
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
@@ -130,12 +130,13 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
         System.Enum.GetValues(typeof<DirectiveLocation>)
         |> Seq.cast<DirectiveLocation>
         |> Seq.filter (fun v -> int(location) &&& int(v) <> 0)
+        |> Seq.toArray
 
     let introspectDirective (namedTypes: Map<string, IntrospectionTypeRef>) (directive: DirectiveDef) : IntrospectionDirective =
         { Name = directive.Name
           Description = directive.Description
           Locations = locationToList directive.Locations
-          Args = directive.Args |> List.map (introspectInput namedTypes) }
+          Args = directive.Args |> List.map (introspectInput namedTypes) |> List.toArray }
 
     let introspectType (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
@@ -145,30 +146,39 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
             let fields = 
                 objdef.Fields 
                 |> List.map (introspectField namedTypes)
+                |> List.toArray
             let interfaces = 
                 objdef.Implements 
                 |> List.map (fun idef -> Map.find idef.Name namedTypes)
+                |> List.toArray
             IntrospectionType.Object(objdef.Name, objdef.Description, fields, interfaces)
         | InputObject inObjDef -> 
-            let inputs = inObjDef.Fields |> List.map (introspectInput namedTypes)
+            let inputs = 
+                inObjDef.Fields 
+                |> List.map (introspectInput namedTypes)
+                |> List.toArray
             IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
         | Union uniondef -> 
             let possibleTypes = 
                 getPossibleTypes uniondef
                 |> List.map (fun tdef -> Map.find tdef.Name namedTypes)
+                |> List.toArray
             IntrospectionType.Union(uniondef.Name, uniondef.Description, possibleTypes)
         | Enum enumdef -> 
             let enumVals = 
                 enumdef.Options
                 |> List.map introspectEnumVal
+                |> List.toArray
             IntrospectionType.Enum(enumdef.Name, enumdef.Description, enumVals)
         | Interface idef ->
             let fields = 
                 idef.Fields 
                 |> List.map (introspectField namedTypes)
+                |> List.toArray
             let possibleTypes = 
                 getPossibleTypes idef
                 |> List.map (fun tdef -> Map.find tdef.Name namedTypes)
+                |> List.toArray
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes )
 
     let introspectSchema types : IntrospectionSchema =
@@ -185,10 +195,13 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
 
         let itypes =
             types
-            |> Map.toList
-            |> List.map (snd >> (introspectType inamed))
+            |> Map.toArray
+            |> Array.map (snd >> (introspectType inamed))
 
-        let idirectives = schemaConfig.Directives |> List.map (introspectDirective inamed)
+        let idirectives = 
+            schemaConfig.Directives 
+            |> List.map (introspectDirective inamed)
+            |> List.toArray
             
         let ischema =
             { QueryType = Map.find query.Name inamed
@@ -221,7 +234,7 @@ type Schema(query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as th
 
 open System.Collections.Generic
 
-type internal NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
+type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
     let setValue key value =
         let mutable i = 0
