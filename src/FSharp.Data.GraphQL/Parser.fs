@@ -4,375 +4,313 @@
 
 module FSharp.Data.GraphQL.Parser
 
-open System
-open System.Globalization
-open FParsec
 open FSharp.Data.GraphQL.Ast
+open System
+open FParsec
 
-// Modeled after https://facebook.github.io/graphql/
-let private someOrEmpty l =
-    match l with
-    | Some list -> list
-    | None -> []
-let private someOrEmptyString s =
-    match s with
-    | Some str -> str
-    | None -> ""
+[<AutoOpen>]
+module internal Internal =
 
-let private BP (p: Parser<_,_>) stream =
-    p stream // set a breakpoint here
+  // 2.1.7 Ignored tokens
+  let ignored = 
+    // 2.1.2 WhiteSpace 
+    //    Horizontal Tab (U+0009) | Space (U+0020) 
+    let whiteSpace  = skipAnyOf "\u0009\u000B\u000C\u0020\u00A0"
 
-let private (<!>) (p: Parser<_,_>) label : Parser<_,_> =
-    fun stream ->
-       // printfn "%A: Entering %s" stream.Position label
-        let reply = p stream
-       // printfn "%A: Leaving %s (%A)" stream.Position label reply.Status
-        reply
+    // 2.1.3 LineTerminator
+    //   New Line (U+000A)
+    //   Carriage Return (U+000D)New Line (U+000A) | (U+000D)New Line (U+000A)
+    let lineTerminators  = skipAnyOf "\u000A\u000D\u2028\u2029" 
 
-let private pSelection, pSelectionRef = createParserForwardedToRef<_, unit>()
-let private pField, pFieldRef = createParserForwardedToRef<_, unit>()
-let private pSelectionSet, pSelectionSetRef = createParserForwardedToRef<Selection list, unit>()
-let private pType, pTypeRef = createParserForwardedToRef<InputType, unit>()
-let private pValue, pValueRef = createParserForwardedToRef<Value, unit>()
+    // 2.1.4 CommentChar
+    //  SourceCharacter but not LineTerminator
+    let comments  = pchar '#' >>. skipManyTill anyChar (lineTerminators <|>  eof) 
 
-let private ``???`` = pzero
+    // 2.1.5 Comma (Insignificant)
+    let comma = skipChar ',' 
+  
+    whiteSpace <|> lineTerminators <|> comments <|> comma <?> "Ignored"
 
-let private oneOf str =
-    str
-    |> Seq.map (fun x -> pstring (x.ToString()))
-    |> choice        
+  // ignore zero or more whitespaces
+  let whitespaces = many ignored |>> ignore
+  
 
-let arrayOrEmptyArray optArray =
-    match optArray with 
-    | None -> Array.empty
-    | Some (list : list<_>) -> list |> Array.ofList
+  // lexical token are indivisible terminal symbols 
+  let token p = p .>> notFollowedBy (letter <|> digit <|> pchar '_')
+  let stoken = pstring >> token
+  let token_ws p = token p .>> whitespaces
+  let stoken_ws = pstring >> token_ws
+  let ctoken_ws = pchar >> token_ws
 
-// Section 2.1 Source text
-let private SourceCharacter = anyChar
+  // helpers to format parser results
+  let someOrEmpty = function | Some lst -> lst | None -> []
+  let charsToString = Array.ofList >> String
+  
+  // parse one items between two char punctuators
+  let betweenChars left right p =
+   (pchar left .>> whitespaces) >>. p .>> (whitespaces .>> pchar right)
 
-// 2.1.1 White Space
-let private WhiteSpace =
-    regex "[\u0009\u000B\u000C\u0020\u00A0]"
-    <?> "WhiteSpace"
+  // parse one or more items ignoring inconsequential whitespace
+  let betweenCharsMany1 left right p =
+    between (pchar left .>> whitespaces) (pchar right) (sepEndBy1 p whitespaces)
 
-// 2.1.2 Line Terminators
-let private lineTerminatorChars = "\u000A\u000D\u2028\u2029"
-let private LineTerminator =    
-    regex "[\u000A\u000D\u2028\u2029]"
-    <?> "NewLine"
+  // parse zero or more items ignoring inconsequential whitespace
+  let betweenCharsMany left right p =
+    between (pchar left .>> whitespaces) (pchar right) (sepEndBy p whitespaces)
 
-// 2.1.3 Comments
-let private pCommentChar =
-    //SourceCharacter but not LineTerminator        
-    noneOf lineTerminatorChars
-
-let private pComment =
-    pchar '#' 
-    >>. many pCommentChar 
-    |>> fun x -> x |> string
-
-// 2.1.4 Insignificant Commas
-let private pComma = pstring ","
+  // run the key, seperator, then value parsers while ignoring inconsequential whitespaces
+  let pairBetween seperator key value =
+    (key .>> whitespaces) .>>. ((pchar seperator .>> whitespaces) >>. value)
 
 
-// 2.1.6 Ignored Tokens
-let private pIgnored =
-    many <| choice [
-        WhiteSpace;
-        LineTerminator;
-        pComment;
-        pComma;
-    ] 
-    <?> "Ignored"
-    <!> "Ignored"
+  // 2.9 Input Values
+  // forward ref since value is recursive in the case of lists and objects
+  let inputValue, inputValueRef = createParserForwardedToRef()
 
-let private pIgnored1 =
-    many1 <| choice [
-        WhiteSpace;
-        LineTerminator;
-        pComment;
-        pComma;
-    ] 
-    <?> "Ignored1"
-    <!> "Ignored1"
 
-let private sepByIgnored p = 
-    many (p .>> pIgnored) .>> pIgnored
+  // 2.1.9 Names (ASCII only)
+  //   /[_A-Za-z][_0-9A-Za-z]*/
+  let name = 
+    let isIdentifierFirstChar c = isAsciiLetter c || c = '_'
+    let isIdentifierChar c = isAsciiLetter c || isDigit c || c = '_'
+    many1Satisfy2 isIdentifierFirstChar isIdentifierChar
 
-let private ws p = p .>> pIgnored
-let private wsstr s = pstring s .>> pIgnored
-//    // 2.1.7 Punctuators
-//    let pPunctuator =
-//        choice [
-//            pstring "!"; pstring "$"; pstring "("; pstring ")";
-//            pstring "..."; pstring ":"; pstring "="; pstring "@";
-//            pstring "["; pstring "]"; pstring "{"; pstring "}";
-//        ]     
+  // 2.9.4 StringValue
+  let stringValue =
+    let escapedCharacter =
+      let escaped = anyOf "\"\\/bfnrt" 
+                        |>> function | 'b' -> '\b' | 'f' -> '\u000C' | 'n' -> '\n' 
+                                     | 'r' -> '\r' | 't' -> '\t' | c -> c 
+      let unicode = 
+        pchar 'u' >>. pipe4 hex hex hex hex (fun h3 h2 h1 h0 ->
+          let hex2int c = (int c &&& 15) + (int c >>> 6)*9 
+          (hex2int h3)*4096 + (hex2int h2)*256 + (hex2int h1)*16 + hex2int h0 |> char)
+      pchar '\\' >>. (escaped <|> unicode)
+  
+    let normalCharacter = noneOf "\u000A\u000D\u2028\u2029\"'"
+    let quote =  pchar '"'
+    between quote quote (manyChars (normalCharacter <|> escapedCharacter))
 
-// 2.1.8 Names
-let private pName = 
-    regex "[_A-Za-z][_0-9A-Za-z]*" 
-    <?> "Name"
-    <!> "Name"
 
-// 2.2.7.1 Int Value
-let private pDigit : Parser<string, string> = regex "[0-9]"
-let private pDigits = regex "[0-9]*"
-let private pIntPart =
-    let negSign = pstring "-"
-    let nonZeroDigit = anyOf "123456789" |>> fun x -> x.ToString()        
+  // 2.9.3 Boolean value
+  //  one of true false
+  let booleanValue =
+    choice [ stoken "true" >>% true
+             stoken "false" >>% false ]
 
-    let zero = opt negSign >>. pstring "0"
-    let nonZero = 
-        opt negSign .>>. nonZeroDigit .>>. pDigits
-        |>> fun ((oneg, d1), drest) ->
-            someOrEmptyString oneg + d1 + drest
 
-    zero <|> nonZero
+  // Integer Part 
+  //   (NegativeSign opt) 0
+  //   (NegativeSign opt) NonZeroDigit (Digit list opt)
+  let integerPart = 
+    let negativeSign = pchar '-'
+    let nonZeroDigit = anyOf "123456789"
+    let zero = pchar '0'
+    let zeroInteger =  opt negativeSign >>. zero >>% "0"
+    let nonZeroInteger =  opt negativeSign .>>. (many1Chars2 nonZeroDigit digit) 
+                          |>> function | (Some _, v) -> "-" + v
+                                       | (None, v) -> v
+    (attempt zeroInteger) <|> nonZeroInteger
 
-let private pIntValue = pIntPart |>> Int32.Parse
 
-// 2.2.7.2 Float Value
-let private pFloatValue = pfloat
+  // 2.9.1 IntValue 
+  //   IntegerPart
+  let integerValue = integerPart |>> int
 
-// 2.2.7.3 Bool Value
-let private pBooleanValue = 
-    (wsstr "true" >>% true) 
-    <|>
-    (wsstr "false" >>% false)
 
-// 2.2.7.4 String Value
-let private pStringValue = 
-    let escapeChar =
-        let pEscapedUnicode = 
-            regex "[0-9A-Fa-f]{4}"
-            |>> fun x -> char(Int32.Parse(x, NumberStyles.HexNumber))
-
-        let pEscapedCharacter = 
-            anyOf "\"\\/bfnrt"
-            |>> fun x -> x
-        
-        let encoded = 
-            choice [
-                pstring "u" >>. pEscapedUnicode
-                pEscapedCharacter
-            ]
-        pstring "\\" >>. encoded
-
-    let sourceChar = satisfy <| fun c -> 
-            match c with 
-            | '\"' | '\\' | '\u000A' | '\u000D' | '\u2028' | '\u2029' -> false
-            | _ -> true
-
-    let pStringCharacter = sourceChar <|> escapeChar        
-    let pQuote = pchar '"'
-
-    between pQuote pQuote (manyChars pStringCharacter)
-    <?> "String"
-
-// 2.2.8 Variables
-let private pVariable =
-    pstring "$" >>. ws pName 
-    <?> "Variable"
-    <!> "Variable"
-
-let private pEnumValue = pName
-let private pListValue = wsstr "[" >>. (sepByIgnored pValue) .>> wsstr "]"
-
-let private pObjectValue = ``???``
-
-// 2.2.7 Input Values
-do pValueRef := 
+  // 2.9.2 FloatValue
+  //    IntegerPart FractionalPart
+  //    IntegerPart ExponentPart
+  //    IntegerPart FractionalPart ExponentPart
+  let floatValue =
+    let exponentPart = 
+      let sign = pchar '+' <|> pchar '-'
+      let exponentIndicator = pchar 'e' <|> pchar 'E'
+      
+      pipe3 exponentIndicator (opt sign) (many1 digit) 
+        (fun exp sign digits ->
+          charsToString (match sign with
+                         | Some sign -> exp::sign::digits
+                         | None -> exp::digits ))
+  
+    let fractionPart = 
+      pchar '.' .>>. (many1 digit) 
+      |>> (fun (dot, digits) -> charsToString(dot::digits))
+    
     choice [
-        pVariable       |>> Variable
-        pIntValue       |>> IntValue
-        pFloatValue     |>> FloatValue
-        pStringValue    |>> StringValue
-        pBooleanValue   |>> BooleanValue
-        pEnumValue      |>> EnumValue
-        pListValue      |>> ListValue
-        pObjectValue    |>> ObjectValue
-    ] <?> "Value"
-        
-// 2.2.5 Field Alias
-let private pAlias =
-    ws pName .>> wsstr ":"
-    <?> "Alias"
-    <!> "Alias"
+      integerPart .>>. (exponentPart <|> fractionPart) |>> fun(p1, p2)-> p1 + p2
+      pipe3 integerPart fractionPart exponentPart 
+        (fun integer fraction exponent -> integer + fraction + exponent ) ] |>> float
 
 
-// 2.2.4 Arguments
-let private pArgument : Parser<Argument, _> = 
-    ws pName .>> wsstr ":" .>>. pValue
-    |>> fun (name, value) -> { Name = name; Value = value}
-    <?> "Argument"
-
-let private pArguments = wsstr "(" >>.  sepByIgnored pArgument .>> wsstr ")"
+  // 2.9.5 EnumValue
+  //   Name but not true or false or null
+  //   (boolean parser is run first)
+  let enumValue = name
 
 
-// 2.2.10 Directives
-let private pDirective : Parser<Directive, _> =
-    pstring "@" >>. pName .>>. opt pArguments
-    |>> fun (name, args) -> { Name = name; Arguments = someOrEmpty args}
+  // 2.10 Variable
+  //   $ Name
+  let variable = pchar '$' >>. name 
 
-let private pDirectives = many pDirective
 
-// 2.2.6 Fragments
-let private pFragmentName = pName
+  // 2.9.7 Input Object Values
+  let inputObject =
+    betweenCharsMany '{' '}' (pairBetween ':' name inputValue <?> "ObjectField") 
+    |>> Map.ofList 
+  
+  let listValue =
+    betweenCharsMany '[' ']' (token_ws inputValue <?> "Value") 
+     
 
-let private pFragmentSpread : Parser<FragmentSpread, _> = 
-    ws pFragmentName .>>. opt pDirectives
-    <?> "FragmentSpread"
-    |>> fun (name, directives) -> { Name = name; Directives = someOrEmpty directives }
+  // 2.9 Value 
+  //   Variable|IntValue|FloatValue|StringValue|
+  //   BooleanValue|EnumValue|ListValue|ObjectValue
+  inputValueRef :=
+    choice [ variable |>> Variable <?> "Variable"
+             (attempt floatValue) |>> FloatValue <?> "Float"
+             integerValue |>> IntValue <?> "Integer"
+             stringValue |>> StringValue <?> "String"
+             (attempt booleanValue) |>> BooleanValue <?> "Boolean"
+             enumValue |>> EnumValue  <?> "Enum"
+             inputObject |>> ObjectValue  <?> "InputObject"
+             listValue |>> ListValue <?> "ListValue" ]  
 
-// 2.2.9 Input Types    
-let private pNamedType = pName |>> fun name -> NamedType(name)
-let private pListType = between (pstring "[")  (pstring "]") !pTypeRef |>> ListType
 
-let private pNonNullType = 
-    choice [
-        pNamedType .>> pstring "!"
-        pListType .>> pstring "!" ]
-    |>> fun name -> NonNullType(name)
+  // 2.6 Arguments
+  //   Argument list
+  let arguments = 
+    // Argument
+    //   Name:Value
+    let argument = 
+      pairBetween ':' name inputValue
+      |>> fun (name, value) -> { Name = name; Value = value } 
+      <?> "Argument"
+    betweenCharsMany '(' ')' argument <?> "Arguments"
 
-do pTypeRef := 
-    choice [
-        pNamedType
-        pListType
-        pNonNullType
-    ]
 
-// 2.2.6.1 Type Conditions
-let private pTypeCondition = 
-    //pNamedType 
-    pName //dont convert to variabletype right now
+  // 2.1.2 Directives
+  //   Directive list
+  let directives = 
+    // Directive 
+    //    @ Name (Arguments opt)
+    let directive =
+      pchar '@' >>. (name .>> whitespaces) .>>. (opt arguments) 
+      |>> fun (name, args) -> { Directive.Name = name; Arguments = someOrEmpty args}
+      <?> "Directive"
+    sepEndBy directive whitespaces <?> "Directives"
 
-// 2.2.6.2 Inline Fragments
-let private pInlineFragment : Parser<FragmentDefinition, _> =
-    let func typeCond directives selSet = {
-        Name = None
-        TypeCondition = if String.IsNullOrEmpty typeCond then None else Some typeCond
-        Directives = directives
-        SelectionSet = selSet
-    }
 
-    pipe3 (wsstr "on" >>. ws pTypeCondition) pDirectives pSelectionSet func
-    <?> "InlineFragment"
+  // 2.11 Type 
+  //   |NamedType|ListType|NonNullType
+  let inputType, inputTypeRef = createParserForwardedToRef()
+  let namedType = name |>> NamedType <?> "NamedType"
+  let listType = 
+    betweenChars '[' ']' inputType
+    |>> ListType  <?> "ListType"
+  let nonNullType = 
+    (listType <|> namedType) .>> pchar '!' 
+    |>> NonNullType <?> "NonNullType"
+  inputTypeRef :=
+    choice [ attempt nonNullType
+             namedType
+             listType ]
 
-//    let pInlineFragment = 
-//        pstring "..." >>. pInlineFragmentTail
 
-let private pSelectionFragment =
-    let fragmentTail = 
-        (pInlineFragment |>> Selection.InlineFragment <!> "InlineFragment")            
-        <|>
-        (pFragmentSpread |>> Selection.FragmentSpread <!> "FragmentSpread")
+  // 2.4 Selection Sets
+  //  Selection list
+  let selection, selectionRef = createParserForwardedToRef()
+  let selectionSet, selectionSetRef = createParserForwardedToRef()
+ 
 
-    wsstr "..." >>. fragmentTail
-
-// 2.2.2 Selection Sets    
-do pSelectionRef := 
-    choice [|
-        (pField |>> Field) <!> "Field"
-        pSelectionFragment
-    |]
-    <?> "Selection"
-    <!> "Selection"
-
-do pSelectionSetRef :=
-    between (wsstr "{") (wsstr "}") (sepByIgnored pSelection)
-    <?> "SelectionSet"
-    <!> "SelectionSet"
-
-// 2.2.3 Fields
-do pFieldRef := 
-    let func oalias name oargs directives oselection = 
-        {
-            Alias = oalias
-            Name = name
-            Arguments = someOrEmpty oargs
-            Directives = directives 
-            SelectionSet = someOrEmpty oselection
-        }
-    pipe5 (opt (attempt pAlias)) (ws pName) (opt pArguments) pDirectives (opt pSelectionSet) func
+  // 2.5 Fields
+  //   (Alias opt) Name (Arguments opt) (Directives opt) (SelectionSet opt)
+  let field = 
+    let alias = token_ws name .>> ctoken_ws ':' 
+    pipe5 (opt(attempt alias)) (token_ws name) (opt(token_ws arguments)) (opt directives) (opt selectionSet)
+      (fun oalias name oargs directives oselection ->
+         (Field { Alias = oalias; Name = name; Arguments = someOrEmpty oargs;
+                  Directives = someOrEmpty directives; SelectionSet = someOrEmpty oselection }))
     <?> "Field"
 
-// 2.2.8 Variables
-let private pDefaultValue = wsstr "=" >>. pValue
+  
+  // 2.8 Fragments
+  //  FragmentSpread|FragmentDefinition|FragmentName
+  let selectionFragment =
+    let inlineFragment =
+      pipe3 (opt(stoken_ws "on" >>. token_ws name)) (opt(token_ws directives)) selectionSet
+        (fun typeCondition directives selectionSet -> 
+          { Name = None; Directives = someOrEmpty directives; SelectionSet = selectionSet 
+            TypeCondition = typeCondition })
+      |>> InlineFragment <?> "InlineFragment"
 
-let private pVariableDefinition: Parser<VariableDefinition, _> = 
-    let func varName varType oDefVal =
-        {
-            VariableName = varName
-            Type = varType
-            DefaultValue = oDefVal
-        }
-    pipe3 (pVariable .>> wsstr ":") pType (opt pDefaultValue) func
-    <?> "Variable Definition"
+    let fragmentSpread = 
+      token_ws name .>>. opt directives
+      |>> fun (name, directives) -> { FragmentSpread.Name = name; Directives = someOrEmpty directives }
+      |>> FragmentSpread <?> "FragmentSpread"
+
+    pstring "..." .>> whitespaces >>. (inlineFragment <|> fragmentSpread)  <?> "Fragment"
+
+  selectionRef :=
+    field <|> selectionFragment  <?> "Selection"
+
+  selectionSetRef := 
+    betweenCharsMany1 '{' '}' selection <?> "SelectionSet"
+
+
+  // 2.3 Operations
+  //    OperationDefinition List
+  let definitions =
+    let operationType = 
+      // leaving out subscriptions for now.
+      // (stoken_ws "subscription" >>% Subscription) 
+      (stoken_ws "query" >>% Query) <|> (stoken_ws "mutation" >>% Mutation) 
+      
+    let namedOperationDefinition = 
+      let variableDefinition =
+        pipe2 (pairBetween ':' variable inputType) (whitespaces >>. opt((ctoken_ws '=') >>. inputValue))
+          (fun (variableName, variableType) defaultVal ->
+              { VariableName = variableName; Type = variableType
+                DefaultValue = defaultVal })
+      let variableDefinitions =
+        betweenCharsMany '(' ')' variableDefinition
+      
+      pipe5 operationType (token_ws name) (opt(token_ws variableDefinitions)) (opt(token_ws directives)) (token_ws selectionSet)
+        (fun  otype name ovars directives selection ->
+          { OperationType = otype; Name = Some name; SelectionSet = selection
+            VariableDefinitions = someOrEmpty ovars; Directives = someOrEmpty directives })
     
-
-let private pVariableDefinitions = between (wsstr "(") (wsstr ")") (sepByIgnored pVariableDefinition)
-
-
-// 2.2.1 Operations
-let private pOperationType =
-    (wsstr "query" >>% Query)
-    <|> (wsstr "mutation" >>% Mutation)
-
-let private pOperationDefinition1 : Parser<OperationDefinition, _> =
-    pipe5 pOperationType (ws pName) (opt pVariableDefinitions) pDirectives pSelectionSet
-    <| fun otype name ovars directives selection ->
-        {
-            OperationType = otype
-            Name = Some name
-            VariableDefinitions = someOrEmpty ovars 
-            Directives = directives
-            SelectionSet = selection
-        }
-
-let private pOperationDefinition2 : Parser<OperationDefinition, _> =
-    pSelectionSet
-    |>> fun x ->
-        {
-            OperationType = OperationType.Query
-            Name = None
-            VariableDefinitions = []
-            Directives = []
-            SelectionSet = x
-        }    
-
-let private pOperationDefinition = 
-    pOperationDefinition1
-    <|>
-    pOperationDefinition2
-    <?> "OperationDefinition"
-    <!> "OperationDefinition"
-        
-
-// 2.2.6 Fragments
-let private pFragmentDefinition: Parser<FragmentDefinition, _> = 
-    pipe4 (wsstr "fragment" >>. ws pFragmentName .>> wsstr "on") (ws pTypeCondition) pDirectives pSelectionSet
-    <| fun name typeCond directives selSet ->
-            {
-                Name = Some name
-                TypeCondition = if String.IsNullOrEmpty typeCond then None else Some typeCond
-                Directives = directives
-                SelectionSet = selSet
-            }
-    <?> "FragmentDefinition"
-    <!> "FragmentDefinition"
+    // Short hand format where operation defaults to a Query
+    let anonymousOperationDefinition =
+      selectionSet |>> (fun selectionSet -> 
+                         { OperationType = Query; SelectionSet = selectionSet; 
+                           VariableDefinitions = []; Directives = []; Name = None })
     
+    // SelectionSet |
+    //(OperationType (Name opt) (VariableDefinitions opt) (Directives opt) SelectionSet) 
+    let operationDefinition =
+      anonymousOperationDefinition <|> namedOperationDefinition |>> OperationDefinition  
+    
+    let fragmentDefinition =
+      pipe4 ((stoken_ws "fragment") >>. token_ws name .>> (stoken_ws "on")) (token_ws name) directives selectionSet
+        (fun name typeCond directives selSet ->
+          FragmentDefinition 
+            { Name = Some name;  Directives = directives; SelectionSet = selSet
+              TypeCondition = if String.IsNullOrEmpty typeCond then None else Some typeCond })
+      
+    // GraphQL documents can contain zero definitions
+    sepEndBy (operationDefinition <|> fragmentDefinition) whitespaces
 
-// 2.2 Query Document
-let private pDefinition =
-    (pOperationDefinition |>> OperationDefinition)
-    <|> (pFragmentDefinition |>> FragmentDefinition)
 
-let private pDocument = many pDefinition |>> fun x -> { Document.Definitions = x }    
-let private entry = ws pDocument .>> eof
+  // 2.2 Document
+  //   Definitionlist    
+  let documents = 
+    whitespaces >>. definitions .>> (skipMany ignored <|> eof)
+    |>> (fun definitions -> { Document.Definitions = definitions })
 
-let parse query = 
-  match run entry query with
+
+/// Parses a GraphQL Document. Throws exception on invalid formats.
+let parse query =
+  match run documents query with
   | Success(result, _, _) -> result
   | Failure(errorMsg, _, _) -> raise (System.FormatException(errorMsg))
-  
