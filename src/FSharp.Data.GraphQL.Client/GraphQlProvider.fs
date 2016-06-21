@@ -16,7 +16,7 @@ type internal ProviderSchemaConfig =
     { Namespace: string 
       DefinedTypes: Map<string, ProvidedTypeDefinition option> }
 
-//[<TypeProvider>]
+[<TypeProvider>]
 type GraphQlProvider (config : TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces ()
     
@@ -24,7 +24,7 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
 
     let requestSchema (url: string) =
         async {
-            let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery), false)
+            let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
             let req = WebRequest.CreateHttp(requestUrl)
             req.Method <- "GET"
             use! resp = req.GetResponseAsync() |> Async.AwaitTask
@@ -46,21 +46,19 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
             Namespace = ns
             KnownTypes = ProviderSessionContext.CoreTypes }
         let typeDefinitions =
-            schema.Types
-            |> Array.fold (fun acc t -> Map.add t.Name (ProvidedType (initType ctx t, t)) acc) ctx.KnownTypes
+            (ctx.KnownTypes, schema.Types)
+            ||> Array.fold (fun acc t ->
+                if acc.ContainsKey t.Name
+                then acc
+                else Map.add t.Name (ProvidedType (initType ctx t, t)) acc) 
         let defctx = { ctx with KnownTypes = typeDefinitions }
         typeDefinitions
-        |> Map.iter (fun k t -> 
-            match t with
-            | NativeType _ -> ()
-            | ProvidedType (t, itype) -> genType defctx itype t)
-        typeDefinitions
-        |> Map.toSeq 
-        |> Seq.map snd
-        |> Seq.choose (
-            function
+        |> Seq.choose (fun kv -> 
+            match kv.Value with
             | NativeType _ -> None
-            | ProvidedType (t, _) -> Some t)
+            | ProvidedType (t, itype) ->
+                genType defctx itype t
+                Some t)
         |> Seq.toList
 
     do

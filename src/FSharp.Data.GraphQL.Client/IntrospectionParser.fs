@@ -48,22 +48,28 @@ module TypeCompiler =
                 "ID", NativeType typeof<string>
                 "__Schema", NativeType typeof<IntrospectionSchema>
                 "__Type", NativeType typeof<IntrospectionTypeRef> ]
-        member x.GetKnownType (t: IntrospectionTypeRef) =
-            let rec receiveType nullable t (types) : Type =
-                match t.Kind with
-                | TypeKind.NON_NULL ->
-                    receiveType false t.OfType.Value types
-                | TypeKind.LIST -> 
-                    let ofType = receiveType true t.OfType.Value types
-                    ofType.MakeArrayType()
-                | other when nullable -> 
-                    optionType.MakeGenericType [| receiveType false t.OfType.Value types |]
-                | other -> receiveType false t.OfType.Value types
-            receiveType true t x.KnownTypes
+        member x.GetKnownType (t: IntrospectionTypeRef): Type =
+            match t.Name with
+            | Some name when x.KnownTypes.ContainsKey name && x.KnownTypes.[name].UnderlyingType <> null ->
+                x.KnownTypes.[name].UnderlyingType
+            | _ -> typeof<obj>
+            // TODO
+//            let rec receiveType nullable t (types) : Type =
+//                match t.Kind with
+//                | TypeKind.NON_NULL ->
+//                    receiveType false t.OfType.Value types
+//                | TypeKind.LIST -> 
+//                    let ofType = receiveType true t.OfType.Value types
+//                    ofType.MakeArrayType()
+//                | other when nullable -> 
+//                    optionType.MakeGenericType [| receiveType false t.OfType.Value types |]
+//                | other -> receiveType false t.OfType.Value types
+//            receiveType true t x.KnownTypes
 
     let genProperty (ctx: ProviderSessionContext) (t: IntrospectionType) ifield =
-        let p = ProvidedProperty(ifield.Name, ctx.GetKnownType ifield.Type, IsStatic = true)
+        let p = ProvidedProperty(ifield.Name, ctx.GetKnownType ifield.Type, IsStatic = false) // TODO: IsStatic = true?
         if t.Description.IsSome then p.AddXmlDoc(t.Description.Value)
+        p.GetterCode <- fun args -> <@@ "Placeholder" :> obj @@>
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
@@ -92,11 +98,12 @@ module TypeCompiler =
     let genObject (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
         if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
         itype.Fields.Value
-        |> Array.map (fun field ->
+        |> Seq.choose (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx itype field) :> MemberInfo
-            else upcast genMethod ctx itype field)
-        |> Array.toList
+            then (genProperty ctx itype field) :> MemberInfo |> Some
+            else None //TODO: upcast genMethod ctx itype field
+        )
+        |> Seq.toList
         |> t.AddMembers
 
     let genInterface (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
@@ -131,12 +138,13 @@ module TypeCompiler =
     let genType (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
         match itype.Kind with
         | TypeKind.OBJECT -> genObject ctx itype t
-        | TypeKind.INPUT_OBJECT -> genInputObject ctx itype t
-        | TypeKind.SCALAR -> genScalar ctx itype t
-        | TypeKind.UNION -> genUnion ctx itype t
-        | TypeKind.ENUM -> genEnum ctx itype t
-        | TypeKind.INTERFACE -> genInterface ctx itype t
-        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
+        | _ -> () // TODO: Complete other type kinds
+//        | TypeKind.INPUT_OBJECT -> genInputObject ctx itype t
+//        | TypeKind.SCALAR -> genScalar ctx itype t
+//        | TypeKind.UNION -> genUnion ctx itype t
+//        | TypeKind.ENUM -> genEnum ctx itype t
+//        | TypeKind.INTERFACE -> genInterface ctx itype t
+//        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
         
     let initType (ctx: ProviderSessionContext) (itype: IntrospectionType) = 
         match itype.Kind with
