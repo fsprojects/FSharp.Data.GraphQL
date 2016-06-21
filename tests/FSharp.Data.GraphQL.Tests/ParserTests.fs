@@ -418,7 +418,7 @@ let ``parser should parse query with nested fragments ``() =
     let friends name = spread "friendFields" |> fieldWithNameArgsAndSelection name [ argInt "first" 10 ]
 
     let withFragments =
-        [friends "friends"; friends "mutualFriends" ]
+        [ friends "friends"; friends "mutualFriends" ]
         |> fieldWithNameAndArgsAndSelections "user" [ argInt "id" 4 ]
         |> namedQuerWithSelection "withNestedFragments"
 

@@ -3,6 +3,9 @@
 namespace FSharp.Data.GraphQL.Types
 
 open System
+open System.Collections.Concurrent
+open Hopac
+open Hopac.Extensions
 open FSharp.Data.GraphQL.Ast
 
 [<Flags; Serializable>]
@@ -150,9 +153,9 @@ type ISchema =
         abstract TypeMap : Map<string, NamedDef>
         abstract Query : ObjectDef
         abstract Mutation : ObjectDef option
-        abstract Directives : DirectiveDef list
+        abstract Directives : DirectiveDef []
         abstract TryFindType : string -> NamedDef option
-        abstract GetPossibleTypes : AbstractDef -> ObjectDef list
+        abstract GetPossibleTypes : AbstractDef -> ObjectDef []
         abstract IsPossibleType : AbstractDef -> ObjectDef -> bool
         abstract Introspected : Introspection.IntrospectionSchema
     end
@@ -210,26 +213,39 @@ and NamedDef =
         abstract Name : string
     end
 
+and ExecuteField = ResolveFieldContext -> obj -> Job<obj>
 and FieldDef = 
     interface
         abstract Name : string
         abstract Description : string option
         abstract DeprecationReason : string option
         abstract Type : OutputDef
-        abstract Args : InputFieldDef list
-        abstract Resolve : ResolveFieldContext -> obj -> Async<obj>
+        abstract Args : InputFieldDef []
+        abstract Resolve : ResolveFieldContext -> obj -> Job<obj>
+        abstract Execute : ExecuteField with get,set
         inherit IEquatable<FieldDef>
     end
 
 and FieldDef<'Val> = 
     interface
-        abstract Resolve : ResolveFieldContext -> 'Val -> Async<obj>
+        abstract Resolve : ResolveFieldContext -> 'Val -> Job<obj>
         inherit FieldDef
     end
+    
+and ExecutionContext = 
+    {
+        Schema: ISchema
+        RootValue: obj
+        Document: Document
+        Operation: OperationDefinition
+        Fragments: FragmentDefinition list
+        Variables: Map<string, obj>
+        Errors: ConcurrentBag<exn>
+    }
 
 and ResolveFieldContext = 
     { FieldName : string
-      Fields : Field list
+      Fields : Field []
       FieldType : FieldDef
       ReturnType : TypeDef
       ParentType : ObjectDef
@@ -237,7 +253,9 @@ and ResolveFieldContext =
       Args : Map<string, obj>
       Operation : OperationDefinition
       Fragments : FragmentDefinition list
-      Variables : Map<string, obj> }
+      Variables : Map<string, obj>
+      ExecutionContext: ExecutionContext
+      AddError: exn -> unit }
     member x.Arg(name : string) : 't option = 
         match Map.tryFind name x.Args with
         | Some o -> Some(o :?> 't)
@@ -317,7 +335,7 @@ and EnumDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Options : EnumVal list
+        abstract Options : EnumVal []
         inherit TypeDef
         inherit InputDef
         inherit OutputDef
@@ -327,7 +345,7 @@ and EnumDef =
 
 and EnumDef<'Val> = 
     interface
-        abstract Options : EnumValue<'Val> list
+        abstract Options : EnumValue<'Val> []
         inherit EnumDef
         inherit TypeDef<'Val>
         inherit InputDef<'Val>
@@ -337,7 +355,7 @@ and EnumDef<'Val> =
 and EnumDefinition<'Val> = 
     { Name : string
       Description : string option
-      Options : EnumValue<'Val> list }
+      Options : EnumValue<'Val> [] }
     
     interface EnumDef<'Val> with
         member x.Options = x.Options
@@ -346,10 +364,10 @@ and EnumDefinition<'Val> =
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Options = 
-            x.Options
-            |> Seq.ofList
+            x.Options 
+            |> Seq.ofArray
             |> Seq.cast<EnumVal>
-            |> Seq.toList
+            |> Seq.toArray
     
     interface NamedDef with
         member x.Name = x.Name
@@ -361,8 +379,8 @@ and ObjectDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Fields : FieldDef list
-        abstract Implements : InterfaceDef list
+        abstract Fields : FieldDef []
+        abstract Implements : InterfaceDef []
         abstract IsTypeOf : (obj -> bool) option
         inherit TypeDef
         inherit NamedDef
@@ -373,7 +391,7 @@ and ObjectDef =
 
 and ObjectDef<'Val> = 
     interface
-        abstract Fields : FieldDef<'Val> list
+        abstract Fields : FieldDef<'Val> []
         inherit ObjectDef
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
@@ -382,8 +400,8 @@ and ObjectDef<'Val> =
 and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> = 
     { Name : string
       Description : string option
-      FieldsFn : unit -> FieldDef<'Val> list
-      Implements : InterfaceDef list
+      FieldsFn : Lazy<FieldDef<'Val> []>
+      Implements : InterfaceDef []
       IsTypeOf : (obj -> bool) option }
     
     interface ObjectDef with
@@ -391,16 +409,16 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
         member x.Description = x.Description
         
         member x.Fields = 
-            x.FieldsFn()
-            |> Seq.ofList
+            x.FieldsFn.Force()
+            |> Seq.ofArray
             |> Seq.cast<FieldDef>
-            |> List.ofSeq
+            |> Seq.toArray
         
         member x.Implements = x.Implements
         member x.IsTypeOf = x.IsTypeOf
     
     interface ObjectDef<'Val> with
-        member x.Fields = x.FieldsFn()
+        member x.Fields = x.FieldsFn.Force()
     
     interface NamedDef with
         member x.Name = x.Name
@@ -420,8 +438,8 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
     override x.ToString() = 
         let sb = System.Text.StringBuilder("type ")
         sb.Append(x.Name) |> ignore
-        if not (List.isEmpty x.Implements) then 
-            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> List.map (fun i -> i.Name))) |> ignore
+        if not (Array.isEmpty x.Implements) then 
+            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> Array.map (fun i -> i.Name))) |> ignore
         sb.Append("{") |> ignore
         //x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
         sb.Append("\n}").ToString()
@@ -430,9 +448,10 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
     { Name : string
       Description : string option
       Type : OutputDef<'Res>
-      Resolve : ResolveFieldContext -> 'Val -> Async<'Res>
-      Args : InputFieldDef list
-      DeprecationReason : string option }
+      Resolve : ResolveFieldContext -> 'Val -> Job<'Res>
+      Args : InputFieldDef []
+      DeprecationReason : string option
+      mutable Execute : ExecuteField }
     
     interface FieldDef with
         member x.Name = x.Name
@@ -440,14 +459,15 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
         member x.DeprecationReason = x.DeprecationReason
         member x.Type = x.Type :> OutputDef
         member x.Args = x.Args
-        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Async<obj> = async { let! result = x.Resolve ctx 
-                                                                                                            (value :?> 'Val)
-                                                                                          return upcast result }
+        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Job<obj> = 
+            x.Resolve ctx (value :?> 'Val)
+            |> Job.map (fun x -> upcast x)
+        member x.Execute with get() = x.Execute and set v = x.Execute <- v
     
     interface FieldDef<'Val> with
-        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Async<obj> = async { let! result = x.Resolve ctx 
-                                                                                                             value
-                                                                                           return upcast result }
+        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Job<obj> = 
+            x.Resolve ctx value
+            |> Job.map (fun x -> upcast x)
     
     interface IEquatable<FieldDef> with
         member x.Equals f = x.Name = f.Name && x.Type :> OutputDef = f.Type && x.Args = f.Args
@@ -465,7 +485,7 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
     
     override x.ToString() = 
         let mutable s = x.Name + ": " + x.Type.ToString()
-        if not (List.isEmpty x.Args) then s <- "(" + String.Join(", ", x.Args) + ")"
+        if not (Array.isEmpty x.Args) then s <- "(" + String.Join(", ", x.Args) + ")"
         s
 
 /// 3.1.3 Interfaces
@@ -473,7 +493,7 @@ and InterfaceDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Fields : FieldDef list
+        abstract Fields : FieldDef []
         abstract ResolveType : (obj -> ObjectDef) option
         inherit TypeDef
         inherit OutputDef
@@ -485,7 +505,7 @@ and InterfaceDef =
 
 and InterfaceDef<'Val> = 
     interface
-        abstract Fields : FieldDef<'Val> list
+        abstract Fields : FieldDef<'Val> []
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
         inherit InterfaceDef
@@ -494,13 +514,13 @@ and InterfaceDef<'Val> =
 and [<CustomEquality; NoComparison>] InterfaceDefinition<'Val> = 
     { Name : string
       Description : string option
-      FieldsFn : unit -> FieldDef<'Val> list
+      FieldsFn : unit -> FieldDef<'Val> []
       ResolveType : (obj -> ObjectDef) option }
     
     interface InterfaceDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.Fields = x.FieldsFn() |> List.map (fun fdef -> upcast fdef)
+        member x.Fields = x.FieldsFn() |> Array.map (fun fdef -> upcast fdef)
         member x.ResolveType = x.ResolveType
     
     interface InterfaceDef<'Val> with
@@ -530,7 +550,7 @@ and UnionDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Options : ObjectDef list
+        abstract Options : ObjectDef []
         abstract ResolveType : (obj -> ObjectDef) option
         abstract ResolveValue : obj -> obj
         inherit TypeDef
@@ -554,7 +574,7 @@ and UnionDef<'In> =
 and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> = 
     { Name : string
       Description : string option
-      Options : ObjectDef list
+      Options : ObjectDef []
       ResolveType : ('In -> ObjectDef) option
       ResolveValue : 'In -> 'Out }
     
@@ -585,7 +605,7 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
         hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
         hash
     
-    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> List.map (fun o -> o.Name))
+    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> Array.map (fun o -> o.Name))
 
 and ListOfDef = 
     interface
@@ -648,7 +668,7 @@ and InputObjectDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Fields : InputFieldDef list
+        abstract Fields : InputFieldDef []
         inherit NamedDef
         inherit InputDef
     end
@@ -657,7 +677,7 @@ and InputObjectDef =
 and InputObjectDefinition<'Val> = 
     { Name : string
       Description : string option
-      FieldsFn : unit -> InputFieldDef list }
+      FieldsFn : unit -> InputFieldDef [] }
     
     interface InputObjectDef with
         member x.Name = x.Name
@@ -723,7 +743,7 @@ and DirectiveDef =
     { Name : string
       Description : string option
       Locations : DirectiveLocation
-      Args : InputFieldDef list }
+      Args : InputFieldDef [] }
 
 [<AutoOpen>]
 module SchemaDefinitions = 
@@ -781,6 +801,26 @@ module SchemaDefinitions =
             try 
                 Some(System.Convert.ToBoolean other)
             with _ -> None
+
+    let internal coerceUriValue (x : obj) : Uri option = 
+        match x with
+        | null -> None
+        | :? Uri as u -> Some u
+        | :? string as s -> 
+            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
+            | true, uri -> Some uri
+            | false, _ -> None
+        | other -> None
+        
+    let internal coerceDateValue (x : obj) : DateTime option = 
+        match x with
+        | null -> None
+        | :? DateTime as d -> Some d
+        | :? string as s -> 
+            match DateTime.TryParse(s) with
+            | true, date -> Some date
+            | false, _ -> None
+        | other -> None
     
     let private coerceIntOuput (x : obj) = 
         match x with
@@ -800,6 +840,16 @@ module SchemaDefinitions =
     let private coerceStringOuput (x : obj) = 
         match x with
         | :? string as y -> Some(StringValue y)
+        | _ -> None
+        
+    let private coerceUriOutput (x : obj) = 
+        match x with
+        | :? Uri as uri -> Some(StringValue (uri.ToString()))
+        | _ -> None
+        
+    let private coerceDateOutput (x : obj) = 
+        match x with
+        | :? DateTime as date -> Some(StringValue (date.ToString("O")))
         | _ -> None
     
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
@@ -878,6 +928,22 @@ module SchemaDefinitions =
         | IntValue i -> Some(i.ToString())
         | StringValue s -> Some s
         | _ -> None
+
+    let private coerceUriInput =
+        function
+        | StringValue s -> 
+            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
+            | true, uri -> Some uri
+            | false, _ -> None
+        | _ -> None
+        
+    let private coerceDateInput =
+        function
+        | StringValue s -> 
+            match DateTime.TryParse(s) with
+            | true, date -> Some date
+            | false, _ -> None
+        | _ -> None
     
     let Nullable(innerDef : #TypeDef<'Val>) : NullableDefinition<'Val> = { OfType = innerDef }
     let ListOf(innerDef : #TypeDef<'Val>) : ListOfDefinition<'Val> = { OfType = innerDef }
@@ -934,7 +1000,7 @@ module SchemaDefinitions =
     
     let (|Output|_|) (tdef : TypeDef) = 
         match tdef with
-        | :? ScalarDef | :? EnumDef | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
+        | :? OutputDef as o -> Some o
         | _ -> None
     
     let (|Leaf|_|) (tdef : TypeDef) = 
@@ -1010,7 +1076,27 @@ module SchemaDefinitions =
           CoerceInput = coerceIdInput
           CoerceValue = coerceStringValue
           CoerceOutput = coerceStringOuput }
-    
+
+    /// GraphQL type for System.Uri
+    let Uri : ScalarDefinition<Uri> =
+        { Name = "URI"
+          Description = 
+              Some 
+                  "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String."
+          CoerceInput = coerceUriInput
+          CoerceValue = coerceUriValue
+          CoerceOutput = coerceUriOutput }
+
+    /// GraphQL type for System.DateTime
+    let Date : ScalarDefinition<DateTime> =
+        { Name = "Date"
+          Description = 
+              Some 
+                  "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
+          CoerceInput = coerceDateInput
+          CoerceValue = coerceDateValue
+          CoerceOutput = coerceDateOutput }
+              
     let IncludeDirective : DirectiveDef = 
         { Name = "include"
           Description = 
@@ -1018,10 +1104,10 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [ { Name = "if"
-                  Description = Some "Included when true."
-                  Type = Boolean
-                  DefaultValue = None } ] }
+              [| { Name = "if"
+                   Description = Some "Included when true."
+                   Type = Boolean
+                   DefaultValue = None } |] }
     
     let SkipDirective : DirectiveDef = 
         { Name = "skip"
@@ -1029,10 +1115,10 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [ { Name = "if"
-                  Description = Some "Skipped when true."
-                  Type = Boolean
-                  DefaultValue = None } ] }
+              [| { Name = "if"
+                   Description = Some "Skipped when true."
+                   Type = Boolean
+                   DefaultValue = None } |] }
     
     let rec internal coerceAstValue (variables : Map<string, obj>) (value : Value) : obj = 
         match value with
@@ -1053,21 +1139,14 @@ module SchemaDefinitions =
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name).Value)
     let inline strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
-    let internal defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Async<'Res> = 
+    let internal defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Job<'Res> = 
         (fun ctx value -> 
-        async { 
-            if Object.Equals(value, null) then return Unchecked.defaultof<'Res>
+            if Object.Equals(value, null) then Job.result Unchecked.defaultof<'Res>
             else 
                 let t = value.GetType()
-                let memberInfo = 
-                    t.GetMember(fieldName, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
+                let memberInfo = t.GetMember(fieldName, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
                 match memberInfo with
-                | [||] -> 
-                    return raise 
-                               (GraphQLException
-                                    (sprintf 
-                                         "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." 
-                                         fieldName t.FullName))
+                | [||] -> Job.raises (GraphQLException (sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName))
                 | found -> 
                     let result = 
                         match found.[0] with
@@ -1076,8 +1155,8 @@ module SchemaDefinitions =
                             let parameters = matchParameters methodInfo ctx
                             methodInfo.Invoke(value, parameters)
                         | :? FieldInfo as field -> field.GetValue(value)
-                    return result :?> 'Res
-        })
+                    Job.result (result :?> 'Res)
+        )
     
     type Define private () = 
         
@@ -1090,7 +1169,7 @@ module SchemaDefinitions =
               CoerceValue = coerceValue }
         
         /// GraphQL type for user defined enums
-        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDefinition<'Val> = 
+        static member Enum(name : string, options : EnumValue<'Val> [], ?description : string) : EnumDefinition<'Val> = 
             { Name = name
               Description = description
               Options = options }
@@ -1103,37 +1182,31 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
         
         /// GraphQL custom object type
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
+        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> [], ?description : string, 
+                             ?interfaces : InterfaceDef [], ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = fieldsFn
-                     Implements = 
-                         match interfaces with
-                         | None -> []
-                         | Some i -> i
+                     FieldsFn = lazy (fieldsFn())
+                     Implements = defaultArg interfaces [||]
                      IsTypeOf = isTypeOf }
         
         /// GraphQL custom object type
-        static member Object(name : string, fields : FieldDef<'Val> list, ?description : string, 
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
+        static member Object(name : string, fields : FieldDef<'Val> [], ?description : string, 
+                             ?interfaces : InterfaceDef [], ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = fun () -> fields
-                     Implements = 
-                         match interfaces with
-                         | None -> []
-                         | Some i -> i
+                     FieldsFn = lazy (fields)
+                     Implements = defaultArg interfaces [||]
                      IsTypeOf = isTypeOf }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef [], ?description : string) : InputObjectDefinition<'Out> = 
             { Name = name
               FieldsFn = fieldsFn
               Description = description }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
+        static member InputObject(name : string, fields : InputFieldDef [], ?description : string) : InputObjectDefinition<'Out> = 
             { Name = name
               Description = description
               FieldsFn = fun () -> fields }
@@ -1144,17 +1217,19 @@ module SchemaDefinitions =
                      Description = None
                      Type = typedef
                      Resolve = defaultResolve<'Val, 'Res> name
-                     Args = []
-                     DeprecationReason = None }
+                     Args = [||]
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = None
                      Type = typedef
-                     Resolve = fun ctx value -> async { return resolve ctx value }
-                     Args = []
-                     DeprecationReason = None }
+                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Args = [||]
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
@@ -1162,29 +1237,32 @@ module SchemaDefinitions =
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> async { return resolve ctx value }
-                     Args = []
-                     DeprecationReason = None }
+                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Args = [||]
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
+        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef [], 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> async { return resolve ctx value }
+                     Resolve = fun ctx value -> Job.result (resolve ctx value)
                      Args = args
-                     DeprecationReason = None }
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
+        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef [], 
                             resolve : ResolveFieldContext -> 'Val -> 'Res, deprecationReason : string) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> async { return resolve ctx value }
+                     Resolve = fun ctx value -> Job.result (resolve ctx value)
                      Args = args
-                     DeprecationReason = Some deprecationReason }
+                     DeprecationReason = Some deprecationReason
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
@@ -1192,9 +1270,10 @@ module SchemaDefinitions =
             upcast { Name = name
                      Description = None
                      Type = typedef
-                     Resolve = resolve
-                     Args = []
-                     DeprecationReason = None }
+                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Args = [||]
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
@@ -1202,30 +1281,33 @@ module SchemaDefinitions =
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = resolve
-                     Args = []
-                     DeprecationReason = None }
+                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Args = [||]
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
+                                 args : InputFieldDef [], resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = resolve
+                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
                      Args = args
-                     DeprecationReason = None }
+                     DeprecationReason = None
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
+                                 args : InputFieldDef [], resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = resolve
+                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
                      Args = args
-                     DeprecationReason = Some deprecationReason }
+                     DeprecationReason = Some deprecationReason
+                     Execute = Unchecked.defaultof<ExecuteField> }
         
         static member Input(name : string, schema : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef = 
             upcast { Name = name
@@ -1234,7 +1316,7 @@ module SchemaDefinitions =
                      DefaultValue = defaultValue }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
+        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> [], ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
             upcast { Name = name
                      Description = description
@@ -1242,7 +1324,7 @@ module SchemaDefinitions =
                      ResolveType = resolveType }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string, 
+        static member Interface(name : string, fields : FieldDef<'Val> [], ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
             upcast { Name = name
                      Description = description
@@ -1250,7 +1332,7 @@ module SchemaDefinitions =
                      ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out, 
+        static member Union(name : string, options : ObjectDef [], resolveValue : 'In -> 'Out, 
                             ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> = 
             upcast { Name = name
                      Description = description

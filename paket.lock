@@ -1,12 +1,14 @@
 NUGET
   remote: https://www.nuget.org/api/v2
   specs:
-    BenchmarkDotNet (0.9.6)
-    BenchmarkDotNet.Diagnostics.Windows (0.9.6)
-      BenchmarkDotNet (>= 0.9.6) - framework: >= net40, dnx451
+    BenchmarkDotNet (0.9.7)
+    BenchmarkDotNet.Diagnostics.Windows (0.9.7)
+      BenchmarkDotNet (>= 0.9.7) - framework: >= net40, dnx451
       Microsoft.Diagnostics.Tracing.TraceEvent (>= 1.0.41) - framework: >= net40, dnx451
     FParsec (1.0.2)
     FSharp.Core (4.0.0.1)
+    Hopac (0.2.1)
+      FSharp.Core (>= 3.1.2.5)
     Microsoft.Diagnostics.Tracing.TraceEvent (1.0.41) - framework: >= net40, dnx451
     Newtonsoft.Json (8.0.3)
     Suave (1.1.2)
@@ -16,13 +18,13 @@ GROUP Build
 NUGET
   remote: https://www.nuget.org/api/v2
   specs:
-    FAKE (4.26.0)
+    FAKE (4.26)
     FParsec (1.0.2)
     FSharp.Compiler.Service (2.0.0.6)
     FSharp.Formatting (2.14.2)
       FSharp.Compiler.Service (2.0.0.6)
-      FSharpVSPowerTools.Core (>= 2.3.0 < 2.4.0)
-    FSharpVSPowerTools.Core (2.3.0)
+      FSharpVSPowerTools.Core (>= 2.3 < 2.4)
+    FSharpVSPowerTools.Core (2.3)
       FSharp.Compiler.Service (>= 2.0.0.3)
     Microsoft.Bcl (1.1.10) - framework: net10, net11, net20, net35, net40, net40
       Microsoft.Bcl.Build (>= 1.0.14)
@@ -30,9 +32,9 @@ NUGET
     Microsoft.Net.Http (2.2.29) - framework: net10, net11, net20, net35, net40, net40
       Microsoft.Bcl (>= 1.1.10)
       Microsoft.Bcl.Build (>= 1.0.14)
-    Octokit (0.19.0)
+    Octokit (0.19)
       Microsoft.Net.Http
-    SourceLink.Fake (1.1.0)
+    SourceLink.Fake (1.1)
 GITHUB
   remote: fsharp/FAKE
   specs:
@@ -42,7 +44,7 @@ GROUP Test
 NUGET
   remote: https://www.nuget.org/api/v2
   specs:
-    FsCheck (2.4.0)
+    FsCheck (2.4)
       FSharp.Core (>= 3.1.2.5)
     FSharp.Core (4.0.0.1)
     xunit (1.9.2)

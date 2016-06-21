@@ -1,4 +1,5 @@
 Newtonsoft.Json
+Hopac
 group Test
 xunit
 FSCheck

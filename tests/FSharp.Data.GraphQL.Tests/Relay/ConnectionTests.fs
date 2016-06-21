@@ -68,25 +68,25 @@ let petName = function
     | Cat (name, _) -> name
     | Dog (name, _) -> name
 
-let Cat = Define.Object("Cat", [
+let Cat = Define.Object("Cat", [|
     Define.Field("name", String, fun _ (Cat(name, _)) -> name)
-    Define.Field("meows", Boolean, fun _ (Cat(_, meows)) -> meows)])
+    Define.Field("meows", Boolean, fun _ (Cat(_, meows)) -> meows) |])
 
-let Dog = Define.Object("Dog", [
+let Dog = Define.Object("Dog", [|
     Define.Field("name", String, fun _ (Dog(name, _)) -> name)
-    Define.Field("barks", Boolean, fun _ (Dog(_, barks)) -> barks)])
+    Define.Field("barks", Boolean, fun _ (Dog(_, barks)) -> barks) |])
 
-let Pet = Define.Union("Pet", [ Dog; Cat ], id<Pet>, fun pet ->
+let Pet = Define.Union("Pet", [| Dog; Cat |], id<Pet>, fun pet ->
     match pet with
     | Cat _ -> upcast Cat
     | Dog _ -> upcast Dog)
 
-let Human = Define.Object("Human", [
+let Human = Define.Object("Human", [|
     Define.Field("name", String, fun _ human -> human.Name)
-    Define.Field("pets",  ConnectionOf Pet, "", Connection.forwardArgs, fun ctx human -> resolveSlice petName (human.Pets) ctx ())])
+    Define.Field("pets",  ConnectionOf Pet, "", Connection.forwardArgs, fun ctx human -> resolveSlice petName (human.Pets) ctx ()) |])
     
 let strings = ["one"; "two"; "three"; "four"; "five"]
-let Query = Define.Object("Query", [
+let Query = Define.Object("Query", [|
     Define.Field(
         name = "strings", 
         description = "",
@@ -98,7 +98,7 @@ let Query = Define.Object("Query", [
         description = "",
         typedef = ConnectionOf Human, 
         args = Connection.forwardArgs, 
-        resolve = resolveSlice humanName people)])
+        resolve = resolveSlice humanName people) |])
 
 let schema = Schema(Query, config = { SchemaConfig.Default with Types = [ Pet; Human ]})
 

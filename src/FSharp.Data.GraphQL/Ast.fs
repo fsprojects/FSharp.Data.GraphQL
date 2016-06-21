@@ -130,13 +130,13 @@ and SchemaDefintion = {
 
 and ObjectTypeDefinition = {
     Name: string
-    Interfaces: string list
-    Fields: FieldDefinition list
+    Interfaces: string []
+    Fields: FieldDefinition []
 }
 
 and FieldDefinition = {
     Name: string
-    Arguments: InputValueDefinition list
+    Arguments: InputValueDefinition []
     Type: InputType
 }
 
@@ -148,22 +148,22 @@ and InputValueDefinition = {
 
 and InterfaceTypeDefinition = {
     Name: string
-    Fields: FieldDefinition list
+    Fields: FieldDefinition []
 }
 
 and UnionTypeDefinition = {
     Name: string
-    Types: string list
+    Types: string []
 }
 
 and EnumTypeDefinition = {
     Name: string
-    Values: string list
+    Values: string []
 }
 
 and InputObjectTypeDefinition = {
     Name: string
-    Fields: InputValueDefinition list
+    Fields: InputValueDefinition []
 }
 
 and TypeDefinition =
