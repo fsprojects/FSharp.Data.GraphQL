@@ -24,7 +24,7 @@ let hasError errMsg (errors: string seq) =
     let containsMessage = 
         errors
         |> Seq.exists (fun e -> e.Contains(errMsg))
-    Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found" errMsg)
+    Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 
 let (<??) opt other = 
     match opt with

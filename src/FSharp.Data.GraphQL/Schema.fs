@@ -219,7 +219,7 @@ type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as t
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag()
                 let! result = execute this ast operationName variables data errors
-                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast errors ]
+                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
                 return upcast NameValueLookup.ofList output
             with 
             | ex -> 

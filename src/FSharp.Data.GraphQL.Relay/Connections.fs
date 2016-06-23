@@ -43,11 +43,13 @@ module Cursor =
 module Definitions =
 
     let (|SliceInfo|_|) (ctx:ResolveFieldContext) = 
-        match ctx.Arg "first", ctx.Arg "after" with
-        | Some first, after -> Some (Forward(first, after))
+        match ctx.TryArg "first", ctx.TryArg "after" with
+        | Some (Some first), None -> Some (Forward(first, None))
+        | Some (Some first), (Some after) -> Some (Forward(first, after))
         | None, _ ->
-            match ctx.Arg "last", ctx.Arg "before" with
-            | Some last, before -> Some (Backward(last, before))
+            match ctx.Arg "last", ctx.TryArg "before" with
+            | Some last, None -> Some (Backward(last, None))
+            | Some last, Some before -> Some (Backward(last, before))
             | _, _ -> None
     
     /// Object defintion representing information about pagination in context of Relay connection

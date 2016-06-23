@@ -97,17 +97,22 @@ and Value =
     | Variable of string
 
 /// 2.2.8 Variables
-and VariableDefinition = {
-    VariableName: string
-    Type: InputType
-    DefaultValue: Value option
-}
+and VariableDefinition = 
+    { VariableName: string
+      Type: InputType
+      DefaultValue: Value option }
 
 /// 2.2.9 Input Types
 and InputType = 
     | NamedType of string
     | ListType of InputType
     | NonNullType of InputType
+    override x.ToString() =
+        let rec str = function
+            | NamedType name -> name
+            | ListType inner -> "[" + (str inner) + "]"
+            | NonNullType inner -> (str inner) + "!"
+        str x
 
 /// 2.2.10 Directives
 and Directive = 
