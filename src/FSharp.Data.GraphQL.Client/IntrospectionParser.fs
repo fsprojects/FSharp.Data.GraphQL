@@ -24,6 +24,7 @@ type IntrospectionResult = {
 }
 
 module TypeCompiler =
+    open System.Collections.Generic
 
     let private optionType = typedefof<option<obj>>
 
@@ -33,7 +34,7 @@ module TypeCompiler =
         member x.UnderlyingType =
             match x with
             | NativeType t -> t
-            | ProvidedType (t, _) -> t.UnderlyingSystemType
+            | ProvidedType (t, _) -> upcast t
 
     type ProviderSessionContext = 
         { Assembly: Assembly
@@ -48,28 +49,31 @@ module TypeCompiler =
                 "ID", NativeType typeof<string>
                 "__Schema", NativeType typeof<IntrospectionSchema>
                 "__Type", NativeType typeof<IntrospectionTypeRef> ]
-        member x.GetKnownType (t: IntrospectionTypeRef): Type =
-            match t.Name with
-            | Some name when x.KnownTypes.ContainsKey name && x.KnownTypes.[name].UnderlyingType <> null ->
-                x.KnownTypes.[name].UnderlyingType
-            | _ -> typeof<obj>
-            // TODO
-//            let rec receiveType nullable t (types) : Type =
-//                match t.Kind with
-//                | TypeKind.NON_NULL ->
-//                    receiveType false t.OfType.Value types
-//                | TypeKind.LIST -> 
-//                    let ofType = receiveType true t.OfType.Value types
-//                    ofType.MakeArrayType()
-//                | other when nullable -> 
-//                    optionType.MakeGenericType [| receiveType false t.OfType.Value types |]
-//                | other -> receiveType false t.OfType.Value types
-//            receiveType true t x.KnownTypes
+        member x.GetKnownType (t: IntrospectionTypeRef) =
+            let findType (t: IntrospectionTypeRef) =
+                match t.Name with
+                | Some name -> Map.tryFind name x.KnownTypes
+                | _ -> None
+                |> function Some t -> t.UnderlyingType | None -> typeof<obj>
+            let rec receiveType nullable t: Type =
+                match t.Kind, t.OfType with
+                | TypeKind.NON_NULL, Some inner ->
+                    receiveType false inner
+                | TypeKind.LIST, Some inner -> 
+                    let ofType = receiveType true inner
+                    ofType.MakeArrayType()
+                | other when nullable -> 
+                    optionType.MakeGenericType [| findType t |]
+                | other -> findType t
+            receiveType true t
 
-    let genProperty (ctx: ProviderSessionContext) (t: IntrospectionType) ifield =
-        let p = ProvidedProperty(ifield.Name, ctx.GetKnownType ifield.Type, IsStatic = false) // TODO: IsStatic = true?
-        if t.Description.IsSome then p.AddXmlDoc(t.Description.Value)
-        p.GetterCode <- fun args -> <@@ "Placeholder" :> obj @@>
+    let genProperty (ctx: ProviderSessionContext) ifield =
+        let p = ProvidedProperty(ifield.Name, ctx.GetKnownType ifield.Type)
+        if ifield.Description.IsSome then p.AddXmlDoc(ifield.Description.Value)
+        // It's important to get the name of the field outside the quotation
+        // in order to prevent errors at runtime
+        let name = ifield.Name
+        p.GetterCode <- fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) @@>
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
@@ -100,7 +104,7 @@ module TypeCompiler =
         itype.Fields.Value
         |> Seq.choose (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx itype field) :> MemberInfo |> Some
+            then (genProperty ctx field) :> MemberInfo |> Some
             else None //TODO: upcast genMethod ctx itype field
         )
         |> Seq.toList
@@ -111,7 +115,7 @@ module TypeCompiler =
         itype.Fields.Value
         |> Array.map (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx itype field) :> MemberInfo
+            then (genProperty ctx field) :> MemberInfo
             else upcast genMethod ctx itype field)
         |> Array.toList
         |> t.AddMembers
@@ -121,7 +125,7 @@ module TypeCompiler =
         itype.Fields.Value
         |> Array.map (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx itype field) :> MemberInfo
+            then (genProperty ctx field) :> MemberInfo
             else upcast genMethod ctx itype field)
         |> Array.toList
         |> t.AddMembers
