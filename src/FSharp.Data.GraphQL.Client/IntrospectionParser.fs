@@ -74,6 +74,7 @@ module TypeCompiler =
         // in order to prevent errors at runtime
         let name = ifield.Name
         p.GetterCode <- 
+            // TODO Union types. Also, Option must be of the specific property type, not obj 
             match ifield.Type.Kind with
             | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) @@>
             | TypeKind.LIST ->
