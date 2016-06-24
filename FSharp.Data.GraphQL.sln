@@ -73,6 +73,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Client", "src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj", "{7C9CC625-FB4E-4215-9F7C-494AA6043821}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
+	ProjectSection(SolutionItems) = preProject
+		samples\client-provider\query.fsx = samples\client-provider\query.fsx
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -134,5 +139,6 @@ Global
 		{9B25360F-2CE4-43D2-AFF0-5EAA693E98F7} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 		{E7139F5F-22CA-4392-8C1C-481A39EEB554} = {9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}
 		{DFA5AAFF-31B8-4203-822C-8ACC4D7A7D74} = {9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}
+		{3D948D55-3CD2-496D-A04C-3B4E7BB69140} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 	EndGlobalSection
 EndGlobal

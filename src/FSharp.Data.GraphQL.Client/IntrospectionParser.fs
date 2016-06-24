@@ -73,7 +73,14 @@ module TypeCompiler =
         // It's important to get the name of the field outside the quotation
         // in order to prevent errors at runtime
         let name = ifield.Name
-        p.GetterCode <- fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) @@>
+        p.GetterCode <- 
+            match ifield.Type.Kind with
+            | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) @@>
+            | TypeKind.LIST ->
+                match ifield.Type.OfType.Value.Kind with
+                | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> @@>
+                | _ -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> |> Array.map Option.ofObj @@>
+            | _ -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> Option.ofObj @@>
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
