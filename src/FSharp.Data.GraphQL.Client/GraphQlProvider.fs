@@ -12,17 +12,10 @@ open Microsoft.FSharp.Core.CompilerServices
 open FSharp.Data.GraphQL.Types.Introspection
 open TypeCompiler
 open System.Collections.Generic
+open Newtonsoft.Json.Linq
+open Newtonsoft.Json
 
-type internal ProviderSchemaConfig =
-    { Namespace: string 
-      DefinedTypes: Map<string, ProvidedTypeDefinition option> }
-
-[<TypeProvider>]
-type GraphQlProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces ()
-    
-    let asm = System.Reflection.Assembly.GetExecutingAssembly()
-
+module Util =
     let requestSchema (url: string) =
         async {
             let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
@@ -41,7 +34,7 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                 return Choice2Of2 errors
         }
 
-    let compileTypesFromSchema ns (schema: IntrospectionSchema) = 
+    let compileTypesFromSchema asm ns (schema: IntrospectionSchema) = 
         let ctx = {
             Assembly = asm
             Namespace = ns
@@ -62,17 +55,38 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                 Some t)
         |> Seq.toList
 
+    let rec jsonToObject (token: JToken) =
+        match token.Type with
+        | JTokenType.Object ->
+            token.Children<JProperty>()
+            |> Seq.map (fun prop -> prop.Name, jsonToObject prop.Value)
+            |> dict :> obj
+        | JTokenType.Array ->
+            token |> Seq.map jsonToObject |> Seq.toArray :> obj
+        | _ ->
+            (token :?> JValue).Value
 
     let launchQuery (serverUrl: string) (query: string) =
         async {
             use client = new WebClient()
-            let query = Map["query", query] |> Newtonsoft.Json.JsonConvert.SerializeObject
+            let query = Map["query", query] |> JsonConvert.SerializeObject
             let! json = client.UploadStringTaskAsync(Uri(serverUrl), query) |> Async.AwaitTask
-            let result = Newtonsoft.Json.JsonConvert.DeserializeObject<IDictionary<string,obj>>(json)
+            let result = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
             match result.TryGetValue("errors") with
             | false, _ -> return Choice1Of2 result.["data"]
             | true, errors -> return Choice2Of2 errors
         }
+
+
+type internal ProviderSchemaConfig =
+    { Namespace: string 
+      DefinedTypes: Map<string, ProvidedTypeDefinition option> }
+
+[<TypeProvider>]
+type GraphQlProvider (config : TypeProviderConfig) as this =
+    inherit TypeProviderForNamespaces ()
+    
+    let asm = System.Reflection.Assembly.GetExecutingAssembly()
 
     do
         let ns = "FSharp.Data.GraphQL"
@@ -80,26 +94,26 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
         generator.DefineStaticParameters([ProvidedStaticParameter("url", typeof<string>)], fun typeName parameterValues ->
             match parameterValues with 
             | [| :? string as url|] ->
-                let choice = requestSchema(url) |> Async.RunSynchronously
+                let choice = Util.requestSchema(url) |> Async.RunSynchronously
                 match choice with
                 | Choice1Of2 schema ->
-                    let types = compileTypesFromSchema ns schema
-                    this.AddNamespace(ns, types)
                     let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
+                    let types = Util.compileTypesFromSchema asm "GraphQLTypes" schema
+                    tdef.AddMembers(types)
                     let m = ProvidedMethod("Query", [], typeof<Async<Choice<obj,obj>>>, IsStaticMethod=true)
                     m.DefineStaticParameters([ProvidedStaticParameter("query", typeof<string>)], fun methName parameterValues ->
                         match parameterValues with 
                         | [| :? string as query|] ->
                             // Make a first flight to be sure the query is accepted by the server
-                            match launchQuery url query |> Async.RunSynchronously with
+                            match Util.launchQuery url query |> Async.RunSynchronously with
                             | Choice1Of2 data -> ()
                             | Choice2Of2 errors -> failwithf "%A" errors
                             let m2 = ProvidedMethod(methName, [], typeof<Async<Choice<obj,obj>>>, IsStaticMethod = true) 
-                            m2.InvokeCode <- fun _ -> <@@ launchQuery url query @@>
+                            m2.InvokeCode <- fun _ -> <@@ Util.launchQuery url query @@>
                             tdef.AddMember m2
                             m2
                         | _ -> failwith "unexpected parameter values")
-                    m.InvokeCode <- fun _ -> <@@ null @@>
+                    m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
                     tdef.AddMember m
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"

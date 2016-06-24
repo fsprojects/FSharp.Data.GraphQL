@@ -159,10 +159,10 @@ module TypeCompiler =
         
     let initType (ctx: ProviderSessionContext) (itype: IntrospectionType) = 
         match itype.Kind with
-        | TypeKind.OBJECT -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<obj>)
-        | TypeKind.INPUT_OBJECT -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<obj>)
-        | TypeKind.SCALAR -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<obj>)
-        | TypeKind.UNION -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<obj>)
-        | TypeKind.ENUM -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<Enum>)
-        | TypeKind.INTERFACE -> ProvidedTypeDefinition(ctx.Assembly, ctx.Namespace, itype.Name, Some typeof<obj>)
+        | TypeKind.OBJECT -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
+        | TypeKind.INPUT_OBJECT -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
+        | TypeKind.SCALAR -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
+        | TypeKind.UNION -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
+        | TypeKind.ENUM -> ProvidedTypeDefinition(itype.Name, Some typeof<Enum>)
+        | TypeKind.INTERFACE -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
