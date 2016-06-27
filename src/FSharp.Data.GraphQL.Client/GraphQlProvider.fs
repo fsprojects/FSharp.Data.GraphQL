@@ -14,8 +14,12 @@ open TypeCompiler
 open System.Collections.Generic
 open Newtonsoft.Json.Linq
 open Newtonsoft.Json
+open Microsoft.FSharp.Quotations
+open QuotationHelpers
 
 module Util =
+    open System.Text.RegularExpressions
+
     let requestSchema (url: string) =
         async {
             let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
@@ -69,13 +73,35 @@ module Util =
     let launchQuery (serverUrl: string) (query: string) =
         async {
             use client = new WebClient()
-            let query = Map["query", query] |> JsonConvert.SerializeObject
-            let! json = client.UploadStringTaskAsync(Uri(serverUrl), query) |> Async.AwaitTask
-            let result = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
-            match result.TryGetValue("errors") with
-            | false, _ -> return Choice1Of2 result.["data"]
-            | true, errors -> return Choice2Of2 errors
+            let queryJson = Map["query", query] |> JsonConvert.SerializeObject
+            let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson) |> Async.AwaitTask
+            let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
+            if res.ContainsKey("errors") then
+                res.["errors"] :?> string[] |> String.concat "\n" |> failwith
+            // TODO: Find a more structured way to get the query name
+            let queryName = Regex.Match(query, "^.*?(\w+)").Groups.[1].Value
+            return (res.["data"] :?> IDictionary<string,obj>).[queryName]
         }
+
+    let createStaticMethod (tdef: ProvidedTypeDefinition) (resType: Type) (serverUrl) =
+        let asyncType = typeof<Async<obj>>.GetGenericTypeDefinition().MakeGenericType(resType)
+        let m = ProvidedMethod("Query" + resType.Name, [], asyncType, IsStaticMethod=true)
+        let sargs = [ProvidedStaticParameter("query", typeof<string>)]
+        m.DefineStaticParameters(sargs, fun methName parameterValues ->
+            match parameterValues with 
+            | [| :? string as query |] ->
+                // Make a first flight to be sure the query is accepted by the server
+                launchQuery serverUrl query |> Async.Catch |> Async.RunSynchronously |> function
+                | Choice1Of2 _ -> ()
+                | Choice2Of2 ex -> failwith ex.Message
+                let m2 = ProvidedMethod(methName, [], asyncType, IsStaticMethod = true) 
+                m2.InvokeCode <- fun _ ->
+                    <@@ launchQuery serverUrl query @@>
+                tdef.AddMember m2
+                m2
+            | _ -> failwith "unexpected parameter values")
+        m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
+        m
 
 
 type internal ProviderSchemaConfig =
@@ -93,28 +119,16 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
         generator.DefineStaticParameters([ProvidedStaticParameter("url", typeof<string>)], fun typeName parameterValues ->
             match parameterValues with 
-            | [| :? string as url|] ->
-                let choice = Util.requestSchema(url) |> Async.RunSynchronously
+            | [| :? string as serverUrl|] ->
+                let choice = Util.requestSchema(serverUrl) |> Async.RunSynchronously
                 match choice with
                 | Choice1Of2 schema ->
                     let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
                     let types = Util.compileTypesFromSchema asm "GraphQLTypes" schema
                     tdef.AddMembers(types)
-                    let m = ProvidedMethod("Query", [], typeof<Async<Choice<obj,obj>>>, IsStaticMethod=true)
-                    m.DefineStaticParameters([ProvidedStaticParameter("query", typeof<string>)], fun methName parameterValues ->
-                        match parameterValues with 
-                        | [| :? string as query|] ->
-                            // Make a first flight to be sure the query is accepted by the server
-                            match Util.launchQuery url query |> Async.RunSynchronously with
-                            | Choice1Of2 data -> ()
-                            | Choice2Of2 errors -> failwithf "%A" errors
-                            let m2 = ProvidedMethod(methName, [], typeof<Async<Choice<obj,obj>>>, IsStaticMethod = true) 
-                            m2.InvokeCode <- fun _ -> <@@ Util.launchQuery url query @@>
-                            tdef.AddMember m2
-                            m2
-                        | _ -> failwith "unexpected parameter values")
-                    m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
-                    tdef.AddMember m
+                    for typ in types do
+                        Util.createStaticMethod tdef typ serverUrl
+                        |> tdef.AddMember
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
             | _ -> failwith "unexpected parameter values")

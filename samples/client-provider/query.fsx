@@ -6,12 +6,13 @@ open System.Collections.Generic
 let [<Literal>] serverUrl = "http://localhost:8083"
 let [<Literal>] query = "{ hero(id: \"1000\") { id, name } }"
 
-let (?) (o: obj) (k: string) = (o :?> IDictionary<string,obj>).Item(k)
-
 type MyClient = GraphQLProvider<serverUrl>
 
-MyClient.Query<query>()
+MyClient.QueryHuman<query>()
 |> Async.RunSynchronously
-|> function
-    | Choice1Of2 data -> printfn "My hero is %A" (data?hero :?> MyClient.Human).name
-    | Choice2Of2 errors -> printfn "Error: %A" errors
+|> function hero -> printfn "My hero is %A" hero.name
+
+let [<Literal>] query2 = "{ hero(id: \"1000\") { id, name }"
+// This code won't compile as the query is not properly formed
+// MyClient.QueryHuman<query2>()
+

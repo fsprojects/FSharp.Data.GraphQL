@@ -17,6 +17,27 @@ open Microsoft.FSharp.Core.CompilerServices
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
 
+module QuotationHelpers =
+    let getDynamicField (name: string) (expr: Expr) =
+        let dicType = typeof<IDictionary<string,obj>>
+        let mi = dicType.GetMethod("get_Item")
+        Expr.Call(Expr.Coerce(expr, dicType), mi, [Expr.Value(name)])
+
+    let makeOption (optType: Type) (expr: Expr) =
+        let optArg = optType.GetGenericArguments().[0]
+        let cases =
+            FSharpType.GetUnionCases(optType)
+            |> Seq.map (fun case -> case.Name, case)
+            |> Map
+        let var = Var("instance", typeof<obj>)
+        Expr.Let(var, expr,
+            Expr.IfThenElse(
+                <@@ %%Expr.Var(var) = null @@>,
+                Expr.NewUnionCase(cases.["None"], []),
+                Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, optArg)])))
+
+open QuotationHelpers
+
 type GraphQLReply<'t> = {
     Data: 't
     Errors: string [] option
@@ -80,25 +101,19 @@ module TypeCompiler =
         p.GetterCode <- 
             // TODO Union types. Also, Option must be of the specific property type, not obj 
             match ifield.Type.Kind with
-            | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) @@>
+            | TypeKind.NON_NULL -> fun args ->
+                getDynamicField name args.[0]
             | TypeKind.LIST ->
                 match ifield.Type.OfType.Value.Kind with
-                | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> @@>
-                | _ -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> |> Array.map Option.ofObj @@>
+                | TypeKind.NON_NULL -> fun args ->
+                    Expr.Coerce(getDynamicField name args.[0], ptype)
+                | _ -> fun args ->
+                    let optType = ptype.GetElementType()
+                    let var = Expr.Coerce(getDynamicField name args.[0], typeof<obj[]>)
+                    <@@ Array.map (makeOption optType) @@>
             | _ -> fun args ->
-                let cases =
-                    FSharpType.GetUnionCases(ptype)
-                    |> Seq.map (fun case -> case.Name, case)
-                    |> Map
-                let dicType = typeof<IDictionary<string,obj>>
-                let mi = dicType.GetMethod("get_Item")
-                let var = Var("instance", typeof<obj>)
-                Expr.Let(var,
-                    Expr.Call(Expr.Coerce(args.[0], dicType), mi, [Expr.Value(name)]),
-                    Expr.IfThenElse(
-                        <@@ %%Expr.Var(var) = null @@>,
-                        Expr.NewUnionCase(cases.["None"], []),
-                        Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, ptype.GetGenericArguments().[0])])))
+                getDynamicField name args.[0]
+                |> makeOption ptype
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
