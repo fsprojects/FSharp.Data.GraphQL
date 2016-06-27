@@ -7,12 +7,15 @@ namespace FSharp.Data.GraphQL.Client
 
 open System
 open System.Reflection
+open System.Collections.Generic
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
+open Microsoft.FSharp.Quotations
+open Microsoft.FSharp.Reflection
 
 type GraphQLReply<'t> = {
     Data: 't
@@ -68,7 +71,8 @@ module TypeCompiler =
             receiveType true t
 
     let genProperty (ctx: ProviderSessionContext) ifield =
-        let p = ProvidedProperty(ifield.Name, ctx.GetKnownType ifield.Type)
+        let ptype = ctx.GetKnownType ifield.Type
+        let p = ProvidedProperty(ifield.Name, ptype)
         if ifield.Description.IsSome then p.AddXmlDoc(ifield.Description.Value)
         // It's important to get the name of the field outside the quotation
         // in order to prevent errors at runtime
@@ -81,7 +85,20 @@ module TypeCompiler =
                 match ifield.Type.OfType.Value.Kind with
                 | TypeKind.NON_NULL -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> @@>
                 | _ -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> unbox<obj[]> |> Array.map Option.ofObj @@>
-            | _ -> fun args -> <@@ ((%%(args.[0]): obj) :?> IDictionary<string,obj>).Item(name) |> Option.ofObj @@>
+            | _ -> fun args ->
+                let cases =
+                    FSharpType.GetUnionCases(ptype)
+                    |> Seq.map (fun case -> case.Name, case)
+                    |> Map
+                let dicType = typeof<IDictionary<string,obj>>
+                let mi = dicType.GetMethod("get_Item")
+                let var = Var("instance", typeof<obj>)
+                Expr.Let(var,
+                    Expr.Call(Expr.Coerce(args.[0], dicType), mi, [Expr.Value(name)]),
+                    Expr.IfThenElse(
+                        <@@ %%Expr.Var(var) = null @@>,
+                        Expr.NewUnionCase(cases.["None"], []),
+                        Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, ptype.GetGenericArguments().[0])])))
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =

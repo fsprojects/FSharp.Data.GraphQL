@@ -13,7 +13,5 @@ type MyClient = GraphQLProvider<serverUrl>
 MyClient.Query<query>()
 |> Async.RunSynchronously
 |> function
-    // We get an error if we try to access an optional field like `name`
-    // because the cast from Option<obj> to Option<string> is not possible
-    | Choice1Of2 data -> printfn "My hero is %A" (data?hero :?> MyClient.Human).id
+    | Choice1Of2 data -> printfn "My hero is %A" (data?hero :?> MyClient.Human).name
     | Choice2Of2 errors -> printfn "Error: %A" errors
