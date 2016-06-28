@@ -84,7 +84,7 @@ module TypeCompiler =
                 | TypeKind.NON_NULL, Some inner ->
                     receiveType false inner
                 | TypeKind.LIST, Some inner -> 
-                    let ofType = receiveType true inner
+                    let ofType = receiveType false inner
                     ofType.MakeArrayType()
                 | other when nullable -> 
                     optionType.MakeGenericType [| findType t |]
@@ -103,14 +103,9 @@ module TypeCompiler =
             match ifield.Type.Kind with
             | TypeKind.NON_NULL -> fun args ->
                 getDynamicField name args.[0]
-            | TypeKind.LIST ->
-                match ifield.Type.OfType.Value.Kind with
-                | TypeKind.NON_NULL -> fun args ->
-                    Expr.Coerce(getDynamicField name args.[0], ptype)
-                | _ -> fun args ->
-                    let optType = ptype.GetElementType()
-                    let var = Expr.Coerce(getDynamicField name args.[0], typeof<obj[]>)
-                    <@@ Array.map (makeOption optType) @@>
+            | TypeKind.LIST -> fun args ->
+                let eltype = ptype.GetElementType()
+                Expr.Coerce(getDynamicField name args.[0], eltype)
             | _ -> fun args ->
                 getDynamicField name args.[0]
                 |> makeOption ptype
@@ -177,15 +172,31 @@ module TypeCompiler =
         |> Array.toList
         |> t.AddMembers
 
-    let genUnion (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = ()
+    let genUnion (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
+        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
+        (Map.empty, itype.PossibleTypes.Value)
+        ||> Seq.fold (fun fields typ ->
+            if typ.Name.IsSome && ctx.KnownTypes.ContainsKey(typ.Name.Value) then
+                match ctx.KnownTypes.[typ.Name.Value] with
+                | ProvidedType (_, itype) when itype.Fields.IsSome ->
+                    (fields, itype.Fields.Value) ||> Seq.fold (fun fields field ->
+                        if field.Args.Length = 0 && not(fields.ContainsKey(field.Name))
+                        then Map.add field.Name ((genProperty ctx field) :> MemberInfo) fields
+                        else fields)
+                | _ -> fields
+            else
+                fields)
+        |> Map.toList
+        |> List.map snd
+        |> t.AddMembers
 
     let genType (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
         match itype.Kind with
         | TypeKind.OBJECT -> genObject ctx itype t
+        | TypeKind.UNION -> genUnion ctx itype t
         | _ -> () // TODO: Complete other type kinds
 //        | TypeKind.INPUT_OBJECT -> genInputObject ctx itype t
 //        | TypeKind.SCALAR -> genScalar ctx itype t
-//        | TypeKind.UNION -> genUnion ctx itype t
 //        | TypeKind.ENUM -> genEnum ctx itype t
 //        | TypeKind.INTERFACE -> genInterface ctx itype t
 //        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())

@@ -4,13 +4,20 @@ open FSharp.Data.GraphQL
 open System.Collections.Generic
 
 let [<Literal>] serverUrl = "http://localhost:8083"
-let [<Literal>] query = "{ hero(id: \"1000\") { id, name } }"
+let [<Literal>] query = "{ hero(id: \"1000\") { id, name, friends { name } } }"
 
 type MyClient = GraphQLProvider<serverUrl>
 
-MyClient.QueryHuman<query>()
-|> Async.RunSynchronously
-|> function hero -> printfn "My hero is %A" hero.name
+let hero =
+    MyClient.QueryHuman<query>()
+    |> Async.RunSynchronously
+
+printfn "My hero is %A" hero.name
+printfn "My hero's friends are:"
+hero.friends
+|> Array.choose (fun x -> x.name)
+|> Array.iter (printfn "- %s")
+
 
 let [<Literal>] query2 = "{ hero(id: \"1000\") { id, name }"
 // This code won't compile as the query is not properly formed
