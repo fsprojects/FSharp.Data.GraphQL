@@ -110,30 +110,49 @@ module TypeCompiler =
                 |> makeOption ptype
         p
 
-    let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
-        let ptype = TypeReference.findType iarg.Type ctx.KnownTypes
-        let param = ProvidedParameter(iarg.Name,ptype, false, iarg.DefaultValue)
-        param
+//    let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
+//        let ptype = TypeReference.findType iarg.Type ctx.KnownTypes
+//        let param = ProvidedParameter(iarg.Name,ptype, false, iarg.DefaultValue)
+//        param
+//
+//    let genMethod (ctx: ProviderSessionContext) (t: IntrospectionType) ifield =
+//        let parameters = 
+//            ifield.Args
+//            |> Array.map (genParam ctx t)
+//            |> Array.toList
+//        let mtype = TypeReference.findType ifield.Type ctx.KnownTypes
+//        let m = ProvidedMethod(ifield.Name, parameters,mtype)
+//        m.IsStaticMethod <- true
+//        if t.Description.IsSome then m.AddXmlDoc(t.Description.Value)
+//        m
 
-    let genMethod (ctx: ProviderSessionContext) (t: IntrospectionType) ifield =
-        let parameters = 
-            ifield.Args
-            |> Array.map (genParam ctx t)
-            |> Array.toList
-        let mtype = TypeReference.findType ifield.Type ctx.KnownTypes
-        let m = ProvidedMethod(ifield.Name, parameters,mtype)
-        m.IsStaticMethod <- true
-        if t.Description.IsSome then m.AddXmlDoc(t.Description.Value)
-        m
+//    let genInputObject (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
+//        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
+//        itype.Fields.Value
+//        |> Array.map (fun field ->
+//            if field.Args.Length = 0
+//            then (genProperty ctx "" false field) :> MemberInfo
+//            else upcast genMethod ctx itype field)
+//        |> Array.toList
+//        |> t.AddMembers
 
-    let genEnumValue (ctx: ProviderSessionContext) (t: IntrospectionType) (enumVal: IntrospectionEnumVal) =
-        let value = ProvidedProperty(enumVal.Name, typeof<int>)
-        if t.Description.IsSome then value.AddXmlDoc(t.Description.Value)
-        value.IsStatic <- true
-        value
+//    let genScalar (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
+//        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
 
-    let genScalar (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
-        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
+    let genEnum (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
+        let genEnumValue (enumVal: IntrospectionEnumVal) =
+            // Name must be obtained outside the quotation
+            let name = enumVal.Name
+            let value = ProvidedProperty(name, t, IsStatic=true)
+            if enumVal.Description.IsSome then value.AddXmlDoc(enumVal.Description.Value)
+            value.GetterCode <- fun _ -> <@@ name @@>
+            value
+        if itype.Description.IsSome then
+            t.AddXmlDoc("[ENUM] " + itype.Description.Value)
+        itype.EnumValues.Value
+        |> Seq.map genEnumValue
+        |> Seq.toList
+        |> t.AddMembers
 
     let genObject (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
         if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
@@ -144,23 +163,6 @@ module TypeCompiler =
             else None //TODO: upcast genMethod ctx itype field
         )
         |> Seq.toList
-        |> t.AddMembers
-
-    let genInputObject (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
-        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
-        itype.Fields.Value
-        |> Array.map (fun field ->
-            if field.Args.Length = 0
-            then (genProperty ctx "" false field) :> MemberInfo
-            else upcast genMethod ctx itype field)
-        |> Array.toList
-        |> t.AddMembers
-
-    let genEnum (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
-        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
-        itype.EnumValues.Value
-        |> Array.map (genEnumValue ctx itype)
-        |> Array.toList
         |> t.AddMembers
 
     let genUnion (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
@@ -177,7 +179,7 @@ module TypeCompiler =
                 (fields, optionToSeq itype.Fields)
                 ||> Seq.fold (fun fields field ->
                     match Map.tryFind field.Name fields with
-                    | Some (prop, typs) ->
+                    | Some (field, typs) ->
                         Map.add field.Name (field, typ.Name.Value::typs) fields
                     | None when field.Args.Length = 0 ->
                         Map.add field.Name (field, [typ.Name.Value]) fields
@@ -187,7 +189,7 @@ module TypeCompiler =
             match kv.Value with
             | (field, typs) ->
                 // Add type owners of this property to comment
-                let docPrefix = sprintf "(%s) " (FSharp.Core.String.concat "/" typs)
+                let docPrefix = sprintf "[%s] " (FSharp.Core.String.concat "/" (List.rev typs))
                 // If the property doesn't belong to all types, force it to be nullable
                 let forceNullable = typs.Length < unionTypes.Length
                 genProperty ctx docPrefix forceNullable field :> MemberInfo)
@@ -198,7 +200,7 @@ module TypeCompiler =
         match itype.Kind with
         | TypeKind.OBJECT | TypeKind.INTERFACE -> genObject ctx itype t
         | TypeKind.UNION -> genUnion ctx itype t
-//        | TypeKind.ENUM -> genEnum ctx itype t
+        | TypeKind.ENUM -> genEnum ctx itype t
         | _ -> () // TODO: Complete other type kinds
 //        | TypeKind.INPUT_OBJECT -> genInputObject ctx itype t
           // TODO: Parse scalars? They shouldn't reach this point
@@ -211,6 +213,6 @@ module TypeCompiler =
         | TypeKind.INPUT_OBJECT -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.SCALAR -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.UNION -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
-        | TypeKind.ENUM -> ProvidedTypeDefinition(itype.Name, Some typeof<Enum>)
+        | TypeKind.ENUM -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.INTERFACE -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())

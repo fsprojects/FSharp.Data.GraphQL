@@ -6,7 +6,7 @@ open System.Collections.Generic
 let [<Literal>] serverUrl = "http://localhost:8083"
 
 // The name and arguments of the query will be automatically set by the type provider
-let [<Literal>] queryFields = "{ id, name, friends { name } }"
+let [<Literal>] queryFields = "{ id, name, appearsIn, friends { name } }"
 
 type MyClient = GraphQLProvider<serverUrl>
 
@@ -23,6 +23,8 @@ match hero with
 | None -> ()
 | Some hero ->
     printfn "My hero is %A" hero.name
+    printfn "Appears in %O: %b" MyClient.Episode.Empire
+        (hero.appearsIn |> Array.exists ((=) MyClient.Episode.Empire))
     printfn "My hero's friends are:"
     hero.friends
     |> Array.choose (fun x -> x.name)
