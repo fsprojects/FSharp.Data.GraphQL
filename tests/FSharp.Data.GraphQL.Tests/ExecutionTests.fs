@@ -102,7 +102,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         Define.Field("d", String, fun _ dt -> dt.d)
         Define.Field("e", String, fun _ dt -> dt.e)
         Define.Field("f", String, fun _ dt -> dt.f)
-        Define.Field("pic", String, "Picture resizer", [| Define.Input("size", Int) |], fun ctx dt -> dt.pic(ctx.Arg("size")))
+        Define.Field("pic", String, "Picture resizer", [| Define.Input("size", Nullable Int) |], fun ctx dt -> dt.pic(ctx.Arg("size")))
         Define.Field("deep", DeepDataType, fun _ dt -> dt.deep) 
     |])
 
@@ -176,8 +176,8 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     let Type = Define.Object("Type", [|
         Define.Field("b", Nullable String, "", [| Define.Input("numArg", Int); Define.Input("stringArg", String) |], 
             fun ctx _ -> 
-                numArg <- ctx.Arg("numArg")
-                stringArg <- ctx.Arg("stringArg")
+                numArg <- ctx.TryArg("numArg")
+                stringArg <- ctx.TryArg("stringArg")
                 stringArg) 
     |])
 

@@ -6,6 +6,7 @@ open System
 open System.Collections.Concurrent
 open Hopac
 open Hopac.Extensions
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 
 [<Flags; Serializable>]
@@ -144,9 +145,6 @@ module Introspection =
           Types : IntrospectionType []
           Directives : IntrospectionDirective [] }
 
-type GraphQLException(msg) = 
-    inherit Exception(msg)
-
 type ISchema = 
     interface
         inherit seq<NamedDef>
@@ -163,6 +161,8 @@ type ISchema =
 // 3.1 Types
 and TypeDef = 
     interface
+        abstract MakeList: unit -> ListOfDef
+        abstract MakeNullable: unit -> NullableDef
     end
 
 and TypeDef<'Val> = 
@@ -173,6 +173,7 @@ and TypeDef<'Val> =
 and InputDef = 
     interface
         inherit TypeDef
+        abstract InputType: Type
     end
 
 and InputDef<'Val> = 
@@ -184,6 +185,7 @@ and InputDef<'Val> =
 and OutputDef = 
     interface
         inherit TypeDef
+        abstract OutputType: Type
     end
 
 and OutputDef<'Val> = 
@@ -256,16 +258,18 @@ and ResolveFieldContext =
       Variables : Map<string, obj>
       ExecutionContext: ExecutionContext
       AddError: exn -> unit }
-    member x.Arg(name : string) : 't option = 
+    member x.TryArg(name : string) : 't option = 
         match Map.tryFind name x.Args with
         | Some o -> Some(o :?> 't)
         | None -> None
+    member x.Arg(name : string) : 't = 
+        downcast Map.find name x.Args
 
 and ScalarDef = 
     interface
         abstract Name : string
         abstract Description : string option
-        abstract CoerceInput : Value -> obj
+        abstract CoerceInput : Value -> obj option
         abstract CoerceOutput : obj -> Value option
         abstract CoerceValue : obj -> obj option
         inherit IEquatable<ScalarDef>
@@ -283,11 +287,25 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       CoerceInput : Value -> 'Val option
       CoerceOutput : 'Val -> Value option
       CoerceValue : obj -> 'Val option }
+
+    interface InputDef with
+        member __.InputType = typeof<'Val>
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val>
     
     interface ScalarDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input = upcast (x.CoerceInput input)
+        member x.CoerceInput input = x.CoerceInput input |> Option.map box
         member x.CoerceOutput output = x.CoerceOutput(output :?> 'Val)
         member x.CoerceValue value = (x.CoerceValue value) |> Option.map box
     
@@ -356,6 +374,20 @@ and EnumDefinition<'Val> =
     { Name : string
       Description : string option
       Options : EnumValue<'Val> [] }
+
+    interface InputDef with
+        member __.InputType = typeof<'Val>
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val>
     
     interface EnumDef<'Val> with
         member x.Options = x.Options
@@ -403,6 +435,17 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
       FieldsFn : Lazy<FieldDef<'Val> []>
       Implements : InterfaceDef []
       IsTypeOf : (obj -> bool) option }
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val>
     
     interface ObjectDef with
         member x.Name = x.Name
@@ -516,6 +559,17 @@ and [<CustomEquality; NoComparison>] InterfaceDefinition<'Val> =
       Description : string option
       FieldsFn : unit -> FieldDef<'Val> []
       ResolveType : (obj -> ObjectDef) option }
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val>
     
     interface InterfaceDef with
         member x.Name = x.Name
@@ -577,6 +631,17 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
       Options : ObjectDef []
       ResolveType : ('In -> ObjectDef) option
       ResolveValue : 'In -> 'Out }
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Out>
     
     interface UnionDef with
         member x.Name = x.Name
@@ -625,6 +690,20 @@ and ListOfDef<'Val> =
 and ListOfDefinition<'Val> = 
     { OfType : TypeDef<'Val> }
     
+    interface InputDef with
+        member __.InputType = typeof<'Val seq>
+
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val seq>
+
     interface ListOfDef with
         member x.OfType = upcast x.OfType
     
@@ -652,6 +731,18 @@ and NullableDef<'Val> =
 
 and NullableDefinition<'Val> = 
     { OfType : TypeDef<'Val> }
+
+    interface InputDef with
+        member __.InputType = typeof<'Val option>
+
+    interface TypeDef with
+        member x.MakeNullable() = upcast x
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
+        
+    interface OutputDef with
+        member __.OutputType = typeof<'Val option>
     
     interface NullableDef with
         member x.OfType = upcast x.OfType
@@ -678,6 +769,9 @@ and InputObjectDefinition<'Val> =
     { Name : string
       Description : string option
       FieldsFn : unit -> InputFieldDef [] }
+
+    interface InputDef with
+        member __.InputType = typeof<'Val>
     
     interface InputObjectDef with
         member x.Name = x.Name
@@ -688,14 +782,22 @@ and InputObjectDefinition<'Val> =
     interface InputDef<'Val>
     interface NamedDef with
         member x.Name = x.Name
+    interface TypeDef with
+        member x.MakeNullable() = 
+            let nullable: NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        member x.MakeList() = 
+            let list: ListOfDefinition<_> = { OfType = x }
+            upcast list
 
+and ExecuteInput = Map<string,obj> -> Value -> obj
 and InputFieldDef = 
     interface
         abstract Name : string
         abstract Description : string option
         abstract Type : InputDef
         abstract DefaultValue : obj option
-        inherit NamedDef
+        abstract ExecuteInput : ExecuteInput with get,set
         inherit IEquatable<InputFieldDef>
     end
 
@@ -704,17 +806,16 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
     { Name : string
       Description : string option
       Type : InputDef<'In>
-      DefaultValue : 'In option }
+      DefaultValue : 'In option
+      mutable ExecuteInput: ExecuteInput }
     
     interface InputFieldDef with
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Type = upcast x.Type
         member x.DefaultValue = x.DefaultValue |> Option.map (fun x -> upcast x)
-    
-    interface NamedDef with
-        member x.Name = x.Name
-    
+        member x.ExecuteInput with get () = x.ExecuteInput and set v = x.ExecuteInput <- v
+        
     interface IEquatable<InputFieldDef> with
         member x.Equals f = x.Name = f.Name && x.Type :> InputDef = f.Type
     
@@ -898,7 +999,7 @@ module SchemaDefinitions =
                  else 0.)
         | _ -> None
     
-    let private coerceStringInput = 
+    let internal coerceStringInput = 
         function 
         | IntValue i -> Some(i.ToString(CultureInfo.InvariantCulture))
         | FloatValue f -> Some(f.ToString(CultureInfo.InvariantCulture))
@@ -908,7 +1009,7 @@ module SchemaDefinitions =
                  else "false")
         | _ -> None
     
-    let private coerceBoolInput = 
+    let internal coerceBoolInput  = 
         function 
         | IntValue i -> 
             Some(if i = 0 then false
@@ -995,7 +1096,7 @@ module SchemaDefinitions =
     
     let (|Input|_|) (tdef : TypeDef) = 
         match tdef with
-        | :? ScalarDef | :? EnumDef | :? InputObjectDef -> Some tdef
+        | :? InputDef as i -> Some i
         | _ -> None
     
     let (|Output|_|) (tdef : TypeDef) = 
@@ -1028,6 +1129,11 @@ module SchemaDefinitions =
     let rec (|Named|_|) (tdef : TypeDef) = named tdef
     
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
+
+    let internal variableOrElse other variables =
+        function
+        | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
+        | value -> other value
     
     /// GraphQL type of int
     let Int : ScalarDefinition<int> = 
@@ -1107,7 +1213,8 @@ module SchemaDefinitions =
               [| { Name = "if"
                    Description = Some "Included when true."
                    Type = Boolean
-                   DefaultValue = None } |] }
+                   DefaultValue = None
+                   ExecuteInput = variableOrElse (coerceBoolInput >> Option.map box >> Option.toObj) } |] }
     
     let SkipDirective : DirectiveDef = 
         { Name = "skip"
@@ -1118,25 +1225,11 @@ module SchemaDefinitions =
               [| { Name = "if"
                    Description = Some "Skipped when true."
                    Type = Boolean
-                   DefaultValue = None } |] }
-    
-    let rec internal coerceAstValue (variables : Map<string, obj>) (value : Value) : obj = 
-        match value with
-        | IntValue i -> upcast i
-        | StringValue s -> upcast s
-        | FloatValue f -> upcast f
-        | BooleanValue b -> upcast b
-        | EnumValue e -> upcast e
-        | ListValue values -> 
-            let mapped = values |> List.map (coerceAstValue variables)
-            upcast mapped
-        | ObjectValue fields -> 
-            let mapped = fields |> Map.map (fun k v -> coerceAstValue variables v)
-            upcast mapped
-        | Variable variable -> variables.[variable]
+                   DefaultValue = None
+                   ExecuteInput = variableOrElse (coerceBoolInput >> Option.map box >> Option.toObj) } |] }
     
     let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) = 
-        methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name).Value)
+        methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
     let internal defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Job<'Res> = 
@@ -1313,7 +1406,8 @@ module SchemaDefinitions =
             upcast { Name = name
                      Description = description
                      Type = schema
-                     DefaultValue = defaultValue }
+                     DefaultValue = defaultValue
+                     ExecuteInput = Unchecked.defaultof<ExecuteInput> }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> [], ?description : string, 

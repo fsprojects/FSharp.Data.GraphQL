@@ -51,7 +51,7 @@ let rec Person = Define.Object(
 let Query = Define.Object(
     name = "Query",
     fields = [|
-        Define.Field("hero", Nullable Person, "Retrieves a person by provided id", [| Define.Input("id", String) |], fun ctx () -> getPerson (ctx.Arg("id").Value))
+        Define.Field("hero", Nullable Person, "Retrieves a person by provided id", [| Define.Input("id", String) |], fun ctx () -> getPerson (ctx.Arg("id")))
     |])
 
 let schema = Schema(Query)

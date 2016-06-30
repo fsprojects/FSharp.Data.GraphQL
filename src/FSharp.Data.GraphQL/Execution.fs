@@ -4,6 +4,7 @@
 module FSharp.Data.GraphQL.Execution
 
 open System
+open System.Reflection
 open System.Collections.Generic
 open System.Collections.Concurrent
 open Hopac
@@ -107,59 +108,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
         NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
-
-let rec private getTypeName = function
-    | NamedType name -> name
-    | ListType inner -> getTypeName inner
-    | NonNullType inner -> getTypeName inner
-
-let rec private coerceValue allowNull typedef (input: obj) : obj = 
-    match typedef with
-    | Scalar scalardef -> 
-        match scalardef.CoerceValue input with
-        | None when allowNull -> null
-        | None -> raise (GraphQLException (sprintf "Value '%A' has been coerced to null, but type definition mark corresponding field as non nullable" input))
-        | Some res -> res
-    | Nullable innerdef -> coerceValue true innerdef input 
-    | List innerdef ->
-        match input with
-        | null -> null
-        // special case - while single values should be wrapped with a list in this scenario,
-        // string would be treat as IEnumerable and coerced into a list of chars
-        | :? string as s -> upcast [coerceValue false innerdef s]
-        | :? System.Collections.IEnumerable as iter -> 
-            let mapped =
-                iter
-                |> Seq.cast<obj>
-                |> Seq.map (fun elem -> coerceValue false innerdef elem)
-                |> List.ofSeq
-            upcast mapped
-        | other -> upcast [coerceValue false innerdef other]
-    | Object objdef -> coerceObjectValue objdef.Fields input
-    | InputObject objdef -> coerceInputObjectValue objdef.Fields input
-    | other -> raise (GraphQLException (sprintf "Cannot coerce value '%A' of type '%A'. Only Scalars, Nullables, Lists and Objects are valid type definitions." other typedef))
-
-and private coerceInputObjectValue (fields: InputFieldDef []) (input: obj) =
-    //TODO: this should be eventually coerced to complex object
-    let map = input :?> Map<string, obj>
-    let mapped = 
-        fields
-        |> Array.map (fun field -> 
-            let valueFound = Map.tryFind field.Name map |> Option.toObj
-            (field.Name, coerceValue false field.Type valueFound))
-        |> Map.ofArray
-    upcast mapped
-
-and private coerceObjectValue (fields: FieldDef []) (input: obj) =
-    let map = input :?> Map<string, obj>
-    let mapped = 
-        fields
-        |> Array.map (fun field -> 
-            let valueFound = Map.tryFind field.Name map |> Option.toObj
-            (field.Name, coerceValue false field.Type valueFound))
-        |> Map.ofArray
-    upcast mapped
-
+        
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
     | Some defVal -> Map.add argdef.Name defVal acc
@@ -170,7 +119,7 @@ let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) 
     |> Array.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
-            match coerceAstValue variables argument.Value with
+            match argdef.ExecuteInput variables argument.Value with
             | null -> collectDefaultArgValue acc argdef
             | value -> Map.add argdef.Name value acc
         | None -> collectDefaultArgValue acc argdef
@@ -188,36 +137,32 @@ let private findOperation doc opName =
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
 
-let private coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (input: obj option) = 
-    let typedef = 
-        match schema.TryFindType (getTypeName vardef.Type) with
-        | None -> raise (GraphQLException (sprintf "Variable '%s' expected value of type '%A', which cannot be used as an input type." vardef.VariableName vardef.Type))
-        | Some t when not (t :? InputDef) -> raise (GraphQLException (sprintf "Variable '%s' expected value of type '%A', which cannot be used as an input type." vardef.VariableName vardef.Type))
-        | Some t -> t :?> InputDef
-    match input with
-    | None -> 
-        match vardef.DefaultValue with
-        | Some defaultValue -> coerceValue false typedef defaultValue
-        | None -> raise (GraphQLException (sprintf "Variable '%s' of required type '%A' was not provided." vardef.VariableName vardef.Type))
-    | Some input -> coerceValue false typedef input
-
-let private coerceVariables (schema: #ISchema) variables (inputs: Map<string, obj> option) =
+let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (inputs: Map<string, obj> option) =
     match inputs with
-    | None -> Map.empty
+    | None -> 
+        variables
+        |> List.filter (fun vardef -> Option.isSome vardef.DefaultValue)
+        |> List.fold (fun acc vardef ->
+            let variableName = vardef.VariableName
+            Map.add variableName (coerceVariable schema vardef Map.empty) acc) Map.empty
     | Some vars -> 
         variables
         |> List.fold (fun acc vardef ->
             let variableName = vardef.VariableName
-            let input = Map.tryFind variableName vars
-            Map.add variableName (coerceVariable schema vardef input) acc) Map.empty
+            Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
     
-let private coerceArgument (ctx: ExecutionContext) (arg: Argument) =
-    coerceBoolValue(coerceAstValue ctx.Variables arg.Value).Value
+let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) =
+    match directive.If.Value with
+    | Variable vname -> downcast ctx.Variables.[vname]
+    | other -> 
+        match coerceBoolInput other with
+        | Some s -> s
+        | None -> raise (GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
 let private shouldSkip (ctx: ExecutionContext) (directive: Directive) =
     match directive.Name with
-    | "skip" when not <| coerceArgument ctx directive.If -> false
-    | "include" when  coerceArgument ctx directive.If -> false
+    | "skip" when not <| coerceDirectiveValue ctx directive -> false
+    | "include" when  coerceDirectiveValue ctx directive -> false
     | _ -> true
 
 let private doesFragmentTypeApply (ctx: ExecutionContext) fragment (objectType: ObjectDef) = 
@@ -324,11 +269,15 @@ let TypeMetaFieldDef = Define.Field(
     description = "Request the type information of a single type.",
     typedef = __Type,
     args = [|
-        Define.Input("name", String)
+        { Name = "name"
+          Description = None
+          Type = String
+          DefaultValue = None
+          ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
     |],
     resolve = fun ctx (_:obj) -> 
         ctx.Schema.Introspected.Types 
-        |> Seq.find (fun t -> t.Name = ctx.Arg("name").Value) 
+        |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 
         |> IntrospectionTypeRef.Named)
     
 let TypeNameMetaFieldDef : FieldDef<obj> = Define.Field(
@@ -413,6 +362,7 @@ and private compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
             resolveFieldCtx.AddError(ex)
             return null
     }
+
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
         match field.Name with
@@ -468,6 +418,12 @@ and private executeFieldsSync ctx typedef value (groupedFieldSet: (string * Fiel
         |> Job.seqIgnore
     return result }
 
+let private compileInputObject (indef: InputObjectDef) =
+    indef.Fields
+    |> Array.iter(fun input -> 
+        let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
+        input.ExecuteInput <- compileByType errMsg input.Type)
+
 let internal compileSchema possibleTypesFn types =
     types
     |> Map.toSeq 
@@ -478,7 +434,11 @@ let internal compileSchema possibleTypesFn types =
             objdef.Fields
             |> Array.iter (fun fieldDef -> 
                 fieldDef.Execute <- compileField possibleTypesFn fieldDef
-                ())
+                fieldDef.Args
+                |> Array.iter (fun arg -> 
+                    let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
+                    arg.ExecuteInput <- compileByType errMsg arg.Type))
+        | InputObject indef -> compileInputObject indef
         | _ -> ())
                 
 let private evaluate (schema: #ISchema) doc operation variables root errors = job {

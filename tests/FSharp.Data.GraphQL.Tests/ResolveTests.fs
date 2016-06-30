@@ -28,7 +28,7 @@ let ``Execute uses default resolve to accesses properties`` () =
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema = testSchema [| 
-        Define.Field("test", String, "", [| Define.Input("a", String) |], resolve = fun ctx d -> d.Test + ctx.Arg("a").Value) |]
+        Define.Field("test", String, "", [| Define.Input("a", String) |], resolve = fun ctx d -> d.Test + ctx.Arg("a")) |]
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
     noErrors actual

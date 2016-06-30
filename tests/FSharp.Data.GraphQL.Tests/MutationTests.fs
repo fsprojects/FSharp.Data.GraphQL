@@ -35,10 +35,10 @@ let NumberHolder = Define.Object("NumberHolder", [| Define.Field("theNumber", In
 let schema = Schema(
     query = Define.Object("Query", [| Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) |]),
     mutation = Define.Object("Mutation", [|
-        Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber").Value))
-        Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber").Value))
-        Define.Field("failToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber").Value))
-        Define.AsyncField("promiseAndFailToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber").Value))
+        Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber")))
+        Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber")))
+        Define.Field("failToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
+        Define.AsyncField("promiseAndFailToChangeTheNumber", NumberHolder, "", [| Define.Input("newNumber", Int) |], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber")))
     |]))
 
 [<Fact>]
@@ -110,7 +110,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 
 [<Fact>]
 let ``Execute handles mutation with multiple arguments`` () =
-    let query = """mutation M ($arg1: Int,, $arg2: Int) {
+    let query = """mutation M ($arg1: Int!, $arg2: Int!) {
       immediatelyChangeTheNumber(newNumber: $arg2) {
         theNumber
       }

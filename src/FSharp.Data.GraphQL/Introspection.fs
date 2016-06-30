@@ -130,7 +130,7 @@ let rec __Type = Define.Object<IntrospectionTypeRef>(
                 | None -> None
                 | Some name ->
                     let found = findIntrospected ctx name
-                    match ctx.Arg "includeDeprecated" with
+                    match ctx.TryArg "includeDeprecated" with
                     | None | Some false -> found.Fields |> Option.map Array.toSeq
                     | Some true -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
         Define.Field("interfaces", Nullable (ListOf __Type), fun ctx t -> 
@@ -151,7 +151,7 @@ let rec __Type = Define.Object<IntrospectionTypeRef>(
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
-                match ctx.Arg "includeDeprecated" with
+                match ctx.TryArg "includeDeprecated" with
                 | None | Some false -> found.EnumValues |> Option.map Array.toSeq
                 | Some true -> found.EnumValues |> Option.map (fun x -> upcast  (x |> Array.filter (fun f -> not f.IsDeprecated))))
         Define.Field("inputFields", Nullable (ListOf __InputValue), resolve = fun ctx t ->
