@@ -59,6 +59,22 @@ module TypeCompiler =
             match x with
             | NativeType t -> t
             | ProvidedType (t, _) -> upcast t
+        static member findType (t: IntrospectionTypeRef) (schemaTypes: Map<string,TypeReference>) =
+            let findType (t: IntrospectionTypeRef) =
+                t.Name
+                |> Option.bind (fun name -> Map.tryFind name schemaTypes)
+                |> function Some t -> t.UnderlyingType | None -> typeof<obj>
+            let rec receiveType nullable t: Type =
+                match t.Kind, t.OfType with
+                | TypeKind.NON_NULL, Some inner ->
+                    receiveType false inner
+                | TypeKind.LIST, Some inner -> 
+                    let ofType = receiveType false inner
+                    ofType.MakeArrayType()
+                | other when nullable -> 
+                    optionType.MakeGenericType [| findType t |]
+                | other -> findType t
+            receiveType true t
 
     type ProviderSessionContext = 
         { Assembly: Assembly
@@ -73,26 +89,9 @@ module TypeCompiler =
                 "ID", NativeType typeof<string>
                 "__Schema", NativeType typeof<IntrospectionSchema>
                 "__Type", NativeType typeof<IntrospectionTypeRef> ]
-        member x.GetKnownType (t: IntrospectionTypeRef) =
-            let findType (t: IntrospectionTypeRef) =
-                match t.Name with
-                | Some name -> Map.tryFind name x.KnownTypes
-                | _ -> None
-                |> function Some t -> t.UnderlyingType | None -> typeof<obj>
-            let rec receiveType nullable t: Type =
-                match t.Kind, t.OfType with
-                | TypeKind.NON_NULL, Some inner ->
-                    receiveType false inner
-                | TypeKind.LIST, Some inner -> 
-                    let ofType = receiveType false inner
-                    ofType.MakeArrayType()
-                | other when nullable -> 
-                    optionType.MakeGenericType [| findType t |]
-                | other -> findType t
-            receiveType true t
 
     let genProperty (ctx: ProviderSessionContext) ifield =
-        let ptype = ctx.GetKnownType ifield.Type
+        let ptype = TypeReference.findType ifield.Type ctx.KnownTypes
         let p = ProvidedProperty(ifield.Name, ptype)
         if ifield.Description.IsSome then p.AddXmlDoc(ifield.Description.Value)
         // It's important to get the name of the field outside the quotation
@@ -112,7 +111,8 @@ module TypeCompiler =
         p
 
     let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
-        let param = ProvidedParameter(iarg.Name, ctx.GetKnownType iarg.Type, false, iarg.DefaultValue)
+        let ptype = TypeReference.findType iarg.Type ctx.KnownTypes
+        let param = ProvidedParameter(iarg.Name,ptype, false, iarg.DefaultValue)
         param
 
     let genMethod (ctx: ProviderSessionContext) (t: IntrospectionType) ifield =
@@ -120,7 +120,8 @@ module TypeCompiler =
             ifield.Args
             |> Array.map (genParam ctx t)
             |> Array.toList
-        let m = ProvidedMethod(ifield.Name, parameters, ctx.GetKnownType ifield.Type)
+        let mtype = TypeReference.findType ifield.Type ctx.KnownTypes
+        let m = ProvidedMethod(ifield.Name, parameters,mtype)
         m.IsStaticMethod <- true
         if t.Description.IsSome then m.AddXmlDoc(t.Description.Value)
         m

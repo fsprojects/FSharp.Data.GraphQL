@@ -21,6 +21,19 @@ module Util =
     open System.Text.RegularExpressions
     open FSharp.Data.GraphQL
 
+    let getOrFail (err: string) = function
+        | Some v -> v
+        | None -> failwith err
+
+    let tryOrFail (err: string) (f: unit->'T) =
+        try f()
+        with ex -> Exception(err, ex) |> raise
+
+    let firstToUpper (str: string) =
+        if str <> null && str.Length > 0
+        then str.[0].ToString().ToUpper() + str.Substring(1)
+        else str
+
     let requestSchema (url: string) =
         async {
             let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
@@ -40,6 +53,8 @@ module Util =
         }
 
     let compileTypesFromSchema asm ns (schema: IntrospectionSchema) = 
+        let underlyingType (t: TypeReference) =
+            t.UnderlyingType
         let ctx = {
             Assembly = asm
             Namespace = ns
@@ -52,13 +67,12 @@ module Util =
                 else Map.add t.Name (ProvidedType (initType ctx t, t)) acc) 
         let defctx = { ctx with KnownTypes = typeDefinitions }
         typeDefinitions
-        |> Seq.choose (fun kv -> 
+        |> Seq.iter (fun kv ->
             match kv.Value with
-            | NativeType _ -> None
+            | NativeType t -> ()
             | ProvidedType (t, itype) ->
-                genType defctx itype t
-                Some t)
-        |> Seq.toList
+                genType defctx itype t)
+        typeDefinitions
 
     let rec jsonToObject (token: JToken) =
         match token.Type with
@@ -71,7 +85,7 @@ module Util =
         | _ ->
             (token :?> JValue).Value
 
-    let launchQuery (serverUrl: string) (query: string) (queryName: string) =
+    let launchQuery (serverUrl: string) (queryName: string) (query: string) =
         async {
             use client = new WebClient()
             let queryJson = Map["query", query] |> JsonConvert.SerializeObject
@@ -81,48 +95,55 @@ module Util =
                 res.["errors"] :?> string[] |> String.concat "\n" |> failwith
             let data = res.["data"]
             return
-                // Using options gives problems with quotations and provided methods
-                // so we have to use null here instead
-                match queryName with
-                | null -> data
-                | queryName -> (res.["data"] :?> IDictionary<string,obj>).[queryName]
+                (res.["data"] :?> IDictionary<string,obj>).[queryName]
+                |> Option.ofObj // TODO: Will all query results be option by default?
         }
 
-    let getQueryName (serverUrl: string) (query: string) =
-        // This will fail if the query is not well formed
-        let doc = Parser.parse query
-        (None, doc.Definitions) ||> List.fold (fun queryOp def ->
-            match queryOp, def with
-            | None, Ast.OperationDefinition({ OperationType = Ast.Query } as q) -> Some q 
-            | _ -> queryOp)
-        |> function
-        | None -> failwith "Cannot find query operation"
-        | Some queryOp ->
-            match queryOp.SelectionSet with
-            | [Ast.Field { Name=name}] -> name // TODO: Check other possibilities
-            | _ -> null
-        // TODO: Make a first flight to be sure the query is accepted by the server?
-//        launchQuery serverUrl query |> Async.Catch |> Async.RunSynchronously |> function
-//        | Choice1Of2 _ -> ()
-//        | Choice2Of2 ex -> failwith ex.Message
+    let buildQuery (queryName: string) (queryFields: string)
+                   (argNames: string[]) (argValues: obj[]) =
+        Seq.zip argNames argValues
+        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (JsonConvert.SerializeObject v))
+        |> String.concat ", "
+        |> sprintf "{ %s(%s) %s }" queryName <| queryFields
 
-    let createStaticMethod (tdef: ProvidedTypeDefinition) (resType: Type) (serverUrl) =
-        let asyncType = typeof<Async<obj>>.GetGenericTypeDefinition().MakeGenericType(resType)
-        let m = ProvidedMethod("Query" + resType.Name, [], asyncType, IsStaticMethod=true)
+    let createStaticMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
+                           (serverUrl: string) (query: IntrospectionField) =
+        let findType (t: IntrospectionTypeRef) =
+            TypeReference.findType t schemaTypes
+        let resType = findType query.Type
+        let asyncType = typedefof<Async<obj>>.MakeGenericType(resType)
+        let args =
+            query.Args
+            |> Seq.map (fun x -> ProvidedParameter(x.Name, findType x.Type))
+            |> Seq.toList
+        let m = ProvidedMethod("Query" + firstToUpper query.Name, args, asyncType, IsStaticMethod=true)
         let sargs = [ProvidedStaticParameter("query", typeof<string>)]
-        m.DefineStaticParameters(sargs, fun methName parameterValues ->
-            match parameterValues with 
-            | [| :? string as query |] ->
-                let queryName = getQueryName serverUrl query
-                let m2 = ProvidedMethod(methName, [], asyncType, IsStaticMethod = true) 
-                m2.InvokeCode <- fun _ ->
-                    <@@ launchQuery serverUrl query queryName @@>
+        m.DefineStaticParameters(sargs, fun methName sargValues ->
+            match sargValues with 
+            | [| :? string as queryFields |] ->
+                let queryName = query.Name
+                let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+                let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true) 
+                m2.InvokeCode <- fun argValues ->
+                    <@@
+                        (%%Expr.NewArray(typeof<obj>, argValues |> List.map (fun e -> Expr.Coerce(e, typeof<obj>))): obj[])
+                        |> buildQuery queryName queryFields argNames
+                        |> launchQuery serverUrl queryName
+                    @@>
                 tdef.AddMember m2
                 m2
             | _ -> failwith "unexpected parameter values")
         m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
         m
 
+    let getQueries (schema: IntrospectionSchema) =
+        let queryType = schema.QueryType.Name |> getOrFail "No queryType.name"
+        schema.Types
+        |> Seq.collect (fun t ->
+            if t.Name = queryType
+            then defaultArg t.Fields [||]
+            else [||])
+        |> Seq.toList
 
 type internal ProviderSchemaConfig =
     { Namespace: string 
@@ -144,11 +165,20 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                 match choice with
                 | Choice1Of2 schema ->
                     let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
-                    let types = Util.compileTypesFromSchema asm "GraphQLTypes" schema
-                    tdef.AddMembers(types)
-                    for typ in types do
-                        Util.createStaticMethod tdef typ serverUrl
-                        |> tdef.AddMember
+                    let schemaTypes =
+                        Util.compileTypesFromSchema asm "GraphQLTypes" schema
+                    // Inner types
+                    schemaTypes
+                    |> Seq.choose (fun kv ->
+                        match kv.Value with
+                        | ProvidedType(t,_) -> Some t
+                        | NativeType _ -> None)
+                    |> Seq.toList
+                    |> tdef.AddMembers
+                    // Static methods
+                    Util.getQueries schema
+                    |> List.map (Util.createStaticMethod tdef schemaTypes serverUrl)
+                    |> tdef.AddMembers
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
             | _ -> failwith "unexpected parameter values")
