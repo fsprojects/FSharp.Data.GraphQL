@@ -4,24 +4,31 @@ open FSharp.Data.GraphQL
 open System.Collections.Generic
 
 let [<Literal>] serverUrl = "http://localhost:8083"
-let [<Literal>] query = "{ id, name, friends { name } }"
+
+// The name and arguments of the query will be automatically set by the type provider
+let [<Literal>] queryFields = "{ id, name, friends { name } }"
 
 type MyClient = GraphQLProvider<serverUrl>
 
 let hero =
-    MyClient.QueryHero<query>("1000")
+    MyClient.QueryHero<queryFields>("1000")
+    |> Async.RunSynchronously
+
+let droid =
+    MyClient.QueryDroid<queryFields>("2000")
     |> Async.RunSynchronously
 
 // Result is an option type
-printfn "My hero is %A" (hero |> Option.map (fun h -> h.name))
+match hero with
+| None -> ()
+| Some hero ->
+    printfn "My hero is %A" hero.name
+    printfn "My hero's friends are:"
+    hero.friends
+    |> Array.choose (fun x -> x.name)
+    |> Array.iter (printfn "- %s")
 
-//printfn "My hero's friends are:"
-//hero.friends
-//|> Array.choose (fun x -> x.name)
-//|> Array.iter (printfn "- %s")
-
-
-let [<Literal>] query2 = "{ hero(id: \"1000\") { id, name }"
+let [<Literal>] queryFields2 = "{ id, name"
 // This code won't compile as the query is not properly formed
-// MyClient.QueryHuman<query2>()
+// MyClient.QueryHero<queryFields2>("1000")
 

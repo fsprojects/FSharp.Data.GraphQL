@@ -90,21 +90,21 @@ module TypeCompiler =
                 "__Schema", NativeType typeof<IntrospectionSchema>
                 "__Type", NativeType typeof<IntrospectionTypeRef> ]
 
-    let genProperty (ctx: ProviderSessionContext) ifield =
-        let ptype = TypeReference.findType ifield.Type ctx.KnownTypes
+    let genProperty (ctx: ProviderSessionContext) docPrefix forceNullable ifield =
+        let ptype =
+            let ptype = TypeReference.findType ifield.Type ctx.KnownTypes
+            if forceNullable && ptype.Name <> "FSharpOption`1"
+            then optionType.MakeGenericType [| ptype |]
+            else ptype
         let p = ProvidedProperty(ifield.Name, ptype)
-        if ifield.Description.IsSome then p.AddXmlDoc(ifield.Description.Value)
+        p.AddXmlDoc(docPrefix + (defaultArg ifield.Description ""))
         // It's important to get the name of the field outside the quotation
         // in order to prevent errors at runtime
         let name = ifield.Name
         p.GetterCode <- 
-            // TODO Union types. Also, Option must be of the specific property type, not obj 
-            match ifield.Type.Kind with
-            | TypeKind.NON_NULL -> fun args ->
+            match forceNullable, ifield.Type.Kind with
+            | false, TypeKind.NON_NULL -> fun args ->
                 getDynamicField name args.[0]
-            | TypeKind.LIST -> fun args ->
-                let eltype = ptype.GetElementType()
-                Expr.Coerce(getDynamicField name args.[0], eltype)
             | _ -> fun args ->
                 getDynamicField name args.[0]
                 |> makeOption ptype
@@ -140,20 +140,10 @@ module TypeCompiler =
         itype.Fields.Value
         |> Seq.choose (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx field) :> MemberInfo |> Some
+            then (genProperty ctx "" false field) :> MemberInfo |> Some
             else None //TODO: upcast genMethod ctx itype field
         )
         |> Seq.toList
-        |> t.AddMembers
-
-    let genInterface (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
-        if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
-        itype.Fields.Value
-        |> Array.map (fun field ->
-            if field.Args.Length = 0
-            then (genProperty ctx field) :> MemberInfo
-            else upcast genMethod ctx itype field)
-        |> Array.toList
         |> t.AddMembers
 
     let genInputObject (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
@@ -161,7 +151,7 @@ module TypeCompiler =
         itype.Fields.Value
         |> Array.map (fun field ->
             if field.Args.Length = 0
-            then (genProperty ctx field) :> MemberInfo
+            then (genProperty ctx "" false field) :> MemberInfo
             else upcast genMethod ctx itype field)
         |> Array.toList
         |> t.AddMembers
@@ -174,32 +164,45 @@ module TypeCompiler =
         |> t.AddMembers
 
     let genUnion (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) =
+        let (|MapTryFind|_|) (map: Map<'k,'v>) (key: 'k) =
+            Map.tryFind key map
+        let optionToSeq (opt: #seq<'T> option): 'T seq =
+            Option.toList opt |> Seq.concat
         if itype.Description.IsSome then t.AddXmlDoc(itype.Description.Value)
-        (Map.empty, itype.PossibleTypes.Value)
+        let unionTypes = optionToSeq itype.PossibleTypes |> Seq.toList
+        (Map.empty, unionTypes)
         ||> Seq.fold (fun fields typ ->
-            if typ.Name.IsSome && ctx.KnownTypes.ContainsKey(typ.Name.Value) then
-                match ctx.KnownTypes.[typ.Name.Value] with
-                | ProvidedType (_, itype) when itype.Fields.IsSome ->
-                    (fields, itype.Fields.Value) ||> Seq.fold (fun fields field ->
-                        if field.Args.Length = 0 && not(fields.ContainsKey(field.Name))
-                        then Map.add field.Name ((genProperty ctx field) :> MemberInfo) fields
-                        else fields)
-                | _ -> fields
-            else
-                fields)
-        |> Map.toList
-        |> List.map snd
+            match typ.Name with
+            | Some(MapTryFind ctx.KnownTypes (ProvidedType (_, itype))) ->
+                (fields, optionToSeq itype.Fields)
+                ||> Seq.fold (fun fields field ->
+                    match Map.tryFind field.Name fields with
+                    | Some (prop, typs) ->
+                        Map.add field.Name (field, typ.Name.Value::typs) fields
+                    | None when field.Args.Length = 0 ->
+                        Map.add field.Name (field, [typ.Name.Value]) fields
+                    | None-> fields)
+            | _ -> fields)
+        |> Seq.map (fun kv ->
+            match kv.Value with
+            | (field, typs) ->
+                // Add type owners of this property to comment
+                let docPrefix = sprintf "(%s) " (FSharp.Core.String.concat "/" typs)
+                // If the property doesn't belong to all types, force it to be nullable
+                let forceNullable = typs.Length < unionTypes.Length
+                genProperty ctx docPrefix forceNullable field :> MemberInfo)
+        |> Seq.toList
         |> t.AddMembers
 
     let genType (ctx: ProviderSessionContext) (itype: IntrospectionType) (t: ProvidedTypeDefinition) = 
         match itype.Kind with
-        | TypeKind.OBJECT -> genObject ctx itype t
+        | TypeKind.OBJECT | TypeKind.INTERFACE -> genObject ctx itype t
         | TypeKind.UNION -> genUnion ctx itype t
+//        | TypeKind.ENUM -> genEnum ctx itype t
         | _ -> () // TODO: Complete other type kinds
 //        | TypeKind.INPUT_OBJECT -> genInputObject ctx itype t
+          // TODO: Parse scalars? They shouldn't reach this point
 //        | TypeKind.SCALAR -> genScalar ctx itype t
-//        | TypeKind.ENUM -> genEnum ctx itype t
-//        | TypeKind.INTERFACE -> genInterface ctx itype t
 //        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
         
     let initType (ctx: ProviderSessionContext) (itype: IntrospectionType) = 

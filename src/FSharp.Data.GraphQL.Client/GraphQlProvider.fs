@@ -85,7 +85,7 @@ module Util =
         | _ ->
             (token :?> JValue).Value
 
-    let launchQuery (serverUrl: string) (queryName: string) (query: string) =
+    let launchQuery (serverUrl: string) (queryName: string) (cont: obj->'T) (query: string) =
         async {
             use client = new WebClient()
             let queryJson = Map["query", query] |> JsonConvert.SerializeObject
@@ -93,10 +93,8 @@ module Util =
             let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
             if res.ContainsKey("errors") then
                 res.["errors"] :?> string[] |> String.concat "\n" |> failwith
-            let data = res.["data"]
-            return
-                (res.["data"] :?> IDictionary<string,obj>).[queryName]
-                |> Option.ofObj // TODO: Will all query results be option by default?
+            let data = (res.["data"] :?> IDictionary<string,obj>).[queryName]
+            return cont(data)
         }
 
     let buildQuery (queryName: string) (queryFields: string)
@@ -110,6 +108,8 @@ module Util =
                            (serverUrl: string) (query: IntrospectionField) =
         let findType (t: IntrospectionTypeRef) =
             TypeReference.findType t schemaTypes
+        let makeExprArray (exprs: Expr list) =
+            Expr.NewArray(typeof<obj>, exprs |> List.map (fun e -> Expr.Coerce(e, typeof<obj>)))
         let resType = findType query.Type
         let asyncType = typedefof<Async<obj>>.MakeGenericType(resType)
         let args =
@@ -124,12 +124,21 @@ module Util =
                 let queryName = query.Name
                 let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
                 let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true) 
-                m2.InvokeCode <- fun argValues ->
-                    <@@
-                        (%%Expr.NewArray(typeof<obj>, argValues |> List.map (fun e -> Expr.Coerce(e, typeof<obj>))): obj[])
-                        |> buildQuery queryName queryFields argNames
-                        |> launchQuery serverUrl queryName
-                    @@>
+                m2.InvokeCode <-
+                    if resType.Name = "FSharpOption`1" then
+                        fun argValues ->
+                        <@@
+                            (%%makeExprArray argValues: obj[])
+                            |> buildQuery queryName queryFields argNames
+                            |> launchQuery serverUrl queryName Option.ofObj
+                        @@>
+                    else
+                        fun argValues ->
+                        <@@
+                            (%%makeExprArray argValues: obj[])
+                            |> buildQuery queryName queryFields argNames
+                            |> launchQuery serverUrl queryName id
+                        @@>
                 tdef.AddMember m2
                 m2
             | _ -> failwith "unexpected parameter values")
