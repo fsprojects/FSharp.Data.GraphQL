@@ -99,10 +99,21 @@ module Util =
 
     let buildQuery (queryName: string) (queryFields: string)
                    (argNames: string[]) (argValues: obj[]) =
+        let queryFields, queryFragments =
+            let mutable i = 0
+            let mutable openBraces = 0
+            let mutable closeBraces = 0
+            while closeBraces = 0 || closeBraces < openBraces do
+                match queryFields.Chars(i) with
+                | '{' -> openBraces <- openBraces + 1
+                | '}' -> closeBraces <- closeBraces + 1
+                | _ -> ()
+                i <- i + 1
+            queryFields.Substring(0, i), queryFields.Substring(i)
         Seq.zip argNames argValues
         |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (JsonConvert.SerializeObject v))
         |> String.concat ", "
-        |> sprintf "{ %s(%s) %s }" queryName <| queryFields
+        |> fun args -> sprintf "{ %s(%s) %s }%s" queryName args queryFields queryFragments
 
     let createStaticMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
                            (serverUrl: string) (query: IntrospectionField) =
@@ -121,6 +132,8 @@ module Util =
         m.DefineStaticParameters(sargs, fun methName sargValues ->
             match sargValues with 
             | [| :? string as queryFields |] ->
+                // This will fail if the query is not well formed
+                do Parser.parse queryFields |> ignore
                 let queryName = query.Name
                 let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
                 let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true) 

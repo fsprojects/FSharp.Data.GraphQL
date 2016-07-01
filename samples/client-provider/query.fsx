@@ -7,11 +7,12 @@ let [<Literal>] serverUrl = "http://localhost:8083"
 
 // The name and arguments of the query will be automatically set by the type provider
 let [<Literal>] queryFields = "{ id, name, appearsIn, friends { name } }"
+let [<Literal>] queryFieldsWithFragments = "{ ...data, friends { name } } fragment data on Human { id, name, appearsIn }"
 
 type MyClient = GraphQLProvider<serverUrl>
 
 let hero =
-    MyClient.QueryHero<queryFields>("1000")
+    MyClient.QueryHero<queryFieldsWithFragments>("1000")
     |> Async.RunSynchronously
 
 let droid =
@@ -32,5 +33,5 @@ match hero with
 
 let [<Literal>] queryFields2 = "{ id, name"
 // This code won't compile as the query is not properly formed
-// MyClient.QueryHero<queryFields2>("1000")
+//MyClient.QueryHero<queryFields2>("1000")
 
