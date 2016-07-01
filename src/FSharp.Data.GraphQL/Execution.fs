@@ -268,13 +268,13 @@ let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
     typedef = __Type,
-    args = [|
+    args = [
         { Name = "name"
           Description = None
           Type = String
           DefaultValue = None
           ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
-    |],
+    ],
     resolve = fun ctx (_:obj) -> 
         ctx.Schema.Introspected.Types 
         |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 

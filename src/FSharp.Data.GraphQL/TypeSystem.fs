@@ -1262,10 +1262,10 @@ module SchemaDefinitions =
               CoerceValue = coerceValue }
         
         /// GraphQL type for user defined enums
-        static member Enum(name : string, options : EnumValue<'Val> [], ?description : string) : EnumDefinition<'Val> = 
+        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDefinition<'Val> = 
             { Name = name
               Description = description
-              Options = options }
+              Options = options |> List.toArray }
         
         /// Single enum option to be used as argument in <see cref="Schema.Enum"/>
         static member EnumValue(name : string, value : 'Val, ?description : string, ?deprecationReason : string) : EnumValue<'Val> = 
@@ -1275,34 +1275,34 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
         
         /// GraphQL custom object type
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> [], ?description : string, 
-                             ?interfaces : InterfaceDef [], ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
+        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
+                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fieldsFn())
-                     Implements = defaultArg interfaces [||]
+                     FieldsFn = lazy (fieldsFn() |> List.toArray)
+                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
         /// GraphQL custom object type
-        static member Object(name : string, fields : FieldDef<'Val> [], ?description : string, 
-                             ?interfaces : InterfaceDef [], ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
+        static member Object(name : string, fields : FieldDef<'Val> list, ?description : string, 
+                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fields)
-                     Implements = defaultArg interfaces [||]
+                     FieldsFn = lazy (fields |> List.toArray)
+                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef [], ?description : string) : InputObjectDefinition<'Out> = 
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
             { Name = name
-              FieldsFn = fieldsFn
+              FieldsFn = fun () -> fieldsFn() |> List.toArray
               Description = description }
         
         /// GraphQL custom input object type
-        static member InputObject(name : string, fields : InputFieldDef [], ?description : string) : InputObjectDefinition<'Out> = 
+        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> = 
             { Name = name
               Description = description
-              FieldsFn = fun () -> fields }
+              FieldsFn = fun () -> fields |> List.toArray }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
@@ -1336,24 +1336,24 @@ module SchemaDefinitions =
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef [], 
+        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
-                     Args = args
+                     Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef [], 
+        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res, deprecationReason : string) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
-                     Args = args
+                     Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
         
@@ -1381,24 +1381,24 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef [], resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
+                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
-                     Args = args
+                     Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef [], resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
+                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
             upcast { Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
-                     Args = args
+                     Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
         
@@ -1410,26 +1410,26 @@ module SchemaDefinitions =
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> [], ?description : string, 
+        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = fieldsFn
+                     FieldsFn = fun () -> fieldsFn() |> List.toArray
                      ResolveType = resolveType }
         
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
-        static member Interface(name : string, fields : FieldDef<'Val> [], ?description : string, 
+        static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = fun () -> fields
+                     FieldsFn = fun () -> fields |> List.toArray
                      ResolveType = resolveType }
         
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
-        static member Union(name : string, options : ObjectDef [], resolveValue : 'In -> 'Out, 
+        static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out, 
                             ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> = 
             upcast { Name = name
                      Description = description
-                     Options = options
+                     Options = options |> List.toArray
                      ResolveType = resolveType
                      ResolveValue = resolveValue }

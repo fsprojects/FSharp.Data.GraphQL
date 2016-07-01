@@ -23,18 +23,18 @@ let cars = [
 
 let rec Person = Define.Object<Person>(
     name = "Person",
-    interfaces = [| Node |],
-    fields = [|
+    interfaces = [ Node ],
+    fields = [
         Define.Field("id", ID, fun _ person -> toGlobalId "person" person.Id)
         Define.Field("name", String, fun _ person -> person.Name)
-        Define.Field("age", Int, fun _ person -> person.Age) |])
+        Define.Field("age", Int, fun _ person -> person.Age) ])
 
 and Car = Define.Object<Car>(
     name = "Car",
-    interfaces = [| Node |],
-    fields = [|
+    interfaces = [ Node ],
+    fields = [
         Define.Field("id", ID, fun _ car -> toGlobalId "car" car.Id)
-        Define.Field("model", String, fun _ car -> car.Model) |])
+        Define.Field("model", String, fun _ car -> car.Model) ])
 
 and resolve _ _ id =
     match id with
@@ -43,7 +43,7 @@ and resolve _ _ id =
 
 and Node = Define.Node (fun () -> [ Person; Car ])
 
-let schema = Schema(Define.Object("Query", [| Define.NodeField(Node, resolve) |]), config = { SchemaConfig.Default with Types = [ Person; Car ] })
+let schema = Schema<unit>(Define.Object("Query", [ Define.NodeField(Node, resolve) ]), config = { SchemaConfig.Default with Types = [ Person; Car ] })
 
 open Xunit
 

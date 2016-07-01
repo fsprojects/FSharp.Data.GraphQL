@@ -39,29 +39,29 @@ type Person =
 
 let NamedType = Define.Interface<INamed>(
     name = "Named",
-    fields = [| Define.Field("name", String) |])
+    fields = [ Define.Field("name", String) ])
 
 let DogType = Define.Object<Dog>(
     name = "Dog",
     isTypeOf = is<Dog>,
-    interfaces = [| NamedType |],
-    fields = [|
+    interfaces = [ NamedType ],
+    fields = [
         Define.Field("name", String)
         Define.Field("barks", Boolean)
-    |])
+    ])
     
 let CatType = Define.Object<Cat>(
     name = "Cat",
     isTypeOf = is<Cat>,
-    interfaces = [| NamedType |],
-    fields = [|
+    interfaces = [ NamedType ],
+    fields = [
         Define.Field("name", String)
         Define.Field("meows", Boolean)
-    |])
+    ])
 
 let PetType = Define.Union(
     name = "Pet",
-    options = [| CatType; DogType |],
+    options = [ CatType; DogType ],
     resolveType = (fun pet ->
         match pet with
         | Cat _ -> upcast CatType
@@ -74,12 +74,12 @@ let PetType = Define.Union(
 let PersonType = Define.Object(
     name = "Person",
     isTypeOf = is<Person>,
-    interfaces = [| NamedType |],
-    fields = [|
+    interfaces = [ NamedType ],
+    fields = [
         Define.Field("name", String)
         Define.Field("pets", ListOf PetType, fun _ person -> upcast person.Pets)
         Define.Field("friends", ListOf NamedType)
-    |])
+    ])
 
 let schema = Schema(query = PersonType, config = { SchemaConfig.Default with Types = [ PetType ] })
 

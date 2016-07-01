@@ -19,7 +19,7 @@ type SchemaConfig =
         { Types = []
           Directives = [IncludeDirective; SkipDirective] }
 
-type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as this =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) as this =
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -214,11 +214,11 @@ type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as t
     do
         compileSchema getPossibleTypes typeMap
         
-    member this.AsyncExecute(ast: Document, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+    member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables data errors
+                let! result = execute this ast operationName variables (data |> Option.map box) errors
                 let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
                 return upcast NameValueLookup.ofList output
             with 
@@ -227,12 +227,12 @@ type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as t
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
 
-    member this.AsyncExecute(queryOrMutation: string, ?data: obj, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+    member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         async {
             try
                 let ast = parse queryOrMutation
                 let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables data errors
+                let! result = execute this ast operationName variables (data |> Option.map box) errors
                 let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
                 return upcast NameValueLookup.ofList output
             with 
@@ -244,10 +244,10 @@ type Schema (query: ObjectDef, ?mutation: ObjectDef, ?config: SchemaConfig) as t
 
     interface ISchema with        
         member val TypeMap = typeMap
-        member val Query = query
-        member val Mutation: ObjectDef option = mutation
         member val Directives = schemaConfig.Directives |> List.toArray
         member val Introspected = introspected
+        member x.Query = upcast query
+        member x.Mutation = mutation |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
