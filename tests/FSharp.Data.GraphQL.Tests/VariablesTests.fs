@@ -27,12 +27,12 @@ type TestInput = {
 }
 let TestInputObject = Define.InputObject<TestInput>(
     name = "TestInputObject",
-    fields = [|
+    fields = [
         Define.Input("a", Nullable String)
         Define.Input("b", Nullable(ListOf (Nullable String)))
         Define.Input("c", String)
         Define.Input("d", Nullable TestComplexScalar)
-    |])
+    ])
 
 type TestNestedInput = {
     na: TestInput option
@@ -40,10 +40,10 @@ type TestNestedInput = {
 }
 let TestNestedInputObject = Define.InputObject<TestNestedInput>(
     name = "TestNestedInputObject",
-    fields = [|
+    fields = [
         Define.Input("na", Nullable TestInputObject)
         Define.Input("nb", String)
-    |])
+    ])
 
 let stringifyArg name (ctx: ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
@@ -53,17 +53,17 @@ let stringifyInput = stringifyArg "input"
 
 let TestType = Define.Object<unit>(
     name = "TestType",
-    fields = [|
-        Define.Field("fieldWithObjectInput", String, "", [| Define.Input("input", Nullable TestInputObject) |], stringifyInput)
-        Define.Field("fieldWithNullableStringInput", String, "", [| Define.Input("input", Nullable String) |], stringifyInput)
-        Define.Field("fieldWithNonNullableStringInput", String, "", [| Define.Input("input", String) |], stringifyInput)
-        Define.Field("fieldWithDefaultArgumentValue", String, "", [| Define.Input("input", Nullable String, Some "hello world") |], stringifyInput)
-        Define.Field("fieldWithNestedInputObject", String, "", [| Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) |], stringifyInput)
-        Define.Field("list", String, "", [| Define.Input("input", Nullable(ListOf (Nullable String))) |], stringifyInput)
-        Define.Field("nnList", String, "", [| Define.Input("input", ListOf (Nullable String)) |], stringifyInput)
-        Define.Field("listNN", String, "", [| Define.Input("input", Nullable (ListOf String)) |], stringifyInput)
-        Define.Field("nnListNN", String, "", [| Define.Input("input", ListOf String) |], stringifyInput)
-    |])
+    fields = [
+        Define.Field("fieldWithObjectInput", String, "", [ Define.Input("input", Nullable TestInputObject) ], stringifyInput)
+        Define.Field("fieldWithNullableStringInput", String, "", [ Define.Input("input", Nullable String) ], stringifyInput)
+        Define.Field("fieldWithNonNullableStringInput", String, "", [ Define.Input("input", String) ], stringifyInput)
+        Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
+        Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) ], stringifyInput)
+        Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
+        Define.Field("nnList", String, "", [ Define.Input("input", ListOf (Nullable String)) ], stringifyInput)
+        Define.Field("listNN", String, "", [ Define.Input("input", Nullable (ListOf String)) ], stringifyInput)
+        Define.Field("nnListNN", String, "", [ Define.Input("input", ListOf String) ], stringifyInput)
+    ])
 
 let schema = Schema(TestType)
 

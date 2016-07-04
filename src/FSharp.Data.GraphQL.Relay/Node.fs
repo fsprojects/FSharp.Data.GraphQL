@@ -60,7 +60,7 @@ module GlobalId =
                 name = "node",
                 typedef = Nullable nodeDef,
                 description = "Fetches an object given its ID",
-                args = [| Define.Input("id", ID, description = "Identifier of an object") |],
+                args = [ Define.Input("id", ID, description = "Identifier of an object") ],
                 resolve = fun ctx value -> 
                     let id = ctx.Arg("id")
                     resolve ctx value id)
@@ -68,6 +68,6 @@ module GlobalId =
         static member Node (possibleTypes: unit -> ObjectDef list) = Define.Interface(
             name = "Node",
             description = "An object that can be uniquely identified by its id",
-            fields = [| Define.Field("id", ID) |],
+            fields = [ Define.Field("id", ID) ],
             resolveType = resolveTypeFun possibleTypes)
         
