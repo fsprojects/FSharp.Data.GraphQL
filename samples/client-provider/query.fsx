@@ -31,15 +31,17 @@ match hero with
     |> Array.choose (fun x -> x.name)
     |> Array.iter (printfn "- %s")
 
-let freeQuery = "{ hero(id: \"1000\"){ i, name, appearsIn, friends { name } } }"
+let freeQuery = "{ hero(id: \"1000\"){ id, name, appearsIn, friends { name } } }"
 
 let hero2 =
     MyClient.Query(freeQuery)
     |> Async.Catch
     |> Async.RunSynchronously
     |> function
-    | Choice1Of2 hero -> Some (hero :?> MyClient.Types.Human)
+    | Choice1Of2 data -> (data :?> IDictionary<string,obj>).["hero"] :?> MyClient.Types.Human |> Some
     | Choice2Of2 err -> printfn "ERROR: %s" err.Message; None
+
+printfn "%A" hero2.Value.name
 
 let [<Literal>] queryFields2 = "{ id, name"
 // This code won't compile as the query is not properly formed

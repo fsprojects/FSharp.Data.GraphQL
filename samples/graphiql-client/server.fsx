@@ -89,9 +89,9 @@ let EpisodeType =
     name = "Episode",
     description = "One of the films in the Star Wars Trilogy",
     options = [
-        Define.EnumValue("NEWHOPE", Episode.NewHope, "Released in 1977.")
-        Define.EnumValue("EMPIRE", Episode.Empire, "Released in 1980.")
-        Define.EnumValue("JEDI", Episode.Jedi, "Released in 1983.") ])
+        Define.EnumValue("NewHope", Episode.NewHope, "Released in 1977.")
+        Define.EnumValue("Empire", Episode.Empire, "Released in 1980.")
+        Define.EnumValue("Jedi", Episode.Jedi, "Released in 1983.") ])
 
 let rec CharacterType =
   Define.Union(
