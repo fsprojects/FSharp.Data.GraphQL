@@ -140,8 +140,8 @@ let Query =
   Define.Object(
     name = "Query",
     fields = [
-        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx () -> getHuman (ctx.Arg("id").Value))
-        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx () -> getDroid (ctx.Arg("id").Value)) ])
+        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx () -> getHuman (ctx.Arg("id")))
+        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx () -> getDroid (ctx.Arg("id"))) ])
 
 let schema = Schema(Query)
 

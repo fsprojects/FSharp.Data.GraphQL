@@ -12,11 +12,11 @@ let [<Literal>] queryFieldsWithFragments = "{ ...data, friends { name } } fragme
 type MyClient = GraphQLProvider<serverUrl>
 
 let hero =
-    MyClient.QueryHero<queryFieldsWithFragments>("1000")
+    MyClient.Queries.Hero<queryFieldsWithFragments>("1000")
     |> Async.RunSynchronously
 
 let droid =
-    MyClient.QueryDroid<queryFields>("2000")
+    MyClient.Queries.Droid<queryFields>("2000")
     |> Async.RunSynchronously
 
 // Result is an option type
@@ -24,12 +24,22 @@ match hero with
 | None -> ()
 | Some hero ->
     printfn "My hero is %A" hero.name
-    printfn "Appears in %O: %b" MyClient.Episode.Empire
-        (hero.appearsIn |> Array.exists ((=) MyClient.Episode.Empire))
+    printfn "Appears in %O: %b" MyClient.Types.Episode.Empire
+        (hero.appearsIn |> Array.exists ((=) MyClient.Types.Episode.Empire))
     printfn "My hero's friends are:"
     hero.friends
     |> Array.choose (fun x -> x.name)
     |> Array.iter (printfn "- %s")
+
+let freeQuery = "{ hero(id: \"1000\"){ i, name, appearsIn, friends { name } } }"
+
+let hero2 =
+    MyClient.Query(freeQuery)
+    |> Async.Catch
+    |> Async.RunSynchronously
+    |> function
+    | Choice1Of2 hero -> Some (hero :?> MyClient.Types.Human)
+    | Choice2Of2 err -> printfn "ERROR: %s" err.Message; None
 
 let [<Literal>] queryFields2 = "{ id, name"
 // This code won't compile as the query is not properly formed
