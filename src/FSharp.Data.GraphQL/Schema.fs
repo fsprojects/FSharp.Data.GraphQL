@@ -178,7 +178,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             let possibleTypes = 
                 getPossibleTypes idef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
-            IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes )
+            IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
 
     let introspectSchema types : IntrospectionSchema =
         let inamed = 
@@ -213,6 +213,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
     let introspected = introspectSchema typeMap      
     do
         compileSchema getPossibleTypes typeMap
+        match Validation.validate typeMap with
+        | Validation.Success -> ()
+        | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
         
     member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         async {
