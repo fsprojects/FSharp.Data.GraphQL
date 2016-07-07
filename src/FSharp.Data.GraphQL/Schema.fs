@@ -19,7 +19,7 @@ type SchemaConfig =
         { Types = []
           Directives = [IncludeDirective; SkipDirective] }
 
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) as this =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig) as this =
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -74,7 +74,11 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             mutation 
             |> Option.map (fun (Named n) -> n) 
             |> Option.toList
-        initialTypes @ m @ schemaConfig.Types
+        let s = 
+            subscription
+            |> Option.map (fun (Named n) -> n)
+            |> Option.toList
+        initialTypes @ m @ s @ schemaConfig.Types
         |> List.fold insert Map.empty
 
     let implementations =
@@ -205,7 +209,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         let ischema =
             { QueryType = Map.find query.Name inamed
               MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-              SubscriptionType = None // not supported yet
+              SubscriptionType = subscription |> Option.map (fun m -> Map.find m.Name inamed)
               Types = itypes
               Directives = idirectives }
         ischema
@@ -251,6 +255,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         member val Introspected = introspected
         member x.Query = upcast query
         member x.Mutation = mutation |> Option.map (fun x -> upcast x)
+        member x.Subscription = subscription |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =

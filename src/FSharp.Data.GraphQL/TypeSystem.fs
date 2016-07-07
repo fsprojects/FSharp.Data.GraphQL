@@ -151,6 +151,7 @@ type ISchema =
         abstract TypeMap : Map<string, NamedDef>
         abstract Query : ObjectDef
         abstract Mutation : ObjectDef option
+        abstract Subscription : ObjectDef option
         abstract Directives : DirectiveDef []
         abstract TryFindType : string -> NamedDef option
         abstract GetPossibleTypes : AbstractDef -> ObjectDef []
