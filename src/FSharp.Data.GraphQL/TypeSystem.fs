@@ -400,7 +400,6 @@ and EnumDefinition<'Val> =
             |> Seq.ofArray
             |> Seq.cast<EnumVal>
             |> Seq.toArray
-    
     interface NamedDef with
         member x.Name = x.Name
     
