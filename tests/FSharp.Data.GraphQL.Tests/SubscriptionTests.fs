@@ -93,3 +93,33 @@ let ``Execute subscription triggers observable when event is triggered after sub
           [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 3 ] ] ] ]
         |> List.map toLookup
     observed |> List.rev |> equals expected
+
+[<Fact>]
+let ``Execute subscription handles label`` () =
+    let mutable observed : NameValueLookup list = []
+    let schema = schema (fun x -> observed <- x :: observed)
+    let query = """subscription M {
+      label: numberChangedSubscribe {
+        number {
+          tn: theNumber
+        }
+      }
+    }"""
+    let root =
+        { NumberHolder = { Number = 1 }
+          NumberChangedSubscribe = observable }
+
+    let result = sync <| schema.AsyncExecute(parse query, root)
+
+    event.Trigger { NumberHolder = { Number = 1 } }
+    event.Trigger { NumberHolder = { Number = 2 } }
+
+    let expected = NameValueLookup.ofList ["label", null]
+    noErrors result
+    result.["data"] |> equals (upcast expected)
+
+    let expected =
+        [ [ "label", box ["number", box [ "tn", box 1 ] ] ]
+          [ "label", box ["number", box [ "tn", box 2 ] ] ] ]
+        |> List.map toLookup
+    observed |> List.rev |> equals expected

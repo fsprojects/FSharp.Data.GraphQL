@@ -490,6 +490,11 @@ type Define with
                          |> Array.filter (fun f -> f.Name = name)
                          |> Array.fold (fun _ f -> f.SelectionSet) []
 
+                     let label =
+                         ctx.Fields
+                         |> Array.filter (fun f -> f.Name = name)
+                         |> Array.fold (fun _ f -> f.AliasOrName) name
+
                      let execute x =
                         collectFields ctx.ExecutionContext typedef set (ref [])
                         |> executeFields ctx.ExecutionContext typedef x
@@ -498,7 +503,7 @@ type Define with
                      |> Async.Global.ofJob
                      |> Async.RunSynchronously
                      |> Observable.map (fun x ->
-                        [name,
+                        [label,
                             execute x
                             |> Async.Global.ofJob
                             |> Async.RunSynchronously
