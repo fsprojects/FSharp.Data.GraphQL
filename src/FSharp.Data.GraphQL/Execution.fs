@@ -480,7 +480,8 @@ TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> Obje
 type Define with
     /// Single subscription defined inside either object types or interfaces 
     static member Subscription(name : string, typedef : ObjectDef<'Res>,
-                               subscribe : ResolveFieldContext -> 'Val -> IObservable<NameValueLookup> -> unit) : FieldDef<'Val> =
+                               subscribe : ResolveFieldContext -> 'Val -> IObservable<NameValueLookup> -> unit,
+                               ?resolve: ResolveFieldContext -> 'Val -> IObservable<'Res>) : FieldDef<'Val> =
         upcast { Name = name
                  Description = None
                  Type = typedef
@@ -499,9 +500,13 @@ type Define with
                         collectFields ctx.ExecutionContext typedef set (ref [])
                         |> executeFields ctx.ExecutionContext typedef x
 
-                     defaultResolve<'Val, IObservable<'Res>> name ctx value
-                     |> Async.Global.ofJob
-                     |> Async.RunSynchronously
+                     let resolve =
+                         defaultArg resolve <| fun ctx value ->
+                             defaultResolve<'Val, IObservable<'Res>> name ctx value
+                             |> Async.Global.ofJob
+                             |> Async.RunSynchronously
+
+                     resolve ctx value
                      |> Observable.map (fun x ->
                         [label,
                             execute x

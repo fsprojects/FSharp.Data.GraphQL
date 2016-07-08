@@ -21,9 +21,10 @@ let observable =
 
 let NumberHolder = Define.Object("NumberHolder", [ Define.Field("theNumber", Int, fun _ x -> x.Number) ])
 let NumberChanged = Define.Object("NumberChanged", [ Define.Field("number", NumberHolder, fun _ (x : NumberChanged) -> x.NumberHolder) ])
+let Query = Define.Object("Query", [ Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) ])
 
 let schema f = Schema(
-    query = Define.Object("Query", [ Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) ]),
+    query = Query,
     subscription = Define.Object("Subscription", [
         Define.Subscription("numberChangedSubscribe", NumberChanged, (fun _ _ o -> o.Add f))
     ]))
@@ -121,5 +122,43 @@ let ``Execute subscription handles label`` () =
     let expected =
         [ [ "label", box ["number", box [ "tn", box 1 ] ] ]
           [ "label", box ["number", box [ "tn", box 2 ] ] ] ]
+        |> List.map toLookup
+    observed |> List.rev |> equals expected
+
+[<Fact>]
+let ``Execute resolves correctly`` () =
+    let mutable observed : NameValueLookup list = []
+    let anotherEvent = Event<NumberChanged>()
+    let anotherObservable =
+        anotherEvent.Publish
+        |> Observable.map id
+    let schema = Schema(
+        query = Query,
+        subscription = Define.Object("Subscription", [
+            Define.Subscription("numberChangedSubscribe", NumberChanged,
+                (fun _ _ o -> o.Add (fun x -> observed <- x :: observed)),
+                (fun _ _ -> anotherObservable))
+        ]))
+    let query = """subscription M {
+      numberChangedSubscribe {
+        number {
+          theNumber
+        }
+      }
+    }"""
+    let root =
+        { NumberHolder = { Number = 1 }
+          NumberChangedSubscribe = observable }
+
+    schema.AsyncExecute(parse query, root) |> sync |> ignore
+
+    event.Trigger { NumberHolder = { Number = 1 } }
+    event.Trigger { NumberHolder = { Number = 2 } }
+    anotherEvent.Trigger { NumberHolder = { Number = 3 } }
+    anotherEvent.Trigger { NumberHolder = { Number = 4 } }
+
+    let expected =
+        [ [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 3 ] ] ]
+          [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 4 ] ] ] ]
         |> List.map toLookup
     observed |> List.rev |> equals expected
