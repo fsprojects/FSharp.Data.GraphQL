@@ -1,7 +1,8 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Release/Hopac.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Release/FSharp.Data.GraphQL.dll"
+#r "../../bin/FSharp.Data.GraphQL/Hopac.dll"
+#r "../../bin/FSharp.Data.GraphQL/Hopac.Core.dll"
+#r "../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll"
 
 open System
 

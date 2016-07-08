@@ -20,6 +20,7 @@ open QuotationHelpers
 module Util =
     open System.Text.RegularExpressions
     open FSharp.Data.GraphQL
+    open QuotationHelpers
 
     let getOrFail (err: string) = function
         | Some v -> v
@@ -74,57 +75,10 @@ module Util =
                 genType defctx itype t)
         typeDefinitions
 
-    let rec jsonToObject (token: JToken) =
-        match token.Type with
-        | JTokenType.Object ->
-            token.Children<JProperty>()
-            |> Seq.map (fun prop -> prop.Name, jsonToObject prop.Value)
-            |> dict :> obj
-        | JTokenType.Array ->
-            token |> Seq.map jsonToObject |> Seq.toArray :> obj
-        | _ ->
-            (token :?> JValue).Value
-
-    let launchQuery (serverUrl: string) (queryName: string) (cont: obj->'T) (query: string) =
-        async {
-            use client = new WebClient()
-            let queryJson = Map["query", query] |> JsonConvert.SerializeObject
-            let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson) |> Async.AwaitTask
-            let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
-            if res.ContainsKey("errors") then
-                res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith
-            let data =
-                // Options are problematic within quotations so we just use null here
-                if queryName <> null
-                then (res.["data"] :?> IDictionary<string,obj>).[queryName]
-                else res.["data"]
-            return cont(data)
-        }
-
-    let buildQuery (queryName: string) (queryFields: string)
-                   (argNames: string[]) (argValues: obj[]) =
-        let queryFields, queryFragments =
-            let mutable i = 0
-            let mutable openBraces = 0
-            let mutable closeBraces = 0
-            while closeBraces = 0 || closeBraces < openBraces do
-                match queryFields.Chars(i) with
-                | '{' -> openBraces <- openBraces + 1
-                | '}' -> closeBraces <- closeBraces + 1
-                | _ -> ()
-                i <- i + 1
-            queryFields.Substring(0, i), queryFields.Substring(i)
-        Seq.zip argNames argValues
-        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (JsonConvert.SerializeObject v))
-        |> String.concat ", "
-        |> fun args -> sprintf "{ %s(%s) %s }%s" queryName args queryFields queryFragments
-
     let createMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
                            (serverUrl: string) (query: IntrospectionField) =
         let findType (t: IntrospectionTypeRef) =
             TypeReference.findType t schemaTypes
-        let makeExprArray (exprs: Expr list) =
-            Expr.NewArray(typeof<obj>, exprs |> List.map (fun e -> Expr.Coerce(e, typeof<obj>)))
         let resType = findType query.Type
         let asyncType = typedefof<Async<obj>>.MakeGenericType(resType)
         let args =
@@ -221,7 +175,7 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                     let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>)
                     m.IsStaticMethod <- true
                     m.InvokeCode <- fun argValues ->
-                        <@@ Util.launchQuery serverUrl null id (%%argValues.[0]: string) @@>
+                        <@@ launchQuery serverUrl null id (%%argValues.[0]: string) @@>
                     tdef.AddMember m
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"

@@ -336,6 +336,12 @@ Target "Release" (fun _ ->
     |> Async.RunSynchronously
 )
 
+Target "AdHocBuild" (fun _ ->
+    !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
+    |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build"
+    |> Log "Output: "
+)
+
 Target "BuildPackage" DoNothing
 
 // --------------------------------------------------------------------------------------

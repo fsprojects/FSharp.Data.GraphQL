@@ -1,4 +1,7 @@
-﻿#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/FSharp.Data.GraphQL.Client.dll"
+﻿#I "../../bin/FSharp.Data.GraphQL.Client"
+#r "Hopac.dll"
+#r "Hopac.Core.dll"
+#r "FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic

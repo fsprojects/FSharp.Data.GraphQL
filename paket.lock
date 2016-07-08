@@ -1,6 +1,5 @@
 NUGET
   remote: https://www.nuget.org/api/v2
-  specs:
     BenchmarkDotNet (0.9.7)
     BenchmarkDotNet.Diagnostics.Windows (0.9.7)
       BenchmarkDotNet (>= 0.9.7) - framework: >= net40, dnx451
@@ -17,7 +16,6 @@ NUGET
 GROUP Build
 NUGET
   remote: https://www.nuget.org/api/v2
-  specs:
     FAKE (4.26)
     FParsec (1.0.2)
     FSharp.Compiler.Service (2.0.0.6)
@@ -37,13 +35,11 @@ NUGET
     SourceLink.Fake (1.1)
 GITHUB
   remote: fsharp/FAKE
-  specs:
     modules/Octokit/Octokit.fsx (32e262c11174b196dc8af16a577c8c3aa0ab0b2b)
       Octokit
 GROUP Test
 NUGET
   remote: https://www.nuget.org/api/v2
-  specs:
     FsCheck (2.4)
       FSharp.Core (>= 3.1.2.5)
     FSharp.Core (4.0.0.1)
