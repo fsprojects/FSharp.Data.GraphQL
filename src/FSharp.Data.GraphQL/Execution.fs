@@ -484,7 +484,28 @@ type Define with
         upcast { Name = name
                  Description = None
                  Type = typedef
-                 Resolve = fun _ _ -> job { return Unchecked.defaultof<'Res> }
+                 Resolve = fun ctx value -> job {
+                     let set =
+                         ctx.Fields
+                         |> Array.filter (fun f -> f.Name = name)
+                         |> Array.fold (fun _ f -> f.SelectionSet) []
+
+                     let execute x =
+                        collectFields ctx.ExecutionContext typedef set (ref [])
+                        |> executeFields ctx.ExecutionContext typedef x
+
+                     defaultResolve<'Val, IObservable<'Res>> name ctx value
+                     |> Async.Global.ofJob
+                     |> Async.RunSynchronously
+                     |> Observable.map (fun x ->
+                        [name,
+                            execute x
+                            |> Async.Global.ofJob
+                            |> Async.RunSynchronously
+                            |> box]
+                        |> NameValueLookup.ofList)
+                     |> subscribe ctx value
+                     return Unchecked.defaultof<'Res> }
                  Args = [||]
                  DeprecationReason = None
                  Execute = Unchecked.defaultof<ExecuteField> }
