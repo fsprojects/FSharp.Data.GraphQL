@@ -460,7 +460,11 @@ let private evaluate (schema: #ISchema) doc operation variables root errors = jo
     | Query ->
         let groupedFieldSet = 
             collectFields ctx schema.Query operation.SelectionSet  (ref [])
-        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet }
+        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet
+    | Subscription ->
+        let groupedFieldSet = 
+            collectFields ctx schema.Subscription.Value operation.SelectionSet  (ref [])
+        return! executeFields ctx schema.Subscription.Value ctx.RootValue groupedFieldSet }
 
 let internal execute (schema: #ISchema) doc operationName variables root errors = async {
     match findOperation doc operationName with
@@ -471,3 +475,16 @@ let internal execute (schema: #ISchema) doc operationName variables root errors 
 SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
 TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
 TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+
+
+type Define with
+    /// Single subscription defined inside either object types or interfaces 
+    static member Subscription(name : string, typedef : ObjectDef<'Res>,
+                               subscribe : ResolveFieldContext -> 'Val -> IObservable<NameValueLookup> -> unit) : FieldDef<'Val> =
+        upcast { Name = name
+                 Description = None
+                 Type = typedef
+                 Resolve = fun _ _ -> job { return Unchecked.defaultof<'Res> }
+                 Args = [||]
+                 DeprecationReason = None
+                 Execute = Unchecked.defaultof<ExecuteField> }
