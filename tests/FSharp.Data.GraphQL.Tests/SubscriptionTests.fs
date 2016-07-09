@@ -162,3 +162,40 @@ let ``Execute resolves correctly`` () =
           [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 4 ] ] ] ]
         |> List.map toLookup
     observed |> List.rev |> equals expected
+
+[<Fact>]
+let ``Execute handles subscription with multiple arguments`` () =
+    let mutable observed : NameValueLookup list = []
+    let schema = Schema(
+        query = Query,
+        subscription = Define.Object("Subscription", [
+            Define.Subscription("numberChangedSubscribe", NumberChanged,
+                (fun ctx _ o ->
+                    o.Add (fun x -> observed <- x :: observed)
+                    event.Trigger { NumberHolder = { Number = ctx.Arg("id") } }
+                    event.Trigger { NumberHolder = { Number = ctx.Arg("client") } } ),
+                args = [Define.Input("id", Int); Define.Input("client", Int)])
+        ]))
+    let query = """subscription M ($arg1: Int!, $arg2: Int!) {
+      numberChangedSubscribe(id: $arg1, client: 4) {
+        number {
+          theNumber
+        }
+      }
+    }"""
+    let root =
+        { NumberHolder = { Number = 1 }
+          NumberChangedSubscribe = observable }
+
+    schema.AsyncExecute(parse query, root, Map.ofList [ "arg1", box 5; "arg2", box 33]) |> sync |> ignore
+
+    event.Trigger { NumberHolder = { Number = 1 } }
+    event.Trigger { NumberHolder = { Number = 2 } }
+
+    let expected =
+        [ [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 5 ] ] ]
+          [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 4 ] ] ]
+          [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 1 ] ] ]
+          [ "numberChangedSubscribe", box ["number", box [ "theNumber", box 2 ] ] ] ]
+        |> List.map toLookup
+    observed |> List.rev |> equals expected

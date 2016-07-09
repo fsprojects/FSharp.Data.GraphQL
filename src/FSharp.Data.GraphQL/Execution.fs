@@ -481,9 +481,10 @@ type Define with
     /// Single subscription defined inside either object types or interfaces 
     static member Subscription(name : string, typedef : ObjectDef<'Res>,
                                subscribe : ResolveFieldContext -> 'Val -> IObservable<NameValueLookup> -> unit,
-                               ?resolve: ResolveFieldContext -> 'Val -> IObservable<'Res>) : FieldDef<'Val> =
+                               ?resolve: ResolveFieldContext -> 'Val -> IObservable<'Res>,
+                               ?description: string, ?args : InputFieldDef list, ?deprecationReason : string) : FieldDef<'Val> =
         upcast { Name = name
-                 Description = None
+                 Description = description
                  Type = typedef
                  Resolve = fun ctx value -> job {
                      let set =
@@ -516,6 +517,6 @@ type Define with
                         |> NameValueLookup.ofList)
                      |> subscribe ctx value
                      return Unchecked.defaultof<'Res> }
-                 Args = [||]
-                 DeprecationReason = None
+                 Args = defaultArg args [] |> List.toArray
+                 DeprecationReason = deprecationReason
                  Execute = Unchecked.defaultof<ExecuteField> }
