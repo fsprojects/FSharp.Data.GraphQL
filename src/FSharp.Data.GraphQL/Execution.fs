@@ -460,7 +460,11 @@ let private evaluate (schema: #ISchema) doc operation variables root errors = jo
     | Query ->
         let groupedFieldSet = 
             collectFields ctx schema.Query operation.SelectionSet  (ref [])
-        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet }
+        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet
+    | Subscription ->
+        let groupedFieldSet = 
+            collectFields ctx schema.Subscription.Value operation.SelectionSet  (ref [])
+        return! executeFields ctx schema.Subscription.Value ctx.RootValue groupedFieldSet }
 
 let internal execute (schema: #ISchema) doc operationName variables root errors = async {
     match findOperation doc operationName with
@@ -471,3 +475,48 @@ let internal execute (schema: #ISchema) doc operationName variables root errors 
 SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
 TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
 TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+
+
+type Define with
+    /// Single subscription defined inside either object types or interfaces 
+    static member Subscription(name : string, typedef : ObjectDef<'Res>,
+                               subscribe : ResolveFieldContext -> 'Val -> IObservable<NameValueLookup> -> unit,
+                               ?resolve: ResolveFieldContext -> 'Val -> IObservable<'Res>,
+                               ?description: string, ?args : InputFieldDef list, ?deprecationReason : string) : FieldDef<'Val> =
+        upcast { Name = name
+                 Description = description
+                 Type = typedef
+                 Resolve = fun ctx value -> job {
+                     let set =
+                         ctx.Fields
+                         |> Array.filter (fun f -> f.Name = name)
+                         |> Array.fold (fun _ f -> f.SelectionSet) []
+
+                     let label =
+                         ctx.Fields
+                         |> Array.filter (fun f -> f.Name = name)
+                         |> Array.fold (fun _ f -> f.AliasOrName) name
+
+                     let execute x =
+                        collectFields ctx.ExecutionContext typedef set (ref [])
+                        |> executeFields ctx.ExecutionContext typedef x
+
+                     let resolve =
+                         defaultArg resolve <| fun ctx value ->
+                             defaultResolve<'Val, IObservable<'Res>> name ctx value
+                             |> Async.Global.ofJob
+                             |> Async.RunSynchronously
+
+                     resolve ctx value
+                     |> Observable.map (fun x ->
+                        [label,
+                            execute x
+                            |> Async.Global.ofJob
+                            |> Async.RunSynchronously
+                            |> box]
+                        |> NameValueLookup.ofList)
+                     |> subscribe ctx value
+                     return Unchecked.defaultof<'Res> }
+                 Args = defaultArg args [] |> List.toArray
+                 DeprecationReason = deprecationReason
+                 Execute = Unchecked.defaultof<ExecuteField> }
