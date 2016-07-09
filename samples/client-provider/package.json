@@ -1,0 +1,16 @@
+{
+  "name": "client-provider",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "fable-core": "^0.1.12",
+    "isomorphic-fetch": "^2.2.1"
+  }
+}

@@ -23,11 +23,11 @@ module QuotationHelpers =
     open Fable.AST.Fable.Util
 
     type GraphQlFableEmitter() =
-        member __.BuildQuery com (info: Fable.ApplyInfo) =
+        member __.BuildQuery (com: ICompiler) (info: Fable.ApplyInfo) =
             ImportCall (Naming.fableInjectFile, "graphqlBuildQuery", None, false, info.args)
             |> makeCall com info.range info.returnType
 
-        member __.LaunchQuery com (info: Fable.ApplyInfo) =
+        member __.LaunchQuery (com: ICompiler) (info: Fable.ApplyInfo) =
             ImportCall (Naming.fableInjectFile, "graphqlLaunchQuery", None, false, info.args)
             |> makeCall com info.range info.returnType
 
@@ -44,7 +44,7 @@ module QuotationHelpers =
                     reject(errors.join('\n'))
                 }
                 else {
-                    resolve($1 ? resp[$1] : resp);
+                    resolve($1 ? resp.data[$1] : resp.data);
                 }
             }))"""
             |> makeEmit args
@@ -60,16 +60,16 @@ module QuotationHelpers =
                 }
                 i++;
             }
-            var queryFields = $1.substr(0, i), queryFragmenst = $1.substr(i);
+            var queryFields = $1.substr(0, i), queryFragments = $1.substr(i);
             var args = $2.map((k, i) => k + ": " + JSON.stringify($3[i])).join(", ");
-            "{ " + $0 + "(" + args + ") " + queryFields " }" + queryFragments;"""
+            "{ " + $0 + "(" + args + ") " + queryFields + " }" + queryFragments;"""
             |> makeEmit args
 
         interface IInjectPlugin with
             member __.Inject com =
               [ { new IInjection with
                     member __.Name = "graphqlLaunchQuery"
-                    member __.ArgumentsLength = 3
+                    member __.ArgumentsLength = 4
                     member __.GetBody args = getLaunchQueryBody com args }
                 { new IInjection with
                     member __.Name = "graphqlBuildQuery"
