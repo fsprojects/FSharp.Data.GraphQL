@@ -4,10 +4,21 @@ namespace FSharp.Data.GraphQL.Types
 
 open System
 open System.Collections.Concurrent
-open Hopac
-open Hopac.Extensions
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
+#if HOPAC
+open Hopac
+open Hopac.Extensions
+#else
+type Job<'T> = interface end
+module Job =
+    let map (f: 'a->'b) (x: Job<'a>): Job<'b> = failwith "Not implemented"
+    let result (x: 'a): Job<'a> = failwith "Not implemented"
+    let raises<'a> (x: exn): Job<'a> = failwith "Not implemented"
+
+module Async =
+    let toJob (x: Async<'a>): Job<'a> = failwith "Not implemented"
+#endif
 
 [<Flags; Serializable>]
 type DirectiveLocation = 
