@@ -10,7 +10,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fable-core": "^0.1.12",
+    "fable-core": "^0.2.0-alpha",
     "isomorphic-fetch": "^2.2.1"
   }
 }

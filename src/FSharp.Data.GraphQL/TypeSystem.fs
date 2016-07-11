@@ -1254,7 +1254,7 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [| { Name = "if"
+              [| { InputFieldDefinition.Name = "if"
                    Description = Some "Included when true."
                    Type = Boolean
                    DefaultValue = None
@@ -1266,7 +1266,7 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [| { Name = "if"
+              [| { InputFieldDefinition.Name = "if"
                    Description = Some "Skipped when true."
                    Type = Boolean
                    DefaultValue = None
@@ -1321,7 +1321,7 @@ module SchemaDefinitions =
         /// GraphQL custom object type
         static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
-            upcast { Name = name
+            upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn = lazy (fieldsFn() |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
@@ -1330,7 +1330,7 @@ module SchemaDefinitions =
         /// GraphQL custom object type
         static member Object(name : string, fields : FieldDef<'Val> list, ?description : string, 
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
-            upcast { Name = name
+            upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn = lazy (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
@@ -1350,7 +1350,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
                      Resolve = defaultResolve<'Val, 'Res> name
@@ -1360,7 +1360,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
@@ -1371,7 +1371,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
@@ -1382,7 +1382,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
@@ -1393,7 +1393,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res, deprecationReason : string) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> Job.result (resolve ctx value)
@@ -1404,7 +1404,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
                                  resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
@@ -1415,7 +1415,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
@@ -1426,7 +1426,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
@@ -1438,7 +1438,7 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
                      Resolve = fun ctx value -> resolve ctx value |> Async.toJob
@@ -1447,7 +1447,7 @@ module SchemaDefinitions =
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         static member Input(name : string, schema : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef = 
-            upcast { Name = name
+            upcast { InputFieldDefinition.Name = name
                      Description = description
                      Type = schema
                      DefaultValue = defaultValue
@@ -1456,7 +1456,7 @@ module SchemaDefinitions =
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
-            upcast { Name = name
+            upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fieldsFn() |> List.toArray
                      ResolveType = resolveType }
@@ -1464,7 +1464,7 @@ module SchemaDefinitions =
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
-            upcast { Name = name
+            upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fields |> List.toArray
                      ResolveType = resolveType }
@@ -1472,7 +1472,7 @@ module SchemaDefinitions =
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
         static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out, 
                             ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> = 
-            upcast { Name = name
+            upcast { UnionDefinition.Name = name
                      Description = description
                      Options = options |> List.toArray
                      ResolveType = resolveType

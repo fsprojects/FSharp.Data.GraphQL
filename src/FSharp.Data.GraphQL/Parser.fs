@@ -184,7 +184,7 @@ module internal Internal =
     //   Name:Value
     let argument = 
       pairBetween ':' name inputValue
-      |>> fun (name, value) -> { Name = name; Value = value } 
+      |>> fun (name, value) -> { Argument.Name = name; Value = value } 
       <?> "Argument"
     betweenCharsMany '(' ')' argument <?> "Arguments"
 
@@ -240,7 +240,9 @@ module internal Internal =
     let inlineFragment =
       pipe3 (opt(stoken_ws "on" >>. token_ws name)) (opt(token_ws directives)) selectionSet
         (fun typeCondition directives selectionSet -> 
-          { Name = None; Directives = someOrEmpty directives; SelectionSet = selectionSet 
+          { FragmentDefinition.Name = None
+            Directives = someOrEmpty directives
+            SelectionSet = selectionSet 
             TypeCondition = typeCondition })
       |>> InlineFragment <?> "InlineFragment"
 

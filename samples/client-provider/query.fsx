@@ -1,6 +1,5 @@
-﻿// #r "../../bin/FSharp.Data.GraphQL.Client/Hopac.dll"
-#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
-#r "../../../Fable/build/fable/bin/Fable.Core.dll"
+﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
+#r "node_modules/fable-core/Fable.Core.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic

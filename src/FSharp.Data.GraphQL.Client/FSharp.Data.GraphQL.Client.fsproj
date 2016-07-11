@@ -40,15 +40,6 @@
     <Prefer32Bit />
     <OtherFlags />
   </PropertyGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-  </ItemGroup>
   <!--<ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
       <Name>FSharp.Data.GraphQL</Name>
@@ -56,22 +47,6 @@
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>-->
-  <ItemGroup>
-    <Reference Include="../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll" />
-  </ItemGroup>
-  <ItemGroup Condition="$(DefineConstants.Contains('FABLE'))">
-    <Reference Include="../../../Fable/build/fable/bin/Fable.Core.dll" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="ProvidedTypes.fsi" />
-    <Compile Include="ProvidedTypes.fs" />
-    <Compile Include="QuotationHelpers.fs" />
-    <Compile Include="IntrospectionParser.fs" />
-    <Compile Include="Serialization.fs" />
-    <Compile Include="GraphQlProvider.fs" />
-    <Compile Include="QueryDSL.fs" />
-  </ItemGroup>
   <Import Project="$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props" Condition="Exists('$(MSBuildExtensionsPath)\$(MSBuildToolsVersion)\Microsoft.Common.props')" />
   <PropertyGroup>
     <MinimumVisualStudioVersion Condition="'$(MinimumVisualStudioVersion)' == ''">11</MinimumVisualStudioVersion>
@@ -96,40 +71,6 @@
   <Target Name="AfterBuild">
   </Target>
   -->
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="ProvidedTypes.fsi" />
-    <Compile Include="ProvidedTypes.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL\Prolog.fs">
-      <Link>Prolog.fs</Link>
-    </Compile>
-    <Compile Include="..\FSharp.Data.GraphQL\Ast.fs">
-      <Link>Ast.fs</Link>
-    </Compile>
-    <Compile Include="..\FSharp.Data.GraphQL\TypeSystem.fs">
-      <Link>TypeSystem.fs</Link>
-    </Compile>
-    <Compile Include="..\FSharp.Data.GraphQL\Introspection.fs">
-      <Link>Introspection.fs</Link>
-    </Compile>
-    <Compile Include="..\FSharp.Data.GraphQL\Parser.fs">
-      <Link>Parser.fs</Link>
-    </Compile>
-    <Compile Include="IntrospectionParser.fs" />
-    <Compile Include="Serialization.fs" />
-    <Compile Include="GraphQlProvider.fs" />
-    <Compile Include="QueryDSL.fs" />
-    <None Include="paket.references" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
-      <Private>True</Private>
-    </Reference>
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Numerics" />
-  </ItemGroup>
   <Choose>
     <When Condition="($(TargetFrameworkIdentifier) == '.NETStandard' And ($(TargetFrameworkVersion) == 'v1.0' Or $(TargetFrameworkVersion) == 'v1.1' Or $(TargetFrameworkVersion) == 'v1.2' Or $(TargetFrameworkVersion) == 'v1.3' Or $(TargetFrameworkVersion) == 'v1.4' Or $(TargetFrameworkVersion) == 'v1.5')) Or ($(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.0' Or $(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6' Or $(TargetFrameworkVersion) == 'v4.6.1' Or $(TargetFrameworkVersion) == 'v4.6.2'))">
       <ItemGroup>
@@ -216,4 +157,55 @@
       </ItemGroup>
     </When>
   </Choose>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ProvidedTypes.fsi" />
+    <Compile Include="ProvidedTypes.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL\Prolog.fs">
+      <Link>Prolog.fs</Link>
+    </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL\Ast.fs">
+      <Link>Ast.fs</Link>
+    </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL\TypeSystem.fs">
+      <Link>TypeSystem.fs</Link>
+    </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL\Introspection.fs">
+      <Link>Introspection.fs</Link>
+    </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL\Parser.fs">
+      <Link>Parser.fs</Link>
+    </Compile>
+    <Compile Include="QuotationHelpers.fs" />
+    <Compile Include="IntrospectionParser.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="GraphQlProvider.fs" />
+    <Compile Include="QueryDSL.fs" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ProvidedTypes.fsi" />
+    <Compile Include="ProvidedTypes.fs" />
+    <Compile Include="IntrospectionParser.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="GraphQlProvider.fs" />
+    <Compile Include="QueryDSL.fs" />
+    <None Include="paket.references" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+    <Reference Include="../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll" />
+    <Reference Include="../../../Fable/build/fable/bin/Fable.Core.dll" />
+    <Reference Include="mscorlib" />
+    <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <Private>True</Private>
+    </Reference>
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Numerics" />
+  </ItemGroup>
 </Project>
