@@ -33,6 +33,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
                 objdef.Fields
+                |> Map.toArray
+                |> Array.map snd
                 |> Array.collect (fun x -> Array.append [| x.Type :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.Type)))
                 |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
                 |> Array.fold (fun n (Named t) -> insert n t) ns'
@@ -151,6 +153,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         | Object objdef -> 
             let fields = 
                 objdef.Fields 
+                |> Map.toArray
+                |> Array.map snd
                 |> Array.map (introspectField namedTypes)
             let interfaces = 
                 objdef.Implements 

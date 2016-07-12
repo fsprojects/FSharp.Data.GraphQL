@@ -20,6 +20,21 @@ module Array =
                     i <- i + 1
             Array.sub temp 0 i
 
+module List =
+    let mergeBy f listx listy =
+        let uniqx = 
+            listx
+            |> List.filter (fun x -> not <| List.exists(fun y -> f(x) = f(y)) listy)
+        uniqx @ listy
+
+module Map =
+    let merge mergeFn mapx mapy =
+        mapy
+        |> Map.fold (fun acc ky vy -> 
+            match Map.tryFind ky acc with
+            | Some vx -> Map.add ky (mergeFn ky vx vy) acc
+            | None -> Map.add ky vy acc) mapx
+
 module Option =
     let toObj value =  match value with None -> null | Some x -> x
 

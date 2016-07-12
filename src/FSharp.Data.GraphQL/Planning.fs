@@ -46,23 +46,40 @@ let private tryFindDef (schema: ISchema) (objdef: ObjectDef) (field: Field) : Fi
     
 type PlanningContext =
     { Schema: ISchema
+      RootDef: ObjectDef
       Document: Document }
 
 type Includer = Map<string,obj> -> bool
 type PlanningData =
-    { ParentDef: ObjectDef
+    { /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
+      Identifier: string option
+      /// Composite definition being the parent of the current field, execution plan refers to.
+      ParentDef: CompositeDef
+      /// Field definition of corresponding type found in current schema.
       Definition: FieldDef
+      /// Boolean value marking if null values are allowed.
       IsNullable: bool
+      /// AST node of the parsed query document.
       Ast: Field }
-    static member Create(ctx: PlanningContext, parentDef: ObjectDef, field: Field) : PlanningData =
+    static member FromObject(ctx: PlanningContext, parentDef: ObjectDef, field: Field) : PlanningData =
         match tryFindDef ctx.Schema parentDef field with
         | Some fdef ->
-            { ParentDef = parentDef
+            { Identifier = Some field.AliasOrName
+              ParentDef = parentDef
               Definition = fdef
               Ast = field
               IsNullable = fdef.Type :? NullableDef }
         | None ->
             raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
+    static member FromAbstraction(ctx: PlanningContext, parentDef: AbstractDef, field: Field) : Map<string, PlanningData> =
+        let objDefs = ctx.Schema.GetPossibleTypes parentDef
+        objDefs
+        |> Array.choose (fun objDef ->
+            match tryFindDef ctx.Schema objDef field with
+            | Some fdef ->
+                Some (objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef })
+            | None -> None)
+        |> Map.ofArray
 
 /// plan of reduction being a result of application of a query AST on existing schema
 type ExecutionPlan =
@@ -73,7 +90,7 @@ type ExecutionPlan =
     // reducer for each of the collection elements
     | ResolveCollection of data:PlanningData * elementPlan:ExecutionPlan
     // reducer for union and interface types to be resolved into ReduceSelection at runtime
-    | ResolveAbstraction of data:PlanningData * chooseReduction:Map<string, ExecutionPlan>
+    | ResolveAbstraction of data:PlanningData * typeFields:Map<string, ExecutionPlan list>
     member x.Data = 
         match x with
         | ResolveValue(data) -> data
@@ -129,87 +146,29 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some conditionalType when conditionalType.Name = objectType.Name -> true
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
-
-//let rec private findGroupIndexByName (groupedFields: System.Collections.Generic.List<string * Field>) (name: string) (i: int) : int =
-//    if i < 0
-//    then -1
-//    else 
-//        let (k, _) = groupedFields.[i]
-//        if k = name then i
-//        else findGroupIndexByName groupedFields name (i-1)
-//
-//let rec private groupFields (ctx: PlanningContext) typedef (selectionSet: Selection list) (visitedFragments): (string * Field []) [] =
-//    let groupedFields = System.Collections.Generic.List(selectionSet.Length)
-//    selectionSet 
-//    |> List.iteri(fun i selection ->
-//        match selection with
-//        | Field field ->
-//            let name = field.AliasOrName
-//            match findGroupIndexByName groupedFields name (groupedFields.Count-1) with
-//            | -1 -> 
-//                groupedFields.Add (name, [| field |])
-//            | idx -> 
-//                let (_, value) = groupedFields.[idx]
-//                groupedFields.[idx] <- (name, Array.append [| field |] value)
-//        | FragmentSpread spread ->
-//            let fragmentSpreadName = spread.Name
-//            if not (List.exists (fun fragmentName -> fragmentName = fragmentSpreadName) !visitedFragments)
-//            then 
-//                visitedFragments := (fragmentSpreadName::!visitedFragments)
-//                let found =
-//                    ctx.Document.Definitions
-//                    |> List.tryFind (function FragmentDefinition f when f.Name.Value = fragmentSpreadName -> true | _ -> false)
-//                match found with
-//                | Some (FragmentDefinition fragment) -> 
-//                    if doesFragmentTypeApply ctx.Schema fragment typedef
-//                    then 
-//                        let fragmentSelectionSet = fragment.SelectionSet
-//                        let fragmentGroupedFieldSet = groupFields ctx typedef fragmentSelectionSet visitedFragments
-//                        for j = 0 to fragmentGroupedFieldSet.Length - 1 do
-//                            let (responseKey, fragmentGroup) = fragmentGroupedFieldSet.[j]
-//                            match findGroupIndexByName groupedFields responseKey (groupedFields.Count-1) with
-//                            | -1 ->
-//                                groupedFields.Add (responseKey, fragmentGroup)
-//                            | idx ->
-//                                let (_, value) = groupedFields.[idx]
-//                                groupedFields.[idx] <- (responseKey, Array.append fragmentGroup value)
-//                | _ -> ()
-//        | InlineFragment fragment -> 
-//            if doesFragmentTypeApply ctx.Schema fragment typedef
-//            then 
-//                let fragmentSelectionSet = fragment.SelectionSet
-//                let fragmentGroupedFieldSet = groupFields ctx typedef fragmentSelectionSet visitedFragments
-//                for j = 0 to fragmentGroupedFieldSet.Length - 1 do
-//                    let (responseKey, fragmentGroup) = fragmentGroupedFieldSet.[j]
-//                    match findGroupIndexByName groupedFields responseKey (groupedFields.Count-1) with
-//                    | -1 ->
-//                        groupedFields.Add (responseKey, fragmentGroup)
-//                    | idx ->
-//                        let (_, value) = groupedFields.[idx]
-//                        groupedFields.[idx] <- (responseKey, Array.append fragmentGroup value))
-//    groupedFields.ToArray()
-
+        
 let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeDef) : ExecutionPlan =
     match typedef with
     | Leaf leafDef -> planLeaf ctx data leafDef
     | Object objDef -> planSelection ctx { data with ParentDef = objDef } data.Ast.SelectionSet (ref [])
     | Nullable innerDef -> plan ctx { data with IsNullable = true } innerDef
     | List innerDef -> planList ctx data innerDef
-    | Abstract abstractDef -> planAbstraction ctx data abstractDef
+    | Abstract abstractDef -> planAbstraction ctx { data with ParentDef = abstractDef } data.Ast.SelectionSet (ref [])
 
 and private planSelection (ctx: PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlan = 
+    let parentDef = downcast data.ParentDef
     let plannedFields =
         selectionSet
-        |> List.fold(fun fields selection ->
+        |> List.fold(fun (fields: ExecutionPlan list) selection ->
             match selection with
             | Field field ->
                 let identifier = field.AliasOrName
-                match fields |> List.tryFindIndex (fun (name, f) -> name = identifier) with
-                | None ->
-                    let data = PlanningData.Create(ctx, data.ParentDef, field)
+                if fields |> List.exists (fun f -> f.Data.Identifier.Value = identifier) 
+                then
+                    let data = PlanningData.FromObject(ctx, parentDef, field)
                     let executionPlan = plan ctx data data.Definition.Type
-                    (identifier, executionPlan)::fields
-                | Some _ -> fields
+                    executionPlan::fields
+                else fields
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
@@ -217,35 +176,64 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
                 else
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
-                    | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment data.ParentDef ->
+                    | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
                         let (SelectFields(_, fragmentFields)) = planSelection ctx data fragment.SelectionSet visitedFragments
                         // filter out already existing fields
-                        let distinctFields =
-                            fragmentFields
-                            |> List.map (fun plan -> (plan.Data.Ast.AliasOrName, plan))
-                            |> List.filter (fun (ffname, _) -> not <| List.exists (fun (name, _) -> name = ffname) fields)
-                        distinctFields @ fields
+                        List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
                     | _ -> fields
-            | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment data.ParentDef ->
+            | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
                  let (SelectFields(_, fragmentFields)) = planSelection ctx data fragment.SelectionSet visitedFragments
                  // filter out already existing fields
-                 let distinctFields =
-                     fragmentFields
-                     |> List.map (fun plan -> (plan.Data.Ast.AliasOrName, plan))
-                     |> List.filter (fun (ffname, _) -> not <| List.exists (fun (name, _) -> name = ffname) fields)
-                 distinctFields @ fields
+                 List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
             | _ -> fields
         ) []
-    SelectFields(data, plannedFields |> List.map snd)
+    SelectFields(data, plannedFields)
+
 and private planList (ctx: PlanningContext) (data: PlanningData) (innerDef: TypeDef) : ExecutionPlan =
     ResolveCollection(data, plan ctx data innerDef)
+
 and private planLeaf (ctx: PlanningContext) (data: PlanningData) (leafDef: LeafDef) : ExecutionPlan =
     ResolveValue(data)
-and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (abstractDef: AbstractDef) : ExecutionPlan =
-    
-    ResolveAbstraction(data,)
+
+and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlan =
+    let parentDef = downcast data.ParentDef
+    let plannedTypeFields =
+        selectionSet
+        |> List.fold(fun (fields: Map<string, ExecutionPlan list>) selection ->
+            match selection with
+            | Field field ->
+                PlanningData.FromAbstraction(ctx, parentDef, field)
+                |> Map.map (fun typeName data -> [ plan ctx data data.Definition.Type ])
+                |> Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields
+            | FragmentSpread spread ->
+                let spreadName = spread.Name
+                if !visitedFragments |> List.exists (fun name -> name = spreadName) 
+                then fields  // fragment already found
+                else
+                    visitedFragments := spreadName::!visitedFragments
+                    match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
+                    | Some (FragmentDefinition fragment) ->
+                        // retrieve fragment data just as it was normal selection set
+                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments
+                        // filter out already existing fields
+                        Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
+                    | _ -> fields
+            | InlineFragment fragment ->
+                 // retrieve fragment data just as it was normal selection set
+                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments
+                 // filter out already existing fields
+                 Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
+            | _ -> fields
+        ) Map.empty
+    ResolveAbstraction(data, plannedTypeFields)
 
 let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
-    planSelection ctx () (downcast ctx.ParentDef) operation.SelectionSet
+    let data = { 
+        Identifier = None;
+        Ast = Unchecked.defaultof<Field>
+        IsNullable = false
+        ParentDef = ctx.RootDef
+        Definition = Unchecked.defaultof<FieldDef>}
+    planSelection ctx data operation.SelectionSet (ref [])

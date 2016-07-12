@@ -207,6 +207,8 @@ and CompositeDef =
 and AbstractDef = 
     interface
         inherit TypeDef
+        // only abstract types are Interface and Union, which are both composite defs too
+        inherit CompositeDef 
     end
 
 and NamedDef = 
