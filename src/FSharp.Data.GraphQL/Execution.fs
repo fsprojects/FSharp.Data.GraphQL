@@ -157,7 +157,8 @@ let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) 
     | other -> 
         match coerceBoolInput other with
         | Some s -> s
-        | None -> raise (GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
+        | None -> raise (
+            GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
 let private shouldSkip (ctx: ExecutionContext) (directive: Directive) =
     match directive.Name with
@@ -309,7 +310,8 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
                     |> Seq.map (fun x -> innerfn ctx x)
                     |> Job.conCollect
                 return completed.ToArray() :> obj
-            | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.FieldName (value.GetType())))
+            | _ -> return raise (
+                GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.FieldName (value.GetType())))
         }
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
@@ -369,7 +371,7 @@ and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
         | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-        | fieldName -> objectType.Fields |> Array.tryFind (fun f -> f.Name = fieldName)
+        | fieldName -> objectType.Fields |> Map.tryFind fieldName
 
 and private getFieldEntry (ctx: ExecutionContext) typedef value (fields: Field []) : Job<obj> = 
     let firstField = fields.[0]
@@ -432,7 +434,7 @@ let internal compileSchema possibleTypesFn types =
         match x with
         | Object objdef -> 
             objdef.Fields
-            |> Array.iter (fun fieldDef -> 
+            |> Map.iter (fun _ fieldDef -> 
                 fieldDef.Execute <- compileField possibleTypesFn fieldDef
                 fieldDef.Args
                 |> Array.iter (fun arg -> 

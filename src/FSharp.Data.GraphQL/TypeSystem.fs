@@ -411,7 +411,7 @@ and ObjectDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Fields : FieldDef []
+        abstract Fields : Map<string, FieldDef>
         abstract Implements : InterfaceDef []
         abstract IsTypeOf : (obj -> bool) option
         inherit TypeDef
@@ -423,7 +423,7 @@ and ObjectDef =
 
 and ObjectDef<'Val> = 
     interface
-        abstract Fields : FieldDef<'Val> []
+        abstract Fields : Map<string, FieldDef<'Val>>
         inherit ObjectDef
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
@@ -432,7 +432,7 @@ and ObjectDef<'Val> =
 and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> = 
     { Name : string
       Description : string option
-      FieldsFn : Lazy<FieldDef<'Val> []>
+      FieldsFn : Lazy<Map<string, FieldDef<'Val>>>
       Implements : InterfaceDef []
       IsTypeOf : (obj -> bool) option }
 
@@ -453,9 +453,7 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
         
         member x.Fields = 
             x.FieldsFn.Force()
-            |> Seq.ofArray
-            |> Seq.cast<FieldDef>
-            |> Seq.toArray
+            |> Map.map (fun k v -> upcast v)
         
         member x.Implements = x.Implements
         member x.IsTypeOf = x.IsTypeOf
@@ -1106,7 +1104,7 @@ module SchemaDefinitions =
     
     let (|Leaf|_|) (tdef : TypeDef) = 
         match tdef with
-        | :? ScalarDef | :? EnumDef -> Some tdef
+        | :? LeafDef as ldef -> Some ldef
         | _ -> None
     
     let (|Composite|_|) (tdef : TypeDef) = 
@@ -1279,7 +1277,7 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fieldsFn() |> List.toArray)
+                     FieldsFn = lazy (fieldsFn() |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
@@ -1288,7 +1286,7 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fields |> List.toArray)
+                     FieldsFn = lazy (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
