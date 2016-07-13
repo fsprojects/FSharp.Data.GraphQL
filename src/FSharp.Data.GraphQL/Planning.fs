@@ -74,15 +74,27 @@ type PlanningData =
               IsNullable = fdef.Type :? NullableDef }
         | None ->
             raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
-    static member FromAbstraction(ctx: PlanningContext, parentDef: AbstractDef, field: Field) : Map<string, PlanningData> =
+    static member FromAbstraction(ctx: PlanningContext, parentDef: AbstractDef, field: Field, typeCondition: string option) : Map<string, PlanningData> =
         let objDefs = ctx.Schema.GetPossibleTypes parentDef
-        objDefs
-        |> Array.choose (fun objDef ->
-            match tryFindDef ctx.Schema objDef field with
-            | Some fdef ->
-                Some (objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef })
-            | None -> None)
-        |> Map.ofArray
+        match typeCondition with
+        | None ->
+            objDefs
+            |> Array.choose (fun objDef ->
+                match tryFindDef ctx.Schema objDef field with
+                | Some fdef ->
+                    Some (objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef })
+                | None -> None)
+            |> Map.ofArray
+        | Some typeName ->
+            match objDefs |> Array.tryFind (fun o -> o.Name = typeName) with
+            | Some objDef ->
+                match tryFindDef ctx.Schema objDef field with
+                | Some fdef ->
+                    Map.ofList [ objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef }]
+                | None -> Map.empty
+            | None -> 
+                let pname = parentDef :?> NamedDef
+                raise (GraphQLException (sprintf "An abstract type '%s' has no relation with a type named '%s'" pname.Name typeName))
 
 /// plan of reduction being a result of application of a query AST on existing schema
 type ExecutionPlan =
@@ -156,7 +168,7 @@ let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeD
     | Object objDef -> planSelection ctx { data with ParentDef = objDef } data.Ast.SelectionSet (ref [])
     | Nullable innerDef -> plan ctx { data with IsNullable = true } innerDef
     | List innerDef -> planList ctx data innerDef
-    | Abstract abstractDef -> planAbstraction ctx { data with ParentDef = abstractDef } data.Ast.SelectionSet (ref [])
+    | Abstract abstractDef -> planAbstraction ctx { data with ParentDef = abstractDef } data.Ast.SelectionSet (ref []) None
 
 and private planSelection (ctx: PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlan = 
     let parentDef = downcast data.ParentDef
@@ -200,14 +212,14 @@ and private planList (ctx: PlanningContext) (data: PlanningData) (innerDef: Type
 and private planLeaf (ctx: PlanningContext) (data: PlanningData) (leafDef: LeafDef) : ExecutionPlan =
     ResolveValue(data)
 
-and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlan =
+and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlan =
     let parentDef = downcast data.ParentDef
     let plannedTypeFields =
         selectionSet
         |> List.fold(fun (fields: Map<string, ExecutionPlan list>) selection ->
             match selection with
             | Field field ->
-                PlanningData.FromAbstraction(ctx, parentDef, field)
+                PlanningData.FromAbstraction(ctx, parentDef, field, typeCondition)
                 |> Map.map (fun typeName data -> [ plan ctx data data.Definition.Type ])
                 |> Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields
             | FragmentSpread spread ->
@@ -219,13 +231,13 @@ and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectio
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
-                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments
+                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments fragment.TypeCondition
                         // filter out already existing fields
                         Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment ->
                  // retrieve fragment data just as it was normal selection set
-                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments
+                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments fragment.TypeCondition
                  // filter out already existing fields
                  Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
             | _ -> fields
