@@ -1,4 +1,7 @@
-﻿module FSharp.Data.GraphQL.Planning
+﻿/// The MIT License (MIT)
+/// Copyright (c) 2016 Bazinga Technologies Inc
+
+module FSharp.Data.GraphQL.Planning
 
 open System
 open System.Reflection
@@ -164,11 +167,11 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
             | Field field ->
                 let identifier = field.AliasOrName
                 if fields |> List.exists (fun f -> f.Data.Identifier.Value = identifier) 
-                then
+                then fields
+                else 
                     let data = PlanningData.FromObject(ctx, parentDef, field)
                     let executionPlan = plan ctx data data.Definition.Type
-                    executionPlan::fields
-                else fields
+                    fields @ [executionPlan]    // unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 

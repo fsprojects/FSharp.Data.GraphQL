@@ -662,7 +662,7 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
     
     override x.Equals y = 
         match y with
-        | :? InterfaceDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
+        | :? UnionDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
         | _ -> false
     
     override x.GetHashCode() = 

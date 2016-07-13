@@ -129,7 +129,7 @@ let private getOperation = function
     | OperationDefinition odef -> Some odef
     | _ -> None
 
-let private findOperation doc opName =
+let internal findOperation doc opName =
     match doc.Definitions |> List.choose getOperation, opName with
     | [def], _ -> Some def
     | defs, name -> 

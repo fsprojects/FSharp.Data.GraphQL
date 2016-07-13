@@ -81,6 +81,7 @@
     <Compile Include="ResolveTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="VariablesTests.fs" />
+    <Compile Include="PlanningTests.fs" />
     <None Include="paket.references" />
     <Content Include="App.config" />
   </ItemGroup>

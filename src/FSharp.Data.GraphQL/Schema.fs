@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
 type SchemaConfig =
@@ -245,6 +246,25 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
 
+    member this.CreateExecutionPlan(ast: Document, ?operationName: string): ExecutionPlan =
+        match findOperation ast operationName with
+        | Some operation -> 
+            let rootDef = 
+                match operation.OperationType with
+                | Query -> query
+                | Mutation -> 
+                    match mutation with
+                    | Some m -> m
+                    | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
+            let planningCtx = { Schema = this; RootDef = rootDef; Document = ast }
+            planOperation planningCtx operation
+        | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
+
+    member this.CreateExecutionPlan(queryOrMutation: string, ?operationName: string) =
+        match operationName with
+        | None -> this.CreateExecutionPlan(parse queryOrMutation)
+        | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
+        
 
     interface ISchema with        
         member val TypeMap = typeMap
