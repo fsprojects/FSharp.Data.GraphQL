@@ -220,24 +220,26 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         compileSchema getPossibleTypes typeMap
         
     member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
-        async {
-            try
-                let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables (data |> Option.map box) errors
-                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
-                return upcast NameValueLookup.ofList output
-            with 
-            | ex -> 
-                let msg = ex.ToString()
-                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
-        }
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
 
     member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        let ast = parse queryOrMutation
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
+
+    member this.AsyncEvaluate(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         async {
             try
-                let ast = parse queryOrMutation
-                let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables (data |> Option.map box) errors
+                let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
+                let rootObj = data |> Option.map box |> Option.toObj
+                let! result = evaluate this executionPlan variables rootObj errors
                 let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
                 return upcast NameValueLookup.ofList output
             with 

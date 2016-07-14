@@ -65,11 +65,11 @@ let ``Planning should work for a simple case``() =
         lastName
         age
     }"""
-    let (SelectFields(data, fields)) = schema.CreateExecutionPlan(query)
-    equals Person (downcast data.ParentDef)
-    equals 3 fields.Length
-    fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type))
+    let plan = schema.CreateExecutionPlan(query)
+    plan.RootDef |> equals (upcast Person)
+    equals 3 plan.Fields.Length
+    plan.Fields
+    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -85,11 +85,11 @@ let ``Planning should work with fragments``() =
         firstName
         lastName
     }"""
-    let (SelectFields(data, fields)) = schema.CreateExecutionPlan(query)
-    equals Person (downcast data.ParentDef)
-    equals 3 fields.Length
-    fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type))
+    let plan = schema.CreateExecutionPlan(query)
+    plan.RootDef |> equals (upcast Person) 
+    equals 3 plan.Fields.Length
+    plan.Fields
+    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -109,11 +109,11 @@ let ``Planning should work with parallel fragments``() =
         lastName
     }
     """
-    let (SelectFields(data, fields)) = schema.CreateExecutionPlan(query)
-    equals Person (downcast data.ParentDef)
-    equals 3 fields.Length
-    fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type))
+    let plan = schema.CreateExecutionPlan(query)
+    plan.RootDef |> equals (upcast Person) 
+    equals 3 plan.Fields.Length
+    plan.Fields
+    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -128,13 +128,13 @@ let ``Planning should work with lists``() =
             lastName
         }
     }"""
-    let (SelectFields(topData, fields)) = schema.CreateExecutionPlan(query)
-    equals 1 fields.Length
-    let (ResolveCollection(listData, SelectFields(data, innerFields))) = fields.Head
+    let plan = schema.CreateExecutionPlan(query)
+    equals 1 plan.Fields.Length
+    let (ResolveCollection(listData, SelectFields(data, innerFields))) = plan.Fields.Head
     equals Person (downcast data.ParentDef)
     equals 2 innerFields.Length
     innerFields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type))
+    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String) ]
 
@@ -154,15 +154,15 @@ let ``Planning should work with interfaces``() =
     fragment ageFragment on Person {
         age
     }"""
-    let (SelectFields(topData, fields)) = schema.CreateExecutionPlan(query)
-    equals 1 fields.Length
-    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = fields.Head
+    let plan = schema.CreateExecutionPlan(query)
+    equals 1 plan.Fields.Length
+    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = plan.Fields.Head
     equals INamed (downcast data.ParentDef)
     innerFields
     |> Map.map 
            (fun typeName fields -> 
            fields 
-           |> List.map (fun (ResolveValue(data)) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type)))
+           |> List.map (fun (ResolveValue(data)) -> (data.Identifier, data.ParentDef, data.Definition.Type)))
     |> equals (Map.ofList [ "Person", 
                             [ ("name", upcast INamed, upcast String)
                               ("age", upcast INamed, upcast Int) ]
@@ -186,15 +186,15 @@ let ``Planning should work with unions``() =
             }
         }
     }"""
-    let (SelectFields(topData, fields)) = schema.CreateExecutionPlan(query)
-    equals 1 fields.Length
-    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = fields.Head
+    let plan = schema.CreateExecutionPlan(query)
+    equals 1 plan.Fields.Length
+    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = plan.Fields.Head
     equals UNamed (downcast data.ParentDef)
     innerFields
     |> Map.map 
            (fun typeName fields -> 
            fields 
-           |> List.map (fun (ResolveValue(data)) -> (data.Identifier.Value, data.ParentDef, data.Definition.Type)))
+           |> List.map (fun (ResolveValue(data)) -> (data.Identifier, data.ParentDef, data.Definition.Type)))
     |> equals (Map.ofList [ "Animal", 
                             [ ("name", upcast UNamed, upcast String)
                               ("species", upcast UNamed, upcast String) ]

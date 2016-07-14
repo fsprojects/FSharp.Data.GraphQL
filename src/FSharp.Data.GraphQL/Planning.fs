@@ -47,73 +47,6 @@ let private tryFindDef (schema: ISchema) (objdef: ObjectDef) (field: Field) : Fi
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objdef.Fields |> Map.tryFind fieldName
     
-type PlanningContext =
-    { Schema: ISchema
-      RootDef: ObjectDef
-      Document: Document }
-
-type Includer = Map<string,obj> -> bool
-type PlanningData =
-    { /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
-      Identifier: string option
-      /// Composite definition being the parent of the current field, execution plan refers to.
-      ParentDef: CompositeDef
-      /// Field definition of corresponding type found in current schema.
-      Definition: FieldDef
-      /// Boolean value marking if null values are allowed.
-      IsNullable: bool
-      /// AST node of the parsed query document.
-      Ast: Field }
-    static member FromObject(ctx: PlanningContext, parentDef: ObjectDef, field: Field) : PlanningData =
-        match tryFindDef ctx.Schema parentDef field with
-        | Some fdef ->
-            { Identifier = Some field.AliasOrName
-              ParentDef = parentDef
-              Definition = fdef
-              Ast = field
-              IsNullable = fdef.Type :? NullableDef }
-        | None ->
-            raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
-    static member FromAbstraction(ctx: PlanningContext, parentDef: AbstractDef, field: Field, typeCondition: string option) : Map<string, PlanningData> =
-        let objDefs = ctx.Schema.GetPossibleTypes parentDef
-        match typeCondition with
-        | None ->
-            objDefs
-            |> Array.choose (fun objDef ->
-                match tryFindDef ctx.Schema objDef field with
-                | Some fdef ->
-                    Some (objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef })
-                | None -> None)
-            |> Map.ofArray
-        | Some typeName ->
-            match objDefs |> Array.tryFind (fun o -> o.Name = typeName) with
-            | Some objDef ->
-                match tryFindDef ctx.Schema objDef field with
-                | Some fdef ->
-                    Map.ofList [ objDef.Name, { Identifier = Some field.AliasOrName; ParentDef = parentDef; Definition = fdef; Ast = field; IsNullable = fdef.Type :? NullableDef }]
-                | None -> Map.empty
-            | None -> 
-                let pname = parentDef :?> NamedDef
-                raise (GraphQLException (sprintf "An abstract type '%s' has no relation with a type named '%s'" pname.Name typeName))
-
-/// plan of reduction being a result of application of a query AST on existing schema
-type ExecutionPlan =
-    // reducer for scalar or enum
-    | ResolveValue of data:PlanningData
-    // reducer for selection set applied upon output object
-    | SelectFields of data:PlanningData * fields:ExecutionPlan list
-    // reducer for each of the collection elements
-    | ResolveCollection of data:PlanningData * elementPlan:ExecutionPlan
-    // reducer for union and interface types to be resolved into ReduceSelection at runtime
-    | ResolveAbstraction of data:PlanningData * typeFields:Map<string, ExecutionPlan list>
-    member x.Data = 
-        match x with
-        | ResolveValue(data) -> data
-        | SelectFields(data, _) -> data
-        | ResolveCollection(data, _) -> data
-        | ResolveAbstraction(data, _) -> data
-
-
 let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (inputs: Map<string, obj> option) =
     match inputs with
     | None -> 
@@ -127,6 +60,54 @@ let private coerceVariables (schema: #ISchema) (variables: VariableDefinition li
         |> List.fold (fun acc vardef ->
             let variableName = vardef.VariableName
             Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
+
+let objectData(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) : PlanningData =
+    match tryFindDef ctx.Schema parentDef field with
+    | Some fdef ->
+        { Identifier = field.AliasOrName
+          ParentDef = parentDef
+          Definition = fdef
+          Ast = field
+          IsNullable = fdef.Type :? NullableDef
+          Include = includer }
+    | None ->
+        raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
+
+let abstractionData(ctx: PlanningContext, parentDef: AbstractDef, field: Field, typeCondition: string option, includer: Includer) : Map<string, PlanningData> =
+    let objDefs = ctx.Schema.GetPossibleTypes parentDef
+    match typeCondition with
+    | None ->
+        objDefs
+        |> Array.choose (fun objDef ->
+            match tryFindDef ctx.Schema objDef field with
+            | Some fdef ->
+                let data = 
+                    { Identifier = field.AliasOrName
+                      ParentDef = parentDef
+                      Definition = fdef
+                      Ast = field
+                      IsNullable = fdef.Type :? NullableDef 
+                      Include = includer }
+                Some (objDef.Name, data)
+            | None -> None)
+        |> Map.ofArray
+    | Some typeName ->
+        match objDefs |> Array.tryFind (fun o -> o.Name = typeName) with
+        | Some objDef ->
+            match tryFindDef ctx.Schema objDef field with
+            | Some fdef ->
+                let data = 
+                    { Identifier = field.AliasOrName
+                      ParentDef = parentDef
+                      Definition = fdef
+                      Ast = field
+                      IsNullable = fdef.Type :? NullableDef 
+                      Include = includer }
+                Map.ofList [ objDef.Name, data ]
+            | None -> Map.empty
+        | None -> 
+            let pname = parentDef :?> NamedDef
+            raise (GraphQLException (sprintf "An abstract type '%s' has no relation with a type named '%s'" pname.Name typeName))
     
 let private directiveIncluder (directive: Directive) : Includer =
     fun variables ->
@@ -162,7 +143,7 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
         
-let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeDef) : ExecutionPlan =
+let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeDef) : ExecutionPlanInfo =
     match typedef with
     | Leaf leafDef -> planLeaf ctx data leafDef
     | Object objDef -> planSelection ctx { data with ParentDef = objDef } data.Ast.SelectionSet (ref [])
@@ -170,18 +151,19 @@ let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeD
     | List innerDef -> planList ctx data innerDef
     | Abstract abstractDef -> planAbstraction ctx { data with ParentDef = abstractDef } data.Ast.SelectionSet (ref []) None
 
-and private planSelection (ctx: PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlan = 
+and private planSelection (ctx: PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlanInfo = 
     let parentDef = downcast data.ParentDef
     let plannedFields =
         selectionSet
-        |> List.fold(fun (fields: ExecutionPlan list) selection ->
+        |> List.fold(fun (fields: ExecutionPlanInfo list) selection ->
+            let includer = getIncluder selection.Directives
             match selection with
             | Field field ->
                 let identifier = field.AliasOrName
-                if fields |> List.exists (fun f -> f.Data.Identifier.Value = identifier) 
+                if fields |> List.exists (fun f -> f.Data.Identifier = identifier) 
                 then fields
                 else 
-                    let data = PlanningData.FromObject(ctx, parentDef, field)
+                    let data = objectData(ctx, parentDef, field, includer)
                     let executionPlan = plan ctx data data.Definition.Type
                     fields @ [executionPlan]    // unfortunatelly, order matters here
             | FragmentSpread spread ->
@@ -206,20 +188,21 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
         ) []
     SelectFields(data, plannedFields)
 
-and private planList (ctx: PlanningContext) (data: PlanningData) (innerDef: TypeDef) : ExecutionPlan =
+and private planList (ctx: PlanningContext) (data: PlanningData) (innerDef: TypeDef) : ExecutionPlanInfo =
     ResolveCollection(data, plan ctx data innerDef)
 
-and private planLeaf (ctx: PlanningContext) (data: PlanningData) (leafDef: LeafDef) : ExecutionPlan =
+and private planLeaf (ctx: PlanningContext) (data: PlanningData) (leafDef: LeafDef) : ExecutionPlanInfo =
     ResolveValue(data)
 
-and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlan =
+and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlanInfo =
     let parentDef = downcast data.ParentDef
     let plannedTypeFields =
         selectionSet
-        |> List.fold(fun (fields: Map<string, ExecutionPlan list>) selection ->
+        |> List.fold(fun (fields: Map<string, ExecutionPlanInfo list>) selection ->
+            let includer = getIncluder selection.Directives
             match selection with
             | Field field ->
-                PlanningData.FromAbstraction(ctx, parentDef, field, typeCondition)
+                abstractionData(ctx, parentDef, field, typeCondition, includer)
                 |> Map.map (fun typeName data -> [ plan ctx data data.Definition.Type ])
                 |> Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields
             | FragmentSpread spread ->
@@ -246,9 +229,25 @@ and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectio
 
 let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
     let data = { 
-        Identifier = None;
+        Identifier = null;
         Ast = Unchecked.defaultof<Field>
         IsNullable = false
         ParentDef = ctx.RootDef
-        Definition = Unchecked.defaultof<FieldDef>}
-    planSelection ctx data operation.SelectionSet (ref [])
+        Definition = Unchecked.defaultof<FieldDef> 
+        Include = incl }
+    let (SelectFields(_, topFields)) = planSelection ctx data operation.SelectionSet (ref [])
+    match operation.OperationType with
+    | Query ->
+        { Operation = operation 
+          Fields = topFields
+          RootDef = ctx.Schema.Query
+          Strategy = Parallel }
+    | Mutation ->
+        match ctx.Schema.Mutation with
+        | Some mutationDef ->
+            { Operation = operation
+              Fields = topFields
+              RootDef = mutationDef
+              Strategy = Serial }
+        | None -> 
+            raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
