@@ -7,7 +7,7 @@ open FSharp.Data.GraphQL.Types.Introspection
     
 open System.Reflection
 let internal getFieldValue name o =
-    let property = o.GetType().GetProperty(name, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
+    let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name)
     if property = null then null else property.GetValue(o, null)
 
 

@@ -1,7 +1,7 @@
 ﻿namespace System
 open System.Reflection
 
-[<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Client")>]
+[<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Relay")>]
 [<assembly: AssemblyProductAttribute("FSharp.Data.GraphQL")>]
 [<assembly: AssemblyDescriptionAttribute("FSharp implementation of Facebook GraphQL query language")>]
 [<assembly: AssemblyVersionAttribute("0.0.1")>]

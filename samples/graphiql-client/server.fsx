@@ -2,6 +2,7 @@
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
 #r "../../bin/FSharp.Data.GraphQL/Hopac.dll"
 #r "../../bin/FSharp.Data.GraphQL/Hopac.Core.dll"
+#r "../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.Shared.dll"
 #r "../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll"
 
 open System

@@ -15,6 +15,23 @@ open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
+type JobWrapper<'a>(job: Job<'a>) =
+    interface IJob<'a>
+    member __.Value = job
+
+type JobHelper() =
+    static member toJob (x: IJob<'a>) = (x :?> JobWrapper<'a>).Value
+    static member ofJob (x: Job<'a>) = JobWrapper<'a>(x) :> IJob<'a>
+
+    interface IJobHelper with
+        member __.Map(x, f) = JobHelper.toJob x |> Job.map f |> JobHelper.ofJob
+        member __.OfAsync x = Async.toJob x |> JobHelper.ofJob
+        member __.Raises x = Job.raises x |> JobHelper.ofJob
+        member __.Result x = Job.result x |> JobHelper.ofJob
+
+// Inject dependency
+JobHelper() |> DependencyInjection.inject<IJobHelper>
+
 type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
     let setValue key value =
@@ -256,9 +273,9 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.Type)
     let resolve = fieldDef.Resolve
-    fun resolveFieldCtx value -> job {
+    fun resolveFieldCtx value -> (job {
         try
-            let! res = (resolve resolveFieldCtx value)
+            let! res = resolve resolveFieldCtx value |> JobHelper.toJob
             if res = null 
             then return null
             else return! completed resolveFieldCtx res
@@ -266,7 +283,7 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
         | ex -> 
             resolveFieldCtx.AddError(ex)
             return null
-    }
+    } |> JobHelper.ofJob)
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
