@@ -21,6 +21,14 @@ type SchemaConfig =
           Directives = [IncludeDirective; SkipDirective] }
 
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) as this =
+    //FIXME: for some reason static do or do invocation in module doesn't work
+    // for this reason we're compiling executors as part of identifier evaluation
+    let __done =
+        // we don't need to know possible types at this point
+        SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
+        TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
+        TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -286,3 +294,4 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        

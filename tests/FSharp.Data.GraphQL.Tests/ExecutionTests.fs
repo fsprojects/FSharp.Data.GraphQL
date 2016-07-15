@@ -82,7 +82,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             "e", upcast "Egg"
             "f", upcast "Fish"
             "pic", upcast "Pic of size: 100"
-            "promise", null
+            "promise", upcast NameValueLookup.ofList [ "a", upcast "Apple" ]
             "deep", upcast NameValueLookup.ofList [
                "a", "Already Been Done" :> obj
                "b", upcast "Boring"
@@ -95,7 +95,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         Define.Field("b", String, (fun _ dt -> dt.b))
         Define.Field("c", (ListOf String), (fun _ dt -> upcast dt.c))
     ])
-    let DataType = Define.Object<TestSubject>("DataType", fields = [
+    let rec DataType = Define.Object<TestSubject>("DataType", fieldsFn = fun () -> [
         Define.Field("a", String, fun _ dt -> dt.a)
         Define.Field("b", String, fun _ dt -> dt.b)
         Define.Field("c", String, fun _ dt -> dt.c)
@@ -103,6 +103,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         Define.Field("e", String, fun _ dt -> dt.e)
         Define.Field("f", String, fun _ dt -> dt.f)
         Define.Field("pic", String, "Picture resizer", [ Define.Input("size", Nullable Int) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
+        Define.AsyncField("promise", DataType, fun _ dt -> dt.promise)
         Define.Field("deep", DeepDataType, fun _ dt -> dt.deep) 
     ])
 

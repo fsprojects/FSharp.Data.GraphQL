@@ -11,6 +11,7 @@ open Hopac
 open Hopac.Extensions
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
@@ -186,38 +187,13 @@ let resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     match uniondef.ResolveType with
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
-    
-let SchemaMetaFieldDef = Define.Field(
-    name = "__schema",
-    description = "Access the current type schema of this server.",
-    typedef = __Schema,
-    resolve = fun ctx (_: obj) -> ctx.Schema.Introspected)
-    
-let TypeMetaFieldDef = Define.Field(
-    name = "__type",
-    description = "Request the type information of a single type.",
-    typedef = __Type,
-    args = [
-        { Name = "name"
-          Description = None
-          Type = String
-          DefaultValue = None
-          ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
-    ],
-    resolve = fun ctx (_:obj) -> 
-        ctx.Schema.Introspected.Types 
-        |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 
-        |> IntrospectionTypeRef.Named)
-    
-let TypeNameMetaFieldDef : FieldDef<obj> = Define.Field(
-    name = "__typename",
-    description = "The name of the current Object type at runtime.",
-    typedef = String,
-    resolve = fun ctx (_:obj) -> ctx.ParentType.Name)
-        
+            
 let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> Job<obj> =
     match returnDef with
-    | Object objdef -> executePlanInfo objdef
+    | Object objdef -> 
+        fun (ctx: ResolveFieldContext) value -> 
+            let (SelectFields(_, fields)) = ctx.ExecutionPlan
+            executeFields objdef ctx value fields
     | Scalar scalardef ->
         let (coerce: obj -> obj option) = scalardef.CoerceValue
         fun _ value -> 
@@ -227,15 +203,17 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | List (Output innerdef) ->
         let (innerfn: ResolveFieldContext -> obj -> Job<obj>) = createCompletion possibleTypesFn innerdef
         fun ctx (value: obj) -> job {
+            let (ResolveCollection(_,innerPlan)) = ctx.ExecutionPlan
+            let innerCtx = { ctx with ExecutionPlan = innerPlan }
             match value with
             | :? string as s -> 
-                let! inner = innerfn ctx (s)
+                let! inner = innerfn innerCtx (s)
                 return [| inner |] :> obj
             | :? System.Collections.IEnumerable as enumerable ->
                 let! completed =
                     enumerable
                     |> Seq.cast<obj>
-                    |> Seq.map (fun x -> innerfn ctx x)
+                    |> Seq.map (fun x -> innerfn innerCtx x)
                     |> Job.conCollect
                 return completed.ToArray() :> obj
             | _ -> return raise (
@@ -256,20 +234,26 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let resolver = resolveInterfaceType possibleTypesFn idef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            return! executePlanInfo resolvedDef ctx value
+            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            match Map.tryFind resolvedDef.Name typeMap with
+            | Some fields -> return! executeFields resolvedDef ctx value fields
+            | None -> return raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
         }
     | Union udef ->
         let resolver = resolveUnionType possibleTypesFn udef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            return! executePlanInfo resolvedDef ctx (udef.ResolveValue value)
+            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            match Map.tryFind resolvedDef.Name typeMap with
+            | Some fields -> return! executeFields resolvedDef ctx (udef.ResolveValue value) fields
+            | None -> return raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
         }
     | Enum _ ->
         fun _ value -> 
             let result = coerceStringValue value
             Job.result (result |> Option.map box |> Option.toObj)
 
-and private compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
+and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.Type)
     let resolve = fieldDef.Resolve
     fun resolveFieldCtx value -> job {
@@ -302,27 +286,9 @@ and private createFieldContext objdef ctx (info: ExecutionPlanInfo) =
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
-      Variables = ctx.Variables } 
+      Variables = ctx.Variables }         
 
-and executePlanInfo (objdef: ObjectDef) ctx value : Job<obj> =
-    match ctx.ExecutionPlan with
-    | ResolveValue data -> data.Definition.Execute ctx value
-    | SelectFields(data, fieldInfos) ->
-        let nestedValue = data.Definition.Execute ctx value
-        executeFields objdef ctx nestedValue fieldInfos
-    | ResolveCollection(data, info) ->
-        let innerCtx = createFieldContext objdef ctx info
-        data.Definition.Execute innerCtx value
-    | ResolveAbstraction(data, typeFields) ->
-        match Map.tryFind objdef.Name typeFields with
-        | Some fieldInfos ->
-            let nestedValue = data.Definition.Execute ctx value
-            executeFields objdef ctx nestedValue fieldInfos
-        | None -> 
-            let (Named named) = data.ParentDef
-            Job.raises (GraphQLException (sprintf "Type '%s' cannot abstract over type '%s'" named.Name objdef.Name))            
-
-and executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) value fieldInfos = job {
+and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : Job<obj> = job {
     let resultSet =
         fieldInfos
         |> List.filter (fun info -> info.Data.Include ctx.Variables)
@@ -335,12 +301,12 @@ and executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) value fieldInfo
     do! resultSet
         |> Array.map (fun (name, info) -> job { 
             let innerCtx = createFieldContext objdef ctx info
-            let! res = executePlanInfo objdef innerCtx value
+            let! res = info.Data.Definition.Execute innerCtx value
             do result.Update name res })
         |> Job.conIgnore
     return box result }
 
-let executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value = job {
+let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value = job {
     let resultSet =
         plan.Fields
         |> List.filter (fun info -> info.Data.Include ctx.Variables)
@@ -363,7 +329,7 @@ let executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables } 
-            let! res = executePlanInfo objdef fieldCtx value
+            let! res = info.Data.Definition.Execute fieldCtx value
             do result.Update name res })
         |> match plan.Strategy with
            | Parallel -> Job.conIgnore
@@ -405,8 +371,3 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
             Errors = errors }
         return! executePlan ctx executionPlan schema.Query root
     } |> Async.Global.ofJob
-
-// we don't need to know possible types at this point
-SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
-TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
-TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef

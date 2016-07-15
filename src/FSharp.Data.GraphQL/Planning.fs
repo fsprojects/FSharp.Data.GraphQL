@@ -156,6 +156,7 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
     let plannedFields =
         selectionSet
         |> List.fold(fun (fields: ExecutionPlanInfo list) selection ->
+            //FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives
             match selection with
             | Field field ->
