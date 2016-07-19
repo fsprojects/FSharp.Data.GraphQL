@@ -101,33 +101,3 @@ module Connection =
     
     let allArgs = forwardArgs @ backwardArgs
     
-    let ofArraySlice meta (SliceInfo args) (array: 't []) = 
-        let startOffset, endOffset =
-            match args with
-            | Forward(first, after) -> 
-                let start = match after with None -> 0 | Some a -> (Cursor.toOffset meta.Start a) - meta.Start
-                (start, start + first)
-            | Backward(last, before) -> 
-                let finish = match before with None -> array.Length | Some b -> (Cursor.toOffset (array.Length + meta.Start) b) - meta.Start
-                (finish - last, finish)
-        let slice = Array.sub array startOffset (System.Math.Min(endOffset, array.Length) - startOffset)
-        let edges = slice |> Array.mapi (fun idx value -> { Cursor = Cursor.ofOffset (idx + startOffset + meta.Start); Node = value })
-        let edgeHead = edges |> Array.tryHead
-        let edgeTail = edges |> Array.tryLast
-        { TotalCount = None
-          Edges = edges
-          PageInfo = 
-            { HasNextPage = endOffset <> meta.Length
-              HasPreviousPage = startOffset <> meta.Start
-              StartCursor = edgeHead |> Option.map (fun e -> e.Cursor)
-              EndCursor = edgeTail |> Option.map (fun e -> e.Cursor) }}
-    
-    let ofArray args (array: 't []) = ofArraySlice { Start = 0; Length = array.Length } args array
-    
-    let ofList args list = ofArray args (Array.ofList list)
-    
-    let ofListSlice meta args list = ofArraySlice meta args (Array.ofList list)
-    
-    let ofSeq args seq = ofArray args (Array.ofSeq seq)
-    
-    let ofSeqSlice meta args seq = ofArraySlice meta args (Array.ofSeq seq)
