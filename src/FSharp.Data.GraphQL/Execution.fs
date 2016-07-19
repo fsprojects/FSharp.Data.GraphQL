@@ -187,7 +187,7 @@ let resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     match uniondef.ResolveType with
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
-            
+                
 let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> Job<obj> =
     match returnDef with
     | Object objdef -> 
@@ -215,7 +215,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
                     |> Seq.cast<obj>
                     |> Seq.map (fun x -> innerfn innerCtx x)
                     |> Job.conCollect
-                return completed.ToArray() :> obj
+                return box (completed.ToArray())
             | _ -> return raise (
                 GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Data.Identifier (value.GetType())))
         }

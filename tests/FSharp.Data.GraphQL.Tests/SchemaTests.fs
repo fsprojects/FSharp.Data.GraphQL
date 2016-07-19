@@ -26,4 +26,9 @@ let ``Object type should be able to merge fields with matching signatures from d
             Define.Field("speed", Int)
             Define.Field("acceleration", Int) ])
     equals [ MovableType :> InterfaceDef; upcast Movable2Type ] (PersonType.Implements |> Array.toList )
-    equals [ Define.Field("name", String) :> FieldDef; upcast Define.Field("speed", Int); upcast Define.Field("acceleration", Int) ] (( PersonType :> ObjectDef).Fields |> Map.toList |> List.map snd)
+    let expected = 
+        //NOTE: under normal conditions field order shouldn't matter in object definitions
+        [ Define.Field("acceleration", Int) :> FieldDef
+          upcast Define.Field("name", String) 
+          upcast Define.Field("speed", Int)  ]
+    equals expected (( PersonType :> ObjectDef).Fields |> Map.toList |> List.map snd)

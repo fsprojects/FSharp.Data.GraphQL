@@ -73,7 +73,7 @@ let objectData(ctx: PlanningContext, parentDef: ObjectDef, field: Field, include
     | None ->
         raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
 
-let abstractionData(ctx: PlanningContext, parentDef: AbstractDef, field: Field, typeCondition: string option, includer: Includer) : Map<string, PlanningData> =
+let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer : Map<string, PlanningData> =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
     match typeCondition with
     | None ->
@@ -106,8 +106,12 @@ let abstractionData(ctx: PlanningContext, parentDef: AbstractDef, field: Field, 
                 Map.ofList [ objDef.Name, data ]
             | None -> Map.empty
         | None -> 
-            let pname = parentDef :?> NamedDef
-            raise (GraphQLException (sprintf "An abstract type '%s' has no relation with a type named '%s'" pname.Name typeName))
+            match ctx.Schema.TryFindType typeName with
+            | Some (Abstract abstractDef) -> 
+                abstractionData ctx abstractDef field None includer
+            | _ ->
+                let pname = parentDef :?> NamedDef
+                raise (GraphQLException (sprintf "There is no object type named '%s' that is a possible type of '%s'" typeName pname.Name))
     
 let private directiveIncluder (directive: Directive) : Includer =
     fun variables ->
@@ -121,17 +125,15 @@ let private directiveIncluder (directive: Directive) : Includer =
 
 let incl: Includer = fun _ -> true
 let excl: Includer = fun _ -> false
-let private getIncluder (directives: Directive list) : Includer =
+let private getIncluder (directives: Directive list) topIncluder : Includer =
     directives
     |> List.fold (fun acc directive ->
         match directive.Name with
         | "skip" ->
-            let excluder = directiveIncluder directive >> not
-            fun vars -> acc vars && excluder vars
+            fun vars -> acc vars && not(directiveIncluder directive vars)
         | "include" -> 
-            let includer = directiveIncluder directive
-            fun vars -> acc vars && includer vars
-        | _ -> acc) incl
+            fun vars -> acc vars && (directiveIncluder directive vars)
+        | _ -> acc) topIncluder
 
 let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: ObjectDef) = 
     match fragment.TypeCondition with
@@ -142,7 +144,7 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some conditionalType when conditionalType.Name = objectType.Name -> true
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
-        
+                
 let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeDef) : ExecutionPlanInfo =
     match typedef with
     | Leaf leafDef -> planLeaf ctx data leafDef
@@ -157,7 +159,8 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
         selectionSet
         |> List.fold(fun (fields: ExecutionPlanInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
-            let includer = getIncluder selection.Directives
+            let includer = getIncluder selection.Directives data.Include
+            let innerData = { data with Include = includer }
             match selection with
             | Field field ->
                 let identifier = field.AliasOrName
@@ -176,13 +179,13 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
-                        let (SelectFields(_, fragmentFields)) = planSelection ctx data fragment.SelectionSet visitedFragments
+                        let (SelectFields(_, fragmentFields)) = planSelection ctx innerData fragment.SelectionSet visitedFragments
                         // filter out already existing fields
                         List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let (SelectFields(_, fragmentFields)) = planSelection ctx data fragment.SelectionSet visitedFragments
+                 let (SelectFields(_, fragmentFields)) = planSelection ctx innerData fragment.SelectionSet visitedFragments
                  // filter out already existing fields
                  List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
             | _ -> fields
@@ -200,10 +203,11 @@ and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectio
     let plannedTypeFields =
         selectionSet
         |> List.fold(fun (fields: Map<string, ExecutionPlanInfo list>) selection ->
-            let includer = getIncluder selection.Directives
+            let includer = getIncluder selection.Directives data.Include
+            let innerData = { data with Include = includer }
             match selection with
             | Field field ->
-                abstractionData(ctx, parentDef, field, typeCondition, includer)
+                abstractionData ctx parentDef field typeCondition includer
                 |> Map.map (fun typeName data -> [ plan ctx data data.Definition.Type ])
                 |> Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields
             | FragmentSpread spread ->
@@ -215,13 +219,13 @@ and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectio
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
-                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments fragment.TypeCondition
+                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
                         // filter out already existing fields
                         Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment ->
                  // retrieve fragment data just as it was normal selection set
-                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx data fragment.SelectionSet visitedFragments fragment.TypeCondition
+                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
                  // filter out already existing fields
                  Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
             | _ -> fields
