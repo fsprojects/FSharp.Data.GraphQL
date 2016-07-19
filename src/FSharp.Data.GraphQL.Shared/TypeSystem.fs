@@ -6,23 +6,6 @@ open System
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-
-type IJob<'T> = interface end
-
-type IJobHelper =
-    abstract member Map : IJob<'a> * ('a->'b) -> IJob<'b>
-    abstract member Result : 'a -> IJob<'a>
-    abstract member Raises<'a> : exn -> IJob<'a>
-    abstract member OfAsync : Async<'a> -> IJob<'a>
-
-module private JobHelper =
-    let private helper = Lazy<_>.Create(fun () ->
-        DependencyInjection.resolve<IJobHelper>()) 
-    
-    let map f x = helper.Value.Map(x, f)
-    let result x = helper.Value.Result x
-    let raises x = helper.Value.Raises x
-    let ofAsync x = helper.Value.OfAsync x
  
 
 [<Flags>]
@@ -296,7 +279,7 @@ and ResolveFieldContext =
     member x.Arg(name : string) : 't = 
         downcast Map.find name x.Args
 
-and ExecuteField = ResolveFieldContext -> obj -> Job<obj>
+and ExecuteField = ResolveFieldContext -> obj -> Async<obj>
 
 and FieldDef = 
     interface
@@ -305,14 +288,14 @@ and FieldDef =
         abstract DeprecationReason : string option
         abstract Type : OutputDef
         abstract Args : InputFieldDef []
-        abstract Resolve : ResolveFieldContext -> obj -> IJob<obj>
+        abstract Resolve : ResolveFieldContext -> obj -> Async<obj>
         abstract Execute : ExecuteField with get,set
         inherit IEquatable<FieldDef>
     end
 
 and FieldDef<'Val> = 
     interface
-        abstract Resolve : ResolveFieldContext -> 'Val -> IJob<obj>
+        abstract Resolve : ResolveFieldContext -> 'Val -> Async<obj>
         inherit FieldDef
     end
     
@@ -539,7 +522,7 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
     { Name : string
       Description : string option
       Type : OutputDef<'Res>
-      Resolve : ResolveFieldContext -> 'Val -> IJob<'Res>
+      Resolve : ResolveFieldContext -> 'Val -> Async<'Res>
       Args : InputFieldDef []
       DeprecationReason : string option
       mutable Execute : ExecuteField }
@@ -550,15 +533,17 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
         member x.DeprecationReason = x.DeprecationReason
         member x.Type = x.Type :> OutputDef
         member x.Args = x.Args
-        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : IJob<obj> = 
-            x.Resolve ctx (value :?> 'Val)
-            |> JobHelper.map (fun x -> upcast x)
+        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Async<obj> = async {
+            let! res = x.Resolve ctx (value :?> 'Val)
+            return upcast res
+        }
         member x.Execute with get() = x.Execute and set v = x.Execute <- v
     
     interface FieldDef<'Val> with
-        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : IJob<obj> = 
-            x.Resolve ctx value
-            |> JobHelper.map (fun x -> upcast x)
+        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Async<obj> = async {
+            let! res = x.Resolve ctx value
+            return upcast res
+        }
     
     interface IEquatable<FieldDef> with
         member x.Equals f = x.Name = f.Name && x.Type :> OutputDef = f.Type && x.Args = f.Args
@@ -1279,9 +1264,9 @@ module SchemaDefinitions =
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
-    let defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> IJob<'Res> = 
-        (fun ctx value -> 
-            if Object.Equals(value, null) then JobHelper.result Unchecked.defaultof<'Res>
+    let defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Async<'Res> = 
+        (fun ctx value -> async {
+            if Object.Equals(value, null) then return Unchecked.defaultof<'Res>
             else
                 let t = value.GetType().GetTypeInfo()
                 let prop, meth = 
@@ -1289,14 +1274,15 @@ module SchemaDefinitions =
                     let meth = if prop = null then t.GetDeclaredMethod(fieldName) else null
                     Option.ofObj prop, Option.ofObj meth
                 match prop, meth with
-                | Some property, _ -> property.GetValue(value, null) :?> 'Res |> JobHelper.result
+                | Some property, _ -> return property.GetValue(value, null) :?> 'Res
                 | None, Some methodInfo ->
                     let parameters = matchParameters methodInfo ctx
-                    methodInfo.Invoke(value, parameters) :?> 'Res |> JobHelper.result
-                | None, None -> 
-                    sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName
-                    |> GraphQLException |> JobHelper.raises
-        )
+                    return methodInfo.Invoke(value, parameters) :?> 'Res
+                | None, None ->
+                    return
+                        sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName
+                        |> GraphQLException |> raise
+        })
     
     type Define private () = 
         
@@ -1366,7 +1352,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
-                     Resolve = fun ctx value -> JobHelper.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1377,7 +1363,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> JobHelper.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1388,7 +1374,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> JobHelper.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1399,7 +1385,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> JobHelper.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1410,7 +1396,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> JobHelper.ofAsync
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1421,7 +1407,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> JobHelper.ofAsync
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1432,7 +1418,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> JobHelper.ofAsync
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1444,7 +1430,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> JobHelper.ofAsync
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
