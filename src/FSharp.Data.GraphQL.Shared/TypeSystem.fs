@@ -6,6 +6,7 @@ open System
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Extensions
  
 
 [<Flags>]
@@ -1270,8 +1271,8 @@ module SchemaDefinitions =
             else
                 let t = value.GetType().GetTypeInfo()
                 let prop, meth = 
-                    let prop = t.GetDeclaredProperty(fieldName)
-                    let meth = if prop = null then t.GetDeclaredMethod(fieldName) else null
+                    let prop = t.GetDeclaredProperty(fieldName, ignoreCase=true)
+                    let meth = if prop = null then t.GetDeclaredMethod(fieldName, ignoreCase=true) else null
                     Option.ofObj prop, Option.ofObj meth
                 match prop, meth with
                 | Some property, _ -> return property.GetValue(value, null) :?> 'Res
