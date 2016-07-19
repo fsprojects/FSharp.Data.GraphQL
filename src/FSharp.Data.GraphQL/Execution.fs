@@ -11,6 +11,7 @@ open Hopac
 open Hopac.Extensions
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
@@ -124,12 +125,12 @@ let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) 
             | value -> Map.add argdef.Name value acc
         | None -> collectDefaultArgValue acc argdef
     ) Map.empty
-
+            
 let private getOperation = function
     | OperationDefinition odef -> Some odef
     | _ -> None
 
-let private findOperation doc opName =
+let internal findOperation doc opName =
     match doc.Definitions |> List.choose getOperation, opName with
     | [def], _ -> Some def
     | defs, name -> 
@@ -137,15 +138,15 @@ let private findOperation doc opName =
         |> List.tryFind (fun def -> def.Name = name)
     | _ -> None
 
-let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (inputs: Map<string, obj> option) =
-    match inputs with
-    | None -> 
+let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (vars: Map<string, obj>) =
+    if vars = Map.empty
+    then
         variables
         |> List.filter (fun vardef -> Option.isSome vardef.DefaultValue)
         |> List.fold (fun acc vardef ->
             let variableName = vardef.VariableName
             Map.add variableName (coerceVariable schema vardef Map.empty) acc) Map.empty
-    | Some vars -> 
+    else
         variables
         |> List.fold (fun acc vardef ->
             let variableName = vardef.VariableName
@@ -157,85 +158,14 @@ let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) 
     | other -> 
         match coerceBoolInput other with
         | Some s -> s
-        | None -> raise (GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
+        | None -> raise (
+            GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
 let private shouldSkip (ctx: ExecutionContext) (directive: Directive) =
     match directive.Name with
     | "skip" when not <| coerceDirectiveValue ctx directive -> false
     | "include" when  coerceDirectiveValue ctx directive -> false
     | _ -> true
-
-let private doesFragmentTypeApply (ctx: ExecutionContext) fragment (objectType: ObjectDef) = 
-    match fragment.TypeCondition with
-    | None -> true
-    | Some typeCondition ->
-        match ctx.Schema.TryFindType typeCondition with
-        | None -> false
-        | Some conditionalType when conditionalType.Name = objectType.Name -> true
-        | Some (Abstract conditionalType) -> ctx.Schema.IsPossibleType conditionalType objectType
-        | _ -> false
-            
-// 6.5 Evaluating selection sets
-let rec private collectFields (ctx: ExecutionContext) typedef (selectionSet: Selection list) (visitedFragments): (string * Field []) [] =
-    let rec findGroupIndexByName (groupedFields: System.Collections.Generic.List<string * Field []>) (name: string) (i: int) : int =
-        if i < 0
-        then -1
-        else 
-            let (k, _) = groupedFields.[i]
-            if k = name then i
-            else findGroupIndexByName groupedFields name (i-1)
-
-    let groupedFields = System.Collections.Generic.List(selectionSet.Length)
-    selectionSet 
-    |> List.iteri(fun i selection ->
-        if not (List.exists (shouldSkip ctx) selection.Directives)
-        then
-            match selection with
-            | Field field ->
-                let name = field.AliasOrName
-                match findGroupIndexByName groupedFields name (groupedFields.Count-1) with
-                | -1 -> 
-                    groupedFields.Add (name, [| field |])
-                | idx -> 
-                    let (_, value) = groupedFields.[idx]
-                    groupedFields.[idx] <- (name, Array.append [| field |] value)
-            | FragmentSpread spread ->
-                let fragmentSpreadName = spread.Name
-                if not (List.exists (fun fragmentName -> fragmentName = fragmentSpreadName) !visitedFragments)
-                then 
-                    visitedFragments := (fragmentSpreadName::!visitedFragments)
-                    let found =
-                        ctx.Document.Definitions
-                        |> List.tryFind (function FragmentDefinition f when f.Name.Value = fragmentSpreadName -> true | _ -> false)
-                    match found with
-                    | Some (FragmentDefinition fragment) -> 
-                        if doesFragmentTypeApply ctx fragment typedef
-                        then 
-                            let fragmentSelectionSet = fragment.SelectionSet
-                            let fragmentGroupedFieldSet = collectFields ctx typedef fragmentSelectionSet visitedFragments
-                            for j = 0 to fragmentGroupedFieldSet.Length - 1 do
-                                let (responseKey, fragmentGroup) = fragmentGroupedFieldSet.[j]
-                                match findGroupIndexByName groupedFields responseKey (groupedFields.Count-1) with
-                                | -1 ->
-                                    groupedFields.Add (responseKey, fragmentGroup)
-                                | idx ->
-                                    let (_, value) = groupedFields.[idx]
-                                    groupedFields.[idx] <- (responseKey, Array.append fragmentGroup value)
-                    | _ -> ()
-            | InlineFragment fragment -> 
-                if doesFragmentTypeApply ctx fragment typedef
-                then 
-                    let fragmentSelectionSet = fragment.SelectionSet
-                    let fragmentGroupedFieldSet = collectFields ctx typedef fragmentSelectionSet visitedFragments
-                    for j = 0 to fragmentGroupedFieldSet.Length - 1 do
-                        let (responseKey, fragmentGroup) = fragmentGroupedFieldSet.[j]
-                        match findGroupIndexByName groupedFields responseKey (groupedFields.Count-1) with
-                        | -1 ->
-                            groupedFields.Add (responseKey, fragmentGroup)
-                        | idx ->
-                            let (_, value) = groupedFields.[idx]
-                            groupedFields.[idx] <- (responseKey, Array.append fragmentGroup value))
-    groupedFields.ToArray()
     
 let private defaultResolveType possibleTypesFn abstractDef : obj -> ObjectDef =
     let possibleTypes = possibleTypesFn abstractDef
@@ -257,38 +187,13 @@ let resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     match uniondef.ResolveType with
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
-    
-let SchemaMetaFieldDef = Define.Field(
-    name = "__schema",
-    description = "Access the current type schema of this server.",
-    typedef = __Schema,
-    resolve = fun ctx (_: obj) -> ctx.Schema.Introspected)
-    
-let TypeMetaFieldDef = Define.Field(
-    name = "__type",
-    description = "Request the type information of a single type.",
-    typedef = __Type,
-    args = [
-        { Name = "name"
-          Description = None
-          Type = String
-          DefaultValue = None
-          ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
-    ],
-    resolve = fun ctx (_:obj) -> 
-        ctx.Schema.Introspected.Types 
-        |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 
-        |> IntrospectionTypeRef.Named)
-    
-let TypeNameMetaFieldDef : FieldDef<obj> = Define.Field(
-    name = "__typename",
-    description = "The name of the current Object type at runtime.",
-    typedef = String,
-    resolve = fun ctx (_:obj) -> ctx.ParentType.Name)
-        
+                
 let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> Job<obj> =
     match returnDef with
-    | Object objdef -> createObjectCompletion objdef
+    | Object objdef -> 
+        fun (ctx: ResolveFieldContext) value -> 
+            let (SelectFields(_, fields)) = ctx.ExecutionPlan
+            executeFields objdef ctx value fields
     | Scalar scalardef ->
         let (coerce: obj -> obj option) = scalardef.CoerceValue
         fun _ value -> 
@@ -298,18 +203,21 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | List (Output innerdef) ->
         let (innerfn: ResolveFieldContext -> obj -> Job<obj>) = createCompletion possibleTypesFn innerdef
         fun ctx (value: obj) -> job {
+            let (ResolveCollection(_,innerPlan)) = ctx.ExecutionPlan
+            let innerCtx = { ctx with ExecutionPlan = innerPlan }
             match value with
             | :? string as s -> 
-                let! inner = innerfn ctx (s)
+                let! inner = innerfn innerCtx (s)
                 return [| inner |] :> obj
             | :? System.Collections.IEnumerable as enumerable ->
                 let! completed =
                     enumerable
                     |> Seq.cast<obj>
-                    |> Seq.map (fun x -> innerfn ctx x)
+                    |> Seq.map (fun x -> innerfn innerCtx x)
                     |> Job.conCollect
-                return completed.ToArray() :> obj
-            | _ -> return raise (GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.FieldName (value.GetType())))
+                return box (completed.ToArray())
+            | _ -> return raise (
+                GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Data.Identifier (value.GetType())))
         }
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
@@ -325,30 +233,27 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | Interface idef ->
         let resolver = resolveInterfaceType possibleTypesFn idef
         fun ctx value -> job {
-            let resolved = resolver value
-            return! createObjectCompletion resolved ctx value
+            let resolvedDef = resolver value
+            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            match Map.tryFind resolvedDef.Name typeMap with
+            | Some fields -> return! executeFields resolvedDef ctx value fields
+            | None -> return raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
         }
     | Union udef ->
         let resolver = resolveUnionType possibleTypesFn udef
         fun ctx value -> job {
-            let resolved = resolver value
-            return! createObjectCompletion resolved ctx (udef.ResolveValue value)
+            let resolvedDef = resolver value
+            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            match Map.tryFind resolvedDef.Name typeMap with
+            | Some fields -> return! executeFields resolvedDef ctx (udef.ResolveValue value) fields
+            | None -> return raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
         }
     | Enum _ ->
         fun _ value -> 
             let result = coerceStringValue value
             Job.result (result |> Option.map box |> Option.toObj)
 
-and private createObjectCompletion objdef =
-    fun (ctx: ResolveFieldContext) value -> job {
-    let groupedFieldSet = 
-        ctx.Fields
-        |> Array.fold (fun _ field -> collectFields ctx.ExecutionContext objdef field.SelectionSet (ref [])) [||]
-    let! res = executeFields ctx.ExecutionContext objdef value groupedFieldSet 
-    return res :> obj }
-
-
-and private compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
+and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.Type)
     let resolve = fieldDef.Resolve
     fun resolveFieldCtx value -> job {
@@ -369,54 +274,67 @@ and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
         | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-        | fieldName -> objectType.Fields |> Array.tryFind (fun f -> f.Name = fieldName)
+        | fieldName -> objectType.Fields |> Map.tryFind fieldName
+        
+and private createFieldContext objdef ctx (info: ExecutionPlanInfo) =
+    let data = info.Data
+    let fdef = data.Definition
+    let args = getArgumentValues fdef.Args data.Ast.Arguments ctx.Variables
+    { ExecutionPlan = info
+      Context = ctx.Context
+      ReturnType = fdef.Type
+      ParentType = objdef
+      Schema = ctx.Schema
+      Args = args
+      Variables = ctx.Variables }         
 
-and private getFieldEntry (ctx: ExecutionContext) typedef value (fields: Field []) : Job<obj> = 
-    let firstField = fields.[0]
-    match getFieldDefinition ctx typedef firstField with
-    | None -> Job.result null
-    | Some fieldDef -> 
-        let args = getArgumentValues fieldDef.Args firstField.Arguments ctx.Variables
-        let resolveFieldCtx = {
-            FieldName = fieldDef.Name
-            Fields = fields
-            FieldType = fieldDef
-            ReturnType = fieldDef.Type
-            ParentType = typedef
-            Schema = ctx.Schema
-            Args = args
-            Operation = ctx.Operation
-            Fragments = ctx.Fragments
-            Variables = ctx.Variables
-            AddError = ctx.Errors.Add
-            ExecutionContext = ctx
-        } 
-        fieldDef.Execute resolveFieldCtx value
-
-and private executeFields (ctx: ExecutionContext) (typedef: ObjectDef) (value: obj) (groupedFieldSet: (string * Field []) []) : Job<NameValueLookup> = job {
-    let result =
-        groupedFieldSet
+and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : Job<obj> = job {
+    let resultSet =
+        fieldInfos
+        |> List.filter (fun info -> info.Data.Include ctx.Variables)
+        |> List.map (fun info -> (info.Data.Identifier, info))
+        |> List.toArray
+    let result = 
+        resultSet
         |> Array.map fst
-        |> NameValueLookup
-    do! groupedFieldSet
-        |> Array.map (fun (responseKey, fields) -> job { 
-            let! res = getFieldEntry ctx typedef value fields
-            do result.Update responseKey res })
+        |> NameValueLookup 
+    do! resultSet
+        |> Array.map (fun (name, info) -> job { 
+            let innerCtx = createFieldContext objdef ctx info
+            let! res = info.Data.Definition.Execute innerCtx value
+            do result.Update name res })
         |> Job.conIgnore
-    return result }
+    return box result }
 
-and private executeFieldsSync ctx typedef value (groupedFieldSet: (string * Field []) []) = job {
-    let result =
-        groupedFieldSet
+let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value = job {
+    let resultSet =
+        plan.Fields
+        |> List.filter (fun info -> info.Data.Include ctx.Variables)
+        |> List.map (fun info -> (info.Data.Identifier, info))
+        |> List.toArray
+    let result = 
+        resultSet
         |> Array.map fst
-        |> NameValueLookup
-    do! groupedFieldSet
-        |> Array.map (fun (responseKey, fields) -> job {
-            let! entry = getFieldEntry ctx typedef value fields
-            result.Update responseKey entry
-           })
-        |> Job.seqIgnore
-    return result }
+        |> NameValueLookup 
+    do! resultSet
+        |> Array.map (fun (name, info) -> job { 
+            let data = info.Data
+            let fdef = data.Definition
+            let args = getArgumentValues fdef.Args data.Ast.Arguments ctx.Variables
+            let fieldCtx = 
+                { ExecutionPlan = info
+                  Context = ctx
+                  ReturnType = fdef.Type
+                  ParentType = objdef
+                  Schema = ctx.Schema
+                  Args = args
+                  Variables = ctx.Variables } 
+            let! res = info.Data.Definition.Execute fieldCtx value
+            do result.Update name res })
+        |> match plan.Strategy with
+           | Parallel -> Job.conIgnore
+           | Serial   -> Job.seqIgnore
+    return box result }
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
@@ -432,7 +350,7 @@ let internal compileSchema possibleTypesFn types =
         match x with
         | Object objdef -> 
             objdef.Fields
-            |> Array.iter (fun fieldDef -> 
+            |> Map.iter (fun _ fieldDef -> 
                 fieldDef.Execute <- compileField possibleTypesFn fieldDef
                 fieldDef.Args
                 |> Array.iter (fun arg -> 
@@ -441,33 +359,15 @@ let internal compileSchema possibleTypesFn types =
         | InputObject indef -> compileInputObject indef
         | _ -> ())
                 
-let private evaluate (schema: #ISchema) doc operation variables root errors = job {
-    let variables = coerceVariables schema operation.VariableDefinitions variables
-    let ctx = {
-        Schema = schema
-        RootValue = match root with None -> null | Some x -> x
-        Document = doc
-        Variables = variables
-        Operation = operation
-        Fragments = doc.Definitions |> List.choose (fun x -> match x with FragmentDefinition f -> Some f | _ -> None)
-        Errors = errors
-    }
-    match operation.OperationType with
-    | Mutation -> 
-        let groupedFieldSet = 
-            collectFields ctx schema.Mutation.Value operation.SelectionSet  (ref [])
-        return! executeFieldsSync ctx schema.Mutation.Value ctx.RootValue groupedFieldSet
-    | Query ->
-        let groupedFieldSet = 
-            collectFields ctx schema.Query operation.SelectionSet  (ref [])
-        return! executeFields ctx schema.Query ctx.RootValue groupedFieldSet }
-
-let internal execute (schema: #ISchema) doc operationName variables root errors = async {
-    match findOperation doc operationName with
-    | Some operation -> return! evaluate schema doc operation variables root errors |> Async.Global.ofJob
-    | None -> return raise (GraphQLException "No operation with specified name has been found for provided document") }
-
-// we don't need to know possible types at this point
-SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
-TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
-TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors = 
+    job {
+        let variables = coerceVariables schema executionPlan.Operation.VariableDefinitions variables
+        let operation = executionPlan.Operation
+        let ctx = {
+            Schema = schema
+            ExecutionPlan = executionPlan
+            RootValue = root
+            Variables = variables
+            Errors = errors }
+        return! executePlan ctx executionPlan schema.Query root
+    } |> Async.Global.ofJob

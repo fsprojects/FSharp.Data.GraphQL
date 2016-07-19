@@ -52,6 +52,7 @@
     <Compile Include="Introspection.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="Values.fs" />
+    <Compile Include="Planning.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="ReflectedSchema.fs" />

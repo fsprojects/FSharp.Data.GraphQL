@@ -207,6 +207,8 @@ and CompositeDef =
 and AbstractDef = 
     interface
         inherit TypeDef
+        // only abstract types are Interface and Union, which are both composite defs too
+        inherit CompositeDef 
     end
 
 and NamedDef = 
@@ -214,6 +216,77 @@ and NamedDef =
         inherit TypeDef
         abstract Name : string
     end
+
+and PlanningContext =
+    { Schema: ISchema
+      RootDef: ObjectDef
+      Document: Document }
+
+and Includer = Map<string,obj> -> bool
+    
+and PlanningData =
+    { /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
+      Identifier: string
+      /// Composite definition being the parent of the current field, execution plan refers to.
+      ParentDef: CompositeDef
+      /// Field definition of corresponding type found in current schema.
+      Definition: FieldDef
+      /// Boolean value marking if null values are allowed.
+      IsNullable: bool
+      /// AST node of the parsed query document.
+      Ast: Field
+      // logic describing if correlated field should be included in result set
+      Include : Includer }
+      
+/// plan of reduction being a result of application of a query AST on existing schema
+and ExecutionPlanInfo =
+    // reducer for scalar or enum
+    | ResolveValue of data:PlanningData
+    // reducer for selection set applied upon output object
+    | SelectFields of data:PlanningData * fields:ExecutionPlanInfo list
+    // reducer for each of the collection elements
+    | ResolveCollection of data:PlanningData * elementPlan:ExecutionPlanInfo
+    // reducer for union and interface types to be resolved into ReduceSelection at runtime
+    | ResolveAbstraction of data:PlanningData * typeFields:Map<string, ExecutionPlanInfo list>
+    member x.Data = 
+        match x with
+        | ResolveValue(data) -> data
+        | SelectFields(data, _) -> data
+        | ResolveCollection(data, _) -> data
+        | ResolveAbstraction(data, _) -> data
+
+and ExecutionStrategy =
+    | Serial
+    | Parallel
+
+and ExecutionPlan = 
+    { Operation: OperationDefinition
+      RootDef: ObjectDef
+      Strategy: ExecutionStrategy
+      Fields: ExecutionPlanInfo list }
+        
+and ExecutionContext = 
+    { Schema: ISchema
+      RootValue: obj
+      ExecutionPlan: ExecutionPlan
+      Variables: Map<string, obj>
+      Errors: ConcurrentBag<exn> }
+
+and ResolveFieldContext = 
+    { ExecutionPlan : ExecutionPlanInfo
+      Context: ExecutionContext 
+      ReturnType : TypeDef
+      ParentType : ObjectDef
+      Schema : ISchema
+      Args : Map<string, obj>
+      Variables : Map<string, obj> }
+    member x.AddError (error: exn) = x.Context.Errors.Add error
+    member x.TryArg(name : string) : 't option = 
+        match Map.tryFind name x.Args with
+        | Some o -> Some(o :?> 't)
+        | None -> None
+    member x.Arg(name : string) : 't = 
+        downcast Map.find name x.Args
 
 and ExecuteField = ResolveFieldContext -> obj -> Job<obj>
 and FieldDef = 
@@ -234,37 +307,6 @@ and FieldDef<'Val> =
         inherit FieldDef
     end
     
-and ExecutionContext = 
-    {
-        Schema: ISchema
-        RootValue: obj
-        Document: Document
-        Operation: OperationDefinition
-        Fragments: FragmentDefinition list
-        Variables: Map<string, obj>
-        Errors: ConcurrentBag<exn>
-    }
-
-and ResolveFieldContext = 
-    { FieldName : string
-      Fields : Field []
-      FieldType : FieldDef
-      ReturnType : TypeDef
-      ParentType : ObjectDef
-      Schema : ISchema
-      Args : Map<string, obj>
-      Operation : OperationDefinition
-      Fragments : FragmentDefinition list
-      Variables : Map<string, obj>
-      ExecutionContext: ExecutionContext
-      AddError: exn -> unit }
-    member x.TryArg(name : string) : 't option = 
-        match Map.tryFind name x.Args with
-        | Some o -> Some(o :?> 't)
-        | None -> None
-    member x.Arg(name : string) : 't = 
-        downcast Map.find name x.Args
-
 and ScalarDef = 
     interface
         abstract Name : string
@@ -410,7 +452,7 @@ and ObjectDef =
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Fields : FieldDef []
+        abstract Fields : Map<string, FieldDef>
         abstract Implements : InterfaceDef []
         abstract IsTypeOf : (obj -> bool) option
         inherit TypeDef
@@ -422,7 +464,7 @@ and ObjectDef =
 
 and ObjectDef<'Val> = 
     interface
-        abstract Fields : FieldDef<'Val> []
+        abstract Fields : Map<string, FieldDef<'Val>>
         inherit ObjectDef
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
@@ -431,7 +473,7 @@ and ObjectDef<'Val> =
 and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> = 
     { Name : string
       Description : string option
-      FieldsFn : Lazy<FieldDef<'Val> []>
+      FieldsFn : Lazy<Map<string, FieldDef<'Val>>>
       Implements : InterfaceDef []
       IsTypeOf : (obj -> bool) option }
 
@@ -452,9 +494,7 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
         
         member x.Fields = 
             x.FieldsFn.Force()
-            |> Seq.ofArray
-            |> Seq.cast<FieldDef>
-            |> Seq.toArray
+            |> Map.map (fun k v -> upcast v)
         
         member x.Implements = x.Implements
         member x.IsTypeOf = x.IsTypeOf
@@ -661,7 +701,7 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
     
     override x.Equals y = 
         match y with
-        | :? InterfaceDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
+        | :? UnionDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
         | _ -> false
     
     override x.GetHashCode() = 
@@ -1105,7 +1145,7 @@ module SchemaDefinitions =
     
     let (|Leaf|_|) (tdef : TypeDef) = 
         match tdef with
-        | :? ScalarDef | :? EnumDef -> Some tdef
+        | :? LeafDef as ldef -> Some ldef
         | _ -> None
     
     let (|Composite|_|) (tdef : TypeDef) = 
@@ -1278,7 +1318,7 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fieldsFn() |> List.toArray)
+                     FieldsFn = lazy (fieldsFn() |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
@@ -1287,7 +1327,7 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { Name = name
                      Description = description
-                     FieldsFn = lazy (fields |> List.toArray)
+                     FieldsFn = lazy (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         

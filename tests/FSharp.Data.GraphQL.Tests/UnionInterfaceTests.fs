@@ -35,8 +35,7 @@ type Person =
     { Name: string; Pets: Pet list; Friends: INamed list }
     interface INamed with
         member x.Name = x.Name
-
-
+        
 let NamedType = Define.Interface<INamed>(
     name = "Named",
     fields = [ Define.Field("name", String) ])
@@ -158,13 +157,11 @@ let ``Executes union types`` () =
             box <| NameValueLookup.ofList [
                 "__typename", box "Cat"
                 "name", upcast "Garfield"
-                "barks", null
                 "meows", upcast false]
             upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
-                "barks", upcast true
-                "meows", null]]]
+                "barks", upcast true]]]
     noErrors actual
     actual.["data"] |> equals (upcast expected)
     
@@ -222,14 +219,11 @@ let ``Executes interface types`` () =
         "friends", upcast [
             box <| NameValueLookup.ofList [
                 "__typename", box "Person"
-                "name", upcast "Liz"
-                "barks", null
-                "meows", null]
+                "name", upcast "Liz" ]
             upcast NameValueLookup.ofList [
                 "__typename", box "Dog"
                 "name", upcast "Odie"
-                "barks", upcast true
-                "meows", null]]]
+                "barks", upcast true ]]]
     noErrors actual
     actual.["data"] |> equals (upcast expected)
     

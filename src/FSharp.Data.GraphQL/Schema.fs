@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
 type SchemaConfig =
@@ -20,6 +21,14 @@ type SchemaConfig =
           Directives = [IncludeDirective; SkipDirective] }
 
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) as this =
+    //FIXME: for some reason static do or do invocation in module doesn't work
+    // for this reason we're compiling executors as part of identifier evaluation
+    let __done =
+        // we don't need to know possible types at this point
+        SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
+        TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
+        TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -33,6 +42,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
                 objdef.Fields
+                |> Map.toArray
+                |> Array.map snd
                 |> Array.collect (fun x -> Array.append [| x.Type :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.Type)))
                 |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
                 |> Array.fold (fun n (Named t) -> insert n t) ns'
@@ -151,6 +162,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         | Object objdef -> 
             let fields = 
                 objdef.Fields 
+                |> Map.toArray
+                |> Array.map snd
                 |> Array.map (introspectField namedTypes)
             let interfaces = 
                 objdef.Implements 
@@ -218,24 +231,26 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
         
     member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
-        async {
-            try
-                let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables (data |> Option.map box) errors
-                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
-                return upcast NameValueLookup.ofList output
-            with 
-            | ex -> 
-                let msg = ex.ToString()
-                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
-        }
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
 
     member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        let ast = parse queryOrMutation
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
+
+    member this.AsyncEvaluate(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         async {
             try
-                let ast = parse queryOrMutation
-                let errors = System.Collections.Concurrent.ConcurrentBag()
-                let! result = execute this ast operationName variables (data |> Option.map box) errors
+                let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
+                let rootObj = data |> Option.map box |> Option.toObj
+                let! result = evaluate this executionPlan variables rootObj errors
                 let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
                 return upcast NameValueLookup.ofList output
             with 
@@ -244,6 +259,25 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
 
+    member this.CreateExecutionPlan(ast: Document, ?operationName: string): ExecutionPlan =
+        match findOperation ast operationName with
+        | Some operation -> 
+            let rootDef = 
+                match operation.OperationType with
+                | Query -> query
+                | Mutation -> 
+                    match mutation with
+                    | Some m -> m
+                    | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
+            let planningCtx = { Schema = this; RootDef = rootDef; Document = ast }
+            planOperation planningCtx operation
+        | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
+
+    member this.CreateExecutionPlan(queryOrMutation: string, ?operationName: string) =
+        match operationName with
+        | None -> this.CreateExecutionPlan(parse queryOrMutation)
+        | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
+        
 
     interface ISchema with        
         member val TypeMap = typeMap
@@ -263,3 +297,4 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
 
     interface System.Collections.IEnumerable with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        
