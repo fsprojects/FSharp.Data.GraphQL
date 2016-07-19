@@ -98,11 +98,6 @@
       <Project>{7c9cc625-fb4e-4215-9f7c-494aa6043821}</Project>
       <Private>True</Private>
     </ProjectReference>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Relay\FSharp.Data.GraphQL.Relay.fsproj">
-      <Name>FSharp.Data.GraphQL.Relay</Name>
-      <Project>{c53b6c2c-35e0-46d1-8d01-59f19d345cb1}</Project>
-      <Private>True</Private>
-    </ProjectReference>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
       <Name>FSharp.Data.GraphQL.Shared</Name>
       <Project>{6768ea38-1335-4b8e-bc09-ccded1f9aaf6}</Project>
