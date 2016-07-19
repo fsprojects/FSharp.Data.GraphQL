@@ -19,8 +19,6 @@ let (@) res1 res2 =
 let validateImplements (objdef: ObjectDef) (idef: InterfaceDef) =
     let objectFields =
         objdef.Fields
-        |> Array.map (fun f -> (f.Name, f))
-        |> Map.ofArray
     let errors =
         idef.Fields
         |> Array.fold (fun acc f ->
@@ -36,7 +34,7 @@ let validateType (namedTypes: Map<string, NamedDef>) typedef =
     match typedef with
     | Scalar scalardef -> Success
     | Object objdef -> 
-        let nonEmptyResult = if objdef.Fields.Length > 0 then Success else Error [ objdef.Name + " must have at least one field defined" ]
+        let nonEmptyResult = if objdef.Fields.Count > 0 then Success else Error [ objdef.Name + " must have at least one field defined" ]
         let implementsResult =
             objdef.Implements
             |> Array.fold (fun acc i -> acc @ validateImplements objdef i) Success
