@@ -229,23 +229,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         match Validation.validate typeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
-        
-    member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
-        let executionPlan = 
-            match operationName with
-            | Some opname -> this.CreateExecutionPlan(ast, opname)
-            | None -> this.CreateExecutionPlan(ast)
-        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
 
-    member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
-        let ast = parse queryOrMutation
-        let executionPlan = 
-            match operationName with
-            | Some opname -> this.CreateExecutionPlan(ast, opname)
-            | None -> this.CreateExecutionPlan(ast)
-        this.AsyncEvaluate(executionPlan, data, defaultArg variables Map.empty)
-
-    member this.AsyncEvaluate(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
+    member private this.Eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
@@ -258,6 +243,24 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 let msg = ex.ToString()
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
+        
+    member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.Eval(executionPlan, data, defaultArg variables Map.empty)
+
+    member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+        let ast = parse queryOrMutation
+        let executionPlan = 
+            match operationName with
+            | Some opname -> this.CreateExecutionPlan(ast, opname)
+            | None -> this.CreateExecutionPlan(ast)
+        this.Eval(executionPlan, data, defaultArg variables Map.empty)
+
+    member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<IDictionary<string,obj>> =
+        this.Eval(executionPlan, data, defaultArg variables Map.empty)
 
     member this.CreateExecutionPlan(ast: Document, ?operationName: string): ExecutionPlan =
         match findOperation ast operationName with

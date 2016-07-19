@@ -56,6 +56,9 @@
     <Compile Include="Execution.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="ReflectedSchema.fs" />
+    <Compile Include="Relay/Node.fs" />
+    <Compile Include="Relay/Mutations.fs" />
+    <Compile Include="Relay/Connections.fs" />
     <None Include="paket.references" />
     <None Include="paket.template" />
   </ItemGroup>

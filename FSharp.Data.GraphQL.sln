@@ -1,6 +1,6 @@
 Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 14
-VisualStudioVersion = 14.0.25123.0
+VisualStudioVersion = 14.0.25420.1
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B98-5CED-492C-A5B7-A5B4F73CF142}"
 	ProjectSection(SolutionItems) = preProject
@@ -48,8 +48,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql-client", "graphiql
 		samples\graphiql-client\server.fsx = samples\graphiql-client\server.fsx
 		samples\graphiql-client\webpack.config.js = samples\graphiql-client\webpack.config.js
 	EndProjectSection
-EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Relay", "src\FSharp.Data.GraphQL.Relay\FSharp.Data.GraphQL.Relay.fsproj", "{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "relay-starter-kit", "relay-starter-kit", "{9B25360F-2CE4-43D2-AFF0-5EAA693E98F7}"
 	ProjectSection(SolutionItems) = preProject
@@ -110,14 +108,6 @@ Global
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|Any CPU.Build.0 = Release|Any CPU
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|x64.ActiveCfg = Release|x64
 		{751357AE-F2B2-4B38-956E-81E0B8606C73}.Release|x64.Build.0 = Release|x64
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Debug|x64.Build.0 = Debug|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|x64.ActiveCfg = Release|Any CPU
-		{C53B6C2C-35E0-46D1-8D01-59F19D345CB1}.Release|x64.Build.0 = Release|Any CPU
 		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{7C9CC625-FB4E-4215-9F7C-494AA6043821}.Debug|x64.ActiveCfg = Debug|Any CPU

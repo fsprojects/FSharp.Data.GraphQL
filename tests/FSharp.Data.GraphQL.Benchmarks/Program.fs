@@ -8,7 +8,7 @@ open BenchmarkDotNet.Running
 open FSharp.Data.GraphQL.ParsingBenchmark
 open FSharp.Data.GraphQL.ExecutionBenchmark
 
-let defaultSwitch () = BenchmarkSwitcher [| typeof<SimpleExecutionBenchmark>; typeof<RepeatableExecutionBenchmark>; typeof<ParsingBenchmark>  |]
+let defaultSwitch () = BenchmarkSwitcher [| typeof<SimpleExecutionBenchmark>; typeof<ParsingBenchmark>  |]
 
 [<EntryPoint>]
 let Main args =
