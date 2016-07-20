@@ -352,12 +352,12 @@ Target "BuildPackage" DoNothing
 Target "All" DoNothing
 
 "Clean"
-  ==> "AssemblyInfo"
+  =?> ("AssemblyInfo", not isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
-  ==> "GenerateReferenceDocs"
-  ==> "GenerateDocs"
+  =?> ("GenerateReferenceDocs", environVar "APPVEYOR" = "True")
+  =?> ("GenerateDocs", environVar "APPVEYOR" = "True")
   ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
