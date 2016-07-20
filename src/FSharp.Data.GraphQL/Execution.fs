@@ -192,7 +192,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 
-            let (SelectFields(_, fields)) = ctx.ExecutionPlan
+            let (SelectFields(fields)) = ctx.ExecutionPlan.Kind
             executeFields objdef ctx value fields
     | Scalar scalardef ->
         let (coerce: obj -> obj option) = scalardef.CoerceValue
@@ -203,7 +203,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | List (Output innerdef) ->
         let (innerfn: ResolveFieldContext -> obj -> Job<obj>) = createCompletion possibleTypesFn innerdef
         fun ctx (value: obj) -> job {
-            let (ResolveCollection(_,innerPlan)) = ctx.ExecutionPlan
+            let (ResolveCollection(innerPlan)) = ctx.ExecutionPlan.Kind
             let innerCtx = { ctx with ExecutionPlan = innerPlan }
             match value with
             | :? string as s -> 
@@ -217,7 +217,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
                     |> Job.conCollect
                 return box (completed.ToArray())
             | _ -> return raise (
-                GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Data.Identifier (value.GetType())))
+                GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Identifier (value.GetType())))
         }
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
@@ -234,7 +234,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let resolver = resolveInterfaceType possibleTypesFn idef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            let (ResolveAbstraction(typeMap)) = ctx.ExecutionPlan.Kind
             match Map.tryFind resolvedDef.Name typeMap with
             | Some fields -> return! executeFields resolvedDef ctx value fields
             | None -> return raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
@@ -243,7 +243,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let resolver = resolveUnionType possibleTypesFn udef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            let (ResolveAbstraction(_, typeMap)) = ctx.ExecutionPlan
+            let (ResolveAbstraction(typeMap)) = ctx.ExecutionPlan.Kind
             match Map.tryFind resolvedDef.Name typeMap with
             | Some fields -> return! executeFields resolvedDef ctx (udef.ResolveValue value) fields
             | None -> return raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
@@ -277,9 +277,8 @@ and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | fieldName -> objectType.Fields |> Map.tryFind fieldName
         
 and private createFieldContext objdef ctx (info: ExecutionPlanInfo) =
-    let data = info.Data
-    let fdef = data.Definition
-    let args = getArgumentValues fdef.Args data.Ast.Arguments ctx.Variables
+    let fdef = info.Definition
+    let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
     { ExecutionPlan = info
       Context = ctx.Context
       ReturnType = fdef.Type
@@ -291,8 +290,8 @@ and private createFieldContext objdef ctx (info: ExecutionPlanInfo) =
 and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : Job<obj> = job {
     let resultSet =
         fieldInfos
-        |> List.filter (fun info -> info.Data.Include ctx.Variables)
-        |> List.map (fun info -> (info.Data.Identifier, info))
+        |> List.filter (fun info -> info.Include ctx.Variables)
+        |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
     let result = 
         resultSet
@@ -301,7 +300,7 @@ and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value:
     do! resultSet
         |> Array.map (fun (name, info) -> job { 
             let innerCtx = createFieldContext objdef ctx info
-            let! res = info.Data.Definition.Execute innerCtx value
+            let! res = info.Definition.Execute innerCtx value
             do result.Update name res })
         |> Job.conIgnore
     return box result }
@@ -309,8 +308,8 @@ and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value:
 let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value = job {
     let resultSet =
         plan.Fields
-        |> List.filter (fun info -> info.Data.Include ctx.Variables)
-        |> List.map (fun info -> (info.Data.Identifier, info))
+        |> List.filter (fun info -> info.Include ctx.Variables)
+        |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
     let result = 
         resultSet
@@ -318,9 +317,8 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
         |> NameValueLookup 
     do! resultSet
         |> Array.map (fun (name, info) -> job { 
-            let data = info.Data
-            let fdef = data.Definition
-            let args = getArgumentValues fdef.Args data.Ast.Arguments ctx.Variables
+            let fdef = info.Definition
+            let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
             let fieldCtx = 
                 { ExecutionPlan = info
                   Context = ctx
@@ -329,7 +327,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables } 
-            let! res = info.Data.Definition.Execute fieldCtx value
+            let! res = info.Definition.Execute fieldCtx value
             do result.Update name res })
         |> match plan.Strategy with
            | Parallel -> Job.conIgnore

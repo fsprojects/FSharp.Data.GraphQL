@@ -61,19 +61,19 @@ let private coerceVariables (schema: #ISchema) (variables: VariableDefinition li
             let variableName = vardef.VariableName
             Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
 
-let objectData(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) : PlanningData =
+let objectData(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
     match tryFindDef ctx.Schema parentDef field with
     | Some fdef ->
         { Identifier = field.AliasOrName
+          Kind = ResolveValue
           ParentDef = parentDef
           Definition = fdef
           Ast = field
-          IsNullable = fdef.Type :? NullableDef
           Include = includer }
     | None ->
         raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
 
-let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer : Map<string, PlanningData> =
+let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
     match typeCondition with
     | None ->
@@ -86,7 +86,7 @@ let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: F
                       ParentDef = parentDef
                       Definition = fdef
                       Ast = field
-                      IsNullable = fdef.Type :? NullableDef 
+                      Kind = ResolveAbstraction Map.empty
                       Include = includer }
                 Some (objDef.Name, data)
             | None -> None)
@@ -101,7 +101,7 @@ let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: F
                       ParentDef = parentDef
                       Definition = fdef
                       Ast = field
-                      IsNullable = fdef.Type :? NullableDef 
+                      Kind = ResolveAbstraction Map.empty
                       Include = includer }
                 Map.ofList [ objDef.Name, data ]
             | None -> Map.empty
@@ -145,26 +145,26 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
                 
-let rec private plan (ctx: PlanningContext) (data: PlanningData) (typedef: TypeDef) : ExecutionPlanInfo =
+let rec private plan (ctx: PlanningContext) (info) (typedef: TypeDef) : ExecutionPlanInfo =
     match typedef with
-    | Leaf leafDef -> planLeaf ctx data leafDef
-    | Object objDef -> planSelection ctx { data with ParentDef = objDef } data.Ast.SelectionSet (ref [])
-    | Nullable innerDef -> plan ctx { data with IsNullable = true } innerDef
-    | List innerDef -> planList ctx data innerDef
-    | Abstract abstractDef -> planAbstraction ctx { data with ParentDef = abstractDef } data.Ast.SelectionSet (ref []) None
+    | Leaf leafDef -> planLeaf ctx info leafDef
+    | Object objDef -> planSelection ctx { info with ParentDef = objDef } info.Ast.SelectionSet (ref [])
+    | Nullable innerDef -> plan ctx info innerDef
+    | List innerDef -> planList ctx info innerDef
+    | Abstract abstractDef -> planAbstraction ctx { info with ParentDef = abstractDef } info.Ast.SelectionSet (ref []) None
 
-and private planSelection (ctx: PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments : ExecutionPlanInfo = 
-    let parentDef = downcast data.ParentDef
+and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection list) visitedFragments : ExecutionPlanInfo = 
+    let parentDef = downcast info.ParentDef
     let plannedFields =
         selectionSet
         |> List.fold(fun (fields: ExecutionPlanInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
-            let includer = getIncluder selection.Directives data.Include
-            let innerData = { data with Include = includer }
+            let includer = getIncluder selection.Directives info.Include
+            let innerData = { info with Include = includer }
             match selection with
             | Field field ->
                 let identifier = field.AliasOrName
-                if fields |> List.exists (fun f -> f.Data.Identifier = identifier) 
+                if fields |> List.exists (fun f -> f.Identifier = identifier) 
                 then fields
                 else 
                     let data = objectData(ctx, parentDef, field, includer)
@@ -179,32 +179,34 @@ and private planSelection (ctx: PlanningContext) (data: PlanningData) (selection
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
-                        let (SelectFields(_, fragmentFields)) = planSelection ctx innerData fragment.SelectionSet visitedFragments
+                        let fragmentInfo = planSelection ctx innerData fragment.SelectionSet visitedFragments
+                        let (SelectFields(fragmentFields)) = fragmentInfo.Kind
                         // filter out already existing fields
-                        List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
+                        List.mergeBy (fun field -> field.Identifier) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let (SelectFields(_, fragmentFields)) = planSelection ctx innerData fragment.SelectionSet visitedFragments
+                 let fragmentInfo = planSelection ctx innerData fragment.SelectionSet visitedFragments
+                 let (SelectFields(fragmentFields)) = fragmentInfo.Kind
                  // filter out already existing fields
-                 List.mergeBy (fun field -> field.Data.Identifier) fields fragmentFields
+                 List.mergeBy (fun field -> field.Identifier) fields fragmentFields
             | _ -> fields
         ) []
-    SelectFields(data, plannedFields)
+    { info with Kind = SelectFields plannedFields }
 
-and private planList (ctx: PlanningContext) (data: PlanningData) (innerDef: TypeDef) : ExecutionPlanInfo =
-    ResolveCollection(data, plan ctx data innerDef)
+and private planList (ctx: PlanningContext) (info) (innerDef: TypeDef) : ExecutionPlanInfo =
+    { info with Kind = ResolveCollection(plan ctx info innerDef) }
 
-and private planLeaf (ctx: PlanningContext) (data: PlanningData) (leafDef: LeafDef) : ExecutionPlanInfo =
-    ResolveValue(data)
+and private planLeaf (ctx: PlanningContext) (info) (leafDef: LeafDef) : ExecutionPlanInfo =
+    info
 
-and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlanInfo =
-    let parentDef = downcast data.ParentDef
+and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlanInfo =
+    let parentDef = downcast info.ParentDef
     let plannedTypeFields =
         selectionSet
         |> List.fold(fun (fields: Map<string, ExecutionPlanInfo list>) selection ->
-            let includer = getIncluder selection.Directives data.Include
-            let innerData = { data with Include = includer }
+            let includer = getIncluder selection.Directives info.Include
+            let innerData = { info with Include = includer }
             match selection with
             | Field field ->
                 abstractionData ctx parentDef field typeCondition includer
@@ -219,28 +221,31 @@ and private planAbstraction (ctx:PlanningContext) (data: PlanningData) (selectio
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
-                        let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                        let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                        let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
                         // filter out already existing fields
                         Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment ->
                  // retrieve fragment data just as it was normal selection set
-                 let (ResolveAbstraction(_, fragmentFields)) = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                 let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                 let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
                  // filter out already existing fields
                  Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
             | _ -> fields
         ) Map.empty
-    ResolveAbstraction(data, plannedTypeFields)
+    { info with Kind = ResolveAbstraction plannedTypeFields }
 
 let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
     let data = { 
-        Identifier = null;
+        Identifier = null
+        Kind = Unchecked.defaultof<ExecutionPlanKind>
         Ast = Unchecked.defaultof<Field>
-        IsNullable = false
         ParentDef = ctx.RootDef
         Definition = Unchecked.defaultof<FieldDef> 
         Include = incl }
-    let (SelectFields(_, topFields)) = planSelection ctx data operation.SelectionSet (ref [])
+    let resolvedInfo = planSelection ctx data operation.SelectionSet (ref [])
+    let (SelectFields(topFields)) = resolvedInfo.Kind
     match operation.OperationType with
     | Query ->
         { Operation = operation 

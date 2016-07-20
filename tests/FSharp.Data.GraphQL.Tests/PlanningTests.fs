@@ -69,7 +69,7 @@ let ``Planning should work for a simple case``() =
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
+    |> List.map (fun info -> (info.Identifier, info.ParentDef, info.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -89,7 +89,7 @@ let ``Planning should work with fragments``() =
     plan.RootDef |> equals (upcast Person) 
     equals 3 plan.Fields.Length
     plan.Fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
+    |> List.map (fun info -> (info.Identifier, info.ParentDef, info.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -113,7 +113,7 @@ let ``Planning should work with parallel fragments``() =
     plan.RootDef |> equals (upcast Person) 
     equals 3 plan.Fields.Length
     plan.Fields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
+    |> List.map (fun info -> (info.Identifier, info.ParentDef, info.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String)
                 ("age", upcast Person, upcast Int) ]
@@ -130,11 +130,13 @@ let ``Planning should work with lists``() =
     }"""
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
-    let (ResolveCollection(listData, SelectFields(data, innerFields))) = plan.Fields.Head
-    equals Person (downcast data.ParentDef)
+    let listInfo = plan.Fields.Head
+    let (ResolveCollection(info)) = listInfo.Kind
+    let (SelectFields(innerFields)) = info.Kind
+    equals Person (downcast info.ParentDef)
     equals 2 innerFields.Length
     innerFields
-    |> List.map (fun (ResolveValue data) -> (data.Identifier, data.ParentDef, data.Definition.Type))
+    |> List.map (fun i -> (i.Identifier, i.ParentDef, i.Definition.Type))
     |> equals [ ("firstName", upcast Person, upcast String)
                 ("lastName", upcast Person, upcast String) ]
 
@@ -156,13 +158,12 @@ let ``Planning should work with interfaces``() =
     }"""
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
-    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = plan.Fields.Head
-    equals INamed (downcast data.ParentDef)
+    let listInfo = plan.Fields.Head
+    let (ResolveCollection(info)) = listInfo.Kind
+    let (ResolveAbstraction(innerFields)) = info.Kind
+    equals INamed (downcast info.ParentDef)
     innerFields
-    |> Map.map 
-           (fun typeName fields -> 
-           fields 
-           |> List.map (fun (ResolveValue(data)) -> (data.Identifier, data.ParentDef, data.Definition.Type)))
+    |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.Definition.Type)))
     |> equals (Map.ofList [ "Person", 
                             [ ("name", upcast INamed, upcast String)
                               ("age", upcast INamed, upcast Int) ]
@@ -188,13 +189,12 @@ let ``Planning should work with unions``() =
     }"""
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
-    let (ResolveCollection(listData, ResolveAbstraction(data, innerFields))) = plan.Fields.Head
-    equals UNamed (downcast data.ParentDef)
+    let listInfo = plan.Fields.Head
+    let (ResolveCollection(info)) = listInfo.Kind
+    let (ResolveAbstraction(innerFields)) = info.Kind
+    equals UNamed (downcast info.ParentDef)
     innerFields
-    |> Map.map 
-           (fun typeName fields -> 
-           fields 
-           |> List.map (fun (ResolveValue(data)) -> (data.Identifier, data.ParentDef, data.Definition.Type)))
+    |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.Definition.Type)))
     |> equals (Map.ofList [ "Animal", 
                             [ ("name", upcast UNamed, upcast String)
                               ("species", upcast UNamed, upcast String) ]

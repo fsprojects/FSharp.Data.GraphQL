@@ -224,36 +224,30 @@ and PlanningContext =
 
 and Includer = Map<string,obj> -> bool
     
-and PlanningData =
+and ExecutionPlanInfo =
     { /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
       Identifier: string
-      /// Composite definition being the parent of the current field, execution plan refers to.
-      ParentDef: CompositeDef
       /// Field definition of corresponding type found in current schema.
       Definition: FieldDef
-      /// Boolean value marking if null values are allowed.
-      IsNullable: bool
       /// AST node of the parsed query document.
       Ast: Field
+      /// A type of execution plan.
+      Kind: ExecutionPlanKind
       // logic describing if correlated field should be included in result set
-      Include : Includer }
+      Include : Includer
+      /// Composite definition being the parent of the current field, execution plan refers to.
+      ParentDef: CompositeDef }
       
 /// plan of reduction being a result of application of a query AST on existing schema
-and ExecutionPlanInfo =
+and ExecutionPlanKind =
     // reducer for scalar or enum
-    | ResolveValue of data:PlanningData
+    | ResolveValue
     // reducer for selection set applied upon output object
-    | SelectFields of data:PlanningData * fields:ExecutionPlanInfo list
+    | SelectFields of fields:ExecutionPlanInfo list
     // reducer for each of the collection elements
-    | ResolveCollection of data:PlanningData * elementPlan:ExecutionPlanInfo
+    | ResolveCollection of elementPlan:ExecutionPlanInfo
     // reducer for union and interface types to be resolved into ReduceSelection at runtime
-    | ResolveAbstraction of data:PlanningData * typeFields:Map<string, ExecutionPlanInfo list>
-    member x.Data = 
-        match x with
-        | ResolveValue(data) -> data
-        | SelectFields(data, _) -> data
-        | ResolveCollection(data, _) -> data
-        | ResolveAbstraction(data, _) -> data
+    | ResolveAbstraction of typeFields:Map<string, ExecutionPlanInfo list>
 
 and ExecutionStrategy =
     | Serial
