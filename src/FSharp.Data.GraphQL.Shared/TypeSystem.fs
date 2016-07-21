@@ -4,12 +4,12 @@ namespace FSharp.Data.GraphQL.Types
 
 open System
 open System.Collections.Concurrent
-open Hopac
-open Hopac.Extensions
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Extensions
+ 
 
-[<Flags; Serializable>]
+[<Flags>]
 type DirectiveLocation = 
     | QUERY = 1
     | MUTATION = 2
@@ -20,7 +20,6 @@ type DirectiveLocation =
     | INLINE_FRAGMENT = 64
 
 module Introspection = 
-    [<Serializable>]
     type TypeKind = 
         | SCALAR = 1
         | OBJECT  = 2
@@ -31,14 +30,13 @@ module Introspection =
         | LIST = 7
         | NON_NULL = 8
     
-    [<Serializable>]
     type IntrospectionDirective = 
         { Name : string
           Description : string option
           Locations : DirectiveLocation []
           Args : IntrospectionInputVal [] }
     
-    and [<Serializable>] IntrospectionType = 
+    and IntrospectionType = 
         { Kind : TypeKind
           Name : string
           Description : string option
@@ -109,7 +107,7 @@ module Introspection =
               InputFields = None
               OfType = None }
     
-    and [<Serializable>] IntrospectionTypeRef = 
+    and IntrospectionTypeRef = 
         { Kind : TypeKind
           Name : string option
           Description : string option
@@ -118,19 +116,19 @@ module Introspection =
         static member NonNull(inner: IntrospectionTypeRef) = { Kind = TypeKind.NON_NULL; Name = None; Description = None; OfType = Some inner }
         static member Named(inner: IntrospectionType) = { Kind = inner.Kind; Name = Some inner.Name; Description = inner.Description; OfType = None }
     
-    and [<Serializable>] IntrospectionInputVal = 
+    and IntrospectionInputVal = 
         { Name : string
           Description : string option
           Type : IntrospectionTypeRef
           DefaultValue : string option }
     
-    and [<Serializable>] IntrospectionEnumVal = 
+    and IntrospectionEnumVal = 
         { Name : string
           Description : string option
           IsDeprecated : bool
           DeprecationReason : string option }
     
-    and [<Serializable>] IntrospectionField = 
+    and IntrospectionField = 
         { Name : string
           Description : string option
           Args : IntrospectionInputVal []
@@ -138,7 +136,7 @@ module Introspection =
           IsDeprecated : bool
           DeprecationReason : string option }
     
-    and [<Serializable>] IntrospectionSchema = 
+    and IntrospectionSchema = 
         { QueryType : IntrospectionTypeRef
           MutationType : IntrospectionTypeRef option
           SubscriptionType : IntrospectionTypeRef option
@@ -282,7 +280,8 @@ and ResolveFieldContext =
     member x.Arg(name : string) : 't = 
         downcast Map.find name x.Args
 
-and ExecuteField = ResolveFieldContext -> obj -> Job<obj>
+and ExecuteField = ResolveFieldContext -> obj -> Async<obj>
+
 and FieldDef = 
     interface
         abstract Name : string
@@ -290,14 +289,14 @@ and FieldDef =
         abstract DeprecationReason : string option
         abstract Type : OutputDef
         abstract Args : InputFieldDef []
-        abstract Resolve : ResolveFieldContext -> obj -> Job<obj>
+        abstract Resolve : ResolveFieldContext -> obj -> Async<obj>
         abstract Execute : ExecuteField with get,set
         inherit IEquatable<FieldDef>
     end
 
 and FieldDef<'Val> = 
     interface
-        abstract Resolve : ResolveFieldContext -> 'Val -> Job<obj>
+        abstract Resolve : ResolveFieldContext -> 'Val -> Async<obj>
         inherit FieldDef
     end
     
@@ -524,7 +523,7 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
     { Name : string
       Description : string option
       Type : OutputDef<'Res>
-      Resolve : ResolveFieldContext -> 'Val -> Job<'Res>
+      Resolve : ResolveFieldContext -> 'Val -> Async<'Res>
       Args : InputFieldDef []
       DeprecationReason : string option
       mutable Execute : ExecuteField }
@@ -535,15 +534,17 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
         member x.DeprecationReason = x.DeprecationReason
         member x.Type = x.Type :> OutputDef
         member x.Args = x.Args
-        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Job<obj> = 
-            x.Resolve ctx (value :?> 'Val)
-            |> Job.map (fun x -> upcast x)
+        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Async<obj> = async {
+            let! res = x.Resolve ctx (value :?> 'Val)
+            return upcast res
+        }
         member x.Execute with get() = x.Execute and set v = x.Execute <- v
     
     interface FieldDef<'Val> with
-        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Job<obj> = 
-            x.Resolve ctx value
-            |> Job.map (fun x -> upcast x)
+        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Async<obj> = async {
+            let! res = x.Resolve ctx value
+            return upcast res
+        }
     
     interface IEquatable<FieldDef> with
         member x.Equals f = x.Name = f.Name && x.Type :> OutputDef = f.Type && x.Args = f.Args
@@ -884,7 +885,7 @@ module SchemaDefinitions =
     open System.Globalization
     open System.Reflection
     
-    let internal coerceIntValue (x : obj) : int option = 
+    let coerceIntValue (x : obj) : int option = 
         match x with
         | null -> None
         | :? int as i -> Some i
@@ -902,7 +903,7 @@ module SchemaDefinitions =
                 Some(System.Convert.ToInt32 other)
             with _ -> None
     
-    let internal coerceFloatValue (x : obj) : double option = 
+    let coerceFloatValue (x : obj) : double option = 
         match x with
         | null -> None
         | :? int as i -> Some(double i)
@@ -920,7 +921,7 @@ module SchemaDefinitions =
                 Some(System.Convert.ToDouble other)
             with _ -> None
     
-    let internal coerceBoolValue (x : obj) : bool option = 
+    let coerceBoolValue (x : obj) : bool option = 
         match x with
         | null -> None
         | :? int as i -> Some(i <> 0)
@@ -936,7 +937,7 @@ module SchemaDefinitions =
                 Some(System.Convert.ToBoolean other)
             with _ -> None
 
-    let internal coerceUriValue (x : obj) : Uri option = 
+    let coerceUriValue (x : obj) : Uri option = 
         match x with
         | null -> None
         | :? Uri as u -> Some u
@@ -946,7 +947,7 @@ module SchemaDefinitions =
             | false, _ -> None
         | other -> None
         
-    let internal coerceDateValue (x : obj) : DateTime option = 
+    let coerceDateValue (x : obj) : DateTime option = 
         match x with
         | null -> None
         | :? DateTime as d -> Some d
@@ -990,13 +991,12 @@ module SchemaDefinitions =
     let (|Option|_|) (x : obj) = 
         if x = null then None
         else 
-            let t = x.GetType()
+            let t = x.GetType().GetTypeInfo()
             if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> then 
-                let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(x, t)
-                Some(fields.[0])
+                t.GetDeclaredProperty("Value").GetValue(x) |> Some
             else None
     
-    let internal coerceStringValue (x : obj) : string option = 
+    let coerceStringValue (x : obj) : string option = 
         match x with
         | null -> None
         | :? string as s -> Some s
@@ -1032,7 +1032,7 @@ module SchemaDefinitions =
                  else 0.)
         | _ -> None
     
-    let internal coerceStringInput = 
+    let coerceStringInput = 
         function 
         | IntValue i -> Some(i.ToString(CultureInfo.InvariantCulture))
         | FloatValue f -> Some(f.ToString(CultureInfo.InvariantCulture))
@@ -1042,7 +1042,7 @@ module SchemaDefinitions =
                  else "false")
         | _ -> None
     
-    let internal coerceBoolInput  = 
+    let coerceBoolInput  = 
         function 
         | IntValue i -> 
             Some(if i = 0 then false
@@ -1163,7 +1163,7 @@ module SchemaDefinitions =
     
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
 
-    let internal variableOrElse other variables =
+    let variableOrElse other variables =
         function
         | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
         | value -> other value
@@ -1243,7 +1243,7 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [| { Name = "if"
+              [| { InputFieldDefinition.Name = "if"
                    Description = Some "Included when true."
                    Type = Boolean
                    DefaultValue = None
@@ -1255,34 +1255,35 @@ module SchemaDefinitions =
           Locations = 
               DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
           Args = 
-              [| { Name = "if"
+              [| { InputFieldDefinition.Name = "if"
                    Description = Some "Skipped when true."
                    Type = Boolean
                    DefaultValue = None
                    ExecuteInput = variableOrElse (coerceBoolInput >> Option.map box >> Option.toObj) } |] }
     
-    let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) = 
+    let matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) = 
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
-    let internal defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Job<'Res> = 
-        (fun ctx value -> 
-            if Object.Equals(value, null) then Job.result Unchecked.defaultof<'Res>
-            else 
-                let t = value.GetType()
-                let memberInfo = t.GetMember(fieldName, BindingFlags.IgnoreCase ||| BindingFlags.Public ||| BindingFlags.Instance)
-                match memberInfo with
-                | [||] -> Job.raises (GraphQLException (sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName))
-                | found -> 
-                    let result = 
-                        match found.[0] with
-                        | :? PropertyInfo as property -> property.GetValue(value, null)
-                        | :? MethodInfo as methodInfo -> 
-                            let parameters = matchParameters methodInfo ctx
-                            methodInfo.Invoke(value, parameters)
-                        | :? FieldInfo as field -> field.GetValue(value)
-                    Job.result (result :?> 'Res)
-        )
+    let defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Async<'Res> = 
+        (fun ctx value -> async {
+            if Object.Equals(value, null) then return Unchecked.defaultof<'Res>
+            else
+                let t = value.GetType().GetTypeInfo()
+                let prop, meth = 
+                    let prop = t.GetDeclaredProperty(fieldName, ignoreCase=true)
+                    let meth = if prop = null then t.GetDeclaredMethod(fieldName, ignoreCase=true) else null
+                    Option.ofObj prop, Option.ofObj meth
+                match prop, meth with
+                | Some property, _ -> return property.GetValue(value, null) :?> 'Res
+                | None, Some methodInfo ->
+                    let parameters = matchParameters methodInfo ctx
+                    return methodInfo.Invoke(value, parameters) :?> 'Res
+                | None, None ->
+                    return
+                        sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName
+                        |> GraphQLException |> raise
+        })
     
     type Define private () = 
         
@@ -1310,7 +1311,7 @@ module SchemaDefinitions =
         /// GraphQL custom object type
         static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
-            upcast { Name = name
+            upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn = lazy (fieldsFn() |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
@@ -1319,7 +1320,7 @@ module SchemaDefinitions =
         /// GraphQL custom object type
         static member Object(name : string, fields : FieldDef<'Val> list, ?description : string, 
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
-            upcast { Name = name
+            upcast { ObjectDefinition.Name = name
                      Description = description
                      FieldsFn = lazy (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
@@ -1339,7 +1340,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
                      Resolve = defaultResolve<'Val, 'Res> name
@@ -1349,10 +1350,10 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
-                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1360,10 +1361,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1371,10 +1372,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1382,10 +1383,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             resolve : ResolveFieldContext -> 'Val -> 'Res, deprecationReason : string) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> Job.result (resolve ctx value)
+                     Resolve = fun ctx value -> async { return (resolve ctx value) }
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1393,10 +1394,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
                                  resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = None
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1404,10 +1405,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1415,10 +1416,10 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1427,16 +1428,16 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
-            upcast { Name = name
+            upcast { FieldDefinition.Name = name
                      Description = Some description
                      Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value |> Async.toJob
+                     Resolve = fun ctx value -> resolve ctx value
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         static member Input(name : string, schema : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef = 
-            upcast { Name = name
+            upcast { InputFieldDefinition.Name = name
                      Description = description
                      Type = schema
                      DefaultValue = defaultValue
@@ -1445,7 +1446,7 @@ module SchemaDefinitions =
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
-            upcast { Name = name
+            upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fieldsFn() |> List.toArray
                      ResolveType = resolveType }
@@ -1453,7 +1454,7 @@ module SchemaDefinitions =
         /// GraphQL custom interface type. It's needs to be implemented object types and should not be used alone.
         static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string, 
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> = 
-            upcast { Name = name
+            upcast { InterfaceDefinition.Name = name
                      Description = description
                      FieldsFn = fun () -> fields |> List.toArray
                      ResolveType = resolveType }
@@ -1461,7 +1462,7 @@ module SchemaDefinitions =
         /// GraphQL custom union type, materialized as one of the types defined. It can be used as interface/object type field.
         static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out, 
                             ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> = 
-            upcast { Name = name
+            upcast { UnionDefinition.Name = name
                      Description = description
                      Options = options |> List.toArray
                      ResolveType = resolveType

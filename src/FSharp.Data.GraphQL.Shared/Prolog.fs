@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.Reflection
 open System.Collections.Generic
 
 type GraphQLException(msg) = 
@@ -41,29 +42,31 @@ module Option =
 module ReflectionHelper =
     /// Returns cons(head,tail)/nil pair for list type generated in runtime from type t.
     let listOfType t =
-        let listType = typedefof<Microsoft.FSharp.Collections.List<_>>.MakeGenericType [| t |]
+        let listType = typedefof<_ list>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
         let nil = 
-            let empty = listType.GetProperty "Empty"
+            let empty = listType.GetDeclaredProperty "Empty"
             empty.GetValue (null)
         let cons = 
-            let cons = listType.GetMethod "Cons"
+            let cons = listType.GetDeclaredMethod "Cons"
             fun item list -> cons.Invoke (null, [| item; list |])
         (cons, nil)
 
     /// Returns some(value)/none pair for option type generated in runtime from type t
     let optionOfType t =
-        let optionType = typedefof<option<_>>.MakeGenericType [| t |]
+        let optionType = typedefof<_ option>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
         let none = 
-            let x = optionType.GetProperty "None"
+            let x = optionType.GetDeclaredProperty "None"
             x.GetValue(null)
         let some =
-            let createSome = optionType.GetMethod "Some"
+            let createSome = optionType.GetDeclaredMethod "Some"
             fun value -> 
                 if value <> null 
                 then
-                    let valueType = value.GetType()
-                    if valueType = optionType then value
-                    elif t.IsAssignableFrom(valueType) then createSome.Invoke(null, [| value |])
+                    let valueType = value.GetType().GetTypeInfo()
+                    if valueType = optionType
+                    then value
+                    elif t .GetTypeInfo().IsAssignableFrom(valueType)
+                    then createSome.Invoke(null, [| value |])
                     else null
                 else none
         (some, none)

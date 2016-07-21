@@ -15,13 +15,13 @@ module internal Internal =
   let ignored = 
     // 2.1.2 WhiteSpace 
     //    Horizontal Tab (U+0009) | Space (U+0020) 
-    let whiteSpace  = skipAnyOf "\u0009\u000B\u000C\u0020\u00A0"
+    let whiteSpace = skipAnyOf [|'\u0009'; '\u000B'; '\u000C'; '\u0020'; '\u00A0'|]
 
     // 2.1.3 LineTerminator
     //   New Line (U+000A)
     //   Carriage Return (U+000D)New Line (U+000A) | (U+000D)New Line (U+000A)
-    let lineTerminators  = skipAnyOf "\u000A\u000D\u2028\u2029" 
-
+    let lineTerminators = skipAnyOf [|'\u000A'; '\u000D'; '\u2028'; '\u2029'|]
+    
     // 2.1.4 CommentChar
     //  SourceCharacter but not LineTerminator
     let comments  = pchar '#' >>. skipManyTill anyChar (lineTerminators <|>  eof) 
@@ -78,7 +78,7 @@ module internal Internal =
   // 2.9.4 StringValue
   let stringValue =
     let escapedCharacter =
-      let escaped = anyOf "\"\\/bfnrt" 
+      let escaped = anyOf [| '"'; '\\'; '/'; 'b'; 'f'; 'n'; 'r'; 't' |]
                         |>> function | 'b' -> '\b' | 'f' -> '\u000C' | 'n' -> '\n' 
                                      | 'r' -> '\r' | 't' -> '\t' | c -> c 
       let unicode = 
@@ -87,7 +87,7 @@ module internal Internal =
           (hex2int h3)*4096 + (hex2int h2)*256 + (hex2int h1)*16 + hex2int h0 |> char)
       pchar '\\' >>. (escaped <|> unicode)
   
-    let normalCharacter = noneOf "\u000A\u000D\u2028\u2029\"'"
+    let normalCharacter = noneOf [|'\u000A';'\u000D';'\u2028';'\u2029';'"';'\''|]
     let quote =  pchar '"'
     between quote quote (manyChars (normalCharacter <|> escapedCharacter))
 
@@ -104,7 +104,7 @@ module internal Internal =
   //   (NegativeSign opt) NonZeroDigit (Digit list opt)
   let integerPart = 
     let negativeSign = pchar '-'
-    let nonZeroDigit = anyOf "123456789"
+    let nonZeroDigit = anyOf [|'1';'2';'3';'4';'5';'6';'7';'8';'9'|]
     let zero = pchar '0'
     let zeroInteger =  opt negativeSign >>. zero >>% "0"
     let nonZeroInteger =  opt negativeSign .>>. (many1Chars2 nonZeroDigit digit) 
@@ -184,7 +184,7 @@ module internal Internal =
     //   Name:Value
     let argument = 
       pairBetween ':' name inputValue
-      |>> fun (name, value) -> { Name = name; Value = value } 
+      |>> fun (name, value) -> { Argument.Name = name; Value = value } 
       <?> "Argument"
     betweenCharsMany '(' ')' argument <?> "Arguments"
 
@@ -240,7 +240,9 @@ module internal Internal =
     let inlineFragment =
       pipe3 (opt(stoken_ws "on" >>. token_ws name)) (opt(token_ws directives)) selectionSet
         (fun typeCondition directives selectionSet -> 
-          { Name = None; Directives = someOrEmpty directives; SelectionSet = selectionSet 
+          { FragmentDefinition.Name = None
+            Directives = someOrEmpty directives
+            SelectionSet = selectionSet 
             TypeCondition = typeCondition })
       |>> InlineFragment <?> "InlineFragment"
 

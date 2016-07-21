@@ -16,26 +16,6 @@ open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
-
-module QuotationHelpers =
-    let getDynamicField (name: string) (expr: Expr) =
-        let dicType = typeof<IDictionary<string,obj>>
-        let mi = dicType.GetMethod("get_Item")
-        Expr.Call(Expr.Coerce(expr, dicType), mi, [Expr.Value(name)])
-
-    let makeOption (optType: Type) (expr: Expr) =
-        let optArg = optType.GetGenericArguments().[0]
-        let cases =
-            FSharpType.GetUnionCases(optType)
-            |> Seq.map (fun case -> case.Name, case)
-            |> Map
-        let var = Var("instance", typeof<obj>)
-        Expr.Let(var, expr,
-            Expr.IfThenElse(
-                <@@ %%Expr.Var(var) = null @@>,
-                Expr.NewUnionCase(cases.["None"], []),
-                Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, optArg)])))
-
 open QuotationHelpers
 
 type GraphQLReply<'t> = {

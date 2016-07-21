@@ -256,9 +256,9 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.Type)
     let resolve = fieldDef.Resolve
-    fun resolveFieldCtx value -> job {
+    fun resolveFieldCtx value -> (job {
         try
-            let! res = (resolve resolveFieldCtx value)
+            let! res = resolve resolveFieldCtx value
             if res = null 
             then return null
             else return! completed resolveFieldCtx res
@@ -266,7 +266,7 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
         | ex -> 
             resolveFieldCtx.AddError(ex)
             return null
-    }
+    } |> Async.Global.ofJob)
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =

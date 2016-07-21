@@ -49,15 +49,16 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ProvidedTypes.fsi" />
     <Compile Include="ProvidedTypes.fs" />
-    <Compile Include="IntrospectionParser.fs" />
     <Compile Include="Serialization.fs" />
+    <Compile Include="QuotationHelpers.fs" />
+    <Compile Include="IntrospectionParser.fs" />
     <Compile Include="GraphQlProvider.fs" />
     <Compile Include="QueryDSL.fs" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
-      <Name>FSharp.Data.GraphQL</Name>
-      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
+      <Name>FSharp.Data.GraphQL.Shared</Name>
+      <Project>{6768ea38-1335-4b8e-bc09-ccded1f9aaf6}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>

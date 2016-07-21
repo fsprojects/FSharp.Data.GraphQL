@@ -336,6 +336,14 @@ Target "Release" (fun _ ->
     |> Async.RunSynchronously
 )
 
+Target "AdHocBuild" (fun _ ->
+    // !!"src/FSharp.Data.GraphQL/FSharp.Data.GraphQL.fsproj"
+    // |> MSBuildDebug "bin/FSharp.Data.GraphQL" "Build" |> Log "Output: "
+
+    !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
+    |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
+)
+
 Target "BuildPackage" DoNothing
 
 // --------------------------------------------------------------------------------------
@@ -344,12 +352,12 @@ Target "BuildPackage" DoNothing
 Target "All" DoNothing
 
 "Clean"
-  ==> "AssemblyInfo"
+  =?> ("AssemblyInfo", not isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
-  ==> "GenerateReferenceDocs"
-  ==> "GenerateDocs"
+  =?> ("GenerateReferenceDocs", environVar "APPVEYOR" = "True")
+  =?> ("GenerateDocs", environVar "APPVEYOR" = "True")
   ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
