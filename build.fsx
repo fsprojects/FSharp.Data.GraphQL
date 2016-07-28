@@ -25,6 +25,7 @@ let project = "FSharp.Data.GraphQL"
 let summary = "FSharp implementation of Facebook GraphQL query language"
 let description = "FSharp implementation of Facebook GraphQL query language"
 let authors = [ "Bazinga Technologies Inc" ]
+let copyright = "Copyright (c) 2016 Bazinga Technologies Inc"
 let tags = "FSharp GraphQL Relay React"
 let solutionFile  = "FSharp.Data.GraphQL.sln"
 let testAssemblies = "tests/**/bin/Release/*Tests*.dll"
@@ -342,6 +343,52 @@ Target "AdHocBuild" (fun _ ->
 
     !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
     |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
+)
+
+Target "PublishServer" (fun _ ->
+    CleanDirs ["nuget" </> project + ".Server"]
+    
+    NuGet(fun p ->
+        {p with
+            Authors = authors
+            Project = project + ".Server"
+            Summary = summary + " (Server)"
+            Description = description + " (Server)"
+            Copyright = copyright
+            Tags = tags
+            Version = release.NugetVersion
+            IncludeReferencedProjects = true
+            WorkingDir = "bin" </> project + ".Server"
+            OutputPath = "nuget" </> project + ".Server"
+            Publish = true
+            PublishUrl = "https://www.nuget.org/api/v2/package"
+            Dependencies =
+                [ "FParsec", GetPackageVersion "./packages/" "FParsec"
+                  "Hopac", GetPackageVersion "./packages/" "Hopac" ]
+            Files = [ project + "*.*", Some "lib", None]
+        }) "tools/Nuget/template.nuspec"
+)
+
+Target "PublishClient" (fun _ ->
+    CleanDirs ["nuget" </> project + ".Client"]
+    
+    NuGet(fun p ->
+        {p with
+            Authors = authors
+            Project = project + ".Client"
+            Summary = summary + " (Client)"
+            Description = description + " (Client)"
+            Copyright = copyright
+            Tags = tags
+            Version = release.NugetVersion
+            IncludeReferencedProjects = true
+            WorkingDir = "bin" </> project + ".Client"
+            OutputPath = "nuget" </> project + ".Client"
+            Publish = true
+            PublishUrl = "https://www.nuget.org/api/v2/package"
+            Dependencies = [ "FParsec", GetPackageVersion "./packages/" "FParsec" ]
+            Files = [ project + "*.*", Some "lib", None]
+        }) "tools/Nuget/template.nuspec"
 )
 
 Target "BuildPackage" DoNothing

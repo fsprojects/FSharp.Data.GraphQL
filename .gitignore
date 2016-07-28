@@ -13,6 +13,7 @@
 
 # Build results
 
+nuget
 npm-debug.log 
 node_modules/
 [Dd]ebug/

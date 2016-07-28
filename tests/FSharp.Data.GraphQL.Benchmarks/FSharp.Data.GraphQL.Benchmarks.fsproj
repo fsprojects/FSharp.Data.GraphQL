@@ -110,6 +110,11 @@
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.Server.fsproj">
+      <Name>FSharp.Data.GraphQL.Server</Name>
+      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
+      <Private>True</Private>
+    </ProjectReference>
     <Reference Include="Microsoft.Build" />
     <Reference Include="mscorlib" />
     <Reference Include="FSharp.Core, Version=$(TargetFSharpCoreVersion), Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
@@ -121,11 +126,6 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
       <Name>FSharp.Data.GraphQL.Shared</Name>
       <Project>{6768ea38-1335-4b8e-bc09-ccded1f9aaf6}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.fsproj">
-      <Name>FSharp.Data.GraphQL</Name>
-      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
       <Private>True</Private>
     </ProjectReference>
   </ItemGroup>
