@@ -13,7 +13,6 @@
 
 # Build results
 
-nuget
 npm-debug.log 
 node_modules/
 [Dd]ebug/
@@ -181,7 +180,7 @@ temp/
 TestResults.xml
 
 # Nuget outputs
-nuget/*.nupkg
+nuget/**/*.nupkg
 release.cmd
 release.sh
 localpackages/

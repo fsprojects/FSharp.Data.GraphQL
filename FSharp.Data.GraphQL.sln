@@ -78,12 +78,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-p
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Shared", "src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "nuget", "nuget", "{C7E855A8-7C1C-420C-8CE4-0CAFA508E850}"
-	ProjectSection(SolutionItems) = preProject
-		nuget\client.nuspec = nuget\client.nuspec
-		nuget\server.nuspec = nuget\server.nuspec
-	EndProjectSection
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
