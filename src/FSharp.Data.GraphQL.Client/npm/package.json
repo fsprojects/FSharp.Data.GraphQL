@@ -1,0 +1,32 @@
+{
+  "name": "fable-providers-graphql",
+  "version": "1.0.0",
+  "description": "GraphQL F# Type Provider compatible with Fable",
+  "main": "index.js",
+  "directories": {
+    "doc": "docs",
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bazingatechnologies/FSharp.Data.GraphQL.git"
+  },
+  "keywords": [
+    "f#",
+    "fsharp",
+    "graphql",
+    "provider"
+  ],
+  "author": "Bazinga Technologies Inc",
+  "license": "MIT",
+  "bugs": {
+    "url": "https://github.com/bazingatechnologies/FSharp.Data.GraphQL/issues"
+  },
+  "homepage": "https://github.com/bazingatechnologies/FSharp.Data.GraphQL#readme",
+  "dependencies": {
+    "fable-core": "^0.5.2"
+  }
+}

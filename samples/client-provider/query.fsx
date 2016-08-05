@@ -1,11 +1,11 @@
 ﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
-#r "node_modules/fable-core/Fable.Core.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic
 
 #if FABLE
-Fable.Import.Node.require.Invoke("isomorphic-fetch") |> ignore
+#r "node_modules/fable-core/Fable.Core.dll"
+Fable.Core.JsInterop.importAll<unit> "isomorphic-fetch"
 #endif
 
 let [<Literal>] serverUrl = "http://localhost:8083"

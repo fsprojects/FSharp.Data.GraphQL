@@ -35,7 +35,87 @@ let gitName = "FSharp.Data.GraphQL"
 let gitRaw = environVarOrDefault "gitRaw" "https://raw.github.com/bazingatechnologies"
 let release = LoadReleaseNotes "RELEASE_NOTES.md"
 
+module Util =
+    open System.Net
+    
+    let join pathParts =
+        Path.Combine(Array.ofSeq pathParts)
 
+    let run workingDir fileName args =
+        let fileName, args =
+            if EnvironmentHelper.isUnix
+            then fileName, args else "cmd", ("/C " + fileName + " " + args)
+        let ok =
+            execProcess (fun info ->
+                info.FileName <- fileName
+                info.WorkingDirectory <- workingDir
+                info.Arguments <- args) TimeSpan.MaxValue
+        if not ok then failwith (sprintf "'%s> %s %s' task failed" workingDir fileName args)
+
+    let runAndReturn workingDir fileName args =
+        let fileName, args =
+            if EnvironmentHelper.isUnix
+            then fileName, args else "cmd", ("/C " + args)
+        ExecProcessAndReturnMessages (fun info ->
+            info.FileName <- fileName
+            info.WorkingDirectory <- workingDir
+            info.Arguments <- args) TimeSpan.MaxValue
+        |> fun p -> p.Messages |> String.concat "\n"
+
+    let rmdir dir =
+        if EnvironmentHelper.isUnix
+        then FileUtils.rm_rf dir
+        // Use this in Windows to prevent conflicts with paths too long
+        else run "." "cmd" ("/C rmdir /s /q " + Path.GetFullPath dir)
+
+    let compileScript symbols outDir fsxPath =
+        let dllFile = Path.ChangeExtension(Path.GetFileName fsxPath, ".dll")
+        let opts = [
+            yield FscHelper.Out (Path.Combine(outDir, dllFile))
+            yield FscHelper.Target FscHelper.TargetType.Library
+            yield! symbols |> List.map FscHelper.Define
+        ]
+        FscHelper.compile opts [fsxPath]
+        |> function 0 -> () | _ -> failwithf "Cannot compile %s" fsxPath
+
+    let normalizeVersion (version: string) =
+        let i = version.IndexOf("-")
+        if i > 0 then version.Substring(0, i) else version
+
+    let assemblyInfo projectDir version extra =
+        let version = normalizeVersion version
+        let asmInfoPath = projectDir </> "AssemblyInfo.fs"
+        (Attribute.Version version)::extra
+        |> CreateFSharpAssemblyInfo asmInfoPath
+
+module Npm =
+    let script workingDir script args =
+        sprintf "run %s -- %s" script (String.concat " " args)
+        |> Util.run workingDir "npm"
+
+    let install workingDir modules =
+        sprintf "install %s" (String.concat " " modules)
+        |> Util.run workingDir "npm"
+
+    let command workingDir command args =
+        sprintf "%s %s" command (String.concat " " args)
+        |> Util.run workingDir "npm"
+
+    let commandAndReturn workingDir command args =
+        sprintf "%s %s" command (String.concat " " args)
+        |> Util.runAndReturn workingDir "npm"
+
+    let getLatestVersion package tag =
+        let package =
+            match tag with
+            | Some tag -> package + "@" + tag
+            | None -> package
+        commandAndReturn "." "show" [package; "version"]
+
+module Node =
+    let run workingDir script args =
+        let args = sprintf "%s %s" script (String.concat " " args)
+        Util.run workingDir "node" args
 
 // --------------------------------------------------------------------------------------
 // Helpers for generating AssemblyInfo
@@ -389,6 +469,23 @@ Target "PublishClient" (fun _ ->
             Dependencies = [ "FParsec", GetPackageVersion "./packages/" "FParsec" ]
             Files = [ project + "*.*", Some "lib", None]
         }) "tools/Nuget/template.nuspec"
+)
+
+Target "PublishNpm" (fun _ ->
+    let binDir, prjDir = "bin/npm", "src/FSharp.Data.GraphQL.Client"
+    CleanDir binDir
+
+    !!("src/FSharp.Data.GraphQL.Client" </> "*.fsproj")
+    |> MSBuild "bin/FSharp.Data.GraphQL.Client" "Build" [
+        "Configuration", "Build"; "DefineConstants", "FABLE"
+    ] |> ignore
+
+    CopyDir binDir (prjDir </> "bin" </> "Release") (fun _ -> true)
+    !!(prjDir </> "npm" </> "*.*")
+    |> Seq.iter (fun path -> FileUtils.cp path binDir)
+
+    Npm.command binDir "version" ["0.0.3"] //[string release.SemVer]
+    Npm.command binDir "publish" []
 )
 
 Target "BuildPackage" DoNothing
