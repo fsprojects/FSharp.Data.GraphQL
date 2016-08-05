@@ -6,6 +6,8 @@ nuget Hopac
 nuget Newtonsoft.Json
 nuget Suave
 nuget System.Runtime
+nuget FSharp.Data.GraphQL.Server
+nuget FSharp.Data.GraphQL.Client
 
 group Build
   source https://nuget.org/api/v2
