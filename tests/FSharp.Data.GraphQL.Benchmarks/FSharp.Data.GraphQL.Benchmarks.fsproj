@@ -110,7 +110,7 @@
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL\FSharp.Data.GraphQL.Server.fsproj">
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj">
       <Name>FSharp.Data.GraphQL.Server</Name>
       <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
       <Private>True</Private>
