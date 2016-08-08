@@ -222,24 +222,6 @@ Target "SourceLink" (fun _ ->
 #endif
 
 // --------------------------------------------------------------------------------------
-// Build a NuGet package
-
-Target "NuGet" (fun _ ->
-    Paket.Pack(fun p ->
-        { p with
-            OutputPath = "bin"
-            Version = release.NugetVersion
-            ReleaseNotes = toLines release.Notes})
-)
-
-Target "PublishNuget" (fun _ ->
-    Paket.Push(fun p ->
-        { p with
-            WorkingDir = "bin" })
-)
-
-
-// --------------------------------------------------------------------------------------
 // Generate the documentation
 
 
@@ -425,50 +407,26 @@ Target "AdHocBuild" (fun _ ->
     |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
 )
 
-Target "PublishServer" (fun _ ->
-    CleanDirs ["nuget" </> project + ".Server"]
-    
-    NuGet(fun p ->
-        {p with
-            Authors = authors
-            Project = project + ".Server"
-            Summary = summary + " (Server)"
-            Description = description + " (Server)"
-            Copyright = copyright
-            Tags = tags
+let publishPackage id =
+    CleanDir <| sprintf "nuget/%s.%s" project id
+    Paket.Pack(fun p ->
+        { p with
             Version = release.NugetVersion
+            OutputPath = sprintf "nuget/%s.%s" project id
+            TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
             IncludeReferencedProjects = true
-            WorkingDir = "bin" </> project + ".Server"
-            OutputPath = "nuget" </> project + ".Server"
-            Publish = true
-            PublishUrl = "https://www.nuget.org/api/v2/package"
-            Dependencies =
-                [ "FParsec", GetPackageVersion "./packages/" "FParsec"
-                  "Hopac", GetPackageVersion "./packages/" "Hopac" ]
-            Files = [ project + "*.*", Some "lib", None]
-        }) "tools/Nuget/template.nuspec"
+        })
+    Paket.Push(fun p ->
+        { p with 
+            WorkingDir = sprintf "nuget/%s.%s" project id
+            PublishUrl = "https://www.nuget.org/api/v2/package" })
+    
+Target "PublishServer" (fun _ ->
+    publishPackage "Server"
 )
 
 Target "PublishClient" (fun _ ->
-    CleanDirs ["nuget" </> project + ".Client"]
-    
-    NuGet(fun p ->
-        {p with
-            Authors = authors
-            Project = project + ".Client"
-            Summary = summary + " (Client)"
-            Description = description + " (Client)"
-            Copyright = copyright
-            Tags = tags
-            Version = release.NugetVersion
-            IncludeReferencedProjects = true
-            WorkingDir = "bin" </> project + ".Client"
-            OutputPath = "nuget" </> project + ".Client"
-            Publish = true
-            PublishUrl = "https://www.nuget.org/api/v2/package"
-            Dependencies = [ "FParsec", GetPackageVersion "./packages/" "FParsec" ]
-            Files = [ project + "*.*", Some "lib", None]
-        }) "tools/Nuget/template.nuspec"
+    publishPackage "Client"
 )
 
 Target "PublishNpm" (fun _ ->
@@ -488,8 +446,6 @@ Target "PublishNpm" (fun _ ->
     Npm.command binDir "publish" []
 )
 
-Target "BuildPackage" DoNothing
-
 // --------------------------------------------------------------------------------------
 // Run all targets by default. Invoke 'build <Target>' to override
 
@@ -505,13 +461,13 @@ Target "All" DoNothing
   ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
-"All"
-#if MONO
-#else
-  =?> ("SourceLink", Pdbstr.tryFind().IsSome )
-#endif
-  ==> "NuGet"
-  ==> "BuildPackage"
+// "All"
+// #if MONO
+// #else
+//   =?> ("SourceLink", Pdbstr.tryFind().IsSome )
+// #endif
+//   ==> "NuGet"
+//   ==> "BuildPackage"
 
 "CleanDocs"
   ==> "GenerateHelp"
@@ -527,8 +483,8 @@ Target "All" DoNothing
 "ReleaseDocs"
   ==> "Release"
 
-"BuildPackage"
-  ==> "PublishNuget"
-  ==> "Release"
+// "BuildPackage"
+//   ==> "PublishNuget"
+//   ==> "Release"
 
 RunTargetOrDefault "All"
