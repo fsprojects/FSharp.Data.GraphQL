@@ -19,6 +19,7 @@ module QuotationHelpers =
     #if FABLE
     open Fable
     open Fable.Core
+    open Fable.Core.JsInterop
     open Fable.AST
     open Fable.AST.Fable.Util
 
@@ -49,7 +50,7 @@ module QuotationHelpers =
             }))"""
             |> makeEmit args
             |> fun p -> CoreLibCall ("Async", Some "awaitPromise", false, [p])
-            |> makeCall com None Fable.UnknownType
+            |> makeCall com None Fable.Any
 
         let getBuildQueryBody com args =
             """var i = 0, openBraces = 0, closeBraces = 0;

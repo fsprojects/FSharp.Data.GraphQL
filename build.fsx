@@ -25,6 +25,7 @@ let project = "FSharp.Data.GraphQL"
 let summary = "FSharp implementation of Facebook GraphQL query language"
 let description = "FSharp implementation of Facebook GraphQL query language"
 let authors = [ "Bazinga Technologies Inc" ]
+let copyright = "Copyright (c) 2016 Bazinga Technologies Inc"
 let tags = "FSharp GraphQL Relay React"
 let solutionFile  = "FSharp.Data.GraphQL.sln"
 let testAssemblies = "tests/**/bin/Release/*Tests*.dll"
@@ -34,7 +35,87 @@ let gitName = "FSharp.Data.GraphQL"
 let gitRaw = environVarOrDefault "gitRaw" "https://raw.github.com/bazingatechnologies"
 let release = LoadReleaseNotes "RELEASE_NOTES.md"
 
+module Util =
+    open System.Net
+    
+    let join pathParts =
+        Path.Combine(Array.ofSeq pathParts)
 
+    let run workingDir fileName args =
+        let fileName, args =
+            if EnvironmentHelper.isUnix
+            then fileName, args else "cmd", ("/C " + fileName + " " + args)
+        let ok =
+            execProcess (fun info ->
+                info.FileName <- fileName
+                info.WorkingDirectory <- workingDir
+                info.Arguments <- args) TimeSpan.MaxValue
+        if not ok then failwith (sprintf "'%s> %s %s' task failed" workingDir fileName args)
+
+    let runAndReturn workingDir fileName args =
+        let fileName, args =
+            if EnvironmentHelper.isUnix
+            then fileName, args else "cmd", ("/C " + args)
+        ExecProcessAndReturnMessages (fun info ->
+            info.FileName <- fileName
+            info.WorkingDirectory <- workingDir
+            info.Arguments <- args) TimeSpan.MaxValue
+        |> fun p -> p.Messages |> String.concat "\n"
+
+    let rmdir dir =
+        if EnvironmentHelper.isUnix
+        then FileUtils.rm_rf dir
+        // Use this in Windows to prevent conflicts with paths too long
+        else run "." "cmd" ("/C rmdir /s /q " + Path.GetFullPath dir)
+
+    let compileScript symbols outDir fsxPath =
+        let dllFile = Path.ChangeExtension(Path.GetFileName fsxPath, ".dll")
+        let opts = [
+            yield FscHelper.Out (Path.Combine(outDir, dllFile))
+            yield FscHelper.Target FscHelper.TargetType.Library
+            yield! symbols |> List.map FscHelper.Define
+        ]
+        FscHelper.compile opts [fsxPath]
+        |> function 0 -> () | _ -> failwithf "Cannot compile %s" fsxPath
+
+    let normalizeVersion (version: string) =
+        let i = version.IndexOf("-")
+        if i > 0 then version.Substring(0, i) else version
+
+    let assemblyInfo projectDir version extra =
+        let version = normalizeVersion version
+        let asmInfoPath = projectDir </> "AssemblyInfo.fs"
+        (Attribute.Version version)::extra
+        |> CreateFSharpAssemblyInfo asmInfoPath
+
+module Npm =
+    let script workingDir script args =
+        sprintf "run %s -- %s" script (String.concat " " args)
+        |> Util.run workingDir "npm"
+
+    let install workingDir modules =
+        sprintf "install %s" (String.concat " " modules)
+        |> Util.run workingDir "npm"
+
+    let command workingDir command args =
+        sprintf "%s %s" command (String.concat " " args)
+        |> Util.run workingDir "npm"
+
+    let commandAndReturn workingDir command args =
+        sprintf "%s %s" command (String.concat " " args)
+        |> Util.runAndReturn workingDir "npm"
+
+    let getLatestVersion package tag =
+        let package =
+            match tag with
+            | Some tag -> package + "@" + tag
+            | None -> package
+        commandAndReturn "." "show" [package; "version"]
+
+module Node =
+    let run workingDir script args =
+        let args = sprintf "%s %s" script (String.concat " " args)
+        Util.run workingDir "node" args
 
 // --------------------------------------------------------------------------------------
 // Helpers for generating AssemblyInfo
@@ -139,24 +220,6 @@ Target "SourceLink" (fun _ ->
 )
 
 #endif
-
-// --------------------------------------------------------------------------------------
-// Build a NuGet package
-
-Target "NuGet" (fun _ ->
-    Paket.Pack(fun p ->
-        { p with
-            OutputPath = "bin"
-            Version = release.NugetVersion
-            ReleaseNotes = toLines release.Notes})
-)
-
-Target "PublishNuget" (fun _ ->
-    Paket.Push(fun p ->
-        { p with
-            WorkingDir = "bin" })
-)
-
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
@@ -344,7 +407,44 @@ Target "AdHocBuild" (fun _ ->
     |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
 )
 
-Target "BuildPackage" DoNothing
+let publishPackage id =
+    CleanDir <| sprintf "nuget/%s.%s" project id
+    Paket.Pack(fun p ->
+        { p with
+            Version = release.NugetVersion
+            OutputPath = sprintf "nuget/%s.%s" project id
+            TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
+            IncludeReferencedProjects = true
+        })
+    Paket.Push(fun p ->
+        { p with 
+            WorkingDir = sprintf "nuget/%s.%s" project id
+            PublishUrl = "https://www.nuget.org/api/v2/package" })
+    
+Target "PublishServer" (fun _ ->
+    publishPackage "Server"
+)
+
+Target "PublishClient" (fun _ ->
+    publishPackage "Client"
+)
+
+Target "PublishNpm" (fun _ ->
+    let binDir, prjDir = "bin/npm", "src/FSharp.Data.GraphQL.Client"
+    CleanDir binDir
+
+    !!("src/FSharp.Data.GraphQL.Client" </> "*.fsproj")
+    |> MSBuild "bin/FSharp.Data.GraphQL.Client" "Build" [
+        "Configuration", "Build"; "DefineConstants", "FABLE"
+    ] |> ignore
+
+    CopyDir binDir (prjDir </> "bin" </> "Release") (fun _ -> true)
+    !!(prjDir </> "npm" </> "*.*")
+    |> Seq.iter (fun path -> FileUtils.cp path binDir)
+
+    Npm.command binDir "version" ["0.0.3"] //[string release.SemVer]
+    Npm.command binDir "publish" []
+)
 
 // --------------------------------------------------------------------------------------
 // Run all targets by default. Invoke 'build <Target>' to override
@@ -361,13 +461,13 @@ Target "All" DoNothing
   ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
-"All"
-#if MONO
-#else
-  =?> ("SourceLink", Pdbstr.tryFind().IsSome )
-#endif
-  ==> "NuGet"
-  ==> "BuildPackage"
+// "All"
+// #if MONO
+// #else
+//   =?> ("SourceLink", Pdbstr.tryFind().IsSome )
+// #endif
+//   ==> "NuGet"
+//   ==> "BuildPackage"
 
 "CleanDocs"
   ==> "GenerateHelp"
@@ -383,8 +483,8 @@ Target "All" DoNothing
 "ReleaseDocs"
   ==> "Release"
 
-"BuildPackage"
-  ==> "PublishNuget"
-  ==> "Release"
+// "BuildPackage"
+//   ==> "PublishNuget"
+//   ==> "Release"
 
 RunTargetOrDefault "All"

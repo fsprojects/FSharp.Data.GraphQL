@@ -5,6 +5,7 @@ nuget FParsec
 nuget Hopac
 nuget Newtonsoft.Json
 nuget Suave
+nuget System.Runtime
 
 group Build
   source https://nuget.org/api/v2

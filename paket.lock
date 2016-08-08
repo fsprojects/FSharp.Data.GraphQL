@@ -9,9 +9,14 @@ NUGET
     Hopac (0.2.1)
       FSharp.Core (>= 3.1.2.5)
     Microsoft.Diagnostics.Tracing.TraceEvent (1.0.41) - framework: >= net40, dnx451
+    Microsoft.NETCore.Platforms (1.0.1) - framework: dnxcore50, netstandard10, netstandard12, netstandard13, >= netstandard15
+    Microsoft.NETCore.Targets (1.0.1) - framework: dnxcore50, netstandard10, netstandard12, netstandard13, >= netstandard15
     Newtonsoft.Json (8.0.3)
     Suave (1.1.2)
       FSharp.Core (>= 3.1.2.5)
+    System.Runtime (4.1)
+      Microsoft.NETCore.Platforms (>= 1.0.1) - framework: dnxcore50, netstandard10, netstandard12, netstandard13, >= netstandard15
+      Microsoft.NETCore.Targets (>= 1.0.1) - framework: dnxcore50, netstandard10, netstandard12, netstandard13, >= netstandard15
 
 GROUP Build
 NUGET
