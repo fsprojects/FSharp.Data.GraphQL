@@ -19,7 +19,7 @@ let testSchema testFields = Schema(Define.Object("Query", fields = testFields))
 
 [<Fact>]
 let ``Execute uses default resolve to accesses properties`` () =
-    let schema = testSchema [ Define.Field("test", String) ]
+    let schema = testSchema [ Define.AutoField("test", String) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
     let actual = sync <| schema.AsyncExecute(parse "{ test }", { Test = "testValue" })
     noErrors actual

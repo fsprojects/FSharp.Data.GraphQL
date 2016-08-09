@@ -1,4 +1,7 @@
-﻿[<AutoOpen>]
+﻿/// The MIT License (MIT)
+/// Copyright (c) 2016 Bazinga Technologies Inc
+
+[<AutoOpen>]
 module internal FSharp.Data.GraphQL.Values
 
 open System
@@ -26,31 +29,16 @@ let inline tryConvertAst schema ast =
             convert false schema inner
     convert true schema ast
 
-let private findMatchingConstructor (indef: InputObjectDef) (constructors: ConstructorInfo []) =
-    let fieldNames = 
-        indef.Fields
-        |> Array.map (fun f -> f.Name)
-        |> Set.ofArray
-    let (ctor, _) =
-        constructors
-        |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
-        // start from most complete constructors
-        |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)                  
-        // try match field with params by name
-        // at last, default constructor should be used if defined
-        |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
-    ctor
-
 let inline private notAssignableMsg (innerDef: InputDef) value : string =
-    sprintf "value of type %s is not assignable from %s" innerDef.InputType.Name (value.GetType().Name)
+    sprintf "value of type %s is not assignable from %s" innerDef.Type.Name (value.GetType().Name)
 
 let rec compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
     match inputDef with
     | Scalar scalardef -> 
         variableOrElse (scalardef.CoerceInput >> Option.toObj)
     | InputObject objdef -> 
-        let objtype = objdef.InputType
-        let ctor = findMatchingConstructor objdef (objtype.GetConstructors())
+        let objtype = objdef.Type
+        let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
         let mapper =
             ctor.GetParameters()
             |> Array.map(fun param -> objdef.Fields |> Array.find(fun field -> field.Name = param.Name))
@@ -73,7 +61,7 @@ let rec compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
             | _ -> null                 
     | List (Input innerdef) -> 
         let inner = compileByType errMsg innerdef       
-        let cons, nil = ReflectionHelper.listOfType innerdef.InputType
+        let cons, nil = ReflectionHelper.listOfType innerdef.Type
 
         fun variables value ->
             match value with
@@ -87,7 +75,7 @@ let rec compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
                 if single = null then null else cons single nil
     | Nullable (Input innerdef) -> 
         let inner = compileByType errMsg innerdef
-        let some, none = ReflectionHelper.optionOfType innerdef.InputType
+        let some, none = ReflectionHelper.optionOfType innerdef.Type
                 
         fun variables value ->
             let i = inner variables value
@@ -105,7 +93,7 @@ let rec compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
                 let coerced = coerceStringInput value
                 match coerced with
                 | None -> null
-                | Some s -> Enum.Parse(enumdef.InputType, s, ignoreCase = true)
+                | Some s -> Enum.Parse(enumdef.Type, s, ignoreCase = true)
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
                 
 let rec private coerceVariableValue isNullable typedef (vardef: VariableDefinition) (input: obj) (errMsg: string) : obj = 
@@ -114,20 +102,20 @@ let rec private coerceVariableValue isNullable typedef (vardef: VariableDefiniti
         match scalardef.CoerceValue input with
         | None when isNullable -> null
         | None -> 
-            raise (GraphQLException <| errMsg + (sprintf "expected value of type %O but got None" scalardef.InputType))
+            raise (GraphQLException <| errMsg + (sprintf "expected value of type %O but got None" scalardef.Type))
         | Some res -> res
     | Nullable (Input innerdef) -> 
-        let some, none = ReflectionHelper.optionOfType innerdef.InputType
+        let some, none = ReflectionHelper.optionOfType innerdef.Type
         let coerced = coerceVariableValue true innerdef vardef input errMsg
         if coerced <> null
         then 
             let s = some coerced
             if s <> null
             then s 
-            else raise (GraphQLException <| errMsg + (sprintf "value of type %O is not assignable from %O" innerdef.InputType (coerced.GetType())))
+            else raise (GraphQLException <| errMsg + (sprintf "value of type %O is not assignable from %O" innerdef.Type (coerced.GetType())))
         else none
     | List (Input innerdef) ->
-        let cons, nil = ReflectionHelper.listOfType innerdef.InputType
+        let cons, nil = ReflectionHelper.listOfType innerdef.Type
         match input with
         | null when isNullable -> null
         | null -> raise(GraphQLException <| errMsg + (sprintf "expected value of type %O, but no value was found." vardef.Type))
@@ -158,7 +146,7 @@ and private coerceVariableInputObject (objdef) (vardef: VariableDefinition) (inp
             objdef.Fields
             |> Array.map (fun field -> 
                 let valueFound = Map.tryFind field.Name map |> Option.toObj
-                (field.Name, coerceVariableValue false field.Type vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
+                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
             |> Map.ofArray
         upcast mapped
     | _ -> input

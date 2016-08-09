@@ -12,5 +12,7 @@ let defaultSwitch () = BenchmarkSwitcher [| typeof<SimpleExecutionBenchmark>; ty
 
 [<EntryPoint>]
 let Main args =
+    let asm = Reflection.Assembly.Load("FSharp.Core")
+    printfn "%+A" asm
     defaultSwitch().Run args 
     0

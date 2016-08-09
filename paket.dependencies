@@ -2,13 +2,19 @@ source https://nuget.org/api/v2
 nuget BenchmarkDotNet
 nuget BenchmarkDotNet.Diagnostics.Windows
 nuget FParsec
+nuget FSCheck
+nuget FSharp.Data.TypeProviders
+nuget FSharp.Quotations.Evaluator
 nuget Hopac
 nuget Newtonsoft.Json
 nuget Suave
+nuget System.Collections.Immutable
+nuget System.Reflection.Metadata
 nuget System.Runtime
 nuget FSharp.Core
 nuget FSharp.Data.GraphQL.Server
 nuget FSharp.Data.GraphQL.Client
+nuget xUnit
 
 group Build
   source https://nuget.org/api/v2

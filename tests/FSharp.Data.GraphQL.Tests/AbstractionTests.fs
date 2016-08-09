@@ -45,8 +45,8 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String)
-            Define.Field("woofs", Boolean)
+            Define.Field("name", String, fun _ d -> d.Name)
+            Define.Field("woofs", Boolean, fun _ d -> d.Woofs)
         ])
     let CatType =
       Define.Object<Cat>(
@@ -54,8 +54,8 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String)
-            Define.Field("meows", Boolean)
+            Define.Field("name", String, fun _ c -> c.Name)
+            Define.Field("meows", Boolean, fun _ c -> c.Meows)
         ])
     let schema =
       Schema(
@@ -95,16 +95,16 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         name = "Dog", 
         isTypeOf = is<Dog>,
         fields = [
-            Define.Field("name", String)
-            Define.Field("woofs", Boolean)
+            Define.AutoField("name", String)
+            Define.AutoField("woofs", Boolean)
         ])
     let CatType =
       Define.Object<Cat>(
         name = "Cat", 
         isTypeOf = is<Cat>,
         fields = [
-            Define.Field("name", String)
-            Define.Field("meows", Boolean)
+            Define.AutoField("name", String)
+            Define.AutoField("meows", Boolean)
         ])
     let PetType = Define.Union("Pet", [ DogType; CatType ], resolvePet)
     let schema =

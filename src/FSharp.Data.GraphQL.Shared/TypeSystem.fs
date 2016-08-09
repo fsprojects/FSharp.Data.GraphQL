@@ -7,7 +7,7 @@ open System.Collections.Concurrent
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
- 
+open Microsoft.FSharp.Quotations
 
 [<Flags>]
 type DirectiveLocation = 
@@ -46,7 +46,8 @@ module Introspection =
           EnumValues : IntrospectionEnumVal [] option
           InputFields : IntrospectionInputVal [] option
           OfType : IntrospectionTypeRef option }
-        static member Scalar(name: string, description: string option) = 
+        
+        static member Scalar(name : string, description : string option) = 
             { Kind = TypeKind.SCALAR
               Name = name
               Description = description
@@ -56,7 +57,9 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member Object(name: string, description: string option, fields: IntrospectionField [], interfaces: IntrospectionTypeRef []) = 
+        
+        static member Object(name : string, description : string option, fields : IntrospectionField [], 
+                             interfaces : IntrospectionTypeRef []) = 
             { Kind = TypeKind.OBJECT
               Name = name
               Description = description
@@ -66,7 +69,8 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member InputObject(name: string, description: string option, inputFields: IntrospectionInputVal []) = 
+        
+        static member InputObject(name : string, description : string option, inputFields : IntrospectionInputVal []) = 
             { Kind = TypeKind.INPUT_OBJECT
               Name = name
               Description = description
@@ -76,7 +80,8 @@ module Introspection =
               EnumValues = None
               InputFields = Some inputFields
               OfType = None }
-        static member Union(name: string, description: string option, possibleTypes: IntrospectionTypeRef []) = 
+        
+        static member Union(name : string, description : string option, possibleTypes : IntrospectionTypeRef []) = 
             { Kind = TypeKind.UNION
               Name = name
               Description = description
@@ -86,7 +91,8 @@ module Introspection =
               EnumValues = None
               InputFields = None
               OfType = None }
-        static member Enum(name: string, description: string option, enumValues: IntrospectionEnumVal []) = 
+        
+        static member Enum(name : string, description : string option, enumValues : IntrospectionEnumVal []) = 
             { Kind = TypeKind.ENUM
               Name = name
               Description = description
@@ -96,7 +102,9 @@ module Introspection =
               EnumValues = Some enumValues
               InputFields = None
               OfType = None }
-        static member Interface(name: string, description: string option, fields: IntrospectionField [], possibleTypes: IntrospectionTypeRef []) = 
+        
+        static member Interface(name : string, description : string option, fields : IntrospectionField [], 
+                                possibleTypes : IntrospectionTypeRef []) = 
             { Kind = TypeKind.INTERFACE
               Name = name
               Description = description
@@ -112,9 +120,24 @@ module Introspection =
           Name : string option
           Description : string option
           OfType : IntrospectionTypeRef option }
-        static member List(inner: IntrospectionTypeRef) = { Kind = TypeKind.LIST; Name = None; Description = None; OfType = Some inner }
-        static member NonNull(inner: IntrospectionTypeRef) = { Kind = TypeKind.NON_NULL; Name = None; Description = None; OfType = Some inner }
-        static member Named(inner: IntrospectionType) = { Kind = inner.Kind; Name = Some inner.Name; Description = inner.Description; OfType = None }
+        
+        static member List(inner : IntrospectionTypeRef) = 
+            { Kind = TypeKind.LIST
+              Name = None
+              Description = None
+              OfType = Some inner }
+        
+        static member NonNull(inner : IntrospectionTypeRef) = 
+            { Kind = TypeKind.NON_NULL
+              Name = None
+              Description = None
+              OfType = Some inner }
+        
+        static member Named(inner : IntrospectionType) = 
+            { Kind = inner.Kind
+              Name = Some inner.Name
+              Description = inner.Description
+              OfType = None }
     
     and IntrospectionInputVal = 
         { Name : string
@@ -159,8 +182,9 @@ type ISchema =
 // 3.1 Types
 and TypeDef = 
     interface
-        abstract MakeList: unit -> ListOfDef
-        abstract MakeNullable: unit -> NullableDef
+        abstract Type : Type
+        abstract MakeList : unit -> ListOfDef
+        abstract MakeNullable : unit -> NullableDef
     end
 
 and TypeDef<'Val> = 
@@ -171,7 +195,6 @@ and TypeDef<'Val> =
 and InputDef = 
     interface
         inherit TypeDef
-        abstract InputType: Type
     end
 
 and InputDef<'Val> = 
@@ -183,7 +206,6 @@ and InputDef<'Val> =
 and OutputDef = 
     interface
         inherit TypeDef
-        abstract OutputType: Type
     end
 
 and OutputDef<'Val> = 
@@ -206,7 +228,7 @@ and AbstractDef =
     interface
         inherit TypeDef
         // only abstract types are Interface and Union, which are both composite defs too
-        inherit CompositeDef 
+        inherit CompositeDef
     end
 
 and NamedDef = 
@@ -215,70 +237,119 @@ and NamedDef =
         abstract Name : string
     end
 
-and PlanningContext =
-    { Schema: ISchema
-      RootDef: ObjectDef
-      Document: Document }
+and PlanningContext = 
+    { Schema : ISchema
+      RootDef : ObjectDef
+      Document : Document }
 
-and Includer = Map<string,obj> -> bool
-    
-and ExecutionPlanInfo =
+and Includer = Map<string, obj> -> bool
+
+and ExecutionInfo = 
     { /// Field identifier, which may be either field name or alias. For top level execution plan it will be None.
-      Identifier: string
+      Identifier : string
       /// Field definition of corresponding type found in current schema.
-      Definition: FieldDef
+      Definition : FieldDef
       /// AST node of the parsed query document.
-      Ast: Field
+      Ast : Field
       /// A type of execution plan.
-      Kind: ExecutionPlanKind
+      Kind : ExecutionInfoKind
       // logic describing if correlated field should be included in result set
       Include : Includer
       /// Composite definition being the parent of the current field, execution plan refers to.
-      ParentDef: CompositeDef }
-      
+      ParentDef : OutputDef
+      /// Type definition marking returned type
+      ReturnDef : OutputDef 
+      /// Flag determining if flag allows to have nullable output
+      IsNullable : bool }
+    override this.ToString () =
+        let pad indent (sb: Text.StringBuilder) = for i = 0 to indent do sb.Append '\t' |> ignore
+        let nameAs info =
+            match info.Ast.Alias with
+            | Some alias -> 
+                info.Ast.Name + " as " + alias + " of " + info.ReturnDef.ToString() + (if info.IsNullable then "" else "!")
+            | None -> info.Ast.Name + " of " + info.ReturnDef.ToString() + (if info.IsNullable then "" else "!")
+        let rec str indent sb info =
+            match info.Kind with
+            | ResolveValue -> 
+                pad indent sb
+                sb.Append("ResolveValue: ").AppendLine(nameAs info) |> ignore
+            | SelectFields fields ->
+                pad indent sb
+                sb.Append("SelectFields: ").AppendLine(nameAs info) |> ignore
+                fields |> List.iter (str (indent+1) sb)
+            | ResolveCollection inner ->
+                pad indent sb
+                sb.Append("ResolveCollection: ").AppendLine(nameAs info) |> ignore
+                str (indent+1) sb inner
+            | ResolveAbstraction types ->
+                pad indent sb
+                sb.Append("ResolveAbstraction: ").AppendLine(nameAs info) |> ignore
+                types
+                |> Map.iter (fun tname fields ->
+                    pad (indent+1) sb
+                    sb.Append("Case: ").AppendLine(tname) |> ignore
+                    fields |> List.iter (str (indent+2) sb))
+            
+        let sb = Text.StringBuilder ()
+        str 0 sb this
+        sb.ToString()
+
 /// plan of reduction being a result of application of a query AST on existing schema
-and ExecutionPlanKind =
+and ExecutionInfoKind = 
     // reducer for scalar or enum
     | ResolveValue
     // reducer for selection set applied upon output object
-    | SelectFields of fields:ExecutionPlanInfo list
+    | SelectFields of fields : ExecutionInfo list
     // reducer for each of the collection elements
-    | ResolveCollection of elementPlan:ExecutionPlanInfo
+    | ResolveCollection of elementPlan : ExecutionInfo
     // reducer for union and interface types to be resolved into ReduceSelection at runtime
-    | ResolveAbstraction of typeFields:Map<string, ExecutionPlanInfo list>
+    | ResolveAbstraction of typeFields : Map<string, ExecutionInfo list>
 
-and ExecutionStrategy =
+and Resolve = 
+    | Undefined
+    // expr is untyped version of Expr<ResolveFieldContext->'Input->'Output>
+    | Sync of input:Type * output:Type * expr:Expr 
+    // expr is untyped version of Expr<ResolveFieldContext->'Input->Async<'Output>>
+    | Async of input:Type * output:Type * expr:Expr 
+    member x.Expr =
+        match x with
+        | Sync(_,_,e) -> e
+        | Async(_,_,e) -> e
+
+and ExecutionStrategy = 
     | Serial
     | Parallel
 
 and ExecutionPlan = 
-    { Operation: OperationDefinition
-      RootDef: ObjectDef
-      Strategy: ExecutionStrategy
-      Fields: ExecutionPlanInfo list }
-        
+    { Operation : OperationDefinition
+      RootDef : ObjectDef
+      Strategy : ExecutionStrategy
+      Fields : ExecutionInfo list }
+    member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
+
 and ExecutionContext = 
-    { Schema: ISchema
-      RootValue: obj
-      ExecutionPlan: ExecutionPlan
-      Variables: Map<string, obj>
-      Errors: ConcurrentBag<exn> }
+    { Schema : ISchema
+      RootValue : obj
+      ExecutionPlan : ExecutionPlan
+      Variables : Map<string, obj>
+      Errors : ConcurrentBag<exn> }
 
 and ResolveFieldContext = 
-    { ExecutionPlan : ExecutionPlanInfo
-      Context: ExecutionContext 
+    { ExecutionPlan : ExecutionInfo
+      Context : ExecutionContext
       ReturnType : TypeDef
       ParentType : ObjectDef
       Schema : ISchema
       Args : Map<string, obj>
       Variables : Map<string, obj> }
-    member x.AddError (error: exn) = x.Context.Errors.Add error
+    member x.AddError(error : exn) = x.Context.Errors.Add error
+    
     member x.TryArg(name : string) : 't option = 
         match Map.tryFind name x.Args with
         | Some o -> Some(o :?> 't)
         | None -> None
-    member x.Arg(name : string) : 't = 
-        downcast Map.find name x.Args
+    
+    member x.Arg(name : string) : 't = downcast Map.find name x.Args
 
 and ExecuteField = ResolveFieldContext -> obj -> Async<obj>
 
@@ -287,19 +358,18 @@ and FieldDef =
         abstract Name : string
         abstract Description : string option
         abstract DeprecationReason : string option
-        abstract Type : OutputDef
+        abstract TypeDef : OutputDef
         abstract Args : InputFieldDef []
-        abstract Resolve : ResolveFieldContext -> obj -> Async<obj>
-        abstract Execute : ExecuteField with get,set
+        abstract Resolve : Resolve
+        abstract Execute : ExecuteField with get, set
         inherit IEquatable<FieldDef>
     end
 
 and FieldDef<'Val> = 
     interface
-        abstract Resolve : ResolveFieldContext -> 'Val -> Async<obj>
         inherit FieldDef
     end
-    
+
 and ScalarDef = 
     interface
         abstract Name : string
@@ -307,7 +377,6 @@ and ScalarDef =
         abstract CoerceInput : Value -> obj option
         abstract CoerceOutput : obj -> Value option
         abstract CoerceValue : obj -> obj option
-        inherit IEquatable<ScalarDef>
         inherit TypeDef
         inherit NamedDef
         inherit InputDef
@@ -322,20 +391,20 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       CoerceInput : Value -> 'Val option
       CoerceOutput : 'Val -> Value option
       CoerceValue : obj -> 'Val option }
-
-    interface InputDef with
-        member __.InputType = typeof<'Val>
-
+    
     interface TypeDef with
+        member __.Type = typeof<'Val>
+        
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val>
+    
+    interface InputDef
+    interface OutputDef
     
     interface ScalarDef with
         member x.Name = x.Name
@@ -351,12 +420,9 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
     interface NamedDef with
         member x.Name = x.Name
     
-    interface IEquatable<ScalarDef> with
-        member x.Equals s = x.Name = s.Name
-    
     override x.Equals y = 
         match y with
-        | :? ScalarDef as s -> (x :> IEquatable<ScalarDef>).Equals(s)
+        | :? ScalarDefinition<'Val> as s -> x.Name = s.Name
         | _ -> false
     
     override x.GetHashCode() = x.Name.GetHashCode()
@@ -409,20 +475,19 @@ and EnumDefinition<'Val> =
     { Name : string
       Description : string option
       Options : EnumValue<'Val> [] }
-
-    interface InputDef with
-        member __.InputType = typeof<'Val>
-
+    interface InputDef
+    interface OutputDef
+    
     interface TypeDef with
+        member __.Type = typeof<'Val>
+        
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val>
     
     interface EnumDef<'Val> with
         member x.Options = x.Options
@@ -431,10 +496,11 @@ and EnumDefinition<'Val> =
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Options = 
-            x.Options 
+            x.Options
             |> Seq.ofArray
             |> Seq.cast<EnumVal>
             |> Seq.toArray
+    
     interface NamedDef with
         member x.Name = x.Name
     
@@ -452,7 +518,6 @@ and ObjectDef =
         inherit NamedDef
         inherit OutputDef
         inherit CompositeDef
-        inherit IEquatable<ObjectDef>
     end
 
 and ObjectDef<'Val> = 
@@ -469,26 +534,24 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
       FieldsFn : Lazy<Map<string, FieldDef<'Val>>>
       Implements : InterfaceDef []
       IsTypeOf : (obj -> bool) option }
-
+    
     interface TypeDef with
+        member __.Type = typeof<'Val>
+        
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val>
+    
+    interface OutputDef
     
     interface ObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        
-        member x.Fields = 
-            x.FieldsFn.Force()
-            |> Map.map (fun k v -> upcast v)
-        
+        member x.Fields = x.FieldsFn.Force() |> Map.map (fun k v -> upcast v)
         member x.Implements = x.Implements
         member x.IsTypeOf = x.IsTypeOf
     
@@ -498,32 +561,22 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
     interface NamedDef with
         member x.Name = x.Name
     
-    interface IEquatable<ObjectDef> with
-        member x.Equals f = x.Name = f.Name
-    
     override x.Equals y = 
         match y with
-        | :? ObjectDef as f -> (x :> IEquatable<ObjectDef>).Equals(f)
+        | :? ObjectDefinition<'Val> as f -> f.Name = x.Name
         | _ -> false
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
         hash
     
-    override x.ToString() = 
-        let sb = System.Text.StringBuilder("type ")
-        sb.Append(x.Name) |> ignore
-        if not (Array.isEmpty x.Implements) then 
-            sb.Append(" implements ").Append(String.Join(", ", x.Implements |> Array.map (fun i -> i.Name))) |> ignore
-        sb.Append("{") |> ignore
-        //x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
-        sb.Append("\n}").ToString()
+    override x.ToString() = x.Name
 
 and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> = 
     { Name : string
       Description : string option
-      Type : OutputDef<'Res>
-      Resolve : ResolveFieldContext -> 'Val -> Async<'Res>
+      TypeDef : OutputDef<'Res>
+      Resolve : Resolve
       Args : InputFieldDef []
       DeprecationReason : string option
       mutable Execute : ExecuteField }
@@ -532,22 +585,18 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
         member x.Name = x.Name
         member x.Description = x.Description
         member x.DeprecationReason = x.DeprecationReason
-        member x.Type = x.Type :> OutputDef
+        member x.TypeDef = x.TypeDef :> OutputDef
         member x.Args = x.Args
-        member x.Resolve (ctx : ResolveFieldContext) (value : obj) : Async<obj> = async {
-            let! res = x.Resolve ctx (value :?> 'Val)
-            return upcast res
-        }
-        member x.Execute with get() = x.Execute and set v = x.Execute <- v
+        member x.Resolve = x.Resolve
+        
+        member x.Execute 
+            with get () = x.Execute
+            and set v = x.Execute <- v
     
-    interface FieldDef<'Val> with
-        member x.Resolve (ctx : ResolveFieldContext) (value : 'Val) : Async<obj> = async {
-            let! res = x.Resolve ctx value
-            return upcast res
-        }
+    interface FieldDef<'Val>
     
     interface IEquatable<FieldDef> with
-        member x.Equals f = x.Name = f.Name && x.Type :> OutputDef = f.Type && x.Args = f.Args
+        member x.Equals f = x.Name = f.Name && x.TypeDef :> OutputDef = f.TypeDef && x.Args = f.Args
     
     override x.Equals y = 
         match y with
@@ -556,14 +605,14 @@ and [<CustomEquality; NoComparison>] FieldDefinition<'Val, 'Res> =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.Type.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
         hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
         hash
     
     override x.ToString() = 
-        let mutable s = x.Name + ": " + x.Type.ToString()
-        if not (Array.isEmpty x.Args) then s <- "(" + String.Join(", ", x.Args) + ")"
-        s
+        if not (Array.isEmpty x.Args) 
+        then x.Name + "(" + String.Join(", ", x.Args) + "): " + x.TypeDef.ToString()
+        else x.Name + ": " + x.TypeDef.ToString()
 
 /// 3.1.3 Interfaces
 and InterfaceDef = 
@@ -577,7 +626,6 @@ and InterfaceDef =
         inherit CompositeDef
         inherit AbstractDef
         inherit NamedDef
-        inherit IEquatable<InterfaceDef>
     end
 
 and InterfaceDef<'Val> = 
@@ -593,17 +641,19 @@ and [<CustomEquality; NoComparison>] InterfaceDefinition<'Val> =
       Description : string option
       FieldsFn : unit -> FieldDef<'Val> []
       ResolveType : (obj -> ObjectDef) option }
-
+    
     interface TypeDef with
+        member __.Type = typeof<'Val>
+        
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val>
+    
+    interface OutputDef
     
     interface InterfaceDef with
         member x.Name = x.Name
@@ -617,12 +667,9 @@ and [<CustomEquality; NoComparison>] InterfaceDefinition<'Val> =
     interface NamedDef with
         member x.Name = x.Name
     
-    interface IEquatable<InterfaceDef> with
-        member x.Equals f = x.Name = f.Name
-    
     override x.Equals y = 
         match y with
-        | :? InterfaceDef as f -> (x :> IEquatable<InterfaceDef>).Equals(f)
+        | :? InterfaceDefinition<'Val> as f -> x.Name = f.Name
         | _ -> false
     
     override x.GetHashCode() = 
@@ -646,7 +693,6 @@ and UnionDef =
         inherit CompositeDef
         inherit AbstractDef
         inherit NamedDef
-        inherit IEquatable<UnionDef>
     end
 
 and UnionDef<'In> = 
@@ -665,17 +711,19 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
       Options : ObjectDef []
       ResolveType : ('In -> ObjectDef) option
       ResolveValue : 'In -> 'Out }
-
+    
     interface TypeDef with
+        member __.Type = typeof<'Out>
+        
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Out>
+    
+    interface OutputDef
     
     interface UnionDef with
         member x.Name = x.Name
@@ -691,12 +739,9 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
     interface NamedDef with
         member x.Name = x.Name
     
-    interface IEquatable<UnionDef> with
-        member x.Equals f = x.Name = f.Name && x.Description = f.Description && x.Options = f.Options
-    
     override x.Equals y = 
         match y with
-        | :? UnionDef as f -> (x :> IEquatable<UnionDef>).Equals(f)
+        | :? UnionDefinition<'In, 'Out> as f -> x.Name = f.Name
         | _ -> false
     
     override x.GetHashCode() = 
@@ -723,21 +768,20 @@ and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
 
 and ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = 
     { OfType : TypeDef<'Val> }
+    interface InputDef
     
-    interface InputDef with
-        member __.InputType = typeof<'Seq>
-
     interface TypeDef with
+        member __.Type = typeof<'Seq>
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_, _> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val seq>
-
+    
+    interface OutputDef
+    
     interface ListOfDef with
         member x.OfType = upcast x.OfType
     
@@ -765,18 +809,16 @@ and NullableDef<'Val> =
 
 and NullableDefinition<'Val> = 
     { OfType : TypeDef<'Val> }
-
-    interface InputDef with
-        member __.InputType = typeof<'Val option>
-
+    interface InputDef
+    
     interface TypeDef with
+        member __.Type = typeof<'Val option>
         member x.MakeNullable() = upcast x
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
-        
-    interface OutputDef with
-        member __.OutputType = typeof<'Val option>
+    
+    interface OutputDef
     
     interface NullableDef with
         member x.OfType = upcast x.OfType
@@ -803,9 +845,7 @@ and InputObjectDefinition<'Val> =
     { Name : string
       Description : string option
       FieldsFn : unit -> InputFieldDef [] }
-
-    interface InputDef with
-        member __.InputType = typeof<'Val>
+    interface InputDef
     
     interface InputObjectDef with
         member x.Name = x.Name
@@ -814,24 +854,30 @@ and InputObjectDefinition<'Val> =
     
     interface TypeDef<'Val>
     interface InputDef<'Val>
+    
     interface NamedDef with
         member x.Name = x.Name
+    
     interface TypeDef with
+        member __.Type = typeof<'Val>
+
         member x.MakeNullable() = 
-            let nullable: NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
+        
         member x.MakeList() = 
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
 
-and ExecuteInput = Map<string,obj> -> Value -> obj
+and ExecuteInput = Map<string, obj> -> Value -> obj
+
 and InputFieldDef = 
     interface
         abstract Name : string
         abstract Description : string option
-        abstract Type : InputDef
+        abstract TypeDef : InputDef
         abstract DefaultValue : obj option
-        abstract ExecuteInput : ExecuteInput with get,set
+        abstract ExecuteInput : ExecuteInput with get, set
         inherit IEquatable<InputFieldDef>
     end
 
@@ -839,19 +885,22 @@ and InputFieldDef =
 and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = 
     { Name : string
       Description : string option
-      Type : InputDef<'In>
+      TypeDef : InputDef<'In>
       DefaultValue : 'In option
-      mutable ExecuteInput: ExecuteInput }
+      mutable ExecuteInput : ExecuteInput }
     
     interface InputFieldDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.Type = upcast x.Type
+        member x.TypeDef = upcast x.TypeDef
         member x.DefaultValue = x.DefaultValue |> Option.map (fun x -> upcast x)
-        member x.ExecuteInput with get () = x.ExecuteInput and set v = x.ExecuteInput <- v
         
+        member x.ExecuteInput 
+            with get () = x.ExecuteInput
+            and set v = x.ExecuteInput <- v
+    
     interface IEquatable<InputFieldDef> with
-        member x.Equals f = x.Name = f.Name && x.Type :> InputDef = f.Type
+        member x.Equals f = x.Name = f.Name && x.TypeDef :> InputDef = f.TypeDef
     
     override x.Equals y = 
         match y with
@@ -860,10 +909,10 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
     
     override x.GetHashCode() = 
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.Type.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
         hash
     
-    override x.ToString() = x.Name
+    override x.ToString() = x.Name + ": " + x.TypeDef.ToString()
 
 /// 5.7 Variables
 and Variable = 
@@ -936,7 +985,7 @@ module SchemaDefinitions =
             try 
                 Some(System.Convert.ToBoolean other)
             with _ -> None
-
+    
     let coerceUriValue (x : obj) : Uri option = 
         match x with
         | null -> None
@@ -946,7 +995,7 @@ module SchemaDefinitions =
             | true, uri -> Some uri
             | false, _ -> None
         | other -> None
-        
+    
     let coerceDateValue (x : obj) : DateTime option = 
         match x with
         | null -> None
@@ -976,15 +1025,15 @@ module SchemaDefinitions =
         match x with
         | :? string as y -> Some(StringValue y)
         | _ -> None
-        
+    
     let private coerceUriOutput (x : obj) = 
         match x with
-        | :? Uri as uri -> Some(StringValue (uri.ToString()))
+        | :? Uri as uri -> Some(StringValue(uri.ToString()))
         | _ -> None
-        
+    
     let private coerceDateOutput (x : obj) = 
         match x with
-        | :? DateTime as date -> Some(StringValue (date.ToString("O")))
+        | :? DateTime as date -> Some(StringValue(date.ToString("O")))
         | _ -> None
     
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
@@ -1042,7 +1091,7 @@ module SchemaDefinitions =
                  else "false")
         | _ -> None
     
-    let coerceBoolInput  = 
+    let coerceBoolInput = 
         function 
         | IntValue i -> 
             Some(if i = 0 then false
@@ -1062,17 +1111,17 @@ module SchemaDefinitions =
         | IntValue i -> Some(i.ToString())
         | StringValue s -> Some s
         | _ -> None
-
-    let private coerceUriInput =
-        function
+    
+    let private coerceUriInput = 
+        function 
         | StringValue s -> 
             match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
             | true, uri -> Some uri
             | false, _ -> None
         | _ -> None
-        
-    let private coerceDateInput =
-        function
+    
+    let private coerceDateInput = 
+        function 
         | StringValue s -> 
             match DateTime.TryParse(s) with
             | true, date -> Some date
@@ -1162,9 +1211,9 @@ module SchemaDefinitions =
     let rec (|Named|_|) (tdef : TypeDef) = named tdef
     
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
-
-    let variableOrElse other variables =
-        function
+    
+    let variableOrElse other variables = 
+        function 
         | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
         | value -> other value
     
@@ -1215,9 +1264,9 @@ module SchemaDefinitions =
           CoerceInput = coerceIdInput
           CoerceValue = coerceStringValue
           CoerceOutput = coerceStringOuput }
-
+    
     /// GraphQL type for System.Uri
-    let Uri : ScalarDefinition<Uri> =
+    let Uri : ScalarDefinition<Uri> = 
         { Name = "URI"
           Description = 
               Some 
@@ -1225,9 +1274,9 @@ module SchemaDefinitions =
           CoerceInput = coerceUriInput
           CoerceValue = coerceUriValue
           CoerceOutput = coerceUriOutput }
-
+    
     /// GraphQL type for System.DateTime
-    let Date : ScalarDefinition<DateTime> =
+    let Date : ScalarDefinition<DateTime> = 
         { Name = "Date"
           Description = 
               Some 
@@ -1235,7 +1284,7 @@ module SchemaDefinitions =
           CoerceInput = coerceDateInput
           CoerceValue = coerceDateValue
           CoerceOutput = coerceDateOutput }
-              
+    
     let IncludeDirective : DirectiveDef = 
         { Name = "include"
           Description = 
@@ -1245,9 +1294,12 @@ module SchemaDefinitions =
           Args = 
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Included when true."
-                   Type = Boolean
+                   TypeDef = Boolean
                    DefaultValue = None
-                   ExecuteInput = variableOrElse (coerceBoolInput >> Option.map box >> Option.toObj) } |] }
+                   ExecuteInput = 
+                       variableOrElse (coerceBoolInput
+                                       >> Option.map box
+                                       >> Option.toObj) } |] }
     
     let SkipDirective : DirectiveDef = 
         { Name = "skip"
@@ -1257,33 +1309,102 @@ module SchemaDefinitions =
           Args = 
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Skipped when true."
-                   Type = Boolean
+                   TypeDef = Boolean
                    DefaultValue = None
-                   ExecuteInput = variableOrElse (coerceBoolInput >> Option.map box >> Option.toObj) } |] }
+                   ExecuteInput = 
+                       variableOrElse (coerceBoolInput
+                                       >> Option.map box
+                                       >> Option.toObj) } |] }
     
     let matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) = 
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
-    let defaultResolve<'Val, 'Res> (fieldName : string) : ResolveFieldContext -> 'Val -> Async<'Res> = 
-        (fun ctx value -> async {
-            if Object.Equals(value, null) then return Unchecked.defaultof<'Res>
-            else
-                let t = value.GetType().GetTypeInfo()
-                let prop, meth = 
-                    let prop = t.GetDeclaredProperty(fieldName, ignoreCase=true)
-                    let meth = if prop = null then t.GetDeclaredMethod(fieldName, ignoreCase=true) else null
-                    Option.ofObj prop, Option.ofObj meth
-                match prop, meth with
-                | Some property, _ -> return property.GetValue(value, null) :?> 'Res
-                | None, Some methodInfo ->
-                    let parameters = matchParameters methodInfo ctx
-                    return methodInfo.Invoke(value, parameters) :?> 'Res
-                | None, None ->
-                    return
-                        sprintf "Default resolve function failed. Couldn't find member '%s' inside definition of type '%s'." fieldName t.FullName
-                        |> GraphQLException |> raise
-        })
+    let boxMeth =
+        let operatorsType = Type.GetType("Microsoft.FSharp.Core.Operators, FSharp.Core", true).GetTypeInfo()
+        operatorsType.GetDeclaredMethod("Box").GetGenericMethodDefinition()
+        
+    let unboxMeth =
+        let operatorsType = Type.GetType("Microsoft.FSharp.Core.Operators, FSharp.Core", true).GetTypeInfo()
+        operatorsType.GetDeclaredMethod("Unbox").GetGenericMethodDefinition()
+
+    let boxifyExpr (inType: Type) (outType: Type) (expr : Expr) : Expr<ResolveFieldContext -> obj -> obj> = 
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let valVar = Var("value", typeof<obj>)
+        (*
+            This is an equivalent of:
+                
+                <@ fun (ctx: ResolveFieldContext) (value: obj) : obj ->
+                       let f: (ResolveFieldContext->'InType->'OutType) = %expr
+                       in upcast f ctx (downcast value)  @>
+        *)
+        Expr.Lambda(ctxVar,
+            Expr.Lambda(valVar, 
+                Expr.Call(boxMeth.MakeGenericMethod(outType), 
+                    [ Expr.Application(
+                        Expr.Application(expr, Expr.Var(ctxVar)), 
+                        Expr.Call(unboxMeth.MakeGenericMethod(inType), [ Expr.Var(valVar) ])) ])))
+        |> Expr.Cast
+    
+    let inline private asyncBox (a : Async<'Val>) : Async<obj> = async { let! res = a
+                                                                         return box res }
+
+    let asyncBoxMeth =
+        let operatorsType = Type.GetType("FSharp.Data.GraphQL.Types.SchemaDefinitions, FSharp.Data.GraphQL.Shared", true).GetTypeInfo()
+        operatorsType.GetDeclaredMethod("asyncBox").GetGenericMethodDefinition()
+
+    let boxifyExprAsync (inType: Type) (outType: Type) (expr : Expr) : Expr<ResolveFieldContext -> obj -> Async<obj>> = 
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let valVar = Var("value", typeof<obj>)
+        (*
+            This is an equivalent of:
+                
+                <@ fun (ctx: ResolveFieldContext) (value: obj) : obj ->
+                       let f: (ResolveFieldContext->'InType->'OutType) = %expr
+                       in async {
+                           let! res = f ctx (downcast value)
+                           return upcast res } @>
+        *)
+        Expr.Lambda(ctxVar,
+            Expr.Lambda(valVar, 
+                Expr.Call(asyncBoxMeth.MakeGenericMethod(outType), 
+                    [ Expr.Application(
+                        Expr.Application(expr, Expr.Var(ctxVar)), 
+                        Expr.Call(unboxMeth.MakeGenericMethod(inType), [ Expr.Var(valVar) ])) ])))
+        |> Expr.Cast
+
+    let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
+        let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
+        let valueVar = Var("value", typeof<'Val>)
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let argExpr (arg : ParameterInfo) = 
+            Expr.Call(Expr.Var(ctxVar), argInfo.MakeGenericMethod(arg.ParameterType), [ Expr.Value(arg.Name) ])        
+        let args = 
+            methodInfo.GetParameters()
+            |> Array.map argExpr
+            |> Array.toList        
+        let expr = 
+            Expr.Lambda
+                (ctxVar, Expr<'Val -> 'Res>.Lambda(valueVar, Expr.Call(Expr.Var(valueVar), methodInfo, args)))
+        Sync(typeof<'Val>, typeof<'Res>, expr)
+
+    let private genPropertyResolve<'Val, 'Res> (typeInfo: TypeInfo) property = 
+        let valueVar = Var("value", typeof<'Val>)
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let expr = 
+            Expr.Lambda
+                (ctxVar, 
+                 Expr<'Val -> 'Res>.Lambda(valueVar, Expr.PropertyGet(Expr.Var(valueVar), property)))
+        Sync(typeof<'Val>, typeof<'Res>, expr)
+            
+    let defaultResolve<'Val, 'Res> (fieldName : string) : Resolve = 
+        let typeInfo = typeof<'Val>.GetTypeInfo()
+        let property = typeInfo.GetDeclaredProperty(fieldName, ignoreCase = true)
+        match property with
+        | null -> 
+            let methodInfo = typeInfo.GetDeclaredMethod(fieldName, ignoreCase = true)
+            genMethodResolve<'Val, 'Res> typeInfo methodInfo            
+        | p -> genPropertyResolve<'Val, 'Res> typeInfo p
     
     type Define private () = 
         
@@ -1313,7 +1434,10 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { ObjectDefinition.Name = name
                      Description = description
-                     FieldsFn = lazy (fieldsFn() |> List.map (fun f -> f.Name, f) |> Map.ofList)
+                     FieldsFn = 
+                         lazy (fieldsFn()
+                               |> List.map (fun f -> f.Name, f)
+                               |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
@@ -1322,7 +1446,10 @@ module SchemaDefinitions =
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> = 
             upcast { ObjectDefinition.Name = name
                      Description = description
-                     FieldsFn = lazy (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
+                     FieldsFn = 
+                         lazy (fields
+                               |> List.map (fun f -> f.Name, f)
+                               |> Map.ofList)
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
         
@@ -1339,99 +1466,113 @@ module SchemaDefinitions =
               FieldsFn = fun () -> fields |> List.toArray }
         
         /// Single field defined inside either object types or interfaces
+        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> = 
+            upcast { FieldDefinition.Name = name
+                     Description = description
+                     TypeDef = typedef
+                     Resolve = defaultResolve<'Val, 'Res> name
+                     Args = defaultArg args [] |> Array.ofList
+                     DeprecationReason = deprecationReason
+                     Execute = Unchecked.defaultof<ExecuteField> }
+        
+        /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
-                     Type = typedef
-                     Resolve = defaultResolve<'Val, 'Res> name
+                     TypeDef = typedef
+                     Resolve = Undefined
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
-        static member Field(name : string, typedef : #OutputDef<'Res>, resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
+        static member Field(name : string, typedef : #OutputDef<'Res>, 
+                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
-                     Type = typedef
-                     Resolve = fun ctx value -> async { return (resolve ctx value) }
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
-                            resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
+                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> async { return (resolve ctx value) }
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            resolve : ResolveFieldContext -> 'Val -> 'Res) : FieldDef<'Val> = 
+                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> async { return (resolve ctx value) }
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            resolve : ResolveFieldContext -> 'Val -> 'Res, deprecationReason : string) : FieldDef<'Val> = 
+                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
+                            deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> async { return (resolve ctx value) }
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
-                                 resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
-                     Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value
+                     TypeDef = typedef
+                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value
+                     TypeDef = typedef
+                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>) : FieldDef<'Val> = 
+                                 args : InputFieldDef list, 
+                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value
+                     TypeDef = typedef
+                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
                      Execute = Unchecked.defaultof<ExecuteField> }
         
         /// Single field defined inside either object types or interfaces
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 args : InputFieldDef list, resolve : ResolveFieldContext -> 'Val -> Async<'Res>, 
+                                 args : InputFieldDef list, 
+                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
-                     Type = typedef
-                     Resolve = fun ctx value -> resolve ctx value
+                     TypeDef = typedef
+                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1439,7 +1580,7 @@ module SchemaDefinitions =
         static member Input(name : string, schema : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef = 
             upcast { InputFieldDefinition.Name = name
                      Description = description
-                     Type = schema
+                     TypeDef = schema
                      DefaultValue = defaultValue
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
         

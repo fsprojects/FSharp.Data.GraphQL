@@ -27,7 +27,7 @@ let TypeMetaFieldDef =
     args = [
         { Name = "name"
           Description = None
-          Type = String
+          TypeDef = String
           DefaultValue = None
           ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
     ],
@@ -64,19 +64,21 @@ let private coerceVariables (schema: #ISchema) (variables: VariableDefinition li
             let variableName = vardef.VariableName
             Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
 
-let objectData(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
+let objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
     match tryFindDef ctx.Schema parentDef field with
     | Some fdef ->
         { Identifier = field.AliasOrName
           Kind = ResolveValue
           ParentDef = parentDef
+          ReturnDef = fdef.TypeDef
           Definition = fdef
           Ast = field
-          Include = includer }
+          Include = includer 
+          IsNullable = false }
     | None ->
         raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
 
-let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer =
+let rec abstractionInfo (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
     match typeCondition with
     | None ->
@@ -86,11 +88,13 @@ let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: F
             | Some fdef ->
                 let data = 
                     { Identifier = field.AliasOrName
-                      ParentDef = parentDef
+                      ParentDef = parentDef :?> OutputDef
+                      ReturnDef = fdef.TypeDef
                       Definition = fdef
                       Ast = field
                       Kind = ResolveAbstraction Map.empty
-                      Include = includer }
+                      Include = includer 
+                      IsNullable = false }
                 Some (objDef.Name, data)
             | None -> None)
         |> Map.ofArray
@@ -101,17 +105,19 @@ let rec abstractionData (ctx:PlanningContext) (parentDef: AbstractDef) (field: F
             | Some fdef ->
                 let data = 
                     { Identifier = field.AliasOrName
-                      ParentDef = parentDef
+                      ParentDef = parentDef  :?> OutputDef
+                      ReturnDef = fdef.TypeDef
                       Definition = fdef
                       Ast = field
                       Kind = ResolveAbstraction Map.empty
-                      Include = includer }
+                      Include = includer 
+                      IsNullable = false }
                 Map.ofList [ objDef.Name, data ]
             | None -> Map.empty
         | None -> 
             match ctx.Schema.TryFindType typeName with
             | Some (Abstract abstractDef) -> 
-                abstractionData ctx abstractDef field None includer
+                abstractionInfo ctx abstractDef field None includer
             | _ ->
                 let pname = parentDef :?> NamedDef
                 raise (GraphQLException (sprintf "There is no object type named '%s' that is a possible type of '%s'" typeName pname.Name))
@@ -130,7 +136,7 @@ let private directiveIncluder (directive: Directive) : Includer =
 
 let incl: Includer = fun _ -> true
 let excl: Includer = fun _ -> false
-let private getIncluder (directives: Directive list) topIncluder : Includer =
+let private getIncluder (directives: Directive list) parentIncluder : Includer =
     directives
     |> List.fold (fun acc directive ->
         match directive.Name with
@@ -138,7 +144,7 @@ let private getIncluder (directives: Directive list) topIncluder : Includer =
             fun vars -> acc vars && not(directiveIncluder directive vars)
         | "include" -> 
             fun vars -> acc vars && (directiveIncluder directive vars)
-        | _ -> acc) topIncluder
+        | _ -> acc) parentIncluder
 
 let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: ObjectDef) = 
     match fragment.TypeCondition with
@@ -150,39 +156,34 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
                 
-let rec private plan (ctx: PlanningContext) (info) (typedef: TypeDef) : ExecutionPlanInfo =
-    match typedef with
-    | Leaf leafDef -> planLeaf ctx info leafDef
-    | Object objDef -> planSelection ctx { info with ParentDef = objDef } info.Ast.SelectionSet (ref [])
-    | Nullable innerDef -> plan ctx info innerDef
-    | List innerDef -> planList ctx info innerDef
-    | Abstract abstractDef -> planAbstraction ctx { info with ParentDef = abstractDef } info.Ast.SelectionSet (ref []) None
-    | _ -> failwithf "Unexpected value of typedef: %O" typedef
+let rec private plan (ctx: PlanningContext) (info) : ExecutionInfo =
+    match info.ReturnDef with
+    | Leaf _ -> info
+    | Object _ -> planSelection ctx info info.Ast.SelectionSet (ref [])
+    | Nullable returnDef -> 
+        let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }
+        { inner with IsNullable = true}
+    | List returnDef -> 
+        let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }
+        { info with Kind = ResolveCollection inner }
+    | Abstract _ -> planAbstraction ctx info info.Ast.SelectionSet (ref []) None
 
-and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection list) visitedFragments : ExecutionPlanInfo = 
-    let retrieveFragmentFields ctx visitedFragments fields innerData (fragment: FragmentDefinition) =
-        // retrieve fragment data just as it was normal selection set
-        let fragmentInfo = planSelection ctx innerData fragment.SelectionSet visitedFragments
-        match fragmentInfo.Kind with
-        | SelectFields fragmentFields ->
-            // filter out already existing fields
-            List.mergeBy (fun field -> field.Identifier) fields fragmentFields
-        | kind -> failwithf "Unexpected value of fragmentInfo.Kind: %A" kind
-    let parentDef = downcast info.ParentDef
+and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection list) visitedFragments : ExecutionInfo = 
+    let parentDef = downcast info.ReturnDef
     let plannedFields =
         selectionSet
-        |> List.fold(fun (fields: ExecutionPlanInfo list) selection ->
+        |> List.fold(fun (fields: ExecutionInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives info.Include
-            let innerData = { info with Include = includer }
+            let updatedInfo = { info with Include = includer }
             match selection with
             | Field field ->
                 let identifier = field.AliasOrName
                 if fields |> List.exists (fun f -> f.Identifier = identifier) 
                 then fields
                 else 
-                    let data = objectData(ctx, parentDef, field, includer)
-                    let executionPlan = plan ctx data data.Definition.Type
+                    let innerInfo = objectInfo(ctx, parentDef, field, includer)
+                    let executionPlan = plan ctx innerInfo 
                     fields @ [executionPlan]    // unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
@@ -192,40 +193,33 @@ and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
-                        retrieveFragmentFields ctx visitedFragments fields innerData fragment
+                        // retrieve fragment data just as it was normal selection set
+                        let fragmentInfo = planSelection ctx updatedInfo fragment.SelectionSet visitedFragments
+                        let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                        // filter out already existing fields
+                        List.mergeBy (fun field -> field.Identifier) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
-                retrieveFragmentFields ctx visitedFragments fields innerData fragment
+                 // retrieve fragment data just as it was normal selection set
+                 let fragmentInfo = planSelection ctx updatedInfo fragment.SelectionSet visitedFragments
+                 let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                 // filter out already existing fields
+                 List.mergeBy (fun field -> field.Identifier) fields fragmentFields
             | _ -> fields
         ) []
     { info with Kind = SelectFields plannedFields }
-
-and private planList (ctx: PlanningContext) (info) (innerDef: TypeDef) : ExecutionPlanInfo =
-    { info with Kind = ResolveCollection(plan ctx info innerDef) }
-
-and private planLeaf (_ctx: PlanningContext) (info) (_leafDef: LeafDef) : ExecutionPlanInfo =
-    info
-
-and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionPlanInfo =
-    let retrieveFragmentFields ctx visitedFragments fields innerData (fragment: FragmentDefinition) =
-        // retrieve fragment data just as it was normal selection set
-        let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
-        match fragmentInfo.Kind with
-        | ResolveAbstraction fragmentFields ->
-            // filter out already existing fields
-            Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields
-        | kind -> failwithf "Unexpected value of fragmentInfo.Kind: %A" kind 
-    let parentDef = downcast info.ParentDef
+    
+and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionInfo =
     let plannedTypeFields =
         selectionSet
-        |> List.fold(fun (fields: Map<string, ExecutionPlanInfo list>) selection ->
+        |> List.fold(fun (fields: Map<string, ExecutionInfo list>) selection ->
             let includer = getIncluder selection.Directives info.Include
             let innerData = { info with Include = includer }
             match selection with
             | Field field ->
-                abstractionData ctx parentDef field typeCondition includer
-                |> Map.map (fun _typeName data -> [ plan ctx data data.Definition.Type ])
-                |> Map.merge (fun _typeName oldVal newVal -> oldVal @ newVal) fields
+                abstractionInfo ctx (info.ReturnDef :?> AbstractDef) field typeCondition includer
+                |> Map.map (fun typeName data -> [ plan ctx data ])
+                |> Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
@@ -242,18 +236,18 @@ and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selectio
     { info with Kind = ResolveAbstraction plannedTypeFields }
 
 let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
-    let data = { 
+    // create artificial plan info to start with
+    let rootInfo = { 
         Identifier = null
-        Kind = Unchecked.defaultof<ExecutionPlanKind>
+        Kind = Unchecked.defaultof<ExecutionInfoKind>
         Ast = Unchecked.defaultof<Field>
         ParentDef = ctx.RootDef
+        ReturnDef = ctx.RootDef
         Definition = Unchecked.defaultof<FieldDef> 
-        Include = incl }
-    let resolvedInfo = planSelection ctx data operation.SelectionSet (ref [])
-    let topFields =
-        match resolvedInfo.Kind with
-        | SelectFields topFields -> topFields
-        | kind -> failwithf "Unexpected value of resolvedInfo.Kind: %O" kind 
+        Include = incl 
+        IsNullable = false }
+    let resolvedInfo = planSelection ctx rootInfo operation.SelectionSet (ref [])
+    let (SelectFields(topFields)) = resolvedInfo.Kind
     match operation.OperationType with
     | Query ->
         { Operation = operation 
