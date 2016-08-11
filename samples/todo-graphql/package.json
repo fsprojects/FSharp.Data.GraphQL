@@ -1,10 +1,11 @@
 {
   "private": true,
   "dependencies": {
-    "core-js": "^2.1.0",
-    "fable-core": "^0.5.2",
     "classnames": "^2.2.5",
+    "core-js": "^2.1.0",
     "director": "^1.2.8",
+    "fable-core": "^0.5.2",
+    "isomorphic-fetch": "^2.2.1",
     "react": "^15.1.0",
     "react-dom": "^15.1.0",
     "requirejs": "^2.1.22",

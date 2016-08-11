@@ -11,7 +11,7 @@ NUGET
     FSharp.Data.GraphQL.Server (0.0.1-beta)
       FParsec (>= 1.0.2)
       Hopac (>= 0.2.1)
-    Hopac (0.2.1)
+    Hopac (0.3.7)
       FSharp.Core (>= 3.1.2.5)
     Microsoft.Diagnostics.Tracing.TraceEvent (1.0.41) - framework: >= net40, dnx451
     Microsoft.NETCore.Platforms (1.0.1) - framework: dnxcore50, netstandard10, netstandard12, netstandard13, >= netstandard15
