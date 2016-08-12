@@ -75,6 +75,20 @@ module Util =
                 genType defctx itype t)
         typeDefinitions
 
+    let createPrimitiveMethod<'T> (serverUrl: string) (opName: string) (opField: IntrospectionField)
+                                  (args: ProvidedParameter list) (returnType: Type) =
+        let m = ProvidedMethod(firstToUpper opField.Name, args, returnType, IsStaticMethod=true)
+        m.InvokeCode <-
+            let opField = opField.Name
+            let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+            fun argValues ->
+            <@@
+                (%%makeExprArray argValues: obj[])
+                |> buildQuery opField "" argNames
+                |> launchRequest serverUrl opName opField unbox<'T>
+            @@>
+        m
+
     let createMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
                      (serverUrl: string) (opName: string) (opField: IntrospectionField) =
         let findType (t: IntrospectionTypeRef) =
@@ -85,46 +99,47 @@ module Util =
             opField.Args
             |> Seq.map (fun x -> ProvidedParameter(x.Name, findType x.Type))
             |> Seq.toList
-        let m = ProvidedMethod(firstToUpper opField.Name, args, asyncType, IsStaticMethod=true)
-        let sargs = [ProvidedStaticParameter("content", typeof<string>)]
-        m.DefineStaticParameters(sargs, fun methName sargValues ->
-            match sargValues with 
-            | [| :? string as resFields |] ->
-                // This will fail if the query is not well formed
-                do Parser.parse resFields |> ignore
-                let opField = opField.Name
-                let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
-                let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
-                m2.InvokeCode <-
-                    if resType.Name = "FSharpOption`1" then
-                        fun argValues ->
-                        <@@
-                            (%%makeExprArray argValues: obj[])
-                            |> buildQuery opField resFields argNames
-                            |> launchRequest serverUrl opName opField Option.ofObj
-                        @@>
-                    // TODO: It seems there're problems when casting Async<'T> to a primitive type,
-                    // we may need to do this for other primitive types. Attempts to isolate the continuation
-                    // make it fail when building the expression
-                    elif resType.FullName = "System.Boolean" then
-                        fun argValues ->
-                        <@@
-                            (%%makeExprArray argValues: obj[])
-                            |> buildQuery opField resFields argNames
-                            |> launchRequest serverUrl opName opField unbox<bool>
-                        @@>                        
-                    else
-                        fun argValues ->
-                        <@@
-                            (%%makeExprArray argValues: obj[])
-                            |> buildQuery opField resFields argNames
-                            |> launchRequest serverUrl opName opField id
-                        @@>
-                tdef.AddMember m2
-                m2
-            | _ -> failwith "unexpected parameter values")
-        m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
-        m
+        // It seems there're problems when casting Async<'T> to a primitive type in the invoke expresion,
+        // so the casting needs to be explicit (also, we don't need to have a static argument in this case).
+        if resType = typeof<bool>
+        then createPrimitiveMethod<bool> serverUrl opName opField args asyncType
+        elif resType = typeof<int>
+        then createPrimitiveMethod<int> serverUrl opName opField args asyncType
+        elif resType = typeof<float>
+        then createPrimitiveMethod<float> serverUrl opName opField args asyncType
+        elif resType = typeof<string>
+        then createPrimitiveMethod<string> serverUrl opName opField args asyncType
+        else
+            let m = ProvidedMethod(firstToUpper opField.Name, args, asyncType, IsStaticMethod=true)
+            let sargs = [ProvidedStaticParameter("content", typeof<string>)]
+            m.DefineStaticParameters(sargs, fun methName sargValues ->
+                match sargValues with 
+                | [| :? string as resFields |] ->
+                    // This will fail if the query is not well formed
+                    do Parser.parse resFields |> ignore
+                    let opField = opField.Name
+                    let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+                    let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
+                    m2.InvokeCode <-
+                        if resType.Name = "FSharpOption`1" then
+                            fun argValues ->
+                            <@@
+                                (%%makeExprArray argValues: obj[])
+                                |> buildQuery opField resFields argNames
+                                |> launchRequest serverUrl opName opField Option.ofObj
+                            @@>                      
+                        else
+                            fun argValues ->
+                            <@@
+                                (%%makeExprArray argValues: obj[])
+                                |> buildQuery opField resFields argNames
+                                |> launchRequest serverUrl opName opField id
+                            @@>
+                    tdef.AddMember m2
+                    m2
+                | _ -> failwith "unexpected parameter values")
+            m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
+            m
 
     let createMethods (tdef: ProvidedTypeDefinition) (serverUrl: string)
                       (schema: IntrospectionSchema) (schemaTypes: Map<string,TypeReference>)

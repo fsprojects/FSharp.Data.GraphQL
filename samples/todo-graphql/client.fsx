@@ -18,7 +18,7 @@ let [<Literal>] taskId = "cfd81e81-18f4-45b9-bd69-74c84fb1eaa2"
 type MyClient = GraphQLProvider<serverUrl>
 
 async {
-    let! res = MyClient.Mutations.Completed<"">(taskId, true)
+    let! res = MyClient.Mutations.Completed(taskId, true)
     printfn "Success: %b" res
 } |> Async.StartImmediate
 
