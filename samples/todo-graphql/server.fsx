@@ -10,6 +10,8 @@
 #r "../../packages/FSharp.Data.GraphQL.Server/lib/FSharp.Data.GraphQL.dll"
 
 open System
+open System.IO
+open Newtonsoft.Json
 
 type Task = 
     { Id : string
@@ -17,13 +19,55 @@ type Task =
       Children : Task list
       Completed : bool }
 
-let tasks = 
-    [ { Id = "cfd81e81-18f4-45b9-bd69-74c84fb1eaa2"
-        Description = "My first task"
-        Children = []
-        Completed = false } ]
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Task =
+    let private lockObj = obj()
 
-let getTask id = tasks |> List.tryFind (fun h -> h.Id = id)        
+    let private filePath =
+        Path.Combine(__SOURCE_DIRECTORY__, "data", "tasks.json")
+
+    let mutable private rootTask =
+        JsonConvert.DeserializeObject<Task>(File.ReadAllText(filePath))
+
+    let tryFind id =
+        let rec tryFind id (task: Task) =
+            if task.Id = id then Some task else
+            List.tryPick (tryFind id) task.Children 
+        tryFind id rootTask
+
+    type private UpdateStatus =
+        | NotFound
+        | FoundButNotUpdated
+        | FoundAndUpdated of Task
+
+    let tryUpdate id (f: Task->Task option) =
+        let rec tryUpdate id (f: Task->Task option) (task: Task) =
+            if task.Id = id
+            then
+                match f task with
+                | Some t -> FoundAndUpdated t
+                | None -> FoundButNotUpdated
+            else
+            (NotFound, task.Children)
+            ||> List.fold (fun status child ->
+                match status with
+                | NotFound ->
+                    match tryUpdate id f child with
+                    | FoundAndUpdated child ->
+                        let children =
+                            task.Children
+                            |> List.map (fun c -> if c.Id = child.Id then child else c)
+                        FoundAndUpdated { task with Children = children }
+                    | status -> status
+                | status -> status)
+        match tryUpdate id f rootTask with
+        | FoundAndUpdated updatedRootTask ->
+            lock lockObj (fun () ->
+                // Persistence
+                File.WriteAllText(filePath, JsonConvert.SerializeObject rootTask)
+                rootTask <- updatedRootTask)
+            true
+        | _ -> false
 
 // Schema definition
 open FSharp.Data.GraphQL
@@ -51,13 +95,44 @@ let rec TaskType =
 
 let Query =
   Define.Object(
-    name = "Query",
-    fields = [
-        Define.Field("task", Nullable TaskType, "Gets task", [ Define.Input("id", String) ],
-                     fun ctx () -> getTask (ctx.Arg("id")))
+      "Query", [
+        Define.Field(
+            "task", Nullable TaskType, "Gets task",
+            [ Define.Input("id", String) ],
+            fun ctx () -> ctx.Arg("id") |> Task.tryFind)
+      ])
+
+let Mutation =
+  Define.Object(
+    "Mutation", [
+        Define.Field(
+            "completed", Boolean, "Sets task as (not) completed. Returns true if successful",
+            [ Define.Input("id", String); Define.Input("completed", Boolean) ],
+            fun ctx () -> Task.tryUpdate (ctx.Arg "id") (fun t -> Some { t with Completed = ctx.Arg "completed" }))
+        Define.Field(
+            "addChild", Boolean, "Add child. Returns true if successful",
+            [ Define.Input("parentId", String); Define.Input("id", String); Define.Input("description", String) ],
+            fun ctx () ->
+                let childId: string = ctx.Arg "id"
+                let childDescription: string = ctx.Arg "description"
+                Task.tryUpdate (ctx.Arg "parentId") (fun t ->
+                    if t.Children |> List.exists (fun c -> c.Id = childId) |> not
+                    then
+                        let newChild = { Id=childId; Description=childDescription; Completed=false; Children=[]}
+                        Some { t with Children = newChild::t.Children }
+                    else None))
+        Define.Field(
+            "removeChild", Boolean, "Add child. Returns true if successful",
+            [ Define.Input("parentId", String); Define.Input("id", String) ],
+            fun ctx () ->
+                let childId: string = ctx.Arg "id"
+                Task.tryUpdate (ctx.Arg "parentId") (fun t ->
+                    if t.Children |> List.exists (fun c -> c.Id = childId)
+                    then Some { t with Children = t.Children |> List.filter (fun c -> c.Id = childId) }
+                    else None))
     ])
 
-let schema = Schema(Query)
+let schema = Schema(Query, Mutation)
 
 // server initialization
 open Suave
