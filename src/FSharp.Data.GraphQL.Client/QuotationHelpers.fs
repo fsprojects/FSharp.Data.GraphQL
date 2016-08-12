@@ -126,35 +126,48 @@ module QuotationHelpers =
         | _ ->
             (token :?> JValue).Value
 
-    let launchQuery (serverUrl: string) (queryName: string) (cont: obj->'T) (query: string) =
+    let launchRequest (serverUrl: string) (opName: string) (opField: string) (cont: obj->'T) (reqBody: string) =
         async {
             use client = new WebClient()
-            let queryJson = Map["query", query] |> JsonConvert.SerializeObject
+            client.Headers.Set("content-type", "application/json")
+            let queryJson =
+                // Options are problematic within quotations so we just use null here
+                if opName <> null
+                then opName + reqBody
+                else reqBody
+//            printfn "%s" queryJson
+            let queryJson =
+                dict [
+                    "operationName", if opName <> null then opName else "query"
+                    "query", queryJson
+                    "variable", "null"
+                ] |> JsonConvert.SerializeObject
             let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson) |> Async.AwaitTask
+//            printfn "%s" json
             let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
             if res.ContainsKey("errors") then
                 res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith
             let data =
-                // Options are problematic within quotations so we just use null here
-                if queryName <> null
-                then (res.["data"] :?> IDictionary<string,obj>).[queryName]
+                if opField <> null
+                then (res.["data"] :?> IDictionary<string,obj>).[opField]
                 else res.["data"]
             return cont(data)
         }
 
-    let buildQuery (queryName: string) (queryFields: string)
+    let buildQuery (queryName: string) (resFields: string)
                    (argNames: string[]) (argValues: obj[]) =
         let queryFields, queryFragments =
+            if String.IsNullOrWhiteSpace resFields then "", "" else
             let mutable i = 0
             let mutable openBraces = 0
             let mutable closeBraces = 0
             while closeBraces = 0 || closeBraces < openBraces do
-                match queryFields.Chars(i) with
+                match resFields.Chars(i) with
                 | '{' -> openBraces <- openBraces + 1
                 | '}' -> closeBraces <- closeBraces + 1
                 | _ -> ()
                 i <- i + 1
-            queryFields.Substring(0, i), queryFields.Substring(i)
+            resFields.Substring(0, i), resFields.Substring(i)
         Seq.zip argNames argValues
         |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (JsonConvert.SerializeObject v))
         |> String.concat ", "

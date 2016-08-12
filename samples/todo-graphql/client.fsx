@@ -1,4 +1,4 @@
-﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
+﻿#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic
@@ -16,6 +16,11 @@ let [<Literal>] queryFields = "{ id, description, completed }"
 let [<Literal>] taskId = "cfd81e81-18f4-45b9-bd69-74c84fb1eaa2"
 
 type MyClient = GraphQLProvider<serverUrl>
+
+async {
+    let! res = MyClient.Mutations.Completed<"">(taskId, true)
+    printfn "Success: %b" res
+} |> Async.StartImmediate
 
 async {
     let! task = MyClient.Queries.Task<queryFields>(taskId)
