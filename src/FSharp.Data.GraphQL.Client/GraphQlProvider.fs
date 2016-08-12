@@ -75,64 +75,92 @@ module Util =
                 genType defctx itype t)
         typeDefinitions
 
+    let createPrimitiveMethod<'T> (serverUrl: string) (opName: string) (opField: IntrospectionField)
+                                  (args: ProvidedParameter list) (returnType: Type) =
+        let m = ProvidedMethod(firstToUpper opField.Name, args, returnType, IsStaticMethod=true)
+        m.InvokeCode <-
+            let opField = opField.Name
+            let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+            fun argValues ->
+            <@@
+                (%%makeExprArray argValues: obj[])
+                |> buildQuery opField "" argNames
+                |> launchRequest serverUrl opName opField unbox<'T>
+            @@>
+        m
+
     let createMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
-                           (serverUrl: string) (query: IntrospectionField) =
+                     (serverUrl: string) (opName: string) (opField: IntrospectionField) =
         let findType (t: IntrospectionTypeRef) =
             TypeReference.findType t schemaTypes
-        let resType = findType query.Type
+        let resType = findType opField.Type
         let asyncType = typedefof<Async<obj>>.MakeGenericType(resType)
         let args =
-            query.Args
+            opField.Args
             |> Seq.map (fun x -> ProvidedParameter(x.Name, findType x.Type))
             |> Seq.toList
-        let m = ProvidedMethod(firstToUpper query.Name, args, asyncType, IsStaticMethod=true)
-        let sargs = [ProvidedStaticParameter("query", typeof<string>)]
-        m.DefineStaticParameters(sargs, fun methName sargValues ->
-            match sargValues with 
-            | [| :? string as queryFields |] ->
-                // This will fail if the query is not well formed
-                do Parser.parse queryFields |> ignore
-                let queryName = query.Name
-                let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
-                let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true) 
-                m2.InvokeCode <-
-                    if resType.Name = "FSharpOption`1" then
-                        fun argValues ->
-                        <@@
-                            (%%makeExprArray argValues: obj[])
-                            |> buildQuery queryName queryFields argNames
-                            |> launchQuery serverUrl queryName Option.ofObj
-                        @@>
-                    else
-                        fun argValues ->
-                        <@@
-                            (%%makeExprArray argValues: obj[])
-                            |> buildQuery queryName queryFields argNames
-                            |> launchQuery serverUrl queryName id
-                        @@>
-                tdef.AddMember m2
-                m2
-            | _ -> failwith "unexpected parameter values")
-        m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
-        m
+        // It seems there're problems when casting Async<'T> to a primitive type in the invoke expresion,
+        // so the casting needs to be explicit (also, we don't need to have a static argument in this case).
+        if resType = typeof<bool>
+        then createPrimitiveMethod<bool> serverUrl opName opField args asyncType
+        elif resType = typeof<int>
+        then createPrimitiveMethod<int> serverUrl opName opField args asyncType
+        elif resType = typeof<float>
+        then createPrimitiveMethod<float> serverUrl opName opField args asyncType
+        elif resType = typeof<string>
+        then createPrimitiveMethod<string> serverUrl opName opField args asyncType
+        else
+            let m = ProvidedMethod(firstToUpper opField.Name, args, asyncType, IsStaticMethod=true)
+            let sargs = [ProvidedStaticParameter("content", typeof<string>)]
+            m.DefineStaticParameters(sargs, fun methName sargValues ->
+                match sargValues with 
+                | [| :? string as resFields |] ->
+                    // This will fail if the query is not well formed
+                    do Parser.parse resFields |> ignore
+                    let opField = opField.Name
+                    let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+                    let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
+                    m2.InvokeCode <-
+                        if resType.Name = "FSharpOption`1" then
+                            fun argValues ->
+                            <@@
+                                (%%makeExprArray argValues: obj[])
+                                |> buildQuery opField resFields argNames
+                                |> launchRequest serverUrl opName opField Option.ofObj
+                            @@>                      
+                        else
+                            fun argValues ->
+                            <@@
+                                (%%makeExprArray argValues: obj[])
+                                |> buildQuery opField resFields argNames
+                                |> launchRequest serverUrl opName opField id
+                            @@>
+                    tdef.AddMember m2
+                    m2
+                | _ -> failwith "unexpected parameter values")
+            m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
+            m
 
     let createMethods (tdef: ProvidedTypeDefinition) (serverUrl: string)
                       (schema: IntrospectionSchema) (schemaTypes: Map<string,TypeReference>)
-                      (opType: IntrospectionTypeRef option) (wrapperName: string) =
+                      (opType: IntrospectionTypeRef option) =
         match opType with
         | Some op when op.Name.IsSome ->
+            let wrapperName, opPrefix =
+                if obj.ReferenceEquals(schema.QueryType, opType.Value) then "Queries", "query "
+                elif obj.ReferenceEquals(schema.MutationType, opType) then "Mutations", "mutation "
+                elif obj.ReferenceEquals(schema.SubscriptionType, opType) then "Subscriptions", "subscription "
+                else failwith "Operation doesn't correspond to any operation in the schema"
             let opName = op.Name.Value
-            let wrapper = ProvidedTypeDefinition(wrapperName, Some typeof<obj>)
             schema.Types
-            |> Seq.collect (fun t ->
-                if t.Name = opName then defaultArg t.Fields [||] else [||])
-            |> Seq.map (createMethod wrapper schemaTypes serverUrl)
-            |> Seq.toList
-            |> function
-            | [] -> ()
-            | ops ->
-                wrapper.AddMembers ops
-                tdef.AddMember wrapper
+            |> Seq.iter (fun t ->
+                if t.Name = opName && t.Fields.IsSome && not (Array.isEmpty t.Fields.Value) then
+                    let wrapper = ProvidedTypeDefinition(wrapperName, Some typeof<obj>)
+                    t.Fields.Value
+                    |> Seq.map (createMethod wrapper schemaTypes serverUrl (opPrefix + opName))
+                    |> Seq.toList
+                    |> wrapper.AddMembers
+                    tdef.AddMember wrapper)
         | _ -> ()
 
 type internal ProviderSchemaConfig =
@@ -168,14 +196,14 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                     |> typesWrapper.AddMembers
                     tdef.AddMember typesWrapper
                     // Static methods
-                    Util.createMethods tdef serverUrl schema schemaTypes (Some schema.QueryType) "Queries"
-                    Util.createMethods tdef serverUrl schema schemaTypes schema.MutationType "Mutations"
-                    Util.createMethods tdef serverUrl schema schemaTypes schema.SubscriptionType "Subscriptions"
+                    Util.createMethods tdef serverUrl schema schemaTypes (Some schema.QueryType)
+                    Util.createMethods tdef serverUrl schema schemaTypes schema.MutationType
+                    Util.createMethods tdef serverUrl schema schemaTypes schema.SubscriptionType
                     // Generic query method
                     let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>)
                     m.IsStaticMethod <- true
                     m.InvokeCode <- fun argValues ->
-                        <@@ launchQuery serverUrl null id (%%argValues.[0]: string) @@>
+                        <@@ launchRequest serverUrl null null id (%%argValues.[0]: string) @@>
                     tdef.AddMember m
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
