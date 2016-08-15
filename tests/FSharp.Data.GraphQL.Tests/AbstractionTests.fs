@@ -57,7 +57,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         ])
     let schema = Schema(
         query = Define.Object("Query", fun () -> [
-            Define.Field("pets", ListOf PetType, fun _ _ -> upcast [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
+            Define.Field("pets", ListOf PetType, fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
         ]), 
         config = { SchemaConfig.Default with Types = [CatType; DogType] })
     let query = """{
@@ -102,7 +102,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     let PetType = Define.Union("Pet", [ DogType; CatType ], resolvePet)
     let schema = Schema(
         query = Define.Object("Query", fun () -> [
-            Define.Field("pets", ListOf PetType, fun _ _ -> upcast [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ])
+            Define.Field("pets", ListOf PetType, fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ])
         ]))
     let query = """{
       pets {

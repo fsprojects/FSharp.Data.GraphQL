@@ -1,11 +1,11 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
 #r "../../packages/System.Runtime/lib/net462/System.Runtime.dll"
-#r "../../bin/FSharp.Data.GraphQL/Hopac.dll"
-#r "../../bin/FSharp.Data.GraphQL/Hopac.Core.dll"
-#r "../../bin/FSharp.Data.GraphQL/Hopac.Platform.dll"
-#r "../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.Shared.dll"
-#r "../../bin/FSharp.Data.GraphQL/FSharp.Data.GraphQL.dll"
+#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.dll"
+#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.Core.dll"
+#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.Platform.dll"
+#r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Shared.dll"
+#r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.dll"
 
 open System
 

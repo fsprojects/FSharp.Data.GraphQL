@@ -331,7 +331,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -418,7 +418,7 @@ and EnumDefinition<'Val> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -475,7 +475,7 @@ and [<CustomEquality; NoComparison>] ObjectDefinition<'Val> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -599,7 +599,7 @@ and [<CustomEquality; NoComparison>] InterfaceDefinition<'Val> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -671,7 +671,7 @@ and [<CustomEquality; NoComparison>] UnionDefinition<'In, 'Out> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -713,26 +713,26 @@ and ListOfDef =
         inherit OutputDef
     end
 
-and ListOfDef<'Val> = 
+and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> = 
     interface
         abstract OfType : TypeDef<'Val>
-        inherit TypeDef<'Val seq>
-        inherit InputDef<'Val seq>
-        inherit OutputDef<'Val seq>
+        inherit TypeDef<'Seq>
+        inherit InputDef<'Seq>
+        inherit OutputDef<'Seq>
     end
 
-and ListOfDefinition<'Val> = 
+and ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = 
     { OfType : TypeDef<'Val> }
     
     interface InputDef with
-        member __.InputType = typeof<'Val seq>
+        member __.InputType = typeof<'Seq>
 
     interface TypeDef with
         member x.MakeNullable() = 
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_, _> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -741,7 +741,7 @@ and ListOfDefinition<'Val> =
     interface ListOfDef with
         member x.OfType = upcast x.OfType
     
-    interface ListOfDef<'Val> with
+    interface ListOfDef<'Val, 'Seq> with
         member x.OfType = x.OfType
     
     override x.ToString() = 
@@ -772,7 +772,7 @@ and NullableDefinition<'Val> =
     interface TypeDef with
         member x.MakeNullable() = upcast x
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
         
     interface OutputDef with
@@ -821,7 +821,7 @@ and InputObjectDefinition<'Val> =
             let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
         member x.MakeList() = 
-            let list: ListOfDefinition<_> = { OfType = x }
+            let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
 
 and ExecuteInput = Map<string,obj> -> Value -> obj
@@ -1080,7 +1080,7 @@ module SchemaDefinitions =
         | _ -> None
     
     let Nullable(innerDef : #TypeDef<'Val>) : NullableDefinition<'Val> = { OfType = innerDef }
-    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDefinition<'Val> = { OfType = innerDef }
+    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDefinition<'Val, 'Seq> = { OfType = innerDef }
     
     let (|Scalar|_|) (tdef : TypeDef) = 
         match tdef with
