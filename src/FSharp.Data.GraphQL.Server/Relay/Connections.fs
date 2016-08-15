@@ -100,4 +100,18 @@ module Connection =
         Define.Input("before", Nullable String) ]
     
     let allArgs = forwardArgs @ backwardArgs
+
+    let ofArray array =
+        let edges = 
+            array
+            |> Array.mapi (fun idx elem -> { Cursor = Cursor.ofOffset idx; Node = elem })
+        let first = if edges.Length = 0 then None else Some edges.[0].Cursor
+        let last = if edges.Length = 0 then None else Some edges.[edges.Length-1].Cursor
+        { TotalCount = Array.length array |> Some
+          PageInfo = 
+            { HasNextPage = false
+              HasPreviousPage = false
+              StartCursor = first
+              EndCursor = last }
+          Edges = edges }
     

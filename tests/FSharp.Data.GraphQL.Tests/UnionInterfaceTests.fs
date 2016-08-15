@@ -76,7 +76,7 @@ let PersonType = Define.Object(
     interfaces = [ NamedType ],
     fields = [
         Define.Field("name", String)
-        Define.Field("pets", ListOf PetType, fun _ person -> upcast person.Pets)
+        Define.Field("pets", ListOf PetType, fun _ person -> person.Pets)
         Define.Field("friends", ListOf NamedType)
     ])
 

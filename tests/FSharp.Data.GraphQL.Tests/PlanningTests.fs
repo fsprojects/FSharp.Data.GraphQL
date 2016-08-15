@@ -120,7 +120,7 @@ let ``Planning should work with parallel fragments``() =
 
 [<Fact>]
 let ``Planning should work with lists``() = 
-    let Query = Define.Object("Query", [ Define.Field("people", ListOf Person, fun _ () -> upcast people) ])
+    let Query = Define.Object("Query", [ Define.Field("people", ListOf Person, fun _ () -> people) ])
     let schema = Schema(Query)
     let query = """{
         people {
@@ -142,7 +142,7 @@ let ``Planning should work with lists``() =
 
 [<Fact>]
 let ``Planning should work with interfaces``() = 
-    let Query = Define.Object("Query", [ Define.Field("names", ListOf INamed, fun _ () -> upcast []) ])
+    let Query = Define.Object("Query", [ Define.Field("names", ListOf INamed, fun _ () -> []) ])
     let schema = Schema(query = Query, config = { SchemaConfig.Default with Types = [ Person; Animal ] })
     let query = """query Example {
         names {
@@ -173,7 +173,7 @@ let ``Planning should work with interfaces``() =
 
 [<Fact>]
 let ``Planning should work with unions``() = 
-    let Query = Define.Object("Query", [ Define.Field("names", ListOf UNamed, fun _ () -> upcast []) ])
+    let Query = Define.Object("Query", [ Define.Field("names", ListOf UNamed, fun _ () -> []) ])
     let schema = Schema(Query)
     let query = """query Example {
         names {

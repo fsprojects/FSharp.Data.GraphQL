@@ -1,7 +1,7 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL/bin/Debug/FSharp.Data.GraphQL.dll"
-#r "../../src/FSharp.Data.GraphQL.Relay/bin/Debug/FSharp.Data.GraphQL.Relay.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Server.dll"
 
 open System
 
@@ -49,7 +49,7 @@ and User = Define.Object<User>(
         Define.Field("name", String, fun _ w -> w.Name)
         Define.Field("widgets", ConnectionOf Widget, "A person's collection of widgets", Connection.allArgs, fun ctx user -> 
             let widgets = user.Widgets |> List.toArray
-            Connection.ofArray ctx widgets )])
+            Connection.ofArray widgets )])
 
 and Node = Define.Node<obj>(fun () -> [ User; Widget ])
 

@@ -93,7 +93,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let DeepDataType = Define.Object<DeepTestSubject>("DeepDataType", [
         Define.Field("a", String, (fun _ dt -> dt.a))
         Define.Field("b", String, (fun _ dt -> dt.b))
-        Define.Field("c", (ListOf String), (fun _ dt -> upcast dt.c))
+        Define.Field("c", (ListOf String), (fun _ dt -> dt.c))
     ])
     let rec DataType = Define.Object<TestSubject>("DataType", fieldsFn = fun () -> [
         Define.Field("a", String, fun _ dt -> dt.a)
