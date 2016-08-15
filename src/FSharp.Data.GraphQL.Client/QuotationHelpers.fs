@@ -110,8 +110,10 @@ module QuotationHelpers =
                 failwithf "Only projections of the form p.Prop are supported! Got %A" e
         // printfn "%A" projection
         match projection with
+        | Lambda(var, Coerce(NewTuple args,_))
         | Lambda(var, NewTuple args) ->
             List.map (translatePropGet var.Name) args
+        | Lambda(var, Coerce(arg,_))
         | Lambda(var, arg) ->
             [translatePropGet var.Name arg]
         | _ -> failwithf "Unsupported projection: %A" projection

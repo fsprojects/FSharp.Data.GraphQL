@@ -23,6 +23,7 @@ type ProvidedParameter =
     // [<CompilerMessage("Please create a ProvidedTypesContext and use ctxt.ProvidedParameter to create a provided parameter. This will help allow your type provider to target portable profiles where that makes sense. Some argument names and values may need adjusting.", 8796)>]
     new : parameterName: string * parameterType: Type * ?isOut:bool * ?optionalValue:obj -> ProvidedParameter
     member IsParamArray : bool with get,set
+    member IsReflectedDefinition : bool with get,set
 
 /// Represents a provided static parameter.
 type ProvidedStaticParameter =

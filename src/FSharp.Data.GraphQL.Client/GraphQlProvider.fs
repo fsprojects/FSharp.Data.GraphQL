@@ -114,8 +114,9 @@ module Util =
                 let resType =
                     if resType.Name = "FSharpOption`1"
                     then resType.GenericTypeArguments.[0] else resType
-                typedefof<obj->obj>.MakeGenericType(resType, typeof<obj>)
-            let projection = ProvidedParameter("projection", typeof<Expr>)
+                let funType = typedefof<obj->obj>.MakeGenericType(resType, typeof<obj>)
+                typedefof<Expr<obj>>.MakeGenericType(funType)
+            let projection = ProvidedParameter("projection", projType, IsReflectedDefinition=true)
             let m = ProvidedMethod(firstToUpper opField.Name, args@[projection], asyncType, IsStaticMethod=true)
             m.InvokeCode <-
                 let opField, argsLength = opField.Name, args.Length
@@ -124,14 +125,14 @@ module Util =
                     fun argValues ->
                         <@@
                             (%%makeExprArray (List.take argsLength argValues): obj[])
-                            |> buildQuery opField (extractFields (%%List.last argValues: Expr)) argNames
+                            |> buildQuery opField (extractFields (%%Expr.Coerce(List.last argValues, typeof<Expr>))) argNames
                             |> launchRequest serverUrl opName opField Option.ofObj
                         @@>                      
                 else
                     fun argValues ->
                         <@@
                             (%%makeExprArray argValues: obj[])
-                            |> buildQuery opField (extractFields (%%List.last argValues: Expr)) argNames
+                            |> buildQuery opField (extractFields (%%Expr.Coerce(List.last argValues, typeof<Expr>))) argNames
                             |> launchRequest serverUrl opName opField id
                         @@>
             // let sargs = [ProvidedStaticParameter("content", typeof<string>)]
