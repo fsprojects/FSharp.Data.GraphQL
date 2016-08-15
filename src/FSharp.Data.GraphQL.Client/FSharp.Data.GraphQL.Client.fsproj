@@ -45,7 +45,7 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
   </ItemGroup>
-  <ItemGroup Condition="$(DefineConstants.Contains('FABLE'))">
+  <ItemGroup>
     <Reference Include="Fable.Core">
       <HintPath>npm/node_modules/fable-core/Fable.Core.dll</HintPath>
       <Private>True</Private>

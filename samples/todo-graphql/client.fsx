@@ -1,4 +1,4 @@
-﻿#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/FSharp.Data.GraphQL.Client.dll"
+﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic
@@ -23,7 +23,8 @@ async {
 } |> Async.StartImmediate
 
 async {
-    let! task = MyClient.Queries.Task<queryFields>(taskId)
+    let projection = <@@ fun (t: MyClient.Types.Task) -> t.description, t.completed @@>
+    let! task = MyClient.Queries.Task(taskId, projection)
     match task with
     | None -> ()
     | Some task ->

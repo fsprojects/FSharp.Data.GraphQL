@@ -9,14 +9,15 @@ open System.Collections.Generic
 // open FSharp.Data.GraphQL.Introspection
 // open ProviderImplementation.ProvidedTypes
 // open Microsoft.FSharp.Core.CompilerServices
-open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
+open Microsoft.FSharp.Quotations
+open Microsoft.FSharp.Quotations.Patterns
 
 module QuotationHelpers =
     let makeExprArray (exprs: Expr list) =
         Expr.NewArray(typeof<obj>, exprs |> List.map (fun e -> Expr.Coerce(e, typeof<obj>)))
 
-    #if FABLE
+    #if FABLE_COMPILER
     open Fable
     open Fable.Core
     open Fable.Core.JsInterop
@@ -96,6 +97,25 @@ module QuotationHelpers =
     open System.Net
     open Newtonsoft.Json
     open Newtonsoft.Json.Linq
+
+    let extractFields (projection: Expr) =
+        let translatePropGet varName = function
+            | Coerce (Call (Some (Coerce (Var v, dicTyp)), meth, [Value(propName,_)]), _)
+                when v.Name = varName && dicTyp.Name = "IDictionary`2" && meth.Name = "get_Item" ->
+                unbox<string> propName
+            | PropertyGet(Some(Var v), prop, []) 
+                when v.Name = varName -> prop.Name
+            | e -> 
+                // Too complex expression in projection
+                failwithf "Only projections of the form p.Prop are supported! Got %A" e
+        // printfn "%A" projection
+        match projection with
+        | Lambda(var, NewTuple args) ->
+            List.map (translatePropGet var.Name) args
+        | Lambda(var, arg) ->
+            [translatePropGet var.Name arg]
+        | _ -> failwithf "Unsupported projection: %A" projection
+        |> String.concat "," |> sprintf "{%s}"
 
     let getDynamicField (name: string) (expr: Expr) =
         let dicType = typeof<IDictionary<string,obj>>

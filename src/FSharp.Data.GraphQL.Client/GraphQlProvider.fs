@@ -110,35 +110,58 @@ module Util =
         elif resType = typeof<string>
         then createPrimitiveMethod<string> serverUrl opName opField args asyncType
         else
-            let m = ProvidedMethod(firstToUpper opField.Name, args, asyncType, IsStaticMethod=true)
-            let sargs = [ProvidedStaticParameter("content", typeof<string>)]
-            m.DefineStaticParameters(sargs, fun methName sargValues ->
-                match sargValues with 
-                | [| :? string as resFields |] ->
-                    // This will fail if the query is not well formed
-                    do Parser.parse resFields |> ignore
-                    let opField = opField.Name
-                    let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
-                    let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
-                    m2.InvokeCode <-
-                        if resType.Name = "FSharpOption`1" then
-                            fun argValues ->
-                            <@@
-                                (%%makeExprArray argValues: obj[])
-                                |> buildQuery opField resFields argNames
-                                |> launchRequest serverUrl opName opField Option.ofObj
-                            @@>                      
-                        else
-                            fun argValues ->
-                            <@@
-                                (%%makeExprArray argValues: obj[])
-                                |> buildQuery opField resFields argNames
-                                |> launchRequest serverUrl opName opField id
-                            @@>
-                    tdef.AddMember m2
-                    m2
-                | _ -> failwith "unexpected parameter values")
-            m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
+            let projType =
+                let resType =
+                    if resType.Name = "FSharpOption`1"
+                    then resType.GenericTypeArguments.[0] else resType
+                typedefof<obj->obj>.MakeGenericType(resType, typeof<obj>)
+            let projection = ProvidedParameter("projection", typeof<Expr>)
+            let m = ProvidedMethod(firstToUpper opField.Name, args@[projection], asyncType, IsStaticMethod=true)
+            m.InvokeCode <-
+                let opField, argsLength = opField.Name, args.Length
+                let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+                if resType.Name = "FSharpOption`1" then
+                    fun argValues ->
+                        <@@
+                            (%%makeExprArray (List.take argsLength argValues): obj[])
+                            |> buildQuery opField (extractFields (%%List.last argValues: Expr)) argNames
+                            |> launchRequest serverUrl opName opField Option.ofObj
+                        @@>                      
+                else
+                    fun argValues ->
+                        <@@
+                            (%%makeExprArray argValues: obj[])
+                            |> buildQuery opField (extractFields (%%List.last argValues: Expr)) argNames
+                            |> launchRequest serverUrl opName opField id
+                        @@>
+            // let sargs = [ProvidedStaticParameter("content", typeof<string>)]
+            // m.DefineStaticParameters(sargs, fun methName sargValues ->
+            //     match sargValues with 
+            //     | [| :? string as resFields |] ->
+            //         // This will fail if the query is not well formed
+            //         do Parser.parse resFields |> ignore
+            //         let opField = opField.Name
+            //         let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
+            //         let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
+            //         m2.InvokeCode <-
+            //             if resType.Name = "FSharpOption`1" then
+            //                 fun argValues ->
+            //                 <@@
+            //                     (%%makeExprArray argValues: obj[])
+            //                     |> buildQuery opField resFields argNames
+            //                     |> launchRequest serverUrl opName opField Option.ofObj
+            //                 @@>                      
+            //             else
+            //                 fun argValues ->
+            //                 <@@
+            //                     (%%makeExprArray argValues: obj[])
+            //                     |> buildQuery opField resFields argNames
+            //                     |> launchRequest serverUrl opName opField id
+            //                 @@>
+            //         tdef.AddMember m2
+            //         m2
+            //     | _ -> failwith "unexpected parameter values")
+            // m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
             m
 
     let createMethods (tdef: ProvidedTypeDefinition) (serverUrl: string)
