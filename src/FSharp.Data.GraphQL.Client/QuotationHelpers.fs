@@ -1,14 +1,13 @@
+namespace FSharp.Data.GraphQL
+
+/// Dummy type to graph requested fields in a GraphQL query projection
+type Fields([<System.ParamArray>] fields: obj[]) =
+    class end
+
 namespace FSharp.Data.GraphQL.Client
 
 open System
-// open System.Reflection
 open System.Collections.Generic
-// open FSharp.Data.GraphQL
-// open FSharp.Data.GraphQL.Types
-// open FSharp.Data.GraphQL.Types.Introspection
-// open FSharp.Data.GraphQL.Introspection
-// open ProviderImplementation.ProvidedTypes
-// open Microsoft.FSharp.Core.CompilerServices
 open Microsoft.FSharp.Reflection
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
@@ -99,17 +98,21 @@ module QuotationHelpers =
     open Newtonsoft.Json.Linq
 
     let extractFields (projection: Expr) =
-        let translatePropGet varName = function
-            | Coerce (Call (Some (Coerce (Var v, dicTyp)), meth, [Value(propName,_)]), _)
+        let rec translatePropGet varName = function
+            | Call (Some (Coerce (Var v, dicTyp)), meth, [Value(propName,_)])
                 when v.Name = varName && dicTyp.Name = "IDictionary`2" && meth.Name = "get_Item" ->
                 unbox<string> propName
             | PropertyGet(Some(Var v), prop, []) 
                 when v.Name = varName -> prop.Name
+            | Coerce(e, _) -> translatePropGet varName e
             | e -> 
                 // Too complex expression in projection
                 failwithf "Only projections of the form p.Prop are supported! Got %A" e
         // printfn "%A" projection
         match projection with
+        | Lambda(var, NewObject(cons, [NewArray(_,args)]))
+            when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
+            List.map (translatePropGet var.Name) args
         | Lambda(var, Coerce(NewTuple args,_))
         | Lambda(var, NewTuple args) ->
             List.map (translatePropGet var.Name) args

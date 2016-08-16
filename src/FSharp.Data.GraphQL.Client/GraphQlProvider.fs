@@ -114,7 +114,7 @@ module Util =
                 let resType =
                     if resType.Name = "FSharpOption`1"
                     then resType.GenericTypeArguments.[0] else resType
-                let funType = typedefof<obj->obj>.MakeGenericType(resType, typeof<obj>)
+                let funType = typedefof<obj->obj>.MakeGenericType(resType, typeof<Fields>)
                 typedefof<Expr<obj>>.MakeGenericType(funType)
             let projection = ProvidedParameter("projection", projType, IsReflectedDefinition=true)
             let m = ProvidedMethod(firstToUpper opField.Name, args@[projection], asyncType, IsStaticMethod=true)

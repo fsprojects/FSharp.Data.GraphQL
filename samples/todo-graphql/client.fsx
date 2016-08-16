@@ -23,8 +23,7 @@ async {
 } |> Async.StartImmediate
 
 async {
-    // let projection = <@@ fun (t: MyClient.Types.Task) -> t.description, t.completed @@>
-    let! task = MyClient.Queries.Task(taskId, fun t -> upcast (t.description, t.completed))
+    let! task = MyClient.Queries.Task(taskId, fun t -> Fields(t.description, t.completed))
     match task with
     | None -> ()
     | Some task ->
