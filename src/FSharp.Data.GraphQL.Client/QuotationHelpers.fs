@@ -1,7 +1,19 @@
 namespace FSharp.Data.GraphQL
 
-/// Dummy type to graph requested fields in a GraphQL query projection
+type DisplayNameAttribute(name: string) =
+    inherit System.Attribute()
+    member __.Name = name
+
+/// Dummy type to wrap requested fields in a GraphQL query projection
 type Fields([<System.ParamArray>] fields: obj[]) =
+    class end
+
+/// Dummy type to wrap a field with a selection in a GraphQL query projection
+type Selection<'T>(field: 'T, selection: 'T->Fields) =
+    class end
+
+/// Dummy type to wrap an inline fragment with type condition in a GraphQL query projection
+type On<'T>(typeName: string, selection: 'T->Fields) =
     class end
 
 namespace FSharp.Data.GraphQL.Client
@@ -132,27 +144,46 @@ module QuotationHelpers =
                 when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
                 Some args
             | _ -> None
-        let rec translatePropGet varName = function
-            | Lambda(v, Fields args) ->
-                Field(v.Name, Some(List.map (translatePropGet v.Name) args))
-                // InlineFragment("Human", List.map (translatePropGet v.Name) args)
+        let (|Selection|_|) = function
+            | NewObject(cons, [fieldExpr; Lambda(_,Fields argExprs)])
+                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.Selection`1") ->
+                Some(fieldExpr, argExprs)
+            | _ -> None
+        let (|OnType|_|) = function
+            | NewObject(cons, [_; Lambda(_,Fields argExprs)])
+                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.On`1") ->
+                let t = cons.DeclaringType.GenericTypeArguments.[0]
+                printfn "Type %O ATTRS %A" t (t.GetCustomAttributesData())
+                let attr = t.GetCustomAttributesData().[0]
+                Some(attr.ConstructorArguments.[0].Value :?> string, argExprs)
+            | _ -> None
+        let rec translatePropGet = function
+            // | Lambda(v, Fields args) ->
+            //     Field(v.Name, Some(List.map translatePropGet args))
+                // InlineFragment("Human", List.map translatePropGet args)
+            | Selection(fieldExpr, argExprs) ->
+                let (Field(name,_)) = translatePropGet fieldExpr
+                Field(name,Some(List.map translatePropGet argExprs))
+            // TODO HACK: It shouldn't be needed to access array elements
+            | Let(_, Call(None, meth, _), body)
+                when meth.Name = "GetArray" ->
+                translatePropGet body
             | Let(_, Call(Some(Coerce(Var v, dicType)), meth, [Value(propName,_)]), NullCheck _)
             | Call (Some (Coerce (Var v, dicType)), meth, [Value(propName,_)])
-                when v.Name = varName && dicType.Name = "IDictionary`2" && meth.Name = "get_Item" ->
+                when dicType.Name = "IDictionary`2" && meth.Name = "get_Item" ->
                 Field(unbox<string> propName, None)
-            | PropertyGet(Some(Var v), prop, []) 
-                when v.Name = varName -> Field(prop.Name, None)
-            | Coerce(e, _) -> translatePropGet varName e
-            | e -> failwithf "Unsupported projection: %A" e
+            | PropertyGet(Some(Var v), prop, []) ->
+                Field(prop.Name, None)
+            | Coerce(e, _) -> translatePropGet e
+            | e -> failwithf "Unsupported field: %A" e
         // printfn "%A" projection
         match projection with
-        | Lambda(var, Fields args)
-        | Lambda(var, Coerce(NewTuple args,_))
-        | Lambda(var, NewTuple args) ->
-            List.map (translatePropGet var.Name) args
+        | Lambda(_, Fields args)
+        | Lambda(_, Coerce(NewTuple args,_))
+        | Lambda(_, NewTuple args) ->
+            List.map translatePropGet args
         | Lambda(var, Coerce(arg,_))
-        | Lambda(var, arg) ->
-            [translatePropGet var.Name arg]
+        | Lambda(var, arg) -> [translatePropGet arg]
         | _ -> failwithf "Unsupported projection: %A" projection
         |> Seq.map string
         |> Seq.filter (String.IsNullOrWhiteSpace >> not)
