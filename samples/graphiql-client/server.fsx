@@ -188,6 +188,7 @@ let graphiql : WebPart =
         async {
             match tryParse "query" http.request.rawForm with
             | Some query ->
+                printfn "Received query: %s" query
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = query.Trim().Replace("\r\n", " ")
                 let! result = schema.AsyncExecute(q)   

@@ -97,22 +97,56 @@ module QuotationHelpers =
     open Newtonsoft.Json
     open Newtonsoft.Json.Linq
 
+    type private Selection =
+        | Field of name: string * selectionSet: (Selection list) option 
+        // | InlineFragment of typeCondition: string option * Selection list
+        // TODO: Throw error if there's an empty selection set?
+        override x.ToString() =
+            match x with
+            | Field(name, selectionSet) ->
+                match selectionSet with
+                | None -> name
+                | Some selectionSet ->
+                    selectionSet
+                    |> Seq.map string
+                    |> String.concat ","
+                    |> sprintf "%s { %s }" name
+            // | InlineFragment(typeCondition, fields) ->
+            //     if List.isEmpty fields then "" else
+            //     let type
+            //     fields
+            //     |> Seq.map string
+            //     |> String.concat ","
+            //     |> sprintf "...on %s { %s }" typeCondition
+
     let extractFields (projection: Expr) =
+        // Accessing nullable types injects a null equality check in the generated code
+        let (|NullCheck|_|) = function
+            | IfThenElse(Call(None, op_Equality, [instance2; Value(nullValue, _)]),
+                         Call(None, get_None, []),
+                         Call(None, get_Some, [Coerce(instance3, _)])) as e ->
+                Some e
+            | _ -> None
+        let (|Fields|_|) = function
+            | NewObject(cons, [NewArray(_,args)])
+                when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
+                Some args
+            | _ -> None
         let rec translatePropGet varName = function
-            | Call (Some (Coerce (Var v, dicTyp)), meth, [Value(propName,_)])
-                when v.Name = varName && dicTyp.Name = "IDictionary`2" && meth.Name = "get_Item" ->
-                unbox<string> propName
+            | Lambda(v, Fields args) ->
+                Field(v.Name, Some(List.map (translatePropGet v.Name) args))
+                // InlineFragment("Human", List.map (translatePropGet v.Name) args)
+            | Let(_, Call(Some(Coerce(Var v, dicType)), meth, [Value(propName,_)]), NullCheck _)
+            | Call (Some (Coerce (Var v, dicType)), meth, [Value(propName,_)])
+                when v.Name = varName && dicType.Name = "IDictionary`2" && meth.Name = "get_Item" ->
+                Field(unbox<string> propName, None)
             | PropertyGet(Some(Var v), prop, []) 
-                when v.Name = varName -> prop.Name
+                when v.Name = varName -> Field(prop.Name, None)
             | Coerce(e, _) -> translatePropGet varName e
-            | e -> 
-                // Too complex expression in projection
-                failwithf "Only projections of the form p.Prop are supported! Got %A" e
+            | e -> failwithf "Unsupported projection: %A" e
         // printfn "%A" projection
         match projection with
-        | Lambda(var, NewObject(cons, [NewArray(_,args)]))
-            when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
-            List.map (translatePropGet var.Name) args
+        | Lambda(var, Fields args)
         | Lambda(var, Coerce(NewTuple args,_))
         | Lambda(var, NewTuple args) ->
             List.map (translatePropGet var.Name) args
@@ -120,7 +154,10 @@ module QuotationHelpers =
         | Lambda(var, arg) ->
             [translatePropGet var.Name arg]
         | _ -> failwithf "Unsupported projection: %A" projection
-        |> String.concat "," |> sprintf "{%s}"
+        |> Seq.map string
+        |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+        |> String.concat ","
+        |> sprintf "{%s}"
 
     let getDynamicField (name: string) (expr: Expr) =
         let dicType = typeof<IDictionary<string,obj>>

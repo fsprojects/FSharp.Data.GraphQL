@@ -3,7 +3,7 @@
 open FSharp.Data.GraphQL
 open System.Collections.Generic
 
-#if FABLE
+#if FABLE_COMPILER
 #r "node_modules/fable-core/Fable.Core.dll"
 Fable.Core.JsInterop.importAll<unit> "isomorphic-fetch"
 #endif
@@ -21,7 +21,12 @@ type MyClient = GraphQLProvider<serverUrl>
 //     |> Async.RunSynchronously
 
 async {
-    let! hero = MyClient.Queries.Hero<queryFieldsWithFragments>("1000")
+    let! hero = MyClient.Queries.Hero("1000", fun c ->
+                Fields(
+                    c.name,
+                    c.appearsIn,
+                    fun (friends: MyClient.Types.Character) -> Fields(friends.name)
+                ))
     match hero with
     | None -> ()
     | Some hero ->
