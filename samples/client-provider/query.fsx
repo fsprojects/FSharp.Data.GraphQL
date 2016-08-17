@@ -24,9 +24,9 @@ async {
     let! hero = MyClient.Queries.Hero("1000", fun c ->
                 Fields(
                     c.name,
-                    c.appearsIn,
-                    Selection(c.friends, fun f -> Fields(f.[0].name))
-                    // On<MyClient.Types.Human>(fun h -> Fields(h.appearsIn))
+                    // c.appearsIn,
+                    Selection(c.friends, fun f -> Fields(f.[0].name)),
+                    On<MyClient.Types.Human>("Human", fun h -> Fields(h.appearsIn))
                 ))
     match hero with
     | None -> ()

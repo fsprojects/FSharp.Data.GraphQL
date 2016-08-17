@@ -110,8 +110,8 @@ module QuotationHelpers =
     open Newtonsoft.Json.Linq
 
     type private Selection =
-        | Field of name: string * selectionSet: (Selection list) option 
-        // | InlineFragment of typeCondition: string option * Selection list
+        | Field of name: string * selectionSet: (Selection list) option
+        | InlineFragment of typeCondition: string option * Selection list
         // TODO: Throw error if there's an empty selection set?
         override x.ToString() =
             match x with
@@ -123,13 +123,13 @@ module QuotationHelpers =
                     |> Seq.map string
                     |> String.concat ","
                     |> sprintf "%s { %s }" name
-            // | InlineFragment(typeCondition, fields) ->
-            //     if List.isEmpty fields then "" else
-            //     let type
-            //     fields
-            //     |> Seq.map string
-            //     |> String.concat ","
-            //     |> sprintf "...on %s { %s }" typeCondition
+            | InlineFragment(typeCondition, fields) ->
+                let typeCondition =
+                    match typeCondition with Some t -> "on " + t | None -> ""
+                fields
+                |> Seq.map string
+                |> String.concat ","
+                |> sprintf "...%s { %s }" typeCondition
 
     let extractFields (projection: Expr) =
         // Accessing nullable types injects a null equality check in the generated code
@@ -150,20 +150,25 @@ module QuotationHelpers =
                 Some(fieldExpr, argExprs)
             | _ -> None
         let (|OnType|_|) = function
-            | NewObject(cons, [_; Lambda(_,Fields argExprs)])
+            | NewObject(cons, [Value(:? string as typeName, _); Lambda(_,Fields argExprs)])
                 when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.On`1") ->
-                let t = cons.DeclaringType.GenericTypeArguments.[0]
-                printfn "Type %O ATTRS %A" t (t.GetCustomAttributesData())
-                let attr = t.GetCustomAttributesData().[0]
-                Some(attr.ConstructorArguments.[0].Value :?> string, argExprs)
+                // TODO: This is not working, attributes are being erased
+                // let t = cons.DeclaringType.GenericTypeArguments.[0]
+                // let attr = t.GetCustomAttributesData().[0]
+                // let typeName = attr.ConstructorArguments.[0].Value :?> string
+                // TODO: If we must pass the type as a string, at least we should do some validation here
+                Some(typeName, argExprs)
             | _ -> None
         let rec translatePropGet = function
             // | Lambda(v, Fields args) ->
             //     Field(v.Name, Some(List.map translatePropGet args))
                 // InlineFragment("Human", List.map translatePropGet args)
-            | Selection(fieldExpr, argExprs) ->
-                let (Field(name,_)) = translatePropGet fieldExpr
-                Field(name,Some(List.map translatePropGet argExprs))
+            | Selection(fieldExpr, argExprs) as e ->
+                match translatePropGet fieldExpr with
+                | Field(name,_) -> Field(name,Some(List.map translatePropGet argExprs))
+                | _ -> failwithf "Selection misses field name: %A" e
+            | OnType(typeName, argExprs) ->
+                InlineFragment(Some typeName, List.map translatePropGet argExprs)
             // TODO HACK: It shouldn't be needed to access array elements
             | Let(_, Call(None, meth, _), body)
                 when meth.Name = "GetArray" ->

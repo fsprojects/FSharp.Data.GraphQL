@@ -198,6 +198,7 @@ module TypeCompiler =
         match itype.Kind with
         | TypeKind.OBJECT ->
             let t = ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
+            // TODO: This is not working, attributes are being erased
             CustomAttributeDataExt.Make(
                 typeof<DisplayNameAttribute>.GetConstructor([|typeof<string>|]),
                 [| CustomAttributeTypedArgument(typeof<DisplayNameAttribute>, itype.Name) |])
