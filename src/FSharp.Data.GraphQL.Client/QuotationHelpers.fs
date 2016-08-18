@@ -9,8 +9,11 @@ type Fields([<System.ParamArray>] fields: obj[]) =
     class end
 
 /// Dummy type to wrap a field with a selection in a GraphQL query projection
-type Selection<'T>(field: 'T, selection: 'T->Fields) =
-    class end
+type Selection<'T> private () =
+    new (fields: 'T[] option, selection: 'T->Fields) = Selection()
+    new (fields: 'T option, selection: 'T->Fields) = Selection()
+    new (fields: 'T[], selection: 'T->Fields) = Selection()
+    new (fields: 'T, selection: 'T->Fields) = Selection()
 
 /// Dummy type to wrap an inline fragment with type condition in a GraphQL query projection
 type On<'T>(typeName: string, selection: 'T->Fields) =
