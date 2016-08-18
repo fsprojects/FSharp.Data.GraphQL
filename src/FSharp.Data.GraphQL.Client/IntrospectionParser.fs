@@ -187,22 +187,17 @@ module TypeCompiler =
 //        | TypeKind.SCALAR -> genScalar ctx itype t
 //        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
 
-    type CustomAttributeDataExt =
-        static member Make(ctorInfo, ?args, ?namedArgs) = 
-            { new CustomAttributeData() with 
-                member __.Constructor =  ctorInfo
-                member __.ConstructorArguments = defaultArg args [||] :> IList<_>
-                member __.NamedArguments = defaultArg namedArgs [||] :> IList<_> }
-
     let initType (ctx: ProviderSessionContext) (itype: IntrospectionType) = 
         match itype.Kind with
         | TypeKind.OBJECT ->
-            let t = ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
-            // TODO: This is not working, attributes are being erased
-            CustomAttributeDataExt.Make(
-                typeof<DisplayNameAttribute>.GetConstructor([|typeof<string>|]),
-                [| CustomAttributeTypedArgument(typeof<DisplayNameAttribute>, itype.Name) |])
-            |> t.AddCustomAttribute
+            let typeName = itype.Name
+            let t = ProvidedTypeDefinition(typeName, Some typeof<obj>)
+            let funType = typedefof<obj->obj>.MakeGenericType(t, typeof<Fields>)
+            let m = ProvidedMethod("On", [ProvidedParameter("selection", funType)], typeof<obj>)
+            m.IsStaticMethod <- true
+            m.InvokeCode <- fun args ->
+                <@@ InlineFragment(typeName, %%args.Head) @@>
+            t.AddMember m
             t
         | TypeKind.INPUT_OBJECT -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.SCALAR -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)

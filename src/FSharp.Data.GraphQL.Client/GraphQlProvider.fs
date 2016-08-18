@@ -89,7 +89,7 @@ module Util =
             @@>
         m
 
-    let createMethod (tdef: ProvidedTypeDefinition) (schemaTypes: Map<string,TypeReference>)
+    let createMethod (schemaTypes: Map<string,TypeReference>)
                      (serverUrl: string) (opName: string) (opField: IntrospectionField) =
         let findType (t: IntrospectionTypeRef) =
             TypeReference.findType t schemaTypes
@@ -135,34 +135,6 @@ module Util =
                             |> buildQuery opField (extractFields (%%Expr.Coerce(List.last argValues, typeof<Expr>))) argNames
                             |> launchRequest serverUrl opName opField id
                         @@>
-            // let sargs = [ProvidedStaticParameter("content", typeof<string>)]
-            // m.DefineStaticParameters(sargs, fun methName sargValues ->
-            //     match sargValues with 
-            //     | [| :? string as resFields |] ->
-            //         // This will fail if the query is not well formed
-            //         do Parser.parse resFields |> ignore
-            //         let opField = opField.Name
-            //         let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
-            //         let m2 = ProvidedMethod(methName, args, asyncType, IsStaticMethod = true)
-            //         m2.InvokeCode <-
-            //             if resType.Name = "FSharpOption`1" then
-            //                 fun argValues ->
-            //                 <@@
-            //                     (%%makeExprArray argValues: obj[])
-            //                     |> buildQuery opField resFields argNames
-            //                     |> launchRequest serverUrl opName opField Option.ofObj
-            //                 @@>                      
-            //             else
-            //                 fun argValues ->
-            //                 <@@
-            //                     (%%makeExprArray argValues: obj[])
-            //                     |> buildQuery opField resFields argNames
-            //                     |> launchRequest serverUrl opName opField id
-            //                 @@>
-            //         tdef.AddMember m2
-            //         m2
-            //     | _ -> failwith "unexpected parameter values")
-            // m.InvokeCode <- fun _ -> <@@ null @@> // Dummy code
             m
 
     let createMethods (tdef: ProvidedTypeDefinition) (serverUrl: string)
@@ -181,7 +153,7 @@ module Util =
                 if t.Name = opName && t.Fields.IsSome && not (Array.isEmpty t.Fields.Value) then
                     let wrapper = ProvidedTypeDefinition(wrapperName, Some typeof<obj>)
                     t.Fields.Value
-                    |> Seq.map (createMethod wrapper schemaTypes serverUrl (opPrefix + opName))
+                    |> Seq.map (createMethod schemaTypes serverUrl (opPrefix + opName))
                     |> Seq.toList
                     |> wrapper.AddMembers
                     tdef.AddMember wrapper)
@@ -194,7 +166,7 @@ type internal ProviderSchemaConfig =
 [<TypeProvider>]
 type GraphQlProvider (config : TypeProviderConfig) as this =
     inherit TypeProviderForNamespaces ()
-    
+
     let asm = System.Reflection.Assembly.GetExecutingAssembly()
 
     do

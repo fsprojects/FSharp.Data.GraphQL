@@ -17,7 +17,7 @@ async {
                 Fields(
                     c.name,
                     Selection(c.friends, fun f -> Fields(f.name)),
-                    On<MyClient.Types.Human>("Human", fun h -> Fields(h.appearsIn))
+                    MyClient.Types.Human.On(fun h -> Fields(h.appearsIn))
                 ))
     match hero with
     | None -> ()

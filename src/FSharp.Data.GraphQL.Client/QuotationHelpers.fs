@@ -15,8 +15,9 @@ type Selection<'T> private () =
     new (fields: 'T[], selection: 'T->Fields) = Selection()
     new (fields: 'T, selection: 'T->Fields) = Selection()
 
-/// Dummy type to wrap an inline fragment with type condition in a GraphQL query projection
-type On<'T>(typeName: string, selection: 'T->Fields) =
+/// Dummy type to wrap inline fragments, shouldn't be used directly.
+/// Use the static method On of provided types instead
+type InlineFragment(typeCondition: string, selection: obj->Fields) =
     class end
 
 namespace FSharp.Data.GraphQL.Client
@@ -152,25 +153,17 @@ module QuotationHelpers =
                 when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.Selection`1") ->
                 Some(fieldExpr, argExprs)
             | _ -> None
-        let (|OnType|_|) = function
-            | NewObject(cons, [Value(:? string as typeName, _); Lambda(_,Fields argExprs)])
-                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.On`1") ->
-                // TODO: This is not working, attributes are being erased
-                // let t = cons.DeclaringType.GenericTypeArguments.[0]
-                // let attr = t.GetCustomAttributesData().[0]
-                // let typeName = attr.ConstructorArguments.[0].Value :?> string
-                // TODO: If we must pass the type as a string, at least we should do some validation here
+        let (|InlineFragment|_|) = function
+            | Let(_,Lambda(_,Fields argExprs),NewObject(cons, [Value(:? string as typeName, _); _]))
+                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.InlineFragment") ->
                 Some(typeName, argExprs)
             | _ -> None
         let rec translatePropGet = function
-            // | Lambda(v, Fields args) ->
-            //     Field(v.Name, Some(List.map translatePropGet args))
-                // InlineFragment("Human", List.map translatePropGet args)
             | Selection(fieldExpr, argExprs) as e ->
                 match translatePropGet fieldExpr with
                 | Field(name,_) -> Field(name,Some(List.map translatePropGet argExprs))
                 | _ -> failwithf "Selection misses field name: %A" e
-            | OnType(typeName, argExprs) ->
+            | InlineFragment(typeName, argExprs) ->
                 InlineFragment(Some typeName, List.map translatePropGet argExprs)
             // TODO HACK: It shouldn't be needed to access array elements
             | Let(_, Call(None, meth, _), body)
