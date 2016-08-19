@@ -1,22 +1,38 @@
+namespace FSharp.Data.GraphQL
+
+type DisplayNameAttribute(name: string) =
+    inherit System.Attribute()
+    member __.Name = name
+
+/// Dummy type to wrap requested fields in a GraphQL query projection
+type Fields([<System.ParamArray>] fields: obj[]) =
+    class end
+
+/// Dummy type to wrap a field with a selection in a GraphQL query projection
+type Selection<'T> private () =
+    new (fields: 'T[] option, selection: 'T->Fields) = Selection()
+    new (fields: 'T option, selection: 'T->Fields) = Selection()
+    new (fields: 'T[], selection: 'T->Fields) = Selection()
+    new (fields: 'T, selection: 'T->Fields) = Selection()
+
+/// Dummy type to wrap inline fragments, shouldn't be used directly.
+/// Use the static method On of provided types instead
+type InlineFragment(typeCondition: string, selection: obj->Fields) =
+    class end
+
 namespace FSharp.Data.GraphQL.Client
 
 open System
-// open System.Reflection
 open System.Collections.Generic
-// open FSharp.Data.GraphQL
-// open FSharp.Data.GraphQL.Types
-// open FSharp.Data.GraphQL.Types.Introspection
-// open FSharp.Data.GraphQL.Introspection
-// open ProviderImplementation.ProvidedTypes
-// open Microsoft.FSharp.Core.CompilerServices
-open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
+open Microsoft.FSharp.Quotations
+open Microsoft.FSharp.Quotations.Patterns
 
 module QuotationHelpers =
     let makeExprArray (exprs: Expr list) =
         Expr.NewArray(typeof<obj>, exprs |> List.map (fun e -> Expr.Coerce(e, typeof<obj>)))
 
-    #if FABLE
+    #if FABLE_COMPILER
     open Fable
     open Fable.Core
     open Fable.Core.JsInterop
@@ -96,6 +112,84 @@ module QuotationHelpers =
     open System.Net
     open Newtonsoft.Json
     open Newtonsoft.Json.Linq
+
+    type private Selection =
+        | Field of name: string * selectionSet: (Selection list) option
+        | InlineFragment of typeCondition: string option * Selection list
+        // TODO: Throw error if there's an empty selection set?
+        override x.ToString() =
+            match x with
+            | Field(name, selectionSet) ->
+                match selectionSet with
+                | None -> name
+                | Some selectionSet ->
+                    selectionSet
+                    |> Seq.map string
+                    |> String.concat ","
+                    |> sprintf "%s { %s }" name
+            | InlineFragment(typeCondition, fields) ->
+                let typeCondition =
+                    match typeCondition with Some t -> "on " + t | None -> ""
+                fields
+                |> Seq.map string
+                |> String.concat ","
+                |> sprintf "...%s { %s }" typeCondition
+
+    let extractFields (projection: Expr) =
+        // Accessing nullable types injects a null equality check in the generated code
+        let (|NullCheck|_|) = function
+            | IfThenElse(Call(None, op_Equality, [instance2; Value(nullValue, _)]),
+                         Call(None, get_None, []),
+                         Call(None, get_Some, [Coerce(instance3, _)])) as e ->
+                Some e
+            | _ -> None
+        let (|Fields|_|) = function
+            | NewObject(cons, [NewArray(_,args)])
+                when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
+                Some args
+            | _ -> None
+        let (|Selection|_|) = function
+            | NewObject(cons, [fieldExpr; Lambda(_,Fields argExprs)])
+                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.Selection`1") ->
+                Some(fieldExpr, argExprs)
+            | _ -> None
+        let (|InlineFragment|_|) = function
+            | Let(_,Lambda(_,Fields argExprs),NewObject(cons, [Value(:? string as typeName, _); _]))
+                when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.InlineFragment") ->
+                Some(typeName, argExprs)
+            | _ -> None
+        let rec translatePropGet = function
+            | Selection(fieldExpr, argExprs) as e ->
+                match translatePropGet fieldExpr with
+                | Field(name,_) -> Field(name,Some(List.map translatePropGet argExprs))
+                | _ -> failwithf "Selection misses field name: %A" e
+            | InlineFragment(typeName, argExprs) ->
+                InlineFragment(Some typeName, List.map translatePropGet argExprs)
+            // TODO HACK: It shouldn't be needed to access array elements
+            | Let(_, Call(None, meth, _), body)
+                when meth.Name = "GetArray" ->
+                translatePropGet body
+            | Let(_, Call(Some(Coerce(Var v, dicType)), meth, [Value(propName,_)]), NullCheck _)
+            | Call (Some (Coerce (Var v, dicType)), meth, [Value(propName,_)])
+                when dicType.Name = "IDictionary`2" && meth.Name = "get_Item" ->
+                Field(unbox<string> propName, None)
+            | PropertyGet(Some(Var v), prop, []) ->
+                Field(prop.Name, None)
+            | Coerce(e, _) -> translatePropGet e
+            | e -> failwithf "Unsupported field: %A" e
+        // printfn "%A" projection
+        match projection with
+        | Lambda(_, Fields args)
+        | Lambda(_, Coerce(NewTuple args,_))
+        | Lambda(_, NewTuple args) ->
+            List.map translatePropGet args
+        | Lambda(var, Coerce(arg,_))
+        | Lambda(var, arg) -> [translatePropGet arg]
+        | _ -> failwithf "Unsupported projection: %A" projection
+        |> Seq.map string
+        |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+        |> String.concat ","
+        |> sprintf "{%s}"
 
     let getDynamicField (name: string) (expr: Expr) =
         let dicType = typeof<IDictionary<string,obj>>

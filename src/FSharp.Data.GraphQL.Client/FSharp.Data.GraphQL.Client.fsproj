@@ -32,7 +32,7 @@
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
     <OutputPath>bin\Release\</OutputPath>
-    <DefineConstants>TRACE</DefineConstants>
+    <DefineConstants>TRACE;NO_GENERATIVE</DefineConstants>
     <WarningLevel>3</WarningLevel>
     <DocumentationFile>bin\Release\FSharp.Data.GraphQL.Client.XML</DocumentationFile>
   </PropertyGroup>
@@ -45,7 +45,7 @@
     <Reference Include="System.Core" />
     <Reference Include="System.Numerics" />
   </ItemGroup>
-  <ItemGroup Condition="$(DefineConstants.Contains('FABLE'))">
+  <ItemGroup>
     <Reference Include="Fable.Core">
       <HintPath>npm/node_modules/fable-core/Fable.Core.dll</HintPath>
       <Private>True</Private>

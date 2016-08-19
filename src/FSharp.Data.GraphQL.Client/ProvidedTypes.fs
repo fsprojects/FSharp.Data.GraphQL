@@ -1175,6 +1175,16 @@ module internal Misc =
                 member __.ConstructorArguments = upcast [|CustomAttributeTypedArgument(typeof<string>, message) ; CustomAttributeTypedArgument(typeof<bool>, isError)  |]
                 member __.NamedArguments = upcast [| |] }
 
+    let mkReflectedDefinitionCustomAttributeData() = 
+#if FX_NO_CUSTOMATTRIBUTEDATA
+        { new IProvidedCustomAttributeData with 
+#else
+        { new CustomAttributeData() with 
+#endif
+                member __.Constructor =  typeof<ReflectedDefinitionAttribute>.GetConstructors().[0]
+                member __.ConstructorArguments = upcast [| |]
+                member __.NamedArguments = upcast [| |] }
+
     type CustomAttributesImpl() =
         let customAttributes = ResizeArray<CustomAttributeData>()
         let mutable hideObjectMethods = false
@@ -1183,6 +1193,7 @@ module internal Misc =
         let mutable xmlDocDelayed = None
         let mutable xmlDocAlwaysRecomputed = None
         let mutable hasParamArray = false
+        let mutable hasReflectedDefinition = false
 
         // XML doc text that we only compute once, if any. This must _not_ be forced until the ConstructorArguments
         // property of the custom attribute is foced.
@@ -1198,11 +1209,13 @@ module internal Misc =
                   match xmlDocDelayed with None -> () | Some _ -> customAttributes.Add(mkXmlDocCustomAttributeDataLazy xmlDocDelayedText) 
                   match obsoleteMessage with None -> () | Some s -> customAttributes.Add(mkObsoleteAttributeCustomAttributeData s) 
                   if hasParamArray then yield mkParamArrayCustomAttributeData()
+                  if hasReflectedDefinition then yield mkReflectedDefinitionCustomAttributeData()
                   yield! customAttributes |]
 
         member __.AddDefinitionLocation(line:int,column:int,filePath:string) = customAttributes.Add(mkDefinitionLocationAttributeCustomAttributeData(line, column, filePath))
         member __.AddObsolete(message : string, isError) = obsoleteMessage <- Some (message,isError)
         member __.HasParamArray with get() = hasParamArray and set(v) = hasParamArray <- v
+        member __.HasReflectedDefinition with get() = hasReflectedDefinition and set(v) = hasReflectedDefinition <- v
         member __.AddXmlDocComputed xmlDocFunction = xmlDocAlwaysRecomputed <- Some xmlDocFunction
         member __.AddXmlDocDelayed xmlDocFunction = xmlDocDelayed <- Some xmlDocFunction
         member __.AddXmlDoc xmlDoc =  xmlDocDelayed <- Some (fun () -> xmlDoc)
@@ -1254,6 +1267,7 @@ type ProvidedParameter(name:string,parameterType:Type,?isOut:bool,?optionalValue
     let customAttributesImpl = CustomAttributesImpl()
     let isOut = defaultArg isOut false
     member __.IsParamArray with get() = customAttributesImpl.HasParamArray and set(v) = customAttributesImpl.HasParamArray <- v
+    member __.IsReflectedDefinition with get() = customAttributesImpl.HasReflectedDefinition and set(v) = customAttributesImpl.HasReflectedDefinition <- v
     override __.Name = name
     override __.ParameterType = parameterType
     override __.Attributes = (base.Attributes ||| (if isOut then ParameterAttributes.Out else enum 0)
