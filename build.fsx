@@ -399,12 +399,19 @@ Target "Release" (fun _ ->
     |> Async.RunSynchronously
 )
 
-Target "AdHocBuild" (fun _ ->
-    // !!"src/FSharp.Data.GraphQL/FSharp.Data.GraphQL.fsproj"
-    // |> MSBuildDebug "bin/FSharp.Data.GraphQL" "Build" |> Log "Output: "
-
+Target "ClientDebug" (fun _ ->
     !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
     |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
+)
+
+Target "Client4Fable" (fun _ ->
+    Npm.install "src/FSharp.Data.GraphQL.Client/npm" []
+
+    !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
+    |> MSBuild "bin/FSharp.Data.GraphQL.Client" "Build" [
+        "Configuration", "Release"
+        "DefineConstants", "FABLE_COMPILER"
+    ] |> Log "Output: "
 )
 
 let publishPackage id =

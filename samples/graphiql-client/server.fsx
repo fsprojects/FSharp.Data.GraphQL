@@ -124,7 +124,7 @@ and HumanType : ObjectDef<Human> =
                 h.Friends
                 |> List.map getCharacter 
                 |> List.toSeq)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> upcast h.AppearsIn)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> upcast h.AppearsIn: seq<Episode>)
         Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet) ])
         
 and DroidType =
@@ -137,7 +137,7 @@ and DroidType =
         Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
         Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.", 
             fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> upcast d.AppearsIn)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> upcast d.AppearsIn: seq<Episode>)
         Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) ])
 
 let Query =

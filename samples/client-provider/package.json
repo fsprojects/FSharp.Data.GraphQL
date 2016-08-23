@@ -1,4 +1,5 @@
 {
+  "private": true,
   "name": "client-provider",
   "version": "1.0.0",
   "description": "",
@@ -10,7 +11,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "fable-core": "^0.5.2",
+    "fable-core": "^0.5.5",
     "isomorphic-fetch": "^2.2.1"
   }
 }

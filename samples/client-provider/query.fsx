@@ -1,10 +1,10 @@
 ﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
+#r "node_modules/fable-core/Fable.Core.dll"
 
 open FSharp.Data.GraphQL
 open System.Collections.Generic
 
 #if FABLE_COMPILER
-#r "node_modules/fable-core/Fable.Core.dll"
 Fable.Core.JsInterop.importAll<unit> "isomorphic-fetch"
 #endif
 
