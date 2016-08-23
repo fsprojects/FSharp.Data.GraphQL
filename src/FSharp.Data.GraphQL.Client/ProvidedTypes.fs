@@ -48,9 +48,9 @@ open System.Reflection.Emit
 [<AutoOpen>]
 module internal UncheckedQuotations =
 
-    let qTy = typeof<Microsoft.FSharp.Quotations.Var>.GetTypeInfo().Assembly.GetType("Microsoft.FSharp.Quotations.ExprConstInfo") 
+    let qTy = typeof<Microsoft.FSharp.Quotations.Var>.Assembly.GetType("Microsoft.FSharp.Quotations.ExprConstInfo") 
     assert (qTy <> null)
-    let pTy = typeof<Microsoft.FSharp.Quotations.Var>.GetTypeInfo().Assembly.GetType("Microsoft.FSharp.Quotations.PatternsModule")
+    let pTy = typeof<Microsoft.FSharp.Quotations.Var>.Assembly.GetType("Microsoft.FSharp.Quotations.PatternsModule")
     assert (pTy<> null)
 
     // These are handles to the internal functions that create quotation nodes of different sizes. Although internal, 
@@ -420,11 +420,10 @@ type QuotationSimplifier(isGenerated: bool) =
         |> fun l -> List.foldBack(fun o s -> Expr.NewUnionCase(cons, [ converter(o); s ])) l (Expr.NewUnionCase(nil, []))
         |> transExpr
 
-    and getValueConverterForType (ty : Type) =
-        let tyInfo = ty.GetTypeInfo()
-        if tyInfo.IsArray then 
+    and getValueConverterForType (ty : Type) = 
+        if ty.IsArray then 
             fun (v : obj) -> transValueArray(v :?> Array, ty)
-        elif tyInfo.IsGenericType && tyInfo.GetGenericTypeDefinition() = typedefof<_ list> then 
+        elif ty.IsGenericType && ty.GetGenericTypeDefinition() = typedefof<_ list> then 
             let nil, cons =
                 let cases = Reflection.FSharpType.GetUnionCases(ty)
                 let a = cases.[0]
@@ -624,17 +623,17 @@ type CodeGenerator(assemblyMainModule: ModuleBuilder, uniqueLambdaTypeName,
     let TypeBuilderInstantiationType = 
         let runningOnMono = try System.Type.GetType("Mono.Runtime") <> null with e -> false 
         let typeName = if runningOnMono then "System.Reflection.MonoGenericClass" else "System.Reflection.Emit.TypeBuilderInstantiation"
-        typeof<TypeBuilder>.GetTypeInfo().Assembly.GetType(typeName)
+        typeof<TypeBuilder>.Assembly.GetType(typeName)
 
     // TODO: this works over FSharp.Core 4.4.0.0 types and methods. These types need to be retargeted to the target runtime.
 
-    let GetTypeFromHandleMethod() = typeof<Type>.GetTypeInfo().GetMethod("GetTypeFromHandle")
+    let GetTypeFromHandleMethod() = typeof<Type>.GetMethod("GetTypeFromHandle")
     let LanguagePrimitivesType() = typedefof<list<_>>.Assembly.GetType("Microsoft.FSharp.Core.LanguagePrimitives")
     let ParseInt32Method() = LanguagePrimitivesType().GetMethod "ParseInt32"
-    let DecimalConstructor() = typeof<decimal>.GetTypeInfo().GetConstructor([| typeof<int>; typeof<int>; typeof<int>; typeof<bool>; typeof<byte> |])
-    let DateTimeConstructor() = typeof<DateTime>.GetTypeInfo().GetConstructor([| typeof<int64>; typeof<DateTimeKind> |])
-    let DateTimeOffsetConstructor() = typeof<DateTimeOffset>.GetTypeInfo().GetConstructor([| typeof<int64>; typeof<TimeSpan> |])
-    let TimeSpanConstructor() = typeof<TimeSpan>.GetTypeInfo().GetConstructor([|typeof<int64>|])
+    let DecimalConstructor() = typeof<decimal>.GetConstructor([| typeof<int>; typeof<int>; typeof<int>; typeof<bool>; typeof<byte> |])
+    let DateTimeConstructor() = typeof<DateTime>.GetConstructor([| typeof<int64>; typeof<DateTimeKind> |])
+    let DateTimeOffsetConstructor() = typeof<DateTimeOffset>.GetConstructor([| typeof<int64>; typeof<TimeSpan> |])
+    let TimeSpanConstructor() = typeof<TimeSpan>.GetConstructor([|typeof<int64>|])
 
     let isEmpty s = (s = ExpectedStackState.Empty)
     let isAddress s = (s = ExpectedStackState.Address)
@@ -808,7 +807,7 @@ type CodeGenerator(assemblyMainModule: ModuleBuilder, uniqueLambdaTypeName,
             emitExpr ExpectedStackState.Value a1
             emitExpr ExpectedStackState.Value a2
             if t1 = typeof<decimal> then
-                ilg.Emit(OpCodes.Call, typeof<decimal>.GetTypeInfo().GetMethod "op_Subtraction")
+                ilg.Emit(OpCodes.Call, typeof<decimal>.GetMethod "op_Subtraction")
             else
                 ilg.Emit(OpCodes.Sub)
                 emitConvIfNecessary t1
@@ -820,7 +819,7 @@ type CodeGenerator(assemblyMainModule: ModuleBuilder, uniqueLambdaTypeName,
             emitExpr ExpectedStackState.Value a1
             emitExpr ExpectedStackState.Value a2
             if t1 = typeof<decimal> then
-                ilg.Emit(OpCodes.Call, typeof<decimal>.GetTypeInfo().GetMethod "op_Division")
+                ilg.Emit(OpCodes.Call, typeof<decimal>.GetMethod "op_Division")
             else
                 match Type.GetTypeCode t1 with
                 | TypeCode.UInt32
@@ -1101,7 +1100,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif 
-            member __.Constructor =  typeof<ParamArrayAttribute>.GetTypeInfo().GetConstructors().[0]
+            member __.Constructor =  typeof<ParamArrayAttribute>.GetConstructors().[0]
             member __.ConstructorArguments = upcast [| |]
             member __.NamedArguments = upcast [| |] }
 
@@ -1124,7 +1123,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif 
-            member __.Constructor =  typeof<TypeProviderEditorHideMethodsAttribute>.GetTypeInfo().GetConstructors().[0]
+            member __.Constructor =  typeof<TypeProviderEditorHideMethodsAttribute>.GetConstructors().[0]
             member __.ConstructorArguments = upcast [| |]
             member __.NamedArguments = upcast [| |] }
 
@@ -1134,7 +1133,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif 
-            member __.Constructor = typeof<AllowNullLiteralAttribute>.GetTypeInfo().GetConstructors().[0]
+            member __.Constructor = typeof<AllowNullLiteralAttribute>.GetConstructors().[0]
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument(typeof<bool>, value) |]
             member __.NamedArguments = upcast [| |] }
 
@@ -1147,7 +1146,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif
-            member __.Constructor =  typeof<TypeProviderXmlDocAttribute>.GetTypeInfo().GetConstructors().[0]
+            member __.Constructor =  typeof<TypeProviderXmlDocAttribute>.GetConstructors().[0]
             member __.ConstructorArguments = upcast [| CustomAttributeTypedArgument(typeof<string>, lazyText.Force())  |]
             member __.NamedArguments = upcast [| |] }
 
@@ -1159,12 +1158,12 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif
-            member __.Constructor =  typeof<TypeProviderDefinitionLocationAttribute>.GetTypeInfo().GetConstructors().[0]
+            member __.Constructor =  typeof<TypeProviderDefinitionLocationAttribute>.GetConstructors().[0]
             member __.ConstructorArguments = upcast [| |]
             member __.NamedArguments = 
-                upcast [| CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetTypeInfo().GetProperty("FilePath"), CustomAttributeTypedArgument(typeof<string>, filePath));
-                            CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetTypeInfo().GetProperty("Line"), CustomAttributeTypedArgument(typeof<int>, line)) ;
-                            CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetTypeInfo().GetProperty("Column"), CustomAttributeTypedArgument(typeof<int>, column)) 
+                upcast [| CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetProperty("FilePath"), CustomAttributeTypedArgument(typeof<string>, filePath));
+                            CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetProperty("Line"), CustomAttributeTypedArgument(typeof<int>, line)) ;
+                            CustomAttributeNamedArgument(typeof<TypeProviderDefinitionLocationAttribute>.GetProperty("Column"), CustomAttributeTypedArgument(typeof<int>, column)) 
                         |] }
     let mkObsoleteAttributeCustomAttributeData(message:string, isError: bool) = 
 #if FX_NO_CUSTOMATTRIBUTEDATA
@@ -1172,7 +1171,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif
-                member __.Constructor =  typeof<System.ObsoleteAttribute>.GetTypeInfo().GetConstructors() |> Array.find (fun x -> x.GetParameters().Length = 2)
+                member __.Constructor =  typeof<System.ObsoleteAttribute>.GetConstructors() |> Array.find (fun x -> x.GetParameters().Length = 2)
                 member __.ConstructorArguments = upcast [|CustomAttributeTypedArgument(typeof<string>, message) ; CustomAttributeTypedArgument(typeof<bool>, isError)  |]
                 member __.NamedArguments = upcast [| |] }
 
@@ -1182,7 +1181,7 @@ module internal Misc =
 #else
         { new CustomAttributeData() with 
 #endif
-                member __.Constructor =  typeof<ReflectedDefinitionAttribute>.GetTypeInfo().GetConstructors().[0]
+                member __.Constructor =  typeof<ReflectedDefinitionAttribute>.GetConstructors().[0]
                 member __.ConstructorArguments = upcast [| |]
                 member __.NamedArguments = upcast [| |] }
 
@@ -1953,7 +1952,7 @@ type ProvidedMeasureBuilder() =
                 None
         match abbreviation with
         | Some (ns, unitName) ->
-            ProvidedSymbolType(ProvidedSymbolKind.FSharpTypeAbbreviation(typeof<Core.CompilerServices.MeasureOne>.GetTypeInfo().Assembly,ns,[| unitName |]), [], id) :> Type
+            ProvidedSymbolType(ProvidedSymbolKind.FSharpTypeAbbreviation(typeof<Core.CompilerServices.MeasureOne>.Assembly,ns,[| unitName |]), [], id) :> Type
         | None ->
             typedefof<list<int>>.Assembly.GetType("Microsoft.FSharp.Data.UnitSystems.SI.UnitNames." + mLowerCase)
 
@@ -2612,11 +2611,11 @@ type AssemblyGenerator(assemblyFileName) =
                         let pb = mb.DefineParameter(i+1, p.Attributes, p.Name)
                         if p.HasDefaultParameterValue then 
                             do
-                                let ctor = typeof<System.Runtime.InteropServices.DefaultParameterValueAttribute>.GetTypeInfo().GetConstructor([|typeof<obj>|])
+                                let ctor = typeof<System.Runtime.InteropServices.DefaultParameterValueAttribute>.GetConstructor([|typeof<obj>|])
                                 let builder = new CustomAttributeBuilder(ctor, [|p.RawDefaultValue|])
                                 pb.SetCustomAttribute builder
                             do
-                                let ctor = typeof<System.Runtime.InteropServices.OptionalAttribute>.GetTypeInfo().GetConstructor([||])
+                                let ctor = typeof<System.Runtime.InteropServices.OptionalAttribute>.GetConstructor([||])
                                 let builder = new CustomAttributeBuilder(ctor, [||])
                                 pb.SetCustomAttribute builder
                             pb.SetConstant p.RawDefaultValue
