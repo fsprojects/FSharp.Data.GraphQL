@@ -3,6 +3,8 @@
 
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
+#nowarn "25"
+
 open System
 open Xunit
 open FsCheck
@@ -14,8 +16,7 @@ open FSharp.Data.GraphQL.Client
 
 [<Fact(Skip="FIXME: investigate reason of failure")>]
 let ``Introspection schema should be serializable back and forth using json`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
     let introResult = schema.AsyncExecute(Introspection.introspectionQuery) |> sync
     let json = Client.Serialization.toJson introResult
@@ -24,8 +25,7 @@ let ``Introspection schema should be serializable back and forth using json`` ()
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
     let query = """{ __type(name: "String") {
       kind
@@ -44,7 +44,8 @@ let ``Core type definitions are considered nullable`` () =
       }
     } }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "kind", upcast "SCALAR"
             "name", upcast "String"
@@ -54,8 +55,7 @@ let ``Core type definitions are considered nullable`` () =
     
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -79,7 +79,8 @@ let ``Default field type definitions are considered non-null`` () =
       }
     } }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
                 box <| NameValueLookup.ofList [
@@ -96,8 +97,7 @@ let ``Default field type definitions are considered non-null`` () =
     
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", Nullable String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", Nullable String) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -121,7 +121,8 @@ let ``Nullabe field type definitions are considered nullable`` () =
       }
     } }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
                 box <| NameValueLookup.ofList [
@@ -135,8 +136,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
     
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Int) ], fun _ () -> null) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Int) ], fun _ () -> null) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -162,7 +162,8 @@ let ``Default field args type definitions are considered non-null`` () =
       }
     } }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
                 box <| NameValueLookup.ofList [
@@ -181,8 +182,7 @@ let ``Default field args type definitions are considered non-null`` () =
     
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Nullable Int) ], fun _ () -> null) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Nullable Int) ], fun _ () -> null) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -208,7 +208,8 @@ let ``Nullable field args type definitions are considered nullable`` () =
       }
     } }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [
                 box <| NameValueLookup.ofList [
@@ -224,14 +225,13 @@ let ``Nullable field args type definitions are considered nullable`` () =
 
 [<Fact(Skip = "Investigate and fix the test, introspeciton is already working")>]
 let ``Introspection executes an introspection query`` () =
-    let root = Define.Object("QueryRoot", [
-        Define.Field("onlyField", String)
-    ])
+    let root = Define.Object("QueryRoot", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
     let (Object raw) = root
     let result = sync <| schema.AsyncExecute(parse Introspection.introspectionQuery, raw)
     noErrors result
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [
             "mutationType", null
             "subscriptionType", null

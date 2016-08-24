@@ -36,11 +36,13 @@ type Person =
     interface INamed with
         member x.Name = x.Name
         
-let NamedType = Define.Interface<INamed>(
+let NamedType =
+  Define.Interface<INamed>(
     name = "Named",
     fields = [ Define.Field("name", String) ])
 
-let DogType = Define.Object<Dog>(
+let DogType =
+  Define.Object<Dog>(
     name = "Dog",
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
@@ -49,7 +51,8 @@ let DogType = Define.Object<Dog>(
         Define.Field("barks", Boolean)
     ])
     
-let CatType = Define.Object<Cat>(
+let CatType =
+  Define.Object<Cat>(
     name = "Cat",
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
@@ -58,7 +61,8 @@ let CatType = Define.Object<Cat>(
         Define.Field("meows", Boolean)
     ])
 
-let PetType = Define.Union(
+let PetType =
+  Define.Union(
     name = "Pet",
     options = [ CatType; DogType ],
     resolveType = (fun pet ->
@@ -70,7 +74,8 @@ let PetType = Define.Union(
         | Cat cat -> box cat
         | Dog dog -> box dog))
 
-let PersonType = Define.Object(
+let PersonType =
+  Define.Object(
     name = "Person",
     isTypeOf = is<Person>,
     interfaces = [ NamedType ],
@@ -110,7 +115,8 @@ let ``Execute can introspect on union and intersection types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "Named", upcast NameValueLookup.ofList [
             "kind", box "INTERFACE"
             "name", upcast "Named"
@@ -150,7 +156,8 @@ let ``Executes union types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [
@@ -184,7 +191,8 @@ let ``Executes union types with inline fragments`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [
@@ -213,7 +221,8 @@ let ``Executes interface types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "friends", upcast [
@@ -245,7 +254,8 @@ let ``Executes interface types with inline fragments`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "friends", upcast [
@@ -291,7 +301,8 @@ let ``Execute allows fragment conditions to be abstract types`` () =
         }
       }"""
     let actual = sync <| schema.AsyncExecute(ast, john)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "__typename", box "Person"
         "name", upcast "John"
         "pets", upcast [

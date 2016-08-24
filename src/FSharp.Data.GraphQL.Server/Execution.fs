@@ -82,8 +82,8 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     interface IEnumerable<KeyValuePair<string, obj>> with
         member x.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
     interface IDictionary<string, obj> with
-        member x.Add(key, value) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Add(item) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member x.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member x.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
         member x.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
         member x.Contains(item) = kvals |> Array.exists ((=) item)
         member x.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
@@ -136,7 +136,6 @@ let internal findOperation doc opName =
     | defs, name -> 
         defs
         |> List.tryFind (fun def -> def.Name = name)
-    | _ -> None
 
 let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (vars: Map<string, obj>) =
     if vars = Map.empty
@@ -158,8 +157,10 @@ let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) 
     | other -> 
         match coerceBoolInput other with
         | Some s -> s
-        | None -> raise (
-            GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
+        | None ->
+            (directive.Name, other)
+            ||> sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A"
+            |> GraphQLException |> raise
 
 let private shouldSkip (ctx: ExecutionContext) (directive: Directive) =
     match directive.Name with
@@ -192,8 +193,9 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 
-            let (SelectFields(fields)) = ctx.ExecutionPlan.Kind
-            executeFields objdef ctx value fields
+            match ctx.ExecutionPlan.Kind with
+            | SelectFields fields -> executeFields objdef ctx value fields
+            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
     | Scalar scalardef ->
         let (coerce: obj -> obj option) = scalardef.CoerceValue
         fun _ value -> 
@@ -203,8 +205,10 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | List (Output innerdef) ->
         let (innerfn: ResolveFieldContext -> obj -> Job<obj>) = createCompletion possibleTypesFn innerdef
         fun ctx (value: obj) -> job {
-            let (ResolveCollection(innerPlan)) = ctx.ExecutionPlan.Kind
-            let innerCtx = { ctx with ExecutionPlan = innerPlan }
+            let innerCtx =
+                match ctx.ExecutionPlan.Kind with
+                | ResolveCollection innerPlan -> { ctx with ExecutionPlan = innerPlan }
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match value with
             | :? string as s -> 
                 let! inner = innerfn innerCtx (s)
@@ -216,8 +220,10 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
                     |> Seq.map (fun x -> innerfn innerCtx x)
                     |> Job.conCollect
                 return box (completed.ToArray())
-            | _ -> return raise (
-                GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Identifier (value.GetType())))
+            | _ ->
+                return (ctx.ExecutionPlan.Identifier, value.GetType())
+                ||> sprintf "Expected to have enumerable value in field '%s' but got '%O'"
+                |> GraphQLException |> raise 
         }
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
@@ -234,7 +240,10 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let resolver = resolveInterfaceType possibleTypesFn idef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            let (ResolveAbstraction(typeMap)) = ctx.ExecutionPlan.Kind
+            let typeMap =
+                match ctx.ExecutionPlan.Kind with
+                | ResolveAbstraction typeMap -> typeMap
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
             | Some fields -> return! executeFields resolvedDef ctx value fields
             | None -> return raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
@@ -243,7 +252,10 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let resolver = resolveUnionType possibleTypesFn udef
         fun ctx value -> job {
             let resolvedDef = resolver value
-            let (ResolveAbstraction(typeMap)) = ctx.ExecutionPlan.Kind
+            let typeMap =
+                match ctx.ExecutionPlan.Kind with
+                | ResolveAbstraction typeMap -> typeMap
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
             | Some fields -> return! executeFields resolvedDef ctx (udef.ResolveValue value) fields
             | None -> return raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
@@ -252,6 +264,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         fun _ value -> 
             let result = coerceStringValue value
             Job.result (result |> Option.map box |> Option.toObj)
+    | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.Type)
@@ -266,7 +279,7 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
         | ex -> 
             resolveFieldCtx.AddError(ex)
             return null
-    } |> Async.Global.ofJob)
+    } |> Job.toAsync)
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
@@ -360,7 +373,6 @@ let internal compileSchema possibleTypesFn types =
 let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors = 
     job {
         let variables = coerceVariables schema executionPlan.Operation.VariableDefinitions variables
-        let operation = executionPlan.Operation
         let ctx = {
             Schema = schema
             ExecutionPlan = executionPlan
@@ -368,4 +380,4 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
             Variables = variables
             Errors = errors }
         return! executePlan ctx executionPlan schema.Query root
-    } |> Async.Global.ofJob
+    } |> Job.toAsync

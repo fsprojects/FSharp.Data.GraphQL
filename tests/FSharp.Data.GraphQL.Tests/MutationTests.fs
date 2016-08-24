@@ -32,9 +32,12 @@ type Root =
         }
 
 let NumberHolder = Define.Object("NumberHolder", [ Define.Field("theNumber", Int, fun _ x -> x.Number) ])
-let schema = Schema(
+let schema =
+  Schema(
     query = Define.Object("Query", [ Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) ]),
-    mutation = Define.Object("Mutation", [
+    mutation =
+      Define.Object("Mutation",
+      [
         Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber")))
         Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber")))
         Define.Field("failToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
@@ -62,7 +65,8 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
     }"""
 
     let mutationResult = sync <| schema.AsyncExecute(parse query, {NumberHolder = {Number = 6}})
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "first",  upcast NameValueLookup.ofList [ "theNumber", 1 :> obj]
         "second", upcast NameValueLookup.ofList [ "theNumber", 2 :> obj]
         "third",  upcast NameValueLookup.ofList [ "theNumber", 3 :> obj]
@@ -97,7 +101,8 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 
     let data = {NumberHolder = {Number = 6}}
     let mutationResult = sync <| schema.AsyncExecute(parse query, data)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "first",  upcast NameValueLookup.ofList [ "theNumber", 1 :> obj]
         "second", upcast NameValueLookup.ofList [ "theNumber", 2 :> obj]
         "third",  null
@@ -117,7 +122,8 @@ let ``Execute handles mutation with multiple arguments`` () =
     }"""
 
     let mutationResult = sync <| schema.AsyncExecute(parse query, {NumberHolder = {Number = 6}}, Map.ofList [ "arg1", box 3; "arg2", box 33])
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "immediatelyChangeTheNumber", upcast NameValueLookup.ofList [ "theNumber", box 33]
         ]
     noErrors mutationResult

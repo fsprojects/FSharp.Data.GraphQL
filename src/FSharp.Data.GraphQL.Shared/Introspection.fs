@@ -88,7 +88,8 @@ let introspectionQuery = """query IntrospectionQuery {
     }
   }"""
     
-let __TypeKind = Define.Enum(
+let __TypeKind =
+  Define.Enum(
     name = "__TypeKind", 
     description = "An enum describing what kind of type a given __Type is.",
     options = [
@@ -102,7 +103,8 @@ let __TypeKind = Define.Enum(
         Define.EnumValue("NON_NULL", TypeKind.NON_NULL, "Indicates this type is a non-null. `ofType` is a valid field.")
     ])
 
-let __DirectiveLocation = Define.Enum(
+let __DirectiveLocation =
+  Define.Enum(
     name = "__DirectiveLocation",
     description = "A Directive can be adjacent to many parts of the GraphQL language, a __DirectiveLocation describes one such possible adjacencies.",
     options = [
@@ -117,10 +119,12 @@ let __DirectiveLocation = Define.Enum(
     
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
 
-let rec __Type = Define.Object<IntrospectionTypeRef>(
+let rec __Type =
+  Define.Object<IntrospectionTypeRef>(
     name = "__Type",
     description = """The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.""",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("kind", __TypeKind, fun _ t -> t.Kind)
         Define.Field("name", Nullable String, resolve = fun _ t -> t.Name)
         Define.Field("description", Nullable String, fun _ t -> t.Description)
@@ -164,20 +168,24 @@ let rec __Type = Define.Object<IntrospectionTypeRef>(
         Define.Field("ofType", Nullable __Type, resolve = fun _ t -> t.OfType)
     ])
    
-and __InputValue = Define.Object<IntrospectionInputVal>(
+and __InputValue =
+  Define.Object<IntrospectionInputVal>(
     name = "__InputValue",
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("name", String, fun _ f -> f.Name)
         Define.Field("description", Nullable String, fun _ f -> f.Description)
         Define.Field("type", __Type, fun _ f -> f.Type)
         Define.Field("defaultValue", Nullable String, fun _ f -> f.DefaultValue)
     ])
     
-and __Field = Define.Object<IntrospectionField>(
+and __Field =
+  Define.Object<IntrospectionField>(
     name = "__Field",
     description = "Object and Interface types are described by a list of Fields, each of which has a name, potentially a list of arguments, and a return type.",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("name", String, fun _ f -> f.Name)
         Define.Field("description", Nullable String, fun _ f -> f.Description)
         Define.Field("args", ListOf __InputValue, fun _ f -> f.Args)
@@ -186,20 +194,24 @@ and __Field = Define.Object<IntrospectionField>(
         Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
     ])
     
-and __EnumValue = Define.Object<IntrospectionEnumVal>(
+and __EnumValue =
+  Define.Object<IntrospectionEnumVal>(
     name = "__EnumValue",
     description = "One possible value for a given Enum. Enum values are unique values, not a placeholder for a string or numeric value. However an Enum value is returned in a JSON response as a string.",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("name", String, fun _ e -> e.Name)
         Define.Field("description", Nullable String, fun _ e -> e.Description)
         Define.Field("isDeprecated", Boolean, fun _ e -> Option.isSome e.DeprecationReason)
         Define.Field("deprecationReason", Nullable String, fun _ e -> e.DeprecationReason)
     ])
 
-and __Directive = Define.Object<IntrospectionDirective>(
+and __Directive =
+  Define.Object<IntrospectionDirective>(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("name", String, fun _ directive -> directive.Name)
         Define.Field("description", Nullable String, fun _ directive -> directive.Description)
         Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> directive.Locations)
@@ -209,10 +221,12 @@ and __Directive = Define.Object<IntrospectionDirective>(
         Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.FIELD)))
     ])
     
-and __Schema = Define.Object<IntrospectionSchema>(
+and __Schema =
+  Define.Object<IntrospectionSchema>(
     name = "__Schema",
     description = "A GraphQL Schema defines the capabilities of a GraphQL server. It exposes all available types and directives on the server, as well as the entry points for query, mutation, and subscription operations.",
-    fieldsFn = fun () -> [
+    fieldsFn = fun () ->
+    [
         Define.Field("types", ListOf __Type, description = "A list of all types supported by this server.", resolve = fun _ schema -> schema.Types |> Array.map IntrospectionTypeRef.Named)
         Define.Field("queryType", __Type, description = "The type that query operations will be rooted at.", resolve = fun _ schema -> schema.QueryType)
         Define.Field("mutationType", Nullable __Type, description = "If this server supports mutation, the type that mutation operations will be rooted at.", resolve = fun _ schema -> schema.MutationType)

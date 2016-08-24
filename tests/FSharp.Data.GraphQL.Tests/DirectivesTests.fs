@@ -14,10 +14,10 @@ open FSharp.Data.GraphQL.Execution
 type Data = { A: string; B: string }
 let data = { A = "a"; B = "b" }
 
-let schema = Schema(Define.Object("TestType", [
-    Define.Field("a", String)
-    Define.Field("b", String)
-]))
+let schema =
+  Schema(Define.Object("TestType",
+          [ Define.Field("a", String)
+            Define.Field("b", String) ]))
 
 let private execAndCompare query expected =
     let actual = sync <| schema.AsyncExecute(parse query, data)

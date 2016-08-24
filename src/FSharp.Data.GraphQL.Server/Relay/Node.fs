@@ -65,7 +65,8 @@ module GlobalId =
                     let id = ctx.Arg("id")
                     resolve ctx value id)
 
-        static member Node (possibleTypes: unit -> ObjectDef list) = Define.Interface(
+        static member Node (possibleTypes: unit -> ObjectDef list) =
+          Define.Interface(
             name = "Node",
             description = "An object that can be uniquely identified by its id",
             fields = [ Define.Field("id", ID) ],

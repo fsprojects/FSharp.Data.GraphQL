@@ -4,6 +4,8 @@
 
 module FSharp.Data.GraphQL.Tests.CoercionTests
 
+#nowarn "25"
+
 open System
 open Xunit
 open FsCheck

@@ -3,6 +3,8 @@
 
 module FSharp.Data.GraphQL.Tests.VariablesTests
 
+#nowarn "25"
+
 open System
 open Xunit
 open FsCheck
@@ -13,7 +15,8 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Client.Serialization
 
-let TestComplexScalar = Define.Scalar(
+let TestComplexScalar =
+  Define.Scalar(
     name = "ComplexScalar",
     coerceInput = (fun (StringValue value) -> if value = "SerializedValue" then Some "DeserializedValue" else None),
     coerceOutput = (fun value -> if value = "DeserializedValue" then Some (StringValue "SerializedValue") else None),
@@ -25,7 +28,8 @@ type TestInput = {
     c: string
     d: string option
 }
-let TestInputObject = Define.InputObject<TestInput>(
+let TestInputObject =
+  Define.InputObject<TestInput>(
     name = "TestInputObject",
     fields = [
         Define.Input("a", Nullable String)
@@ -38,7 +42,8 @@ type TestNestedInput = {
     na: TestInput option
     nb: string
 }
-let TestNestedInputObject = Define.InputObject<TestNestedInput>(
+let TestNestedInputObject =
+  Define.InputObject<TestNestedInput>(
     name = "TestNestedInputObject",
     fields = [
         Define.Input("na", Nullable TestInputObject)
@@ -51,7 +56,8 @@ let stringifyArg name (ctx: ResolveFieldContext) () =
 
 let stringifyInput = stringifyArg "input"
 
-let TestType = Define.Object<unit>(
+let TestType =
+  Define.Object<unit>(
     name = "TestType",
     fields = [
         Define.Field("fieldWithObjectInput", String, "", [ Define.Input("input", Nullable TestInputObject) ], stringifyInput)
@@ -104,9 +110,9 @@ let ``Execute handles variables with complex inputs`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params : Map<string, obj> = Map.ofList [
-        "input", upcast { a = Some "foo"; b = Some (upcast [ Some "bar"]) ; c = "baz"; d = None }]
-    let actual = sync <| schema.AsyncExecute(ast, variables = params)
+    let params' : Map<string, obj> =
+        Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [ Some "bar"]) ; c = "baz"; d = None }]
+    let actual = sync <| schema.AsyncExecute(ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
     noErrors actual
     actual.["data"] |> equals (upcast expected)
@@ -126,12 +132,13 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params : Map<string, obj> = Map.ofList [
+    let params' : Map<string, obj> =
+      Map.ofList [
         "input", upcast Map.ofList [
             "a", "foo" :> obj
             "b", upcast ["bar"]
             "c", null]]
-    let actual = sync <| schema.AsyncExecute(ast, variables = params)
+    let actual = sync <| schema.AsyncExecute(ast, variables = params')
     let errMsg = sprintf "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type %O but got None" typeof<string>
     hasError errMsg (downcast actual.["errors"])
     
@@ -140,8 +147,8 @@ let ``Execute handles variables and errors on incorrect type`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
-    let actual = sync <| schema.AsyncExecute(ast, variables = params)
+    let params' : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
+    let actual = sync <| schema.AsyncExecute(ast, variables = params')
     let errMsg = sprintf " Variable '$input': value of type %O is not assignable from %O" typeof<TestInput> typeof<string>
     hasError errMsg (downcast actual.["errors"])
     
@@ -150,11 +157,12 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params : Map<string, obj> = Map.ofList [
+    let params' : Map<string, obj> =
+      Map.ofList [
         "input", upcast Map.ofList [
             "a", "foo" :> obj
             "b", upcast ["bar"]]]
-    let actual = sync <| schema.AsyncExecute(ast, variables = params)
+    let actual = sync <| schema.AsyncExecute(ast, variables = params')
     equals 1 (Seq.length (downcast actual.["errors"]))
     let errMsg = sprintf "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type %O but got None" typeof<string>
     hasError errMsg (downcast actual.["errors"])

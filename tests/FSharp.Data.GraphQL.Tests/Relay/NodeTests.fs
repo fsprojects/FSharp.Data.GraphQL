@@ -21,7 +21,8 @@ let cars = [
     { Id = "1"; Model = "Tesla S" }
     { Id = "2"; Model = "Shelby GT500" }]
 
-let rec Person = Define.Object<Person>(
+let rec Person =
+  Define.Object<Person>(
     name = "Person",
     interfaces = [ Node ],
     fields = [
@@ -29,7 +30,8 @@ let rec Person = Define.Object<Person>(
         Define.Field("name", String, fun _ person -> person.Name)
         Define.Field("age", Int, fun _ person -> person.Age) ])
 
-and Car = Define.Object<Car>(
+and Car =
+  Define.Object<Car>(
     name = "Car",
     interfaces = [ Node ],
     fields = [
@@ -40,6 +42,7 @@ and resolve _ _ id =
     match id with
     | GlobalId("person", id) -> people |> List.tryFind (fun person -> person.Id = id) |> Option.map box
     | GlobalId("car", id) -> cars |> List.tryFind (fun car -> car.Id = id) |> Option.map box
+    | _ -> None
 
 and Node = Define.Node (fun () -> [ Person; Car ])
 
@@ -60,7 +63,8 @@ let ``Node with global ID gets correct record`` () =
             age
         }
     }"""
-    let expected1 = NameValueLookup.ofList [
+    let expected1 =
+      NameValueLookup.ofList [
         "name", upcast "Alice"
         "age", upcast 18]
     execAndValidateNode query1 expected1
@@ -70,7 +74,8 @@ let ``Node with global ID gets correct record`` () =
             model
         }
     }"""
-    let expected2 = NameValueLookup.ofList [
+    let expected2 =    
+      NameValueLookup.ofList [
         "model", upcast "Tesla S" ]
     execAndValidateNode query1 expected1
 

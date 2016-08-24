@@ -51,6 +51,7 @@ let validateType (namedTypes: Map<string, NamedDef>) typedef =
     | Interface idef -> 
         let nonEmptyResult = if idef.Fields.Length > 0 then Success else Error [ idef.Name + " must have at least one field defined" ]
         nonEmptyResult
+    | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
 let validate (namedTypes: Map<string, NamedDef>) : ValidationResult =
     namedTypes

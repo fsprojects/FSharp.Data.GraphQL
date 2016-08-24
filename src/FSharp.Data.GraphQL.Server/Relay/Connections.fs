@@ -51,9 +51,11 @@ module Definitions =
             | Some last, None -> Some (Backward(last, None))
             | Some last, Some before -> Some (Backward(last, before))
             | _, _ -> None
+        | _ -> None
     
     /// Object defintion representing information about pagination in context of Relay connection
-    let PageInfo = Define.Object<PageInfo>(
+    let PageInfo =
+      Define.Object<PageInfo>(
         name = "PageInfo",
         description = "Information about pagination in a connection.",
         fields = [
@@ -74,12 +76,16 @@ module Definitions =
                 description = "An edge in a connection from an object to another object of type " + n.Name,
                 fields = [
                     Define.Field("cursor", String, "A cursor for use in pagination", fun _ edge -> edge.Cursor)
-                    Define.Field("node", nodeType, "The item at the end of the edge. Must NOT be an enumerable collection.", fun _ edge -> edge.Node) ]) 
+                    Define.Field("node", nodeType, "The item at the end of the edge. Must NOT be an enumerable collection.", fun _ edge -> edge.Node) ])
+        | _ -> failwithf "Unexpected value of nodeType: %O" nodeType
     
     /// Converts existing output type definition into Relay-compatible connection.
     /// <paramref name="nodeType"/> must not be a List.
     let ConnectionOf(nodeType: #OutputDef<'Node>) = 
-        let (Named n) = nodeType
+        let n =
+            match nodeType with
+            | Named n -> n
+            | _ -> failwithf "Unexpected value of nodeType: %O" nodeType
         Define.Object<Connection<'Node>>(
             name = n.Name + "Connection",
             description = "A connection from an object to a list of objects of type " + n.Name,
