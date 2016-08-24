@@ -3,7 +3,8 @@
 ## WARNING: Work in progress
 F# implementation of Facebook [GraphQL query language specification](https://facebook.github.io/graphql).
 
-[![Build status](https://ci.appveyor.com/api/projects/status/yjsen9xyvqhyak4b?svg=true)](https://ci.appveyor.com/project/johnberzy-bazinga/fsharp-data-graphql)
+[![Build Status](https://travis-ci.org/bazingatechnologies/FSharp.Data.GraphQL.svg?branch=dev)](https://travis-ci.org/bazingatechnologies/FSharp.Data.GraphQL)
+[![Build status](https://ci.appveyor.com/api/projects/status/mkjwu1dg9xn3jwox/branch/dev?svg=true)](https://ci.appveyor.com/project/bazingatechnologies/fsharp-data-graphql-ydavv/branch/dev)
 
 ## Quick start
 
