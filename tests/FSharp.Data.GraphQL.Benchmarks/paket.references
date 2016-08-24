@@ -1,3 +1,4 @@
+FSharp.Core
 BenchmarkDotNet
 BenchmarkDotNet.Diagnostics.Windows
 Hopac

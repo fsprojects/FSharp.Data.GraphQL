@@ -456,9 +456,9 @@ Target "All" DoNothing
   ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
+  ==> "All"
   =?> ("GenerateReferenceDocs", environVar "APPVEYOR" = "True")
   =?> ("GenerateDocs", environVar "APPVEYOR" = "True")
-  ==> "All"
   =?> ("ReleaseDocs",isLocalBuild)
 
 // "All"
