@@ -12,25 +12,26 @@ open FSharp.Data.GraphQL.Linq
 open FSharp.Data.GraphQL.Execution
 
 type NestedDataType = { D: string }
-type DataType = { A: string; B: string; C: NestedDataType; E: NestedDataType list }
+type DataType = { ID: int; A: string; B: string; C: NestedDataType; E: NestedDataType list }
 
 let NestedType = Define.Object("NestedType", [
     Define.Field("d", String, fun _ x -> x.D)])
 
 let DataType = Define.Object<DataType>("DataType", [
+    Define.Field("id", ID, fun _ x -> x.ID)
     Define.AutoField("a", String)
     Define.Field("b", String, fun _ x -> x.B)
     Define.Field("c", NestedType, fun _ x -> x.C)
     Define.Field("e", ListOf NestedType, fun _ x -> x.E) ])
 
 let data = [
-    { A = "aa"; 
-    B = "bb"; 
-    C = { D = "dd"}; 
-    E = [ 
-        { D = "dd2" }; 
-        { D = "dd3" } 
-    ]}
+    { ID = 1; 
+      A = "aa"; 
+      B = "bb"; 
+      C = { D = "dd"}; 
+      E = [ 
+          { D = "dd2" }; 
+          { D = "dd3" } ]}
 ]
 
 let undefined<'t> = Unchecked.defaultof<'t>
@@ -108,13 +109,13 @@ let ``LINQ interpreter works with nested collections`` () =
             { D = "dd3" } ]
 
 [<Fact(Skip="TODO")>]
+let ``LINQ interpreter works with id arg`` () = ()
+
+[<Fact(Skip="TODO")>]
 let ``LINQ interpreter works with first/after args`` () = ()
 
 [<Fact(Skip="TODO")>]
 let ``LINQ interpreter works with last/before args`` () = ()
-
-[<Fact(Skip="TODO")>]
-let ``LINQ interpreter works with id arg`` () = ()
 
 [<Fact(Skip="TODO")>]
 let ``LINQ interpreter works with Relay Connection`` () = ()

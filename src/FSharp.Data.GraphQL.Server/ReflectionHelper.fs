@@ -58,21 +58,23 @@ module internal Gen =
         then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
         else None
 
-    let listOfSeq = 
-        let (Call(_, info, _)) = <@ List.ofSeq<_> Seq.empty @>
-        info.GetGenericMethodDefinition()
-    let arrayOfSeq = 
-        let (Call(_, info, _)) = <@ Array.ofSeq<_> Seq.empty @>
-        info.GetGenericMethodDefinition()
-    let setOfSeq = 
-        let (Call(_, info, _)) = <@ Set.ofSeq<_> Seq.empty @>
-        info.GetGenericMethodDefinition()
-
     let genericType<'t> typeParams = typedefof<'t>.MakeGenericType typeParams
 
     let genericMethod<'t> methodName typeParams = 
         let methods = typeof<'t>.GetMethods().Where(System.Func<MethodInfo,bool>(fun x -> x.Name = methodName))
         methods.First().MakeGenericMethod typeParams
+    
+    let listOfSeq = 
+        let (Call(_, info, _)) = <@ List.ofSeq<_> Seq.empty @>
+        info.GetGenericMethodDefinition()
+
+    let arrayOfSeq = 
+        let (Call(_, info, _)) = <@ Array.ofSeq<_> Seq.empty @>
+        info.GetGenericMethodDefinition()
+
+    let setOfSeq = 
+        let (Call(_, info, _)) = <@ Set.ofSeq<_> Seq.empty @>
+        info.GetGenericMethodDefinition()
 
     let private select tIn tOut =        
         match tIn with
@@ -86,3 +88,62 @@ module internal Gen =
             let tSelect = genericMethod<Enumerable> "Select" [| tSource; tFunc |]
             tSelect
         | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
+
+    let enumerableMethods = typeof<Enumerable>.GetMethods()
+    let queryableMethods = typeof<Queryable>.GetMethods()
+
+type internal EnumerableMethods =
+
+    static member Type = typedefof<IEnumerable<_>>
+
+    static member Select = 
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Select"))
+        methods.First()
+
+    static member Where = 
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Where"))
+        methods.First()
+        
+    static member Skip = 
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Skip"))
+        methods.First()
+        
+    static member Take = 
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Take"))
+        methods.First()
+        
+    static member OrderBy = 
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderBy"))
+        methods.First()
+                
+    static member OrderByDesc =  
+        let methods = Gen.enumerableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderByDescending"))
+        methods.First()
+        
+type internal QueryableMethods =
+
+    static member Type = typedefof<IQueryable<_>>
+
+    static member Select = 
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Select"))
+        methods.First()
+
+    static member Where = 
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Where"))
+        methods.First()
+        
+    static member Skip = 
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Skip"))
+        methods.First()
+        
+    static member Take = 
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Take"))
+        methods.First()
+        
+    static member OrderBy = 
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderBy"))
+        methods.First()
+                
+    static member OrderByDesc =  
+        let methods = Gen.queryableMethods.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderByDescending"))
+        methods.First()

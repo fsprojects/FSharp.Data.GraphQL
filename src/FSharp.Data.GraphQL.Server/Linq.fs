@@ -53,30 +53,37 @@ let rec private eval tIn info (inputExpr: Expression) : Expression =
         constructObject returnedType fields inputExpr
     | ResolveCollection inner ->
         // apply Select on the Expr target
-        constructCollection tIn inner inputExpr
+        let tResult = inner.ReturnDef.Type
+        // create a call, that will return either IEnumerable`1 or IQueryable`1
+        let call =
+            match tIn with
+            | Gen.Queryable tSource ->
+                let p0 = Expression.Parameter(tSource)
+                let body = eval inner.ParentDef.Type inner p0
+                // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
+                Expression.Call(
+                    // Select<tSource, tResult> - method to invoke
+                    QueryableMethods.Select.MakeGenericMethod [| tSource; tResult |], 
+                    // `this` param - Convert(inputValue, IQueryable<tSource>)
+                    Expression.Convert(inputExpr, QueryableMethods.Type.MakeGenericType [| tSource |]), 
+                    // `mapFunc` param - (p0 => body )
+                    Expression.Lambda(body, p0))
 
-and private constructCollection tIn inner inputExpr =
-    let tResult = inner.ReturnDef.Type
-    // create a call, that will return either IEnumerable`1 or IQueryable`1
-    let call =
-        match tIn with
-        | Gen.Queryable tSource ->
-            let mSelect = Gen.genericMethod<Queryable> "Select" [| tSource; tResult |] 
-            let innerParam = Expression.Parameter(tSource)
-            let evaled = eval inner.ParentDef.Type inner innerParam
-            let destinationType = Gen.genericType<IQueryable<_>> [| tSource |] 
-            let fn = Expression.Lambda(evaled, innerParam)
-            Expression.Call(mSelect, Expression.Convert(inputExpr, destinationType), fn)
-        | Gen.Enumerable tSource ->
-            let mSelect = Gen.genericMethod<Enumerable> "Select" [| tSource; tResult |] 
-            let innerParam = Expression.Parameter(tSource)
-            let evaled = eval inner.ParentDef.Type inner innerParam
-            let destinationType = Gen.genericType<IEnumerable<_>> [| tSource |] 
-            let fn = Expression.Lambda(evaled, innerParam)
-            Expression.Call(mSelect, Expression.Convert(inputExpr, destinationType), fn)
-        | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
-    // enhance call with cast to result type
-    castTo tIn call
+            | Gen.Enumerable tSource ->
+                let p0 = Expression.Parameter(tSource)
+                let body = eval inner.ParentDef.Type inner p0
+                // call method - ((IEnuerable<tSource>)inputExpr).Select(p0 => body)
+                Expression.Call(
+                    // Select<tSource, tResult> - method to invoke
+                    EnumerableMethods.Select.MakeGenericMethod [| tSource; tResult |], 
+                    // `this` param - Convert(inputValue, IEnumerable<tSource>)
+                    Expression.Convert(inputExpr, EnumerableMethods.Type.MakeGenericType [| tSource |]), 
+                    // `mapFunc` param - (p0 => ... )
+                    Expression.Lambda(body, p0))
+
+            | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
+        // enhance call with cast to result type
+        castTo tIn call
 
 and private constructObject (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
     let fieldMap = Dictionary()
@@ -116,7 +123,7 @@ and private constructObject (t: Type) (infos: ExecutionInfo list) inputExpr : Ex
                 upcast Expression.Bind(m, eval kv.Value.ParentDef.Type kv.Value inputExpr))
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings)        
         
-let rec private toLinq (info: ExecutionInfo) (query: IQueryable<'Source>) : IQueryable<'Result> =
+let rec private toLinq info (query: IQueryable<'Source>) : IQueryable<'Result> =
     let collectionType = query.GetType()
     let parameter = Expression.Parameter(collectionType)
     let expr = eval collectionType info parameter
@@ -129,12 +136,13 @@ let rec private toLinq (info: ExecutionInfo) (query: IQueryable<'Source>) : IQue
         | selector -> 
             let tSource = typeof<'Source>
             let tResult = typeof<'Result>
-            let mSelect = Gen.genericMethod<Queryable> "Select" [| tSource; tResult |]
-            let destinationType = Gen.genericType<IQueryable<_>> [| typeof<'Result> |]
+            let mSelect = QueryableMethods.Select.MakeGenericMethod [| tSource; tResult |]
+            let destinationType = QueryableMethods.Type.MakeGenericType [| typeof<'Result> |]
             let call = Expression.Call(mSelect, Expression.Convert(parameter, destinationType), selector)
             Expression.Lambda(call, [| parameter |]).Compile()
     downcast compiled.DynamicInvoke [| box query |]
 
 type FSharp.Data.GraphQL.Types.ExecutionInfo with
-    member this.ToLinq(source: IQueryable<'Source>) : IQueryable<'Result> = toLinq this source
+    member this.ToLinq(source: IQueryable<'Source>) : IQueryable<'Result> = 
+        toLinq this source
         

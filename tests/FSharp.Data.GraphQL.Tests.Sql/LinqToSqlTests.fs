@@ -16,7 +16,7 @@ open FSharp.Data.GraphQL.Linq
 type Db = SqlDataConnection<"Server=.;Database=NORTHWND;Trusted_Connection=True;">
 
 let Order = Define.Object("Order", [
-    Define.Field("orderId", Int, fun _ (o: Db.ServiceTypes.Orders) -> o.OrderID)
+    Define.Field("orderId", ID, fun _ (o: Db.ServiceTypes.Orders) -> o.OrderID)
     Define.Field("shipAddress", String, fun _ o -> o.ShipAddress)
     Define.Field("shipCity", String, fun _ o -> o.ShipCity)
     Define.Field("shipCountry", String, fun _ o -> o.ShipCountry) ])

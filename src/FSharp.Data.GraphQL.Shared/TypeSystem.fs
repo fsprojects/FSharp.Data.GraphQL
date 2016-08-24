@@ -1054,6 +1054,13 @@ module SchemaDefinitions =
                  else "false")
         | Option o -> Some(o.ToString())
         | _ -> Some(x.ToString())
+        
+    let coerceIDValue (x : obj) : 't option = 
+        match x with
+        | null -> None
+        | :? string as s -> Some (downcast Convert.ChangeType(s, typeof<'t>))
+        | Option o -> Some(downcast Convert.ChangeType(o, typeof<'t>))
+        | _ -> Some(downcast Convert.ChangeType(x, typeof<'t>))
     
     let private coerceIntInput = 
         function 
@@ -1106,10 +1113,10 @@ module SchemaDefinitions =
         | BooleanValue b -> Some b
         | _ -> None
     
-    let private coerceIdInput = 
-        function 
-        | IntValue i -> Some(i.ToString())
-        | StringValue s -> Some s
+    let private coerceIdInput input : 't option= 
+        match input with
+        | IntValue i -> Some(downcast Convert.ChangeType(i, typeof<'t>)) 
+        | StringValue s -> Some(downcast Convert.ChangeType(s, typeof<'t>))
         | _ -> None
     
     let private coerceUriInput = 
@@ -1256,13 +1263,13 @@ module SchemaDefinitions =
           CoerceOutput = coerceStringOuput }
     
     /// GraphQL type for custom identifier
-    let ID : ScalarDefinition<string> = 
+    let ID<'Val> : ScalarDefinition<'Val> = 
         { Name = "ID"
           Description = 
               Some 
                   "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
           CoerceInput = coerceIdInput
-          CoerceValue = coerceStringValue
+          CoerceValue = coerceIDValue
           CoerceOutput = coerceStringOuput }
     
     /// GraphQL type for System.Uri
