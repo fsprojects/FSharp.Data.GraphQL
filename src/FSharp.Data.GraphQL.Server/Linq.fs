@@ -13,6 +13,98 @@ open FSharp.Data.GraphQL.Types
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
 
+type Arg = 
+    | Id of obj
+    | OrderBy of obj
+    | OrderByDesc of obj
+    | Skip of obj
+    | Take of obj
+    | First of obj
+    | Last of obj
+    | Before of obj
+    | After of obj
+
+let inline private argVal vars argDef = 
+    function 
+    | Some arg -> Execution.argumentValue vars argDef arg
+    | None -> argDef.DefaultValue
+
+let private resolveLinqArg vars (name, argdef, arg) =
+    match name with
+    | "id"          -> argVal vars argdef arg |> Option.map (Id)
+    | "orderby"     -> argVal vars argdef arg |> Option.map (OrderBy)
+    | "orderbydesc" -> argVal vars argdef arg |> Option.map (OrderByDesc)
+    | "skip"        -> argVal vars argdef arg |> Option.map (Skip)
+    | "take"        -> argVal vars argdef arg |> Option.map (Take)
+    | "first"       -> argVal vars argdef arg |> Option.map (First)
+    | "last"        -> argVal vars argdef arg |> Option.map (Last)
+    | "before"      -> argVal vars argdef arg |> Option.map (Before)
+    | "after"       -> argVal vars argdef arg |> Option.map (After)
+    | _ -> None
+
+let private argumentToQueryable tSource allArguments expression =
+    function
+    | Id value -> 
+        let p0 = Expression.Parameter tSource
+        // Func<tSource, bool> predicate = p0 => p0 == value
+        let predicate = Expression.Lambda(Expression.Equal(p0, Expression.Constant value), p0)
+        let where = QueryableMethods.Where.MakeGenericMethod [| tSource |]
+        Expression.Call(null, where, expression, predicate)
+    | OrderBy value ->
+        let p0 = Expression.Parameter tSource
+        //TODO: Func<tSource, tResult> memberAccess = p0 => p0.<value>
+        expression
+    | OrderByDesc value -> 
+        let p0 = Expression.Parameter tSource
+        //TODO: Func<tSource, tResult> memberAccess = p0 => p0.<value>
+        expression
+    | Skip value -> 
+        let skip = QueryableMethods.Skip.MakeGenericMethod [| tSource |]
+        Expression.Call(null, skip, expression, Expression.Constant(value))
+    | Take value -> 
+        let take = QueryableMethods.Take.MakeGenericMethod [| tSource |]
+        Expression.Call(null, take, expression, Expression.Constant(value))
+    | First value -> 
+        let afterOption = allArguments |> Array.tryFind (function After _ -> true | _ -> false)
+        //TODO:
+        // 1. Find ID field of the structure (info object is needed)
+        // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+        let result =
+            match afterOption with
+            | Some(After id) -> 
+                // 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+                expression
+            | None -> 
+                expression
+        // 5. apply result.Take(value)
+        result
+    | Last value -> 
+        let beforeOption = allArguments |> Array.tryFind (function Before _ -> true | _ -> false)
+        //TODO:
+        // 1. Find ID field of the structure (info object is needed)
+        // 2. apply q.OrderByDescending(p0 => p0.<ID_field>) on the expression
+        let result =
+            match beforeOption with
+            | Some(Before id) -> 
+                // 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                // 4a. apply q.Where(p0 => p0.<ID_field> < id) on the ordered expression
+                expression
+            | None -> 
+                expression
+        // 5. apply result.Take(value)
+        result
+    | _ -> expression
+
+let private linqArgs vars info =
+    let argDefs = info.Definition.Args
+    if Array.isEmpty argDefs then [||]
+    else 
+        let args = info.Ast.Arguments
+        argDefs
+        |> Array.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
+        |> Array.choose (resolveLinqArg vars)
+
 let private unwrap (resolve: Resolve) inParam: Expression =
     let (Lambda(_, inner)) = resolve.Expr
     match inner with

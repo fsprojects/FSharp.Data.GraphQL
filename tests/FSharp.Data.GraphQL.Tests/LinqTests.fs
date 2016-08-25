@@ -32,15 +32,24 @@ let data = [
       E = [ 
           { D = "dd2" }; 
           { D = "dd3" } ]}
+          
+    { ID = 2; 
+      A = "aa2"; 
+      B = "bb2"; 
+      C = { D = "dd2"}; 
+      E = []}
 ]
 
 let undefined<'t> = Unchecked.defaultof<'t>
 
+let resolveRoot ctx () =
+    let info = ctx.ExecutionPlan
+    let queryable = data.AsQueryable()
+    let result = info.ToLinq(queryable) |> Seq.toList
+    result
+
 let schema = Schema(Define.Object("RootQuery", [
-    Define.Field("root", ListOf DataType, fun ctx () -> 
-        let info = ctx.ExecutionPlan
-        let queryable = data.AsQueryable()
-        info.ToLinq(queryable) |> Seq.toList)]))
+    Define.Field("root", ListOf DataType, "", [ Define.Input("id", Nullable ID<int>) ], resolveRoot)]))
 
 [<Fact>]
 let ``LINQ interpreter works with auto-fields`` () = 
@@ -108,8 +117,39 @@ let ``LINQ interpreter works with nested collections`` () =
             { D = "dd2" }
             { D = "dd3" } ]
 
-[<Fact(Skip="TODO")>]
-let ``LINQ interpreter works with id arg`` () = ()
+[<Fact>]
+let ``LINQ interpreter works with id arg`` () = 
+    let query = """
+        query Example {
+            root(id: 2) {
+                id
+                a
+            }
+        }
+        """
+    let expected = NameValueLookup.ofList [
+        "root", upcast [ 
+            box <| NameValueLookup.ofList [
+                "id", upcast 2
+                "a", upcast "aa2" ]]]
+    let actual = sync <| schema.AsyncExecute(query)
+    noErrors actual
+    actual.["data"] |> equals (upcast expected)
+//    let plan = schema.CreateExecutionPlan """
+//    query Example {
+//        root(id: 2) {
+//            id
+//            a
+//        }
+//    }
+//    """
+//    let info = plan.["root"]
+//    let result = info.ToLinq(data.AsQueryable()).First()
+//    result.ID |> equals 2
+//    result.A |> equals "aa2"
+//    result.B |> equals undefined 
+//    result.C |> equals undefined 
+//    result.E |> equals undefined
 
 [<Fact(Skip="TODO")>]
 let ``LINQ interpreter works with first/after args`` () = ()

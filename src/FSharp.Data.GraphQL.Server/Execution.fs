@@ -116,14 +116,19 @@ let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     | Some defVal -> Map.add argdef.Name defVal acc
     | None -> acc
 
+let internal argumentValue variables (argdef: InputFieldDef) (argument: Argument) =
+    match argdef.ExecuteInput variables argument.Value with
+    | null -> argdef.DefaultValue
+    | value -> Some value    
+
 let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
     argDefs
     |> Array.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
-            match argdef.ExecuteInput variables argument.Value with
-            | null -> collectDefaultArgValue acc argdef
-            | value -> Map.add argdef.Name value acc
+            match argumentValue variables argdef argument with
+            | Some v -> Map.add argdef.Name v acc
+            | None -> acc
         | None -> collectDefaultArgValue acc argdef
     ) Map.empty
             
