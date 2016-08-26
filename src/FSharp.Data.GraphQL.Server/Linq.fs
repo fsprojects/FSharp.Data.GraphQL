@@ -24,6 +24,13 @@ type Arg =
     | Before of obj
     | After of obj
 
+let private unwrap (resolve: Resolve) inParam: Expression =
+    let (Lambda(_, inner)) = resolve.Expr
+    match inner with
+    | Lambda(var1, PropertyGet(Some(var2), propInfo, args)) ->
+        upcast Expression.Property(inParam, propInfo)
+    | other -> QuotationEvaluator.ToLinqExpression other
+
 let inline private argVal vars argDef = 
     function 
     | Some arg -> Execution.argumentValue vars argDef arg
@@ -32,8 +39,8 @@ let inline private argVal vars argDef =
 let private resolveLinqArg vars (name, argdef, arg) =
     match name with
     | "id"          -> argVal vars argdef arg |> Option.map (Id)
-    | "orderby"     -> argVal vars argdef arg |> Option.map (OrderBy)
-    | "orderbydesc" -> argVal vars argdef arg |> Option.map (OrderByDesc)
+    | "orderBy"     -> argVal vars argdef arg |> Option.map (OrderBy)
+    | "orderByDesc" -> argVal vars argdef arg |> Option.map (OrderByDesc)
     | "skip"        -> argVal vars argdef arg |> Option.map (Skip)
     | "take"        -> argVal vars argdef arg |> Option.map (Take)
     | "first"       -> argVal vars argdef arg |> Option.map (First)
@@ -42,58 +49,86 @@ let private resolveLinqArg vars (name, argdef, arg) =
     | "after"       -> argVal vars argdef arg |> Option.map (After)
     | _ -> None
 
-let private argumentToQueryable tSource allArguments expression =
+let private memberExpr info memberName parameter =
+    let (SelectFields(fields)) = info.Kind
+    let fieldInfo =
+        fields
+        |> List.find (fun f -> f.Definition.Name = memberName)
+    unwrap fieldInfo.Definition.Resolve parameter
+
+let private argumentToQueryable (methods: Methods) tSource allArguments info expression =
     function
     | Id value -> 
         let p0 = Expression.Parameter tSource
+        let idProperty = memberExpr info "id" p0
         // Func<tSource, bool> predicate = p0 => p0 == value
-        let predicate = Expression.Lambda(Expression.Equal(p0, Expression.Constant value), p0)
-        let where = QueryableMethods.Where.MakeGenericMethod [| tSource |]
+        let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant value), p0)
+        let where = methods.Where.MakeGenericMethod [| tSource |]
         Expression.Call(null, where, expression, predicate)
     | OrderBy value ->
         let p0 = Expression.Parameter tSource
-        //TODO: Func<tSource, tResult> memberAccess = p0 => p0.<value>
-        expression
+        // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+        let property = memberExpr info (string value) p0        
+        let memberAccess = Expression.Lambda(property, [| p0 |])
+        let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+        Expression.Call(null, orderBy, expression, memberAccess)
     | OrderByDesc value -> 
         let p0 = Expression.Parameter tSource
-        //TODO: Func<tSource, tResult> memberAccess = p0 => p0.<value>
-        expression
+        // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+        let property = memberExpr info (string value) p0        
+        let memberAccess = Expression.Lambda(property, [| p0 |])
+        let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+        Expression.Call(null, orderByDesc, expression, memberAccess)
     | Skip value -> 
-        let skip = QueryableMethods.Skip.MakeGenericMethod [| tSource |]
+        let skip = methods.Skip.MakeGenericMethod [| tSource |]
         Expression.Call(null, skip, expression, Expression.Constant(value))
     | Take value -> 
-        let take = QueryableMethods.Take.MakeGenericMethod [| tSource |]
+        let take = methods.Take.MakeGenericMethod [| tSource |]
         Expression.Call(null, take, expression, Expression.Constant(value))
     | First value -> 
-        let afterOption = allArguments |> Array.tryFind (function After _ -> true | _ -> false)
-        //TODO:
+        let p0 = Expression.Parameter tSource   
         // 1. Find ID field of the structure (info object is needed)
+        let idProperty = memberExpr info "id" p0
         // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+        let idAccess = Expression.Lambda(idProperty, [| p0 |])
+        let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+        let ordered = Expression.Call(null, orderBy, expression, idAccess)
+
+        let afterOption = allArguments |> Array.tryFind (function After _ -> true | _ -> false)
         let result =
             match afterOption with
             | Some(After id) -> 
-                // 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
                 // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-                expression
-            | None -> 
-                expression
+                let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant id), p0)
+                let where = methods.Where.MakeGenericMethod [| tSource |]
+                Expression.Call(null, where, ordered, predicate)
+            | None -> ordered
         // 5. apply result.Take(value)
-        result
+        let take = methods.Take.MakeGenericMethod [| tSource |]
+        Expression.Call(null, take, result, Expression.Constant value)
     | Last value -> 
-        let beforeOption = allArguments |> Array.tryFind (function Before _ -> true | _ -> false)
-        //TODO:
+        let p0 = Expression.Parameter tSource   
         // 1. Find ID field of the structure (info object is needed)
-        // 2. apply q.OrderByDescending(p0 => p0.<ID_field>) on the expression
+        let idProperty = memberExpr info "id" p0
+        // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+        let idAccess = Expression.Lambda(idProperty, [| p0 |])
+        let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+        let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
+
+        let beforeOption = allArguments |> Array.tryFind (function Before _ -> true | _ -> false)
         let result =
             match beforeOption with
             | Some(Before id) -> 
-                // 3a. parse id value using Relay GlobalId and retrieve "actual" id value
-                // 4a. apply q.Where(p0 => p0.<ID_field> < id) on the ordered expression
-                expression
-            | None -> 
-                expression
+                //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+                let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant id), p0)
+                let where = methods.Where.MakeGenericMethod [| tSource |]
+                Expression.Call(null, where, ordered, predicate)
+            | None -> ordered
         // 5. apply result.Take(value)
-        result
+        let take = methods.Take.MakeGenericMethod [| tSource |]
+        Expression.Call(null, take, result, Expression.Constant value)
     | _ -> expression
 
 let private linqArgs vars info =
@@ -104,13 +139,6 @@ let private linqArgs vars info =
         argDefs
         |> Array.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
         |> Array.choose (resolveLinqArg vars)
-
-let private unwrap (resolve: Resolve) inParam: Expression =
-    let (Lambda(_, inner)) = resolve.Expr
-    match inner with
-    | Lambda(var1, PropertyGet(Some(var2), propInfo, args)) ->
-        upcast Expression.Property(inParam, propInfo)
-    | other -> QuotationEvaluator.ToLinqExpression other
 
 let private (|Object|Record|NotSupported|) (t: Type) =
     if FSharpType.IsRecord t then Record
@@ -136,48 +164,46 @@ let castTo tCollection callExpr : Expression =
         upcast Expression.Call(null, cast, [ callExpr ])
     | _ -> callExpr
         
-let rec private eval tIn info (inputExpr: Expression) : Expression =
-    match info.Kind with
-    | ResolveValue ->  inputExpr
-    | SelectFields fields ->
-        // construct new object initializer with bindings as list of assignments for each field
-        let returnedType = unwrapType info.Definition.TypeDef
-        constructObject returnedType fields inputExpr
-    | ResolveCollection inner ->
-        // apply Select on the Expr target
-        let tResult = inner.ReturnDef.Type
-        // create a call, that will return either IEnumerable`1 or IQueryable`1
-        let call =
-            match tIn with
-            | Gen.Queryable tSource ->
-                let p0 = Expression.Parameter(tSource)
-                let body = eval inner.ParentDef.Type inner p0
-                // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
-                Expression.Call(
-                    // Select<tSource, tResult> - method to invoke
-                    QueryableMethods.Select.MakeGenericMethod [| tSource; tResult |], 
-                    // `this` param - Convert(inputValue, IQueryable<tSource>)
-                    Expression.Convert(inputExpr, QueryableMethods.Type.MakeGenericType [| tSource |]), 
-                    // `mapFunc` param - (p0 => body )
-                    Expression.Lambda(body, p0))
+let rec private eval vars tIn info (inputExpr: Expression) : Expression =
+    if not <| info.Include vars
+    then inputExpr
+    else
+        match info.Kind with
+        | ResolveValue ->  inputExpr
+        | SelectFields fields ->
+            // construct new object initializer with bindings as list of assignments for each field
+            let returnedType = unwrapType info.Definition.TypeDef
+            constructObject vars returnedType fields inputExpr
+        | ResolveCollection inner ->
+            // apply Select on the Expr target
+            // create a call, that will return either IEnumerable`1 or IQueryable`1
+            let call =
+                match tIn with
+                | Gen.Queryable tSource -> 
+                    constructCollection Gen.queryableMethods vars tSource inputExpr inner
+                | Gen.Enumerable tSource ->
+                    constructCollection Gen.enumerableMethods vars tSource inputExpr inner
+                | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
+            // enhance call with cast to result type
+            castTo tIn call
 
-            | Gen.Enumerable tSource ->
-                let p0 = Expression.Parameter(tSource)
-                let body = eval inner.ParentDef.Type inner p0
-                // call method - ((IEnuerable<tSource>)inputExpr).Select(p0 => body)
-                Expression.Call(
-                    // Select<tSource, tResult> - method to invoke
-                    EnumerableMethods.Select.MakeGenericMethod [| tSource; tResult |], 
-                    // `this` param - Convert(inputValue, IEnumerable<tSource>)
-                    Expression.Convert(inputExpr, EnumerableMethods.Type.MakeGenericType [| tSource |]), 
-                    // `mapFunc` param - (p0 => ... )
-                    Expression.Lambda(body, p0))
+and private constructCollection (methods: Methods) vars tSource inputExpr inner = 
+    let tResult = inner.ReturnDef.Type
+    let args = linqArgs vars inner
+    let p0 = Expression.Parameter(tSource)
+    let body = eval vars inner.ParentDef.Type inner p0
+    // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
+    let call = 
+        Expression.Call(
+            // Select<tSource, tResult> - method to invoke
+            methods.Select.MakeGenericMethod [| tSource; tResult |], 
+            // `this` param - Convert(inputValue, IQueryable<tSource>)
+            Expression.Convert(inputExpr, methods.Type.MakeGenericType [| tSource |]), 
+            // `mapFunc` param - (p0 => body )
+            Expression.Lambda(body, p0))
+    args |> Array.fold (fun acc -> argumentToQueryable methods tSource args inner acc) call
 
-            | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
-        // enhance call with cast to result type
-        castTo tIn call
-
-and private constructObject (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
+and private constructObject vars (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
     let fieldMap = Dictionary()
     infos |> List.iter (fun f -> fieldMap.Add(f.Definition.Name.ToLower(), f)) 
     let ctor =
@@ -197,7 +223,7 @@ and private constructObject (t: Type) (infos: ExecutionInfo list) inputExpr : Ex
             | true, info -> 
                 fieldMap.Remove paramName |> ignore
                 let expr = unwrap info.Definition.Resolve inputExpr
-                eval info.ReturnDef.Type info expr
+                eval vars info.ReturnDef.Type info expr
             | false, _ -> upcast Expression.Default parameter.ParameterType)
     // if all query fields matched into constructor, invoke it with new expr
     // otherwise make member init expr, and pass remaining fields as member bindings
@@ -212,13 +238,13 @@ and private constructObject (t: Type) (infos: ExecutionInfo list) inputExpr : Ex
             fieldMap
             |> Seq.map (fun kv -> 
                 let m = Map.find kv.Key members
-                upcast Expression.Bind(m, eval kv.Value.ParentDef.Type kv.Value inputExpr))
+                upcast Expression.Bind(m, eval vars kv.Value.ParentDef.Type kv.Value inputExpr))
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings)        
         
-let rec private toLinq info (query: IQueryable<'Source>) : IQueryable<'Result> =
+let rec private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Result> =
     let collectionType = query.GetType()
     let parameter = Expression.Parameter(collectionType)
-    let expr = eval collectionType info parameter
+    let expr = eval variables collectionType info parameter
     let compiled =
         match expr with
         | :? MethodCallExpression as call -> 
@@ -228,13 +254,13 @@ let rec private toLinq info (query: IQueryable<'Source>) : IQueryable<'Result> =
         | selector -> 
             let tSource = typeof<'Source>
             let tResult = typeof<'Result>
-            let mSelect = QueryableMethods.Select.MakeGenericMethod [| tSource; tResult |]
-            let destinationType = QueryableMethods.Type.MakeGenericType [| typeof<'Result> |]
+            let mSelect = Gen.queryableMethods.Select.MakeGenericMethod [| tSource; tResult |]
+            let destinationType = Gen.queryableMethods.Type.MakeGenericType [| typeof<'Result> |]
             let call = Expression.Call(mSelect, Expression.Convert(parameter, destinationType), selector)
             Expression.Lambda(call, [| parameter |]).Compile()
     downcast compiled.DynamicInvoke [| box query |]
 
 type FSharp.Data.GraphQL.Types.ExecutionInfo with
-    member this.ToLinq(source: IQueryable<'Source>) : IQueryable<'Result> = 
-        toLinq this source
+    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<'Result> = 
+        toLinq this source (defaultArg variables Map.empty)
         

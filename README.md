@@ -38,7 +38,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### GraphiQL client
 
-Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build `FSharp.Data.GraphQL` project on Debug settings and run `server.fsx` with FSI - this will create a Suave.IO server compatible with GraphQL spec, running on port 8083. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on http://localhost:8090/ . Visit this link, and GraphiQL edito should appear. You may try it by applying following query:
+Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build `FSharp.Data.GraphQL` project on Debug settings and run `server.fsx` with FSI - this will create a Suave.IO server compatible with GraphQL spec, running on port 8083. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL edito should appear. You may try it by applying following query:
 
 ```graphql
 {
@@ -63,13 +63,6 @@ Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.
 
 [Second sample](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/) is a F#-backed version of of popular Relay Starter Kit - an example application using React.js + Relay with Relay-compatible server API.
 
-To run it, build a `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on http://localhost:8090/ .
+To run it, build a `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on [http://localhost:8083/](http://localhost:8083/) .
 
-In order to update client schema, visit http://localhost:8083/ and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.
-
-## Implementation progress
-
-Missing parts:
-
-- Complex objects as input arguments
-- Friendly query validation messages
+In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.

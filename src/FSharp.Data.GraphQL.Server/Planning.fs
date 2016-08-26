@@ -12,15 +12,13 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
-let SchemaMetaFieldDef =
-  Define.Field(
+let SchemaMetaFieldDef = Define.Field(
     name = "__schema",
     description = "Access the current type schema of this server.",
     typedef = __Schema,
     resolve = fun ctx (_: obj) -> ctx.Schema.Introspected)
     
-let TypeMetaFieldDef =
-  Define.Field(
+let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
     typedef = __Type,
@@ -36,8 +34,7 @@ let TypeMetaFieldDef =
         |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 
         |> IntrospectionTypeRef.Named)
     
-let TypeNameMetaFieldDef : FieldDef<obj> =
-  Define.Field(
+let TypeNameMetaFieldDef : FieldDef<obj> = Define.Field(
     name = "__typename",
     description = "The name of the current Object type at runtime.",
     typedef = String,
@@ -129,10 +126,8 @@ let private directiveIncluder (directive: Directive) : Includer =
         | other -> 
             match coerceBoolInput other with
             | Some s -> s
-            | None ->
-                (directive.Name, other)
-                ||> sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A"
-                |> GraphQLException |> raise
+            | None -> raise (
+                GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
 let incl: Includer = fun _ -> true
 let excl: Includer = fun _ -> false
@@ -228,10 +223,19 @@ and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selectio
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
-                        retrieveFragmentFields ctx visitedFragments fields innerData fragment
+                        // retrieve fragment data just as it was normal selection set
+                        let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                        let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
+                        // filter out already existing fields
+                        Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
                     | _ -> fields
             | InlineFragment fragment ->
-                retrieveFragmentFields ctx visitedFragments fields innerData fragment
+                 // retrieve fragment data just as it was normal selection set
+                 let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
+                 let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
+                 // filter out already existing fields
+                 Map.merge (fun typeName oldVal newVal -> oldVal @ newVal) fields fragmentFields
+            | _ -> fields
         ) Map.empty
     { info with Kind = ResolveAbstraction plannedTypeFields }
 
