@@ -14,6 +14,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Quotations.Evaluator
 
 type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
@@ -115,14 +116,19 @@ let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     | Some defVal -> Map.add argdef.Name defVal acc
     | None -> acc
 
+let internal argumentValue variables (argdef: InputFieldDef) (argument: Argument) =
+    match argdef.ExecuteInput variables argument.Value with
+    | null -> argdef.DefaultValue
+    | value -> Some value    
+
 let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) (variables: Map<string, obj>) : Map<string, obj> = 
     argDefs
     |> Array.fold (fun acc argdef -> 
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
         | Some argument ->
-            match argdef.ExecuteInput variables argument.Value with
-            | null -> collectDefaultArgValue acc argdef
-            | value -> Map.add argdef.Name value acc
+            match argumentValue variables argdef argument with
+            | Some v -> Map.add argdef.Name v acc
+            | None -> acc
         | None -> collectDefaultArgValue acc argdef
     ) Map.empty
             
@@ -267,19 +273,37 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
-    let completed = createCompletion possibleTypesFn (fieldDef.Type)
-    let resolve = fieldDef.Resolve
-    fun resolveFieldCtx value -> (job {
-        try
-            let! res = resolve resolveFieldCtx value
-            if res = null 
-            then return null
-            else return! completed resolveFieldCtx res
-        with
-        | ex -> 
-            resolveFieldCtx.AddError(ex)
-            return null
-    } |> Job.toAsync)
+    let completed = createCompletion possibleTypesFn (fieldDef.TypeDef)
+    match fieldDef.Resolve with
+    | Sync(inType, outType, resolve) ->
+        let boxified = boxifyExpr inType outType resolve
+        let compiled = boxified.Compile()
+        fun resolveFieldCtx value ->
+            try
+                let res = compiled resolveFieldCtx value
+                if res = null
+                then async.Return null
+                else completed resolveFieldCtx res |> Async.Global.ofJob
+            with
+            | ex -> 
+                resolveFieldCtx.AddError ex
+                async.Return null
+    | Async(inType, outType, resolve) ->
+        let boxified = boxifyExprAsync inType outType resolve
+        let compiled = boxified.Compile()
+        fun resolveFieldCtx value -> (job {
+            try
+                let! res = compiled resolveFieldCtx value
+                if res = null 
+                then return null
+                else return! completed resolveFieldCtx res
+            with
+            | ex -> 
+                resolveFieldCtx.AddError(ex)
+                return null
+        } |> Async.Global.ofJob)
+    | Undefined -> 
+        fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
 and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
@@ -289,12 +313,12 @@ and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objectType.Fields |> Map.tryFind fieldName
         
-and private createFieldContext objdef ctx (info: ExecutionPlanInfo) =
+and private createFieldContext objdef ctx (info: ExecutionInfo) =
     let fdef = info.Definition
     let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
     { ExecutionPlan = info
       Context = ctx.Context
-      ReturnType = fdef.Type
+      ReturnType = fdef.TypeDef
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
@@ -335,7 +359,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             let fieldCtx = 
                 { ExecutionPlan = info
                   Context = ctx
-                  ReturnType = fdef.Type
+                  ReturnType = fdef.TypeDef
                   ParentType = objdef
                   Schema = ctx.Schema
                   Args = args
@@ -351,7 +375,7 @@ let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun input -> 
         let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
-        input.ExecuteInput <- compileByType errMsg input.Type)
+        input.ExecuteInput <- compileByType errMsg input.TypeDef)
 
 let internal compileSchema possibleTypesFn types =
     types
@@ -366,7 +390,7 @@ let internal compileSchema possibleTypesFn types =
                 fieldDef.Args
                 |> Array.iter (fun arg -> 
                     let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
-                    arg.ExecuteInput <- compileByType errMsg arg.Type))
+                    arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
                 

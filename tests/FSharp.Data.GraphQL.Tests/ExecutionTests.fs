@@ -118,7 +118,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     noErrors result
     result.["data"] |> equals (upcast expected)
 
-type TestThing = { Thing: string }
+type TestThing = { mutable Thing: string }
 
 [<Fact(Skip="Fixme")>]
 let ``Execution handles basic tasks: merges parallel fragments`` () = 
@@ -167,38 +167,36 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () = 
     let query = "query Example { a }"
-    let data = { Thing = "thing" }
-    let mutable resolved = {Thing = ""};
-    let Thing =
-      Define.Object<TestThing>(
-          "Type", [
-            Define.Field("a", String, fun _ _ -> resolved <- data; resolved.Thing)
-        ])
+    let data = { Thing = "" }
+    let Thing = Define.Object<TestThing>("Type", [
+        Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing)
+    ])
     let result = sync <| Schema(Thing).AsyncExecute(parse query, data)
     noErrors result
-    equals "thing" resolved.Thing
+    equals "thing" data.Thing
     
+type TestTarget =
+    { mutable Num: int option
+      mutable Str: string option }
+
 [<Fact>]
 let ``Execution handles basic tasks: correctly threads arguments`` () =
     let query = """query Example {
         b(numArg: 123, stringArg: "foo")
       }"""
-    let mutable numArg = None;
-    let mutable stringArg = None;
-    let Type =
-      Define.Object(
-          "Type", [
-            Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ], 
-                fun ctx _ -> 
-                    numArg <- ctx.TryArg("numArg")
-                    stringArg <- ctx.TryArg("stringArg")
-                    stringArg) 
-        ])
+    let data = { Num = None; Str = None }
+    let Type = Define.Object("Type", [
+        Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ], 
+            fun ctx value -> 
+                value.Num <- ctx.TryArg("numArg")
+                value.Str <- ctx.TryArg("stringArg")
+                value.Str) 
+    ])
 
-    let result = sync <| Schema(Type).AsyncExecute(parse query, ())
+    let result = sync <| Schema(Type).AsyncExecute(parse query, data)
     noErrors result
-    equals (Some 123) numArg
-    equals (Some "foo") stringArg
+    equals (Some 123) data.Num
+    equals (Some "foo") data.Str
     
 type InlineTest = { A: string }
 

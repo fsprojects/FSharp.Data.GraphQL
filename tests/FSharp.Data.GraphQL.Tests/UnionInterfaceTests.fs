@@ -47,8 +47,8 @@ let DogType =
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
     fields = [
-        Define.Field("name", String)
-        Define.Field("barks", Boolean)
+        Define.AutoField("name", String)
+        Define.AutoField("barks", Boolean)
     ])
     
 let CatType =
@@ -57,8 +57,8 @@ let CatType =
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
     fields = [
-        Define.Field("name", String)
-        Define.Field("meows", Boolean)
+        Define.AutoField("name", String)
+        Define.AutoField("meows", Boolean)
     ])
 
 let PetType =
@@ -80,9 +80,9 @@ let PersonType =
     isTypeOf = is<Person>,
     interfaces = [ NamedType ],
     fields = [
-        Define.Field("name", String)
+        Define.AutoField("name", String)
         Define.Field("pets", ListOf PetType, fun _ person -> person.Pets)
-        Define.Field("friends", ListOf NamedType)
+        Define.AutoField("friends", ListOf NamedType)
     ])
 
 let schema = Schema(query = PersonType, config = { SchemaConfig.Default with Types = [ PetType ] })

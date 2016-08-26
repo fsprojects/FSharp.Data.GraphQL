@@ -206,8 +206,11 @@ and __EnumValue =
         Define.Field("deprecationReason", Nullable String, fun _ e -> e.DeprecationReason)
     ])
 
-and __Directive =
-  Define.Object<IntrospectionDirective>(
+and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation) =
+    let c = int comparand
+    compared |> Array.exists (fun cc -> c &&& (int cc) <> 0)
+
+and __Directive = Define.Object<IntrospectionDirective>(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fieldsFn = fun () ->
@@ -216,9 +219,9 @@ and __Directive =
         Define.Field("description", Nullable String, fun _ directive -> directive.Description)
         Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> directive.Locations)
         Define.Field("args", ListOf __InputValue, fun _ directive -> directive.Args)
-        Define.Field("onOperation", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.QUERY ||| DirectiveLocation.MUTATION ||| DirectiveLocation.SUBSCRIPTION)))
-        Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION)))
-        Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (fun l -> l.HasFlag(DirectiveLocation.FIELD)))
+        Define.Field("onOperation", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.QUERY; DirectiveLocation.MUTATION; DirectiveLocation.SUBSCRIPTION |]))
+        Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FRAGMENT_SPREAD; DirectiveLocation.INLINE_FRAGMENT; DirectiveLocation.FRAGMENT_DEFINITION |]))
+        Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
     ])
     
 and __Schema =

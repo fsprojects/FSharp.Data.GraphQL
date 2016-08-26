@@ -44,21 +44,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 objdef.Fields
                 |> Map.toArray
                 |> Array.map snd
-                |> Array.collect (fun x -> Array.append [| x.Type :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.Type)))
-                |> Array.choose (function
-                    | Named x when not (Map.containsKey x.Name ns') -> Some x
-                    | _ -> None)
-                |> Array.fold insert ns'
+                |> Array.collect (fun x -> Array.append [| x.TypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
+                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+                |> Array.fold (fun n (Named t) -> insert n t) ns'
             objdef.Implements
             |> Array.fold insert withFields'
         | Interface interfacedef ->
             let ns' = addOrReturn typedef.Name typedef ns
             interfacedef.Fields
-            |> Array.map (fun x -> x.Type)
-            |> Array.choose (function
-                | Named x when not (Map.containsKey x.Name ns') -> Some x
-                | _ -> None)
-            |> Array.fold insert ns'
+            |> Array.map (fun x -> x.TypeDef)
+            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (fun n (Named t) -> insert n t) ns'    
         | Union uniondef ->
             let ns' = addOrReturn typedef.Name typedef ns
             uniondef.Options
@@ -68,12 +64,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
-            |> Array.collect (fun x -> [| x.Type :> TypeDef |])
-            |> Array.choose (function
-                | Named x when not (Map.containsKey x.Name ns') -> Some x
-                | _ -> None)
-            |> Array.fold insert ns'
-        | _ -> failwithf "Unexpected value of typedef: %O" typedef
+            |> Array.collect (fun x -> [| x.TypeDef :> TypeDef |])
+            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (fun n (Named t) -> insert n t) ns'
         
     let initialTypes: NamedDef list = [ 
         Int
@@ -133,14 +126,14 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         { Name = inputDef.Name
           Description = inputDef.Description
-          Type = introspectTypeRef false namedTypes inputDef.Type
-          DefaultValue = inputDef.DefaultValue |> Option.map (fun x -> x.ToString()) }
+          Type = introspectTypeRef false namedTypes inputDef.TypeDef
+          DefaultValue = inputDef.DefaultValue |> Option.map string }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
           Description = fdef.Description
           Args = fdef.Args |> Array.map (introspectInput namedTypes) 
-          Type = introspectTypeRef false namedTypes fdef.Type
+          Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
 
