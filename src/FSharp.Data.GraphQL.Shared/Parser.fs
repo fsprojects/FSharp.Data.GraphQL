@@ -226,7 +226,7 @@ module internal Internal =
   // 2.5 Fields
   //   (Alias opt) Name (Arguments opt) (Directives opt) (SelectionSet opt)
   let field = 
-    let alias = token_ws name .>> ctoken_ws ':' 
+    let alias = token_ws name .>> pchar ':' .>> whitespaces
     pipe5 (opt(attempt alias)) (token_ws name) (opt(token_ws arguments)) (opt directives) (opt selectionSet)
       (fun oalias name oargs directives oselection ->
          (Field { Alias = oalias; Name = name; Arguments = someOrEmpty oargs;
