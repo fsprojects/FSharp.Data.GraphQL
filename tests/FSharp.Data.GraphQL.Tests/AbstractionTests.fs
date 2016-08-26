@@ -39,7 +39,8 @@ let resolvePet = function
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () = 
     let PetType = Define.Interface("Pet", fun () -> [ Define.Field("name", String) ])
-    let DogType = Define.Object<Dog>(
+    let DogType =
+      Define.Object<Dog>(
         name = "Dog", 
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
@@ -47,7 +48,8 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
-    let CatType = Define.Object<Cat>(
+    let CatType =
+      Define.Object<Cat>(
         name = "Cat", 
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
@@ -55,8 +57,10 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             Define.Field("name", String)
             Define.Field("meows", Boolean)
         ])
-    let schema = Schema(
-        query = Define.Object("Query", fun () -> [
+    let schema =
+      Schema(
+        query = Define.Object("Query", fun () ->
+        [
             Define.Field("pets", ListOf PetType, fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
         ]), 
         config = { SchemaConfig.Default with Types = [CatType; DogType] })
@@ -72,8 +76,9 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    let expected = NameValueLookup.ofList [
-        "pets", upcast [
+    let expected =
+      NameValueLookup.ofList [
+          "pets", upcast [
             NameValueLookup.ofList [
                 "name", "Odie" :> obj
                 "woofs", upcast true ] :> obj
@@ -85,14 +90,16 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
-    let DogType = Define.Object<Dog>(
+    let DogType =
+      Define.Object<Dog>(
         name = "Dog", 
         isTypeOf = is<Dog>,
         fields = [
             Define.Field("name", String)
             Define.Field("woofs", Boolean)
         ])
-    let CatType = Define.Object<Cat>(
+    let CatType =
+      Define.Object<Cat>(
         name = "Cat", 
         isTypeOf = is<Cat>,
         fields = [
@@ -100,8 +107,10 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             Define.Field("meows", Boolean)
         ])
     let PetType = Define.Union("Pet", [ DogType; CatType ], resolvePet)
-    let schema = Schema(
-        query = Define.Object("Query", fun () -> [
+    let schema =
+      Schema(
+        query = Define.Object("Query", fun () ->
+        [
             Define.Field("pets", ListOf PetType, fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ])
         ]))
     let query = """{
@@ -117,7 +126,8 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
       }
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "pets", upcast [
             NameValueLookup.ofList [
                 "name", "Odie" :> obj

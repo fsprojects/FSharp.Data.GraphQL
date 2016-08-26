@@ -3,6 +3,8 @@
 
 module FSharp.Data.GraphQL.Tests.Relay.ConnectionTests
 
+#nowarn "25"
+
 open System
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -62,17 +64,20 @@ let resolveSlice (cursor: 't -> string) (values: 't list) (SliceInfo slice) () :
             |> List.take last
             |> List.rev
         toConnection cursor slice values
-    | _ -> toConnection cursor values values
 
 let petName = function
     | Cat (name, _) -> name
     | Dog (name, _) -> name
 
-let Cat = Define.Object("Cat", [
+let Cat =
+  Define.Object(
+   "Cat", [
     Define.Field("name", String, fun _ (Cat(name, _)) -> name)
     Define.Field("meows", Boolean, fun _ (Cat(_, meows)) -> meows) ])
 
-let Dog = Define.Object("Dog", [
+let Dog =
+  Define.Object(
+   "Dog", [
     Define.Field("name", String, fun _ (Dog(name, _)) -> name)
     Define.Field("barks", Boolean, fun _ (Dog(_, barks)) -> barks) ])
 
@@ -81,12 +86,16 @@ let Pet = Define.Union("Pet", [ Dog; Cat ], id<Pet>, fun pet ->
     | Cat _ -> upcast Cat
     | Dog _ -> upcast Dog)
 
-let Human = Define.Object("Human", [
+let Human =
+  Define.Object(
+   "Human", [
     Define.Field("name", String, fun _ human -> human.Name)
     Define.Field("pets",  ConnectionOf Pet, "", Connection.forwardArgs, fun ctx human -> resolveSlice petName (human.Pets) ctx ()) ])
     
 let strings = ["one"; "two"; "three"; "four"; "five"]
-let Query = Define.Object("Query", [
+let Query =
+  Define.Object(
+   "Query", [
     Define.Field(
         name = "strings", 
         description = "",
@@ -114,7 +123,8 @@ let ``Connection definition includes connection and edge fields for simple cases
         }
     }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "strings", upcast NameValueLookup.ofList [
             "edges", upcast [
                 box <| NameValueLookup.ofList [
@@ -148,7 +158,8 @@ let ``Connection definition includes connection and edge fields for complex case
         }
     }"""
     let result = sync <| schema.AsyncExecute(query)
-    let expected = NameValueLookup.ofList [
+    let expected =
+      NameValueLookup.ofList [
         "people", upcast NameValueLookup.ofList [
             "edges", upcast [
                 box <| NameValueLookup.ofList [

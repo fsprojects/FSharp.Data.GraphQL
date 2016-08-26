@@ -45,28 +45,35 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 |> Map.toArray
                 |> Array.map snd
                 |> Array.collect (fun x -> Array.append [| x.Type :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.Type)))
-                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-                |> Array.fold (fun n (Named t) -> insert n t) ns'
+                |> Array.choose (function
+                    | Named x when not (Map.containsKey x.Name ns') -> Some x
+                    | _ -> None)
+                |> Array.fold insert ns'
             objdef.Implements
-            |> Array.fold (fun n t -> insert n t) withFields'
+            |> Array.fold insert withFields'
         | Interface interfacedef ->
             let ns' = addOrReturn typedef.Name typedef ns
             interfacedef.Fields
             |> Array.map (fun x -> x.Type)
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'            
+            |> Array.choose (function
+                | Named x when not (Map.containsKey x.Name ns') -> Some x
+                | _ -> None)
+            |> Array.fold insert ns'
         | Union uniondef ->
             let ns' = addOrReturn typedef.Name typedef ns
             uniondef.Options
-            |> Array.fold (fun n t -> insert n t) ns'            
+            |> Array.fold insert ns'
         | List (Named innerdef) -> insert ns innerdef 
         | Nullable (Named innerdef) -> insert ns innerdef
         | InputObject objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
             |> Array.collect (fun x -> [| x.Type :> TypeDef |])
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'
+            |> Array.choose (function
+                | Named x when not (Map.containsKey x.Name ns') -> Some x
+                | _ -> None)
+            |> Array.fold insert ns'
+        | _ -> failwithf "Unexpected value of typedef: %O" typedef
         
     let initialTypes: NamedDef list = [ 
         Int
@@ -83,8 +90,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
     let mutable typeMap: Map<string, NamedDef> = 
         let m = 
             mutation 
-            |> Option.map (fun (Named n) -> n) 
-            |> Option.toList
+            |> function Some(Named n) -> [n] | _ -> []
         initialTypes @ m @ schemaConfig.Types
         |> List.fold insert Map.empty
 
@@ -122,6 +128,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             if isNullable
             then Map.find named.Name namedTypes
             else IntrospectionTypeRef.NonNull(introspectTypeRef true namedTypes typedef)
+        | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         { Name = inputDef.Name
@@ -163,8 +170,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             let fields = 
                 objdef.Fields 
                 |> Map.toArray
-                |> Array.map snd
-                |> Array.map (introspectField namedTypes)
+                |> Array.map (snd >> introspectField namedTypes)
             let interfaces = 
                 objdef.Implements 
                 |> Array.map (fun idef -> Map.find idef.Name namedTypes)
@@ -192,6 +198,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 getPossibleTypes idef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
+        | _ -> failwithf "Unexpected value of typedef: %O" typedef            
 
     let introspectSchema types : IntrospectionSchema =
         let inamed = 
@@ -203,7 +210,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 | InputObject x -> { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
                 | Union x -> { Kind = TypeKind.UNION; Name = Some typeName; Description = x.Description; OfType = None }
                 | Enum x -> { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
-                | Interface x -> { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None })
+                | Interface x -> { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
+                | _ -> failwithf "Unexpected value of typedef: %O" typedef)
 
         let itypes =
             types

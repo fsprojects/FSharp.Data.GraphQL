@@ -12,7 +12,8 @@ type Document = {
 and Definition =
     | OperationDefinition of OperationDefinition
     | FragmentDefinition of FragmentDefinition
-    member x.Name with get () =
+    member x.Name
+      with get () =
         match x with 
         | OperationDefinition op -> op.Name
         | FragmentDefinition frag -> frag.Name

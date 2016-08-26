@@ -2,6 +2,8 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.PlanningTests
 
+#nowarn "25"
+
 open System
 open Xunit
 open FsCheck
