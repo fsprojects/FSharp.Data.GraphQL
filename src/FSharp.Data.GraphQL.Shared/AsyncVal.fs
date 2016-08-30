@@ -10,6 +10,10 @@ type AsyncVal<'T> =
     new (async: Async<'T>) = { Value = Unchecked.defaultof<'T>; Async = async }
     member x.IsAsync = not (System.Object.ReferenceEquals(x.Async, null))
     member x.IsSync = System.Object.ReferenceEquals(x.Async, null)
+    override x.ToString () = 
+        if x.IsSync 
+        then "AsyncVal(" + x.Value.ToString() + ")"
+        else "AsyncVal(Async<>)"
     static member Zero = AsyncVal<'T>(Unchecked.defaultof<'T>)
     
 [<RequireQualifiedAccess>]

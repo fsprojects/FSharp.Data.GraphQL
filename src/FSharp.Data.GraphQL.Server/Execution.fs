@@ -296,10 +296,9 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
         let compiled = boxified.Compile()
         fun resolveFieldCtx value -> 
             try
-                let res = compiled resolveFieldCtx value
-                if Object.ReferenceEquals(res, null)
-                then AsyncVal.empty
-                else completed resolveFieldCtx res
+                compiled resolveFieldCtx value
+                |> AsyncVal.ofAsync
+                |> AsyncVal.bind (completed resolveFieldCtx)
             with
             | ex -> 
                 resolveFieldCtx.AddError(ex)
