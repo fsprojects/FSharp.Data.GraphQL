@@ -107,6 +107,7 @@
     </Content>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Prolog.fs" />
+    <Compile Include="AsyncValBenchmark.fs" />
     <Compile Include="ParsingBenchmark.fs" />
     <Compile Include="ExecutionBenchmark.fs" />
     <Compile Include="Program.fs" />

@@ -125,12 +125,16 @@ module AsyncVal =
             ofAsync x
         | immediates, awaitings ->
             //TODO: optimize
+            let len =  immediates.Length
             let asyncs = awaitings |> Array.map (fun v -> v.Async)
-            let x = 
-                immediates
-                |> Array.map (toAsync)
-                |> Array.append asyncs
-                |> Async.Parallel
+            let results = Array.zeroCreate (len + asyncs.Length)
+            for i = 0 to len - 1 do
+                results.[i] <- immediates.[i].Value
+            let x = async {
+                let! asyncResults = asyncs |> Async.Parallel
+                Array.Copy(asyncResults, 0, results, len, asyncResults.Length)
+                return results
+            }
             ofAsync x
 
 type AsyncValBuilder () =
