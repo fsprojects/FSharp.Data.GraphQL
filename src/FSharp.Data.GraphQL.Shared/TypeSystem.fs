@@ -351,7 +351,7 @@ and ResolveFieldContext =
     
     member x.Arg(name : string) : 't = downcast Map.find name x.Args
 
-and ExecuteField = ResolveFieldContext -> obj -> Async<obj>
+and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
 
 and FieldDef = 
     interface

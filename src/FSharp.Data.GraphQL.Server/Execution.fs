@@ -5,10 +5,9 @@ module FSharp.Data.GraphQL.Execution
 
 open System
 open System.Reflection
+open System.Runtime.InteropServices;
 open System.Collections.Generic
 open System.Collections.Concurrent
-open Hopac
-open Hopac.Extensions
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Planning
@@ -110,7 +109,8 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
         NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
-        
+                
+
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
     | Some defVal -> Map.add argdef.Name defVal acc
@@ -195,81 +195,83 @@ let resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
                 
-let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> Job<obj> =
+let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 
             match ctx.ExecutionPlan.Kind with
             | SelectFields fields -> executeFields objdef ctx value fields
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
+    
     | Scalar scalardef ->
         let (coerce: obj -> obj option) = scalardef.CoerceValue
         fun _ value -> 
             coerce value
             |> Option.toObj
-            |> Job.result
+            |> AsyncVal.wrap
+    
     | List (Output innerdef) ->
-        let (innerfn: ResolveFieldContext -> obj -> Job<obj>) = createCompletion possibleTypesFn innerdef
-        fun ctx (value: obj) -> job {
+        let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef
+        fun ctx (value: obj) ->
             let innerCtx =
                 match ctx.ExecutionPlan.Kind with
                 | ResolveCollection innerPlan -> { ctx with ExecutionPlan = innerPlan }
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match value with
             | :? string as s -> 
-                let! inner = innerfn innerCtx (s)
-                return [| inner |] :> obj
+                innerfn innerCtx (s)
+                |> AsyncVal.map (fun x -> upcast [| x |])
             | :? System.Collections.IEnumerable as enumerable ->
-                let! completed =
+                let completed =
                     enumerable
                     |> Seq.cast<obj>
                     |> Seq.map (fun x -> innerfn innerCtx x)
-                    |> Job.conCollect
-                return box (completed.ToArray())
-            | _ ->
-                return (ctx.ExecutionPlan.Identifier, value.GetType())
-                ||> sprintf "Expected to have enumerable value in field '%s' but got '%O'"
-                |> GraphQLException |> raise 
-        }
+                    |> Seq.toArray
+                    |> AsyncVal.collectParallel
+                    |> AsyncVal.map box
+                completed
+            | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Identifier (value.GetType()))
+    
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
         let optionDef = typedefof<option<_>>
-        fun ctx value -> job {
+        fun ctx value ->
             let t = value.GetType()
-            if value = null then return null
+            if value = null then AsyncVal.empty
             elif t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
                 let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, t)
-                return! innerfn ctx (fields.[0])
-            else return! innerfn ctx value
-        }
+                AsyncVal.wrap (fields.[0])
+            else innerfn ctx value
+    
     | Interface idef ->
         let resolver = resolveInterfaceType possibleTypesFn idef
-        fun ctx value -> job {
+        fun ctx value -> 
             let resolvedDef = resolver value
             let typeMap =
                 match ctx.ExecutionPlan.Kind with
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
-            | Some fields -> return! executeFields resolvedDef ctx value fields
-            | None -> return raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
-        }
+            | Some fields -> executeFields resolvedDef ctx value fields
+            | None -> raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
+        
     | Union udef ->
         let resolver = resolveUnionType possibleTypesFn udef
-        fun ctx value -> job {
+        fun ctx value ->
             let resolvedDef = resolver value
             let typeMap =
                 match ctx.ExecutionPlan.Kind with
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
-            | Some fields -> return! executeFields resolvedDef ctx (udef.ResolveValue value) fields
-            | None -> return raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
-        }
+            | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields
+            | None -> raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
+        
     | Enum _ ->
         fun _ value -> 
             let result = coerceStringValue value
-            Job.result (result |> Option.map box |> Option.toObj)
+            AsyncVal.wrap (result |> Option.map box |> Option.toObj)
+    
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
@@ -282,26 +284,27 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
             try
                 let res = compiled resolveFieldCtx value
                 if res = null
-                then async.Return null
-                else completed resolveFieldCtx res |> Async.Global.ofJob
+                then AsyncVal.empty
+                else completed resolveFieldCtx res
             with
             | ex -> 
                 resolveFieldCtx.AddError ex
-                async.Return null
+                AsyncVal.empty
+
     | Async(inType, outType, resolve) ->
         let boxified = boxifyExprAsync inType outType resolve
         let compiled = boxified.Compile()
-        fun resolveFieldCtx value -> (job {
+        fun resolveFieldCtx value -> 
             try
-                let! res = compiled resolveFieldCtx value
-                if res = null 
-                then return null
-                else return! completed resolveFieldCtx res
+                let res = compiled resolveFieldCtx value
+                if Object.ReferenceEquals(res, null)
+                then AsyncVal.empty
+                else completed resolveFieldCtx res
             with
             | ex -> 
                 resolveFieldCtx.AddError(ex)
-                return null
-        } |> Async.Global.ofJob)
+                AsyncVal.empty
+
     | Undefined -> 
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
@@ -324,36 +327,29 @@ and private createFieldContext objdef ctx (info: ExecutionInfo) =
       Args = args
       Variables = ctx.Variables }         
 
-and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : Job<obj> = job {
+and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : AsyncVal<obj> = 
     let resultSet =
         fieldInfos
         |> List.filter (fun info -> info.Include ctx.Variables)
         |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
-    let result = 
-        resultSet
-        |> Array.map fst
-        |> NameValueLookup 
-    do! resultSet
-        |> Array.map (fun (name, info) -> job { 
-            let innerCtx = createFieldContext objdef ctx info
-            let! res = info.Definition.Execute innerCtx value
-            do result.Update name res })
-        |> Job.conIgnore
-    return box result }
+    resultSet
+    |> Array.map (fun (name, info) ->  
+        let innerCtx = createFieldContext objdef ctx info
+        let res = info.Definition.Execute innerCtx value
+        res |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x)))
+    |> AsyncVal.collectParallel
+    |> AsyncVal.map (fun x -> upcast NameValueLookup x)
 
-let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value = job {
+let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value =
     let resultSet =
         plan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)
         |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
-    let result = 
+    let results =
         resultSet
-        |> Array.map fst
-        |> NameValueLookup 
-    do! resultSet
-        |> Array.map (fun (name, info) -> job { 
+        |> Array.map (fun (name, info) ->
             let fdef = info.Definition
             let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
             let fieldCtx = 
@@ -364,12 +360,11 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables } 
-            let! res = info.Definition.Execute fieldCtx value
-            do result.Update name res })
-        |> match plan.Strategy with
-           | Parallel -> Job.conIgnore
-           | Serial   -> Job.seqIgnore
-    return box result }
+            let res = info.Definition.Execute fieldCtx value
+            res |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r)))
+    match plan.Strategy with
+    | Parallel -> AsyncVal.collectParallel results
+    | Serial   -> AsyncVal.collectSequential results
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
@@ -394,14 +389,13 @@ let internal compileSchema possibleTypesFn types =
         | InputObject indef -> compileInputObject indef
         | _ -> ())
                 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors = 
-    job {
-        let variables = coerceVariables schema executionPlan.Operation.VariableDefinitions variables
-        let ctx = {
-            Schema = schema
-            ExecutionPlan = executionPlan
-            RootValue = root
-            Variables = variables
-            Errors = errors }
-        return! executePlan ctx executionPlan schema.Query root
-    } |> Job.toAsync
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors : AsyncVal<NameValueLookup> = 
+    let variables = coerceVariables schema executionPlan.Operation.VariableDefinitions variables
+    let ctx = {
+        Schema = schema
+        ExecutionPlan = executionPlan
+        RootValue = root
+        Variables = variables
+        Errors = errors }
+    let result = executePlan ctx executionPlan schema.Query root
+    result |> AsyncVal.map (NameValueLookup)

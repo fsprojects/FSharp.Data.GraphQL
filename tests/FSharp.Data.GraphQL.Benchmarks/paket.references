@@ -1,6 +1,5 @@
 FSharp.Core
 BenchmarkDotNet
 BenchmarkDotNet.Diagnostics.Windows
-Hopac
 System.Reflection.Metadata
 System.Collections.Immutable
