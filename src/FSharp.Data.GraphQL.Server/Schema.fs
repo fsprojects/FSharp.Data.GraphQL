@@ -232,13 +232,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     member private this.Eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
+        let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
+            if errors.IsEmpty 
+            then [ "data", box result ] 
+            else [ "data", box result ; "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let! result = evaluate this executionPlan variables rootObj errors
-                let output = [ "data", box result ] @ if errors.IsEmpty then [] else [ "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
-                return upcast NameValueLookup.ofList output
+                let res = evaluate this executionPlan variables rootObj errors
+                let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
+                return result :> IDictionary<string,obj>
             with 
             | ex -> 
                 let msg = ex.ToString()

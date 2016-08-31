@@ -78,6 +78,30 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Helpers.fs" />
+    <Compile Include="LinqToSqlTests.fs" />
+    <None Include="paket.references" />
+    <Content Include="App.config" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="mscorlib" />
+    <Reference Include="System" />
+    <Reference Include="System.Core" />
+    <Reference Include="System.Data.Linq" />
+    <Reference Include="System.Numerics" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj">
+      <Name>FSharp.Data.GraphQL.Server</Name>
+      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
+      <Name>FSharp.Data.GraphQL.Shared</Name>
+      <Project>{6768ea38-1335-4b8e-bc09-ccded1f9aaf6}</Project>
+      <Private>True</Private>
+    </ProjectReference>
+  </ItemGroup>
   <Choose>
     <When Condition="($(TargetFrameworkIdentifier) == '.NETCore') Or ($(TargetFrameworkIdentifier) == 'MonoAndroid') Or ($(TargetFrameworkIdentifier) == 'MonoTouch') Or ($(TargetFrameworkIdentifier) == 'Xamarin.iOS') Or ($(TargetFrameworkIdentifier) == 'Xamarin.Mac') Or ($(TargetFrameworkProfile) == 'Profile7') Or ($(TargetFrameworkProfile) == 'Profile44')">
       <ItemGroup>
@@ -425,28 +449,4 @@
       </ItemGroup>
     </When>
   </Choose>
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Helpers.fs" />
-    <Compile Include="LinqToSqlTests.fs" />
-    <None Include="paket.references" />
-    <Content Include="App.config" />
-  </ItemGroup>
-  <ItemGroup>
-    <Reference Include="mscorlib" />
-    <Reference Include="System" />
-    <Reference Include="System.Core" />
-    <Reference Include="System.Data.Linq" />
-    <Reference Include="System.Numerics" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj">
-      <Name>FSharp.Data.GraphQL.Server</Name>
-      <Project>{474179d3-0090-49e9-88f8-2971c0966077}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
-      <Name>FSharp.Data.GraphQL.Shared</Name>
-      <Project>{6768ea38-1335-4b8e-bc09-ccded1f9aaf6}</Project>
-      <Private>True</Private>
-    </ProjectReference>
-  </ItemGroup>
 </Project>

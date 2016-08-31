@@ -5,7 +5,6 @@ nuget FParsec
 nuget FSCheck
 nuget FSharp.Data.TypeProviders
 nuget FSharp.Quotations.Evaluator
-nuget Hopac
 nuget Newtonsoft.Json
 nuget Suave
 nuget System.Collections.Immutable
