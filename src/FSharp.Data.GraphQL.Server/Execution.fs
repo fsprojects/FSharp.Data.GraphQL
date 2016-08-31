@@ -240,7 +240,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
             if value = null then AsyncVal.empty
             elif t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
                 let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, t)
-                AsyncVal.wrap (fields.[0])
+                innerfn ctx fields.[0]
             else innerfn ctx value
     
     | Interface idef ->
@@ -336,7 +336,9 @@ and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value:
     |> Array.map (fun (name, info) ->  
         let innerCtx = createFieldContext objdef ctx info
         let res = info.Definition.Execute innerCtx value
-        res |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x)))
+        res 
+        |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x))
+        |> AsyncVal.rescue (fun e -> ctx.AddError e; KeyValuePair<_,_>(name, null)))
     |> AsyncVal.collectParallel
     |> AsyncVal.map (fun x -> upcast NameValueLookup x)
 
@@ -360,7 +362,9 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                   Args = args
                   Variables = ctx.Variables } 
             let res = info.Definition.Execute fieldCtx value
-            res |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r)))
+            res 
+            |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
+            |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
     match plan.Strategy with
     | Parallel -> AsyncVal.collectParallel results
     | Serial   -> AsyncVal.collectSequential results

@@ -1,6 +1,7 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
+open System.Collections.Generic
 
 [<Struct>]
 type AsyncVal<'T> =
@@ -49,12 +50,20 @@ module AsyncVal =
 
     /// Maps content of AsyncVal using provided mapping function, returning new 
     /// AsyncVal as the result.
-    let map (fn: 'T -> 'Res) (x: AsyncVal<'T>) =
+    let map (fn: 'T -> 'U) (x: AsyncVal<'T>) =
         if x.IsSync
-        then AsyncVal<'Res>(fn x.Value)
-        else AsyncVal<'Res> (async {
+        then AsyncVal<'U>(fn x.Value)
+        else AsyncVal<'U> (async {
             let! result = x.Async
             return fn result })
+
+    /// Applies rescue fn in case when contained Async value throws an exception.
+    let rescue (fn: exn -> 'T) (x: AsyncVal<'T>) =
+        if x.IsSync // sync vals will never throw, as they contain ready value
+        then x
+        else ofAsync(async {
+            try return! x.Async
+            with e -> return fn e })
 
     /// Folds content of AsyncVal over provided initial state zero using provided fn.
     /// Returns new AsyncVal as a result.
@@ -79,67 +88,47 @@ module AsyncVal =
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are 
     /// executed asynchronously, one by one with regard to their order in array.
+    /// Returned array maintain order of values.
     let collectSequential (values: AsyncVal<'T> []) : AsyncVal<'T []> =
-        let i, a = values |> Array.partition isSync
-        match i, a with
-        | [||], [||] -> AsyncVal<_> [||]
-        | immediates, [||] -> 
-            let x = immediates |> Array.map (fun v -> v.Value)
-            AsyncVal<_> x
-        | [||], awaitings -> 
-            let asyncs = awaitings |> Array.map (fun v -> v.Async)
-            let x = async {
-                let results = Array.zeroCreate asyncs.Length
-                let mutable i = 0
-                for a in asyncs do
-                    let! res = a
-                    results.[i] <- res
-                    i <- i + 1
-                return results
-            }
-            ofAsync x
-        | immediates, awaitings ->
-            //TODO: optimize
-            let ready = immediates |> Array.map (fun v -> v.Value)
-            let asyncs = awaitings |> Array.map (fun v -> v.Async)
-            let x = async {
-                let results = Array.zeroCreate (ready.Length + asyncs.Length)
-                Array.Copy(ready, results, ready.Length)
-                let mutable i = ready.Length
-                for a in asyncs do
-                    let! res = a
-                    results.[i] <- res
-                    i <- i + 1
-                return results
-            }
-            ofAsync x
+        if values.Length = 0 then AsyncVal<_> [||]
+        elif values |> Array.exists isAsync then
+            ofAsync <| async {
+                let results = Array.zeroCreate values.Length
+                for i = 0 to values.Length - 1 do
+                    let v = values.[i]
+                    if v.IsSync
+                    then results.[i] <- v.Value
+                    else
+                        let! r = v.Async
+                        results.[i] <- r
+                return results }
+        else AsyncVal<_> (values |> Array.map (fun x -> x.Value)) 
+            
 
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are 
-    /// executed all in parallel, in unordered fashion.
+    /// executed all in parallel, in unordered fashion. Order of values
+    /// inside returned array is maintained.
     let collectParallel (values: AsyncVal<'T> []) : AsyncVal<'T []> =
-        let i, a = values |> Array.partition isSync
-        match i, a with
-        | [||], [||] -> AsyncVal<_> [||]
-        | immediates, [||] -> 
-            let x = immediates |> Array.map (fun v -> v.Value)
-            AsyncVal<_> x
-        | [||], awaitings -> 
-            let x = awaitings |> Array.map (fun v -> v.Async) |> Async.Parallel
-            ofAsync x
-        | immediates, awaitings ->
-            //TODO: optimize
-            let len =  immediates.Length
-            let asyncs = awaitings |> Array.map (fun v -> v.Async)
-            let results = Array.zeroCreate (len + asyncs.Length)
-            for i = 0 to len - 1 do
-                results.[i] <- immediates.[i].Value
-            let x = async {
-                let! asyncResults = asyncs |> Async.Parallel
-                Array.Copy(asyncResults, 0, results, len, asyncResults.Length)
-                return results
-            }
-            ofAsync x
+        if values.Length = 0 then AsyncVal<_> [||]
+        else 
+            let indexes = List<_>(0)
+            let continuations = List<_>(0)
+            let results = Array.zeroCreate values.Length
+            for i = 0 to values.Length - 1 do
+                let v = values.[i]
+                if v.IsSync
+                then results.[i] <- v.Value
+                else 
+                    indexes.Add i
+                    continuations.Add v.Async
+            if indexes.Count = 0
+            then AsyncVal<_> results
+            else ofAsync (async {
+                let! vals = continuations |> Async.Parallel
+                for i = 0 to indexes.Count - 1 do
+                    results.[indexes.[i]] <- vals.[i]
+                return results })
 
 type AsyncValBuilder () =
     member x.Zero () = AsyncVal.empty

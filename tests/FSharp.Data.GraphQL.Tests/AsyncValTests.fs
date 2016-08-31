@@ -66,3 +66,35 @@ let ``AsyncVal can be bound inside Async computation`` () =
         return v }
     let res = a |> sync
     res |> equals 1
+    
+[<Fact>]
+let ``AsyncVal sequential collection resolves all values in order of execution`` () =
+    let mutable flag = "none"
+    let a = async {
+        do! Async.Sleep 1000
+        flag <- "a"
+        return 2
+    }
+    let b = async {
+        flag <- "b"
+        return 4 }
+    let array = [| AsyncVal.wrap 1; AsyncVal.ofAsync a; AsyncVal.wrap 3; AsyncVal.ofAsync b |]
+    let v = array |> AsyncVal.collectSequential
+    v |> AsyncVal.get |> equals [| 1; 2; 3; 4 |]
+    flag |> equals "b"
+
+[<Fact>]
+let ``AsyncVal parallel collection resolves all values with no order of execution`` () =
+    let mutable flag = "none"
+    let a = async {
+        do! Async.Sleep 1000
+        flag <- "a"
+        return 2
+    }
+    let b = async {
+        flag <- "b"
+        return 4 }
+    let array = [| AsyncVal.wrap 1; AsyncVal.ofAsync a; AsyncVal.wrap 3; AsyncVal.ofAsync b |]
+    let v = array |> AsyncVal.collectParallel
+    v |> AsyncVal.get |> equals [| 1; 2; 3; 4 |]
+    flag |> equals "a"
