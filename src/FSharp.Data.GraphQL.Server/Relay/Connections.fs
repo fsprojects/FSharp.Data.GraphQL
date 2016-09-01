@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL.Relay
 
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 
 type Edge<'Node> = 
     { Cursor : string

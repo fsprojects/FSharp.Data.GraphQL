@@ -9,43 +9,66 @@ FSharp.Data.GraphQL
 
 Documentation
 
-<div class="row">
-  <div class="span1"></div>
-  <div class="span6">
-    <div class="well well-small" id="nuget">
-      The FSharp.Data.GraphQL library can be <a href="https://nuget.org/packages/FSharp.Data.GraphQL">installed from NuGet</a>:
-      <pre>PM> Install-Package FSharp.Data.GraphQL</pre>
-    </div>
-  </div>
-  <div class="span1"></div>
-</div>
-
-Example
+The FSharp.Data.GraphQL library can be installed from [NuGet](https://www.nuget.org/packages?q=FSharp.Data.Graphql):
+    
+    PM> Install-Package FSharp.Data.GraphQL
+    
+First steps
 -------
 
-This example demonstrates using a function defined in this sample library.
+This example demonstrates how to define your own GraphQL schema.
 
 *)
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Release/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Release/FSharp.Data.GraphQL.Server.dll"
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Execution
 
+// define your types and data source
+type Person = { FirstName: string; LastName: string }
+let people = [ 
+    { FirstName = "Jane"; LastName = "Milton" }
+    { FirstName = "Travis"; LastName = "Smith" } ]
+
+// now define it's GraphQL representation
+let Person = Define.Object("Person", [
+    Define.Field("firstName", String, fun ctx p -> p.FirstName)
+    Define.Field("lastName", String, fun ctx p -> p.LastName)  
+])
+
+let QueryRoot = Define.Object("Query", [
+    Define.Field("people", ListOf Person, fun ctx () -> people)
+])
+
+// then initialize everything as part of schema
+let schema = Schema(QueryRoot)
+
+// now you can execute graphql schema
+let query = """
+query Example {
+  people {
+    firstName
+  }
+}
+"""
+async {
+    let! response = schema.AsyncExecute(query)
+    printf "%A" response
+}
 
 (**
-Some more info
 
-Samples & documentation
------------------------
+More examples
+-------------
 
-The library comes with comprehensible documentation. 
-It can include tutorials automatically generated from `*.fsx` files in [the content folder][content]. 
-The API reference is automatically generated from Markdown comments in the library implementation.
+For more examples, see the samples folder. There, your can find:
 
- * [Tutorial](tutorial.html) contains a further explanation of this sample library.
+- A mandatory Star Wars schema introduction using [GraphiQL](https://github.com/graphql/graphiql) client.
+- An example using Relay.JS data structures (which this library supports).
+- A client example, using type providers to operate on any GraphQL schema available - worth noticing: it's compatbile with [Fable](https://fable-compiler.github.io/)!
+- A fully fledged TODO application, where *FSharp.Data.GraphQL* is used for both server and client.
 
- * [API Reference](reference/index.html) contains automatically generated documentation for all types, modules
-   and functions in the library. This includes additional brief samples on using most of the
-   functions.
- 
 Contributing and copyright
 --------------------------
 

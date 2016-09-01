@@ -10,6 +10,7 @@ open System.Linq.Expressions
 open FSharp.Reflection
 open FSharp.Quotations.Evaluator
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
 

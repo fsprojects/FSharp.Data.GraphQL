@@ -49,7 +49,7 @@ let data = [
 let undefined<'t> = Unchecked.defaultof<'t>
 
 let resolveRoot ctx () =
-    let info = ctx.ExecutionPlan
+    let info = ctx.ExecutionInfo
     let queryable = data.AsQueryable()
     let result = info.ToLinq(queryable) |> Seq.toList
     result
@@ -67,7 +67,7 @@ let linqArgs = [
 
 let schema = Schema(Define.Object("RootQuery", [
     Define.Field("people", ListOf Person, "", linqArgs, fun ctx () ->
-        let info = ctx.ExecutionPlan
+        let info = ctx.ExecutionInfo
         let queryable = data.AsQueryable()
         let result = info.ToLinq(queryable) |> Seq.toList
         result )        

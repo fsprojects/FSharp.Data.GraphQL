@@ -18,7 +18,7 @@ let PersonType = Define.Object(
     name = "Person",
     fields = [
         // property resolver will be auto-generated
-        Define.Field("firstName", String)   
+        Define.AutoField("firstName", String)   
         // asynchronous explicit member resolver
         Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })   
     ])

@@ -9,6 +9,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
@@ -264,6 +265,6 @@ let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : Exec
             { Operation = operation
               Fields = topFields
               RootDef = mutationDef
-              Strategy = Serial }
+              Strategy = Sequential }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
