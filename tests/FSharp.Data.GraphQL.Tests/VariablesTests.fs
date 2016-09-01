@@ -19,7 +19,6 @@ let TestComplexScalar =
   Define.Scalar(
     name = "ComplexScalar",
     coerceInput = (fun (StringValue value) -> if value = "SerializedValue" then Some "DeserializedValue" else None),
-    coerceOutput = (fun value -> if value = "DeserializedValue" then Some (StringValue "SerializedValue") else None),
     coerceValue = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
 type TestInput = { 

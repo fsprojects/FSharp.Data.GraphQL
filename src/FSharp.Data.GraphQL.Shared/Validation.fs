@@ -4,6 +4,7 @@
 module FSharp.Data.GraphQL.Validation
 
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 
 type ValidationResult =
     | Success

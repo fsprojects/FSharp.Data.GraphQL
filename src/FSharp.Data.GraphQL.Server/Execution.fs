@@ -10,6 +10,7 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
@@ -190,16 +191,16 @@ let private resolveInterfaceType possibleTypesFn (interfacedef: InterfaceDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn interfacedef
 
-let resolveUnionType possibleTypesFn (uniondef: UnionDef) = 
+let private resolveUnionType possibleTypesFn (uniondef: UnionDef) = 
     match uniondef.ResolveType with
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
                 
-let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
+let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 
-            match ctx.ExecutionPlan.Kind with
+            match ctx.ExecutionInfo.Kind with
             | SelectFields fields -> executeFields objdef ctx value fields
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
     
@@ -214,8 +215,8 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef
         fun ctx (value: obj) ->
             let innerCtx =
-                match ctx.ExecutionPlan.Kind with
-                | ResolveCollection innerPlan -> { ctx with ExecutionPlan = innerPlan }
+                match ctx.ExecutionInfo.Kind with
+                | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match value with
             | :? string as s -> 
@@ -230,7 +231,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
                     |> AsyncVal.collectParallel
                     |> AsyncVal.map box
                 completed
-            | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionPlan.Identifier (value.GetType()))
+            | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
     
     | Nullable (Output innerdef) ->
         let innerfn = createCompletion possibleTypesFn innerdef
@@ -248,7 +249,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         fun ctx value -> 
             let resolvedDef = resolver value
             let typeMap =
-                match ctx.ExecutionPlan.Kind with
+                match ctx.ExecutionInfo.Kind with
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
@@ -260,7 +261,7 @@ let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: 
         fun ctx value ->
             let resolvedDef = resolver value
             let typeMap =
-                match ctx.ExecutionPlan.Kind with
+                match ctx.ExecutionInfo.Kind with
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
@@ -318,7 +319,7 @@ and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
 and private createFieldContext objdef ctx (info: ExecutionInfo) =
     let fdef = info.Definition
     let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
-    { ExecutionPlan = info
+    { ExecutionInfo = info
       Context = ctx.Context
       ReturnType = fdef.TypeDef
       ParentType = objdef
@@ -354,7 +355,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             let fdef = info.Definition
             let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
             let fieldCtx = 
-                { ExecutionPlan = info
+                { ExecutionInfo = info
                   Context = ctx
                   ReturnType = fdef.TypeDef
                   ParentType = objdef
@@ -367,7 +368,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
     match plan.Strategy with
     | Parallel -> AsyncVal.collectParallel results
-    | Serial   -> AsyncVal.collectSequential results
+    | Sequential   -> AsyncVal.collectSequential results
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields

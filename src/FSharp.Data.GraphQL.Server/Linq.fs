@@ -10,10 +10,11 @@ open System.Linq.Expressions
 open FSharp.Reflection
 open FSharp.Quotations.Evaluator
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
 
-type Arg = 
+type private Arg = 
     | Id of obj
     | OrderBy of obj
     | OrderByDesc of obj
@@ -151,7 +152,7 @@ let private unwrapType = function
     | Nullable inner -> inner.Type
     | tdef -> tdef.Type
 
-let castTo tCollection callExpr : Expression = 
+let private castTo tCollection callExpr : Expression = 
     match tCollection with
     | Gen.List tRes ->
         let cast = Gen.listOfSeq.MakeGenericMethod [| tRes |]
@@ -261,6 +262,16 @@ let rec private toLinq info (query: IQueryable<'Source>) variables : IQueryable<
     downcast compiled.DynamicInvoke [| box query |]
 
 type FSharp.Data.GraphQL.Types.ExecutionInfo with
+    
+    /// Replaces top level type of the execution info with provided queryable source
+    /// and constructs a LINQ expression from it, returing queryable with all applied 
+    /// operations as the result.
+    /// 
+    /// GraphQL may define queries that will be interpreted in terms of LINQ operations,
+    /// such as `orderBy`, `orderByDesc`, `skip`, `take, but also more advanced like:
+    /// - `id` returning where comparison with object's id field.
+    /// - `first`/`after` returning slice of the collection, ordered by id with id greater than provided in after param.
+    /// - `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.
     member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<'Result> = 
         toLinq this source (defaultArg variables Map.empty)
         

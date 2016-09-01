@@ -3,6 +3,7 @@
 open System
 open System.Collections.Generic
 
+/// A struct used to operate on both synchronous values and Async computations using an uniform API.
 [<Struct>]
 type AsyncVal<'T> =
     val Value : 'T

@@ -36,6 +36,9 @@ let settings = JsonSerializerSettings()
 settings.Converters <- [| OptionConverter() |]
 settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
 
+/// Serializes provided object to JSON format.
 let toJson (o: 't) : string = JsonConvert.SerializeObject(o, settings)
+
+/// Deserializes provided JSON string to object of given type.
 let fromJson<'t> (json: string) : 't = JsonConvert.DeserializeObject<'t>(json, settings)
 

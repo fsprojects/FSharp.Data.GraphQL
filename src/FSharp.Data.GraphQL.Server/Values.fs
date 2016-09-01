@@ -9,6 +9,7 @@ open System.Reflection
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -32,7 +33,7 @@ let inline tryConvertAst schema ast =
 let inline private notAssignableMsg (innerDef: InputDef) value : string =
     sprintf "value of type %s is not assignable from %s" innerDef.Type.Name (value.GetType().Name)
 
-let rec compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
+let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
     match inputDef with
     | Scalar scalardef -> 
         variableOrElse (scalardef.CoerceInput >> Option.toObj)
@@ -151,7 +152,7 @@ and private coerceVariableInputObject (objdef) (vardef: VariableDefinition) (inp
         upcast mapped
     | _ -> input
 
-let coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (inputs) = 
+let internal coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (inputs) = 
     let typedef = 
         match tryConvertAst schema vardef.Type with
         | None -> raise (GraphQLException (sprintf "Variable '$%s' expected value of type %s, which cannot be used as an input type." vardef.VariableName (vardef.Type.ToString())))

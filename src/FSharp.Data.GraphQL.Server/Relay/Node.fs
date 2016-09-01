@@ -40,13 +40,16 @@ module GlobalId =
                 failwithf "Object of type '%s' was none of the defined types [%A]" (o.GetType().FullName) (map.Value.Keys)
     
     type FSharp.Data.GraphQL.Types.SchemaDefinitions.Define with
+        
+        /// Field definition for the Relay GlobalID field for the chosen type.
         static member GlobalIdField (typeName: string, resolve: (ResolveFieldContext -> 'In -> string)) =
             Define.Field(
                 name = "id",
                 typedef = ID,
                 description = "The ID of an object",
                 resolve = fun ctx value -> toGlobalId typeName (resolve ctx value))
-
+                
+        /// Field definition for the Relay GlobalID field for the chosen type.
         static member GlobalIdField (resolve: (ResolveFieldContext -> 'In -> string)) =
             Define.Field(
                 name = "id",
@@ -54,7 +57,10 @@ module GlobalId =
                 description = "The ID of an object",
                 resolve = fun ctx value -> 
                     toGlobalId ctx.ParentType.Name (resolve ctx value))
-
+                    
+        /// Field definition for the Relay Node interface. Node interfaces are used
+        /// by Relay to identify uniqe components - they need to implement and `id`
+        /// field which is a globally unique object identifier.
         static member NodeField (nodeDef: InterfaceDef<'Res>, resolve: (ResolveFieldContext -> 'Val -> string -> 'Res option)) =
             Define.Field(
                 name = "node",
@@ -64,7 +70,10 @@ module GlobalId =
                 resolve = fun ctx value -> 
                     let id = ctx.Arg("id")
                     resolve ctx value id)
-
+                    
+        /// Field definition for the Relay Node interface. Node interfaces are used
+        /// by Relay to identify uniqe components - they need to implement and `id`
+        /// field which is a globally unique object identifier.
         static member Node (possibleTypes: unit -> ObjectDef list) =
           Define.Interface(
             name = "Node",

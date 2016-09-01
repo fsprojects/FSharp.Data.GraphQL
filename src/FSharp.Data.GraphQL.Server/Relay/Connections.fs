@@ -4,24 +4,53 @@
 namespace FSharp.Data.GraphQL.Relay
 
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 
+/// Record used to represent Relay node with cursor identifier.
 type Edge<'Node> = 
-    { Cursor : string
+    { /// Cursor used to identify current node.
+      Cursor : string
+      /// Object satisfying Relay Node interface definition.
       Node : 'Node }
 
+/// Record used to represent a information about single page of 
+/// results to Relay. Relay uses cursor id to identify the order
+/// between the pages.
 type PageInfo = 
-    { HasNextPage : bool
+    { /// Should be true, if the next page is available.
+      /// False if current page is the last page of results.
+      HasNextPage : bool
+      /// Should be true, if the previous page is available.
+      /// False if current page is the first page of results.
       HasPreviousPage : bool
+      /// Optional cursor used to identify begining of the results.
       StartCursor : string option
+      /// Optional cursor used to identify the end of the results.
       EndCursor : string option }
 
+/// Record representing Relay connection object. Connection describes
+/// a set of results (Relay nodes) returned from the server. Instead
+/// of statically identifying paged results, relay uses notion of the
+/// cursor, which allows to track result set windows, while the 
+/// result set itself may change over time.
 type Connection<'Node> = 
-    { TotalCount : int option
+    { /// Optional value describing total number of results avaiable
+      /// at the time.
+      TotalCount : int option
+      /// Information about current results page.
       PageInfo : PageInfo
+      /// List of edges (Relay nodes with cursors) returned as results.
       Edges : Edge<'Node> seq }
 
+/// Slice info union describing Relay cursor progression.
 type SliceInfo =
+    /// Return page of `first` results `after` provided cursor value.
+    /// If `after` value was not provided, start from the beginning of
+    /// the result set.
     | Forward of first:int * after:string option
+    /// Return page of `last` results `before` provided cursor value.
+    /// If `before` value was not provided, return `last` results of 
+    /// the result set.
     | Backward of last:int * before:string option
 
 type SliceMetaInfo = { Start: int; Length: int }
@@ -42,6 +71,8 @@ module Cursor =
 [<AutoOpen>]
 module Definitions =
 
+    /// Active pattern used to match context arguments in order
+    /// to construct Relay slice information.
     let (|SliceInfo|_|) (ctx:ResolveFieldContext) = 
         match ctx.TryArg "first", ctx.TryArg "after" with
         | Some (Some first), None -> Some (Forward(first, None))
@@ -97,16 +128,23 @@ module Definitions =
 [<RequireQualifiedAccess>]
 module Connection =
 
+    /// List of argument definitions used to apply 
+    /// Relay's connection forwarding ability.
     let forwardArgs = [ 
         Define.Input("first", Nullable Int)
         Define.Input("after", Nullable String) ]
     
+    /// List of argument definitions used to apply 
+    /// Relay's connection backwarding ability.
     let backwardArgs = [ 
         Define.Input("last", Nullable Int)
         Define.Input("before", Nullable String) ]
     
+    /// List of argument definitions used to apply 
+    /// Relay's ability to move connections forwards and backwards.
     let allArgs = forwardArgs @ backwardArgs
 
+    /// Construct a Relay Connection object from the provided array.
     let ofArray array =
         let edges = 
             array

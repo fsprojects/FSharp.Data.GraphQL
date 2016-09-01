@@ -227,7 +227,7 @@ let ``Nullable field args type definitions are considered nullable`` () =
 let ``Introspection executes an introspection query`` () =
     let root = Define.Object("QueryRoot", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
-    let (Object raw) = root
+    let (Patterns.Object raw) = root
     let result = sync <| schema.AsyncExecute(parse Introspection.introspectionQuery, raw)
     noErrors result
     let expected =

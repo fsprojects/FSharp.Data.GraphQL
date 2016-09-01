@@ -11,6 +11,7 @@ open Xunit
 open FsCheck
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 
 let private testCoercion graphQLType (expected: 't) actual =
     let (Scalar scalar) = graphQLType

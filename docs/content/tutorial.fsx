@@ -4,10 +4,12 @@
 #I "../../src/FSharp.Data.GraphQL.Server/bin/Release"
 
 (**
-Introducing your project
+Getting started
 ========================
 
-Say more
+Download a package to your project:
+
+    
 
 *)
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Release/FSharp.Data.GraphQL.Shared.dll"
