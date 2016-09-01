@@ -28,7 +28,7 @@ type private Arg =
 let private unwrap (resolve: Resolve) inParam: Expression =
     let (Lambda(_, inner)) = resolve.Expr
     match inner with
-    | Lambda(var1, PropertyGet(Some(var2), propInfo, args)) ->
+    | Lambda(_, PropertyGet(Some(_), propInfo, _)) ->
         upcast Expression.Property(inParam, propInfo)
     | other -> QuotationEvaluator.ToLinqExpression other
 
@@ -187,6 +187,7 @@ let rec private eval vars tIn info (inputExpr: Expression) : Expression =
                 | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
             // enhance call with cast to result type
             castTo tIn call
+        | ResolveAbstraction _ -> raise (NotSupportedException "Resolving abstract types is not supported for LINQ yet")
 
 and private constructCollection (methods: Methods) vars tSource inputExpr inner = 
     let tResult = inner.ReturnDef.Type

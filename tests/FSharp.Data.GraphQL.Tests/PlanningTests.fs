@@ -3,6 +3,7 @@
 module FSharp.Data.GraphQL.Tests.PlanningTests
 
 #nowarn "25"
+#nowarn "40"
 
 open System
 open Xunit
@@ -38,15 +39,13 @@ let animals =
         species = "Dog" } ]
 
 let rec Person = 
-    Define.Object
-        (name = "Person", 
-         fieldsFn = (fun () -> [ 
-            Define.Field("firstName", String, fun _ person -> person.firstName)
-            Define.Field("lastName", String, fun _ person -> person.lastName)
-            Define.Field("age", Int, fun _ person -> person.age)
-            Define.Field("name", String, fun _ person -> person.firstName + " " + person.lastName)
-            Define.Field("friends", ListOf Person, fun _ _ -> []) ]), 
-         interfaces = [ INamed ])
+    Define.Object(name = "Person", 
+                  fieldsFn = (fun () -> 
+                  [ Define.Field("firstName", String, fun _ person -> person.firstName)
+                    Define.Field("lastName", String, fun _ person -> person.lastName)
+                    Define.Field("age", Int, fun _ person -> person.age)
+                    Define.Field("name", String, fun _ person -> person.firstName + " " + person.lastName)
+                    Define.Field("friends", ListOf Person, fun _ _ -> []) ]), interfaces = [ INamed ])
 
 and Animal = 
     Define.Object(name = "Animal", 
@@ -60,7 +59,7 @@ and UNamed =
                  function 
                  | Animal a -> box a
                  | Person p -> upcast p)
-             
+
 [<Fact>]
 let ``Planning should retain correct types for leafs``() = 
     let schema = Schema(Person)
@@ -90,7 +89,7 @@ let ``Planning should work with fragments``() =
         lastName
     }"""
     let plan = schema.CreateExecutionPlan(query)
-    plan.RootDef |> equals (upcast Person) 
+    plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
@@ -114,7 +113,7 @@ let ``Planning should work with parallel fragments``() =
     }
     """
     let plan = schema.CreateExecutionPlan(query)
-    plan.RootDef |> equals (upcast Person) 
+    plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
@@ -154,7 +153,6 @@ let ``Planning should retain correct types for lists``() =
     friendInfo.Identifier |> equals "friends"
     friendInfo.ParentDef |> equals (upcast PersonList)
     friendInfo.ReturnDef |> equals (upcast Person)
-
 
 [<Fact>]
 let ``Planning should work with interfaces``() = 

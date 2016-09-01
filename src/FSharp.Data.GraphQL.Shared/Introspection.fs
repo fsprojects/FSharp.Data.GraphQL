@@ -237,7 +237,8 @@ and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation
 /// to provide options to alter GraphQL’s execution behavior in ways field 
 /// arguments will not suffice, such as conditionally including or skipping a field. 
 /// Directives provide this by describing additional information to the executor.
-and __Directive = Define.Object<IntrospectionDirective>(
+and __Directive = 
+  Define.Object<IntrospectionDirective>(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fieldsFn = fun () ->
