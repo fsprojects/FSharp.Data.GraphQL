@@ -1,6 +1,5 @@
 # FSharp.Data.GraphQL
 
-## WARNING: Work in progress
 F# implementation of Facebook [GraphQL query language specification](https://facebook.github.io/graphql).
 
 [![Build Status](https://travis-ci.org/bazingatechnologies/FSharp.Data.GraphQL.svg?branch=dev)](https://travis-ci.org/bazingatechnologies/FSharp.Data.GraphQL)

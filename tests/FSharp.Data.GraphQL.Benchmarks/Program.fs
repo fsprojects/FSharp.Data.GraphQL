@@ -15,5 +15,5 @@ let defaultSwitch () = BenchmarkSwitcher [| typeof<AsyncValBenchmark>; typeof<Si
 let Main args =
     let asm = Reflection.Assembly.Load("FSharp.Core")
     printfn "%+A" asm
-    defaultSwitch().Run args 
+    defaultSwitch().Run args |> ignore
     0

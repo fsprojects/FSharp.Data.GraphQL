@@ -3,6 +3,8 @@
 
 module FSharp.Data.GraphQL.Tests.Relay.NodeTests
 
+#nowarn "40"
+
 open System
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types

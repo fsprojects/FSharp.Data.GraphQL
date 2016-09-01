@@ -11,6 +11,8 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
+#nowarn "40"
+
 type TestSubject = {
     a: string
     b: string
@@ -168,9 +170,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
 let ``Execution handles basic tasks: threads root value context correctly`` () = 
     let query = "query Example { a }"
     let data = { Thing = "" }
-    let Thing = Define.Object<TestThing>("Type", [
-        Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing)
-    ])
+    let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing) ])
     let result = sync <| Schema(Thing).AsyncExecute(parse query, data)
     noErrors result
     equals "thing" data.Thing
