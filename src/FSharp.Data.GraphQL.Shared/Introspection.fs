@@ -11,7 +11,8 @@ let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if property = null then null else property.GetValue(o, null)
 
-
+/// Common GraphQL query that may be used to retriev overall data 
+/// about schema type system itself.
 let introspectionQuery = """query IntrospectionQuery {
     __schema {
       queryType { name }
@@ -88,6 +89,9 @@ let introspectionQuery = """query IntrospectionQuery {
     }
   }"""
     
+/// GraphQL enum describing kind of the GraphQL type definition.
+/// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,
+/// NON_NULL or INPUT_OBJECT.
 let __TypeKind =
   Define.Enum(
     name = "__TypeKind", 
@@ -102,7 +106,10 @@ let __TypeKind =
         Define.EnumValue("LIST", TypeKind.LIST, "Indicates this type is a list. `ofType` is a valid field.")
         Define.EnumValue("NON_NULL", TypeKind.NON_NULL, "Indicates this type is a non-null. `ofType` is a valid field.")
     ])
-
+    
+/// GraphQL enum describing kind of location for a particular directive
+/// to be used in. Can be one of: QUERY, MUTATION, SUBSCRIPTION, FIELD,
+/// FRAGMENT_DEFINITION, FRAGMENT_SPREAD or INLINE_FRAGMENT.
 let __DirectiveLocation =
   Define.Enum(
     name = "__DirectiveLocation",
@@ -119,6 +126,13 @@ let __DirectiveLocation =
     
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
 
+/// The fundamental unit of any GraphQL Schema is the type. There are many 
+/// kinds of types in GraphQL as represented by the `__TypeKind` enum. 
+/// Depending on the kind of a type, certain fields describe information about 
+/// that type. Scalar types provide no information beyond a name and description, 
+/// while Enum types provide their values. Object and Interface types provide 
+/// the fields they describe. Abstract types, Union and Interface, provide 
+/// the Object types possible at runtime. List and NonNull types compose other types.
 let rec __Type =
   Define.Object<IntrospectionTypeRef>(
     name = "__Type",
@@ -168,6 +182,9 @@ let rec __Type =
         Define.Field("ofType", Nullable __Type, resolve = fun _ t -> t.OfType)
     ])
    
+/// Arguments provided to Fields or Directives and the input fields of an 
+/// InputObject are represented as Input Values which describe their type
+/// and optionally a default value.
 and __InputValue =
   Define.Object<IntrospectionInputVal>(
     name = "__InputValue",
@@ -180,6 +197,8 @@ and __InputValue =
         Define.Field("defaultValue", Nullable String, fun _ f -> f.DefaultValue)
     ])
     
+/// Object and Interface types are described by a list of Fields, each of 
+/// which has a name, potentially a list of arguments, and a return type.
 and __Field =
   Define.Object<IntrospectionField>(
     name = "__Field",
@@ -194,6 +213,9 @@ and __Field =
         Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
     ])
     
+/// One possible value for a given Enum. Enum values are unique values, 
+/// not a placeholder for a string or numeric value. However an Enum value 
+/// is returned in a JSON response as a string.
 and __EnumValue =
   Define.Object<IntrospectionEnumVal>(
     name = "__EnumValue",
@@ -209,7 +231,12 @@ and __EnumValue =
 and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation) =
     let c = int comparand
     compared |> Array.exists (fun cc -> c &&& (int cc) <> 0)
-
+    
+/// A GraphQL Directive provides a way to describe alternate runtime execution 
+/// and type validation behavior in a GraphQL document. In some cases, you need 
+/// to provide options to alter GraphQL’s execution behavior in ways field 
+/// arguments will not suffice, such as conditionally including or skipping a field. 
+/// Directives provide this by describing additional information to the executor.
 and __Directive = Define.Object<IntrospectionDirective>(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
@@ -224,6 +251,9 @@ and __Directive = Define.Object<IntrospectionDirective>(
         Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
     ])
     
+/// GraphQL object defining capabilities of GraphQL server. It exposes 
+/// all available types and directives on the server, as well as the 
+/// entry points for query, mutation, and subscription operations.
 and __Schema =
   Define.Object<IntrospectionSchema>(
     name = "__Schema",

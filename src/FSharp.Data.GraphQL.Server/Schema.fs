@@ -14,13 +14,19 @@ open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
+/// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
-    { Types : NamedDef list
+    { /// List of types that couldn't be resolved from schema query root 
+      /// tree traversal, but should be included anyway.
+      Types : NamedDef list
+      /// List of custom directives that should be included as known to the schema.
       Directives : DirectiveDef list }
+    /// Returns a default schema configuration.
     static member Default = 
         { Types = []
           Directives = [IncludeDirective; SkipDirective] }
 
+/// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) as this =
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
@@ -249,14 +255,22 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 let msg = ex.ToString()
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
-        
+    
+    /// Asynchronously executes parsed GraphQL query AST.
+    /// data is optional object provided as a root to all top level field resolvers.
+    /// variables define list of variables to be used during query execution, that were defined in it.
+    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
     member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         let executionPlan = 
             match operationName with
             | Some opname -> this.CreateExecutionPlan(ast, opname)
             | None -> this.CreateExecutionPlan(ast)
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
-
+        
+    /// Asynchronously executes raw GraphQL query string.
+    /// data is optional object provided as a root to all top level field resolvers.
+    /// variables define list of variables to be used during query execution, that were defined in it.
+    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
     member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         let ast = parse queryOrMutation
         let executionPlan = 
@@ -264,10 +278,21 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             | Some opname -> this.CreateExecutionPlan(ast, opname)
             | None -> this.CreateExecutionPlan(ast)
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
-
+        
+    /// Asynchronously executes prefetched operation execution plan. This is useful
+    /// in cases when you have the same query executed multiple times with different
+    /// parameters. In that case, query can be used to construct execution plan,
+    /// which then is cached and reused as needed.
+    /// data is optional object provided as a root to all top level field resolvers.
+    /// variables define list of variables to be used during query execution, that were defined in it.
+    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
     member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
 
+    /// Creates an execution plan for provided GraphQL document AST without 
+    /// executing it. This is useful in cases when you have the same query executed 
+    /// multiple times with different parameters. In that case, query can be used 
+    /// to construct execution plan, which then is cached and reused as needed.
     member this.CreateExecutionPlan(ast: Document, ?operationName: string): ExecutionPlan =
         match findOperation ast operationName with
         | Some operation -> 
@@ -281,7 +306,11 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             let planningCtx = { Schema = this; RootDef = rootDef; Document = ast }
             planOperation planningCtx operation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
-
+        
+    /// Creates an execution plan for provided GraphQL query string without 
+    /// executing it. This is useful in cases when you have the same query executed 
+    /// multiple times with different parameters. In that case, query can be used 
+    /// to construct execution plan, which then is cached and reused as needed.
     member this.CreateExecutionPlan(queryOrMutation: string, ?operationName: string) =
         match operationName with
         | None -> this.CreateExecutionPlan(parse queryOrMutation)

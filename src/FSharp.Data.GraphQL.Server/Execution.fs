@@ -191,12 +191,12 @@ let private resolveInterfaceType possibleTypesFn (interfacedef: InterfaceDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn interfacedef
 
-let resolveUnionType possibleTypesFn (uniondef: UnionDef) = 
+let private resolveUnionType possibleTypesFn (uniondef: UnionDef) = 
     match uniondef.ResolveType with
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
                 
-let rec createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
+let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 

@@ -13,12 +13,14 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
+/// Field definition allowing to access the current type schema of this server.
 let SchemaMetaFieldDef = Define.Field(
     name = "__schema",
     description = "Access the current type schema of this server.",
     typedef = __Schema,
     resolve = fun ctx (_: obj) -> ctx.Schema.Introspected)
     
+/// Field definition allowing to request the type information of a single type.
 let TypeMetaFieldDef = Define.Field(
     name = "__type",
     description = "Request the type information of a single type.",
@@ -35,6 +37,7 @@ let TypeMetaFieldDef = Define.Field(
         |> Seq.find (fun t -> t.Name = ctx.Arg("name")) 
         |> IntrospectionTypeRef.Named)
     
+/// Field definition allowing to resolve a name of the current Object type at runtime.
 let TypeNameMetaFieldDef : FieldDef<obj> = Define.Field(
     name = "__typename",
     description = "The name of the current Object type at runtime.",
@@ -62,7 +65,7 @@ let private coerceVariables (schema: #ISchema) (variables: VariableDefinition li
             let variableName = vardef.VariableName
             Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
 
-let objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
+let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
     match tryFindDef ctx.Schema parentDef field with
     | Some fdef ->
         { Identifier = field.AliasOrName
@@ -76,7 +79,7 @@ let objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field, include
     | None ->
         raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
 
-let rec abstractionInfo (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer =
+let rec private abstractionInfo (ctx:PlanningContext) (parentDef: AbstractDef) (field: Field) typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
     match typeCondition with
     | None ->
@@ -130,8 +133,8 @@ let private directiveIncluder (directive: Directive) : Includer =
             | None -> raise (
                 GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
-let incl: Includer = fun _ -> true
-let excl: Includer = fun _ -> false
+let private incl: Includer = fun _ -> true
+let private excl: Includer = fun _ -> false
 let private getIncluder (directives: Directive list) parentIncluder : Includer =
     directives
     |> List.fold (fun acc directive ->
@@ -240,7 +243,7 @@ and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selectio
         ) Map.empty
     { info with Kind = ResolveAbstraction plannedTypeFields }
 
-let planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
+let internal planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
     // create artificial plan info to start with
     let rootInfo = { 
         Identifier = null
