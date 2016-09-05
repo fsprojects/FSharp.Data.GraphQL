@@ -1,4 +1,4 @@
-#r @"packages/build/FAKE/tools/FakeLib.dll"
+@"packages/build/FAKE/tools/FakeLib.dll"
 open Fake
 open Fake.Git
 open Fake.AssemblyInfoFile
