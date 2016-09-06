@@ -10,9 +10,80 @@ open System.Linq.Expressions
 open FSharp.Reflection
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open FSharp.Quotations
-open FSharp.Quotations.Patterns
-open FSharp.Linq.RuntimeHelpers
+open Microsoft.FSharp.Quotations
+
+let rec private collect (e: Expr) =
+    match e with
+    | Patterns.PropertyGet(Some subject, propertyInfo, _) ->
+        let exprs = collect subject
+        let head = exprs |> List.head
+        let property = Expression.Property(null, propertyInfo)
+        [ property ]
+    | Patterns.Lambda(arg, body) ->
+        collect body
+    | Patterns.FieldGet(Some subject, fieldInfo) -> 
+        let exprs = collect subject
+        let head = exprs |> List.head
+        let field = Expression.Field(null, fieldInfo)
+        [ field ]
+    | Patterns.Application(body, arg) -> 
+        (collect body) @ (collect arg)
+    | Patterns.Call(subject, _, args) -> 
+        (defaultArg (subject |> Option.map collect) []) @ (List.collect collect args)
+    | Patterns.Coerce(expr, _) -> 
+        collect expr
+    | Patterns.ForIntegerRangeLoop(indexer, lower, upper, iter) -> 
+        (collect lower) @ (collect upper) @ (collect iter)
+    | Patterns.IfThenElse(condition, ifTrue, ifFalse) -> 
+        (collect condition) @ (collect ifTrue) @ (collect ifFalse)
+    | Patterns.Let(variable, expr, body) -> 
+        (collect expr) @ (collect body)
+    | Patterns.LetRecursive(bindings, body) -> 
+        (collect body)
+    | Patterns.NewArray(_, exprs) ->
+        exprs |> List.collect collect
+    | Patterns.NewDelegate(_, _, body) -> 
+        collect body
+    | Patterns.NewObject(_, args) ->
+        args |> List.collect collect
+    | Patterns.NewRecord(_, args) ->
+        args |> List.collect collect
+    | Patterns.NewTuple(args) -> 
+        args |> List.collect collect
+    | Patterns.NewUnionCase(_, args) ->
+        args |> List.collect collect
+    | Patterns.QuoteRaw(expr) -> 
+        collect expr
+    | Patterns.QuoteTyped(expr) -> 
+        collect expr
+    | Patterns.Sequential(prev, next) -> 
+        (collect prev) @ (collect next)
+    | Patterns.TryFinally(tryBlock, finalBlock) -> 
+        (collect tryBlock) @ (collect finalBlock)
+    | Patterns.TryWith(tryBlock, var1, filter, var2, handler) -> 
+        (collect tryBlock) @ (collect filter) @ (collect handler)
+    | Patterns.TupleGet(expr, _) -> 
+        collect expr
+    | Patterns.TypeTest(expr, _) -> 
+        collect expr
+    | Patterns.UnionCaseTest(expr, _) -> 
+        collect expr
+    | Patterns.VarSet(_, expr) -> 
+        collect expr
+    | Patterns.WhileLoop(condition, body) -> 
+        (collect condition) @ (collect body)
+    | Patterns.WithValue(_, _, expr) -> 
+        collect expr
+    | Patterns.AddressOf(_) -> []
+    | Patterns.AddressSet(_, _) -> []
+    | Patterns.DefaultValue(_) -> []
+    | Patterns.FieldSet(_, _, _) -> []
+    | Patterns.PropertySet(_, _, _, _) -> []
+    | Patterns.Value(value, tValue) -> []
+    | Patterns.ValueWithName(value, tValue, name) -> []
+    | Patterns.Var(var) -> []
+    | _ -> []
+
 
 type private Arg = 
     | Id of obj
@@ -27,9 +98,9 @@ type private Arg =
 
 let private unwrap (resolve: Resolve) inParam: Expression =
     match resolve.Expr with
-    | WithValue(_, _, Lambda(_, Lambda(_, PropertyGet(Some(_), propInfo, _)))) ->
+    | Patterns.WithValue(_, _, Patterns.Lambda(_, Patterns.Lambda(_, Patterns.PropertyGet(Some(_), propInfo, _)))) ->
         upcast Expression.Property(inParam, propInfo)
-    | other -> LeafExpressionConverter.QuotationToExpression other
+    | other -> FSharp.Linq.RuntimeHelpers.LeafExpressionConverter.QuotationToExpression other
 
 let inline private argVal vars argDef = 
     function 

@@ -65,6 +65,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AsyncValTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />
