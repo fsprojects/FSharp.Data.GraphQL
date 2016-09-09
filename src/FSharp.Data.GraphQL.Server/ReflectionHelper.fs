@@ -133,59 +133,131 @@ module internal ReflectionHelper =
             |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
         ctor
 
+    type Scope = 
+        { Parent: Scope option
+          Children: List<Scope>
+          Tracked: HashSet<Expr>
+          Vars: Dictionary<Var, Expr> }
+
+    let empty = { Parent = None; Tracked = null; Vars = null; Children = null }
+    let mkChild parent tracked = 
+        let child = { Parent = Some parent; Tracked = HashSet<_>(); Vars = Dictionary<_,_>(); Children = List<_>() }
+        parent.Children.Add child 
+        child.Tracked.Add tracked |> ignore
+        child
+
+    let rec getTrack var scope =
+        if scope.Tracked.Contains var 
+        then Some scope
+        else match scope.Parent with
+             | None -> None
+             | Some parent -> getTrack var parent
+
+    let rec getVar var scope =
+        match scope.Vars.TryGetValue var with
+        | true, e -> Some e
+        | false, _ ->
+            match scope.Parent with
+            | None -> None
+            | Some parent -> getVar var parent
+
     /// Data structure, that is used to tracking property getters in `collectGetters` function.
-    type Tracker = Tracker of MemberExpression * Tracker []
+    type Tracker = 
+        | Complex of string * Tracker list
+        | Leaf of string
 
     /// Traverses a provided F# quotation in order to catch all 
-    let collectGetters (e: Expr) : Expression list = 
-        let rec collect tracked (e : Expr) : Expression list =
+    let track (e: Expr) : Tracker  = 
+        let rec track scope e =
             match e with
-            | Patterns.PropertyGet(Some subject, propertyInfo, _) -> 
-                let exprs = collect tracked subject
-                let head = exprs |> List.head
-                let property = Expression.Property(head, propertyInfo)
-                [ property ]
-            | Patterns.Lambda(arg, body) -> collect tracked body
+            | Patterns.PropertyGet(Some subject, propertyInfo, _) ->
+                match getTrack subject scope with
+                | None -> ()
+                | Some scope -> scope.Tracked.Add e |> ignore
+            | Patterns.Lambda(arg, body) -> 
+                //TODO: create child scope with a
+                let nestedScope = mkChild scope (Expr.Var arg)
+                track nestedScope body
             | Patterns.FieldGet(Some subject, fieldInfo) -> 
-                let exprs = collect tracked subject
-                let head = exprs |> List.head
-                let field = Expression.Field(head, fieldInfo)
-                [ field ]
-            | Patterns.Var(var) -> [ Expression.Variable(var.Type, var.Name) ]
-            | Patterns.Application(body, arg) -> (collect tracked body) @ (collect tracked arg)
-            | Patterns.Call(subject, _, args) -> (defaultArg (subject |> Option.map (collect tracked)) []) @ (List.collect (collect tracked) args)
-            | Patterns.Coerce(expr, _) -> collect tracked expr
-            | Patterns.ForIntegerRangeLoop(indexer, lower, upper, iter) -> (collect tracked lower) @ (collect tracked upper) @ (collect tracked iter)
-            | Patterns.IfThenElse(condition, ifTrue, ifFalse) -> (collect tracked condition) @ (collect tracked ifTrue) @ (collect tracked ifFalse)
-            | Patterns.Let(variable, expr, body) -> (collect tracked expr) @ (collect tracked body)
-            | Patterns.LetRecursive(bindings, body) -> (collect tracked body)
-            | Patterns.NewArray(_, exprs) -> exprs |> List.collect (collect tracked) 
-            | Patterns.NewDelegate(_, _, body) -> collect tracked body
-            | Patterns.NewObject(_, args) -> args |> List.collect (collect tracked)
-            | Patterns.NewRecord(_, args) -> args |> List.collect (collect tracked)
-            | Patterns.NewTuple(args) -> args |> List.collect (collect tracked)
-            | Patterns.NewUnionCase(_, args) -> args |> List.collect (collect tracked)
-            | Patterns.QuoteRaw(expr) -> collect tracked expr
-            | Patterns.QuoteTyped(expr) -> collect tracked expr
-            | Patterns.Sequential(prev, next) -> (collect tracked prev) @ (collect tracked next)
-            | Patterns.TryFinally(tryBlock, finalBlock) -> (collect tracked tryBlock) @ (collect tracked finalBlock)
-            | Patterns.TryWith(tryBlock, var1, filter, var2, handler) -> 
-                (collect tracked tryBlock) @ (collect tracked filter) @ (collect tracked handler)
-            | Patterns.TupleGet(expr, _) -> collect tracked expr
-            | Patterns.TypeTest(expr, _) -> collect tracked expr
-            | Patterns.UnionCaseTest(expr, _) -> collect tracked expr
-            | Patterns.VarSet(_, expr) -> collect tracked expr
-            | Patterns.WhileLoop(condition, body) -> (collect tracked condition) @ (collect tracked body)
-            | Patterns.WithValue(_, _, expr) -> collect tracked expr
+                match getTrack subject scope with
+                | None -> ()
+                | Some scope -> scope.Tracked.Add e |> ignore
+            | Patterns.Var(var) ->
+                if getTrack e scope |> Option.isSome then scope.Tracked.Add e |> ignore
+            | Patterns.Application(_, _) ->
+                apply scope Map.empty 0 e
+            | Patterns.Call(subject, _, args) -> 
+                match subject with
+                | Some self -> track scope self
+                | None -> ()
+                args
+                |> List.iter (trackAll scope)
+            | Patterns.Coerce(expr, _) -> ()
+            | Patterns.ForIntegerRangeLoop(indexer, lower, upper, iter) -> ()
+            | Patterns.IfThenElse(condition, ifTrue, ifFalse) ->
+                track (mkChild scope condition) condition
+                track (mkChild scope ifTrue) ifTrue
+                track (mkChild scope ifFalse) ifFalse                
+            | Patterns.Let(variable, expr, body) -> ()
+            | Patterns.LetRecursive(bindings, body) -> 
+                for (var, e) in bindings do
+                    scope.Vars.Add(var, e)
+                track scope body
+            | Patterns.NewArray(_, exprs) -> ()
+            | Patterns.NewDelegate(_, _, body) -> ()
+            | Patterns.NewObject(_, args) -> ()
+            | Patterns.NewRecord(_, args) -> ()
+            | Patterns.NewTuple(args) -> ()
+            | Patterns.NewUnionCase(_, args) -> ()
+            | Patterns.QuoteRaw(expr) -> ()
+            | Patterns.QuoteTyped(expr) -> ()
+            | Patterns.Sequential(prev, next) -> ()
+            | Patterns.TryFinally(tryBlock, finalBlock) -> ()
+            | Patterns.TryWith(tryBlock, var1, filter, var2, handler) -> ()
+            | Patterns.TupleGet(expr, _) -> ()
+            | Patterns.TypeTest(expr, _) -> ()
+            | Patterns.UnionCaseTest(expr, _) -> ()
+            | Patterns.VarSet(_, expr) -> ()
+            | Patterns.WhileLoop(condition, body) -> ()
+            | Patterns.WithValue(_, _, expr) -> ()
             //TODO: move all unnecessary calls into else `_` case
-            | Patterns.AddressOf(_) -> []
-            | Patterns.AddressSet(_, _) -> []
-            | Patterns.DefaultValue(_) -> []
-            | Patterns.FieldSet(_, _, _) -> []
-            | Patterns.PropertySet(_, _, _, _) -> []
-            | Patterns.Value(_, _) -> []
-            | Patterns.ValueWithName(_, _, _) -> []
-            | _ -> []
+            | Patterns.AddressOf(_) -> ()
+            | Patterns.AddressSet(_, _) -> ()
+            | Patterns.DefaultValue(_) -> ()
+            | Patterns.FieldSet(_, _, _) -> ()
+            | Patterns.PropertySet(_, _, _, _) -> ()
+            | Patterns.Value(_, _) -> ()
+            | Patterns.ValueWithName(_, _, _) -> ()
+            | _ -> ()
+
+        and apply scope index n e = 
+            match e with
+            | Patterns.Application(body, param) ->
+                let newIndex =
+                    if getTrack param scope |> Option.isSome
+                    then Map.add n param index
+                    else index
+                apply scope newIndex (n+1) body
+            | Patterns.Var(var) ->
+                match getVar var scope with
+                | Some lambda ->
+                    apply scope index (n-1) lambda
+                | None -> failwithf "Couldn't find lambda identifier %A in scope" var
+            | Patterns.Lambda(arg, body) ->
+                let argExpr = Expr.Var arg
+                let lambdaScope = if getTrack argExpr scope |> Option.isSome then  mkChild scope argExpr else scope
+                if n = 0 
+                then track lambdaScope body
+                else apply lambdaScope index (n-1) body
+
+        and trackAll scope e =
+            ()
+            
+
         match e with
-        | Patterns.Lambda(root, expr) -> collect [ root ] expr
+        | Patterns.Lambda(root, expr) -> 
+            let scope = { Parent = None; Tracked = HashSet<_>(); Vars = Dictionary<_,_>(); Children = List<_>() }
+            scope.Tracked.Add (Expr.Var root)
+            track scope expr
+            scope
         | _ -> failwithf "Provided F# quotation must be Lambda"
