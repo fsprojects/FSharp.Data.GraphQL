@@ -133,131 +133,91 @@ module internal ReflectionHelper =
             |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
         ctor
 
-    type Scope = 
-        { Parent: Scope option
-          Children: List<Scope>
-          Tracked: HashSet<Expr>
-          Vars: Dictionary<Var, Expr> }
-
-    let empty = { Parent = None; Tracked = null; Vars = null; Children = null }
-    let mkChild parent tracked = 
-        let child = { Parent = Some parent; Tracked = HashSet<_>(); Vars = Dictionary<_,_>(); Children = List<_>() }
-        parent.Children.Add child 
-        child.Tracked.Add tracked |> ignore
-        child
-
-    let rec getTrack var scope =
-        if scope.Tracked.Contains var 
-        then Some scope
-        else match scope.Parent with
-             | None -> None
-             | Some parent -> getTrack var parent
-
-    let rec getVar var scope =
-        match scope.Vars.TryGetValue var with
-        | true, e -> Some e
-        | false, _ ->
-            match scope.Parent with
-            | None -> None
-            | Some parent -> getVar var parent
+module Tracking =
 
     /// Data structure, that is used to tracking property getters in `collectGetters` function.
     type Tracker = 
-        | Complex of string * Tracker list
+        | Complex of string * Set<Tracker>
         | Leaf of string
 
+    [<CustomComparison; CustomEquality>]
+    type internal Track = 
+        { Name: string
+          From: Type
+          To: Type }
+        interface IEquatable<Track> with
+            member x.Equals y = (x.Name = y.Name && x.From.FullName = y.From.FullName && x.To.FullName = y.To.FullName)
+        interface IComparable with
+            member x.CompareTo y = 
+                match y with
+                | :? Track as t -> 
+                    let c = compare x.Name t.Name
+                    if c = 0
+                    then 
+                        let c = compare x.From.FullName t.From.FullName
+                        if c = 0 then compare x.To.FullName t.To.FullName else c
+                    else c                        
+                | _ -> invalidArg "y" "Track cannot be compared to other type"
+
+    let internal mkTrack name src dst = { Name = name; From = src; To = dst }
+
+    let rec internal shakeTracks trackSet (tRoot: Type) =
+        let members = trackSet |> Set.filter (fun track -> track.From = tRoot)
+        let remaining = Set.difference trackSet members
+        members
+        |> Set.map(fun track ->
+            let children = shakeTracks remaining track.To
+            if Set.isEmpty children then Leaf(track.Name) else Complex(track.Name, children))
+             
+    /// Takes function with 2 parameters and applies them in reversed order           
+    let inline internal flip fn a b = fn b a
+
     /// Traverses a provided F# quotation in order to catch all 
-    let track (e: Expr) : Tracker  = 
-        let rec track scope e =
+    let tracker (e: Expr) : Tracker  = 
+        let rec track set e =
             match e with
-            | Patterns.PropertyGet(Some subject, propertyInfo, _) ->
-                match getTrack subject scope with
-                | None -> ()
-                | Some scope -> scope.Tracked.Add e |> ignore
-            | Patterns.Lambda(arg, body) -> 
-                //TODO: create child scope with a
-                let nestedScope = mkChild scope (Expr.Var arg)
-                track nestedScope body
-            | Patterns.FieldGet(Some subject, fieldInfo) -> 
-                match getTrack subject scope with
-                | None -> ()
-                | Some scope -> scope.Tracked.Add e |> ignore
-            | Patterns.Var(var) ->
-                if getTrack e scope |> Option.isSome then scope.Tracked.Add e |> ignore
-            | Patterns.Application(_, _) ->
-                apply scope Map.empty 0 e
-            | Patterns.Call(subject, _, args) -> 
-                match subject with
-                | Some self -> track scope self
-                | None -> ()
-                args
-                |> List.iter (trackAll scope)
-            | Patterns.Coerce(expr, _) -> ()
-            | Patterns.ForIntegerRangeLoop(indexer, lower, upper, iter) -> ()
-            | Patterns.IfThenElse(condition, ifTrue, ifFalse) ->
-                track (mkChild scope condition) condition
-                track (mkChild scope ifTrue) ifTrue
-                track (mkChild scope ifFalse) ifFalse                
-            | Patterns.Let(variable, expr, body) -> ()
-            | Patterns.LetRecursive(bindings, body) -> 
-                for (var, e) in bindings do
-                    scope.Vars.Add(var, e)
-                track scope body
-            | Patterns.NewArray(_, exprs) -> ()
-            | Patterns.NewDelegate(_, _, body) -> ()
-            | Patterns.NewObject(_, args) -> ()
-            | Patterns.NewRecord(_, args) -> ()
-            | Patterns.NewTuple(args) -> ()
-            | Patterns.NewUnionCase(_, args) -> ()
-            | Patterns.QuoteRaw(expr) -> ()
-            | Patterns.QuoteTyped(expr) -> ()
-            | Patterns.Sequential(prev, next) -> ()
-            | Patterns.TryFinally(tryBlock, finalBlock) -> ()
-            | Patterns.TryWith(tryBlock, var1, filter, var2, handler) -> ()
-            | Patterns.TupleGet(expr, _) -> ()
-            | Patterns.TypeTest(expr, _) -> ()
-            | Patterns.UnionCaseTest(expr, _) -> ()
-            | Patterns.VarSet(_, expr) -> ()
-            | Patterns.WhileLoop(condition, body) -> ()
-            | Patterns.WithValue(_, _, expr) -> ()
+            | Patterns.PropertyGet(Some _, propertyInfo, _) -> Set.add (mkTrack propertyInfo.Name propertyInfo.DeclaringType propertyInfo.PropertyType) set
+            | Patterns.Lambda(_, body) -> track set body
+            | Patterns.FieldGet(Some _, fieldInfo) -> Set.add (mkTrack fieldInfo.Name fieldInfo.DeclaringType fieldInfo.FieldType) set
+            | Patterns.Var(_) -> set
+            | Patterns.Application(var, body) -> (flip track var >> flip track body) set
+            | Patterns.Call(subject, _, args) -> args |> List.fold track (match subject with Some x -> track set x | None -> set)
+            | Patterns.Coerce(expr, _) -> track set expr
+            | Patterns.ForIntegerRangeLoop(_, lower, upper, iter) -> (flip track lower >> flip track upper >> flip track iter) set
+            | Patterns.IfThenElse(condition, ifTrue, ifFalse) -> (flip track condition >> flip track ifTrue >> flip track ifFalse) set          
+            | Patterns.Let(_, expr, body) -> (flip track expr >> flip track body) set
+            | Patterns.LetRecursive(bindings, body) -> bindings |> List.fold (fun acc (_, e) -> track acc e) (track set body)
+            | Patterns.NewArray(_, exprs) -> exprs |> List.fold track set
+            | Patterns.NewDelegate(_, _, body) -> track set body
+            | Patterns.NewObject(_, args) -> args |> List.fold track set
+            | Patterns.NewRecord(_, args) -> args |> List.fold track set
+            | Patterns.NewTuple(args) -> args |> List.fold track set
+            | Patterns.NewUnionCase(_, args) -> args |> List.fold track set
+            | Patterns.QuoteRaw(expr) -> track set expr
+            | Patterns.QuoteTyped(expr) -> track set expr
+            | Patterns.Sequential(prev, next) -> (flip track prev >> flip track next) set
+            | Patterns.TryFinally(tryBlock, finalBlock) -> (flip track tryBlock >> flip track finalBlock) set
+            | Patterns.TryWith(tryBlock, _, filter, _, handler) -> (flip track tryBlock >> flip track filter >> flip track handler) set 
+            | Patterns.TupleGet(expr, _) -> track set expr
+            | Patterns.TypeTest(expr, _) -> track set expr
+            | Patterns.UnionCaseTest(expr, _) -> track set expr
+            | Patterns.VarSet(_, expr) -> track set expr
+            | Patterns.WhileLoop(condition, body) -> (flip track condition >> flip track body) set
+            | Patterns.WithValue(_, _, expr) -> track set expr
             //TODO: move all unnecessary calls into else `_` case
-            | Patterns.AddressOf(_) -> ()
-            | Patterns.AddressSet(_, _) -> ()
-            | Patterns.DefaultValue(_) -> ()
-            | Patterns.FieldSet(_, _, _) -> ()
-            | Patterns.PropertySet(_, _, _, _) -> ()
-            | Patterns.Value(_, _) -> ()
-            | Patterns.ValueWithName(_, _, _) -> ()
-            | _ -> ()
-
-        and apply scope index n e = 
-            match e with
-            | Patterns.Application(body, param) ->
-                let newIndex =
-                    if getTrack param scope |> Option.isSome
-                    then Map.add n param index
-                    else index
-                apply scope newIndex (n+1) body
-            | Patterns.Var(var) ->
-                match getVar var scope with
-                | Some lambda ->
-                    apply scope index (n-1) lambda
-                | None -> failwithf "Couldn't find lambda identifier %A in scope" var
-            | Patterns.Lambda(arg, body) ->
-                let argExpr = Expr.Var arg
-                let lambdaScope = if getTrack argExpr scope |> Option.isSome then  mkChild scope argExpr else scope
-                if n = 0 
-                then track lambdaScope body
-                else apply lambdaScope index (n-1) body
-
-        and trackAll scope e =
-            ()
+            | Patterns.AddressOf(_) -> set
+            | Patterns.AddressSet(_, _) -> set
+            | Patterns.DefaultValue(_) -> set
+            | Patterns.FieldSet(_, _, _) -> set
+            | Patterns.PropertySet(_, _, _, _) -> set
+            | Patterns.Value(_, _) -> set
+            | Patterns.ValueWithName(_, _, _) -> set
+            | _ -> set
             
-
         match e with
-        | Patterns.Lambda(root, expr) -> 
-            let scope = { Parent = None; Tracked = HashSet<_>(); Vars = Dictionary<_,_>(); Children = List<_>() }
-            scope.Tracked.Add (Expr.Var root)
-            track scope expr
-            scope
+        | Patterns.Lambda(arg, expr) -> 
+            let init = Set.empty
+            let tracks = track init expr
+            let shaked = shakeTracks tracks arg.Type
+            if Set.isEmpty shaked then Leaf(arg.Name) else Complex(arg.Name, shaked)
         | _ -> failwithf "Provided F# quotation must be Lambda"
