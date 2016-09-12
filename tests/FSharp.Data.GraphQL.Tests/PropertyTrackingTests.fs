@@ -23,8 +23,10 @@ type OuterType =
       LastName : string
       NestedCollection : DeepType list }
 
-let private complex name nodes = Complex(name, Set.ofList nodes)
-let private leaf name = Leaf(name)
+let private complex name nodes = Direct(name, Set.ofList nodes)
+let private leaf name = Direct(name, Set.empty)
+let private optional name nodes = Optional(name, Set.ofList nodes)
+let private collection name nodes = Collection(name, Set.ofList nodes)
 
 let private test expected expr = 
     let actual = tracker expr
@@ -52,7 +54,7 @@ let ``Collect getters from for loops``() =
     <@ fun o ->
         for i=1 to o.NestedCollection.Length do
             ()
-    @> |> test (complex "o" [ (complex "NestedCollection" [ leaf "Length" ])])
+    @> |> test (complex "o" [ (collection "NestedCollection" [ leaf "Length" ])])
 
 [<Fact>]
 let ``Collect getters from if-else expressions``() = 
@@ -67,7 +69,7 @@ let ``Collect getters from let statements``() =
     <@ fun o ->
         let x = o.X
         x.Y
-    @> |> test (complex "o" [ leaf "X"; leaf "Y" ])
+    @> |> test (complex "o" [ (complex "X" [ leaf "Y" ])])
 
 [<Fact>]
 let ``Collect getters from mutable assignments``() = 
@@ -83,7 +85,7 @@ let ``Collect getters from recursive let statements``() =
             match n with
             | 0 -> a.X
             | _ -> loop (n-1) a
-        loop o
+        loop 4 o
     @> |> test (complex "o" [ leaf "X"])
 
 [<Fact>]
@@ -152,7 +154,7 @@ let ``Collect getters from pattern matches``() =
         match o.X with
         | { Y = y } when o.FirstName = "" -> y
         | { Y = y } -> y
-    @> |> test (complex "o" [ (complex "X" [ leaf "Y" ]); leaf "LastName"; ])
+    @> |> test (complex "o" [ (complex "X" [ leaf "Y" ]); leaf "FirstName"; ])
 
 [<Fact>]
 let ``Collect getters from while loops``() = 
@@ -167,7 +169,7 @@ let ``Collect getters from foreach loops``() =
         for i in o.NestedCollection do
             let x = i.Y
             ()
-    @> |> test (complex "o" [ leaf "NestedCollection"; leaf "Y" ])
+    @> |> test (complex "o" [ (collection "NestedCollection" [ leaf "Y" ])])
 
 [<Fact>]
 let ``Collect getters from repinned field``() = 

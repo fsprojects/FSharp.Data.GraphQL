@@ -137,14 +137,16 @@ module Tracking =
 
     /// Data structure, that is used to tracking property getters in `collectGetters` function.
     type Tracker = 
-        | Complex of string * Set<Tracker>
-        | Leaf of string
+        | Direct of string * Set<Tracker>
+        | Collection of string * Set<Tracker>
+        | Optional of string * Set<Tracker>
 
     [<CustomComparison; CustomEquality>]
-    type internal Track = 
+    type private Track = 
         { Name: string
           From: Type
           To: Type }
+        override x.ToString() = sprintf "(%s: %s -> %s)" x.Name x.From.Name x.To.Name
         interface IEquatable<Track> with
             member x.Equals y = (x.Name = y.Name && x.From.FullName = y.From.FullName && x.To.FullName = y.To.FullName)
         interface IComparable with
@@ -159,26 +161,45 @@ module Tracking =
                     else c                        
                 | _ -> invalidArg "y" "Track cannot be compared to other type"
 
-    let internal mkTrack name src dst = { Name = name; From = src; To = dst }
+    let private mkTrack name src dst = { Name = name; From = src; To = dst }
 
-    let rec internal shakeTracks trackSet (tRoot: Type) =
-        let members = trackSet |> Set.filter (fun track -> track.From = tRoot)
+    let private (|IsDirect|IsCollection|IsOption|) (tRoot: Type) = 
+        if tRoot.IsGenericType
+        then 
+            if typeof<IEnumerable>.IsAssignableFrom tRoot
+            then IsCollection
+            elif typedefof<Option<_>>.IsAssignableFrom tRoot
+            then IsOption
+            else IsDirect
+        else IsDirect
+
+    let private canJoin (tRoot: Type) (tFrom: Type) =
+        if tFrom = tRoot then true
+        elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
+        then tFrom = (tRoot.GetGenericArguments().[0])
+        else false
+
+    let rec private foldTracks trackSet (tRoot: Type) =
+        let members = trackSet |> Set.filter (fun track -> canJoin tRoot track.From)
         let remaining = Set.difference trackSet members
         members
         |> Set.map(fun track ->
-            let children = shakeTracks remaining track.To
-            if Set.isEmpty children then Leaf(track.Name) else Complex(track.Name, children))
+            let children = foldTracks remaining track.To
+            match track.To with
+            | IsDirect -> Direct(track.Name, children)
+            | IsCollection -> Collection(track.Name, children)
+            | IsOption -> Optional(track.Name, children))
              
     /// Takes function with 2 parameters and applies them in reversed order           
-    let inline internal flip fn a b = fn b a
+    let inline private flip fn a b = fn b a
 
     /// Traverses a provided F# quotation in order to catch all 
     let tracker (e: Expr) : Tracker  = 
         let rec track set e =
             match e with
-            | Patterns.PropertyGet(Some _, propertyInfo, _) -> Set.add (mkTrack propertyInfo.Name propertyInfo.DeclaringType propertyInfo.PropertyType) set
+            | Patterns.PropertyGet(Some subject, propertyInfo, _) -> Set.add (mkTrack propertyInfo.Name propertyInfo.DeclaringType propertyInfo.PropertyType) (track set subject)
             | Patterns.Lambda(_, body) -> track set body
-            | Patterns.FieldGet(Some _, fieldInfo) -> Set.add (mkTrack fieldInfo.Name fieldInfo.DeclaringType fieldInfo.FieldType) set
+            | Patterns.FieldGet(Some subject, fieldInfo) -> Set.add (mkTrack fieldInfo.Name fieldInfo.DeclaringType fieldInfo.FieldType) (track set subject)
             | Patterns.Var(_) -> set
             | Patterns.Application(var, body) -> (flip track var >> flip track body) set
             | Patterns.Call(subject, _, args) -> args |> List.fold track (match subject with Some x -> track set x | None -> set)
@@ -218,6 +239,6 @@ module Tracking =
         | Patterns.Lambda(arg, expr) -> 
             let init = Set.empty
             let tracks = track init expr
-            let shaked = shakeTracks tracks arg.Type
-            if Set.isEmpty shaked then Leaf(arg.Name) else Complex(arg.Name, shaked)
+            let shaked = foldTracks tracks arg.Type
+            Direct(arg.Name, shaked)
         | _ -> failwithf "Provided F# quotation must be Lambda"
