@@ -9,6 +9,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Quotations
+open FSharp.Quotations.Patterns
 open FSharp.Reflection
 open FSharp.Linq.RuntimeHelpers
 
@@ -1234,52 +1235,50 @@ module Resolve =
             Some(typ.GenericTypeArguments |> Array.head)
         else None
         
-    let private boxify'<'T,'U>(f:ResolveFieldContext -> 'T -> 'U) : ResolveFieldContext -> obj -> obj =
+    let private boxify<'T,'U>(f:ResolveFieldContext -> 'T -> 'U) : ResolveFieldContext -> obj -> obj =
         <@@ fun ctx (x:obj) -> f ctx (x :?> 'T)  |> box  @@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
 
-    let private boxifyAsync'<'T, 'U>(f:ResolveFieldContext -> 'T -> Async<'U>): ResolveFieldContext -> obj -> Async<obj> =
+    let private boxifyAsync<'T, 'U>(f:ResolveFieldContext -> 'T -> Async<'U>): ResolveFieldContext -> obj -> Async<obj> =
         <@@ fun ctx (x:obj) -> async.Bind(f ctx (x :?> 'T), async.Return << box)  @@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
     
     let getRuntimeMethod name =
-        let module' = typeof<Marker>.DeclaringType
-        let methodInfo = module'.GetRuntimeMethods() |> Seq.find (fun m -> m.Name.Equals name)
-        methodInfo
-
+        let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods() 
+        methods |> Seq.find (fun m -> m.Name.Equals name)
+        
     let runtimeBoxify = getRuntimeMethod "boxify"
     
     let runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
 
     let private unwrapExpr = function
-        | Patterns.WithValue(resolver, _, _) -> (resolver, resolver.GetType())
+        | WithValue(resolver, _, _) -> (resolver, resolver.GetType())
         | expr -> failwithf "Could not extract resolver from Expr: '%A'" expr 
         
-    let inline private resolveUntyped f d c isAsync = 
-        let methodInfo = if isAsync then runtimeBoxifyAsync else runtimeBoxify
+    let inline private resolveUntyped f d c (methodInfo:MethodInfo) = 
         let result =  methodInfo.GetGenericMethodDefinition().MakeGenericMethod(d,c).Invoke(null, [|f|])
         result |> unbox
 
-    let boxify expr : ResolveFieldContext -> obj -> obj =
+    let boxifyExpr expr : ResolveFieldContext -> obj -> obj =
         match unwrapExpr expr with
         | resolver, FSharpFunc(_,FSharpFunc(d,c)) -> 
-            resolveUntyped resolver d c false
+            resolveUntyped resolver d c runtimeBoxify
         | resolver, _ -> failwithf "Unsupported signature for Resolve %A"  (resolver.GetType())
     
-    let boxifyAsync expr : ResolveFieldContext -> obj -> Async<obj> =
+    let boxifyExprAsync expr : ResolveFieldContext -> obj -> Async<obj> =
         match unwrapExpr expr with
         | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) -> 
-            resolveUntyped resolver d c true
+            resolveUntyped resolver d c runtimeBoxifyAsync
         | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A"  (resolver.GetType())
     
     let (|BoxedSync|_|) = function 
-        | Sync(d,c,expr) -> Some(d,c,boxify expr)
+        | Sync(d,c,expr) -> Some(d,c,boxifyExpr expr)
         | _ -> None
        
     let (|BoxedAsync|_|) = function
-        | Async(d,c,expr) -> Some(d,c,boxifyAsync expr)
+        | Async(d,c,expr) -> Some(d,c,boxifyExprAsync expr)
         | _ -> None 
 
     let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
