@@ -14,7 +14,6 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
-open FSharp.Quotations.Evaluator
 
 type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
@@ -278,12 +277,10 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
 and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
     let completed = createCompletion possibleTypesFn (fieldDef.TypeDef)
     match fieldDef.Resolve with
-    | Sync(inType, outType, resolve) ->
-        let boxified = boxifyExpr inType outType resolve
-        let compiled = boxified.Compile()
+    | Resolve.BoxedSync(inType, outType, resolve) ->
         fun resolveFieldCtx value ->
             try
-                let res = compiled resolveFieldCtx value
+                let res = resolve resolveFieldCtx value
                 if res = null
                 then AsyncVal.empty
                 else completed resolveFieldCtx res
@@ -292,12 +289,10 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
                 resolveFieldCtx.AddError ex
                 AsyncVal.empty
 
-    | Async(inType, outType, resolve) ->
-        let boxified = boxifyExprAsync inType outType resolve
-        let compiled = boxified.Compile()
+    | Resolve.BoxedAsync(inType, outType, resolve) ->
         fun resolveFieldCtx value -> 
             try
-                compiled resolveFieldCtx value
+                resolve resolveFieldCtx value
                 |> AsyncVal.ofAsync
                 |> AsyncVal.bind (completed resolveFieldCtx)
             with

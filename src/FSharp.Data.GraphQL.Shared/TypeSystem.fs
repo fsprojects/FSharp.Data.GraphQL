@@ -3,11 +3,15 @@
 namespace FSharp.Data.GraphQL.Types
 
 open System
+open System.Reflection
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
-open Microsoft.FSharp.Quotations
+open FSharp.Quotations
+open FSharp.Quotations.Patterns
+open FSharp.Reflection
+open FSharp.Linq.RuntimeHelpers
 
 [<Flags>]
 type DirectiveLocation = 
@@ -1214,6 +1218,108 @@ and DirectiveDef =
       /// Array of arguments defined within that directive.
       Args : InputFieldDef [] }
 
+
+
+[<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
+module Resolve =
+    type private Marker = class end
+
+    let private (|FSharpFunc|_|) (typ : Type) =
+        if FSharpType.IsFunction typ then
+            let d,c = FSharpType.GetFunctionElements typ
+            Some(d,c)
+        else None
+    
+    let private (|FSharpAsync|_|) (typ: Type) =
+        if typ.GetTypeInfo().IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Async<_>> then
+            Some(typ.GenericTypeArguments |> Array.head)
+        else None
+        
+    let private boxify<'T,'U>(f:ResolveFieldContext -> 'T -> 'U) : ResolveFieldContext -> obj -> obj =
+        <@@ fun ctx (x:obj) -> f ctx (x :?> 'T)  |> box  @@>
+        |> LeafExpressionConverter.EvaluateQuotation
+        |> unbox
+
+    let private boxifyAsync<'T, 'U>(f:ResolveFieldContext -> 'T -> Async<'U>): ResolveFieldContext -> obj -> Async<obj> =
+        <@@ fun ctx (x:obj) -> async.Bind(f ctx (x :?> 'T), async.Return << box)  @@>
+        |> LeafExpressionConverter.EvaluateQuotation
+        |> unbox
+    
+    let getRuntimeMethod name =
+        let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods() 
+        methods |> Seq.find (fun m -> m.Name.Equals name)
+        
+    let runtimeBoxify = getRuntimeMethod "boxify"
+    
+    let runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
+
+    let private unwrapExpr = function
+        | WithValue(resolver, _, _) -> (resolver, resolver.GetType())
+        | expr -> failwithf "Could not extract resolver from Expr: '%A'" expr 
+        
+    let inline private resolveUntyped f d c (methodInfo:MethodInfo) = 
+        let result =  methodInfo.GetGenericMethodDefinition().MakeGenericMethod(d,c).Invoke(null, [|f|])
+        result |> unbox
+
+    let boxifyExpr expr : ResolveFieldContext -> obj -> obj =
+        match unwrapExpr expr with
+        | resolver, FSharpFunc(_,FSharpFunc(d,c)) -> 
+            resolveUntyped resolver d c runtimeBoxify
+        | resolver, _ -> failwithf "Unsupported signature for Resolve %A"  (resolver.GetType())
+    
+    let boxifyExprAsync expr : ResolveFieldContext -> obj -> Async<obj> =
+        match unwrapExpr expr with
+        | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) -> 
+            resolveUntyped resolver d c runtimeBoxifyAsync
+        | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A"  (resolver.GetType())
+    
+    let (|BoxedSync|_|) = function 
+        | Sync(d,c,expr) -> Some(d,c,boxifyExpr expr)
+        | _ -> None
+       
+    let (|BoxedAsync|_|) = function
+        | Async(d,c,expr) -> Some(d,c,boxifyExprAsync expr)
+        | _ -> None 
+
+    let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
+        let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
+        let valueVar = Var("value", typeof<'Val>)
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let argExpr (arg : ParameterInfo) = 
+            Expr.Call(Expr.Var(ctxVar), argInfo.MakeGenericMethod(arg.ParameterType), [ Expr.Value(arg.Name) ])        
+        let args = 
+            methodInfo.GetParameters()
+            |> Array.map argExpr
+            |> Array.toList        
+        let expr = 
+            Expr.Lambda
+                (ctxVar, Expr<'Val -> 'Res>.Lambda(valueVar, Expr.Call(Expr.Var(valueVar), methodInfo, args)))
+        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation 
+        let exprWithVal = Expr.WithValue(compiled, typeof<ResolveFieldContext -> 'Val -> 'Res>, expr)
+        Sync(typeof<'Val>, typeof<'Res>, exprWithVal)
+        
+    let genPropertyResolve<'Val, 'Res> (typeInfo: TypeInfo) property = 
+        let valueVar = Var("value", typeof<'Val>)
+        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
+        let expr = 
+            Expr.Lambda
+                (ctxVar, 
+                 Expr<'Val -> 'Res>.Lambda(valueVar, Expr.PropertyGet(Expr.Var(valueVar), property)))
+        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation 
+        let exprWithVal = Expr.WithValue(compiled, typeof<ResolveFieldContext -> 'Val -> 'Res>, expr)
+        Sync(typeof<'Val>, typeof<'Res>, exprWithVal)
+            
+    let defaultResolve<'Val, 'Res> (fieldName : string) : Resolve = 
+        let typeInfo = typeof<'Val>.GetTypeInfo()
+        let property = typeInfo.GetDeclaredProperty(fieldName, ignoreCase = true)
+        match property with
+        | null -> 
+            let methodInfo = typeInfo.GetDeclaredMethod(fieldName, ignoreCase = true)
+            genMethodResolve<'Val, 'Res> typeInfo methodInfo            
+        | p -> genPropertyResolve<'Val, 'Res> typeInfo p 
+
+
+
 module Patterns =
 
     /// Active pattern to match GraphQL type defintion with Scalar.
@@ -1614,92 +1720,7 @@ module SchemaDefinitions =
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline internal strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
     
-    let private boxMeth =
-        let operatorsType = Type.GetType("Microsoft.FSharp.Core.Operators, FSharp.Core", true).GetTypeInfo()
-        operatorsType.GetDeclaredMethod("Box").GetGenericMethodDefinition()
-        
-    let private unboxMeth =
-        let operatorsType = Type.GetType("Microsoft.FSharp.Core.Operators, FSharp.Core", true).GetTypeInfo()
-        operatorsType.GetDeclaredMethod("Unbox").GetGenericMethodDefinition()
-
-    let boxifyExpr (inType: Type) (outType: Type) (expr : Expr) : Expr<ResolveFieldContext -> obj -> obj> = 
-        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let valVar = Var("value", typeof<obj>)
-        (*
-            This is an equivalent of:
-                
-                <@ fun (ctx: ResolveFieldContext) (value: obj) : obj ->
-                       let f: (ResolveFieldContext->'InType->'OutType) = %expr
-                       in upcast f ctx (downcast value)  @>
-        *)
-        Expr.Lambda(ctxVar,
-            Expr.Lambda(valVar, 
-                Expr.Call(boxMeth.MakeGenericMethod(outType), 
-                    [ Expr.Application(
-                        Expr.Application(expr, Expr.Var(ctxVar)), 
-                        Expr.Call(unboxMeth.MakeGenericMethod(inType), [ Expr.Var(valVar) ])) ])))
-        |> Expr.Cast
-    
-    let inline private asyncBox (a : Async<'Val>) : Async<obj> = async { let! res = a
-                                                                         return box res }
-
-    let private asyncBoxMeth =
-        let operatorsType = Type.GetType("FSharp.Data.GraphQL.Types.SchemaDefinitions, FSharp.Data.GraphQL.Shared", true).GetTypeInfo()
-        operatorsType.GetDeclaredMethod("asyncBox").GetGenericMethodDefinition()
-
-    let boxifyExprAsync (inType: Type) (outType: Type) (expr : Expr) : Expr<ResolveFieldContext -> obj -> Async<obj>> = 
-        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let valVar = Var("value", typeof<obj>)
-        (*
-            This is an equivalent of:
-                
-                <@ fun (ctx: ResolveFieldContext) (value: obj) : obj ->
-                       let f: (ResolveFieldContext->'InType->'OutType) = %expr
-                       in async {
-                           let! res = f ctx (downcast value)
-                           return upcast res } @>
-        *)
-        Expr.Lambda(ctxVar,
-            Expr.Lambda(valVar, 
-                Expr.Call(asyncBoxMeth.MakeGenericMethod(outType), 
-                    [ Expr.Application(
-                        Expr.Application(expr, Expr.Var(ctxVar)), 
-                        Expr.Call(unboxMeth.MakeGenericMethod(inType), [ Expr.Var(valVar) ])) ])))
-        |> Expr.Cast
-
-    let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
-        let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
-        let valueVar = Var("value", typeof<'Val>)
-        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let argExpr (arg : ParameterInfo) = 
-            Expr.Call(Expr.Var(ctxVar), argInfo.MakeGenericMethod(arg.ParameterType), [ Expr.Value(arg.Name) ])        
-        let args = 
-            methodInfo.GetParameters()
-            |> Array.map argExpr
-            |> Array.toList        
-        let expr = 
-            Expr.Lambda
-                (ctxVar, Expr<'Val -> 'Res>.Lambda(valueVar, Expr.Call(Expr.Var(valueVar), methodInfo, args)))
-        Sync(typeof<'Val>, typeof<'Res>, expr)
-
-    let private genPropertyResolve<'Val, 'Res> (typeInfo: TypeInfo) property = 
-        let valueVar = Var("value", typeof<'Val>)
-        let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let expr = 
-            Expr.Lambda
-                (ctxVar, 
-                 Expr<'Val -> 'Res>.Lambda(valueVar, Expr.PropertyGet(Expr.Var(valueVar), property)))
-        Sync(typeof<'Val>, typeof<'Res>, expr)
-            
-    let defaultResolve<'Val, 'Res> (fieldName : string) : Resolve = 
-        let typeInfo = typeof<'Val>.GetTypeInfo()
-        let property = typeInfo.GetDeclaredProperty(fieldName, ignoreCase = true)
-        match property with
-        | null -> 
-            let methodInfo = typeInfo.GetDeclaredMethod(fieldName, ignoreCase = true)
-            genMethodResolve<'Val, 'Res> typeInfo methodInfo            
-        | p -> genPropertyResolve<'Val, 'Res> typeInfo p
-    
+   
     /// Common space for all definition helper methods.
     type Define private () = 
         
@@ -1765,7 +1786,7 @@ module SchemaDefinitions =
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
-                     Resolve = defaultResolve<'Val, 'Res> name
+                     Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
                      Execute = Unchecked.defaultof<ExecuteField> }
@@ -1782,7 +1803,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member Field(name : string, typedef : #OutputDef<'Res>, 
-                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -1793,7 +1814,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
-                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -1804,7 +1825,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -1815,7 +1836,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
                             deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
@@ -1827,7 +1848,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
-                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -1838,7 +1859,7 @@ module SchemaDefinitions =
         
         /// Single field defined inside either object types or interfaces.
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -1850,7 +1871,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces.
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
-                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -1862,7 +1883,7 @@ module SchemaDefinitions =
         /// Single field defined inside either object types or interfaces.
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
-                                 [<ReflectedDefinition>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
                                  deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description

@@ -4,7 +4,6 @@ nuget BenchmarkDotNet.Diagnostics.Windows
 nuget FParsec
 nuget FSCheck
 nuget FSharp.Data.TypeProviders
-nuget FSharp.Quotations.Evaluator
 nuget Newtonsoft.Json
 nuget Suave
 nuget System.Collections.Immutable

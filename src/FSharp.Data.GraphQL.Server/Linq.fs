@@ -8,11 +8,11 @@ open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
 open FSharp.Reflection
-open FSharp.Quotations.Evaluator
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open Microsoft.FSharp.Quotations
-open Microsoft.FSharp.Quotations.Patterns
+open FSharp.Quotations
+open FSharp.Quotations.Patterns
+open FSharp.Linq.RuntimeHelpers
 
 type private Arg = 
     | Id of obj
@@ -26,11 +26,10 @@ type private Arg =
     | After of obj
 
 let private unwrap (resolve: Resolve) inParam: Expression =
-    let (Lambda(_, inner)) = resolve.Expr
-    match inner with
-    | Lambda(_, PropertyGet(Some(_), propInfo, _)) ->
+    match resolve.Expr with
+    | WithValue(_, _, Lambda(_, Lambda(_, PropertyGet(Some(_), propInfo, _)))) ->
         upcast Expression.Property(inParam, propInfo)
-    | other -> QuotationEvaluator.ToLinqExpression other
+    | other -> LeafExpressionConverter.QuotationToExpression other
 
 let inline private argVal vars argDef = 
     function 
