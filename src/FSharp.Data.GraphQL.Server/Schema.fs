@@ -241,8 +241,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
     member private this.Eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
             if errors.IsEmpty 
-            then [ "data", box result ] 
-            else [ "data", box result ; "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
+            then [ "documentId", box executionPlan.DocumentId ; "data", upcast result ] 
+            else [ "documentId", box executionPlan.DocumentId ; "data", box result ; "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
@@ -304,7 +304,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                     | Some m -> m
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
             let planningCtx = { Schema = this; RootDef = rootDef; Document = ast }
-            planOperation planningCtx operation
+            planOperation (ast.GetHashCode()) planningCtx operation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
         
     /// Creates an execution plan for provided GraphQL query string without 

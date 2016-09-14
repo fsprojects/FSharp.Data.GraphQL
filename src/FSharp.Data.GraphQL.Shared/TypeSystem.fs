@@ -416,7 +416,9 @@ and ExecutionStrategy =
 /// Execution plan of the current GraphQL operation. It describes, which
 /// fiels will be resolved and how to do so.
 and ExecutionPlan = 
-    { /// AST defintion of current operation.
+    { /// Unique identifier of the current execution plan.
+      DocumentId : int
+      /// AST defintion of current operation.
       Operation : OperationDefinition
       /// Definition of the root type (either query or mutation) used by the
       /// current operation.

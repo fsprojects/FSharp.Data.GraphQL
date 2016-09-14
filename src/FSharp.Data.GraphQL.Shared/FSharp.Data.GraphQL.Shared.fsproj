@@ -46,6 +46,18 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Extensions.fs" />
+    <Compile Include="Prolog.fs" />
+    <Compile Include="Ast.fs" />
+    <Compile Include="AsyncVal.fs" />
+    <Compile Include="TypeSystem.fs" />
+    <Compile Include="Validation.fs" />
+    <Compile Include="Introspection.fs" />
+    <Compile Include="Parser.fs" />
+    <None Include="paket.references" />
+  </ItemGroup>
   <Choose>
     <When Condition="$(TargetFrameworkIdentifier) == '.NETFramework' And ($(TargetFrameworkVersion) == 'v4.0' Or $(TargetFrameworkVersion) == 'v4.5' Or $(TargetFrameworkVersion) == 'v4.5.1' Or $(TargetFrameworkVersion) == 'v4.5.2' Or $(TargetFrameworkVersion) == 'v4.5.3' Or $(TargetFrameworkVersion) == 'v4.6' Or $(TargetFrameworkVersion) == 'v4.6.1' Or $(TargetFrameworkVersion) == 'v4.6.2' Or $(TargetFrameworkVersion) == 'v4.6.3')">
       <ItemGroup>
@@ -141,16 +153,4 @@
       </ItemGroup>
     </When>
   </Choose>
-  <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Extensions.fs" />
-    <Compile Include="Prolog.fs" />
-    <Compile Include="Ast.fs" />
-    <Compile Include="AsyncVal.fs" />
-    <Compile Include="TypeSystem.fs" />
-    <Compile Include="Validation.fs" />
-    <Compile Include="Introspection.fs" />
-    <Compile Include="Parser.fs" />
-    <None Include="paket.references" />
-  </ItemGroup>
 </Project>

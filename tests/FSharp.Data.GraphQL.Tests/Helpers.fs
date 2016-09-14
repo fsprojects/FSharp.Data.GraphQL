@@ -13,6 +13,8 @@ open FSharp.Data.GraphQL.Execution
 
 let equals (expected : 'x) (actual : 'x) = 
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
+let notEquals (expected : 'x) (actual : 'x) = 
+    Assert.True((actual <> expected), sprintf "unexpected %+A" expected)
 let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors

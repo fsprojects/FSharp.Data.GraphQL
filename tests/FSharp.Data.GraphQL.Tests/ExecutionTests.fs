@@ -252,3 +252,18 @@ let ``Execution when querying the same field twice will return it`` () =
         "b", upcast 2]
     noErrors result
     result.["data"] |> equals (upcast expected)
+    
+[<Fact>]
+let ``Execution when querying returns unique document id with response`` () =
+    let schema =
+      Schema(Define.Object<TwiceTest>(
+                "Type", [
+                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("b", Int, fun _ x -> x.B)
+                ]))
+    let result1 = sync <| schema.AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    result1.["documentId"] |> notEquals (null)
+    result1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
+    let result2 = sync <| schema.AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    result1.["documentId"] |> equals (result2.["documentId"])
+    
