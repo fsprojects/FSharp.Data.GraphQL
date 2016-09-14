@@ -139,7 +139,19 @@ module Tracking =
     type Tracker = 
         | Direct of string * Set<Tracker>
         | Collection of string * Set<Tracker>
-        | Optional of string * Set<Tracker>
+        static member name =
+            function
+            | Direct(n, _)     -> n
+            | Collection(n, _) -> n
+        static member children =
+            function
+            | Direct(_, t)     -> t
+            | Collection(_, t) -> t
+    
+    let addChild child =
+        function
+        | Direct(n, t)     -> Direct(n, Set.add child t)
+        | Collection(n, t) -> Collection(n, Set.add child t)
 
     [<CustomComparison; CustomEquality>]
     type private Track = 
@@ -163,13 +175,11 @@ module Tracking =
 
     let private mkTrack name src dst = { Name = name; From = src; To = dst }
 
-    let private (|IsDirect|IsCollection|IsOption|) (tRoot: Type) = 
+    let private (|IsDirect|IsCollection|) (tRoot: Type) = 
         if tRoot.IsGenericType
         then 
             if typeof<IEnumerable>.IsAssignableFrom tRoot
             then IsCollection
-            elif typedefof<Option<_>>.IsAssignableFrom tRoot
-            then IsOption
             else IsDirect
         else IsDirect
 
@@ -187,14 +197,13 @@ module Tracking =
             let children = foldTracks remaining track.To
             match track.To with
             | IsDirect -> Direct(track.Name, children)
-            | IsCollection -> Collection(track.Name, children)
-            | IsOption -> Optional(track.Name, children))
+            | IsCollection -> Collection(track.Name, children))
              
     /// Takes function with 2 parameters and applies them in reversed order           
     let inline private flip fn a b = fn b a
 
     /// Traverses a provided F# quotation in order to catch all 
-    let tracker (e: Expr) : Tracker  = 
+    let tracker (root: Var) (expr: Expr) : Tracker  = 
         let rec track set e =
             match e with
             | Patterns.PropertyGet(Some subject, propertyInfo, _) -> Set.add (mkTrack propertyInfo.Name propertyInfo.DeclaringType propertyInfo.PropertyType) (track set subject)
@@ -235,10 +244,7 @@ module Tracking =
             | Patterns.ValueWithName(_, _, _) -> set
             | _ -> set
             
-        match e with
-        | Patterns.Lambda(arg, expr) -> 
-            let init = Set.empty
-            let tracks = track init expr
-            let shaked = foldTracks tracks arg.Type
-            Direct(arg.Name, shaked)
-        | _ -> failwithf "Provided F# quotation must be Lambda"
+        let init = Set.empty
+        let tracks = track init expr
+        let shaked = foldTracks tracks root.Type
+        Direct(root.Name, shaked)

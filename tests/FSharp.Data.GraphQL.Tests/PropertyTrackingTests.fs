@@ -25,11 +25,10 @@ type OuterType =
 
 let private complex name nodes = Direct(name, Set.ofList nodes)
 let private leaf name = Direct(name, Set.empty)
-let private optional name nodes = Optional(name, Set.ofList nodes)
 let private collection name nodes = Collection(name, Set.ofList nodes)
 
-let private test expected expr = 
-    let actual = tracker expr
+let private test expected (Patterns.Lambda(arg, expr))= 
+    let actual = tracker arg expr
     actual |> equals expected 
 
 [<Fact>]

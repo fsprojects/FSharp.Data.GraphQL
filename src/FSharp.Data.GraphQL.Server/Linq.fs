@@ -217,9 +217,9 @@ let private (|Object|Record|NotSupported|) (t: Type) =
     elif FSharpType.IsUnion t then NotSupported
     else Object
     
-let private unwrapType = function
-    | List inner -> inner.Type
-    | Nullable inner -> inner.Type
+let rec private unwrapType = function
+    | List inner -> unwrapType inner
+    | Nullable inner -> unwrapType inner
     | tdef -> tdef.Type
 
 let private castTo tCollection callExpr : Expression = 
@@ -234,86 +234,133 @@ let private castTo tCollection callExpr : Expression =
         let cast = Gen.setOfSeq.MakeGenericMethod [| tRes |]
         upcast Expression.Call(null, cast, [ callExpr ])
     | _ -> callExpr
-        
-let rec private eval vars tIn info (inputExpr: Expression) : Expression =
-    if not <| info.Include vars
-    then inputExpr
+//        
+//let rec private eval vars tIn info (inputExpr: Expression) : Expression =
+//    if not <| info.Include vars
+//    then inputExpr
+//    else
+//        match info.Kind with
+//        | ResolveValue ->  inputExpr
+//        | SelectFields fields ->
+//            // construct new object initializer with bindings as list of assignments for each field
+//            let returnedType = unwrapType info.Definition.TypeDef
+//            constructObject vars returnedType fields inputExpr
+//        | ResolveCollection inner ->
+//            // apply Select on the Expr target
+//            // create a call, that will return either IEnumerable`1 or IQueryable`1
+//            let call =
+//                match tIn with
+//                | Gen.Queryable tSource -> 
+//                    constructCollection Gen.queryableMethods vars tSource inputExpr inner
+//                | Gen.Enumerable tSource ->
+//                    constructCollection Gen.enumerableMethods vars tSource inputExpr inner
+//                | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
+//            // enhance call with cast to result type
+//            castTo tIn call
+//        | ResolveAbstraction _ -> raise (NotSupportedException "Resolving abstract types is not supported for LINQ yet")
+//
+//and private constructCollection (methods: Methods) vars tSource inputExpr inner = 
+//    let tResult = inner.ReturnDef.Type
+//    let args = linqArgs vars inner
+//    let p0 = Expression.Parameter(tSource)
+//    let body = eval vars inner.ParentDef.Type inner p0
+//    // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
+//    let call = 
+//        Expression.Call(
+//            // Select<tSource, tResult> - method to invoke
+//            methods.Select.MakeGenericMethod [| tSource; tResult |], 
+//            // `this` param - Convert(inputValue, IQueryable<tSource>)
+//            Expression.Convert(inputExpr, methods.Type.MakeGenericType [| tSource |]), 
+//            // `mapFunc` param - (p0 => body )
+//            Expression.Lambda(body, p0))
+//    args |> Array.fold (fun acc -> argumentToQueryable methods tSource args inner acc) call
+//
+//and private constructObject vars (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
+//    let fieldMap = Dictionary()
+//    infos |> List.iter (fun f -> fieldMap.Add(f.Definition.Name.ToLower(), f)) 
+//    let ctor =
+//        match t with
+//        | Record -> FSharpValue.PreComputeRecordConstructorInfo t
+//        | Object -> 
+//            let fields = infos |> List.toArray |> Array.map (fun info -> info.Definition.Name)
+//            ReflectionHelper.matchConstructor t fields
+//        | NotSupported ->
+//            raise <| NotSupportedException (sprintf "LINQ conversion for type %O is not supported. Only POCOs and records are allowed." t)
+//    // try to match constructor arguments AND remove them from fieldMap
+//    let ctorArgs =
+//        ctor.GetParameters()
+//        |> Array.map (fun parameter -> 
+//            let paramName = parameter.Name.ToLower ()
+//            match fieldMap.TryGetValue paramName with
+//            | true, info -> 
+//                fieldMap.Remove paramName |> ignore
+//                let expr = unwrap info.Definition.Resolve inputExpr
+//                eval vars info.ReturnDef.Type info expr
+//            | false, _ -> upcast Expression.Default parameter.ParameterType)
+//    // if all query fields matched into constructor, invoke it with new expr
+//    // otherwise make member init expr, and pass remaining fields as member bindings
+//    if fieldMap.Count = 0
+//    then upcast Expression.New(ctor, ctorArgs)
+//    else 
+//        let members = 
+//            t.GetMembers()
+//            |> Array.map (fun m -> (m.Name.ToLower(), m))
+//            |> Map.ofArray
+//        let memberBindings : MemberBinding seq = 
+//            fieldMap
+//            |> Seq.map (fun kv -> 
+//                let m = Map.find kv.Key members
+//                upcast Expression.Bind(m, eval vars kv.Value.ParentDef.Type kv.Value inputExpr))
+//        upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings)        
+//        
+//let rec private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Result> =
+//    let collectionType = query.GetType()
+//    let parameter = Expression.Parameter(collectionType)
+//    let expr = eval variables collectionType info parameter
+//    let compiled =
+//        match expr with
+//        | :? MethodCallExpression as call -> 
+//            let lambda = Expression.Lambda(call, [| parameter |])
+//            let compiled = lambda.Compile()
+//            compiled
+//        | selector -> 
+//            let tSource = typeof<'Source>
+//            let tResult = typeof<'Result>
+//            let mSelect = Gen.queryableMethods.Select.MakeGenericMethod [| tSource; tResult |]
+//            let destinationType = Gen.queryableMethods.Type.MakeGenericType [| typeof<'Result> |]
+//            let call = Expression.Call(mSelect, Expression.Convert(parameter, destinationType), selector)
+//            Expression.Lambda(call, [| parameter |]).Compile()
+//    downcast compiled.DynamicInvoke [| box query |]
+
+/// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
+/// and `childInfo` to determine to point of connection.
+let rec private branch parentTrack (parentInfo: ExecutionInfo) childTrack (childInfo: ExecutionInfo) =
+    let parentType = unwrapType parentInfo.ReturnDef
+    if parentType = childInfo.ParentDef.Type
+    then Tracking.addChild parentTrack childTrack
     else
-        match info.Kind with
-        | ResolveValue ->  inputExpr
-        | SelectFields fields ->
-            // construct new object initializer with bindings as list of assignments for each field
-            let returnedType = unwrapType info.Definition.TypeDef
-            constructObject vars returnedType fields inputExpr
-        | ResolveCollection inner ->
-            // apply Select on the Expr target
-            // create a call, that will return either IEnumerable`1 or IQueryable`1
-            let call =
-                match tIn with
-                | Gen.Queryable tSource -> 
-                    constructCollection Gen.queryableMethods vars tSource inputExpr inner
-                | Gen.Enumerable tSource ->
-                    constructCollection Gen.enumerableMethods vars tSource inputExpr inner
-                | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
-            // enhance call with cast to result type
-            castTo tIn call
-        | ResolveAbstraction _ -> raise (NotSupportedException "Resolving abstract types is not supported for LINQ yet")
+        // check if childTrack is a grand-child 
+        match parentTrack with
+        | Tracking.Direct(name, children) ->
+            let updated = children |> Set.map (fun child -> branch child parentInfo childTrack childInfo)
+            Tracking.Direct(name, updated)
+        | Tracking.Collection(name, children) ->
+            let updated = children |> Set.map (fun child -> branch child parentInfo childTrack childInfo)
+            Tracking.Collection(name, updated)    
 
-and private constructCollection (methods: Methods) vars tSource inputExpr inner = 
-    let tResult = inner.ReturnDef.Type
-    let args = linqArgs vars inner
-    let p0 = Expression.Parameter(tSource)
-    let body = eval vars inner.ParentDef.Type inner p0
-    // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
-    let call = 
-        Expression.Call(
-            // Select<tSource, tResult> - method to invoke
-            methods.Select.MakeGenericMethod [| tSource; tResult |], 
-            // `this` param - Convert(inputValue, IQueryable<tSource>)
-            Expression.Convert(inputExpr, methods.Type.MakeGenericType [| tSource |]), 
-            // `mapFunc` param - (p0 => body )
-            Expression.Lambda(body, p0))
-    args |> Array.fold (fun acc -> argumentToQueryable methods tSource args inner acc) call
-
-and private constructObject vars (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
-    let fieldMap = Dictionary()
-    infos |> List.iter (fun f -> fieldMap.Add(f.Definition.Name.ToLower(), f)) 
-    let ctor =
-        match t with
-        | Record -> FSharpValue.PreComputeRecordConstructorInfo t
-        | Object -> 
-            let fields = infos |> List.toArray |> Array.map (fun info -> info.Definition.Name)
-            ReflectionHelper.matchConstructor t fields
-        | NotSupported ->
-            raise <| NotSupportedException (sprintf "LINQ conversion for type %O is not supported. Only POCOs and records are allowed." t)
-    // try to match constructor arguments AND remove them from fieldMap
-    let ctorArgs =
-        ctor.GetParameters()
-        |> Array.map (fun parameter -> 
-            let paramName = parameter.Name.ToLower ()
-            match fieldMap.TryGetValue paramName with
-            | true, info -> 
-                fieldMap.Remove paramName |> ignore
-                let expr = unwrap info.Definition.Resolve inputExpr
-                eval vars info.ReturnDef.Type info expr
-            | false, _ -> upcast Expression.Default parameter.ParameterType)
-    // if all query fields matched into constructor, invoke it with new expr
-    // otherwise make member init expr, and pass remaining fields as member bindings
-    if fieldMap.Count = 0
-    then upcast Expression.New(ctor, ctorArgs)
-    else 
-        let members = 
-            t.GetMembers()
-            |> Array.map (fun m -> (m.Name.ToLower(), m))
-            |> Map.ofArray
-        let memberBindings : MemberBinding seq = 
-            fieldMap
-            |> Seq.map (fun kv -> 
-                let m = Map.find kv.Key members
-                upcast Expression.Bind(m, eval vars kv.Value.ParentDef.Type kv.Value inputExpr))
-        upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings)        
+let rec private infoToTracker info =
+    let (Patterns.Lambda(_, Patterns.Lambda(arg, body))) = info.Definition.Resolve.Expr
+    match info.Kind with
+    | ResolveValue -> Tracking.tracker arg body
+    | SelectFields fields ->
+        fields
+        |> List.fold (fun parentTrack fieldInfo ->
+            let fieldTrack = infoToTracker fieldInfo
+            branch parentTrack info fieldTrack fieldInfo) (Tracking.tracker arg body)
+    | ResolveCollection inner -> infoToTracker info
+    | ResolveAbstraction typeMap -> failwithf "LINQ interpreter doesn't support abstract types"
         
-let rec private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Result> =
+let toLinq info (query: IQueryable<'Source>) variables =
     let collectionType = query.GetType()
     let parameter = Expression.Parameter(collectionType)
     let expr = eval variables collectionType info parameter
@@ -343,6 +390,6 @@ type FSharp.Data.GraphQL.Types.ExecutionInfo with
     /// - `id` returning where comparison with object's id field.
     /// - `first`/`after` returning slice of the collection, ordered by id with id greater than provided in after param.
     /// - `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.
-    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<'Result> = 
+    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<Map<string, obj>> = 
         toLinq this source (defaultArg variables Map.empty)
         
