@@ -245,7 +245,7 @@ and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selectio
         ) Map.empty
     { info with Kind = ResolveAbstraction plannedTypeFields }
 
-let internal planOperation (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
+let internal planOperation documentId (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
     // create artificial plan info to start with
     let rootInfo = { 
         Identifier = null
@@ -260,14 +260,16 @@ let internal planOperation (ctx: PlanningContext) (operation: OperationDefinitio
     let (SelectFields(topFields)) = resolvedInfo.Kind
     match operation.OperationType with
     | Query ->
-        { Operation = operation 
+        { DocumentId = documentId
+          Operation = operation 
           Fields = topFields
           RootDef = ctx.Schema.Query
           Strategy = Parallel }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
-            { Operation = operation
+            { DocumentId = documentId
+              Operation = operation
               Fields = topFields
               RootDef = mutationDef
               Strategy = Sequential }
