@@ -49,11 +49,11 @@ type private Arg =
 [<CustomComparison; CustomEquality>]
 type private Track = 
     { Name: string
-      From: Type
-      To: Type }
-    override x.ToString() = sprintf "(%s: %s -> %s)" x.Name x.From.Name x.To.Name
+      ParentType: Type
+      ReturnType: Type }
+    override x.ToString() = sprintf "(%s: %s -> %s)" x.Name x.ParentType.Name x.ReturnType.Name
     interface IEquatable<Track> with
-        member x.Equals y = (x.Name = y.Name && x.From.FullName = y.From.FullName && x.To.FullName = y.To.FullName)
+        member x.Equals y = (x.Name = y.Name && x.ParentType.FullName = y.ParentType.FullName && x.ReturnType.FullName = y.ReturnType.FullName)
     interface IComparable with
         member x.CompareTo y = 
             match y with
@@ -61,43 +61,30 @@ type private Track =
                 let c = compare x.Name t.Name
                 if c = 0
                 then 
-                    let c = compare x.From.FullName t.From.FullName
-                    if c = 0 then compare x.To.FullName t.To.FullName else c
+                    let c = compare x.ParentType.FullName t.ParentType.FullName
+                    if c = 0 then compare x.ReturnType.FullName t.ReturnType.FullName else c
                 else c                        
             | _ -> invalidArg "y" "Track cannot be compared to other type"
 
-/// Data structure, that is used to tracking property getter trees. 
-[<CustomComparison;CustomEquality>]
-type private Tracker =
-    { Name: string; 
-      ParentType: Type;
-      ReturnType: Type; 
-      Args: Arg list; 
-      Children: Set<Tracker> }
-    interface IEquatable<Tracker> with
-        member x.Equals y =
-            x.Name = y.Name && x.ParentType = y.ParentType && x.ReturnType = y.ReturnType && x.Args = y.Args && x.Children = y.Children
-    interface IComparable with
-        member x.CompareTo y =
-            match y with
-            | :? Tracker as t -> 
-                let c1 = x.Name.CompareTo t.Name
-                if c1 <> 0
-                then 
-                    let c2 = (x.Args :> IComparable).CompareTo t.Args
-                    if c2 <> 0
-                    then  (x.Children :> IComparable).CompareTo t.Children
-                    else c2
-                else c1
-            | _ -> failwithf "Cannot compare tracker to %O" (y.GetType())
-
-
+type private Tracker = 
+    | Direct of Track
+    | Compose of Track * Set<Tracker>
+    | Collection of Track * Arg list * Tracker
+    member x.Track = 
+        match x with
+        | Direct track            -> track
+        | Compose(track, _)       -> track
+        | Collection(track, _, _) -> track
 
 /// Adds a child Tracker to it's new parent, returning updated parent as the result.
-let private addChild child parent = { parent with Children = Set.add child parent.Children }
+let rec private addChild child = 
+    function
+    | Direct track -> Compose(track, Set.singleton child)
+    | Compose(track, children) -> Compose(track, Set.add child children)
+    | Collection(track, args, inner) -> Collection(track, args, addChild child inner)
 
 /// Helper function for creating Track structures.
-let private mkTrack name src dst = { Name = name; From = src; To = dst }
+let private mkTrack name src dst = { Name = name; ParentType = src; ReturnType = dst }
 
 /// Checks if `tFrom` somewhat matches `tRoot`, either by direct type comparison
 /// or as a type argument in enumerable or option of root.
@@ -106,17 +93,7 @@ let private canJoin (tRoot: Type) (tFrom: Type) =
     elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
     then tFrom = (tRoot.GetGenericArguments().[0])
     else false
-
-/// Folds unrelated set of Tracks into a single Tracker tree, given the `tRoot`
-/// as a root of the tree.
-let rec private foldTracks trackSet (tRoot: Type) =
-    let members = trackSet |> Set.filter (fun track -> canJoin tRoot track.From)
-    let remaining = Set.difference trackSet members
-    members
-    |> Set.map(fun track ->
-        let children = foldTracks remaining track.To
-        { Name = track.Name; ParentType = track.From; ReturnType = track.To; Args = []; Children = children })
-         
+             
 /// Takes function with 2 parameters and applies them in reversed order           
 let inline private flip fn a b = fn b a
 
@@ -147,11 +124,14 @@ let rec private unwrapType =
     | Nullable inner -> unwrapType inner
     | other -> other.Type
 
-let private memberExpr tracker name parameter =
-    let t = tracker.ReturnType
-    match t.GetProperty name with
+open System.Reflection
+
+let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public
+let private memberExpr (tracker: Tracker) name parameter =
+    let t = tracker.Track.ReturnType
+    match t.GetProperty(name, bindingFlags) with
     | null -> 
-        match t.GetField name with
+        match t.GetField(name, bindingFlags) with
         | null -> failwithf "Couldn't find property or field '%s' inside type '%O'" name t
         | field -> Expression.Field(parameter, field)
     | property -> Expression.Property(parameter, property)
@@ -166,81 +146,83 @@ let private memberExpr tracker name parameter =
 /// - Take(num)              -> .Take(num)
 /// - First(num)/After(id)   -> .Where(p0 => p0.(idField) > id).OrderBy(p0 => p0.(idField)).Take(num)
 /// - Last(num)/Before(id)   -> .Where(p0 => p0.(idField) < id).OrderByDescending(p0 => p0.(idField)).Take(num)
-let private argumentToQueryable (methods: Methods) tSource tracker expression arg =
-    let allArguments = tracker.Args
-    match arg with
-    | Id value -> 
-        let p0 = Expression.Parameter tSource
-        let idProperty = memberExpr tracker "id" p0
-        // Func<tSource, bool> predicate = p0 => p0 == value
-        let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant value), p0)
-        let where = methods.Where.MakeGenericMethod [| tSource |]
-        Expression.Call(null, where, expression, predicate)
-    | OrderBy value ->
-        let p0 = Expression.Parameter tSource
-        // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-        let property = memberExpr tracker (string value) p0        
-        let memberAccess = Expression.Lambda(property, [| p0 |])
-        let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
-        Expression.Call(null, orderBy, expression, memberAccess)
-    | OrderByDesc value -> 
-        let p0 = Expression.Parameter tSource
-        // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-        let property = memberExpr tracker (string value) p0        
-        let memberAccess = Expression.Lambda(property, [| p0 |])
-        let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
-        Expression.Call(null, orderByDesc, expression, memberAccess)
-    | Skip value -> 
-        let skip = methods.Skip.MakeGenericMethod [| tSource |]
-        Expression.Call(null, skip, expression, Expression.Constant(value))
-    | Take value -> 
-        let take = methods.Take.MakeGenericMethod [| tSource |]
-        Expression.Call(null, take, expression, Expression.Constant(value))
-    | First value -> 
-        let p0 = Expression.Parameter tSource   
-        // 1. Find ID field of the structure (info object is needed)
-        let idProperty = memberExpr tracker "id" p0
-        // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
-        let idAccess = Expression.Lambda(idProperty, [| p0 |])
-        let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
-        let ordered = Expression.Call(null, orderBy, expression, idAccess)
+let private argumentToQueryable (methods: Methods) tSource (tracker: Tracker) expression arg =
+    match tracker with
+    | Collection(track, allArguments, innerTracker) ->
+        match arg with
+        | Id value -> 
+            let p0 = Expression.Parameter tSource
+            let idProperty = memberExpr innerTracker "id" p0
+            // Func<tSource, bool> predicate = p0 => p0 == value
+            let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant value), p0)
+            let where = methods.Where.MakeGenericMethod [| tSource |]
+            Expression.Call(null, where, expression, predicate)
+        | OrderBy value ->
+            let p0 = Expression.Parameter tSource
+            // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+            let property = memberExpr innerTracker (string value) p0        
+            let memberAccess = Expression.Lambda(property, [| p0 |])
+            let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+            Expression.Call(null, orderBy, expression, memberAccess)
+        | OrderByDesc value -> 
+            let p0 = Expression.Parameter tSource
+            // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+            let property = memberExpr innerTracker (string value) p0        
+            let memberAccess = Expression.Lambda(property, [| p0 |])
+            let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+            Expression.Call(null, orderByDesc, expression, memberAccess)
+        | Skip value -> 
+            let skip = methods.Skip.MakeGenericMethod [| tSource |]
+            Expression.Call(null, skip, expression, Expression.Constant(value))
+        | Take value -> 
+            let take = methods.Take.MakeGenericMethod [| tSource |]
+            Expression.Call(null, take, expression, Expression.Constant(value))
+        | First value -> 
+            let p0 = Expression.Parameter tSource   
+            // 1. Find ID field of the structure (info object is needed)
+            let idProperty = memberExpr innerTracker "id" p0
+            // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+            let idAccess = Expression.Lambda(idProperty, [| p0 |])
+            let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+            let ordered = Expression.Call(null, orderBy, expression, idAccess)
 
-        let afterOption = allArguments |> List.tryFind (function After _ -> true | _ -> false)
-        let result =
-            match afterOption with
-            | Some(After id) -> 
-                //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
-                // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-                let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant id), p0)
-                let where = methods.Where.MakeGenericMethod [| tSource |]
-                Expression.Call(null, where, ordered, predicate)
-            | None -> ordered
-        // 5. apply result.Take(value)
-        let take = methods.Take.MakeGenericMethod [| tSource |]
-        Expression.Call(null, take, result, Expression.Constant value)
-    | Last value -> 
-        let p0 = Expression.Parameter tSource   
-        // 1. Find ID field of the structure (info object is needed)
-        let idProperty = memberExpr tracker "id" p0
-        // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
-        let idAccess = Expression.Lambda(idProperty, [| p0 |])
-        let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
-        let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
+            let afterOption = allArguments |> List.tryFind (function After _ -> true | _ -> false)
+            let result =
+                match afterOption with
+                | Some(After id) -> 
+                    //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                    // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+                    let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant id), p0)
+                    let where = methods.Where.MakeGenericMethod [| tSource |]
+                    Expression.Call(null, where, ordered, predicate)
+                | None -> ordered
+            // 5. apply result.Take(value)
+            let take = methods.Take.MakeGenericMethod [| tSource |]
+            Expression.Call(null, take, result, Expression.Constant value)
+        | Last value -> 
+            let p0 = Expression.Parameter tSource   
+            // 1. Find ID field of the structure (info object is needed)
+            let idProperty = memberExpr innerTracker "id" p0
+            // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+            let idAccess = Expression.Lambda(idProperty, [| p0 |])
+            let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+            let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
 
-        let beforeOption = allArguments |> List.tryFind (function Before _ -> true | _ -> false)
-        let result =
-            match beforeOption with
-            | Some(Before id) -> 
-                //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
-                // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-                let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant id), p0)
-                let where = methods.Where.MakeGenericMethod [| tSource |]
-                Expression.Call(null, where, ordered, predicate)
-            | None -> ordered
-        // 5. apply result.Take(value)
-        let take = methods.Take.MakeGenericMethod [| tSource |]
-        Expression.Call(null, take, result, Expression.Constant value)
-    | _ -> expression
+            let beforeOption = allArguments |> List.tryFind (function Before _ -> true | _ -> false)
+            let result =
+                match beforeOption with
+                | Some(Before id) -> 
+                    //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+                    // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+                    let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant id), p0)
+                    let where = methods.Where.MakeGenericMethod [| tSource |]
+                    Expression.Call(null, where, ordered, predicate)
+                | None -> ordered
+            // 5. apply result.Take(value)
+            let take = methods.Take.MakeGenericMethod [| tSource |]
+            Expression.Call(null, take, result, Expression.Constant value)
+        | _ -> expression
+    | _ -> raise <| NotSupportedException "Currently only collection arguments are supported"
 
 /// Tries to resolve all supported LINQ args with values 
 /// from a given ExecutionInfo and variables collection
@@ -307,34 +289,56 @@ let rec private track set e =
 ///
 /// This technique doesn't track exact properties accessed from the `root`
 /// and can can cause eager overfetching.
-let rec private tracker vars (info: ExecutionInfo) : Tracker  =      
+let rec private tracker vars (info: ExecutionInfo) : Tracker  =     
+    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
+    let tracks = track Set.empty expr 
     match info.Kind with
-    | ResolveValue -> rootTrack vars info
+    | ResolveValue -> 
+        composeValue tracks { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
     | SelectFields fieldInfos -> 
-        let root = rootTrack vars info
+        let root = composeValue tracks { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
         fieldInfos |> List.fold (fun acc child -> branch acc info (tracker vars child) child) root
-    | ResolveCollection innerInfo -> rootTrack vars info
+    | ResolveCollection inner ->
+        let nested = tracker vars inner
+        let args = linqArgs vars info
+        Collection({ Name = root.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }, args, nested)
     | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)"
 
-and private rootTrack vars info = 
-    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
-    let tracks = track Set.empty expr
-    { Name = root.Name; 
-      ParentType = info.ParentDef.Type;
-      ReturnType = info.ReturnDef.Type;
-      Args = linqArgs vars info; 
-      Children = foldTracks tracks root.Type }
+and private composeValue tracks parent =
+    let members = tracks |> Set.filter (fun track -> canJoin parent.ReturnType track.ParentType)
+    let remaining = Set.difference tracks members
+    let result =
+        members
+        |> Set.map(fun track ->
+            match track.ParentType with
+            | Gen.Enumerable t -> 
+                Collection(track, [], composeValue remaining track)
+            | parentType -> composeValue remaining track)
+    if Set.isEmpty result
+    then Direct parent
+    else Compose(parent, result)
+            
+
+//and private rootTrack vars info = 
+//    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
+//    let tracks = track Set.empty expr
+//    { Name = root.Name; 
+//      ParentType = info.ParentDef.Type;
+//      ReturnType = info.ReturnDef.Type;
+//      Args = linqArgs vars info; 
+//      Children = foldTracks tracks root.Type }
         
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.
 and private branch parentTrack (parentInfo: ExecutionInfo) childTrack (childInfo: ExecutionInfo) =
     let parentType = unwrapType parentInfo.ReturnDef
     if parentType = childInfo.ParentDef.Type
-    then addChild parentTrack childTrack
+    then addChild childTrack parentTrack
     else
-        // check if childTrack is a grand-child 
-        let updated = parentTrack.Children |> Set.map (fun child -> branch child parentInfo childTrack childInfo)
-        { parentTrack with Children = updated }  
+        match parentTrack with
+        | Collection(_, _, inner) -> branch inner parentInfo childTrack childInfo
+        | Compose(track, fields) -> Compose(track, fields |> Set.map (fun child -> branch child parentInfo childTrack childInfo))
+        | Direct(_) -> parentTrack
 
 let private (|Object|Record|NotSupported|) (t: Type) =
     if FSharpType.IsRecord t then Record
@@ -357,18 +361,22 @@ let private castTo tCollection callExpr : Expression =
         upcast Expression.Call(null, cast, [ callExpr ])
     | _ -> callExpr      
 
-let rec private construct (tracker: Tracker) inParam =
-    match tracker.ReturnType with
-    | Gen.Queryable t -> constructCollection Gen.queryableMethods t tracker inParam
-    | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam
-    | other -> constructObject tracker inParam
+let rec private construct tracker inParam : Expression =
+    match tracker with
+    | Direct(track) -> upcast Expression.PropertyOrField(inParam, track.Name)
+    | Compose(track, fields) -> constructObject tracker inParam
+    | Collection(track, args, inner) ->
+        match track.ReturnType with
+        | Gen.Queryable t -> constructCollection Gen.queryableMethods t tracker inParam
+        | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam
+        | other -> failwithf "Type '%O' is neither IQueryable nor IEnumerable" other
 
 and private constructObject (tracker: Tracker) (inParam: ParameterExpression) : Expression =
-    let tObj = tracker.ReturnType
-    let trackerMap = 
-        tracker.Children 
-        |> Set.map (fun t -> (t.Name.ToLowerInvariant(), t)) 
-        |> dict
+    let (Compose(track, fields)) = tracker
+    let tObj = track.ReturnType
+    let trackerMap = Dictionary<_,_>() 
+    fields |> Set.iter (fun t -> trackerMap.Add(t.Track.Name.ToLowerInvariant(), t)) 
+
     let fieldNames = trackerMap.Keys.ToArray()
     let ctor =
         match tObj with
@@ -400,9 +408,10 @@ and private constructObject (tracker: Tracker) (inParam: ParameterExpression) : 
                 upcast Expression.Bind(m, construct kv.Value inParam))
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
-and private constructCollection methods (tSource: Type) (tracker: Tracker) (inParam: ParameterExpression) =
+and private constructCollection methods (tSource: Type) tracker (inParam: ParameterExpression) =
+    let (Collection(track, args, inner)) = tracker
     let p0 = Expression.Parameter(tSource)
-    let body = constructObject tracker p0
+    let body = construct inner p0
     // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
     let call = 
         Expression.Call(
@@ -412,7 +421,7 @@ and private constructCollection methods (tSource: Type) (tracker: Tracker) (inPa
             Expression.Convert(inParam, methods.Type.MakeGenericType [| tSource |]), 
             // `mapFunc` param - (p0 => body )
             Expression.Lambda(body, p0))
-    let final = tracker.Args |> List.fold (fun acc -> argumentToQueryable methods tSource tracker acc) call 
+    let final = args |> List.fold (fun acc -> argumentToQueryable methods tSource tracker acc) call 
     upcast final
         
 let private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Source> =
@@ -431,7 +440,11 @@ let private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Sou
             let destinationType = Gen.queryableMethods.Type.MakeGenericType [| tSource |]
             let call = Expression.Call(mSelect, Expression.Convert(parameter, destinationType), selector)
             Expression.Lambda(call, [| parameter |]).Compile()
-    downcast compiled.DynamicInvoke [| box query |]
+    let result = compiled.DynamicInvoke [| box query |]
+    match result with
+    | :? IQueryable<'Source> as q -> q
+    | :? IEnumerable<'Source> as e -> e.AsQueryable()
+    | _ -> failwithf "Unrecognized type '%O' is neither IEnumerable<%O> nor IQueryable<%O>" (result.GetType()) typeof<'Source> typeof<'Source>
 
 type FSharp.Data.GraphQL.Types.ExecutionInfo with
     
