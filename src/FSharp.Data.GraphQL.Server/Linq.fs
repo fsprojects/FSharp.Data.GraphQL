@@ -276,6 +276,93 @@ let rec private track set e =
     | Patterns.ValueWithName(_, _, _) -> set
     | _ -> set   
 
+/// Intermediate representation containing info about all resolved
+/// member acesses. Contains execution info, which resolver function
+/// was used, set of tracks found inside resolver function
+/// and list of all children (empty for ResolveValue).
+type private IR = IR of ExecutionInfo * Set<Tracker> * IR list
+
+let rec private merge parent members =
+    if Set.isEmpty members
+    then parent
+    else match parent with
+         | Direct(track) -> Compose(track, members)
+         | Compose(track, children) -> Compose(track, children + members)
+         | Collection(track, args, inner) -> Collection(track, args, merge inner members)     
+
+/// Composes trackers into tree within range of a single ExecutionInfo
+/// `allTracks` is expected to be the list of Direct's (unrelated tracks)
+/// which are going to be composed.
+let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Tracker =    
+    let returnType = root.Track.ReturnType
+    let members = allTracks |> Set.filter (fun (Direct track) -> canJoin returnType track.ParentType)
+    let remaining = Set.difference allTracks members
+    let results =
+        members
+        |> Set.map(fun tracker ->
+            let (Direct(track)) = tracker
+            match track.ParentType with
+            | Gen.Enumerable t -> Collection(track, [], infoComposer tracker remaining)
+            | parentType -> infoComposer tracker remaining)
+    merge root results
+
+/// Composes tracks collected within a single ExecutionInfo
+/// (but not across the ExecutionInfo boundaries)
+let rec private compose ir = 
+    let (IR(info, directs, children)) = ir
+    let root = Direct { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
+    let composed = infoComposer root directs
+    IR(info, Set.singleton composed, children |> List.map compose)
+
+/// Get unrelated tracks from current info and its children (if any)
+/// Returned set of trackers ALWAYS consists of Direct trackers only
+let rec private getTracks info =
+    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
+    let tracks = track Set.empty expr |> Set.map Direct
+    match info.Kind with
+    | ResolveValue -> IR(info, tracks, [])
+    | SelectFields fieldInfos -> IR(info, tracks, List.map getTracks fieldInfos)
+    | ResolveCollection inner -> IR(info, tracks, [ getTracks inner ])
+    | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)" 
+
+let rec private joinToLeaves vars info parent child =
+    let returnType = info.ReturnDef.Type
+    let (IR(childInfo, trackSet, irs)) = child
+    let tracker = trackSet |> Seq.head
+    // join children to current parent
+    match irs with
+    | [] -> join returnType parent tracker
+    | grandChildren -> 
+        let childTracker = 
+            grandChildren            
+            |> List.fold (fun acc grandChild -> joinToLeaves vars childInfo acc grandChild) tracker
+        match parent with
+        | Direct track when track.ReturnType = returnType ->  
+            match returnType with
+            | Gen.Enumerable _ -> Collection(track, linqArgs vars info, childTracker)
+            | _ -> Compose(track, Set.singleton childTracker)
+        | Direct _ -> 
+            parent
+        | Compose(track, children) when track.ReturnType = returnType -> 
+            Compose(track, Set.add childTracker children)
+        | Compose(track, children) ->
+            Compose(track, children |> Set.map (fun c -> joinToLeaves vars info c child))
+        | Collection(track, args, inner) -> 
+            Collection(track, args, merge inner (Set.singleton childTracker))
+
+and private join returnType parent child =
+    match parent with
+    | Direct track when track.ReturnType = returnType ->    
+        Compose(track, Set.singleton child)
+    | Direct _ -> 
+        parent
+    | Compose(track, children) when track.ReturnType = returnType -> 
+        Compose(track, Set.add child children)
+    | Compose(track, children) ->
+        Compose(track, children)
+    | Collection(track, args, inner) -> 
+        Collection(track, args, merge inner (Set.singleton child))
+
 /// Creates a LINQ intermediate representation of ExecutionInfo by
 /// traversing a provided F# quotation in order to catch all member 
 /// accesses (fields / property getters) and tries to construct
@@ -289,45 +376,13 @@ let rec private track set e =
 ///
 /// This technique doesn't track exact properties accessed from the `root`
 /// and can can cause eager overfetching.
-let rec private tracker vars (info: ExecutionInfo) : Tracker  =     
-    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
-    let tracks = track Set.empty expr 
-    match info.Kind with
-    | ResolveValue -> 
-        composeValue tracks { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
-    | SelectFields fieldInfos -> 
-        let root = composeValue tracks { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
-        fieldInfos |> List.fold (fun acc child -> branch acc info (tracker vars child) child) root
-    | ResolveCollection inner ->
-        let nested = tracker vars inner
-        let args = linqArgs vars info
-        Collection({ Name = root.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }, args, nested)
-    | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)"
-
-and private composeValue tracks parent =
-    let members = tracks |> Set.filter (fun track -> canJoin parent.ReturnType track.ParentType)
-    let remaining = Set.difference tracks members
-    let result =
-        members
-        |> Set.map(fun track ->
-            match track.ParentType with
-            | Gen.Enumerable t -> 
-                Collection(track, [], composeValue remaining track)
-            | parentType -> composeValue remaining track)
-    if Set.isEmpty result
-    then Direct parent
-    else Compose(parent, result)
+let rec private tracker vars (info: ExecutionInfo) : Tracker  =       
+    let ir = getTracks info
+    let composed = compose ir
+    let (IR(_, tracker, children)) = composed
+    children
+    |> List.fold (fun acc child -> joinToLeaves vars info acc child) (Seq.head tracker)
             
-
-//and private rootTrack vars info = 
-//    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
-//    let tracks = track Set.empty expr
-//    { Name = root.Name; 
-//      ParentType = info.ParentDef.Type;
-//      ReturnType = info.ReturnDef.Type;
-//      Args = linqArgs vars info; 
-//      Children = foldTracks tracks root.Type }
-        
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.
 and private branch parentTrack (parentInfo: ExecutionInfo) childTrack (childInfo: ExecutionInfo) =
@@ -459,82 +514,3 @@ type FSharp.Data.GraphQL.Types.ExecutionInfo with
     /// - `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.
     member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<'Source> = 
         toLinq this source (defaultArg variables Map.empty)
-        
-//        
-//let rec private eval vars tIn tracker info (inputExpr: Expression) : Expression =
-//    if not <| info.Include vars
-//    then inputExpr
-//    else
-//        match info.Kind with
-//        | ResolveValue ->  inputExpr
-//        | SelectFields fields ->
-//            // construct new object initializer with bindings as list of assignments for each field
-//            let returnedType = unwrapType info.Definition.TypeDef
-//            constructObject vars returnedType fields inputExpr
-//        | ResolveCollection inner ->
-//            // apply Select on the Expr target
-//            // create a call, that will return either IEnumerable`1 or IQueryable`1
-//            let call =
-//                match tIn with
-//                | Gen.Queryable tSource -> 
-//                    constructCollection Gen.queryableMethods vars tSource inputExpr inner
-//                | Gen.Enumerable tSource ->
-//                    constructCollection Gen.enumerableMethods vars tSource inputExpr inner
-//                | _ -> raise (InvalidOperationException <| sprintf "Type %O is not enumerable" tIn)
-//            // enhance call with cast to result type
-//            castTo tIn call
-//        | ResolveAbstraction _ -> raise (NotSupportedException "Resolving abstract types is not supported for LINQ yet")
-//
-//and private constructCollection (methods: Methods) vars tSource inputExpr inner = 
-//    let tResult = inner.ReturnDef.Type
-//    let args = linqArgs vars inner
-//    let p0 = Expression.Parameter(tSource)
-//    let body = eval vars inner.ParentDef.Type inner p0
-//    // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
-//    let call = 
-//        Expression.Call(
-//            // Select<tSource, tResult> - method to invoke
-//            methods.Select.MakeGenericMethod [| tSource; tResult |], 
-//            // `this` param - Convert(inputValue, IQueryable<tSource>)
-//            Expression.Convert(inputExpr, methods.Type.MakeGenericType [| tSource |]), 
-//            // `mapFunc` param - (p0 => body )
-//            Expression.Lambda(body, p0))
-//    args |> Array.fold (fun acc -> argumentToQueryable methods tSource args inner acc) call
-//
-//and private constructObject vars (t: Type) (infos: ExecutionInfo list) inputExpr : Expression =
-//    let fieldMap = Dictionary()
-//    infos |> List.iter (fun f -> fieldMap.Add(f.Definition.Name.ToLower(), f)) 
-//    let ctor =
-//        match t with
-//        | Record -> FSharpValue.PreComputeRecordConstructorInfo t
-//        | Object -> 
-//            let fields = infos |> List.toArray |> Array.map (fun info -> info.Definition.Name)
-//            ReflectionHelper.matchConstructor t fields
-//        | NotSupported ->
-//            raise <| NotSupportedException (sprintf "LINQ conversion for type %O is not supported. Only POCOs and records are allowed." t)
-//    // try to match constructor arguments AND remove them from fieldMap
-//    let ctorArgs =
-//        ctor.GetParameters()
-//        |> Array.map (fun parameter -> 
-//            let paramName = parameter.Name.ToLower ()
-//            match fieldMap.TryGetValue paramName with
-//            | true, info -> 
-//                fieldMap.Remove paramName |> ignore
-//                let expr = unwrap info.Definition.Resolve inputExpr
-//                eval vars info.ReturnDef.Type info expr
-//            | false, _ -> upcast Expression.Default parameter.ParameterType)
-//    // if all query fields matched into constructor, invoke it with new expr
-//    // otherwise make member init expr, and pass remaining fields as member bindings
-//    if fieldMap.Count = 0
-//    then upcast Expression.New(ctor, ctorArgs)
-//    else 
-//        let members = 
-//            t.GetMembers()
-//            |> Array.map (fun m -> (m.Name.ToLower(), m))
-//            |> Map.ofArray
-//        let memberBindings : MemberBinding seq = 
-//            fieldMap
-//            |> Seq.map (fun kv -> 
-//                let m = Map.find kv.Key members
-//                upcast Expression.Bind(m, eval vars kv.Value.ParentDef.Type kv.Value inputExpr))
-//        upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
