@@ -339,7 +339,7 @@ let rec private compose ir =
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
 let rec private getTracks info =
-    let (Patterns.Lambda(_, Patterns.Lambda(root, expr))) = info.Definition.Resolve.Expr
+    let (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(root, expr))))) = info.Definition.Resolve.Expr
     let tracks = track Set.empty expr |> Set.map Direct
     match info.Kind with
     | ResolveValue -> IR(info, tracks, [])
