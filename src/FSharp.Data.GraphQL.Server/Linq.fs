@@ -437,9 +437,9 @@ let private castTo tCollection callExpr : Expression =
         upcast Expression.Call(null, cast, [ callExpr ])
     | _ -> callExpr      
 
-let rec private construct tracker inParam : Expression =
+let rec private construct tracker (inParam: Expression) : Expression =
     match tracker with
-    | Direct(track) -> upcast Expression.PropertyOrField(inParam, track.Name)
+    | Direct(track) -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
     | Compose(track, fields) -> constructObject tracker inParam
     | Collection(track, args, inner) ->
         match track.ReturnType with
@@ -447,7 +447,7 @@ let rec private construct tracker inParam : Expression =
         | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam
         | other -> failwithf "Type '%O' is neither IQueryable nor IEnumerable" other
 
-and private constructObject (tracker: Tracker) (inParam: ParameterExpression) : Expression =
+and private constructObject (tracker: Tracker) (inParam: Expression) : Expression =
     let (Compose(track, fields)) = tracker
     let tObj = track.ReturnType
     let trackerMap = Dictionary<_,_>() 
@@ -468,7 +468,8 @@ and private constructObject (tracker: Tracker) (inParam: ParameterExpression) : 
             match trackerMap.TryGetValue paramName  with
             | true, childTracker -> 
                 trackerMap.Remove paramName |> ignore
-                construct childTracker inParam
+                let fieldOrProperty = memberExpr tracker paramName inParam
+                construct childTracker fieldOrProperty
             | false, _ -> upcast Expression.Default parameter.ParameterType)
     if trackerMap.Count = 0
     then upcast Expression.New(ctor, ctorArgs)
@@ -484,7 +485,7 @@ and private constructObject (tracker: Tracker) (inParam: ParameterExpression) : 
                 upcast Expression.Bind(m, construct kv.Value inParam))
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
-and private constructCollection methods (tSource: Type) tracker (inParam: ParameterExpression) =
+and private constructCollection methods (tSource: Type) tracker (inParam: Expression) =
     let (Collection(track, args, inner)) = tracker
     let p0 = Expression.Parameter(tSource)
     let body = construct inner p0
