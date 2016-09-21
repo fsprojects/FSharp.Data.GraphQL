@@ -20,7 +20,7 @@ type Person =
       LastName : string
       Contact : Contact
       Friends : Contact list }
-
+      
 let Contact = Define.Object("Contact", [ Define.Field("email", String, fun _ x -> x.Email) ])
 
 let Person = 
@@ -28,7 +28,9 @@ let Person =
                           [ Define.Field("id", ID, fun _ x -> x.ID)
                             Define.AutoField("firstName", String)
                             Define.Field("lastName", String, fun _ x -> x.LastName)
+                            Define.Field("fullName", String, fun _ x -> x.FirstName + " " + x.LastName)
                             Define.Field("contact", Contact, fun _ x -> x.Contact)
+                            Define.Field("email", String, fun _ x -> x.Contact.Email)
                             Define.Field("friends", ListOf Contact, fun _ x -> x.Friends) ])
 
 let data = 
@@ -150,6 +152,45 @@ let ``LINQ interpreter works with nested collections``() =
     result.Contact |> equals undefined
     result.Friends |> equals [ { Email = "j.abrams@gmail.com" }
                                { Email = "l.trif@gmail.com" } ]
+
+[<Fact>]
+let ``LINQ interpreter works with nested property getters in resolve function``() =
+    let plan = schema.CreateExecutionPlan """
+    query Example {
+        people {
+            email
+        }
+    }
+    """
+    let info = plan.["people"]
+    let people = info.ToLinq(data.AsQueryable()) |> Seq.toList
+    List.length people |> equals 3
+    let result = List.head people
+    result.FirstName |> equals undefined
+    result.LastName |> equals undefined
+    // this should be resolved, because email resolver is: fun _ x -> x.Contact.Email
+    result.Contact |> equals { Email = "b.adams@gmail.com" }
+    result.Friends |> equals undefined
+
+[<Fact>]
+let ``LINQ interpreter resolves multiple properties from complex resolvers``() =
+    let plan = schema.CreateExecutionPlan """
+    query Example {
+        people {
+            fullName
+        }
+    }
+    """
+    let info = plan.["people"]
+    let people = info.ToLinq(data.AsQueryable()) |> Seq.toList
+    List.length people |> equals 3
+    let result = List.head people
+    // both FirstName and LastName should be resolved, because
+    // they are accessed from within fullName function resolver
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact |> equals undefined
+    result.Friends |> equals undefined
 
 [<Fact>]
 let ``LINQ interpreter works with id arg``() = 

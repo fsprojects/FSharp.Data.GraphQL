@@ -6,29 +6,11 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Reflection
 open FSharp.Data.GraphQL.Types
-
-module internal ReflectionHelper =
-
-    let matchConstructor (t: Type) (fields: string []) =
-        let constructors = t.GetConstructors()
-        let fieldNames = 
-            fields
-            |> Set.ofArray
-        let (ctor, _) =
-            constructors
-            |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
-            // start from most complete constructors
-            |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)                  
-            // try match field with params by name
-            // at last, default constructor should be used if defined
-            |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
-        ctor
-
 open System.Collections
 open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
-open Microsoft.FSharp.Quotations.Patterns
+open Microsoft.FSharp.Quotations
 
 type internal Methods =
     interface
@@ -76,15 +58,15 @@ module internal Gen =
         methods.First().MakeGenericMethod typeParams
     
     let listOfSeq = 
-        let (Call(_, info, _)) = <@ List.ofSeq<_> Seq.empty @>
+        let (Patterns.Call(_, info, _)) = <@ List.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
 
     let arrayOfSeq = 
-        let (Call(_, info, _)) = <@ Array.ofSeq<_> Seq.empty @>
+        let (Patterns.Call(_, info, _)) = <@ Array.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
 
     let setOfSeq = 
-        let (Call(_, info, _)) = <@ Set.ofSeq<_> Seq.empty @>
+        let (Patterns.Call(_, info, _)) = <@ Set.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
         
     let private em = typeof<Enumerable>.GetMethods()
@@ -133,3 +115,20 @@ module internal Gen =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderByDescending"))
             methods.First()
         }
+
+module internal ReflectionHelper =
+
+    let matchConstructor (t: Type) (fields: string []) =
+        let constructors = t.GetConstructors()
+        let fieldNames = 
+            fields
+            |> Set.ofArray
+        let (ctor, _) =
+            constructors
+            |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
+            // start from most complete constructors
+            |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)                  
+            // try match field with params by name
+            // at last, default constructor should be used if defined
+            |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
+        ctor
