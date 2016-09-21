@@ -443,8 +443,8 @@ let rec private construct tracker (inParam: Expression) : Expression =
     | Compose(track, fields) -> constructObject tracker inParam
     | Collection(track, args, inner) ->
         match track.ReturnType with
-        | Gen.Queryable t -> constructCollection Gen.queryableMethods t tracker inParam
-        | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam
+        | Gen.Queryable t -> constructCollection Gen.queryableMethods t tracker inParam |> castTo track.ReturnType
+        | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam |> castTo track.ReturnType
         | other -> failwithf "Type '%O' is neither IQueryable nor IEnumerable" other
 
 and private constructObject (tracker: Tracker) (inParam: Expression) : Expression =
@@ -485,7 +485,7 @@ and private constructObject (tracker: Tracker) (inParam: Expression) : Expressio
                 upcast Expression.Bind(m, construct kv.Value inParam))
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
-and private constructCollection methods (tSource: Type) tracker (inParam: Expression) =
+and private constructCollection methods (tSource: Type) tracker (inParam: Expression) : Expression =
     let (Collection(track, args, inner)) = tracker
     let p0 = Expression.Parameter(tSource)
     let body = construct inner p0
