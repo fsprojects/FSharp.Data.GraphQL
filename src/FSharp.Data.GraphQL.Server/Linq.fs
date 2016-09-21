@@ -85,14 +85,6 @@ let rec private addChild child =
 
 /// Helper function for creating Track structures.
 let private mkTrack name src dst = { Name = name; ParentType = src; ReturnType = dst }
-
-/// Checks if `tFrom` somewhat matches `tRoot`, either by direct type comparison
-/// or as a type argument in enumerable or option of root.
-let private canJoin (tRoot: Type) (tFrom: Type) =
-    if tFrom = tRoot then true
-    elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
-    then tFrom = (tRoot.GetGenericArguments().[0])
-    else false
              
 /// Takes function with 2 parameters and applies them in reversed order           
 let inline private flip fn a b = fn b a
@@ -282,6 +274,14 @@ let rec private track set e =
 /// and list of all children (empty for ResolveValue).
 type private IR = IR of ExecutionInfo * Set<Tracker> * IR list
 
+/// Checks if `tFrom` somewhat matches `tRoot`, either by direct type comparison
+/// or as a type argument in enumerable or option of root.
+let private canJoin (tRoot: Type) (tFrom: Type) =
+    if tFrom = tRoot then true
+    elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
+    then tFrom = (tRoot.GetGenericArguments().[0])
+    else false
+
 let rec private merge parent members =
     if Set.isEmpty members
     then parent
@@ -293,18 +293,40 @@ let rec private merge parent members =
 /// Composes trackers into tree within range of a single ExecutionInfo
 /// `allTracks` is expected to be the list of Direct's (unrelated tracks)
 /// which are going to be composed.
-let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Tracker =    
-    let returnType = root.Track.ReturnType
-    let members = allTracks |> Set.filter (fun (Direct track) -> canJoin returnType track.ParentType)
-    let remaining = Set.difference allTracks members
-    let results =
-        members
-        |> Set.map(fun tracker ->
-            let (Direct(track)) = tracker
-            match track.ParentType with
-            | Gen.Enumerable t -> Collection(track, [], infoComposer tracker remaining)
-            | parentType -> infoComposer tracker remaining)
-    merge root results
+let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tracker> = 
+    let rootTrack = root.Track 
+    let parentType = rootTrack.ReturnType  
+    let members = allTracks |> Set.filter (fun (Direct track) -> canJoin parentType track.ParentType)
+    if Set.isEmpty members
+    then
+        // check for artificial property
+        // eg. given type Parent = { fname: string; lname: string }
+        // and field definition "fullName": p -> p.fname + " " + p.lname
+        // we don't want to return fullName Tracker (as such field doesn't exists)
+        // but fname and lname instead
+        let grandpaType = rootTrack.ParentType
+        let members = allTracks |> Set.filter (fun (Direct track) -> canJoin grandpaType track.ParentType)
+        if Set.isEmpty members
+        then root |> Set.singleton
+        else
+            let remaining = Set.difference allTracks members
+            members
+            |> Set.map(fun tracker -> infoComposer tracker remaining)
+            |> Seq.collect id
+            |> Set.ofSeq
+    else
+        // compose remaining elements recursivelly under members
+        let remaining = Set.difference allTracks members
+        let results =
+            members
+            |> Set.map(fun tracker -> infoComposer tracker remaining)
+            |> Seq.collect id
+            |> Set.ofSeq
+        let newRoot =
+            match parentType with
+            | Gen.Enumerable t -> Collection(rootTrack, [], merge root results)
+            | _ -> merge root results
+        newRoot |> Set.singleton
 
 /// Composes tracks collected within a single ExecutionInfo
 /// (but not across the ExecutionInfo boundaries)
@@ -312,7 +334,7 @@ let rec private compose ir =
     let (IR(info, directs, children)) = ir
     let root = Direct { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
     let composed = infoComposer root directs
-    IR(info, Set.singleton composed, children |> List.map compose)
+    IR(info, composed, children |> List.map compose)
 
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
@@ -325,30 +347,29 @@ let rec private getTracks info =
     | ResolveCollection inner -> IR(info, tracks, [ getTracks inner ])
     | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)" 
 
-let rec private joinToLeaves vars info parent child =
+let rec private joinToLeaves vars info child parent =
     let returnType = info.ReturnDef.Type
     let (IR(childInfo, trackSet, irs)) = child
-    let tracker = trackSet |> Seq.head
     // join children to current parent
     match irs with
-    | [] -> join returnType parent tracker
+    | [] -> 
+        trackSet
+        |> Set.fold (fun acc tracker -> join returnType acc tracker) parent
     | grandChildren -> 
-        let childTracker = 
-            grandChildren            
-            |> List.fold (fun acc grandChild -> joinToLeaves vars childInfo acc grandChild) tracker
-        match parent with
-        | Direct track when track.ReturnType = returnType ->  
-            match returnType with
-            | Gen.Enumerable _ -> Collection(track, linqArgs vars info, childTracker)
-            | _ -> Compose(track, Set.singleton childTracker)
-        | Direct _ -> 
-            parent
-        | Compose(track, children) when track.ReturnType = returnType -> 
-            Compose(track, Set.add childTracker children)
-        | Compose(track, children) ->
-            Compose(track, children |> Set.map (fun c -> joinToLeaves vars info c child))
-        | Collection(track, args, inner) -> 
-            Collection(track, args, merge inner (Set.singleton childTracker))
+        trackSet
+        |> Set.fold(fun acc tracker ->
+            let childTracker = 
+                grandChildren            
+                |> List.fold (fun acc grandChild -> joinToLeaves vars childInfo grandChild acc) tracker
+            match acc with
+            | Direct track when track.ReturnType = returnType ->  
+                match returnType with
+                | Gen.Enumerable _ -> Collection(track, linqArgs vars info, childTracker)
+                | _ -> Compose(track, Set.singleton childTracker)
+            | Direct _ -> acc
+            | Compose(track, children) when track.ReturnType = returnType -> Compose(track, Set.add childTracker children)
+            | Compose(track, children) -> Compose(track, children |> Set.map (joinToLeaves vars info child))
+            | Collection(track, args, inner) -> Collection(track, args, merge inner (Set.singleton childTracker))) parent
 
 and private join returnType parent child =
     match parent with
@@ -381,7 +402,7 @@ let rec private tracker vars (info: ExecutionInfo) : Tracker  =
     let composed = compose ir
     let (IR(_, tracker, children)) = composed
     children
-    |> List.fold (fun acc child -> joinToLeaves vars info acc child) (Seq.head tracker)
+    |> List.fold (fun acc child -> joinToLeaves vars info child acc) (Seq.head tracker)
             
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.
