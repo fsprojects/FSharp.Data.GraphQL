@@ -14,40 +14,21 @@ open Microsoft.FSharp.Quotations
 
 /// Union type of arguments supported by LINQ interpreter
 [<CustomComparison;CustomEquality>]
-type private Arg = 
-    | Id of IComparable
-    | OrderBy of string
-    | OrderByDesc of string
-    | Skip of int
-    | Take of int
-    | First of int
-    | Last of int
-    | Before of string
-    | After of string
-    member x.Num = 
-        match x with
-        | Id _ -> 1
-        | OrderBy _ -> 2
-        | OrderByDesc _ -> 3
-        | Skip _ -> 4
-        | Take _ -> 5
-        | First _ -> 6
-        | Last _ -> 7
-        | Before _ -> 8
-        | After _ -> 9
+type Arg = 
+    { Name: string; Value: obj }
     interface IEquatable<Arg> with
-        member x.Equals y = x.Num = y.Num        
+        member x.Equals y = x.Name = y.Name      
     interface IComparable with
         member x.CompareTo y =
             match y with
-            | :? Arg as a -> x.Num.CompareTo a.Num
+            | :? Arg as a -> x.Name.CompareTo a.Name
             | _ -> failwithf "Cannot compare Arg to %O" (y.GetType())
             
 /// A track is used to represend a single member access statement in F# quotation expressions. 
 /// It can be represented as (member: from -> to), where `member` in name of field/property getter,
 /// `from` determines a type, which member is accessed and `to` a returned type of a member.
 [<CustomComparison; CustomEquality>]
-type private Track = 
+type Track = 
     { Name: string
       ParentType: Type
       ReturnType: Type }
@@ -66,9 +47,18 @@ type private Track =
                 else c                        
             | _ -> invalidArg "y" "Track cannot be compared to other type"
 
-type private Tracker = 
+/// A representation of the property tree - describes a tree
+/// of all properties and subproperties accessed in provided 
+/// ExecutionInfo with top level argument given as a root.
+type Tracker = 
+    /// Marks a direct field/property access.
     | Direct of Track
+    /// Marks branched field/property access - property value
+    /// is then used to access subproperties.
     | Compose of Track * Set<Tracker>
+    /// Marks a collection-based field property access. Such
+    /// property may be marked with arguments used to apply
+    /// different kind of LINQ operations.
     | Collection of Track * Arg list * Tracker
     member x.Track = 
         match x with
@@ -89,26 +79,15 @@ let private mkTrack name src dst = { Name = name; ParentType = src; ReturnType =
 /// Takes function with 2 parameters and applies them in reversed order           
 let inline private flip fn a b = fn b a
 
-let inline private argVal<'t> vars argDef argOpt : 't option = 
+let inline private argVal vars argDef argOpt  = 
     match argOpt with
     | Some arg -> Execution.argumentValue vars argDef arg
     | None -> argDef.DefaultValue
-    |> Option.map (fun x -> x :?> 't)
-
+    
 /// Resolves an object representing one of the supported arguments
 /// given a variables set and GraphQL input data.
 let private resolveLinqArg vars (name, argdef, arg) =
-    match name with
-    | "id"          -> argVal vars argdef arg |> Option.map (Id)
-    | "orderBy"     -> argVal vars argdef arg |> Option.map (OrderBy)
-    | "orderByDesc" -> argVal vars argdef arg |> Option.map (OrderByDesc)
-    | "skip"        -> argVal vars argdef arg |> Option.map (Skip)
-    | "take"        -> argVal vars argdef arg |> Option.map (Take)
-    | "first"       -> argVal vars argdef arg |> Option.map (First)
-    | "last"        -> argVal vars argdef arg |> Option.map (Last)
-    | "before"      -> argVal vars argdef arg |> Option.map (Before)
-    | "after"       -> argVal vars argdef arg |> Option.map (After)
-    | _ -> None
+    argVal vars argdef arg |> Option.map (fun v -> { Arg.Name = name; Value = v })
     
 let rec private unwrapType =
     function
@@ -128,93 +107,111 @@ let private memberExpr (tracker: Tracker) name parameter =
         | field -> Expression.Field(parameter, field)
     | property -> Expression.Property(parameter, property)
 
-/// Applies provided arguments data as a LINQ methods (either Queryable or Enumerable)
-/// on a given source, constructing new LINQ expression in the result.
-/// Supported arguments:
-/// - Id(value)              -> .Where(p0 => p0.(idField) == value)
-/// - OrderBy(fieldName)     -> .OrderBy(p0 => p0.(fieldName))
-/// - OrderByDesc(fieldName) -> .OrderByDescending(p0 => p0.(fieldName))
-/// - Skip(num)              -> .Skip(num)
-/// - Take(num)              -> .Take(num)
-/// - First(num)/After(id)   -> .Where(p0 => p0.(idField) > id).OrderBy(p0 => p0.(idField)).Take(num)
-/// - Last(num)/Before(id)   -> .Where(p0 => p0.(idField) < id).OrderByDescending(p0 => p0.(idField)).Take(num)
-let private argumentToQueryable (methods: Methods) tSource (tracker: Tracker) expression arg =
-    match tracker with
-    | Collection(track, allArguments, innerTracker) ->
-        match arg with
-        | Id value -> 
-            let p0 = Expression.Parameter tSource
-            let idProperty = memberExpr innerTracker "id" p0
-            // Func<tSource, bool> predicate = p0 => p0 == value
-            let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant value), p0)
+type CallableArg =
+    { Argument: Arg
+      AllArguments: Arg list 
+      Track: Track
+      SubTracker: Tracker }
+
+type ArgApplication = Expression -> CallableArg -> Expression
+
+let private sourceAndMethods track =
+    match track.ReturnType with
+    | Gen.Queryable t -> t, Gen.queryableMethods
+    | Gen.Enumerable t -> t, Gen.enumerableMethods
+    | other -> failwithf "Type '%O' is neither queryable nor enumerable" other
+    
+/// Id(value) -> expression.Where(p0 => p0.(idField) == value)
+let private applyId: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let p0 = Expression.Parameter tSource
+    let idProperty = memberExpr callable.SubTracker "id" p0
+    // Func<tSource, bool> predicate = p0 => p0 == value
+    let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant callable.Argument.Value), p0)
+    let where = methods.Where.MakeGenericMethod [| tSource |]
+    upcast Expression.Call(null, where, expression, predicate)
+    
+/// OrderBy(fieldName) -> expression.OrderBy(p0 => p0.(fieldName))
+let private applyOrderBy: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let p0 = Expression.Parameter tSource
+    // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+    let property = memberExpr callable.SubTracker (string callable.Argument.Value) p0        
+    let memberAccess = Expression.Lambda(property, [| p0 |])
+    let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+    upcast Expression.Call(null, orderBy, expression, memberAccess)  
+    
+/// OrderByDesc(fieldName) -> expression.OrderByDescending(p0 => p0.(fieldName))
+let private applyOrderByDesc: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let p0 = Expression.Parameter tSource
+    // Func<tSource, tResult> memberAccess = p0 => p0.<value>
+    let property = memberExpr callable.SubTracker (string callable.Argument.Value) p0        
+    let memberAccess = Expression.Lambda(property, [| p0 |])
+    let orderBy = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
+    upcast Expression.Call(null, orderBy, expression, memberAccess)   
+    
+/// Skip(num) -> expression.Skip(num)
+let private applySkip: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let skip = methods.Skip.MakeGenericMethod [| tSource |]
+    upcast Expression.Call(null, skip, expression, Expression.Constant(callable.Argument.Value))
+    
+/// Take(num) -> expression.Take(num)
+let private applyTake: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let skip = methods.Take.MakeGenericMethod [| tSource |]
+    upcast Expression.Call(null, skip, expression, Expression.Constant(callable.Argument.Value))
+    
+/// First(num)/After(id) -> expression.Where(p0 => p0.(idField) > id).OrderBy(p0 => p0.(idField)).Take(num)
+let private applyFirst: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let p0 = Expression.Parameter tSource   
+    // 1. Find ID field of the structure (info object is needed)
+    let idProperty = memberExpr callable.SubTracker "id" p0
+    // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+    let idAccess = Expression.Lambda(idProperty, [| p0 |])
+    let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+    let ordered = Expression.Call(null, orderBy, expression, idAccess)
+
+    let afterOption = callable.AllArguments |> List.tryFind (fun a -> a.Name = "after")
+    let result =
+        match afterOption with
+        | Some(after) -> 
+            //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+            // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+            let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant after.Value), p0)
             let where = methods.Where.MakeGenericMethod [| tSource |]
-            Expression.Call(null, where, expression, predicate)
-        | OrderBy value ->
-            let p0 = Expression.Parameter tSource
-            // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-            let property = memberExpr innerTracker (string value) p0        
-            let memberAccess = Expression.Lambda(property, [| p0 |])
-            let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
-            Expression.Call(null, orderBy, expression, memberAccess)
-        | OrderByDesc value -> 
-            let p0 = Expression.Parameter tSource
-            // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-            let property = memberExpr innerTracker (string value) p0        
-            let memberAccess = Expression.Lambda(property, [| p0 |])
-            let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
-            Expression.Call(null, orderByDesc, expression, memberAccess)
-        | Skip value -> 
-            let skip = methods.Skip.MakeGenericMethod [| tSource |]
-            Expression.Call(null, skip, expression, Expression.Constant(value))
-        | Take value -> 
-            let take = methods.Take.MakeGenericMethod [| tSource |]
-            Expression.Call(null, take, expression, Expression.Constant(value))
-        | First value -> 
-            let p0 = Expression.Parameter tSource   
-            // 1. Find ID field of the structure (info object is needed)
-            let idProperty = memberExpr innerTracker "id" p0
-            // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
-            let idAccess = Expression.Lambda(idProperty, [| p0 |])
-            let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
-            let ordered = Expression.Call(null, orderBy, expression, idAccess)
+            Expression.Call(null, where, ordered, predicate)
+        | None -> ordered
+    // 5. apply result.Take(value)
+    let take = methods.Take.MakeGenericMethod [| tSource |]
+    upcast Expression.Call(null, take, result, Expression.Constant callable.Argument.Value)
+    
+/// Last(num)/Before(id) -> expression.Where(p0 => p0.(idField) < id).OrderByDescending(p0 => p0.(idField)).Take(num)
+let private applyLast: ArgApplication = fun expression callable ->
+    let tSource, methods = sourceAndMethods callable.Track
+    let p0 = Expression.Parameter tSource   
+    // 1. Find ID field of the structure (info object is needed)
+    let idProperty = memberExpr callable.SubTracker "id" p0
+    // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
+    let idAccess = Expression.Lambda(idProperty, [| p0 |])
+    let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
+    let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
 
-            let afterOption = allArguments |> List.tryFind (function After _ -> true | _ -> false)
-            let result =
-                match afterOption with
-                | Some(After id) -> 
-                    //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
-                    // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-                    let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant id), p0)
-                    let where = methods.Where.MakeGenericMethod [| tSource |]
-                    Expression.Call(null, where, ordered, predicate)
-                | None -> ordered
-            // 5. apply result.Take(value)
-            let take = methods.Take.MakeGenericMethod [| tSource |]
-            Expression.Call(null, take, result, Expression.Constant value)
-        | Last value -> 
-            let p0 = Expression.Parameter tSource   
-            // 1. Find ID field of the structure (info object is needed)
-            let idProperty = memberExpr innerTracker "id" p0
-            // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
-            let idAccess = Expression.Lambda(idProperty, [| p0 |])
-            let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
-            let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
-
-            let beforeOption = allArguments |> List.tryFind (function Before _ -> true | _ -> false)
-            let result =
-                match beforeOption with
-                | Some(Before id) -> 
-                    //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
-                    // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-                    let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant id), p0)
-                    let where = methods.Where.MakeGenericMethod [| tSource |]
-                    Expression.Call(null, where, ordered, predicate)
-                | None -> ordered
-            // 5. apply result.Take(value)
-            let take = methods.Take.MakeGenericMethod [| tSource |]
-            Expression.Call(null, take, result, Expression.Constant value)
-        | _ -> expression
-    | _ -> raise <| NotSupportedException "Currently only collection arguments are supported"
+    let beforeOption = callable.AllArguments |> List.tryFind (fun a -> a.Name = "after")
+    let result =
+        match beforeOption with
+        | Some(before) -> 
+            //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
+            // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
+            let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant before.Value), p0)
+            let where = methods.Where.MakeGenericMethod [| tSource |]
+            Expression.Call(null, where, ordered, predicate)
+        | None -> ordered
+    // 5. apply result.Take(value)
+    let take = methods.Take.MakeGenericMethod [| tSource |]
+    upcast Expression.Call(null, take, result, Expression.Constant callable.Argument.Value)
 
 /// Tries to resolve all supported LINQ args with values 
 /// from a given ExecutionInfo and variables collection
@@ -362,12 +359,12 @@ let rec private joinToLeaves vars info child parent =
                 grandChildren            
                 |> List.fold (fun acc grandChild -> joinToLeaves vars childInfo grandChild acc) tracker
             match acc with
-            | Direct track when track.ReturnType = returnType ->  
+            | Direct track when returnType.IsAssignableFrom track.ReturnType ->  
                 match returnType with
                 | Gen.Enumerable _ -> Collection(track, linqArgs vars info, childTracker)
                 | _ -> Compose(track, Set.singleton childTracker)
             | Direct _ -> acc
-            | Compose(track, children) when track.ReturnType = returnType -> Compose(track, Set.add childTracker children)
+            | Compose(track, children) when returnType.IsAssignableFrom track.ReturnType -> Compose(track, Set.add childTracker children)
             | Compose(track, children) -> Compose(track, children |> Set.map (joinToLeaves vars info child))
             | Collection(track, args, inner) -> Collection(track, args, merge inner (Set.singleton childTracker))) parent
 
@@ -397,7 +394,7 @@ and private join returnType parent child =
 ///
 /// This technique doesn't track exact properties accessed from the `root`
 /// and can can cause eager overfetching.
-let rec private tracker vars (info: ExecutionInfo) : Tracker  =       
+let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
     let ir = getTracks info
     let composed = compose ir
     let (IR(_, tracker, children)) = composed
@@ -437,17 +434,13 @@ let private castTo tCollection callExpr : Expression =
         upcast Expression.Call(null, cast, [ callExpr ])
     | _ -> callExpr      
 
-let rec private construct tracker (inParam: Expression) : Expression =
+let rec private construct (argApplicators: Map<string, ArgApplication>) tracker (inParam: Expression) : Expression =
     match tracker with
     | Direct(track) -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
-    | Compose(track, fields) -> constructObject tracker inParam
-    | Collection(track, args, inner) ->
-        match track.ReturnType with
-        | Gen.Queryable t -> constructCollection Gen.queryableMethods t tracker inParam |> castTo track.ReturnType
-        | Gen.Enumerable t -> constructCollection Gen.enumerableMethods t tracker inParam |> castTo track.ReturnType
-        | other -> failwithf "Type '%O' is neither IQueryable nor IEnumerable" other
+    | Compose(track, fields) -> constructObject argApplicators tracker inParam
+    | Collection(track, args, inner) -> constructCollection argApplicators tracker inParam |> castTo track.ReturnType
 
-and private constructObject (tracker: Tracker) (inParam: Expression) : Expression =
+and private constructObject argApplicators (tracker: Tracker) (inParam: Expression) : Expression =
     let (Compose(track, fields)) = tracker
     let tObj = track.ReturnType
     let trackerMap = Dictionary<_,_>() 
@@ -469,42 +462,60 @@ and private constructObject (tracker: Tracker) (inParam: Expression) : Expressio
             | true, childTracker -> 
                 trackerMap.Remove paramName |> ignore
                 let fieldOrProperty = memberExpr tracker paramName inParam
-                construct childTracker fieldOrProperty
+                construct argApplicators childTracker fieldOrProperty
             | false, _ -> upcast Expression.Default parameter.ParameterType)
     if trackerMap.Count = 0
     then upcast Expression.New(ctor, ctorArgs)
     else 
         let members = 
-            tObj.GetMembers()
+            tObj.GetProperties(BindingFlags.SetProperty|||BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public)
+            |> Array.map (fun p -> p:> MemberInfo)
+            |> Array.append (tObj.GetFields(BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public) |> Array.map (fun p -> p:> MemberInfo))
             |> Array.map (fun m -> (m.Name.ToLower(), m))
             |> Map.ofArray
-        let memberBindings : MemberBinding seq = 
+        let memberBindings = 
             trackerMap
             |> Seq.map (fun kv -> 
                 let m = Map.find kv.Key members
-                upcast Expression.Bind(m, construct kv.Value inParam))
+                let fieldOrProperty = memberExpr tracker kv.Key inParam
+                Expression.Bind(m, construct argApplicators kv.Value fieldOrProperty) :> MemberBinding)
+            |> Seq.toArray
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
-and private constructCollection methods (tSource: Type) tracker (inParam: Expression) : Expression =
+and private constructCollection argApplicators tracker (inParam: Expression) : Expression =
     let (Collection(track, args, inner)) = tracker
+    let tSource, methods = sourceAndMethods track
     let p0 = Expression.Parameter(tSource)
-    let body = construct inner p0
+    let body = construct argApplicators inner p0
     // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
-    let call = 
-        Expression.Call(
+    let call: Expression = 
+        upcast Expression.Call(
             // Select<tSource, tResult> - method to invoke
             methods.Select.MakeGenericMethod [| tSource; tSource |], 
             // `this` param - Convert(inputValue, IQueryable<tSource>)
             Expression.Convert(inParam, methods.Type.MakeGenericType [| tSource |]), 
             // `mapFunc` param - (p0 => body )
             Expression.Lambda(body, p0))
-    let final = args |> List.fold (fun acc -> argumentToQueryable methods tSource tracker acc) call 
-    upcast final
-        
-let private toLinq info (query: IQueryable<'Source>) variables : IQueryable<'Source> =
+    let final = args |> List.fold (fun acc (arg: Arg) -> 
+        match Map.tryFind (arg.Name.ToLowerInvariant()) argApplicators with
+        | Some apply -> apply acc { AllArguments = args; Argument = arg; Track = track; SubTracker = inner }
+        | None -> acc) call 
+    final
+
+let private defaultArgApplicators: Map<string, ArgApplication> = 
+    Map.ofList [
+        "id", applyId
+        "orderby", applyOrderBy
+        "orderbydesc", applyOrderByDesc
+        "skip", applySkip
+        "take", applyTake
+        "first", applyFirst
+        "last", applyLast ]
+
+let private toLinq info (query: IQueryable<'Source>) variables (argApplicators: Map<string, ArgApplication>) : IQueryable<'Source> =
     let parameter = Expression.Parameter (query.GetType())
     let ir = tracker variables info
-    let expr = construct ir parameter
+    let expr = construct argApplicators ir parameter
     let compiled =
         match expr with
         | :? MethodCallExpression as call -> 
@@ -534,5 +545,9 @@ type FSharp.Data.GraphQL.Types.ExecutionInfo with
     /// - `id` returning where comparison with object's id field.
     /// - `first`/`after` returning slice of the collection, ordered by id with id greater than provided in after param.
     /// - `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.
-    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>) : IQueryable<'Source> = 
-        toLinq this source (defaultArg variables Map.empty)
+    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> = 
+        let appl = 
+            match applicators with
+            | None -> defaultArgApplicators
+            | Some a -> a |> Map.fold (fun acc key value -> Map.add (key.ToLowerInvariant()) value acc) defaultArgApplicators
+        toLinq this source (defaultArg variables Map.empty) appl
