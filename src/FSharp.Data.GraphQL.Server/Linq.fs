@@ -29,10 +29,10 @@ type Arg =
 /// `from` determines a type, which member is accessed and `to` a returned type of a member.
 [<CustomComparison; CustomEquality>]
 type Track = 
-    { Name: string
+    { Name: string option
       ParentType: Type
       ReturnType: Type }
-    override x.ToString() = sprintf "(%s: %s -> %s)" x.Name x.ParentType.Name x.ReturnType.Name
+    override x.ToString() = sprintf "(%s: %s -> %s)" (defaultArg x.Name "") x.ParentType.Name x.ReturnType.Name
     interface IEquatable<Track> with
         member x.Equals y = (x.Name = y.Name && x.ParentType.FullName = y.ParentType.FullName && x.ReturnType.FullName = y.ReturnType.FullName)
     interface IComparable with
@@ -52,29 +52,23 @@ type Track =
 /// ExecutionInfo with top level argument given as a root.
 type Tracker = 
     /// Marks a direct field/property access.
-    | Direct of Track
+    | Direct of Track * Arg list
     /// Marks branched field/property access - property value
     /// is then used to access subproperties.
-    | Compose of Track * Set<Tracker>
-    /// Marks a collection-based field property access. Such
-    /// property may be marked with arguments used to apply
-    /// different kind of LINQ operations.
-    | Collection of Track * Arg list * Tracker
+    | Compose of Track * Arg list * Set<Tracker>
     member x.Track = 
         match x with
-        | Direct track            -> track
-        | Compose(track, _)       -> track
-        | Collection(track, _, _) -> track
+        | Direct(track, _)     -> track
+        | Compose(track, _, _) -> track
 
 /// Adds a child Tracker to it's new parent, returning updated parent as the result.
 let rec private addChild child = 
     function
-    | Direct track -> Compose(track, Set.singleton child)
-    | Compose(track, children) -> Compose(track, Set.add child children)
-    | Collection(track, args, inner) -> Collection(track, args, addChild child inner)
+    | Direct(track, args) -> Compose(track, args, Set.singleton child)
+    | Compose(track, args, children) -> Compose(track, args, Set.add child children)
 
 /// Helper function for creating Track structures.
-let private mkTrack name src dst = { Name = name; ParentType = src; ReturnType = dst }
+let private mkTrack name src dst = { Name = Some name; ParentType = src; ReturnType = dst }
              
 /// Takes function with 2 parameters and applies them in reversed order           
 let inline private flip fn a b = fn b a
@@ -98,8 +92,7 @@ let rec private unwrapType =
 open System.Reflection
 
 let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public
-let private memberExpr (tracker: Tracker) name parameter =
-    let t = tracker.Track.ReturnType
+let private memberExpr (t: Type) name parameter =
     match t.GetProperty(name, bindingFlags) with
     | null -> 
         match t.GetField(name, bindingFlags) with
@@ -111,7 +104,8 @@ type CallableArg =
     { Argument: Arg
       AllArguments: Arg list 
       Track: Track
-      SubTracker: Tracker }
+      Type: Type
+      Fields: Set<Tracker> }
 
 type ArgApplication = Expression -> CallableArg -> Expression
 
@@ -125,7 +119,7 @@ let private sourceAndMethods track =
 let private applyId: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource
-    let idProperty = memberExpr callable.SubTracker "id" p0
+    let idProperty = memberExpr callable.Type "id" p0
     // Func<tSource, bool> predicate = p0 => p0 == value
     let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant callable.Argument.Value), p0)
     let where = methods.Where.MakeGenericMethod [| tSource |]
@@ -136,7 +130,7 @@ let private applyOrderBy: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource
     // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-    let property = memberExpr callable.SubTracker (string callable.Argument.Value) p0        
+    let property = memberExpr callable.Type (string callable.Argument.Value) p0        
     let memberAccess = Expression.Lambda(property, [| p0 |])
     let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
     upcast Expression.Call(null, orderBy, expression, memberAccess)  
@@ -146,7 +140,7 @@ let private applyOrderByDesc: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource
     // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-    let property = memberExpr callable.SubTracker (string callable.Argument.Value) p0        
+    let property = memberExpr callable.Type (string callable.Argument.Value) p0        
     let memberAccess = Expression.Lambda(property, [| p0 |])
     let orderBy = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
     upcast Expression.Call(null, orderBy, expression, memberAccess)   
@@ -168,7 +162,7 @@ let private applyFirst: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource   
     // 1. Find ID field of the structure (info object is needed)
-    let idProperty = memberExpr callable.SubTracker "id" p0
+    let idProperty = memberExpr callable.Type "id" p0
     // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
     let idAccess = Expression.Lambda(idProperty, [| p0 |])
     let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
@@ -193,7 +187,7 @@ let private applyLast: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource   
     // 1. Find ID field of the structure (info object is needed)
-    let idProperty = memberExpr callable.SubTracker "id" p0
+    let idProperty = memberExpr callable.Type "id" p0
     // 2. apply q.OrderBy(p0 => p0.<ID_field>) on the expression
     let idAccess = Expression.Lambda(idProperty, [| p0 |])
     let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
@@ -279,13 +273,42 @@ let private canJoin (tRoot: Type) (tFrom: Type) =
     then tFrom = (tRoot.GetGenericArguments().[0])
     else false
 
+let private fieldOrProperty = MemberTypes.Field ||| MemberTypes.Property
+
+/// Check if there exists a field or property described by the current track.
+let private isOwn (track: Track) =
+    match track.Name with
+    | None -> false
+    | Some name ->
+        let t = 
+            match track.ParentType with
+            | Gen.Enumerable tparam -> tparam
+            | tval -> tval
+        match track.ParentType.GetMember(name, fieldOrProperty, bindingFlags) with
+        | [||]  -> false
+        | array -> 
+            array |> Array.exists(fun m -> 
+                match m with 
+                | :? PropertyInfo as p -> p.PropertyType = track.ReturnType
+                | :? FieldInfo as f -> f.FieldType = track.ReturnType
+                | _ -> false)
+
 let rec private merge parent members =
     if Set.isEmpty members
-    then parent
+    then Set.singleton parent
     else match parent with
-         | Direct(track) -> Compose(track, members)
-         | Compose(track, children) -> Compose(track, children + members)
-         | Collection(track, args, inner) -> Collection(track, args, merge inner members)     
+         | Direct(track, args) -> 
+            if Option.isSome track.Name 
+            then Compose(track, args, members) |> Set.singleton
+            else match track.ReturnType with
+                 | Gen.Enumerable _ -> Compose(track, args, members) |> Set.singleton
+                 | _ -> members
+         | Compose(track, args, children) -> 
+            if Option.isSome track.Name 
+            then Compose(track, args, children + members) |> Set.singleton
+            else match track.ReturnType with
+                 | Gen.Enumerable _ -> Compose(track, args, children + members) |> Set.singleton
+                 | _ -> members
 
 /// Composes trackers into tree within range of a single ExecutionInfo
 /// `allTracks` is expected to be the list of Direct's (unrelated tracks)
@@ -293,7 +316,7 @@ let rec private merge parent members =
 let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tracker> = 
     let rootTrack = root.Track 
     let parentType = rootTrack.ReturnType  
-    let members = allTracks |> Set.filter (fun (Direct track) -> canJoin parentType track.ParentType)
+    let members = allTracks |> Set.filter (fun (Direct(track, _)) -> canJoin parentType track.ParentType && isOwn track)
     if Set.isEmpty members
     then
         // check for artificial property
@@ -302,7 +325,7 @@ let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tra
         // we don't want to return fullName Tracker (as such field doesn't exists)
         // but fname and lname instead
         let grandpaType = rootTrack.ParentType
-        let members = allTracks |> Set.filter (fun (Direct track) -> canJoin grandpaType track.ParentType)
+        let members = allTracks |> Set.filter (fun (Direct(track, _)) -> canJoin grandpaType track.ParentType && isOwn track)
         if Set.isEmpty members
         then root |> Set.singleton
         else
@@ -319,68 +342,38 @@ let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tra
             |> Set.map(fun tracker -> infoComposer tracker remaining)
             |> Seq.collect id
             |> Set.ofSeq
-        let newRoot =
-            match parentType with
-            | Gen.Enumerable t -> Collection(rootTrack, [], merge root results)
-            | _ -> merge root results
-        newRoot |> Set.singleton
+        let newRoot = merge root results
+        newRoot
 
 /// Composes tracks collected within a single ExecutionInfo
 /// (but not across the ExecutionInfo boundaries)
-let rec private compose ir = 
+let rec private compose vars ir = 
     let (IR(info, directs, children)) = ir
-    let root = Direct { Name = info.Definition.Name; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
+    let rootTrack = { Name = None; ParentType = info.ParentDef.Type; ReturnType = info.ReturnDef.Type }
+    let root = Direct(rootTrack, linqArgs vars info)
     let composed = infoComposer root directs
-    IR(info, composed, children |> List.map compose)
+    IR(info, composed, children |> List.map (compose vars))
 
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
 let rec private getTracks info =
     let (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(root, expr))))) = info.Definition.Resolve.Expr
-    let tracks = track Set.empty expr |> Set.map Direct
+    let tracks = track Set.empty expr |> Set.map(fun track -> Direct(track, []))
     match info.Kind with
     | ResolveValue -> IR(info, tracks, [])
     | SelectFields fieldInfos -> IR(info, tracks, List.map getTracks fieldInfos)
     | ResolveCollection inner -> IR(info, tracks, [ getTracks inner ])
     | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)" 
-
-let rec private joinToLeaves vars info child parent =
-    let returnType = info.ReturnDef.Type
-    let (IR(childInfo, trackSet, irs)) = child
-    // join children to current parent
-    match irs with
-    | [] -> 
-        trackSet
-        |> Set.fold (fun acc tracker -> join returnType acc tracker) parent
-    | grandChildren -> 
-        trackSet
-        |> Set.fold(fun acc tracker ->
-            let childTracker = 
-                grandChildren            
-                |> List.fold (fun acc grandChild -> joinToLeaves vars childInfo grandChild acc) tracker
-            match acc with
-            | Direct track when returnType.IsAssignableFrom track.ReturnType ->  
-                match returnType with
-                | Gen.Enumerable _ -> Collection(track, linqArgs vars info, childTracker)
-                | _ -> Compose(track, Set.singleton childTracker)
-            | Direct _ -> acc
-            | Compose(track, children) when returnType.IsAssignableFrom track.ReturnType -> Compose(track, Set.add childTracker children)
-            | Compose(track, children) -> Compose(track, children |> Set.map (joinToLeaves vars info child))
-            | Collection(track, args, inner) -> Collection(track, args, merge inner (Set.singleton childTracker))) parent
-
-and private join returnType parent child =
-    match parent with
-    | Direct track when track.ReturnType = returnType ->    
-        Compose(track, Set.singleton child)
-    | Direct _ -> 
-        parent
-    | Compose(track, children) when track.ReturnType = returnType -> 
-        Compose(track, Set.add child children)
-    | Compose(track, children) ->
-        Compose(track, children)
-    | Collection(track, args, inner) -> 
-        Collection(track, args, merge inner (Set.singleton child))
-
+    
+let rec private join parentTracks childIRs =
+    let childrenCombined =
+        childIRs
+        |> List.fold (fun acc (IR(_, childTracks, grandchildIRs)) ->
+            acc + join childTracks grandchildIRs) Set.empty
+    if Set.isEmpty childrenCombined
+    then parentTracks
+    else parentTracks |> Set.collect (fun parentTrack -> merge parentTrack childrenCombined)
+    
 /// Creates a LINQ intermediate representation of ExecutionInfo by
 /// traversing a provided F# quotation in order to catch all member 
 /// accesses (fields / property getters) and tries to construct
@@ -396,10 +389,9 @@ and private join returnType parent child =
 /// and can can cause eager overfetching.
 let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
     let ir = getTracks info
-    let composed = compose ir
-    let (IR(_, tracker, children)) = composed
-    children
-    |> List.fold (fun acc child -> joinToLeaves vars info child acc) (Seq.head tracker)
+    let composed = compose vars ir
+    let (IR(info, trackers, children)) = composed
+    join trackers children |> Seq.head
             
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.
@@ -409,8 +401,7 @@ and private branch parentTrack (parentInfo: ExecutionInfo) childTrack (childInfo
     then addChild childTrack parentTrack
     else
         match parentTrack with
-        | Collection(_, _, inner) -> branch inner parentInfo childTrack childInfo
-        | Compose(track, fields) -> Compose(track, fields |> Set.map (fun child -> branch child parentInfo childTrack childInfo))
+        | Compose(track, args, fields) -> Compose(track, args, fields |> Set.map (fun child -> branch child parentInfo childTrack childInfo))
         | Direct(_) -> parentTrack
 
 let private (|Object|Record|NotSupported|) (t: Type) =
@@ -436,15 +427,17 @@ let private castTo tCollection callExpr : Expression =
 
 let rec private construct (argApplicators: Map<string, ArgApplication>) tracker (inParam: Expression) : Expression =
     match tracker with
-    | Direct(track) -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
-    | Compose(track, fields) -> constructObject argApplicators tracker inParam
-    | Collection(track, args, inner) -> constructCollection argApplicators tracker inParam |> castTo track.ReturnType
+    | Direct(track, _) -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
+    | Compose(track, _, fields) -> 
+        match track.ReturnType with
+        | Gen.Enumerable _ -> constructCollection argApplicators tracker inParam |> castTo track.ReturnType
+        | _ -> constructObject argApplicators track.ReturnType fields inParam
 
-and private constructObject argApplicators (tracker: Tracker) (inParam: Expression) : Expression =
-    let (Compose(track, fields)) = tracker
-    let tObj = track.ReturnType
+and private constructObject argApplicators tObj fields (inParam: Expression) : Expression =
     let trackerMap = Dictionary<_,_>() 
-    fields |> Set.iter (fun t -> trackerMap.Add(t.Track.Name.ToLowerInvariant(), t)) 
+    fields 
+    |> Set.filter (fun t -> t.Track.Name |> Option.isSome)
+    |> Set.iter (fun t -> trackerMap.Add(t.Track.Name.Value.ToLowerInvariant(), t)) 
 
     let fieldNames = trackerMap.Keys.ToArray()
     let ctor =
@@ -461,7 +454,7 @@ and private constructObject argApplicators (tracker: Tracker) (inParam: Expressi
             match trackerMap.TryGetValue paramName  with
             | true, childTracker -> 
                 trackerMap.Remove paramName |> ignore
-                let fieldOrProperty = memberExpr tracker paramName inParam
+                let fieldOrProperty = memberExpr tObj paramName inParam
                 construct argApplicators childTracker fieldOrProperty
             | false, _ -> upcast Expression.Default parameter.ParameterType)
     if trackerMap.Count = 0
@@ -477,16 +470,16 @@ and private constructObject argApplicators (tracker: Tracker) (inParam: Expressi
             trackerMap
             |> Seq.map (fun kv -> 
                 let m = Map.find kv.Key members
-                let fieldOrProperty = memberExpr tracker kv.Key inParam
+                let fieldOrProperty = memberExpr tObj kv.Key inParam
                 Expression.Bind(m, construct argApplicators kv.Value fieldOrProperty) :> MemberBinding)
             |> Seq.toArray
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
 and private constructCollection argApplicators tracker (inParam: Expression) : Expression =
-    let (Collection(track, args, inner)) = tracker
+    let (Compose(track, args, fields)) = tracker
     let tSource, methods = sourceAndMethods track
     let p0 = Expression.Parameter(tSource)
-    let body = construct argApplicators inner p0
+    let body = constructObject argApplicators tSource fields p0
     // call method - ((IQueryable<tSource>)inputExpr).Select(p0 => body)
     let call: Expression = 
         upcast Expression.Call(
@@ -498,7 +491,7 @@ and private constructCollection argApplicators tracker (inParam: Expression) : E
             Expression.Lambda(body, p0))
     let final = args |> List.fold (fun acc (arg: Arg) -> 
         match Map.tryFind (arg.Name.ToLowerInvariant()) argApplicators with
-        | Some apply -> apply acc { AllArguments = args; Argument = arg; Track = track; SubTracker = inner }
+        | Some apply -> apply acc { AllArguments = args; Argument = arg; Track = track; Fields = fields; Type = tSource }
         | None -> acc) call 
     final
 
