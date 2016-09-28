@@ -285,6 +285,9 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
                 then AsyncVal.empty
                 else completed resolveFieldCtx res
             with
+            | :? AggregateException as e ->
+                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
+                AsyncVal.empty
             | ex -> 
                 resolveFieldCtx.AddError ex
                 AsyncVal.empty
@@ -296,6 +299,9 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
                 |> AsyncVal.ofAsync
                 |> AsyncVal.bind (completed resolveFieldCtx)
             with
+            | :? AggregateException as e ->
+                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
+                AsyncVal.empty
             | ex -> 
                 resolveFieldCtx.AddError(ex)
                 AsyncVal.empty

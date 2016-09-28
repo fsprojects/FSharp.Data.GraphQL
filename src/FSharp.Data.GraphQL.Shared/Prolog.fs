@@ -28,6 +28,9 @@ module List =
             |> List.filter (fun x -> not <| List.exists(fun y -> f(x) = f(y)) listy)
         uniqx @ listy
 
+module Set =
+    let collect f set = set |> Set.fold (fun acc e -> acc + f e) Set.empty
+    
 module Map =
     let merge mergeFn mapx mapy =
         mapy
