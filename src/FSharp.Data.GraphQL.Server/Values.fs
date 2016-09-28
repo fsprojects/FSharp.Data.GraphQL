@@ -12,7 +12,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
-let inline tryConvertAst schema ast =
+let inline private tryConvertAst schema ast =
     let rec convert isNullable (schema: ISchema) (ast: InputType) : TypeDef option =
         match ast with
         | NamedType name -> 

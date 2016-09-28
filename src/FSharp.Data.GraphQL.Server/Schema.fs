@@ -256,10 +256,16 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
                 return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
         }
     
-    /// Asynchronously executes parsed GraphQL query AST.
-    /// data is optional object provided as a root to all top level field resolvers.
-    /// variables define list of variables to be used during query execution, that were defined in it.
-    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
+    /// <summary>
+    /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
+    /// - `documentId`: unique identifier of current document's AST
+    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
+    /// - `errors` (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// </summary>
+    /// <param name="ast">Parsed GraphQL query string.</param>
+    /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
+    /// <param name="variables">Map of all variable values provided by the client request.</param>
+    /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         let executionPlan = 
             match operationName with
@@ -267,10 +273,16 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             | None -> this.CreateExecutionPlan(ast)
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
         
-    /// Asynchronously executes raw GraphQL query string.
-    /// data is optional object provided as a root to all top level field resolvers.
-    /// variables define list of variables to be used during query execution, that were defined in it.
-    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
+    /// <summary>
+    /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
+    /// - `documentId`: unique identifier of current document's AST
+    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
+    /// - `errors (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// </summary>
+    /// <param name="ast">Parsed GraphQL query string.</param>
+    /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
+    /// <param name="variables">Map of all variable values provided by the client request.</param>
+    /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
         let ast = parse queryOrMutation
         let executionPlan = 
@@ -279,20 +291,25 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             | None -> this.CreateExecutionPlan(ast)
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
         
-    /// Asynchronously executes prefetched operation execution plan. This is useful
-    /// in cases when you have the same query executed multiple times with different
-    /// parameters. In that case, query can be used to construct execution plan,
-    /// which then is cached and reused as needed.
-    /// data is optional object provided as a root to all top level field resolvers.
-    /// variables define list of variables to be used during query execution, that were defined in it.
-    /// operation name defines which operation needs to be executed, in case when schema won't be able to resolve it by itself.
+    /// <summary>
+    /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed 
+    /// and cached using `documentId` as an identifier.
+    /// Returned value is a readonly dictionary consisting of following top level entries:
+    /// - `documentId`: unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well
+    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
+    /// - `errors (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// </summary>
+    /// <param name="ast">Parsed GraphQL query string.</param>
+    /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
+    /// <param name="variables">Map of all variable values provided by the client request.</param>
+    /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         this.Eval(executionPlan, data, defaultArg variables Map.empty)
 
     /// Creates an execution plan for provided GraphQL document AST without 
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
-    /// to construct execution plan, which then is cached and reused as needed.
+    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
     member this.CreateExecutionPlan(ast: Document, ?operationName: string): ExecutionPlan =
         match findOperation ast operationName with
         | Some operation -> 
@@ -310,13 +327,12 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
     /// Creates an execution plan for provided GraphQL query string without 
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
-    /// to construct execution plan, which then is cached and reused as needed.
+    /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
     member this.CreateExecutionPlan(queryOrMutation: string, ?operationName: string) =
         match operationName with
         | None -> this.CreateExecutionPlan(parse queryOrMutation)
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
         
-
     interface ISchema with        
         member val TypeMap = typeMap
         member val Directives = schemaConfig.Directives |> List.toArray

@@ -11,7 +11,7 @@ let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if property = null then null else property.GetValue(o, null)
 
-/// Common GraphQL query that may be used to retriev overall data 
+/// Common GraphQL query that may be used to retrieve overall data 
 /// about schema type system itself.
 let introspectionQuery = """query IntrospectionQuery {
     __schema {
