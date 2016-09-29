@@ -15,6 +15,11 @@ open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
+/// Name value lookup used as output to be serialized into JSON.
+/// It has a form of a dictionary with fixed set of keys. Values under keys
+/// can be set, but no new entry can be added or removed, once lookup
+/// has been initialized.
+/// This dicitionay implements structural equality.
 type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
     let setValue key value =
@@ -63,14 +68,24 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             then sb.Append(other.ToString()) |> ignore
             else sb.Append("null") |> ignore
         ()
+    /// Create new NameValueLookup from given list of key-value tuples.
     static member ofList (l: (string * obj) list) = NameValueLookup(l)
+    /// Returns raw content of the current lookup.
     member private x.Buffer : KeyValuePair<string, obj> [] = kvals
+    /// Return a number of entries stored in current lookup. It's fixed size.
     member x.Count = kvals.Length
+    /// Updates an entry's value under given key. It will throw an exception
+    /// if provided key cannot be found in provided lookup.
     member x.Update key value = setValue key value
     override x.Equals(other) = 
         match other with
         | :? NameValueLookup as lookup -> structEq x lookup
         | _ -> false
+    override x.GetHashCode() =
+        let mutable hash = 0
+        for kv in kvals do
+            hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if kv.Value = null then 0 else kv.Value.GetHashCode())
+        hash
     override x.ToString() = 
         let sb =Text.StringBuilder()
         stringify sb 1 x
@@ -110,7 +125,6 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
                 
-
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
     | Some defVal -> Map.add argdef.Name defVal acc

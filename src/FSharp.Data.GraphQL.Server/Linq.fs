@@ -12,10 +12,13 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open Microsoft.FSharp.Quotations
 
-/// Union type of arguments supported by LINQ interpreter
+/// Record defining an argument resolved as part of the property tracker.
 [<CustomComparison;CustomEquality>]
 type Arg = 
-    { Name: string; Value: obj }
+    { /// Name of the argument. Matches field arguments from GraphQL type definitions.
+      Name: string; 
+      /// Value of the argument, provided with user request, query string or as default argument value.
+      Value: obj }
     interface IEquatable<Arg> with
         member x.Equals y = x.Name = y.Name      
     interface IComparable with
@@ -29,8 +32,11 @@ type Arg =
 /// `from` determines a type, which member is accessed and `to` a returned type of a member.
 [<CustomComparison; CustomEquality>]
 type Track = 
-    { Name: string option
+    { /// Name of the field or property. None is used only by root of the property tracker tree.
+      Name: string option
+      /// Type declaring field or property.
       ParentType: Type
+      /// Type of value returned or stored by field or property.
       ReturnType: Type }
     override x.ToString() = sprintf "(%s: %s -> %s)" (defaultArg x.Name "") x.ParentType.Name x.ReturnType.Name
     interface IEquatable<Track> with
@@ -51,10 +57,12 @@ type Track =
 /// of all properties and subproperties accessed in provided 
 /// ExecutionInfo with top level argument given as a root.
 type Tracker = 
-    /// Marks a direct field/property access.
+    /// Leaf of the tree. Marks a direct field/property access with no sub-trees. 
+    /// Consists of <see cref="Track"/> record and (neglible in this case) list of arguments.
     | Direct of Track * Arg list
-    /// Marks branched field/property access - property value
-    /// is then used to access subproperties.
+    /// Marks branched field/property access - property value withh possible sub-trees.
+    /// Consists of <see cref="Track"/> record list of arguments used to parametrize GraphQL 
+    /// field definition and set of subtrees.
     | Compose of Track * Arg list * Set<Tracker>
     member x.Track = 
         match x with
@@ -100,13 +108,23 @@ let private memberExpr (t: Type) name parameter =
         | field -> Expression.Field(parameter, field)
     | property -> Expression.Property(parameter, property)
 
+/// Input for custom argument applicators. Contains metadata associated with
+/// current property call.
 type CallableArg =
-    { Argument: Arg
+    { /// Resolved argument value related to current argument application.
+      Argument: Arg
+      /// List of all other arguments resolved as part of other possible 
+      /// applications on the current property track.
       AllArguments: Arg list 
+      /// Track describing field or property access.
       Track: Track
+      /// Source type of the property - in case when track returns a collection or option,
+      /// this is the type of the nested element.
       Type: Type
+      /// Set of trackers defining nested property subtrees.
       Fields: Set<Tracker> }
 
+/// Delegate describing application of the callable argument on the provided LINQ expression.
 type ArgApplication = Expression -> CallableArg -> Expression
 
 let private sourceAndMethods track =
@@ -373,25 +391,6 @@ let rec private join parentTracks childIRs =
     if Set.isEmpty childrenCombined
     then parentTracks
     else parentTracks |> Set.collect (fun parentTrack -> merge parentTrack childrenCombined)
-    
-/// Creates a LINQ intermediate representation of ExecutionInfo by
-/// traversing a provided F# quotation in order to catch all member 
-/// accesses (fields / property getters) and tries to construct
-/// a accessor dependency tree from them with root starting from `root` 
-/// parameter.
-///
-/// This is a fast and naive way to resolve all properties that are possibily
-/// accessed in resolver functions to include them inside LINQ query 
-/// constructed later - this way we can potentially omit multiple database
-/// calls as a result of underfetched data.
-///
-/// This technique doesn't track exact properties accessed from the `root`
-/// and can can cause eager overfetching.
-let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
-    let ir = getTracks info
-    let composed = compose vars ir
-    let (IR(info, trackers, children)) = composed
-    join trackers children |> Seq.head
             
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.
@@ -504,6 +503,29 @@ let private defaultArgApplicators: Map<string, ArgApplication> =
         "take", applyTake
         "first", applyFirst
         "last", applyLast ]
+    
+/// <summary>
+/// <para>
+/// Creates an intermediate representation of ExecutionInfo by
+/// traversing all F# quotations provided in field definition resolvers
+/// in order to catch all member accesses (fields / property getters) and 
+/// tries to construct a dependency tree from them with root starting from 
+/// query `root` object parameter.
+/// </para><para>
+/// This is a fast and naive way to resolve all properties that are possibily
+/// accessed in resolver functions to include them inside LINQ query 
+/// constructed later - this way we can potentially omit multiple database
+/// calls as a result of underfetched data.
+/// </para><para>
+/// NOTE: This technique doesn't track exact properties accessed from the `root`
+/// and can can cause eager overfetching.
+/// </para>
+/// </summary>
+let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
+    let ir = getTracks info
+    let composed = compose vars ir
+    let (IR(info, trackers, children)) = composed
+    join trackers children |> Seq.head
 
 let private toLinq info (query: IQueryable<'Source>) variables (argApplicators: Map<string, ArgApplication>) : IQueryable<'Source> =
     let parameter = Expression.Parameter (query.GetType())
@@ -527,20 +549,28 @@ let private toLinq info (query: IQueryable<'Source>) variables (argApplicators: 
     | :? IEnumerable<'Source> as e -> e.AsQueryable()
     | _ -> failwithf "Unrecognized type '%O' is neither IEnumerable<%O> nor IQueryable<%O>" (result.GetType()) typeof<'Source> typeof<'Source>
 
-type FSharp.Data.GraphQL.Types.ExecutionInfo with
-    
+type System.Linq.IQueryable<'Source> with
+
+    /// <summary>
+    /// <para>
     /// Replaces top level type of the execution info with provided queryable source
     /// and constructs a LINQ expression from it, returing queryable with all applied 
     /// operations as the result.
-    /// 
-    /// GraphQL may define queries that will be interpreted in terms of LINQ operations,
+    /// </para>
+    /// <para>
+    /// By default, GraphQL may define queries that will be interpreted in terms of LINQ operations,
     /// such as `orderBy`, `orderByDesc`, `skip`, `take, but also more advanced like:
-    /// - `id` returning where comparison with object's id field.
-    /// - `first`/`after` returning slice of the collection, ordered by id with id greater than provided in after param.
-    /// - `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.
-    member this.ToLinq(source: IQueryable<'Source>, ?variables: Map<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> = 
+    /// <para>- `id` returning where comparison with object's id field.</para>
+    /// <para>- `first`/`after` returning slice of the collection, ordered by id with id greater than provided in after param.</para>
+    /// <para>- `last`/`before` returning slice of the collection, ordered by id descending with id less than provided in after param.</para>
+    /// </para>
+    /// </summary>
+    /// <param name="info">Execution info data to be applied on the queryable.</param>
+    /// <param name="variables">Optional map with client-provided arguments used to resolve argument values.</param>
+    /// <param name="applicators">Map of applicators used to define LINQ expression mutations based on GraphQL arguments.</param>
+    member this.Apply(info: ExecutionInfo, ?variables: Map<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> = 
         let appl = 
             match applicators with
             | None -> defaultArgApplicators
             | Some a -> a |> Map.fold (fun acc key value -> Map.add (key.ToLowerInvariant()) value acc) defaultArgApplicators
-        toLinq this source (defaultArg variables Map.empty) appl
+        toLinq info this (defaultArg variables Map.empty) appl

@@ -11,6 +11,13 @@ type GraphQLException(msg) =
     inherit Exception(msg)
 
 module Array =
+
+    /// <summary>
+    /// Returns a new array with unique elements. Uniqueness is determined by
+    /// output of the <paramref name="keyf"/> function.
+    /// </summary>
+    /// <param name="keyf">Function, which output is used to determine uniqueness of input elements.</param>
+    /// <param name="array">Array of elements.</param>
     let distinctBy keyf (array:'T[]) =
             let temp = Array.zeroCreate array.Length
             let mutable i = 0 
@@ -22,6 +29,13 @@ module Array =
             Array.sub temp 0 i
 
 module List =
+    
+    /// <summary>
+    /// Merges elements of two lists, returning a new list without duplicates.
+    /// </summary>
+    /// <param name="f">Function used to determine if any two given elements are considered equal.</param>
+    /// <param name="listx">First list with elements to merge.</param>
+    /// <param name="listy">Second list with elements to merge.</param>
     let mergeBy f listx listy =
         let uniqx = 
             listx
@@ -29,9 +43,27 @@ module List =
         uniqx @ listy
 
 module Set =
+
+    /// <summary>
+    /// Maps over each of the <paramref name="set"/> elements, applying function
+    /// over each one of them to generate new Set. Sets generated this way are
+    /// then flattened into single output set.
+    /// </summary>
+    /// <param name="f">Function used to generate Set from each of the input's elements.</param>
+    /// <param name="set">Input set.</param>
     let collect f set = set |> Set.fold (fun acc e -> acc + f e) Set.empty
     
 module Map =
+
+    /// <summary>
+    /// Merges the entries of two maps by their key, returning new map in result.
+    /// </summary>
+    /// <param name="mergeFn">
+    /// Function, which takes key shared by entries in both maps, first entry's value,
+    /// second entry's value to produce a result value used in newly generated map.
+    /// </param>
+    /// <param name="mapx">First map with elements to merge.</param>
+    /// <param name="mapy">Second map with elements to merge.</param>
     let merge mergeFn mapx mapy =
         mapy
         |> Map.fold (fun acc ky vy -> 
@@ -39,11 +71,13 @@ module Map =
             | Some vx -> Map.add ky (mergeFn ky vx vy) acc
             | None -> Map.add ky vy acc) mapx
 
-module Option =
-    let toObj value =  match value with None -> null | Some x -> x
-
 module ReflectionHelper =
-    /// Returns cons(head,tail)/nil pair for list type generated in runtime from type t.
+    
+    /// <summary>
+    /// Returns pair of function constructors for `cons(head,tail)` and `nil` 
+    /// used to create list of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">Type used for result list constructors as type param</param>
     let listOfType t =
         let listType = typedefof<_ list>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
         let nil = 
@@ -54,7 +88,11 @@ module ReflectionHelper =
             fun item list -> cons.Invoke (null, [| item; list |])
         (cons, nil)
 
-    /// Returns some(value)/none pair for option type generated in runtime from type t
+    /// <summary>
+    /// Returns pair of function constructors for `some(value)` and `none`
+    /// used to create option of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">Type used for result option constructors as type param</param>
     let optionOfType t =
         let optionType = typedefof<_ option>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
         let none = 

@@ -132,7 +132,7 @@ let ``Planning should retain correct types for lists``() =
             friends
         }
     }"""
-    let PersonList : ListOfDefinition<Person, Person list> = ListOf Person
+    let PersonList : ListOfDef<Person, Person list> = ListOf Person
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
@@ -172,7 +172,7 @@ let ``Planning should work with interfaces``() =
     }"""
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
-    let INamedList : ListOfDefinition<obj, obj list> = ListOf INamed
+    let INamedList : ListOfDef<obj, obj list> = ListOf INamed
     let listInfo = plan.Fields.Head
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast INamedList)
@@ -209,7 +209,7 @@ let ``Planning should work with unions``() =
     let plan = schema.CreateExecutionPlan(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
-    let UNamedList : ListOfDefinition<Named, Named list> = ListOf UNamed
+    let UNamedList : ListOfDef<Named, Named list> = ListOf UNamed
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast UNamedList)
     let (ResolveCollection(info)) = listInfo.Kind

@@ -32,7 +32,7 @@ type internal OptionConverter() =
         if value = null then FSharpValue.MakeUnion(cases.[0], [||])
         else FSharpValue.MakeUnion(cases.[1], [|value|])
 
-let settings = JsonSerializerSettings()
+let internal settings = JsonSerializerSettings()
 settings.Converters <- [| OptionConverter() |]
 settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
 

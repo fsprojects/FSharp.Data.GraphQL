@@ -8,9 +8,7 @@ open System.Collections.Generic
 Fable.Core.JsInterop.importAll<unit> "isomorphic-fetch"
 #endif
 
-let [<Literal>] serverUrl = "http://localhost:8083"
-
-type MyClient = GraphQLProvider<serverUrl>
+type MyClient = GraphQLProvider<"http://localhost:8083">
 
 async {
     let! hero = MyClient.Queries.Hero("1000", fun c ->
