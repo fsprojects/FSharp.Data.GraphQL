@@ -1,9 +1,6 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
 #r "../../packages/System.Runtime/lib/net462/System.Runtime.dll"
-#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.dll"
-#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.Core.dll"
-#r "../../bin/FSharp.Data.GraphQL.Server/Hopac.Platform.dll"
 #r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Shared.dll"
 #r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.dll"
 
@@ -124,7 +121,7 @@ and HumanType : ObjectDef<Human> =
                 h.Friends
                 |> List.map getCharacter 
                 |> List.toSeq)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> upcast h.AppearsIn)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
         Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet) ])
         
 and DroidType =
@@ -137,7 +134,7 @@ and DroidType =
         Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
         Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.", 
             fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
-        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> upcast d.AppearsIn)
+        Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
         Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) ])
 
 let Query =
