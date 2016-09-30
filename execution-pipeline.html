@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Technical overview over execution pipeline
+</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content="FSharp implementation of Facebook GraphQL query language"/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+<h1><a name="Technical-overview-over-execution-pipeline" class="anchor" href="#Technical-overview-over-execution-pipeline">Technical overview over execution pipeline</a></h1>
+<p>The major work done by FSharp.Data.GraphQL can be split into several phases:</p>
+<ol>
+<li>Compilation phase, which is executed once when a new <code>Schema</code> is being created.</li>
+<li>Planning phase, when GraphQL query string has been supplied.</li>
+<li>Execution phase, when query is being executed and result is produced.</li>
+</ol>
+<h2><a name="Compilation-phase" class="anchor" href="#Compilation-phase">Compilation phase</a></h2>
+<p>Compilation phase is called, when we're creating a schema. From this point, all types defined within that schema should remain unchanged. During this step, server will invoke all operations that can be done ahead of time, before actual queries can be handled. This also means that creating a new schema is expensive process, and should not be done on each request.</p>
+<p>Compilation phase performs several operations:</p>
+<ul>
+<li>Validates, if all type definitions conform GraphQL specification.</li>
+<li>Creates an <a href="https://facebook.github.io/graphql/#sec-Introspection">introspection</a>-oriented representation of the schema.</li>
+<li>Prepares value resolution pipeline for each of the fields defined in the schema.</li>
+</ul>
+<h2><a name="Planning-phase" class="anchor" href="#Planning-phase">Planning phase</a></h2>
+<p>In many cases planning and execution phases are called together. This however can be changed by calling <code>schema.CreateExecutionPlan(graphQlQueryString)</code>, which produces so-called <code>ExecutionPlan</code> without actually executing a query.</p>
+<p>As the name suggests, <code>ExecutionPlan</code> and its components (a tree of objects known as <code>ExecutionInfo</code>s) describes how the query is going to be executed. This includes:</p>
+<ul>
+<li>Inlining GraphQL query fragments.</li>
+<li>Defining fields resolution strategy - serial or parallel.</li>
+<li>Combining information from query AST (resolved fields / aliases) with server-side information about them (field and type definitions).</li>
+<li>Preparation of the hooks in the execution chain, that will be supplied with potential variables upon execution.</li>
+</ul>
+<p>Spliting planning and execution phases is a good idea, when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute execution plan once and cache it. You can use <code>executionPlan.DocumentId</code> as a cache identifier. It's also returned as one of the top level fields in GraphQL response, so it can be used from the client side. Other GraphQL implementations describe that technique as <strong>persistent queries</strong>.</p>
+<h2><a name="Execution-phase" class="anchor" href="#Execution-phase">Execution phase</a></h2>
+<p>Execution phase is performed, when we want to resolve response from GraphQL server given query execution plan and optional set of variables provided by the client. Usually it's called together with planning phase descibed above.</p>
+<p>During execution phase, we perform a traversal over execution plan tree, create an execution context objects for each of the fields and supply them along with data resolved from previous higher level resolver responses recrusively.</p>
+<p>Field resolution context contains all the necessary metadata about things such as:</p>
+<ul>
+<li>Executing schema itself.</li>
+<li>Variables provided with the request.</li>
+<li>Field parameters (in case if field defined any arguments).</li>
+<li>Type definition of both parent and expected return type.</li>
+<li>ExecutionInfo which is fragment of the execution plan itself related to current field and all of its subsequent fields.</li>
+</ul>
+<p>Execution phase can be performed using one of the two strategies:</p>
+<ul>
+<li><strong>Parallel</strong>, where asynchronous fields can be resolved in unordered manner. This is by default available for GraphQL queries due to fact, that they are readonly operations.</li>
+<li><strong>Sequential</strong> where asynchronous fields must be resolved in correct order (as it was defined in query string). This is default mode for GraphQL mutations.</li>
+</ul>
+<p>As result of GraphQL query execution, a dictionary with resolved values will be returned. It contains following fields:</p>
+<ul>
+<li><code>documentId</code> which is query AST document hash code - it can be used to implement execution plan caching.</li>
+<li><code>data</code> with a formated GraphQL response matching the requested query string.</li>
+<li><code>errors</code> entry is optional. If it has been provided, it will contain list of errors, that occured during query execution.</li>
+</ul>
+
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>
