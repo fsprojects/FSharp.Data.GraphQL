@@ -34,7 +34,7 @@
         <div class="span9" id="main">
           
 <h1><a name="Working-with-GraphQL-type-system" class="anchor" href="#Working-with-GraphQL-type-system">Working with GraphQL type system</a></h1>
-<p>Hearth of each GraphQL service is it's schema. Schema defines a namespace for type definitions exposed to service consumers, that can be used laters to generate things such as documentation, introspection queries and finally to execute and validate incoming GraphQL queries and mutations.</p>
+<p>A central point of each GraphQL service is its schema. Schema defines a namespace for type definitions exposed to service consumers, that can be used later to generate things such as documentation, introspection queries and finally to execute and validate incoming GraphQL queries and mutations.</p>
 <p>Each schema definition requires to have something called <em>root query</em> - it's a GraphQL object definition, which exposes all top level fields to be requested by the user. Aside of it there are also separate roots for mutations (queries are readonly requests) and subscriptions (which is an experimental feature, at the moment of v0.2-beta is not yet supported by Fsharp.Data.GraphQL).</p>
 <p>GraphQL type system categorizes several custom types, that can be defined by programmer, including:</p>
 <ul>
@@ -48,7 +48,7 @@
 <p>Beside them, FSharp.Data.GraphQL defines two others:</p>
 <ul>
 <li>Lists - which can be used to compose types defined above in context of collections.</li>
-<li>Nullables - which can be used to define potentially absent fields in form of the F# option types. This differs from GraphQL standard, where fields are nullable by default and can be optionally marked as non-null. This however doesn't fit the spirit of FSharp programming language.</li>
+<li>Nullables - which can be used to define potentially absent fields in form of the F# option types. This differs from GraphQL standard, where fields are nullable by default and can be optionally marked as non-null. Such approach however wouldn't fit the spirit of FSharp programming language.</li>
 </ul>
 <p>One of the important distintions, that can save your time in the future is difference between <strong>Input</strong> and <strong>Output</strong> type definitions:</p>
 <ol>
@@ -88,43 +88,45 @@ Input types define types, which can be used as valid values included in GraphQL 
 </code></pre></td>
 </tr>
 </table>
-<p>You can enhance most of the GraphQL components with description (this includes both object and fields definitions) - such string will can be queries and used by tools like <a href="https://github.com/graphql/graphiql">graphiql</a> to generate documentation.</p>
+<p>You can enhance most of the GraphQL components with description (this includes both object and fields definitions) - it later can be queried and used by tools like <a href="https://github.com/graphql/graphiql">graphiql</a> to be used as documentation.</p>
 <p>Fields can also be parametrized - by specifying a list of arguments in GraphQL field definition you can use them later to pass runtime parameters, that may differ with each query, even when query structure remains the same. Do define an argument use <code>Define.Input</code> helper method:</p>
-<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
-<span class="l">2: </span>
-<span class="l">3: </span>
-<span class="l">4: </span>
-<span class="l">5: </span>
-<span class="l">6: </span>
-<span class="l">7: </span>
-<span class="l">8: </span>
-<span class="l">9: </span>
+<table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
+<span class="l"> 2: </span>
+<span class="l"> 3: </span>
+<span class="l"> 4: </span>
+<span class="l"> 5: </span>
+<span class="l"> 6: </span>
+<span class="l"> 7: </span>
+<span class="l"> 8: </span>
+<span class="l"> 9: </span>
+<span class="l">10: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="i">Define</span><span class="o">.</span><span class="i">AsyncField</span>(<span class="s">&quot;people&quot;</span>, <span class="i">ListOf</span> <span onmouseout="hideTip(event, 'fs1', 3)" onmouseover="showTip(event, 'fs1', 3)" class="i">Person</span>, <span class="s">&quot;Single page&quot;</span>, [ <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;page&quot;</span>, <span class="i">Int</span>) ], <span class="k">fun</span> <span class="i">ctx</span> <span class="i">db</span> <span class="k">-&gt;</span>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs3', 3)" onmouseover="showTip(event, 'fs3', 3)" class="i">pageSize</span> <span class="o">=</span> <span class="n">20</span>
+<span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;people&quot;</span>, <span class="i">ListOf</span> <span onmouseout="hideTip(event, 'fs1', 4)" onmouseover="showTip(event, 'fs1', 4)" class="i">Person</span>, <span class="s">&quot;Single page&quot;</span>, [ <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;page&quot;</span>, <span class="i">Int</span>) ], <span class="k">fun</span> <span class="i">ctx</span> <span class="i">db</span> <span class="k">-&gt;</span>
     <span class="k">let</span> <span class="i">page</span> <span class="o">=</span> <span class="i">ctx</span><span class="o">.</span><span class="i">Arg</span> <span class="s">&quot;page&quot;</span>
-    <span onmouseout="hideTip(event, 'fs3', 4)" onmouseover="showTip(event, 'fs3', 4)" class="i">query</span> {
+    <span onmouseout="hideTip(event, 'fs4', 5)" onmouseover="showTip(event, 'fs4', 5)" class="i">query</span> {
         <span class="k">for</span> <span class="i">person</span> <span class="k">in</span> <span class="i">db</span><span class="o">.</span><span class="i">People</span> <span class="k">do</span>
         <span class="i">sortBy</span> <span class="i">person</span><span class="o">.</span><span class="i">Id</span>
-        <span class="i">skip</span> (<span class="i">page</span> <span class="o">*</span> <span class="i">PageSize</span>)
-        <span class="i">take</span> <span class="i">PageSize</span>
+        <span class="i">skip</span> (<span class="i">page</span> <span class="o">*</span> <span onmouseout="hideTip(event, 'fs3', 6)" onmouseover="showTip(event, 'fs3', 6)" class="i">pageSize</span>)
+        <span class="i">take</span> <span onmouseout="hideTip(event, 'fs3', 7)" onmouseover="showTip(event, 'fs3', 7)" class="i">pageSize</span>
         <span class="i">select</span> <span class="i">person</span>
-    } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs4', 5)" onmouseover="showTip(event, 'fs4', 5)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs5', 6)" onmouseover="showTip(event, 'fs5', 6)" class="i">toList</span>) 
+    } <span class="o">|&gt;</span> <span onmouseout="hideTip(event, 'fs5', 8)" onmouseover="showTip(event, 'fs5', 8)" class="i">Seq</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs6', 9)" onmouseover="showTip(event, 'fs6', 9)" class="i">toList</span>) 
 </code></pre></td>
 </tr>
 </table>
 <h3><a name="Defining-recursive-type-references" class="anchor" href="#Defining-recursive-type-references">Defining recursive type references</a></h3>
-<p>Sometimes you may find hard to define a composed GraphQL type, that in one of its fields calls its own definition. Good example of that would be a <code>Person</code> object with field <code>friends</code> returning list of instances of type <code>Person</code> itself. It's hard to do so due to limitation of F# language. However you can still achieve that by using overloaded <code>Define.Object</code> method:</p>
+<p>Sometimes you may find hard to define a GraphQL types having recursive relationship to each other. Good example of that would be a <code>Person</code> object with field <code>friends</code> returning list of instances of type <code>Person</code> itself. It's hard to do so due to limitations of F# language. However you can still achieve that by using overloaded <code>Define.Object</code> method:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
 <span class="l">2: </span>
 <span class="l">3: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs1', 7)" onmouseover="showTip(event, 'fs1', 7)" class="i">Person</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span>(<span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Person&quot;</span>, <span class="i">fieldsFn</span> <span class="o">=</span> <span class="k">fun</span> () <span class="k">-&gt;</span> [
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs1', 10)" onmouseover="showTip(event, 'fs1', 10)" class="i">Person</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span>(<span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Person&quot;</span>, <span class="i">fieldsFn</span> <span class="o">=</span> <span class="k">fun</span> () <span class="k">-&gt;</span> [
     <span class="c">// ... some person fields</span>
-    <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;friends&quot;</span>, <span class="i">ListOf</span> <span onmouseout="hideTip(event, 'fs1', 8)" onmouseover="showTip(event, 'fs1', 8)" class="i">Person</span>, <span class="k">fun</span> _ <span class="i">p</span> <span class="k">-&gt;</span> <span class="i">p</span><span class="o">.</span><span class="i">Friends</span>) ])
+    <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;friends&quot;</span>, <span class="i">ListOf</span> <span onmouseout="hideTip(event, 'fs1', 11)" onmouseover="showTip(event, 'fs1', 11)" class="i">Person</span>, <span class="k">fun</span> _ <span class="i">p</span> <span class="k">-&gt;</span> <span class="i">p</span><span class="o">.</span><span class="i">Friends</span>) ])
 </code></pre></td>
 </tr>
 </table>
-<p>As you may see, we defined Person object definition using <em>rec</em> keyword and instead of defining fields as a list, we used a lazily evaluated function instead. This will do the trick.</p>
+<p>As you may see, we defined Person object definition using <em>rec</em> keyword and instead of defining fields as a list and we used a lazily evaluated function instead.</p>
 <h2><a name="Defining-an-Interface" class="anchor" href="#Defining-an-Interface">Defining an Interface</a></h2>
 <p>GraphQL interfaces are so called abstract types (along with unions). This means, that they can be used as part of the query, however query materialization must always be bound to some concrete Object type definition.</p>
 <p>Object definitions must explicitly implement interfaces and all of their fields in order to use them:</p>
@@ -145,21 +147,21 @@ Input types define types, which can be used as valid values included in GraphQL 
 <span class="l">15: </span>
 <span class="l">16: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs6', 9)" onmouseover="showTip(event, 'fs6', 9)" class="i">Animal</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs7', 10)" onmouseover="showTip(event, 'fs7', 10)" class="i">Interface</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs8', 11)" onmouseover="showTip(event, 'fs8', 11)" class="i">obj</span><span class="o">&gt;</span>(<span class="s">&quot;Animal&quot;</span>, [
-    <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 12)" onmouseover="showTip(event, 'fs2', 12)" class="i">String</span>) ])
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span class="k">rec</span> <span onmouseout="hideTip(event, 'fs7', 12)" onmouseover="showTip(event, 'fs7', 12)" class="i">Animal</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span onmouseout="hideTip(event, 'fs8', 13)" onmouseover="showTip(event, 'fs8', 13)" class="i">Interface</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs9', 14)" onmouseover="showTip(event, 'fs9', 14)" class="i">obj</span><span class="o">&gt;</span>(<span class="s">&quot;Animal&quot;</span>, [
+    <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 15)" onmouseover="showTip(event, 'fs2', 15)" class="i">String</span>) ])
 
-<span class="k">and</span> <span onmouseout="hideTip(event, 'fs9', 13)" onmouseover="showTip(event, 'fs9', 13)" class="i">Cat</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs9', 14)" onmouseover="showTip(event, 'fs9', 14)" class="i">Cat</span><span class="o">&gt;</span>(
+<span class="k">and</span> <span onmouseout="hideTip(event, 'fs10', 16)" onmouseover="showTip(event, 'fs10', 16)" class="i">Cat</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs10', 17)" onmouseover="showTip(event, 'fs10', 17)" class="i">Cat</span><span class="o">&gt;</span>(
     <span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Cat&quot;</span>,
     <span class="i">interfaces</span> <span class="o">=</span> [<span class="i">Animal</span>],
     <span class="i">fields</span> <span class="o">=</span> [
-        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 15)" onmouseover="showTip(event, 'fs2', 15)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Name</span>)
+        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 18)" onmouseover="showTip(event, 'fs2', 18)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Name</span>)
         <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;meows&quot;</span>, <span class="i">Boolean</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Meows</span>) ])
 
-<span class="k">and</span> <span onmouseout="hideTip(event, 'fs10', 16)" onmouseover="showTip(event, 'fs10', 16)" class="i">Dog</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs10', 17)" onmouseover="showTip(event, 'fs10', 17)" class="i">Dog</span><span class="o">&gt;</span>(
+<span class="k">and</span> <span onmouseout="hideTip(event, 'fs11', 19)" onmouseover="showTip(event, 'fs11', 19)" class="i">Dog</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs11', 20)" onmouseover="showTip(event, 'fs11', 20)" class="i">Dog</span><span class="o">&gt;</span>(
     <span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Dog&quot;</span>,
     <span class="i">interfaces</span> <span class="o">=</span> [<span class="i">Animal</span>],
     <span class="i">fields</span> <span class="o">=</span> [
-        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 18)" onmouseover="showTip(event, 'fs2', 18)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Name</span>)
+        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 21)" onmouseover="showTip(event, 'fs2', 21)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Name</span>)
         <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;barks&quot;</span>, <span class="i">Boolean</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Barks</span>) ])
 </code></pre></td>
 </tr>
@@ -189,31 +191,31 @@ Input types define types, which can be used as valid values included in GraphQL 
 <span class="l">18: </span>
 <span class="l">19: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs11', 19)" onmouseover="showTip(event, 'fs11', 19)" class="t">Cat</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs12', 20)" onmouseover="showTip(event, 'fs12', 20)" class="i">Name</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs13', 21)" onmouseover="showTip(event, 'fs13', 21)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs14', 22)" onmouseover="showTip(event, 'fs14', 22)" class="i">Meows</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs15', 23)" onmouseover="showTip(event, 'fs15', 23)" class="t">bool</span> }
-<span class="k">type</span> <span onmouseout="hideTip(event, 'fs16', 24)" onmouseover="showTip(event, 'fs16', 24)" class="t">Dog</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs17', 25)" onmouseover="showTip(event, 'fs17', 25)" class="i">Name</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs13', 26)" onmouseover="showTip(event, 'fs13', 26)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs18', 27)" onmouseover="showTip(event, 'fs18', 27)" class="i">Barks</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs15', 28)" onmouseover="showTip(event, 'fs15', 28)" class="t">bool</span> }
-<span class="k">type</span> <span onmouseout="hideTip(event, 'fs19', 29)" onmouseover="showTip(event, 'fs19', 29)" class="t">Pet</span> <span class="o">=</span> 
-    | <span onmouseout="hideTip(event, 'fs20', 30)" onmouseover="showTip(event, 'fs20', 30)" class="p">DogPet</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs16', 31)" onmouseover="showTip(event, 'fs16', 31)" class="t">Dog</span>
-    | <span onmouseout="hideTip(event, 'fs21', 32)" onmouseover="showTip(event, 'fs21', 32)" class="p">CatPet</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs11', 33)" onmouseover="showTip(event, 'fs11', 33)" class="t">Cat</span>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs12', 22)" onmouseover="showTip(event, 'fs12', 22)" class="t">Cat</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs13', 23)" onmouseover="showTip(event, 'fs13', 23)" class="i">Name</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 24)" onmouseover="showTip(event, 'fs14', 24)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs15', 25)" onmouseover="showTip(event, 'fs15', 25)" class="i">Meows</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs16', 26)" onmouseover="showTip(event, 'fs16', 26)" class="t">bool</span> }
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs17', 27)" onmouseover="showTip(event, 'fs17', 27)" class="t">Dog</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs18', 28)" onmouseover="showTip(event, 'fs18', 28)" class="i">Name</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 29)" onmouseover="showTip(event, 'fs14', 29)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs19', 30)" onmouseover="showTip(event, 'fs19', 30)" class="i">Barks</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs16', 31)" onmouseover="showTip(event, 'fs16', 31)" class="t">bool</span> }
+<span class="k">type</span> <span onmouseout="hideTip(event, 'fs20', 32)" onmouseover="showTip(event, 'fs20', 32)" class="t">Pet</span> <span class="o">=</span> 
+    | <span onmouseout="hideTip(event, 'fs21', 33)" onmouseover="showTip(event, 'fs21', 33)" class="p">DogPet</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs17', 34)" onmouseover="showTip(event, 'fs17', 34)" class="t">Dog</span>
+    | <span onmouseout="hideTip(event, 'fs22', 35)" onmouseover="showTip(event, 'fs22', 35)" class="p">CatPet</span> <span class="k">of</span> <span onmouseout="hideTip(event, 'fs12', 36)" onmouseover="showTip(event, 'fs12', 36)" class="t">Cat</span>
 
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs11', 34)" onmouseover="showTip(event, 'fs11', 34)" class="i">Cat</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs11', 35)" onmouseover="showTip(event, 'fs11', 35)" class="i">Cat</span><span class="o">&gt;</span>(<span class="s">&quot;Cat&quot;</span>, [
-        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 36)" onmouseover="showTip(event, 'fs2', 36)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Name</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs12', 37)" onmouseover="showTip(event, 'fs12', 37)" class="i">Cat</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs12', 38)" onmouseover="showTip(event, 'fs12', 38)" class="i">Cat</span><span class="o">&gt;</span>(<span class="s">&quot;Cat&quot;</span>, [
+        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 39)" onmouseover="showTip(event, 'fs2', 39)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Name</span>)
         <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;meows&quot;</span>, <span class="i">Boolean</span>, <span class="k">fun</span> _ <span class="i">cat</span> <span class="k">-&gt;</span> <span class="i">cat</span><span class="o">.</span><span class="i">Meows</span>) ])
 
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs16', 37)" onmouseover="showTip(event, 'fs16', 37)" class="i">Dog</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs16', 38)" onmouseover="showTip(event, 'fs16', 38)" class="i">Dog</span><span class="o">&gt;</span>(<span class="s">&quot;Dog&quot;</span>, [
-        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 39)" onmouseover="showTip(event, 'fs2', 39)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Name</span>)
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs17', 40)" onmouseover="showTip(event, 'fs17', 40)" class="i">Dog</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Object</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs17', 41)" onmouseover="showTip(event, 'fs17', 41)" class="i">Dog</span><span class="o">&gt;</span>(<span class="s">&quot;Dog&quot;</span>, [
+        <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;name&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 42)" onmouseover="showTip(event, 'fs2', 42)" class="i">String</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Name</span>)
         <span class="i">Define</span><span class="o">.</span><span class="i">Field</span>(<span class="s">&quot;barks&quot;</span>, <span class="i">Boolean</span>, <span class="k">fun</span> _ <span class="i">dog</span> <span class="k">-&gt;</span> <span class="i">dog</span><span class="o">.</span><span class="i">Barks</span>) ])
 
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs22', 40)" onmouseover="showTip(event, 'fs22', 40)" class="i">Pet</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Union</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs22', 41)" onmouseover="showTip(event, 'fs22', 41)" class="i">Pet</span><span class="o">&gt;</span>(
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs23', 43)" onmouseover="showTip(event, 'fs23', 43)" class="i">Pet</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Union</span><span class="o">&lt;</span><span onmouseout="hideTip(event, 'fs23', 44)" onmouseover="showTip(event, 'fs23', 44)" class="i">Pet</span><span class="o">&gt;</span>(
     <span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Pet&quot;</span>,
-    <span class="i">options</span> <span class="o">=</span> [ <span onmouseout="hideTip(event, 'fs11', 42)" onmouseover="showTip(event, 'fs11', 42)" class="i">Cat</span>; <span onmouseout="hideTip(event, 'fs16', 43)" onmouseover="showTip(event, 'fs16', 43)" class="i">Dog</span> ],
-    <span class="i">resolveType</span> <span class="o">=</span> <span class="k">function</span> <span onmouseout="hideTip(event, 'fs20', 44)" onmouseover="showTip(event, 'fs20', 44)" class="i">DogPet</span> _ <span class="k">-&gt;</span> <span class="k">upcast</span> <span onmouseout="hideTip(event, 'fs16', 45)" onmouseover="showTip(event, 'fs16', 45)" class="i">Dog</span> | <span onmouseout="hideTip(event, 'fs21', 46)" onmouseover="showTip(event, 'fs21', 46)" class="i">CatPet</span> _ <span class="k">-&gt;</span> <span class="k">upcast</span> <span onmouseout="hideTip(event, 'fs11', 47)" onmouseover="showTip(event, 'fs11', 47)" class="i">Cat</span>,
-    <span class="i">resolveValue</span> <span class="o">=</span> <span class="k">function</span> <span onmouseout="hideTip(event, 'fs20', 48)" onmouseover="showTip(event, 'fs20', 48)" class="i">DogPet</span> <span class="i">d</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs23', 49)" onmouseover="showTip(event, 'fs23', 49)" class="i">box</span> <span class="i">d</span> | <span onmouseout="hideTip(event, 'fs21', 50)" onmouseover="showTip(event, 'fs21', 50)" class="i">CatPet</span> <span class="i">c</span> <span class="k">-&gt;</span> <span class="k">upcast</span> <span class="i">c</span>)
+    <span class="i">options</span> <span class="o">=</span> [ <span onmouseout="hideTip(event, 'fs12', 45)" onmouseover="showTip(event, 'fs12', 45)" class="i">Cat</span>; <span onmouseout="hideTip(event, 'fs17', 46)" onmouseover="showTip(event, 'fs17', 46)" class="i">Dog</span> ],
+    <span class="i">resolveType</span> <span class="o">=</span> <span class="k">function</span> <span onmouseout="hideTip(event, 'fs21', 47)" onmouseover="showTip(event, 'fs21', 47)" class="i">DogPet</span> _ <span class="k">-&gt;</span> <span class="k">upcast</span> <span onmouseout="hideTip(event, 'fs17', 48)" onmouseover="showTip(event, 'fs17', 48)" class="i">Dog</span> | <span onmouseout="hideTip(event, 'fs22', 49)" onmouseover="showTip(event, 'fs22', 49)" class="i">CatPet</span> _ <span class="k">-&gt;</span> <span class="k">upcast</span> <span onmouseout="hideTip(event, 'fs12', 50)" onmouseover="showTip(event, 'fs12', 50)" class="i">Cat</span>,
+    <span class="i">resolveValue</span> <span class="o">=</span> <span class="k">function</span> <span onmouseout="hideTip(event, 'fs21', 51)" onmouseover="showTip(event, 'fs21', 51)" class="i">DogPet</span> <span class="i">d</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs24', 52)" onmouseover="showTip(event, 'fs24', 52)" class="i">box</span> <span class="i">d</span> | <span onmouseout="hideTip(event, 'fs22', 53)" onmouseover="showTip(event, 'fs22', 53)" class="i">CatPet</span> <span class="i">c</span> <span class="k">-&gt;</span> <span class="k">upcast</span> <span class="i">c</span>)
 </code></pre></td>
 </tr>
 </table>
 <p>The example above shows, how you can use <code>Pet</code> discriminated union as a proxy to being able to define GraphQL union type and still being able to operate with .NET type system in safe manner.</p>
 <h2><a name="Defining-an-Enum" class="anchor" href="#Defining-an-Enum">Defining an Enum</a></h2>
-<p>GraphQL enums can be quite closelly related to C# enums - they define primitive types (used as GraphQL leaf types) that have strictly defined subset of possible values, i.e:</p>
+<p>GraphQL enums can be quite closelly related to C# enums - they define primitive types (used as GraphQL leaf types) that have strictly defined set of possible values, i.e:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
 <span class="l">2: </span>
 <span class="l">3: </span>
@@ -224,19 +226,19 @@ Input types define types, which can be used as valid values included in GraphQL 
 <span class="l">8: </span>
 <span class="l">9: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs24', 51)" onmouseover="showTip(event, 'fs24', 51)" class="t">Ord</span> <span class="o">=</span>
-    | <span onmouseout="hideTip(event, 'fs25', 52)" onmouseover="showTip(event, 'fs25', 52)" class="i">Gt</span> <span class="o">=</span> <span class="n">1</span>
-    | <span onmouseout="hideTip(event, 'fs26', 53)" onmouseover="showTip(event, 'fs26', 53)" class="i">Eq</span> <span class="o">=</span> <span class="n">0</span>
-    | <span onmouseout="hideTip(event, 'fs27', 54)" onmouseover="showTip(event, 'fs27', 54)" class="i">Lt</span> <span class="o">=</span> <span class="o">-</span><span class="n">1</span>
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs25', 54)" onmouseover="showTip(event, 'fs25', 54)" class="t">Ord</span> <span class="o">=</span>
+    | <span onmouseout="hideTip(event, 'fs26', 55)" onmouseover="showTip(event, 'fs26', 55)" class="i">Gt</span> <span class="o">=</span> <span class="n">1</span>
+    | <span onmouseout="hideTip(event, 'fs27', 56)" onmouseover="showTip(event, 'fs27', 56)" class="i">Eq</span> <span class="o">=</span> <span class="n">0</span>
+    | <span onmouseout="hideTip(event, 'fs28', 57)" onmouseover="showTip(event, 'fs28', 57)" class="i">Lt</span> <span class="o">=</span> <span class="o">-</span><span class="n">1</span>
 
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs28', 55)" onmouseover="showTip(event, 'fs28', 55)" class="i">Ord</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Enum</span>(<span class="s">&quot;Ord&quot;</span>, [
-    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Lesser&quot;</span>, <span onmouseout="hideTip(event, 'fs28', 56)" onmouseover="showTip(event, 'fs28', 56)" class="i">Ord</span><span class="o">.</span><span class="i">Lt</span>)
-    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Equal&quot;</span>, <span onmouseout="hideTip(event, 'fs28', 57)" onmouseover="showTip(event, 'fs28', 57)" class="i">Ord</span><span class="o">.</span><span class="i">Eq</span>)
-    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Greater&quot;</span>, <span onmouseout="hideTip(event, 'fs28', 58)" onmouseover="showTip(event, 'fs28', 58)" class="i">Ord</span><span class="o">.</span><span class="i">Greater</span>) ])
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs29', 58)" onmouseover="showTip(event, 'fs29', 58)" class="i">Ord</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Enum</span>(<span class="s">&quot;Ord&quot;</span>, [
+    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Lesser&quot;</span>, <span onmouseout="hideTip(event, 'fs29', 59)" onmouseover="showTip(event, 'fs29', 59)" class="i">Ord</span><span class="o">.</span><span class="i">Lt</span>)
+    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Equal&quot;</span>, <span onmouseout="hideTip(event, 'fs29', 60)" onmouseover="showTip(event, 'fs29', 60)" class="i">Ord</span><span class="o">.</span><span class="i">Eq</span>)
+    <span class="i">Define</span><span class="o">.</span><span class="i">EnumValue</span>(<span class="s">&quot;Greater&quot;</span>, <span onmouseout="hideTip(event, 'fs29', 61)" onmouseover="showTip(event, 'fs29', 61)" class="i">Ord</span><span class="o">.</span><span class="i">Greater</span>) ])
 </code></pre></td>
 </tr>
 </table>
-<p>The major difference from .NET here is that, GraphQL expects, that enum values are serialized as <strong>strings</strong>. Therefore, upon serialization, given enum value will be projected using <code>ToString()</code> method.</p>
+<p>The major difference from .NET here is that GraphQL expects, that enum values are serialized as <strong>strings</strong>. Therefore, upon serialization, given enum value will be projected using <code>ToString()</code> method.</p>
 <h2><a name="Defining-a-Scalar" class="anchor" href="#Defining-a-Scalar">Defining a Scalar</a></h2>
 <p>Just like enums, GraphQL scalars are leaf types, that should be able to be serialized/deserialized into primitive types supported by format of your choice (which will be JSON in most of the cases).</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
@@ -244,10 +246,10 @@ Input types define types, which can be used as valid values included in GraphQL 
 <span class="l">3: </span>
 <span class="l">4: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs29', 59)" onmouseover="showTip(event, 'fs29', 59)" class="i">Guid</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Scalar</span>(
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">let</span> <span onmouseout="hideTip(event, 'fs30', 62)" onmouseover="showTip(event, 'fs30', 62)" class="i">Guid</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">Scalar</span>(
     <span class="i">name</span> <span class="o">=</span> <span class="s">&quot;Guid&quot;</span>,
-    <span class="i">coerceInput</span> <span class="o">=</span> (<span class="k">fun</span> (<span class="i">StringValue</span> <span class="i">s</span>) <span class="k">-&gt;</span> <span class="k">match</span> <span onmouseout="hideTip(event, 'fs29', 60)" onmouseover="showTip(event, 'fs29', 60)" class="i">Guid</span><span class="o">.</span><span class="i">TryParse</span>(<span class="i">s</span>) <span class="k">with</span> <span class="k">true</span>, <span class="i">g</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 61)" onmouseover="showTip(event, 'fs30', 61)" class="i">Some</span> <span class="i">g</span> | <span class="k">false</span>, _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs31', 62)" onmouseover="showTip(event, 'fs31', 62)" class="i">None</span>),
-    <span class="i">coerceValue</span> <span class="o">=</span> <span class="k">fun</span> <span class="i">v</span> <span class="k">-&gt;</span> <span class="k">match</span> <span class="i">v</span> <span class="k">with</span> | <span class="o">:?</span> <span onmouseout="hideTip(event, 'fs29', 63)" onmouseover="showTip(event, 'fs29', 63)" class="i">Guid</span> <span class="i">g</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs30', 64)" onmouseover="showTip(event, 'fs30', 64)" class="i">Some</span> <span class="i">g</span> | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs31', 65)" onmouseover="showTip(event, 'fs31', 65)" class="i">None</span>)
+    <span class="i">coerceInput</span> <span class="o">=</span> (<span class="k">fun</span> (<span class="i">StringValue</span> <span class="i">s</span>) <span class="k">-&gt;</span> <span class="k">match</span> <span onmouseout="hideTip(event, 'fs30', 63)" onmouseover="showTip(event, 'fs30', 63)" class="i">Guid</span><span class="o">.</span><span class="i">TryParse</span>(<span class="i">s</span>) <span class="k">with</span> <span class="k">true</span>, <span class="i">g</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs31', 64)" onmouseover="showTip(event, 'fs31', 64)" class="i">Some</span> <span class="i">g</span> | <span class="k">false</span>, _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs32', 65)" onmouseover="showTip(event, 'fs32', 65)" class="i">None</span>),
+    <span class="i">coerceValue</span> <span class="o">=</span> <span class="k">fun</span> <span class="i">v</span> <span class="k">-&gt;</span> <span class="k">match</span> <span class="i">v</span> <span class="k">with</span> | <span class="o">:?</span> <span onmouseout="hideTip(event, 'fs30', 66)" onmouseover="showTip(event, 'fs30', 66)" class="i">Guid</span> <span class="i">g</span> <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs31', 67)" onmouseover="showTip(event, 'fs31', 67)" class="i">Some</span> <span class="i">g</span> | _ <span class="k">-&gt;</span> <span onmouseout="hideTip(event, 'fs32', 68)" onmouseover="showTip(event, 'fs32', 68)" class="i">None</span>)
 </code></pre></td>
 </tr>
 </table>
@@ -263,50 +265,51 @@ Input types define types, which can be used as valid values included in GraphQL 
 <span class="l">3: </span>
 <span class="l">4: </span>
 </pre></td>
-<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs32', 66)" onmouseover="showTip(event, 'fs32', 66)" class="t">CreateAccountData</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs33', 67)" onmouseover="showTip(event, 'fs33', 67)" class="i">Email</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs13', 68)" onmouseover="showTip(event, 'fs13', 68)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs34', 69)" onmouseover="showTip(event, 'fs34', 69)" class="i">Password</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs13', 70)" onmouseover="showTip(event, 'fs13', 70)" class="t">string</span> }
-<span class="k">let</span> <span onmouseout="hideTip(event, 'fs35', 71)" onmouseover="showTip(event, 'fs35', 71)" class="i">CreateAccountData</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">InputObject</span>(<span class="s">&quot;CreateAccountData&quot;</span>, [
-    <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;email&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 72)" onmouseover="showTip(event, 'fs2', 72)" class="i">String</span>)
-    <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;password&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 73)" onmouseover="showTip(event, 'fs2', 73)" class="i">String</span>) ])
+<td class="snippet"><pre class="fssnip highlighted"><code lang="fsharp"><span class="k">type</span> <span onmouseout="hideTip(event, 'fs33', 69)" onmouseover="showTip(event, 'fs33', 69)" class="t">CreateAccountData</span> <span class="o">=</span> { <span onmouseout="hideTip(event, 'fs34', 70)" onmouseover="showTip(event, 'fs34', 70)" class="i">Email</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 71)" onmouseover="showTip(event, 'fs14', 71)" class="t">string</span>; <span onmouseout="hideTip(event, 'fs35', 72)" onmouseover="showTip(event, 'fs35', 72)" class="i">Password</span><span class="o">:</span> <span onmouseout="hideTip(event, 'fs14', 73)" onmouseover="showTip(event, 'fs14', 73)" class="t">string</span> }
+<span class="k">let</span> <span onmouseout="hideTip(event, 'fs36', 74)" onmouseover="showTip(event, 'fs36', 74)" class="i">CreateAccountData</span> <span class="o">=</span> <span class="i">Define</span><span class="o">.</span><span class="i">InputObject</span>(<span class="s">&quot;CreateAccountData&quot;</span>, [
+    <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;email&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 75)" onmouseover="showTip(event, 'fs2', 75)" class="i">String</span>)
+    <span class="i">Define</span><span class="o">.</span><span class="i">Input</span>(<span class="s">&quot;password&quot;</span>, <span onmouseout="hideTip(event, 'fs2', 76)" onmouseover="showTip(event, 'fs2', 76)" class="i">String</span>) ])
 </code></pre></td>
 </tr>
 </table>
-<p>Unlike the objects, you neither define input object field resolver nor supply it with arguments - it's designed to work only as a type-safe value container. They also don't work together with abstract types like interfaces or unions.</p>
+<p>Unlike the objects, you neither define input object field resolver nor provide any arguments for it. They also don't work together with abstract types like interfaces or unions.</p>
 
 <div class="tip" id="fs1">val Person : obj<br /><br />Full name: typesystem.Person</div>
 <div class="tip" id="fs2">module String<br /><br />from Microsoft.FSharp.Core</div>
-<div class="tip" id="fs3">val query : Linq.QueryBuilder<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.query</div>
-<div class="tip" id="fs4">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
-<div class="tip" id="fs5">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
-<div class="tip" id="fs6">val Animal : obj<br /><br />Full name: typesystem.Animal</div>
-<div class="tip" id="fs7">Multiple items<br />type InterfaceAttribute =<br />&#160;&#160;inherit Attribute<br />&#160;&#160;new : unit -&gt; InterfaceAttribute<br /><br />Full name: Microsoft.FSharp.Core.InterfaceAttribute<br /><br />--------------------<br />new : unit -&gt; InterfaceAttribute</div>
-<div class="tip" id="fs8">type obj = System.Object<br /><br />Full name: Microsoft.FSharp.Core.obj</div>
-<div class="tip" id="fs9">val Cat : obj<br /><br />Full name: typesystem.Cat</div>
-<div class="tip" id="fs10">val Dog : obj<br /><br />Full name: typesystem.Dog</div>
-<div class="tip" id="fs11">Multiple items<br />val Cat : obj<br /><br />Full name: typesystem.Cat<br /><br />--------------------<br />type Cat =<br />&#160;&#160;{Name: string;<br />&#160;&#160;&#160;Meows: bool;}<br /><br />Full name: typesystem.Cat</div>
-<div class="tip" id="fs12">Cat.Name: string</div>
-<div class="tip" id="fs13">Multiple items<br />val string : value:&#39;T -&gt; string<br /><br />Full name: Microsoft.FSharp.Core.Operators.string<br /><br />--------------------<br />type string = System.String<br /><br />Full name: Microsoft.FSharp.Core.string</div>
-<div class="tip" id="fs14">Cat.Meows: bool</div>
-<div class="tip" id="fs15">type bool = System.Boolean<br /><br />Full name: Microsoft.FSharp.Core.bool</div>
-<div class="tip" id="fs16">Multiple items<br />val Dog : obj<br /><br />Full name: typesystem.Dog<br /><br />--------------------<br />type Dog =<br />&#160;&#160;{Name: string;<br />&#160;&#160;&#160;Barks: bool;}<br /><br />Full name: typesystem.Dog</div>
-<div class="tip" id="fs17">Dog.Name: string</div>
-<div class="tip" id="fs18">Dog.Barks: bool</div>
-<div class="tip" id="fs19">type Pet =<br />&#160;&#160;| DogPet of Dog<br />&#160;&#160;| CatPet of Cat<br /><br />Full name: typesystem.Pet</div>
-<div class="tip" id="fs20">union case Pet.DogPet: Dog -&gt; Pet</div>
-<div class="tip" id="fs21">union case Pet.CatPet: Cat -&gt; Pet</div>
-<div class="tip" id="fs22">Multiple items<br />val Pet : obj<br /><br />Full name: typesystem.Pet<br /><br />--------------------<br />type Pet =<br />&#160;&#160;| DogPet of Dog<br />&#160;&#160;| CatPet of Cat<br /><br />Full name: typesystem.Pet</div>
-<div class="tip" id="fs23">val box : value:&#39;T -&gt; obj<br /><br />Full name: Microsoft.FSharp.Core.Operators.box</div>
-<div class="tip" id="fs24">type Ord =<br />&#160;&#160;|  Gt  =  1<br />&#160;&#160;|  Eq  =  0<br />&#160;&#160;|  Lt  =  -1<br /><br />Full name: typesystem.Ord</div>
-<div class="tip" id="fs25">Ord.Gt: Ord = 1</div>
-<div class="tip" id="fs26">Ord.Eq: Ord = 0</div>
-<div class="tip" id="fs27">Ord.Lt: Ord = -1</div>
-<div class="tip" id="fs28">Multiple items<br />val Ord : obj<br /><br />Full name: typesystem.Ord<br /><br />--------------------<br />type Ord =<br />&#160;&#160;|  Gt  =  1<br />&#160;&#160;|  Eq  =  0<br />&#160;&#160;|  Lt  =  -1<br /><br />Full name: typesystem.Ord</div>
-<div class="tip" id="fs29">val Guid : obj<br /><br />Full name: typesystem.Guid</div>
-<div class="tip" id="fs30">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
-<div class="tip" id="fs31">union case Option.None: Option&lt;&#39;T&gt;</div>
-<div class="tip" id="fs32">type CreateAccountData =<br />&#160;&#160;{Email: string;<br />&#160;&#160;&#160;Password: string;}<br /><br />Full name: typesystem.CreateAccountData</div>
-<div class="tip" id="fs33">CreateAccountData.Email: string</div>
-<div class="tip" id="fs34">CreateAccountData.Password: string</div>
-<div class="tip" id="fs35">Multiple items<br />val CreateAccountData : obj<br /><br />Full name: typesystem.CreateAccountData<br /><br />--------------------<br />type CreateAccountData =<br />&#160;&#160;{Email: string;<br />&#160;&#160;&#160;Password: string;}<br /><br />Full name: typesystem.CreateAccountData</div>
+<div class="tip" id="fs3">val pageSize : int<br /><br />Full name: typesystem.pageSize</div>
+<div class="tip" id="fs4">val query : Linq.QueryBuilder<br /><br />Full name: Microsoft.FSharp.Core.ExtraTopLevelOperators.query</div>
+<div class="tip" id="fs5">module Seq<br /><br />from Microsoft.FSharp.Collections</div>
+<div class="tip" id="fs6">val toList : source:seq&lt;&#39;T&gt; -&gt; &#39;T list<br /><br />Full name: Microsoft.FSharp.Collections.Seq.toList</div>
+<div class="tip" id="fs7">val Animal : obj<br /><br />Full name: typesystem.Animal</div>
+<div class="tip" id="fs8">Multiple items<br />type InterfaceAttribute =<br />&#160;&#160;inherit Attribute<br />&#160;&#160;new : unit -&gt; InterfaceAttribute<br /><br />Full name: Microsoft.FSharp.Core.InterfaceAttribute<br /><br />--------------------<br />new : unit -&gt; InterfaceAttribute</div>
+<div class="tip" id="fs9">type obj = System.Object<br /><br />Full name: Microsoft.FSharp.Core.obj</div>
+<div class="tip" id="fs10">val Cat : obj<br /><br />Full name: typesystem.Cat</div>
+<div class="tip" id="fs11">val Dog : obj<br /><br />Full name: typesystem.Dog</div>
+<div class="tip" id="fs12">Multiple items<br />val Cat : obj<br /><br />Full name: typesystem.Cat<br /><br />--------------------<br />type Cat =<br />&#160;&#160;{Name: string;<br />&#160;&#160;&#160;Meows: bool;}<br /><br />Full name: typesystem.Cat</div>
+<div class="tip" id="fs13">Cat.Name: string</div>
+<div class="tip" id="fs14">Multiple items<br />val string : value:&#39;T -&gt; string<br /><br />Full name: Microsoft.FSharp.Core.Operators.string<br /><br />--------------------<br />type string = System.String<br /><br />Full name: Microsoft.FSharp.Core.string</div>
+<div class="tip" id="fs15">Cat.Meows: bool</div>
+<div class="tip" id="fs16">type bool = System.Boolean<br /><br />Full name: Microsoft.FSharp.Core.bool</div>
+<div class="tip" id="fs17">Multiple items<br />val Dog : obj<br /><br />Full name: typesystem.Dog<br /><br />--------------------<br />type Dog =<br />&#160;&#160;{Name: string;<br />&#160;&#160;&#160;Barks: bool;}<br /><br />Full name: typesystem.Dog</div>
+<div class="tip" id="fs18">Dog.Name: string</div>
+<div class="tip" id="fs19">Dog.Barks: bool</div>
+<div class="tip" id="fs20">type Pet =<br />&#160;&#160;| DogPet of Dog<br />&#160;&#160;| CatPet of Cat<br /><br />Full name: typesystem.Pet</div>
+<div class="tip" id="fs21">union case Pet.DogPet: Dog -&gt; Pet</div>
+<div class="tip" id="fs22">union case Pet.CatPet: Cat -&gt; Pet</div>
+<div class="tip" id="fs23">Multiple items<br />val Pet : obj<br /><br />Full name: typesystem.Pet<br /><br />--------------------<br />type Pet =<br />&#160;&#160;| DogPet of Dog<br />&#160;&#160;| CatPet of Cat<br /><br />Full name: typesystem.Pet</div>
+<div class="tip" id="fs24">val box : value:&#39;T -&gt; obj<br /><br />Full name: Microsoft.FSharp.Core.Operators.box</div>
+<div class="tip" id="fs25">type Ord =<br />&#160;&#160;|  Gt  =  1<br />&#160;&#160;|  Eq  =  0<br />&#160;&#160;|  Lt  =  -1<br /><br />Full name: typesystem.Ord</div>
+<div class="tip" id="fs26">Ord.Gt: Ord = 1</div>
+<div class="tip" id="fs27">Ord.Eq: Ord = 0</div>
+<div class="tip" id="fs28">Ord.Lt: Ord = -1</div>
+<div class="tip" id="fs29">Multiple items<br />val Ord : obj<br /><br />Full name: typesystem.Ord<br /><br />--------------------<br />type Ord =<br />&#160;&#160;|  Gt  =  1<br />&#160;&#160;|  Eq  =  0<br />&#160;&#160;|  Lt  =  -1<br /><br />Full name: typesystem.Ord</div>
+<div class="tip" id="fs30">val Guid : obj<br /><br />Full name: typesystem.Guid</div>
+<div class="tip" id="fs31">union case Option.Some: Value: &#39;T -&gt; Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs32">union case Option.None: Option&lt;&#39;T&gt;</div>
+<div class="tip" id="fs33">type CreateAccountData =<br />&#160;&#160;{Email: string;<br />&#160;&#160;&#160;Password: string;}<br /><br />Full name: typesystem.CreateAccountData</div>
+<div class="tip" id="fs34">CreateAccountData.Email: string</div>
+<div class="tip" id="fs35">CreateAccountData.Password: string</div>
+<div class="tip" id="fs36">Multiple items<br />val CreateAccountData : obj<br /><br />Full name: typesystem.CreateAccountData<br /><br />--------------------<br />type CreateAccountData =<br />&#160;&#160;{Email: string;<br />&#160;&#160;&#160;Password: string;}<br /><br />Full name: typesystem.CreateAccountData</div>
 
         </div>
         <div class="span3">

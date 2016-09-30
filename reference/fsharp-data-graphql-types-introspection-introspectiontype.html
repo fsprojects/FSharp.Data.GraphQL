@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>IntrospectionType - FSharp.Data.GraphQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content=""/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+
+
+
+<h1>IntrospectionType</h1>
+<p>
+  <span>Namespace: FSharp.Data.GraphQL.Types</span><br />
+  <span>Parent Module: <a href="fsharp-data-graphql-types-introspection.html">Introspection</a></span>
+</p>
+<div class="xmldoc">
+<p>Introspection descriptor of a GraphQL type defintion.</p>
+
+</div>
+  <h3>Record Fields</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Record Field</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '281', 281)" onmouseover="showTip(event, '281', 281)">
+            Description
+          </code>
+          <div class="tip" id="281">
+            <strong>Signature:</strong> string option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L59-59" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Optional type description.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '282', 282)" onmouseover="showTip(event, '282', 282)">
+            EnumValues
+          </code>
+          <div class="tip" id="282">
+            <strong>Signature:</strong> IntrospectionEnumVal [] option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L70-70" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Array of enum values defined by current Enum type.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '283', 283)" onmouseover="showTip(event, '283', 283)">
+            Fields
+          </code>
+          <div class="tip" id="283">
+            <strong>Signature:</strong> IntrospectionField [] option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L62-62" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Array of field descriptors defined within current type.
+Only present for Object and Interface types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '284', 284)" onmouseover="showTip(event, '284', 284)">
+            InputFields
+          </code>
+          <div class="tip" id="284">
+            <strong>Signature:</strong> IntrospectionInputVal [] option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L72-72" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Array of input fields defined by current InputObject type.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '285', 285)" onmouseover="showTip(event, '285', 285)">
+            Interfaces
+          </code>
+          <div class="tip" id="285">
+            <strong>Signature:</strong> IntrospectionTypeRef [] option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L64-64" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Array of interfaces implemented by output object type defintion.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '286', 286)" onmouseover="showTip(event, '286', 286)">
+            Kind
+          </code>
+          <div class="tip" id="286">
+            <strong>Signature:</strong> TypeKind<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L55-55" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Which kind category current type belongs to.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '287', 287)" onmouseover="showTip(event, '287', 287)">
+            Name
+          </code>
+          <div class="tip" id="287">
+            <strong>Signature:</strong> string<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L57-57" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Type name. Must be unique in scope of the defined schema.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '288', 288)" onmouseover="showTip(event, '288', 288)">
+            OfType
+          </code>
+          <div class="tip" id="288">
+            <strong>Signature:</strong> IntrospectionTypeRef option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L74-74" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Type param reference - used only by List and NonNull types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '289', 289)" onmouseover="showTip(event, '289', 289)">
+            PossibleTypes
+          </code>
+          <div class="tip" id="289">
+            <strong>Signature:</strong> IntrospectionTypeRef [] option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L68-68" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Array of type references being possible implementation of current type.
+Only present for Union types (list of union cases) and Interface types
+(list of all objects implementing interface in scope of the schema).</p>
+
+
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Static members</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Static member</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '290', 290)" onmouseover="showTip(event, '290', 290)">
+            Enum(name, description, enumValues)
+          </code>
+          <div class="tip" id="290">
+            <strong>Signature:</strong> (name:string * description:string option * enumValues:IntrospectionEnumVal []) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L151-151" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '291', 291)" onmouseover="showTip(event, '291', 291)">
+            InputObject(...)
+          </code>
+          <div class="tip" id="291">
+            <strong>Signature:</strong> (name:string * description:string option * inputFields:IntrospectionInputVal []) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L117-117" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '292', 292)" onmouseover="showTip(event, '292', 292)">
+            Interface(...)
+          </code>
+          <div class="tip" id="292">
+            <strong>Signature:</strong> (name:string * description:string option * fields:IntrospectionField [] * possibleTypes:IntrospectionTypeRef []) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L169-169" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '293', 293)" onmouseover="showTip(event, '293', 293)">
+            Object(...)
+          </code>
+          <div class="tip" id="293">
+            <strong>Signature:</strong> (name:string * description:string option * fields:IntrospectionField [] * interfaces:IntrospectionTypeRef []) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L99-99" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '294', 294)" onmouseover="showTip(event, '294', 294)">
+            Scalar(name, description)
+          </code>
+          <div class="tip" id="294">
+            <strong>Signature:</strong> (name:string * description:string option) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L81-81" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '295', 295)" onmouseover="showTip(event, '295', 295)">
+            Union(name, description, possibleTypes)
+          </code>
+          <div class="tip" id="295">
+            <strong>Signature:</strong> (name:string * description:string option * possibleTypes:IntrospectionTypeRef []) -&gt; IntrospectionType<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L134-134" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Constructs an introspection descriptor for a  types.</p>
+
+
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>

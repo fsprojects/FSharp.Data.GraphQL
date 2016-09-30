@@ -1,0 +1,1107 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Namespaces - FSharp.Data.GraphQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content=""/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+
+<h1>FSharp.Data.GraphQL</h1>
+
+
+  <h2>FSharp.Data.GraphQL Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-displaynameattribute.html">DisplayNameAttribute</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-fields.html">Fields</a>
+          </td>
+          <td class="xmldoc"><p>Dummy type to wrap requested fields in a GraphQL query projection</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-graphqlprovider.html">GraphQLProvider</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-inlinefragment.html">InlineFragment</a>
+          </td>
+          <td class="xmldoc"><p>Dummy type to wrap inline fragments, shouldn't be used directly.
+Use the static method On of provided types instead</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-selection-1.html">Selection<'T></a>
+          </td>
+          <td class="xmldoc"><p>Dummy type to wrap a field with a selection in a GraphQL query projection</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-schema-1.html">Schema<'Root></a>
+          </td>
+          <td class="xmldoc"><p>GraphQL server schema. Defines the complete type system to be used by GraphQL queries.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-schemaconfig.html">SchemaConfig</a>
+          </td>
+          <td class="xmldoc"><p>A configuration object fot the GraphQL server schema.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-asyncvalbuilder.html">AsyncValBuilder</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+  <table class="table table-bordered module-list">
+    <thead>
+      <tr><td>Module</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-execution.html">Execution</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-linq.html">Linq</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-planning.html">Planning</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-array.html">Array</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-asyncextensions.html">AsyncExtensions</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-asyncval.html">AsyncVal</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-introspection.html">Introspection</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-list.html">List</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-map.html">Map</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-parser.html">Parser</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2015-Mar 2016 Kevin Thompson @kthompson
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-reflectionhelper-0.html">ReflectionHelper</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-set.html">Set</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-validation.html">Validation</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+  <h2>FSharp.Data.GraphQL.Ast Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-argument.html">Argument</a>
+          </td>
+          <td class="xmldoc"><p>2.2.4 Arguments</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-definition.html">Definition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-directive.html">Directive</a>
+          </td>
+          <td class="xmldoc"><p>2.2.10 Directives</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-document.html">Document</a>
+          </td>
+          <td class="xmldoc"><p>2.2 Query Document</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-enumtypedefinition.html">EnumTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-field.html">Field</a>
+          </td>
+          <td class="xmldoc"><p>2.2.3 Fields</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-fielddefinition.html">FieldDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-fragmentdefinition.html">FragmentDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-fragmentspread.html">FragmentSpread</a>
+          </td>
+          <td class="xmldoc"><p>2.2.6 Fragments</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-inputobjecttypedefinition.html">InputObjectTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-inputvaluedefinition.html">InputValueDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-interfacetypedefinition.html">InterfaceTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-objecttypedefinition.html">ObjectTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-operationdefinition.html">OperationDefinition</a>
+          </td>
+          <td class="xmldoc"><p>2.2.1 Operations</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-operationtype.html">OperationType</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-operationtypedefinition.html">OperationTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-schemadefintion.html">SchemaDefintion</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-selection.html">Selection</a>
+          </td>
+          <td class="xmldoc"><p>2.2.2 Selection Sets</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-typedefinition.html">TypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-uniontypedefinition.html">UnionTypeDefinition</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-value.html">Value</a>
+          </td>
+          <td class="xmldoc"><p>2.2.7 Input Values</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-ast-variabledefinition.html">VariableDefinition</a>
+          </td>
+          <td class="xmldoc"><p>2.2.8 Variables</p>
+
+</td>
+        </tr>
+    </tbody>
+  </table>
+  <table class="table table-bordered module-list">
+    <thead>
+      <tr><td>Module</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-ast-visitor.html">Visitor</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+  <h2>FSharp.Data.GraphQL.Client Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-client-graphqlreply-1.html">GraphQLReply<'t></a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-client-graphqlprovider.html">GraphQlProvider</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-client-introspectionresult.html">IntrospectionResult</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+  <table class="table table-bordered module-list">
+    <thead>
+      <tr><td>Module</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-client-querydsl.html">QueryDSL</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-client-quotationhelpers.html">QuotationHelpers</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-client-serialization.html">Serialization</a>
+          </td>
+          <td class="xmldoc"><p>The MIT License (MIT)
+Copyright (c) 2016 Bazinga Technologies Inc</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-client-typecompiler.html">TypeCompiler</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-client-util.html">Util</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+  <h2>FSharp.Data.GraphQL.Relay Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-relay-connection-1.html">Connection<'Node></a>
+          </td>
+          <td class="xmldoc"><p>Record representing Relay connection object. Connection describes
+a set of results (Relay nodes) returned from the server. Instead
+of statically identifying paged results, relay uses notion of the
+cursor, which allows to track result set windows, while the
+result set itself may change over time.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-relay-edge-1.html">Edge<'Node></a>
+          </td>
+          <td class="xmldoc"><p>Record used to represent Relay node with cursor identifier.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-relay-pageinfo.html">PageInfo</a>
+          </td>
+          <td class="xmldoc"><p>Record used to represent a information about single page of
+results to Relay. Relay uses cursor id to identify the order
+between the pages.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-relay-sliceinfo.html">SliceInfo</a>
+          </td>
+          <td class="xmldoc"><p>Slice info union describing Relay cursor progression.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-relay-slicemetainfo.html">SliceMetaInfo</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+  <table class="table table-bordered module-list">
+    <thead>
+      <tr><td>Module</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-relay-connection.html">Connection</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-relay-cursor.html">Cursor</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-relay-definitions.html">Definitions</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-relay-globalid.html">GlobalId</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+  <h2>FSharp.Data.GraphQL.Types Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-abstractdef.html">AbstractDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of abstract types: interfaces and unions. Each abstract
+type contains a collection of possible object types, which can be resolved
+from schema.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-compositedef.html">CompositeDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of composite types. Composites are non-leaf nodes of
+the GraphQL query tree. Query path cannot end with a composite.
+Composite type defines list of fields, it consists of. By default
+only interfaces, unions and objects are valid composite types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-directivedef.html">DirectiveDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL directive defintion.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-enumdef.html">EnumDef</a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL representation of the enum type. Enums are leaf types.
+They have a well-defined set of all possible cases that
+can be returned to caller.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-enumdef-1.html">EnumDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL representation of the enum type. Enums are leaf types.
+They have a well-defined set of all possible cases that
+can be returned to caller.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-enumval.html">EnumVal</a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL representation of single case of the enum type.
+Enum value return value is always represented as string.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executefield.html">ExecuteField</a>
+          </td>
+          <td class="xmldoc"><p>Function type for the compiled field executor.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executeinput.html">ExecuteInput</a>
+          </td>
+          <td class="xmldoc"><p>Function type used for resolving input object field values.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executioncontext.html">ExecutionContext</a>
+          </td>
+          <td class="xmldoc"><p>Execution context of the current GraphQL operation. It contains a full
+knowledge about which fields will be accessed, what types are associated
+with them and what variable values have been set by incoming query.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executioninfokind.html">ExecutionInfoKind</a>
+          </td>
+          <td class="xmldoc"><p>Kind of ExecutionInfo, marking a reduction operations, that should be applied to it.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executionplan.html">ExecutionPlan</a>
+          </td>
+          <td class="xmldoc"><p>Execution plan of the current GraphQL operation. It describes, which
+fiels will be resolved and how to do so.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-executionstrategy.html">ExecutionStrategy</a>
+          </td>
+          <td class="xmldoc"><p>Execution strategy for provided queries. Defines if object fields should
+be resolved either sequentially one-by-one or in parallel.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-fielddef.html">FieldDef</a>
+          </td>
+          <td class="xmldoc"><p>Untyped representation of the GraphQL field defintion.
+Can be used only withing object and interface definitions.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-fielddef-1.html">FieldDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>A paritally typed representation of the GraphQL field defintion.
+Contains type parameter describing .NET type used as it's container.
+Can be used only withing object and interface definitions.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-ischema.html">ISchema</a>
+          </td>
+          <td class="xmldoc"><p>Interface used for receiving information about a whole
+schema and type system defined within it.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-includer.html">Includer</a>
+          </td>
+          <td class="xmldoc"><p>A function type, which upon execution returns true if related field should
+be included in result set for the query.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-inputdef.html">InputDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of all type defintions, that can be uses as inputs.
+By default only scalars, enums, lists, nullables and input objects
+are valid input types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-inputdef-1.html">InputDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>Representation of all type defintions, that can be uses as inputs.
+By default only scalars, enums, lists, nullables and input objects
+are valid input types. Constrained to represent .NET type provided
+as generic parameter.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-inputfielddef.html">InputFieldDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL field input definition. Can be used as fields for
+input objects or as arguments for any ordinary field definition.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-inputobjectdef.html">InputObjectDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL tye definition for input objects. They are different
+from object types (which can be used only as outputs).</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-inputobjectdefinition-1.html">InputObjectDefinition<'Val></a>
+          </td>
+          <td class="xmldoc"><p>GraphQL tye definition for input objects. They are different
+from object types (which can be used only as outputs).</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-interfacedef.html">InterfaceDef</a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL interface type defintion. Interfaces are composite
+output types, that can be implemented by GraphQL objects.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-interfacedef-1.html">InterfaceDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL interface type defintion. Interfaces are composite
+output types, that can be implemented by GraphQL objects.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-leafdef.html">LeafDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of leaf type definitions. Leaf types represents leafs
+of the GraphQL query tree. Each query path must end with a leaf.
+By default only scalars and enums are valid leaf types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-listofdef.html">ListOfDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for collection types. Lists are both
+valid input and output types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-listofdef-2.html">ListOfDef<'Val, 'Seq></a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for collection types. Lists are both
+valid input and output types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-nameddef.html">NamedDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of named types. All named types are registered in
+a schema. By default only non-named types are nullables and lists.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-nullabledef.html">NullableDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for nullable/optional types.
+By default all GraphQL types in this library are considered
+to be NonNull. This definition applies reversed mechanics,
+allowing them to take null as a valid value.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-nullabledef-1.html">NullableDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for nullable/optional types.
+By default all GraphQL types in this library are considered
+to be NonNull. This definition applies reversed mechanics,
+allowing them to take null as a valid value.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-objectdef.html">ObjectDef</a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for objects. Objects are composite output
+types with set of fields. They can implement GraphQL interfaces
+and be cases of the GraphQL unions.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-objectdef-1.html">ObjectDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>GraphQL type definition for objects. Objects are composite output
+types with set of fields. They can implement GraphQL interfaces
+and be cases of the GraphQL unions.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-outputdef.html">OutputDef</a>
+          </td>
+          <td class="xmldoc"><p>Representation of all type defintions, that can be uses as outputs.
+By default only scalars, enums, lists, nullables, unions, interfaces
+and objects are valid output types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-outputdef-1.html">OutputDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>Representation of all type defintions, that can be uses as outputs.
+By default only scalars, enums, lists, nullables, unions, interfaces
+and objects are valid input types. Constrained to represent .NET type
+provided as generic parameter.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-planningcontext.html">PlanningContext</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-resolve.html">Resolve</a>
+          </td>
+          <td class="xmldoc"><p>Wrapper for a resolve method defined by the user or generated by a runtime.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-resolvefieldcontext.html">ResolveFieldContext</a>
+          </td>
+          <td class="xmldoc"><p>An execution context for the particular field, applied as the first
+parameter for target resolve function.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-scalardef.html">ScalarDef</a>
+          </td>
+          <td class="xmldoc"><p>An untyped representation of GraphQL scalar type.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-typedef-1.html">TypeDef<'Val></a>
+          </td>
+          <td class="xmldoc"><p>Root of GraphQL type system. Constrained to represent .NET type
+provided as generic parameter.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-uniondef.html">UnionDef</a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL union definition. Unions are composite output types,
+that can return one of the defined case objects as outputs.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="fsharp-data-graphql-types-uniondef-1.html">UnionDef<'In></a>
+          </td>
+          <td class="xmldoc"><p>A GraphQL union definition. Unions are composite output types,
+that can return one of the defined case objects as outputs.</p>
+
+</td>
+        </tr>
+    </tbody>
+  </table>
+  <table class="table table-bordered module-list">
+    <thead>
+      <tr><td>Module</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-types-introspection.html">Introspection</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-types-patterns.html">Patterns</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-types-resolvemodule.html">Resolve</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="module-name">
+            <a href="fsharp-data-graphql-types-schemadefinitions.html">SchemaDefinitions</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+  <h2>ProviderImplementation.ProvidedTypes Namespace</h2>
+    <div>
+      <table class="table table-bordered type-list">
+    <thead>
+      <tr><td>Type</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedconstructor.html">ProvidedConstructor</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided constructor.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedevent.html">ProvidedEvent</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided property.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedfield.html">ProvidedField</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided field.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedliteralfield.html">ProvidedLiteralField</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided field.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedmeasurebuilder.html">ProvidedMeasureBuilder</a>
+          </td>
+          <td class="xmldoc"><p>Helps create erased provided unit-of-measure annotations.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedmethod.html">ProvidedMethod</a>
+          </td>
+          <td class="xmldoc"></td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedparameter.html">ProvidedParameter</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided parameter</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedproperty.html">ProvidedProperty</a>
+          </td>
+          <td class="xmldoc"><p>Represents an erased provided property.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedstaticparameter.html">ProvidedStaticParameter</a>
+          </td>
+          <td class="xmldoc"><p>Represents a provided static parameter.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedsymbolkind.html">ProvidedSymbolKind</a>
+          </td>
+          <td class="xmldoc"><p>Represents the type constructor in a provided symbol type.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedsymboltype.html">ProvidedSymbolType</a>
+          </td>
+          <td class="xmldoc"><p>Represents an array or other symbolic type involving a provided type as the argument.
+See the type provider spec for the methods that must be implemented.
+Note that the type provider specification does not require us to implement pointer-equality for provided types.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedtypebuilder.html">ProvidedTypeBuilder</a>
+          </td>
+          <td class="xmldoc"><p>Helpers to build symbolic provided types</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-providedtypedefinition.html">ProvidedTypeDefinition</a>
+          </td>
+          <td class="xmldoc"><p>Represents a provided type definition.</p>
+
+</td>
+        </tr>
+        <tr>
+          <td class="type-name">
+            <a href="providerimplementation-providedtypes-typeproviderfornamespaces.html">TypeProviderForNamespaces</a>
+          </td>
+          <td class="xmldoc"><p>A base type providing default implementations of type provider functionality when all provided
+types are of type ProvidedTypeDefinition.</p>
+
+</td>
+        </tr>
+    </tbody>
+  </table>
+
+    </div>
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>

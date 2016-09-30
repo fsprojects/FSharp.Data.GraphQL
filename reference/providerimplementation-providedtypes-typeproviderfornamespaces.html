@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>TypeProviderForNamespaces - FSharp.Data.GraphQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content=""/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+
+
+
+<h1>TypeProviderForNamespaces</h1>
+<p>
+  <span>Namespace: ProviderImplementation.ProvidedTypes</span><br />
+</p>
+<div class="xmldoc">
+<p>A base type providing default implementations of type provider functionality when all provided
+types are of type ProvidedTypeDefinition.</p>
+
+</div>
+  <h3>Constructors</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Constructor</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '550', 550)" onmouseover="showTip(event, '550', 550)">
+            new()
+          </code>
+          <div class="tip" id="550">
+            <strong>Signature:</strong> unit -&gt; TypeProviderForNamespaces<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2857-2857" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Initializes a type provider</p>
+
+
+              <p>CompiledName: <code>.ctor</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '551', 551)" onmouseover="showTip(event, '551', 551)">
+            new(namespaceName, types)
+          </code>
+          <div class="tip" id="551">
+            <strong>Signature:</strong> (namespaceName:string * types:ProvidedTypeDefinition list) -&gt; TypeProviderForNamespaces<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2856-2856" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Initializes a type provider to provide the types in the given namespace.</p>
+
+
+              <p>CompiledName: <code>.ctor</code></p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Instance members</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Instance member</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '552', 552)" onmouseover="showTip(event, '552', 552)">
+            add_Disposing(arg1)
+          </code>
+          <div class="tip" id="552">
+            <strong>Signature:</strong> EventHandler -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2860-2860" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '553', 553)" onmouseover="showTip(event, '553', 553)">
+            AddNamespace(namespaceName, types)
+          </code>
+          <div class="tip" id="553">
+            <strong>Signature:</strong> (namespaceName:string * types:ProvidedTypeDefinition list) -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2895-2895" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Invoked by the type provider to add a namespace of provided types in the specification of the type provider.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '554', 554)" onmouseover="showTip(event, '554', 554)">
+            ApplyStaticArgumentsForMethod(...)
+          </code>
+          <div class="tip" id="554">
+            <strong>Signature:</strong> (MethodBase * string * obj []) -&gt; MethodBase<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2908-2908" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Invoked by the host of the type provider to apply the static argumetns for a method.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '555', 555)" onmouseover="showTip(event, '555', 555)">
+            Disposing
+          </code>
+          <div class="tip" id="555">
+            <strong>Signature:</strong> IEvent&lt;EventHandler,EventArgs&gt;<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2860-2860" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          
+              <p>CompiledName: <code>get_Disposing</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '556', 556)" onmouseover="showTip(event, '556', 556)">
+            GetStaticParametersForMethod(arg1)
+          </code>
+          <div class="tip" id="556">
+            <strong>Signature:</strong> MethodBase -&gt; ParameterInfo []<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2902-2902" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Invoked by the host of the type provider to get the static parameters for a method.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '557', 557)" onmouseover="showTip(event, '557', 557)">
+            Invalidate()
+          </code>
+          <div class="tip" id="557">
+            <strong>Signature:</strong> unit -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2900-2900" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Invoked by the type provider to invalidate the information provided by the provider</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '558', 558)" onmouseover="showTip(event, '558', 558)">
+            Namespaces
+          </code>
+          <div class="tip" id="558">
+            <strong>Signature:</strong> seq&lt;string * ProvidedTypeDefinition list&gt;<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2898-2898" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Invoked by the type provider to get all provided namespaces with their provided types.</p>
+
+
+              <p>CompiledName: <code>get_Namespaces</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '559', 559)" onmouseover="showTip(event, '559', 559)">
+            RegisterProbingFolder(folder)
+          </code>
+          <div class="tip" id="559">
+            <strong>Signature:</strong> folder:string -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2879-2879" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Registers custom probing path that can be used for probing assemblies</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '560', 560)" onmouseover="showTip(event, '560', 560)">
+            RegisterRuntimeAssemblyLocationAsProbingFolder(...)
+          </code>
+          <div class="tip" id="560">
+            <strong>Signature:</strong> config:TypeProviderConfig -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2884-2884" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Registers location of RuntimeAssembly (from TypeProviderConfig) as probing folder</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '561', 561)" onmouseover="showTip(event, '561', 561)">
+            remove_Disposing(arg1)
+          </code>
+          <div class="tip" id="561">
+            <strong>Signature:</strong> EventHandler -&gt; unit<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2860-2860" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '562', 562)" onmouseover="showTip(event, '562', 562)">
+            ResolveAssembly(arg1)
+          </code>
+          <div class="tip" id="562">
+            <strong>Signature:</strong> ResolveEventArgs -&gt; Assembly<br />
+              <strong>Modifiers:</strong> abstract<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Client/ProvidedTypes.fs#L2867-2867" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>AssemblyResolve handler. Default implementation searches <assemblyname>.dll file in registered folders</p>
+
+
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>

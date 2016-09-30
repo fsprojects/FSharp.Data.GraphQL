@@ -35,8 +35,8 @@
           
 <h1><a name="LINQ-support" class="anchor" href="#LINQ-support">LINQ support</a></h1>
 <h2><a name="Tracking-properties" class="anchor" href="#Tracking-properties">Tracking properties</a></h2>
-<p>One of the unique features, <code>ExecutionInfo</code> gives to FSharp.Data.GraphQL, is an ability to make more advanced analysis of the requested query ahead of its execution. One of them is abilit to create so called property trees, also known as <strong>Tracker</strong>s.</p>
-<p><strong>Tracker</strong> is a tree with all dependent members (properties or fields) accessed in given execution info resolver expression, as well as its continuations in all nested execution infos, that will be called further. ExecutionInfo resolve object parameter is considered as a tree root in this case.</p>
+<p>One of the unique features, <code>ExecutionInfo</code> gives to FSharp.Data.GraphQL, is an ability to make more advanced analysis of the requested query ahead of its execution. One of them is an ability to create so called property trees, also known as <strong>Tracker</strong>s.</p>
+<p><strong>Tracker</strong> is a tree of all dependent members (properties or fields) accessed in given execution info resolver expression, as well as its continuations in all nested execution infos, that will be called further. ExecutionInfo resolve object parameter is considered as a tree root in this case.</p>
 <p>Keep in mind that tracker is only able to resolve dependent properties within range of the given resolver expression - it won't be able to determine which members were accessed in subsequent method calls.</p>
 <blockquote>
 <p>WARNING: At the moment of current version (v0.2-beta) this feature is not working with abstract types either.</p>
@@ -62,8 +62,8 @@
 </code></pre></td>
 </tr>
 </table>
-<p>While this is very simplistic query, it could expose potential problem - as we don't know what other entities beside <code>People</code> table will be queries as part of GraphQL query at this point. This may potentially lead to problem of N+1 SELECTs, where related tables - which have not been mentioned in original database query - will be a subject of many subsequent queries.</p>
-<p>However, given information lying in <code>ExecutionInfo</code> and property <code>Tracker</code> tree as its extension, we are able to determine which entity relations will be called before actual execution of the query. Given that knowledge, we can construct a simple logic which will apply <code>Include("&lt;Relationship&gt;")</code> method, which will warn Entity Framework, which table to prefetch when an actual LINQ query will be called.</p>
+<p>While this is very simplistic query, it could expose potential problem - as we don't know what other entities beside <code>People</code> table will be queried as part of GraphQL query at this point, as subsequent objects may define their own fields with other relationships not visible from this function. This may potentially lead to problem of N+1 SELECTs, where related tables - which have not been mentioned in the original database query - could be a subjects of many subsequent queries.</p>
+<p>However, given information lying in <code>ExecutionInfo</code> - and property <code>Tracker</code> tree as its extension - we are able to determine which entity relations will be called before actual execution of the query. Given that knowledge, we can construct a simple logic which will apply <code>Include("&lt;Relationship&gt;")</code> method to warn Entity Framework, which tables to prefetch when an actual LINQ query will be called.</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
 <span class="l"> 2: </span>
 <span class="l"> 3: </span>
@@ -112,7 +112,7 @@
 </code></pre></td>
 </tr>
 </table>
-<p>With that, we can simply modify the code from the beginning to, include all referenced tables - even thou the GraphQL query itself may be constructed dynamically:</p>
+<p>With that, we can simply modify the code from the beginning, to include all referenced tables - even thou the GraphQL query itself may still be constructed dynamically:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
 <span class="l">2: </span>
 <span class="l">3: </span>
@@ -132,12 +132,12 @@
 </tr>
 </table>
 <h2><a name="LINQ-generation" class="anchor" href="#LINQ-generation">LINQ generation</a></h2>
-<p>Beside being able to use trackers for custom use, FSharp.Data.GraphQL server offers an ability to apply that information in form of LINQ expression on top of an existing <code>IQueryable&lt;&gt;</code> collection. Such application is able to create subsequent selects if form of <code>A</code> &amp;rArr; <code>A'{ list of field acessed from A}</code>, where it takes only those fields, which will be used during query execution.</p>
+<p>Beside being able to use trackers for custom use, FSharp.Data.GraphQL server offers an ability to apply that information in form of LINQ expression on top of an existing <code>IQueryable&lt;&gt;</code> collection. Such application is able to create subsequent selects if form of <code>A</code> &amp;rArr; <code>A'{ list of field acessed from A }</code>, where it takes only those fields, which will be used during query execution.</p>
 <p>What it also does is free interpretation of field parameters into their LINQ "equivalent". This includes:</p>
 <ul>
 <li><code>skip</code>, <code>take</code>, <code>orderBy</code> and <code>orderByDesc</code> will be translated into corresponding LINQ equivalent methods.</li>
-<li><code>id</code> will be translated into <code>.Where(x =&gt; x.Id == &lt;id&gt;)</code>. This requires returned type to provide such Id member used as entity identifier.</li>
-<li><code>first</code>/<code>after</code> and <code>last</code>/<code>before</code> combinations known to the <a href="https://facebook.github.io/relay/">RelayJS</a> users will be translated into <code>.OrderBy(x =&gt; x.Id).Where(x =&gt; x.Id &gt; &lt;after&gt;).Take(&lt;first&gt;)</code> and <code>.OrderByDescending(x =&gt; x.Id).Wherex(x =&gt; x.Id &lt; &lt;before&gt;).Take(&lt;last&gt;)</code> equivalents. This also requires from queries elements to provide Id member used as entity identifier.</li>
+<li><code>id</code> will be translated into <code>.Where(x =&gt; x.Id == &lt;id&gt;)</code>. This requires returned type to provide an Id member used as entity identifier.</li>
+<li><code>first</code>/<code>after</code> and <code>last</code>/<code>before</code> combinations known to the <a href="https://facebook.github.io/relay/">RelayJS</a> users will be translated into <code>.OrderBy(x =&gt; x.Id).Where(x =&gt; x.Id &gt; &lt;after&gt;).Take(&lt;first&gt;)</code> and <code>.OrderByDescending(x =&gt; x.Id).Wherex(x =&gt; x.Id &lt; &lt;before&gt;).Take(&lt;last&gt;)</code> equivalents. This also requires from queried elements to provide Id member used as entity identifier.</li>
 </ul>
 <p>This list can be extended and overriden by custom user implementation.</p>
 <p>To better illustrate lets use the example. Consider having following type definition:</p>
@@ -194,7 +194,7 @@
     }
 }
 </code></pre></td></tr></table>
-<p>LINQ interpreter will produce equivalent similar in form to:</p>
+<p>Once executed, a LINQ interpreter will produce equivalent similar in form to:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
 <span class="l"> 2: </span>
 <span class="l"> 3: </span>

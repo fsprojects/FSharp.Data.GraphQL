@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>GlobalId - FSharp.Data.GraphQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content=""/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+
+
+
+<h1>GlobalId</h1>
+<p>
+  <span>Namespace: FSharp.Data.GraphQL.Relay</span><br />
+</p>
+<div class="xmldoc">
+</div>
+
+<!-- Render nested types and modules, if there are any -->
+
+  <h3>Functions and values</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Function or value</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '79', 79)" onmouseover="showTip(event, '79', 79)">
+            fromGlobalId id
+          </code>
+          <div class="tip" id="79">
+            <strong>Signature:</strong> id:string -&gt; (string * string) option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L16-16" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Tries to parse Relay global node identifier.
+Relay identifiers are strings, which follows base64(typeName:nodeId) format.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '80', 80)" onmouseover="showTip(event, '80', 80)">
+            toGlobalId typeName id
+          </code>
+          <div class="tip" id="80">
+            <strong>Signature:</strong> typeName:string -&gt; id:string -&gt; string<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L26-26" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Tries to parse typeName - id pair into single Relay-compatible global node identifier</p>
+
+
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Type extensions</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Type extension</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '81', 81)" onmouseover="showTip(event, '81', 81)">
+            GlobalIdField(typeName, resolve)
+          </code>
+          <div class="tip" id="81">
+            <strong>Signature:</strong> (typeName:string * resolve:(ResolveFieldContext -&gt; &#39;In -&gt; string)) -&gt; FieldDef&lt;&#39;In&gt;<br />
+                          <strong>Type parameters:</strong> 'In          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L45-45" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Field definition for the Relay GlobalID field for the chosen type.</p>
+
+
+              <p>CompiledName: <code>Define.GlobalIdField.Static</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '82', 82)" onmouseover="showTip(event, '82', 82)">
+            GlobalIdField(resolve)
+          </code>
+          <div class="tip" id="82">
+            <strong>Signature:</strong> (resolve:(ResolveFieldContext -&gt; &#39;In -&gt; string)) -&gt; FieldDef&lt;&#39;In&gt;<br />
+                          <strong>Type parameters:</strong> 'In          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L53-53" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Field definition for the Relay GlobalID field for the chosen type.</p>
+
+
+              <p>CompiledName: <code>Define.GlobalIdField.Static</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '83', 83)" onmouseover="showTip(event, '83', 83)">
+            Node(possibleTypes)
+          </code>
+          <div class="tip" id="83">
+            <strong>Signature:</strong> (possibleTypes:(unit -&gt; ObjectDef list)) -&gt; InterfaceDef&lt;&#39;?7659&gt;<br />
+                          <strong>Type parameters:</strong> '?7659          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L77-77" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Field definition for the Relay Node interface. Node interfaces are used
+by Relay to identify uniqe components - they need to implement and <code>id</code>
+field which is a globally unique object identifier.</p>
+
+
+              <p>CompiledName: <code>Define.Node.Static</code></p>
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '84', 84)" onmouseover="showTip(event, '84', 84)">
+            NodeField(nodeDef, resolve)
+          </code>
+          <div class="tip" id="84">
+            <strong>Signature:</strong> (nodeDef:InterfaceDef&lt;&#39;Res&gt; * resolve:(ResolveFieldContext -&gt; &#39;Val -&gt; string -&gt; &#39;Res option)) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L64-64" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Field definition for the Relay Node interface. Node interfaces are used
+by Relay to identify uniqe components - they need to implement and <code>id</code>
+field which is a globally unique object identifier.</p>
+
+
+              <p>CompiledName: <code>Define.NodeField.Static</code></p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+  <h3>Active patterns</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Active pattern</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '85', 85)" onmouseover="showTip(event, '85', 85)">
+            ( |GlobalId|_| ) 
+          </code>
+          <div class="tip" id="85">
+            <strong>Signature:</strong> string -&gt; (string * string) option<br />
+                      </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Server/Relay/Node.fs#L23-23" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Active pattern over <see cref="fromGlobalId"/> function.</p>
+
+
+              <p>CompiledName: <code>|GlobalId|_|</code></p>
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>

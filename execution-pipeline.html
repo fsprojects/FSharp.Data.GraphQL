@@ -34,14 +34,14 @@
         <div class="span9" id="main">
           
 <h1><a name="Technical-overview-over-execution-pipeline" class="anchor" href="#Technical-overview-over-execution-pipeline">Technical overview over execution pipeline</a></h1>
-<p>The major work done by FSharp.Data.GraphQL can be split into several phases:</p>
+<p>The major work done by FSharp.Data.GraphQL server can be split into several phases:</p>
 <ol>
 <li>Compilation phase, which is executed once when a new <code>Schema</code> is being created.</li>
 <li>Planning phase, when GraphQL query string has been supplied.</li>
 <li>Execution phase, when query is being executed and result is produced.</li>
 </ol>
 <h2><a name="Compilation-phase" class="anchor" href="#Compilation-phase">Compilation phase</a></h2>
-<p>Compilation phase is called, when we're creating a schema. From this point, all types defined within that schema should remain unchanged. During this step, server will invoke all operations that can be done ahead of time, before actual queries can be handled. This also means that creating a new schema is expensive process, and should not be done on each request.</p>
+<p>Compilation phase is called, when we're creating a new schema instance. From this point, all types defined within that schema should remain unchanged. During this step, server will invoke all operations that can be done ahead of time, before actual queries can be handled. This also means that creating a new schema is expensive process, and <strong>should not</strong> be done on each request.</p>
 <p>Compilation phase performs several operations:</p>
 <ul>
 <li>Validates, if all type definitions conform GraphQL specification.</li>
@@ -57,11 +57,11 @@
 <li>Combining information from query AST (resolved fields / aliases) with server-side information about them (field and type definitions).</li>
 <li>Preparation of the hooks in the execution chain, that will be supplied with potential variables upon execution.</li>
 </ul>
-<p>Spliting planning and execution phases is a good idea, when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute execution plan once and cache it. You can use <code>executionPlan.DocumentId</code> as a cache identifier. It's also returned as one of the top level fields in GraphQL response, so it can be used from the client side. Other GraphQL implementations describe that technique as <strong>persistent queries</strong>.</p>
+<p>Spliting planning and execution phases is a good idea, when you have the same GraphQL query requested many times (with potentially different variables). This way you can compute execution plan once and cache it. You can use <code>executionPlan.DocumentId</code> as a cache identifier. DocumentId is also returned as one of the top level fields in GraphQL response, so it can be used from the client side. Other GraphQL implementations describe that technique as <strong>persistent queries</strong>.</p>
 <h2><a name="Execution-phase" class="anchor" href="#Execution-phase">Execution phase</a></h2>
 <p>Execution phase is performed, when we want to resolve response from GraphQL server given query execution plan and optional set of variables provided by the client. Usually it's called together with planning phase descibed above.</p>
 <p>During execution phase, we perform a traversal over execution plan tree, create an execution context objects for each of the fields and supply them along with data resolved from previous higher level resolver responses recrusively.</p>
-<p>Field resolution context contains all the necessary metadata about things such as:</p>
+<p>Field resolution context contains all of the necessary metadata about things such as:</p>
 <ul>
 <li>Executing schema itself.</li>
 <li>Variables provided with the request.</li>
@@ -71,7 +71,7 @@
 </ul>
 <p>Execution phase can be performed using one of the two strategies:</p>
 <ul>
-<li><strong>Parallel</strong>, where asynchronous fields can be resolved in unordered manner. This is by default available for GraphQL queries due to fact, that they are readonly operations.</li>
+<li><strong>Parallel</strong>, where asynchronous fields can be resolved in unordered manner. This is default option in case of GraphQL queries due to fact, that they are readonly operations.</li>
 <li><strong>Sequential</strong> where asynchronous fields must be resolved in correct order (as it was defined in query string). This is default mode for GraphQL mutations.</li>
 </ul>
 <p>As result of GraphQL query execution, a dictionary with resolved values will be returned. It contains following fields:</p>
@@ -80,6 +80,7 @@
 <li><code>data</code> with a formated GraphQL response matching the requested query string.</li>
 <li><code>errors</code> entry is optional. If it has been provided, it will contain list of errors, that occured during query execution.</li>
 </ul>
+<p>This result can be serialized directly and returned to the client.</p>
 
 
         </div>

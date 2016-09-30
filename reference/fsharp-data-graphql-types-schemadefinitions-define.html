@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>Define - FSharp.Data.GraphQL</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <meta name="description" content=""/>
+    <meta name="author" content="Bazinga Technologies Inc"/>
+
+    <script src="https://code.jquery.com/jquery-1.8.0.js"></script>
+    <script src="https://code.jquery.com/ui/1.8.23/jquery-ui.js"></script>
+    <script src="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/js/bootstrap.min.js"></script>
+    <link href="https://netdna.bootstrapcdn.com/twitter-bootstrap/2.2.1/css/bootstrap-combined.min.css" rel="stylesheet"/>
+
+    <link type="text/css" rel="stylesheet" href="/FSharp.Data.GraphQL/content/style.css" />
+    <script type="text/javascript" src="/FSharp.Data.GraphQL/content/tips.js"></script>
+    <!-- HTML5 shim, for IE6-8 support of HTML5 elements -->
+    <!--[if lt IE 9]>
+      <script src="https://oss.maxcdn.com/html5shiv/3.7.2/html5shiv.min.js"></script>
+    <![endif]-->
+  </head>
+  <body>
+    <div class="container">
+      <div class="masthead">
+        <ul class="nav nav-pills pull-right">
+          <li><a href="http://fsharp.org">fsharp.org</a></li>
+          <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">github page</a></li>
+        </ul>
+        <h3 class="muted"><a href="/FSharp.Data.GraphQL/index.html">FSharp.Data.GraphQL</a></h3>
+      </div>
+      <hr />
+      <div class="row">
+        <div class="span9" id="main">
+          
+
+
+
+<h1>Define</h1>
+<p>
+  <span>Namespace: FSharp.Data.GraphQL.Types</span><br />
+  <span>Parent Module: <a href="fsharp-data-graphql-types-schemadefinitions.html">SchemaDefinitions</a></span>
+</p>
+<div class="xmldoc">
+<p>Common space for all definition helper methods.</p>
+
+</div>
+  <h3>Static members</h3>
+  <table class="table table-bordered member-list">
+    <thead>
+      <tr><td>Static member</td><td>Description</td></tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '303', 303)" onmouseover="showTip(event, '303', 303)">
+            AsyncField(...)
+          </code>
+          <div class="tip" id="303">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8763 * description:string * args:InputFieldDef list * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; Async&lt;&#39;Res&gt;)&gt; * deprecationReason:string) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8763, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2111-2111" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type with asynchronously resolved value. Fields is marked as deprecated.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '304', 304)" onmouseover="showTip(event, '304', 304)">
+            AsyncField(...)
+          </code>
+          <div class="tip" id="304">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8759 * description:string * args:InputFieldDef list * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; Async&lt;&#39;Res&gt;)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8759, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2091-2091" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type with asynchronously resolved value.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '305', 305)" onmouseover="showTip(event, '305', 305)">
+            AsyncField(...)
+          </code>
+          <div class="tip" id="305">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8755 * description:string * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; Async&lt;&#39;Res&gt;)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8755, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2073-2073" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type with asynchronously resolved value.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '306', 306)" onmouseover="showTip(event, '306', 306)">
+            AsyncField(name, typedef, resolve)
+          </code>
+          <div class="tip" id="306">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8751 * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; Async&lt;&#39;Res&gt;)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8751, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2056-2056" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type with asynchronously resolved value.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '307', 307)" onmouseover="showTip(event, '307', 307)">
+            AutoField(...)
+          </code>
+          <div class="tip" id="307">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8727 * description:string option * args:InputFieldDef list option * deprecationReason:string option) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8727, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1955-1955" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object types with automatically generated field resolve function.
+Field name must match object's property or field.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '308', 308)" onmouseover="showTip(event, '308', 308)">
+            Enum(name, options, description)
+          </code>
+          <div class="tip" id="308">
+            <strong>Signature:</strong> (name:string * options:EnumValue&lt;&#39;Val&gt; list * description:string option) -&gt; EnumDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1847-1847" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates GraphQL type definition for user defined enums.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '309', 309)" onmouseover="showTip(event, '309', 309)">
+            EnumValue(...)
+          </code>
+          <div class="tip" id="309">
+            <strong>Signature:</strong> (name:string * value:&#39;Val * description:string option * deprecationReason:string option) -&gt; EnumValue&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1862-1862" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a single enum option to be used as argument in .</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '310', 310)" onmouseover="showTip(event, '310', 310)">
+            Field(...)
+          </code>
+          <div class="tip" id="310">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8747 * description:string * args:InputFieldDef list * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; &#39;Res)&gt; * deprecationReason:string) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8747, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2039-2039" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type. Fields is marked as deprecated.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '311', 311)" onmouseover="showTip(event, '311', 311)">
+            Field(...)
+          </code>
+          <div class="tip" id="311">
+            <strong>Signature:</strong> (name:string * typedef:&#39;a * description:string * args:InputFieldDef list * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; &#39;Res)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'a, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2020-2020" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '312', 312)" onmouseover="showTip(event, '312', 312)">
+            Field(...)
+          </code>
+          <div class="tip" id="312">
+            <strong>Signature:</strong> (name:string * typedef:&#39;a * description:string * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; &#39;Res)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'a, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2002-2002" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '313', 313)" onmouseover="showTip(event, '313', 313)">
+            Field(name, typedef, resolve)
+          </code>
+          <div class="tip" id="313">
+            <strong>Signature:</strong> (name:string * typedef:&#39;a * resolve:Expr&lt;(ResolveFieldContext -&gt; &#39;Val -&gt; &#39;Res)&gt;) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'a, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1985-1985" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside object type.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '314', 314)" onmouseover="showTip(event, '314', 314)">
+            Field(name, typedef)
+          </code>
+          <div class="tip" id="314">
+            <strong>Signature:</strong> (name:string * typedef:&#39;?8731) -&gt; FieldDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> '?8731, 'Res, 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1970-1970" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates field defined inside interfaces. When used for objects may cause runtime exceptions due to
+lack of resolve function supplied. To use auto generated resolvers use .</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '315', 315)" onmouseover="showTip(event, '315', 315)">
+            Input(...)
+          </code>
+          <div class="tip" id="315">
+            <strong>Signature:</strong> (name:string * typedef:&#39;a * defaultValue:&#39;In option * description:string option) -&gt; InputFieldDef<br />
+                          <strong>Type parameters:</strong> 'a, 'In          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2133-2133" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates an input field. Input fields are used like ordinary fileds in case of s,
+and can be used to define arguments to objects and interfaces fields.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '316', 316)" onmouseover="showTip(event, '316', 316)">
+            InputObject(name, fields, description)
+          </code>
+          <div class="tip" id="316">
+            <strong>Signature:</strong> (name:string * fields:InputFieldDef list * description:string option) -&gt; InputObjectDefinition&lt;&#39;Out&gt;<br />
+                          <strong>Type parameters:</strong> 'Out          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1941-1941" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+.NET class or struct, or a F# record.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '317', 317)" onmouseover="showTip(event, '317', 317)">
+            InputObject(name, fieldsFn, description)
+          </code>
+          <div class="tip" id="317">
+            <strong>Signature:</strong> (name:string * fieldsFn:(unit -&gt; InputFieldDef list) * description:string option) -&gt; InputObjectDefinition&lt;&#39;Out&gt;<br />
+                          <strong>Type parameters:</strong> 'Out          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1928-1928" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+.NET class or struct, or a F# record.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '318', 318)" onmouseover="showTip(event, '318', 318)">
+            Interface(...)
+          </code>
+          <div class="tip" id="318">
+            <strong>Signature:</strong> (name:string * fields:FieldDef&lt;&#39;Val&gt; list * description:string option * resolveType:(obj -&gt; ObjectDef) option) -&gt; InterfaceDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2163-2163" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '319', 319)" onmouseover="showTip(event, '319', 319)">
+            Interface(...)
+          </code>
+          <div class="tip" id="319">
+            <strong>Signature:</strong> (name:string * fieldsFn:(unit -&gt; FieldDef&lt;&#39;Val&gt; list) * description:string option * resolveType:(obj -&gt; ObjectDef) option) -&gt; InterfaceDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2149-2149" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '320', 320)" onmouseover="showTip(event, '320', 320)">
+            Object(...)
+          </code>
+          <div class="tip" id="320">
+            <strong>Signature:</strong> (name:string * fields:FieldDef&lt;&#39;Val&gt; list * description:string option * interfaces:InterfaceDef list option * isTypeOf:(obj -&gt; bool) option) -&gt; ObjectDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1907-1907" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates GraphQL custom output object type. It can be used as a valid output but not an input object
+(see  for more details).</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '321', 321)" onmouseover="showTip(event, '321', 321)">
+            Object(...)
+          </code>
+          <div class="tip" id="321">
+            <strong>Signature:</strong> (name:string * fieldsFn:(unit -&gt; FieldDef&lt;&#39;Val&gt; list) * description:string option * interfaces:InterfaceDef list option * isTypeOf:(obj -&gt; bool) option) -&gt; ObjectDef&lt;&#39;Val&gt;<br />
+                          <strong>Type parameters:</strong> 'Val          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1883-1883" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates GraphQL custom output object type. It can be used as a valid output but not an input object
+(see  for more details).</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '322', 322)" onmouseover="showTip(event, '322', 322)">
+            Scalar(...)
+          </code>
+          <div class="tip" id="322">
+            <strong>Signature:</strong> (name:string * coerceInput:(Value -&gt; &#39;T option) * coerceValue:(obj -&gt; &#39;T option) * description:string option) -&gt; ScalarDefinition&lt;&#39;T&gt;<br />
+                          <strong>Type parameters:</strong> 'T          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L1834-1834" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates GraphQL type definition for user defined scalars.</p>
+
+
+        </td>
+      </tr>
+      <tr>
+        <td class="member-name">
+
+          <code onmouseout="hideTip(event, '323', 323)" onmouseover="showTip(event, '323', 323)">
+            Union(...)
+          </code>
+          <div class="tip" id="323">
+            <strong>Signature:</strong> (name:string * options:ObjectDef list * resolveValue:(&#39;In -&gt; &#39;Out) * resolveType:(&#39;In -&gt; ObjectDef) option * description:string option) -&gt; UnionDef&lt;&#39;In&gt;<br />
+                          <strong>Type parameters:</strong> 'In, 'Out          </div>
+        </td>
+        <td class="xmldoc">
+            <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/src/FSharp.Data.GraphQL.Shared/TypeSystem.fs#L2180-2180" class="github-link">
+              <img src="../content/img/github.png" class="normal" />
+              <img src="../content/img/github-blue.png" class="hover" />
+            </a>
+          <p>Creates a custom GraphQL union type, materialized as one of the types defined. It can be used as interface/object type field.
+In order to work with F# discriminated unions,  function may be used to unwrap objects
+nested as discriminated union cases.</p>
+
+
+        </td>
+      </tr>
+    </tbody>
+  </table>
+
+        </div>
+        <div class="span3">
+          <img src="/FSharp.Data.GraphQL/img/logo.png" alt="F# Project" style="width:150px;margin:10px" />  
+          <ul class="nav nav-list" id="menu" style="margin-top: 20px;">
+            <li class="nav-header">FSharp.Data.GraphQL</li>
+            <li><a href="/FSharp.Data.GraphQL/index.html">Home page</a></li>
+            <li class="divider"></li>
+            <li><a href="http://nuget.org/packages/FSharp.Data.GraphQL">Get Library via NuGet</a></li>
+            <li><a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL">Source Code on GitHub</a></li>
+            <li><a href="/FSharp.Data.GraphQL/license.html">License</a></li>
+            <li><a href="/FSharp.Data.GraphQL/release-notes.html">Release Notes</a></li>
+            
+            <li class="nav-header">Documentation</li>
+            <li><a href="/FSharp.Data.GraphQL/reference/index.html">API Reference</a></li>
+            <li><a href="/FSharp.Data.GraphQL/type-system.html">Working with GraphQL type system</a></li>
+            <li><a href="/FSharp.Data.GraphQL/execution-pipeline.html">Execution pipeline overview</a></li>
+            <li><a href="/FSharp.Data.GraphQL/linq.html">Property tracking</a></li>
+            <li><a href="/FSharp.Data.GraphQL/client-side.html">GraphQL on the client side</a></li>
+          </ul>
+        </div>
+      </div>
+    </div>
+    <a href="http://github.com/bazingatechnologies/FSharp.Data.GraphQL"><img style="position: absolute; top: 0; right: 0; border: 0;" src="https://s3.amazonaws.com/github/ribbons/forkme_right_gray_6d6d6d.png" alt="Fork me on GitHub"/></a>
+  </body>
+  </html>

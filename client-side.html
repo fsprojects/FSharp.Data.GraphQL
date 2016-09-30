@@ -34,7 +34,7 @@
         <div class="span9" id="main">
           
 <h1><a name="Using-FSharp-Data-GraphQL-on-the-client-side" class="anchor" href="#Using-FSharp-Data-GraphQL-on-the-client-side">Using FSharp.Data.GraphQL on the client side</a></h1>
-<p>FSharp.Data.GraphQL offers a client-side library, which can be used to query <strong>any</strong> GraphQL-compatible server. This includes a type provider (erasing one), which is able to introspect remotelly a schema of the server it connects to, and give you the ability to make typesafe queries from the client side. To use GraphQL type provider from the client side, simply supply it an endpoint URL of target GraphQL server:</p>
+<p>FSharp.Data.GraphQL offers a client-side library, which can be used to query <strong>any</strong> GraphQL-compatible server. It includes a type provider (erasing one), which is able to introspect remotelly a schema of the server it connects to, and give you the ability to make typesafe queries from the client side. To use GraphQL type provider from the client side, simply supply it an endpoint URL of target GraphQL server:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l">1: </span>
 <span class="l">2: </span>
 </pre></td>
@@ -43,7 +43,7 @@
 </code></pre></td>
 </tr>
 </table>
-<p>This way we get type provider, which exposes top level queries and mutation in form of the methods and fields. F# client also gives a custom DSL that alows to construct GraphQL queries programatically. For example, client may execute GraphQL query string as defined below:</p>
+<p>This way we get type provider, which exposes top level queries and mutations in form of the methods and fields. F# client also gives a custom DSL that alows to construct GraphQL queries programatically. For example, client may execute GraphQL query string as defined below:</p>
 <table class="pre"><tr><td class="lines"><pre class="fssnip"><span class="l"> 1: </span>
 <span class="l"> 2: </span>
 <span class="l"> 3: </span>
@@ -107,8 +107,7 @@
 </code></pre></td>
 </tr>
 </table>
-<p>GraphQL client is fully compatible with <a href="https://fable-compiler.github.io/">Fable compiler</a>, which allows to use it in apps targeted for the browser.</p>
-<p>In samples section you can check a <a href="https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/todo-graphql">TODO application</a>, where FSharp.Data.GraphQL used on both server- and client-side.</p>
+<p>GraphQL client is fully compatible with <a href="https://fable-compiler.github.io/">Fable compiler</a>, which gives you a possiblity to write F# applications targeted for the browsers.</p>
 
 <div class="tip" id="fs1">namespace Microsoft.FSharp</div>
 <div class="tip" id="fs2">namespace Microsoft.FSharp.Data</div>
