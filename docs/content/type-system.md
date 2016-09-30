@@ -1,7 +1,7 @@
 Working with GraphQL type system
 ========================
 
-Hearth of each GraphQL service is it's schema. Schema defines a namespace for type definitions exposed to service consumers, that can be used laters to generate things such as documentation, introspection queries and finally to execute and validate incoming GraphQL queries and mutations.
+A central point of each GraphQL service is its schema. Schema defines a namespace for type definitions exposed to service consumers, that can be used later to generate things such as documentation, introspection queries and finally to execute and validate incoming GraphQL queries and mutations.
 
 Each schema definition requires to have something called *root query* - it's a GraphQL object definition, which exposes all top level fields to be requested by the user. Aside of it there are also separate roots for mutations (queries are readonly requests) and subscriptions (which is an experimental feature, at the moment of v0.2-beta is not yet supported by Fsharp.Data.GraphQL).
 
@@ -17,7 +17,7 @@ GraphQL type system categorizes several custom types, that can be defined by pro
 Beside them, FSharp.Data.GraphQL defines two others:
 
 - Lists - which can be used to compose types defined above in context of collections.
-- Nullables - which can be used to define potentially absent fields in form of the F# option types. This differs from GraphQL standard, where fields are nullable by default and can be optionally marked as non-null. This however doesn't fit the spirit of FSharp programming language.
+- Nullables - which can be used to define potentially absent fields in form of the F# option types. This differs from GraphQL standard, where fields are nullable by default and can be optionally marked as non-null. Such approach however wouldn't fit the spirit of FSharp programming language.
 
 One of the important distintions, that can save your time in the future is difference between **Input** and **Output** type definitions:
 
@@ -49,25 +49,26 @@ let Person = Define.Object("Person", [
     Define.AsyncField("picture", Uri, fun _ person -> getPictureUrl(person.Id)) ])
 ```
 
-You can enhance most of the GraphQL components with description (this includes both object and fields definitions) - such string will can be queries and used by tools like [graphiql](https://github.com/graphql/graphiql) to generate documentation.
+You can enhance most of the GraphQL components with description (this includes both object and fields definitions) - it later can be queried and used by tools like [graphiql](https://github.com/graphql/graphiql) to be used as documentation.
 
 Fields can also be parametrized - by specifying a list of arguments in GraphQL field definition you can use them later to pass runtime parameters, that may differ with each query, even when query structure remains the same. Do define an argument use `Define.Input` helper method:
 
 ```fsharp
-Define.AsyncField("people", ListOf Person, "Single page", [ Define.Input("page", Int) ], fun ctx db ->
+let pageSize = 20
+Define.Field("people", ListOf Person, "Single page", [ Define.Input("page", Int) ], fun ctx db ->
     let page = ctx.Arg "page"
     query {
         for person in db.People do
         sortBy person.Id
-        skip (page * PageSize)
-        take PageSize
+        skip (page * pageSize)
+        take pageSize
         select person
     } |> Seq.toList) 
 ```
 
 ### Defining recursive type references
 
-Sometimes you may find hard to define a composed GraphQL type, that in one of its fields calls its own definition. Good example of that would be a `Person` object with field `friends` returning list of instances of type `Person` itself. It's hard to do so due to limitation of F# language. However you can still achieve that by using overloaded `Define.Object` method:
+Sometimes you may find hard to define a GraphQL types having recursive relationship to each other. Good example of that would be a `Person` object with field `friends` returning list of instances of type `Person` itself. It's hard to do so due to limitations of F# language. However you can still achieve that by using overloaded `Define.Object` method:
 
 ```fsharp
 let rec Person = Define.Object(name = "Person", fieldsFn = fun () -> [
@@ -75,7 +76,7 @@ let rec Person = Define.Object(name = "Person", fieldsFn = fun () -> [
     Define.Field("friends", ListOf Person, fun _ p -> p.Friends) ])
 ```
 
-As you may see, we defined Person object definition using *rec* keyword and instead of defining fields as a list, we used a lazily evaluated function instead. This will do the trick.
+As you may see, we defined Person object definition using *rec* keyword and instead of defining fields as a list and we used a lazily evaluated function instead.
 
 ## Defining an Interface 
 
@@ -138,7 +139,7 @@ The example above shows, how you can use `Pet` discriminated union as a proxy to
 
 ## Defining an Enum
 
-GraphQL enums can be quite closelly related to C# enums - they define primitive types (used as GraphQL leaf types) that have strictly defined subset of possible values, i.e:
+GraphQL enums can be quite closelly related to C# enums - they define primitive types (used as GraphQL leaf types) that have strictly defined set of possible values, i.e:
 
 ```fsharp
 type Ord =
@@ -152,7 +153,7 @@ let Ord = Define.Enum("Ord", [
     Define.EnumValue("Greater", Ord.Greater) ])
 ```
 
-The major difference from .NET here is that, GraphQL expects, that enum values are serialized as **strings**. Therefore, upon serialization, given enum value will be projected using `ToString()` method.
+The major difference from .NET here is that GraphQL expects, that enum values are serialized as **strings**. Therefore, upon serialization, given enum value will be projected using `ToString()` method.
 
 ## Defining a Scalar
 
@@ -181,4 +182,4 @@ let CreateAccountData = Define.InputObject("CreateAccountData", [
     Define.Input("password", String) ])
 ```
 
-Unlike the objects, you neither define input object field resolver nor supply it with arguments - it's designed to work only as a type-safe value container. They also don't work together with abstract types like interfaces or unions.
+Unlike the objects, you neither define input object field resolver nor provide any arguments for it. They also don't work together with abstract types like interfaces or unions.

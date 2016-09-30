@@ -7,7 +7,7 @@ FSharp.Data.GraphQL is a client and server implementation of Facebook's [GraphQL
 It's a standard created for building web service APIs and a runtime for defining those APIs in statically typed, well
 formed way. The core idea is to define web service in context of its capabilities in oposition to routees known from existing RESTful APIs. Capabilities are defined in form of GraphQL schema and describe all operations and data allowed to be requested by the client, without fragmenting it into particular routes.
 
-The FSharp.Data.GraphQL library can be installed from NuGet as [server](https://www.nuget.org/packages/FSharp.Data.GraphQL.Server) or a [client](https://www.nuget.org/packages/FSharp.Data.GraphQL.Client):
+The FSharp.Data.GraphQL library can be installed from NuGet on the [server](https://www.nuget.org/packages/FSharp.Data.GraphQL.Server) or a [client](https://www.nuget.org/packages/FSharp.Data.GraphQL.Client):
     
     PM> Install-Package FSharp.Data.GraphQL.Server -Pre
     PM> Install-Package FSharp.Data.GraphQL.Client -Pre
@@ -23,7 +23,7 @@ let people = [
     { FirstName = "Travis"; LastName = "Smith" } ]
 ```
 
-Then expose it through the schema - GraphQL standard defines it's own type system, that can be integrated with any other programming language:
+Then expose it through the schema - GraphQL language defines it's own type system, that can be integrated with any other programming language:
 
 ```fsharp
 open FSharp.Data.GraphQL
