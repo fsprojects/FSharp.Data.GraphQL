@@ -1,14 +1,14 @@
 Using FSharp.Data.GraphQL on the client side
 ========================
 
-FSharp.Data.GraphQL offers a client-side library, which can be used to query **any** GraphQL-compatible server. This includes a type provider (erasing one), which is able to introspect remotelly a schema of the server it connects to, and give you the ability to make typesafe queries from the client side. To use GraphQL type provider from the client side, simply supply it an endpoint URL of target GraphQL server:
+FSharp.Data.GraphQL offers a client-side library, which can be used to query **any** GraphQL-compatible server. It includes a type provider (erasing one), which is able to introspect remotelly a schema of the server it connects to, and give you the ability to make typesafe queries from the client side. To use GraphQL type provider from the client side, simply supply it an endpoint URL of target GraphQL server:
 
 ```fsharp
 open FSharp.Data.GraphQL
 type GraphQlClient = GraphQLProvider<"http://graphql-server.com">
 ```
 
-This way we get type provider, which exposes top level queries and mutation in form of the methods and fields. F# client also gives a custom DSL that alows to construct GraphQL queries programatically. For example, client may execute GraphQL query string as defined below:
+This way we get type provider, which exposes top level queries and mutations in form of the methods and fields. F# client also gives a custom DSL that alows to construct GraphQL queries programatically. For example, client may execute GraphQL query string as defined below:
 
 ```graphql
 async {
@@ -46,6 +46,4 @@ async {
 }
 ```
 
-GraphQL client is fully compatible with [Fable compiler](https://fable-compiler.github.io/), which allows to use it in apps targeted for the browser.
-
-In samples section you can check a [TODO application](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/todo-graphql), where FSharp.Data.GraphQL used on both server- and client-side.
+GraphQL client is fully compatible with [Fable compiler](https://fable-compiler.github.io/), which gives you a possiblity to write F# applications targeted for the browsers.
