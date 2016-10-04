@@ -52,6 +52,24 @@ let ``Core type definitions are considered nullable`` () =
             "ofType", null]]
     noErrors result
     result.["data"] |> equals (upcast expected)
+
+type User = { FirstName: string; LastName: string }
+type UserInput = { Name: string }
+
+[<Fact>]
+let ``Introspection works with query and mutation sharing same generic param`` =
+    let User = Define.Object<User>("User", [
+        Define.AutoField("firstName", String)
+        Define.AutoField("lastName", String) ])
+    let UserInput = Define.InputObject<UserInput>("UserInput", [
+        Define.Input("name", String) ])
+    let Query = Define.Object<User list>("Query", [
+        Define.Field("users", ListOf User, fun _ u -> u) ])
+    let Mutation = Define.Object<User list>("Mutation", [
+        Define.Field("addUser", User, fun _ u -> u |> List.head)])
+    let schema = Schema(Query, Mutation)
+    let introResult = schema.AsyncExecute(Introspection.introspectionQuery) |> sync
+    ()
     
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =

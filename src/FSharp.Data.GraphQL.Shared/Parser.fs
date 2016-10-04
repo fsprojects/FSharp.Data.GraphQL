@@ -115,7 +115,7 @@ module internal Internal =
 
   // 2.9.1 IntValue 
   //   IntegerPart
-  let integerValue = integerPart |>> int
+  let integerValue = integerPart |>> int64
 
 
   // 2.9.2 FloatValue

@@ -116,19 +116,23 @@ module internal Gen =
             methods.First()
         }
 
+open Microsoft.FSharp.Reflection
+
 module internal ReflectionHelper =
 
     let matchConstructor (t: Type) (fields: string []) =
-        let constructors = t.GetConstructors()
-        let fieldNames = 
-            fields
-            |> Set.ofArray
-        let (ctor, _) =
-            constructors
-            |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
-            // start from most complete constructors
-            |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)                  
-            // try match field with params by name
-            // at last, default constructor should be used if defined
-            |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
-        ctor
+        if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
+        else
+            let constructors = t.GetConstructors(BindingFlags.NonPublic|||BindingFlags.Public|||BindingFlags.Instance)
+            let fieldNames = 
+                fields
+                |> Set.ofArray
+            let (ctor, _) =
+                constructors
+                |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
+                // start from most complete constructors
+                |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)                  
+                // try match field with params by name
+                // at last, default constructor should be used if defined
+                |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
+            ctor
