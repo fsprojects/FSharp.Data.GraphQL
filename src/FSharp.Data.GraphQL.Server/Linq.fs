@@ -374,13 +374,16 @@ let rec private compose vars ir =
 
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
-let rec private getTracks info =
+let rec private getTracks alreadyFound info =
     let (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(root, expr))))) = info.Definition.Resolve.Expr
-    let tracks = track Set.empty expr |> Set.map(fun track -> Direct(track, []))
+    let tracks = 
+        track Set.empty expr 
+        |> Set.map(fun track -> Direct(track, []))
+        |> flip Set.difference alreadyFound
     match info.Kind with
     | ResolveValue -> IR(info, tracks, [])
-    | SelectFields fieldInfos -> IR(info, tracks, List.map getTracks fieldInfos)
-    | ResolveCollection inner -> IR(info, tracks, [ getTracks inner ])
+    | SelectFields fieldInfos -> IR(info, tracks, fieldInfos |> List.map (getTracks (alreadyFound + tracks)))
+    | ResolveCollection inner -> IR(info, tracks, [ getTracks (alreadyFound + tracks) inner ])
     | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)" 
     
 let rec private join parentTracks childIRs =
@@ -522,7 +525,7 @@ let private defaultArgApplicators: Map<string, ArgApplication> =
 /// </para>
 /// </summary>
 let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
-    let ir = getTracks info
+    let ir = getTracks Set.empty info
     let composed = compose vars ir
     let (IR(info, trackers, children)) = composed
     join trackers children |> Seq.head

@@ -1541,6 +1541,24 @@ module SchemaDefinitions =
                 Some(System.Convert.ToInt32 other)
             with _ -> None
     
+    /// Tries to convert any value to int64.
+    let private coerceLongValue (x : obj) : int64 option = 
+        match x with
+        | null -> None
+        | :? int as i -> Some (int64 i)
+        | :? int64 as l -> Some(l)
+        | :? double as d -> Some(int64 d)
+        | :? string as s -> 
+            match Int64.TryParse(s) with
+            | true, i -> Some i
+            | false, _ -> None
+        | :? bool as b -> 
+            Some(if b then 1L else 0L)
+        | other -> 
+            try 
+                Some(System.Convert.ToInt64 other)
+            with _ -> None
+    
     /// Tries to convert any value to double.
     let private coerceFloatValue (x : obj) : double option = 
         match x with
@@ -1598,6 +1616,17 @@ module SchemaDefinitions =
             | true, date -> Some date
             | false, _ -> None
         | other -> None
+    
+    /// Tries to convert any value to Guid.
+    let private coerceGuidValue (x : obj) : Guid option = 
+        match x with
+        | null -> None
+        | :? Guid as g -> Some g
+        | :? string as s -> 
+            match Guid.TryParse(s) with
+            | true, guid -> Some guid
+            | false, _ -> None
+        | other -> None
         
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
     let private (|Option|_|) (x : obj) = 
@@ -1630,7 +1659,7 @@ module SchemaDefinitions =
     /// Tries to resolve AST query input to int.
     let private coerceIntInput = 
         function 
-        | IntValue i -> Some i
+        | IntValue i -> Some (int i)
         | FloatValue f -> Some(int f)
         | StringValue s -> 
             match Int32.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
@@ -1639,6 +1668,19 @@ module SchemaDefinitions =
         | BooleanValue b -> 
             Some(if b then 1
                  else 0)
+        | _ -> None
+        
+    /// Tries to resolve AST query input to int64.
+    let private coerceLongInput = 
+        function 
+        | IntValue i -> Some (int64 i)
+        | FloatValue f -> Some(int64 f)
+        | StringValue s -> 
+            match Int64.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
+            | true, i -> Some i
+            | false, _ -> None
+        | BooleanValue b -> 
+            Some(if b then 1L else 0L)
         | _ -> None
     
     /// Tries to resolve AST query input to double.
@@ -1670,7 +1712,7 @@ module SchemaDefinitions =
     let coerceBoolInput = 
         function 
         | IntValue i -> 
-            Some(if i = 0 then false
+            Some(if i = 0L then false
                  else true)
         | FloatValue f -> 
             Some(if f = 0. then false
@@ -1707,6 +1749,15 @@ module SchemaDefinitions =
             | false, _ -> None
         | _ -> None
     
+    /// Tries to resolve AST query input to Guid.
+    let private coerceGuidInput = 
+        function 
+        | StringValue s -> 
+            match Guid.TryParse(s) with
+            | true, guid -> Some guid
+            | false, _ -> None
+        | _ -> None
+    
     /// Wraps a GraphQL type definition, allowing defining field/argument 
     /// to take option of provided value.
     let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
@@ -1730,6 +1781,15 @@ module SchemaDefinitions =
                   "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
           CoerceInput = coerceIntInput
           CoerceValue = coerceIntValue }
+          
+    /// GraphQL type of int
+    let Long : ScalarDefinition<int64> = 
+        { Name = "Long"
+          Description = 
+              Some 
+                  "The `Long` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^63) and 2^63 - 1."
+          CoerceInput = coerceLongInput
+          CoerceValue = coerceLongValue }
     
     /// GraphQL type of boolean
     let Boolean : ScalarDefinition<bool> = 
@@ -1782,6 +1842,15 @@ module SchemaDefinitions =
                   "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
           CoerceInput = coerceDateInput
           CoerceValue = coerceDateValue }
+          
+    /// GraphQL type for System.Guid
+    let Guid : ScalarDefinition<Guid> = 
+        { Name = "Date"
+          Description = 
+              Some 
+                  "The `Guid` scalar type represents a Globaly Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
+          CoerceInput = coerceGuidInput
+          CoerceValue = coerceGuidValue }
     
     /// GraphQL @include directive.
     let IncludeDirective : DirectiveDef = 

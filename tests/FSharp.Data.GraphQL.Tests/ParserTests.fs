@@ -36,7 +36,7 @@ let queryWithSelections selections =
 let queryWithSelection selection = queryWithSelections [ selection ]
 
 let arg name value = { Argument.Name = name; Value = value }
-let argInt name value = arg name (IntValue value)
+let argInt name value = arg name (IntValue (int64 value))
 let fieldWithNameAndArgsAndSelections name arguments selections =
     Field { Name = name
             Alias = None

@@ -81,7 +81,7 @@ and FragmentDefinition = {
 /// 2.2.7 Input Values
 and Value = 
     /// 2.2.7.1 Int Value
-    | IntValue of int
+    | IntValue of int64
     /// 2.2.7.2 Float Value
     | FloatValue of double
     /// 2.2.7.3 Boolean Value
