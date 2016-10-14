@@ -268,13 +268,13 @@ let rec private track set e =
     | Patterns.WhileLoop(condition, body) -> (flip track condition >> flip track body) set
     | Patterns.WithValue(_, _, expr) -> track set expr
     //TODO: move all unnecessary calls into else `_` case
+    | Patterns.Value(expr, _) -> set
+    | Patterns.ValueWithName(_, _, _) -> set
     | Patterns.AddressOf(_) -> set
     | Patterns.AddressSet(_, _) -> set
     | Patterns.DefaultValue(_) -> set
     | Patterns.FieldSet(_, _, _) -> set
     | Patterns.PropertySet(_, _, _, _) -> set
-    | Patterns.Value(_, _) -> set
-    | Patterns.ValueWithName(_, _, _) -> set
     | _ -> set   
 
 /// Intermediate representation containing info about all resolved
@@ -311,7 +311,13 @@ let private isOwn (track: Track) =
                 | :? FieldInfo as f -> f.FieldType = track.ReturnType
                 | _ -> false)
 
-let rec private merge parent members =
+let private coreType (t: Type): Type =
+    match t with
+    | Gen.Enumerable tCore -> tCore
+    | Gen.Option tCore -> tCore
+    | _ -> t
+
+let rec private merge (parent: Tracker) (members: Set<Tracker>) =
     if Set.isEmpty members
     then Set.singleton parent
     else match parent with
@@ -384,16 +390,40 @@ let rec private getTracks alreadyFound info =
     | ResolveValue -> IR(info, tracks, [])
     | SelectFields fieldInfos -> IR(info, tracks, fieldInfos |> List.map (getTracks (alreadyFound + tracks)))
     | ResolveCollection inner -> IR(info, tracks, [ getTracks (alreadyFound + tracks) inner ])
-    | ResolveAbstraction _ -> failwith "LINQ interpreter doesn't work with abstract types (interfaces/unions)" 
-    
-let rec private join parentTracks childIRs =
-    let childrenCombined =
-        childIRs
-        |> List.fold (fun acc (IR(_, childTracks, grandchildIRs)) ->
-            acc + join childTracks grandchildIRs) Set.empty
-    if Set.isEmpty childrenCombined
-    then parentTracks
-    else parentTracks |> Set.collect (fun parentTrack -> merge parentTrack childrenCombined)
+    | ResolveAbstraction typeMap -> 
+        let found = alreadyFound + tracks
+        let children = 
+            typeMap
+            |> Map.toSeq
+            |> Seq.map snd
+            |> Seq.map (List.map (getTracks found))
+            |> Seq.collect id
+            |> Seq.toList
+        IR(info, tracks, children) 
+
+let rec private assignableChildren (parentType: Type) (childTracks: Set<Tracker>) = 
+    let assignable, unassignable =
+        childTracks 
+        |> Set.partition (fun child -> parentType.IsAssignableFrom (coreType child.Track.ParentType))
+    unassignable 
+    |> Set.collect (function Direct(_,_) -> Set.empty | Compose(_, _, grandChildren) -> assignableChildren parentType grandChildren)
+    |> ((+) assignable)
+
+let rec private join (parentTracks: Set<Tracker>) childIRs =
+    match childIRs with
+    | [] -> parentTracks
+    | _  ->
+        let childrenCombined =
+            childIRs
+            |> List.fold (fun acc childIR ->
+                let (IR(_, childTracks, grandchildIRs)) = childIR
+                let joined = join childTracks grandchildIRs
+                acc + joined ) Set.empty      
+        parentTracks 
+        |> Set.collect (fun parentTrack ->
+            let parentType = coreType parentTrack.Track.ReturnType
+            let assignable = assignableChildren parentType childrenCombined
+            merge parentTrack assignable)
             
 /// Adds `childTrack` as a node to current `parentTrack`, using `parentInfo` 
 /// and `childInfo` to determine to point of connection.

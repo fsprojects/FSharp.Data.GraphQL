@@ -285,11 +285,3 @@ let ``LINQ interpreter works with orderByDesc arg``() =
                        (7, "Jeneffer")
                        (4, "Ben") ]
 
-[<Fact(Skip = "TODO")>]
-let ``LINQ interpreter works with first/after args``() = ()
-
-[<Fact(Skip = "TODO")>]
-let ``LINQ interpreter works with last/before args``() = ()
-
-[<Fact(Skip = "TODO")>]
-let ``LINQ interpreter works with Relay Connection``() = ()

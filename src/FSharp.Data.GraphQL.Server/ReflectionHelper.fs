@@ -41,14 +41,25 @@ module internal Gen =
         if t = tArray then Some typeParam
         else None
 
+    let inline defaultArgOnNull a b = if a <> null then a else b
+    let private optionType = typedefof<option<_>>
+    let (|Option|_|) (t: Type) =
+        if t.IsGenericType && t.GetGenericTypeDefinition() = optionType
+        then Some (t.GetGenericArguments().[0])
+        else None
+
     let (|Enumerable|_|) t =
         if typeof<System.Collections.IEnumerable>.IsAssignableFrom t 
-        then Some (Enumerable (t.GetInterface("IEnumerable`1").GetGenericArguments().[0]))
+        then
+            let e = defaultArgOnNull (t.GetInterface("IEnumerable`1")) t
+            Some (e.GetGenericArguments().[0])
         else None
 
     let (|Queryable|_|) t =
         if typeof<IQueryable>.IsAssignableFrom t 
-        then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
+        then
+            let q = defaultArgOnNull (t.GetInterface("IQueryable`1")) t 
+            Some (q.GetGenericArguments().[0])
         else None
 
     let genericType<'t> typeParams = typedefof<'t>.MakeGenericType typeParams
