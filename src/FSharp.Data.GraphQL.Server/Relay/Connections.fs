@@ -41,6 +41,9 @@ type Connection<'Node> =
       PageInfo : PageInfo
       /// List of edges (Relay nodes with cursors) returned as results.
       Edges : Edge<'Node> seq }
+//    interface seq<'Node> with
+//        member x.GetEnumerator () = (Seq.map (fun edge -> edge.Node) x.Edges).GetEnumerator()
+//        member x.GetEnumerator () : System.Collections.IEnumerator = upcast (x :> seq<'Node>).GetEnumerator()            
 
 /// Slice info union describing Relay cursor progression.
 type SliceInfo =

@@ -439,6 +439,27 @@ and ExecutionInfo =
       ReturnDef : OutputDef 
       /// Flag determining if flag allows to have nullable output.
       IsNullable : bool }
+    /// Get a nested info recognized by path provided as parameter. Path may consist of fields names or aliases.
+    member this.GetPath (keys: string list) : ExecutionInfo option =         
+        let rec path info segments =
+            match segments with
+            | []        -> Some info
+            | head::tail ->
+                match info.Kind with
+                | ResolveValue _ -> None
+                | ResolveCollection inner -> path inner segments
+                | SelectFields fields ->
+                    fields 
+                    |> List.tryFind (fun f -> f.Identifier = head)
+                    |> Option.bind (fun f -> path f tail)
+                | ResolveAbstraction typeMap ->
+                    typeMap
+                    |> Map.toSeq
+                    |> Seq.map snd
+                    |> Seq.collect id
+                    |> Seq.tryFind (fun f -> f.Identifier = head)
+                    |> Option.bind (fun f -> path f tail)
+        path this keys
     override this.ToString () =
         let pad indent (sb: Text.StringBuilder) = for i = 0 to indent do sb.Append '\t' |> ignore
         let nameAs info =
