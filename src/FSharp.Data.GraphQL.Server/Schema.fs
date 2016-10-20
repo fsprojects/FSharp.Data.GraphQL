@@ -20,11 +20,16 @@ type SchemaConfig =
       /// tree traversal, but should be included anyway.
       Types : NamedDef list
       /// List of custom directives that should be included as known to the schema.
-      Directives : DirectiveDef list }
+      Directives : DirectiveDef list
+      /// Function called, when errors occurred during query execution.
+      /// It's used to retrieve messages shown as output to the client.
+      /// May be also used to log messages before returning them.
+      ParseErrors: exn[] -> string[] }
     /// Returns a default schema configuration.
     static member Default = 
         { Types = []
-          Directives = [IncludeDirective; SkipDirective] }
+          Directives = [IncludeDirective; SkipDirective]
+          ParseErrors = Array.map (fun e -> e.Message) }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) =
@@ -242,7 +247,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
             if errors.IsEmpty 
             then [ "documentId", box executionPlan.DocumentId ; "data", upcast result ] 
-            else [ "documentId", box executionPlan.DocumentId ; "data", box result ; "errors", upcast (errors.ToArray() |> Array.map (fun e -> e.Message)) ]
+            else [ "documentId", box executionPlan.DocumentId ; "data", box result ; "errors", upcast (errors.ToArray() |> schemaConfig.ParseErrors) ]
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
