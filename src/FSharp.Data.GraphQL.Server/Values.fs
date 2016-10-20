@@ -42,7 +42,11 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
         let mapper =
             ctor.GetParameters()
-            |> Array.map(fun param -> objdef.Fields |> Array.find(fun field -> field.Name = param.Name))
+            |> Array.map(fun param -> 
+                match objdef.Fields |> Array.tryFind(fun field -> field.Name = param.Name) with
+                | Some x -> x
+                | None -> 
+                    failwithf "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields" objdef.Name objtype param.Name)
 
         fun variables value ->
             match value with
