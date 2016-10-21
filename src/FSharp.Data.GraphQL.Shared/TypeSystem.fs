@@ -546,6 +546,15 @@ and ExecutionStrategy =
     /// read-only operations like queries. It's not valid for mutations.
     | Parallel
 
+/// Type representing a variable definition inside GraphQL query.
+and VarDef = 
+    { /// Variable name without prefixed '$'.
+      Name: string
+      /// Type definition in corresponding GraphQL schema.
+      TypeDef: InputDef 
+      /// Optional default value.
+      DefaultValue: Value option }
+
 /// Execution plan of the current GraphQL operation. It describes, which
 /// fiels will be resolved and how to do so.
 and ExecutionPlan = 
@@ -559,7 +568,9 @@ and ExecutionPlan =
       /// Execution strategy applied on the underlying object's fields.
       Strategy : ExecutionStrategy
       /// List of fields of top level query/mutation object to be resolved.
-      Fields : ExecutionInfo list }
+      Fields : ExecutionInfo list
+      /// List of variables defined within executed query.
+      Variables: VarDef list }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full
@@ -755,7 +766,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
         | _ -> false
     
     override x.GetHashCode() = x.Name.GetHashCode()
-    override x.ToString() = x.Name
+    override x.ToString() = x.Name + "!"
 
 /// A GraphQL representation of single case of the enum type. 
 /// Enum value return value is always represented as string.
@@ -858,7 +869,7 @@ and internal EnumDefinition<'Val> =
     interface NamedDef with
         member x.Name = x.Name
     
-    override x.ToString() = sprintf "enum %s {\n    %s\n}" x.Name (String.Join("\n    ", x.Options))
+    override x.ToString() = x.Name + "!"
 
 /// GraphQL type definition for objects. Objects are composite output
 /// types with set of fields. They can implement GraphQL interfaces
@@ -943,7 +954,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> =
         let mutable hash = x.Name.GetHashCode()
         hash
     
-    override x.ToString() = x.Name
+    override x.ToString() = x.Name + "!"
 
 /// A GraphQL interface type defintion. Interfaces are composite
 /// output types, that can be implemented by GraphQL objects.
@@ -1027,10 +1038,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> =
         let mutable hash = x.Name.GetHashCode()
         hash
     
-    override x.ToString() = 
-        let sb = System.Text.StringBuilder("interface ").Append(x.Name).Append(" {")
-        // x.Fields |> List.iter (fun f -> sb.Append("\n    ").Append(f.ToString()) |> ignore)
-        sb.Append("\n}").ToString()
+    override x.ToString() = x.Name + "!"
 
 /// A GraphQL union definition. Unions are composite output types,
 /// that can return one of the defined case objects as outputs.
@@ -1125,7 +1133,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> =
         hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
         hash
     
-    override x.ToString() = "union " + x.Name + " = " + String.Join(" | ", x.Options |> Array.map (fun o -> o.Name))
+    override x.ToString() = x.Name + "!"
 
 /// GraphQL type definition for collection types. Lists are both
 /// valid input and output types.
@@ -1170,10 +1178,7 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> =
     interface ListOfDef<'Val, 'Seq> with
         member x.OfType = x.OfType
     
-    override x.ToString() = 
-        match x.OfType with
-        | :? NamedDef as named -> "[" + named.Name + "]"
-        | other -> "[" + other.ToString() + "]"
+    override x.ToString() = "[" + x.OfType.ToString() + "]!"
 
 /// GraphQL type definition for nullable/optional types.
 /// By default all GraphQL types in this library are considered
@@ -1220,7 +1225,8 @@ and internal NullableDefinition<'Val> =
     
     override x.ToString() = 
         match x.OfType with
-        | :? NamedDef as named -> named.Name.Substring(0, named.Name.Length - 1) // remobe bang on sufix
+        | :? NamedDef as named -> named.Name
+        | :? ListOfDef as list -> "[" + list.OfType.ToString() + "]"
         | other -> other.ToString()
         
 /// GraphQL tye definition for input objects. They are different
@@ -1272,7 +1278,7 @@ and InputObjectDefinition<'Val> =
             upcast list
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = Map<string, obj> -> Value -> obj
+and ExecuteInput = Value -> Map<string, obj> -> obj
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -1789,10 +1795,10 @@ module SchemaDefinitions =
     
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
     
-    let variableOrElse other variables = 
-        function 
+    let variableOrElse other value variables = 
+        match value with 
         | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
-        | value -> other value
+        | v -> other v
     
     /// GraphQL type of int
     let Int : ScalarDefinition<int> = 
@@ -1802,15 +1808,6 @@ module SchemaDefinitions =
                   "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
           CoerceInput = coerceIntInput
           CoerceValue = coerceIntValue }
-          
-    /// GraphQL type of int
-    let Long : ScalarDefinition<int64> = 
-        { Name = "Long"
-          Description = 
-              Some 
-                  "The `Long` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^63) and 2^63 - 1."
-          CoerceInput = coerceLongInput
-          CoerceValue = coerceLongValue }
     
     /// GraphQL type of boolean
     let Boolean : ScalarDefinition<bool> = 

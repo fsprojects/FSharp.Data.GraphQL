@@ -53,20 +53,6 @@ let private tryFindDef (schema: ISchema) (objdef: ObjectDef) (field: Field) : Fi
         | "__type" when Object.ReferenceEquals(schema.Query, objdef) -> Some (upcast TypeMetaFieldDef)
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objdef.Fields |> Map.tryFind fieldName
-    
-let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (inputs: Map<string, obj> option) =
-    match inputs with
-    | None -> 
-        variables
-        |> List.filter (fun vardef -> Option.isSome vardef.DefaultValue)
-        |> List.fold (fun acc vardef ->
-            let variableName = vardef.VariableName
-            Map.add variableName (coerceVariable schema vardef Map.empty) acc) Map.empty
-    | Some vars -> 
-        variables
-        |> List.fold (fun acc vardef ->
-            let variableName = vardef.VariableName
-            Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
 
 let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field, includer: Includer) =
     match tryFindDef ctx.Schema parentDef field with
@@ -245,6 +231,18 @@ and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selectio
         ) Map.empty
     { info with Kind = ResolveAbstraction plannedTypeFields }
 
+let private planVariables (schema: ISchema) (operation: OperationDefinition) =
+    operation.VariableDefinitions 
+    |> List.map (fun vdef ->
+        let vname = vdef.VariableName
+        match Values.tryConvertAst schema vdef.Type with
+        | None -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not known in the current schema" vname (vdef.Type.ToString()) ))
+        | Some tdef ->
+            match tdef with
+            | :? InputDef as idef ->
+                { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
+            | _ -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
+
 let internal planOperation documentId (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
     // create artificial plan info to start with
     let rootInfo = { 
@@ -258,13 +256,15 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         IsNullable = false }
     let resolvedInfo = planSelection ctx rootInfo operation.SelectionSet (ref [])
     let (SelectFields(topFields)) = resolvedInfo.Kind
+    let variables = planVariables ctx.Schema operation
     match operation.OperationType with
     | Query ->
         { DocumentId = documentId
           Operation = operation 
           Fields = topFields
           RootDef = ctx.Schema.Query
-          Strategy = Parallel }
+          Strategy = Parallel
+          Variables = variables }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
@@ -272,6 +272,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
               Operation = operation
               Fields = topFields
               RootDef = mutationDef
-              Strategy = Sequential }
+              Strategy = Sequential 
+              Variables = variables }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")

@@ -10,7 +10,10 @@ open System.Collections.Generic
 type GraphQLException(msg) = 
     inherit Exception(msg)
 
-module Array =
+type MalformedQueryException(msg) =
+    inherit GraphQLException(msg)
+
+module internal Array =
 
     /// <summary>
     /// Returns a new array with unique elements. Uniqueness is determined by
@@ -28,7 +31,7 @@ module Array =
                     i <- i + 1
             Array.sub temp 0 i
 
-module List =
+module internal List =
     
     /// <summary>
     /// Merges elements of two lists, returning a new list without duplicates.
@@ -42,7 +45,7 @@ module List =
             |> List.filter (fun x -> not <| List.exists(fun y -> f(x) = f(y)) listy)
         uniqx @ listy
 
-module Set =
+module internal Set =
 
     /// <summary>
     /// Maps over each of the <paramref name="set"/> elements, applying function
@@ -53,7 +56,7 @@ module Set =
     /// <param name="set">Input set.</param>
     let collect f set = set |> Set.fold (fun acc e -> acc + f e) Set.empty
     
-module Map =
+module internal Map =
 
     /// <summary>
     /// Merges the entries of two maps by their key, returning new map in result.
@@ -71,7 +74,7 @@ module Map =
             | Some vx -> Map.add ky (mergeFn ky vx vy) acc
             | None -> Map.add ky vy acc) mapx
 
-module ReflectionHelper =
+module internal ReflectionHelper =
     
     /// <summary>
     /// Returns pair of function constructors for `cons(head,tail)` and `nil` 

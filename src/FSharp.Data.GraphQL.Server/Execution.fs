@@ -131,7 +131,7 @@ let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     | None -> acc
 
 let internal argumentValue variables (argdef: InputFieldDef) (argument: Argument) =
-    match argdef.ExecuteInput variables argument.Value with
+    match argdef.ExecuteInput argument.Value variables  with
     | null -> argdef.DefaultValue
     | value -> Some value    
 
@@ -156,21 +156,7 @@ let internal findOperation doc opName =
     | defs, name -> 
         defs
         |> List.tryFind (fun def -> def.Name = name)
-
-let private coerceVariables (schema: #ISchema) (variables: VariableDefinition list) (vars: Map<string, obj>) =
-    if vars = Map.empty
-    then
-        variables
-        |> List.filter (fun vardef -> Option.isSome vardef.DefaultValue)
-        |> List.fold (fun acc vardef ->
-            let variableName = vardef.VariableName
-            Map.add variableName (coerceVariable schema vardef Map.empty) acc) Map.empty
-    else
-        variables
-        |> List.fold (fun acc vardef ->
-            let variableName = vardef.VariableName
-            Map.add variableName (coerceVariable schema vardef vars) acc) Map.empty
-    
+            
 let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) =
     match directive.If.Value with
     | Variable vname -> downcast ctx.Variables.[vname]
@@ -407,9 +393,13 @@ let internal compileSchema possibleTypesFn types =
                     arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
+
+let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
+    variables
+    |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
                 
 let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors : AsyncVal<NameValueLookup> = 
-    let variables = coerceVariables schema executionPlan.Operation.VariableDefinitions variables
+    let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema
         ExecutionPlan = executionPlan
