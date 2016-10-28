@@ -443,7 +443,10 @@ and ExecutionInfo =
     member this.GetPath (keys: string list) : ExecutionInfo option =         
         let rec path info segments =
             match segments with
-            | []        -> Some info
+            | []        -> 
+                match info.Kind with
+                | ResolveCollection inner -> Some inner
+                | _ -> Some info
             | head::tail ->
                 match info.Kind with
                 | ResolveValue _ -> None
@@ -619,7 +622,10 @@ and ResolveFieldContext =
     
     /// Returns an argument by provided name. If argument was not found
     /// and exception will be thrown.
-    member x.Arg(name : string) : 't = downcast Map.find name x.Args
+    member x.Arg(name : string) : 't =
+        match Map.tryFind name x.Args with
+        | Some found -> downcast found
+        | None -> raise (System.Collections.Generic.KeyNotFoundException(sprintf "Argument '%s' was not provided within context of a field '%s'. Check if it was supplied within GraphQL query." name x.ExecutionInfo.Identifier))
 
 /// Function type for the compiled field executor.
 and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>

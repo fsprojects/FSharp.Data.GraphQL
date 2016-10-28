@@ -399,7 +399,7 @@ let rec private getTracks alreadyFound info =
             |> Seq.map (List.map (getTracks found))
             |> Seq.collect id
             |> Seq.toList
-        IR(info, tracks, children) 
+        IR(info, found, children) 
 
 let rec private assignableChildren (parentType: Type) (childTracks: Set<Tracker>) = 
     let assignable, unassignable =
