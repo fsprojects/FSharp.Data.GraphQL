@@ -136,6 +136,17 @@ Target "AssemblyInfo" (fun _ ->
           Attribute.Description summary
           Attribute.Version release.AssemblyVersion
           Attribute.FileVersion release.AssemblyVersion ]
+          
+    let internalsVisibility (fsproj: string) =
+        match fsproj with
+        | f when f.EndsWith "FSharp.Data.GraphQL.Shared.fsproj" -> 
+            [ Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
+              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
+              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
+        | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" -> 
+            [ Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
+              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
+        | _ -> []
 
     let getProjectDetails projectPath =
         let projectName = System.IO.Path.GetFileNameWithoutExtension(projectPath)
@@ -149,7 +160,7 @@ Target "AssemblyInfo" (fun _ ->
     |> Seq.map getProjectDetails
     |> Seq.iter (fun (projFileName, projectName, folderName, attributes) ->
         match projFileName with
-        | Fsproj -> CreateFSharpAssemblyInfo (folderName </> "AssemblyInfo.fs") attributes
+        | Fsproj -> CreateFSharpAssemblyInfo (folderName </> "AssemblyInfo.fs") (attributes @ internalsVisibility projFileName)
         | Csproj -> CreateCSharpAssemblyInfo ((folderName </> "Properties") </> "AssemblyInfo.cs") attributes
         | Vbproj -> CreateVisualBasicAssemblyInfo ((folderName </> "My Project") </> "AssemblyInfo.vb") attributes
         | Shproj -> ()
@@ -452,7 +463,7 @@ Target "PublishNpm" (fun _ ->
 Target "All" DoNothing
 
 "Clean"
-  =?> ("AssemblyInfo", not isLocalBuild)
+  =?> ("AssemblyInfo", isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
