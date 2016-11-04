@@ -180,7 +180,4 @@ and TypeDefinition =
     | EnumTypeDefinition of EnumTypeDefinition
     | InputObjectTypeDefinition of InputObjectTypeDefinition
 
-module Visitor =
-    
-    let visit enter leave ast = failwith "Not implemented"
         

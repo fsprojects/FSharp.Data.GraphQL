@@ -138,8 +138,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
             "b", upcast ["bar"]
             "c", null]]
     let actual = sync <| schema.AsyncExecute(ast, variables = params')
-    let errMsg = sprintf "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type %O but got None" typeof<string>
-    hasError errMsg (downcast actual.["errors"])
+    hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles variables and errors on incorrect type`` () =
@@ -163,8 +162,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
             "b", upcast ["bar"]]]
     let actual = sync <| schema.AsyncExecute(ast, variables = params')
     equals 1 (Seq.length (downcast actual.["errors"]))
-    let errMsg = sprintf "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type %O but got None" typeof<string>
-    hasError errMsg (downcast actual.["errors"])
+    hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" (downcast actual.["errors"])
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted`` () =
@@ -228,8 +226,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
           fieldWithNonNullableStringInput(input: $value)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "value", null ])
-    let errMsg = sprintf "Variable '$value': expected value of type %O but got None" typeof<string>
-    hasError errMsg (downcast actual.["errors"])
+    hasError "Variable '$value': expected value of type String but got None" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value in a variable`` () =
@@ -342,8 +339,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
           listNN(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
-    let errMsg = sprintf "Variable '$input': list element expected value of type %O but got None" typeof<string>
-    hasError errMsg (downcast actual.["errors"])
+    hasError "Variable '$input': list element expected value of type String but got None" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
@@ -369,24 +365,31 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
           nnListNN(input: $input)
         }"""
     let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
-    let errMsg = sprintf "Variable '$input': list element expected value of type %O but got None" typeof<string>
-    hasError errMsg (downcast actual.["errors"])
+    hasError "Variable '$input': list element expected value of type String but got None" (downcast actual.["errors"])
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow invalid types to be used as values`` () =
     let ast = parse """query q($input: TestType!) {
           fieldWithObjectInput(input: $input)
         }"""
-    let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, "B" :> obj ] :> obj ])
-    hasError "Variable '$input' expected value of type TestType!, which cannot be used as an input type" (downcast actual.["errors"])
+    // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
+    let e = throws<MalformedQueryException> (fun () ->
+        schema.AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, "B" :> obj ] :> obj ])
+        |> sync
+        |> ignore)        
+    e.Message |> equals "GraphQL query defined variable '$input' of type 'TestType!' which is not an input type definition"
     
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow unknown types to be used as values`` () =
     let ast = parse """query q($input: UnknownType!) {
           fieldWithObjectInput(input: $input)
         }"""
-    let actual = sync <| schema.AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ])
-    hasError "Variable '$input' expected value of type UnknownType!, which cannot be used as an input type" (downcast actual.["errors"])
+    // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
+    let e = throws<MalformedQueryException> (fun () ->
+        schema.AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ]) 
+        |> sync
+        |> ignore)
+    e.Message |> equals "GraphQL query defined variable '$input' of type 'UnknownType!' which is not known in the current schema"
     
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =

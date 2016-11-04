@@ -12,7 +12,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
-let inline private tryConvertAst schema ast =
+let inline tryConvertAst schema ast =
     let rec convert isNullable (schema: ISchema) (ast: InputType) : TypeDef option =
         match ast with
         | NamedType name -> 
@@ -42,9 +42,13 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
         let mapper =
             ctor.GetParameters()
-            |> Array.map(fun param -> objdef.Fields |> Array.find(fun field -> field.Name = param.Name))
+            |> Array.map(fun param -> 
+                match objdef.Fields |> Array.tryFind(fun field -> field.Name = param.Name) with
+                | Some x -> x
+                | None -> 
+                    failwithf "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields" objdef.Name objtype param.Name)
 
-        fun variables value ->
+        fun value variables ->
             match value with
             | ObjectValue props ->
                 let args = 
@@ -52,7 +56,7 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                     |> Array.map (fun field -> 
                         match Map.tryFind field.Name props with
                         | None -> null
-                        | Some prop -> field.ExecuteInput variables prop)
+                        | Some prop -> field.ExecuteInput prop variables)
                 let instance = ctor.Invoke(args)
                 instance
             | Variable variableName -> 
@@ -64,15 +68,15 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
         let inner = compileByType errMsg innerdef       
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
 
-        fun variables value ->
+        fun value variables ->
             match value with
             | ListValue list ->
-                let mappedValues = list |> List.map (inner variables)
+                let mappedValues = list |> List.map (fun value -> inner value variables)
                 nil |> List.foldBack cons mappedValues
             | Variable variableName -> variables.[variableName]
             | _ -> 
                 // try to construct a list from single element
-                let single = inner variables value
+                let single = inner value variables
                 if single = null then null else cons single nil
     | Nullable (Input innerdef) -> 
         let inner = compileByType errMsg innerdef
@@ -87,7 +91,7 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 if c <> null then c
                 else raise(GraphQLException (errMsg + notAssignableMsg innerdef coerced))
     | Enum enumdef -> 
-        fun variables value ->
+        fun value variables ->
             match value with
             | Variable variableName -> variables.[variableName]
             | _ ->
@@ -97,13 +101,13 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 | Some s -> Enum.Parse(enumdef.Type, s, ignoreCase = true)
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
                 
-let rec private coerceVariableValue isNullable typedef (vardef: VariableDefinition) (input: obj) (errMsg: string) : obj = 
+let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: obj) (errMsg: string) : obj = 
     match typedef with
     | Scalar scalardef -> 
         match scalardef.CoerceValue input with
         | None when isNullable -> null
         | None -> 
-            raise (GraphQLException <| errMsg + (sprintf "expected value of type %O but got None" scalardef.Type))
+            raise (GraphQLException <| errMsg + (sprintf "expected value of type %s but got None" scalardef.Name))
         | Some res -> res
     | Nullable (Input innerdef) -> 
         let some, none = ReflectionHelper.optionOfType innerdef.Type
@@ -119,7 +123,7 @@ let rec private coerceVariableValue isNullable typedef (vardef: VariableDefiniti
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
         match input with
         | null when isNullable -> null
-        | null -> raise(GraphQLException <| errMsg + (sprintf "expected value of type %O, but no value was found." vardef.Type))
+        | null -> raise(GraphQLException <| errMsg + (sprintf "expected value of type %s, but no value was found." (vardef.TypeDef.ToString())))
         // special case - while single values should be wrapped with a list in this scenario,
         // string would be treat as IEnumerable and coerced into a list of chars
         | :? string as s -> 
@@ -139,7 +143,7 @@ let rec private coerceVariableValue isNullable typedef (vardef: VariableDefiniti
     | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
     | _ -> raise (GraphQLException <| errMsg + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions.")
 
-and private coerceVariableInputObject (objdef) (vardef: VariableDefinition) (input: obj) errMsg =
+and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) errMsg =
     //TODO: this should be eventually coerced to complex object
     match input with
     | :? Map<string, obj> as map ->
@@ -151,19 +155,18 @@ and private coerceVariableInputObject (objdef) (vardef: VariableDefinition) (inp
             |> Map.ofArray
         upcast mapped
     | _ -> input
-
-let internal coerceVariable (schema: #ISchema) (vardef: VariableDefinition) (inputs) = 
-    let typedef = 
-        match tryConvertAst schema vardef.Type with
-        | None -> raise (GraphQLException (sprintf "Variable '$%s' expected value of type %s, which cannot be used as an input type." vardef.VariableName (vardef.Type.ToString())))
-        | Some t when not (t :? InputDef) -> raise (GraphQLException (sprintf "Variable '$%s' expected value of type %s, which cannot be used as an input type." vardef.VariableName (vardef.Type.ToString())))
-        | Some t -> t :?> InputDef
-    match Map.tryFind vardef.VariableName inputs with
+    
+let internal coerceVariable (vardef: VarDef) (inputs) =
+    let vname = vardef.Name 
+    match Map.tryFind vname inputs with
     | None -> 
         match vardef.DefaultValue with
         | Some defaultValue -> 
-            let errMsg = (sprintf "Variable '%s': " vardef.VariableName)
-            let executeInput = compileByType errMsg typedef
-            executeInput inputs defaultValue
-        | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vardef.VariableName (vardef.Type.ToString())))
-    | Some input -> coerceVariableValue false typedef vardef input (sprintf "Variable '$%s': " vardef.VariableName)
+            let errMsg = (sprintf "Variable '%s': " vname)
+            let executeInput = compileByType errMsg vardef.TypeDef
+            executeInput defaultValue inputs
+        | None -> 
+            match vardef.TypeDef with
+            | Nullable _ -> null
+            | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString())))
+    | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)

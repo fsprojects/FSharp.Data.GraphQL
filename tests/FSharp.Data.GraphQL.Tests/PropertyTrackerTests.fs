@@ -14,13 +14,15 @@ open FSharp.Data.GraphQL.Relay
 open FSharp.Data.GraphQL.Execution
 
 type Person = { Id: int; FirstName: string; LastName: string; Friends: Person list }
+type Droid = { Id: int; Number: string; Function: string }
 
 let track name tFrom tTo = { ReturnType = tTo; ParentType = tFrom; Name = Option.ofObj name }
 
 let john = { Id = 1; FirstName = "John"; LastName = "Doe"; Friends = [] }
 let ben = { Id = 2; FirstName = "Ben"; LastName = "Adams"; Friends = [ john ] }
+let at22 = { Id = 3; Number = "AT22"; Function = "combat wombat" }
 
-let rec Person = Define.Object(
+let rec Person = Define.Object<Person>(
     name = "Person", 
     interfaces = [ Node ],
     fieldsFn = fun () -> [
@@ -57,12 +59,26 @@ let rec Person = Define.Object(
                   EndCursor = data |> List.tryLast |> Option.map (fun edge -> edge.Cursor) }
               Edges = data }
         ) ])
-and Node = Define.Node<obj>(fun () -> [ Person ])
-and Query = Define.Object("Query", [
-    Define.Field("people", ListOf Person, fun ctx data -> data)
+and Droid = Define.Object<Droid>(
+    name = "Droid",
+    interfaces = [Node],
+    fieldsFn = fun () -> [
+        Define.GlobalIdField(fun _ d -> string d.Id)
+        Define.Field("number", String, fun _ d -> d.Number)
+        Define.Field("function", String, fun _ d -> d.Function)
+    ])
+and Node = Define.Node<obj>(fun () -> [ Person; Droid ])
+and Query = Define.Object<obj list>("Query", [
+    Define.Field("all", ListOf Node, fun ctx data -> data)
+    Define.Field("people", ListOf Person, fun ctx data -> 
+        data 
+        |> List.choose (fun o -> match o with | :? Person as p-> Some p | _ -> None))
+    Define.Field("droid", ListOf Droid, fun ctx data -> 
+        data 
+        |> List.choose (fun o -> match o with | :? Droid as d-> Some d | _ -> None))
 ])
 
-let schema = Schema<Person list>(Query)
+let schema = Schema(Query)
 
 [<Fact>]
 let ``Property tracker can track indirect properties`` () =
@@ -75,7 +91,7 @@ let ``Property tracker can track indirect properties`` () =
     """)
     let info = plan.["people"]
     let expected = 
-        Compose(track null typeof<Person list> typeof<Person list>, [], Set.ofList [
+        Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList [
             Direct(track "FirstName" typeof<Person> typeof<string>, [])
             Direct(track "LastName" typeof<Person> typeof<string>, []) ])
     let actual = tracker Map.empty info
@@ -100,7 +116,7 @@ let ``Property tracker can correctly jump over properties not being part of the 
     """)
     let info = plan.["people"]
     let expected = 
-        Compose(track null typeof<Person list> typeof<Person list>, [], Set.ofList [
+        Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList [
             Direct(track "Id" typeof<Person> typeof<int>, [])
             Compose(track "Friends" typeof<Person> typeof<Person list>, [], Set.ofList [
                 Direct(track "FirstName" typeof<Person> typeof<string>, []) ]) ])
