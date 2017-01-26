@@ -647,7 +647,6 @@ and FieldDef =
         /// Field resolution function.
         abstract Resolve : Resolve
         /// INTERNAL API: Compiled field executor. To be set only by the runtime.
-        abstract Execute : ExecuteField with get, set
         inherit IEquatable<FieldDef>
     end
     
@@ -672,8 +671,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
       Args : InputFieldDef []
       /// Optional field deprecation warning.
       DeprecationReason : string option
-      /// INTERNAL API: Compiled field executor. To be set only by the runtime.
-      mutable Execute : ExecuteField }
+      }
     
     interface FieldDef with
         member x.Name = x.Name
@@ -682,10 +680,6 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
         member x.TypeDef = x.TypeDef :> OutputDef
         member x.Args = x.Args
         member x.Resolve = x.Resolve
-        
-        member x.Execute 
-            with get () = x.Execute
-            and set v = x.Execute <- v
     
     interface FieldDef<'Val>
     
@@ -2052,7 +2046,7 @@ module SchemaDefinitions =
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates field defined inside interfaces. When used for objects may cause runtime exceptions due to 
@@ -2067,7 +2061,7 @@ module SchemaDefinitions =
                      Resolve = Undefined
                      Args = [||]
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2083,7 +2077,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                      }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2100,7 +2094,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                      }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2118,7 +2112,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates field defined inside object type. Fields is marked as deprecated.
@@ -2138,7 +2132,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2154,7 +2148,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                      }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2171,7 +2165,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                      }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2190,7 +2184,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value. Fields is marked as deprecated.
@@ -2211,7 +2205,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Execute = Unchecked.defaultof<ExecuteField> }
+                     }
         
         /// <summary>
         /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,
