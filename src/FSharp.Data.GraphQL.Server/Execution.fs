@@ -15,6 +15,23 @@ open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 
+
+open System.Collections.Generic;
+type FieldExecuteMap () = 
+    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
+
+    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
+        let key = typeName, fieldName
+        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
+
+    member public this.GetExecute(typeName: string, fieldName: string) = 
+        let key = 
+            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
+            then "", fieldName
+            else typeName, fieldName
+
+        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
+
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys
 /// can be set, but no new entry can be added or removed, once lookup
@@ -195,12 +212,12 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
                 
-let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef): ResolveFieldContext -> obj -> AsyncVal<obj> =
+let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef) (fieldExecuteMap: FieldExecuteMap): ResolveFieldContext -> obj -> AsyncVal<obj> =
     match returnDef with
     | Object objdef -> 
         fun (ctx: ResolveFieldContext) value -> 
             match ctx.ExecutionInfo.Kind with
-            | SelectFields fields -> executeFields objdef ctx value fields
+            | SelectFields fields -> executeFields objdef ctx value fields fieldExecuteMap
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
     
     | Scalar scalardef ->
@@ -211,7 +228,7 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
             |> AsyncVal.wrap
     
     | List (Output innerdef) ->
-        let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef
+        let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef fieldExecuteMap
         fun ctx (value: obj) ->
             let innerCtx =
                 match ctx.ExecutionInfo.Kind with
@@ -233,7 +250,7 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
             | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
     
     | Nullable (Output innerdef) ->
-        let innerfn = createCompletion possibleTypesFn innerdef
+        let innerfn = createCompletion possibleTypesFn innerdef fieldExecuteMap
         let optionDef = typedefof<option<_>>
         fun ctx value ->
             let t = value.GetType()
@@ -252,7 +269,7 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
-            | Some fields -> executeFields resolvedDef ctx value fields
+            | Some fields -> executeFields resolvedDef ctx value fields fieldExecuteMap
             | None -> raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
         
     | Union udef ->
@@ -264,7 +281,7 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
                 | ResolveAbstraction typeMap -> typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
             match Map.tryFind resolvedDef.Name typeMap with
-            | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields
+            | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields fieldExecuteMap
             | None -> raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
         
     | Enum _ ->
@@ -274,8 +291,8 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
     
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
-and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
-    let completed = createCompletion possibleTypesFn (fieldDef.TypeDef)
+and internal compileField possibleTypesFn (fieldDef: FieldDef) (fieldExecuteMap: FieldExecuteMap) : ExecuteField =
+    let completed = createCompletion possibleTypesFn (fieldDef.TypeDef) fieldExecuteMap
     match fieldDef.Resolve with
     | Resolve.BoxedSync(inType, outType, resolve) ->
         fun resolveFieldCtx value ->
@@ -283,7 +300,7 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) : ExecuteField =
                 let res = resolve resolveFieldCtx value
                 if res = null
                 then AsyncVal.empty
-                else completed resolveFieldCtx res
+                else completed resolveFieldCtx res 
             with
             | :? AggregateException as e ->
                 e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
@@ -328,7 +345,7 @@ and private createFieldContext objdef ctx (info: ExecutionInfo) =
       Args = args
       Variables = ctx.Variables }         
 
-and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos : AsyncVal<obj> = 
+and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos (fieldExecuteMap: FieldExecuteMap) : AsyncVal<obj> = 
     let resultSet =
         fieldInfos
         |> List.filter (fun info -> info.Include ctx.Variables)
@@ -337,14 +354,15 @@ and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value:
     resultSet
     |> Array.map (fun (name, info) ->  
         let innerCtx = createFieldContext objdef ctx info
-        let res = info.Definition.Execute innerCtx value
+        let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
+        let res = execute innerCtx value
         res 
         |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x))
         |> AsyncVal.rescue (fun e -> ctx.AddError e; KeyValuePair<_,_>(name, null)))
     |> AsyncVal.collectParallel
     |> AsyncVal.map (fun x -> upcast NameValueLookup x)
 
-let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) value =
+let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultSet =
         plan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)
@@ -363,7 +381,9 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables } 
-            let res = info.Definition.Execute fieldCtx value
+            let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+            let res = execute fieldCtx value
+            //let res = //info.Definition.Execute fieldCtx value
             res 
             |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
@@ -377,16 +397,17 @@ let private compileInputObject (indef: InputObjectDef) =
         let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
         input.ExecuteInput <- compileByType errMsg input.TypeDef)
 
-let internal compileSchema possibleTypesFn types =
+let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteMap) =
     types
     |> Map.toSeq 
-    |> Seq.map snd
-    |> Seq.iter (fun x ->
+    |> Seq.iter (fun (tName, x) ->
         match x with
         | Object objdef -> 
             objdef.Fields
             |> Map.iter (fun _ fieldDef -> 
-                fieldDef.Execute <- compileField possibleTypesFn fieldDef
+                
+                fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField possibleTypesFn fieldDef fieldExecuteMap)
+
                 fieldDef.Args
                 |> Array.iter (fun arg -> 
                     let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
@@ -398,7 +419,7 @@ let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
                 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors : AsyncVal<NameValueLookup> = 
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> = 
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema
@@ -406,5 +427,5 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         RootValue = root
         Variables = variables
         Errors = errors }
-    let result = executePlan ctx executionPlan schema.Query root
+    let result = executePlan ctx executionPlan schema.Query fieldExecuteMap root 
     result |> AsyncVal.map (NameValueLookup)

@@ -33,13 +33,23 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) =
+    let fieldExecuteMap = FieldExecuteMap()
+
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     let __done =
-        // we don't need to know possible types at this point
-        SchemaMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef
-        TypeMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef
-        TypeNameMetaFieldDef.Execute <- compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef
+    //     we don't need to know possible types at this point
+        fieldExecuteMap.SetExecute("",
+                                   "__schema",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+
+        fieldExecuteMap.SetExecute("",
+                                   "__type",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+
+        fieldExecuteMap.SetExecute("",
+                                   "__typename",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -238,7 +248,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         
     let introspected = introspectSchema typeMap      
     do
-        compileSchema getPossibleTypes typeMap
+        compileSchema getPossibleTypes typeMap fieldExecuteMap
         match Validation.validate typeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
@@ -252,7 +262,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate this executionPlan variables rootObj errors
+                let res = evaluate this executionPlan variables rootObj errors fieldExecuteMap
                 let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
                 return result :> IDictionary<string,obj>
             with 
