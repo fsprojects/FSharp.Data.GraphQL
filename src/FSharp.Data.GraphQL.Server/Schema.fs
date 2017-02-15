@@ -356,6 +356,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         member x.Mutation = mutation |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
+        member x.FieldExecuteMap = fieldExecuteMap
+        member x.ParseErrors exns = schemaConfig.ParseErrors exns
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false

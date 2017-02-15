@@ -5,6 +5,7 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open System.Reflection
 open System.Collections.Concurrent
+open System.Collections.Generic;
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
@@ -312,7 +313,26 @@ type ISchema =
 
         /// Returns an introspected representation of current schema.
         abstract Introspected : Introspection.IntrospectionSchema
+
+        abstract FieldExecuteMap : FieldExecuteMap
+
+        abstract ParseErrors : exn[] -> string[]
     end
+
+and FieldExecuteMap () = 
+    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
+
+    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
+        let key = typeName, fieldName
+        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
+
+    member public this.GetExecute(typeName: string, fieldName: string) = 
+        let key = 
+            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
+            then "", fieldName
+            else typeName, fieldName
+
+        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.

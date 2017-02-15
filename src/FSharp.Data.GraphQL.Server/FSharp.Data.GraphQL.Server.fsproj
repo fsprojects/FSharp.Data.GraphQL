@@ -55,6 +55,7 @@
     <Compile Include="Relay/Connections.fs" />
     <None Include="paket.references" />
     <None Include="paket.template" />
+    <Compile Include="SchemaProcessor.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
