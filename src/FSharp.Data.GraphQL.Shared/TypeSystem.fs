@@ -304,7 +304,7 @@ type ISchema =
         /// type. For Union types, it's the array of all union options.
         /// For Interface types, it's an array of all types - within
         /// schema - implementing target interface.
-        abstract GetPossibleTypes : AbstractDef -> ObjectDef []
+        abstract GetPossibleTypes : TypeDef -> ObjectDef []
 
         /// Checks if provided object is a possible type type (case 
         /// for Unions and implementation for Interfaces) of provided
@@ -313,8 +313,6 @@ type ISchema =
 
         /// Returns an introspected representation of current schema.
         abstract Introspected : Introspection.IntrospectionSchema
-
-        abstract FieldExecuteMap : FieldExecuteMap
 
         abstract ParseErrors : exn[] -> string[]
     end

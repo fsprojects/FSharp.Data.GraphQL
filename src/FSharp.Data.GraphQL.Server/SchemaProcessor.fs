@@ -5,11 +5,35 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
 type SchemaProcessor (schema: ISchema) = 
-    
-    member private this.Eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
+    let fieldExecuteMap = FieldExecuteMap()
+
+    //FIXME: for some reason static do or do invocation in module doesn't work
+    // for this reason we're compiling executors as part of identifier evaluation
+    let __done =
+    //     we don't need to know possible types at this point
+        fieldExecuteMap.SetExecute("",
+                                   "__schema",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+
+        fieldExecuteMap.SetExecute("",
+                                   "__type",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+
+        fieldExecuteMap.SetExecute("",
+                                   "__typename",
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
+
+    do
+        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
+        match Validation.validate schema.TypeMap with
+        | Validation.Success -> ()
+        | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
+
+    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
         let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
             if errors.IsEmpty 
             then [ "documentId", box executionPlan.DocumentId ; "data", upcast result ] 
@@ -18,7 +42,7 @@ type SchemaProcessor (schema: ISchema) =
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors schema.FieldExecuteMap
+                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
                 let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
                 return result :> IDictionary<string,obj>
             with 
@@ -42,7 +66,7 @@ type SchemaProcessor (schema: ISchema) =
             match operationName with
             | Some opname -> this.CreateExecutionPlan(ast, opname)
             | None -> this.CreateExecutionPlan(ast)
-        this.Eval(executionPlan, data, defaultArg variables Map.empty)
+        eval(executionPlan, data, defaultArg variables Map.empty)
         
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -60,7 +84,7 @@ type SchemaProcessor (schema: ISchema) =
             match operationName with
             | Some opname -> this.CreateExecutionPlan(ast, opname)
             | None -> this.CreateExecutionPlan(ast)
-        this.Eval(executionPlan, data, defaultArg variables Map.empty)
+        eval(executionPlan, data, defaultArg variables Map.empty)
         
     /// <summary>
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed 
@@ -75,7 +99,7 @@ type SchemaProcessor (schema: ISchema) =
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<IDictionary<string,obj>> =
-        this.Eval(executionPlan, data, defaultArg variables Map.empty)
+        eval(executionPlan, data, defaultArg variables Map.empty)
 
     /// Creates an execution plan for provided GraphQL document AST without 
     /// executing it. This is useful in cases when you have the same query executed 
