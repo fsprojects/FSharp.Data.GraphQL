@@ -20,7 +20,7 @@ let testSchema testFields : Schema<TestData> = Schema(Define.Object("Query", fie
 let ``Execute uses default resolve to accesses properties`` () =
     let schema = testSchema [ Define.AutoField("test", String) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
-    let actual = sync <| SchemaProcessor(schema).AsyncExecute(parse "{ test }", { Test = "testValue" })
+    let actual = sync <| Executor(schema).AsyncExecute(parse "{ test }", { Test = "testValue" })
     noErrors actual
     actual.["data"] |> equals (upcast expected)
             
@@ -28,6 +28,6 @@ let ``Execute uses default resolve to accesses properties`` () =
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema = testSchema [ Define.Field("test", String, "", [ Define.Input("a", String) ], resolve = fun ctx d -> d.Test + ctx.Arg("a")) ]
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
-    let actual = sync <| SchemaProcessor(schema).AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
+    let actual = sync <| Executor(schema).AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
     noErrors actual
     actual.["data"] |> equals (upcast expected)

@@ -64,7 +64,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             Define.Field("pets", ListOf PetType, fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
         ]), 
         config = { SchemaConfig.Default with Types = [CatType; DogType] })
-    let schemaProcessor = SchemaProcessor(schema)
+    let schemaProcessor = Executor(schema)
     let query = """{
       pets {
         name
@@ -114,7 +114,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         [
             Define.Field("pets", ListOf PetType, fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ])
         ]))
-    let schemaProcessor = SchemaProcessor(schema)
+    let schemaProcessor = Executor(schema)
     let query = """{
       pets {
         ... on Dog {
@@ -212,7 +212,7 @@ let ``inner types `` () =
        ])
 
    let schema = Schema(query = Query, config = { SchemaConfig.Default with Types = [ User; Widget ]})
-   let schemaProcessor = SchemaProcessor(schema)
+   let schemaProcessor = Executor(schema)
     
    let query = "{
                    viewer {name}, widgets { edges }

@@ -79,7 +79,7 @@ let schema =
                                             let result = queryable.Apply(info) |> Seq.toList
                                             result) ]))
 
-let schemaProcessor = SchemaProcessor(schema)
+let schemaProcessor = Executor(schema)
 
 [<Fact>]
 let ``LINQ interpreter works with auto-fields``() = 

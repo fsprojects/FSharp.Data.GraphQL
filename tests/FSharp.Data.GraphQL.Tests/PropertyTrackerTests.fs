@@ -78,7 +78,7 @@ and Query = Define.Object<obj list>("Query", [
 ])
 
 let schema = Schema(Query)
-let schemaProcessor = SchemaProcessor(schema)
+let schemaProcessor = Executor(schema)
 
 [<Fact>]
 let ``Property tracker can track indirect properties`` () =

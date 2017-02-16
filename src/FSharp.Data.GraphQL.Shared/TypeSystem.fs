@@ -550,6 +550,9 @@ and Resolve =
     /// expr is untyped version of Expr<ResolveFieldContext->'Input->Async<'Output>>
     | Async of input:Type * output:Type * expr:Expr 
 
+
+    | ResolveExpr of expr:Expr 
+
     /// Returns an expression defining resolver function.
     member x.Expr =
         match x with
@@ -1428,6 +1431,10 @@ module Resolve =
         | Async(d,c,expr) -> Some(d,c,boxifyExprAsync expr)
         | _ -> None 
 
+    let (|BoxedExpr|_|) = function
+        | ResolveExpr(e) -> Some(boxifyExpr e)
+        | _ -> None 
+
     let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
         let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
         let valueVar = Var("value", typeof<'Val>)
@@ -1860,6 +1867,15 @@ module SchemaDefinitions =
                   "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
           CoerceInput = coerceIdInput
           CoerceValue = coerceIDValue }
+
+    let Obj : ScalarDefinition<obj> = {
+            Name = "Object"
+            Description = 
+               Some 
+                  "The `Object` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
+            CoerceInput = (fun (o: Value) -> Some (o:>obj))
+            CoerceValue = (fun (o: obj) -> Some (o))
+        }
     
     /// GraphQL type for System.Uri
     let Uri : ScalarDefinition<Uri> = 
@@ -2223,6 +2239,15 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
+                     }
+
+        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = Obj
+                     Resolve = ResolveExpr(execField)
+                     Args = [||]
+                     DeprecationReason = None
                      }
         
         /// <summary>

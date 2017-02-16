@@ -281,9 +281,9 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
 and internal compileField possibleTypesFn (fieldDef: FieldDef) (fieldExecuteMap: FieldExecuteMap) : ExecuteField =
-    let completed = createCompletion possibleTypesFn (fieldDef.TypeDef) fieldExecuteMap
     match fieldDef.Resolve with
     | Resolve.BoxedSync(inType, outType, resolve) ->
+        let completed = createCompletion possibleTypesFn (fieldDef.TypeDef) fieldExecuteMap
         fun resolveFieldCtx value ->
             try
                 let res = resolve resolveFieldCtx value
@@ -299,11 +299,24 @@ and internal compileField possibleTypesFn (fieldDef: FieldDef) (fieldExecuteMap:
                 AsyncVal.empty
 
     | Resolve.BoxedAsync(inType, outType, resolve) ->
+        let completed = createCompletion possibleTypesFn (fieldDef.TypeDef) fieldExecuteMap
         fun resolveFieldCtx value -> 
             try
                 resolve resolveFieldCtx value
                 |> AsyncVal.ofAsync
                 |> AsyncVal.bind (completed resolveFieldCtx)
+            with
+            | :? AggregateException as e ->
+                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
+                AsyncVal.empty
+            | ex -> 
+                resolveFieldCtx.AddError(ex)
+                AsyncVal.empty
+
+    | Resolve.BoxedExpr (resolve) ->
+        fun resolveFieldCtx value -> 
+            try
+                downcast resolve resolveFieldCtx value
             with
             | :? AggregateException as e ->
                 e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)

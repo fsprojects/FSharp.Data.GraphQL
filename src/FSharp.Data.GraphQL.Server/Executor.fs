@@ -8,7 +8,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
-type SchemaProcessor (schema: ISchema) = 
+type Executor (schema: ISchema) = 
     let fieldExecuteMap = FieldExecuteMap()
 
     //FIXME: for some reason static do or do invocation in module doesn't work

@@ -94,7 +94,7 @@ type SimpleExecutionBenchmark() =
     }"""
 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
-    let mutable schemaProcessor : SchemaProcessor = Unchecked.defaultof<SchemaProcessor>
+    let mutable schemaProcessor : Executor = Unchecked.defaultof<Executor>
     let mutable simpleAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable flatAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable nestedAst : Ast.Document = Unchecked.defaultof<Ast.Document>
@@ -105,7 +105,7 @@ type SimpleExecutionBenchmark() =
     [<Setup>]
     member x.Setup() = 
         schema <- Schema(Query)
-        schemaProcessor <- SchemaProcessor(schema)
+        schemaProcessor <- Executor(schema)
         simpleAst <- parse simpleQueryString
         flatAst <- parse flatQueryString
         nestedAst <- parse nestedQueryString

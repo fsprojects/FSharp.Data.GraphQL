@@ -17,7 +17,7 @@ let schema =
     Schema(Define.Object("TestType", [ Define.AutoField("a", String); Define.AutoField("b", String) ])) :> Schema<Data>
 
 let private execAndCompare query expected =
-    let actual = sync <| SchemaProcessor(schema).AsyncExecute(parse query, data)
+    let actual = sync <| Executor(schema).AsyncExecute(parse query, data)
     noErrors actual
     actual.["data"] |> equals (upcast expected)
     
