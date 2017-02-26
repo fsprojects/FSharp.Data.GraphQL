@@ -1,7 +1,7 @@
-
 module FSharp.Data.GraphQL.Tests.RemoteInstanceTests
 
 open System
+open System.Collections.Generic
 open Xunit
 open FsCheck
 open FSharp.Data.GraphQL
@@ -63,50 +63,13 @@ let remoteSchema =
         config = { SchemaConfig.Default with Types = [FriendType] })
 
 
-type RemoteSchemaHandler() =
-    interface IRemoteSchemaHandler with
-        member x.Resolve resolveFieldCtx value = 
-            // serizing needed information
-            let astString = JsonConvert.SerializeObject(resolveFieldCtx.ExecutionInfo.Ast)
-            let plan = resolveFieldCtx.Context.ExecutionPlan
-            let operationType =
-                match plan.Operation.OperationType with
-                    | Query -> query 
-                    | Mutation -> mutation
+let rsExecutor = RequestSchemaExecutor()
+rsExecutor.RegisterSchema("friends", remoteSchema)
 
-
-            // TODO : pass info 
-
-
-            // get information on server:
-            let ast = JsonConvert.DeserializeObject<Ast.Field>(astString)
-            let oType = match operationType with
-            | query -> Ast.Query
-            | mutation -> Ast.Mutation
-
-            let operationDefinition = 
-                {
-                    Ast.OperationDefinition.OperationType = oType
-                    Ast.OperationDefinition.Name = Some "subquery"
-                    Ast.OperationDefinition.VariableDefinitions = []
-                    Ast.OperationDefinition.Directives = []
-                    Ast.OperationDefinition.SelectionSet = [
-                          Ast.Selection.Field (ast)
-                    ]
-                }
-
-            let sp = Executor(remoteSchema)
-            let doc = {
-                Ast.Document.Definitions = [
-                    Ast.Definition.OperationDefinition operationDefinition
-                ]
-            }
-
-            let result = sync <| sp.AsyncExecute(doc)
-            let errors = result.TryGetValue("errors")
-            let resData = result.["data"] :?> Collections.Generic.IDictionary<string, obj>
-
-            AsyncVal.wrap(resData.[ast.Name] :> obj)
+let serializer rsd = JsonConvert.SerializeObject(rsd) :> obj
+let transport (data : obj) : IDictionary<string, obj> =
+    let unserializedData = JsonConvert.DeserializeObject<RemoteSchemaData>(data.ToString())
+    rsExecutor.Execute(unserializedData)
 
 
 [<Fact>]
@@ -121,7 +84,7 @@ let ``Execute subschema`` () =
             Define.Field("name", String, fun _ d -> d.Name)
             Define.Field("woofs", Boolean, fun _ d -> d.Woofs)
             Define.Field("weight", Int, fun _ d -> d.Weight)
-            Define.RemoteSchemaField("friends", RemoteSchemaHandler())
+            Define.RemoteSchemaField("friends", serializer, transport)
         ])
     let CatType =
       Define.Object<Cat>(
@@ -180,39 +143,3 @@ let ``Execute subschema`` () =
                 "friends", upcast []]]]
     noErrors result
     result.["data"] |> equals (upcast expected)
-
-
-
-//type Widget = 
-//    { Id: string;
-//      Name: string }
-
-//type User = 
-//    { Id: string;
-//      Name: string;
-//      Widgets: Widget list }
-
-//[<Fact>]
-//let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface1111`` () = 
-//    let rec Widget = Define.Object<Widget>(
-//        name = "Widget",
-//        description = "A shiny widget",
-//        interfaces = [ Node ],
-//        fields = [
-//            Define.GlobalIdField(fun _ w -> w.Id)
-//            Define.Field("name", String, fun _ w -> w.Name)])
-
-//    and User = Define.Object<User>(
-//        name = "User",
-//        description = "A person who uses our app",
-//        interfaces = [ Node ],
-//        fields = [
-//            Define.GlobalIdField(fun _ w -> w.Id)
-//            Define.Field("name", String, fun _ w -> w.Name)
-//            Define.Field("widgets", ConnectionOf Widget, "A person's collection of widgets", Connection.allArgs, fun ctx user -> 
-//                let widgets = user.Widgets |> List.toArray
-//                Connection.ofArray widgets )])
-
-//    and Node = Define.Node<obj>(fun () -> [ User; Widget ])
-//    ()
-
