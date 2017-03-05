@@ -14,9 +14,10 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Quotations
+open FSharp.Quotations.Patterns
+open FSharp.Reflection.FSharpReflectionExtensions
 
-
-open System.Collections.Generic;
 type FieldExecuteMap () = 
     let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
 
@@ -255,7 +256,11 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
         fun ctx value ->
             let t = value.GetType()
             if value = null then AsyncVal.empty
+#if NETSTANDARD1_6           
+            elif t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
+#else       
             elif t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+#endif                  
                 let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, t)
                 innerfn ctx fields.[0]
             else innerfn ctx value
@@ -388,8 +393,8 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
     match plan.Strategy with
-    | Parallel -> AsyncVal.collectParallel results
-    | Sequential   -> AsyncVal.collectSequential results
+    | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
+    | ExecutionStrategy.Sequential   -> AsyncVal.collectSequential results
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields

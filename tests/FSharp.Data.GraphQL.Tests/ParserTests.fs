@@ -6,7 +6,6 @@ module FSharp.Data.GraphQL.Tests.ParserTests
 
 open System
 open Xunit
-open FsCheck
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 

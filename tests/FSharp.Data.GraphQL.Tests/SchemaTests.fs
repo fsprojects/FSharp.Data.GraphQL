@@ -5,7 +5,6 @@ module FSharp.Data.GraphQL.Tests.SchemaTests
 
 open System
 open Xunit
-open FsCheck
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution

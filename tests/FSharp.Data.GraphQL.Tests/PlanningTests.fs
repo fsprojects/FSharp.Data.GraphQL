@@ -7,14 +7,12 @@ module FSharp.Data.GraphQL.Tests.PlanningTests
 
 open System
 open Xunit
-open FsCheck
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Client.Serialization
 
 type Person = 
     { firstName : string

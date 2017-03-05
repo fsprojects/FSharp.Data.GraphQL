@@ -3,7 +3,6 @@
 module FSharp.Data.GraphQL.Tests.PropertyTrackerTests
 
 open Xunit
-open FsCheck
 open System
 open System.Linq
 open System.Collections.Generic

@@ -6,7 +6,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Types
 open Xunit
-open FsCheck
 
 type ITestInterface = 
     interface

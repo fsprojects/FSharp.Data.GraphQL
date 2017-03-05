@@ -5,12 +5,12 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Reflection
-open FSharp.Data.GraphQL.Types
 open System.Collections
 open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
-open Microsoft.FSharp.Quotations
+open FSharp.Data.GraphQL.Types
+open FSharp.Quotations
 
 type internal Methods =
     interface
@@ -44,22 +44,33 @@ module internal Gen =
     let inline defaultArgOnNull a b = if a <> null then a else b
     let private optionType = typedefof<option<_>>
     let (|Option|_|) (t: Type) =
+#if NETSTANDARD1_6
+        if t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() = optionType
+        then Some (t.GetTypeInfo().GetGenericArguments().[0])
+#else 
         if t.IsGenericType && t.GetGenericTypeDefinition() = optionType
         then Some (t.GetGenericArguments().[0])
+#endif 
         else None
 
     let (|Enumerable|_|) t =
         if typeof<System.Collections.IEnumerable>.IsAssignableFrom t 
         then
+#if NETSTANDARD1_6
+            let e = defaultArgOnNull (t.GetTypeInfo().GetInterface("IEnumerable`1")) t
+#else 
             let e = defaultArgOnNull (t.GetInterface("IEnumerable`1")) t
+#endif
             Some (e.GetGenericArguments().[0])
         else None
 
     let (|Queryable|_|) t =
         if typeof<IQueryable>.IsAssignableFrom t 
-        then
-            let q = defaultArgOnNull (t.GetInterface("IQueryable`1")) t 
-            Some (q.GetGenericArguments().[0])
+#if NETSTANDARD1_6        
+        then Some (Queryable (t.GetTypeInfo().GetInterface("IQueryable`1").GetGenericArguments().[0]))
+#else 
+        then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
+#endif 
         else None
 
     let genericType<'t> typeParams = typedefof<'t>.MakeGenericType typeParams
@@ -127,7 +138,7 @@ module internal Gen =
             methods.First()
         }
 
-open Microsoft.FSharp.Reflection
+open FSharp.Reflection
 
 module internal ReflectionHelper =
 
