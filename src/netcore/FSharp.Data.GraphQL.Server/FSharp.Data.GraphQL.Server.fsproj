@@ -24,6 +24,6 @@
     <PackageReference Include="FSharp.Core" Version="4.1.*" />
     <PackageReference Include="System.Reflection.TypeExtensions" Version="4.3.*" />
     <PackageReference Include="System.Linq.Expressions" Version="4.3.*" />
-    <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" Version="0.0.3-beta"/>
+    <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>
