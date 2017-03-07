@@ -6,7 +6,6 @@ module FSharp.Data.GraphQL.Tests.AsyncValTests
 open System
 open FSharp.Data.GraphQL
 open Xunit
-open FsCheck
 
 [<Fact>]
 let ``AsyncVal computation allows to return constant values`` () =

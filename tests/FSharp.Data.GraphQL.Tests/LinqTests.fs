@@ -3,7 +3,6 @@
 module FSharp.Data.GraphQL.Tests.LinqTests
 
 open Xunit
-open FsCheck
 open System
 open System.Linq
 open FSharp.Data.GraphQL

@@ -10,7 +10,7 @@ open System.Linq.Expressions
 open FSharp.Reflection
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open Microsoft.FSharp.Quotations
+open FSharp.Quotations
 
 /// Record defining an argument resolved as part of the property tracker.
 [<CustomComparison;CustomEquality>]
@@ -101,7 +101,14 @@ open System.Reflection
 
 let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public
 let private memberExpr (t: Type) name parameter =
-    match t.GetProperty(name, bindingFlags) with
+    
+    let prop =
+#if NETSTANDARD1_6
+        t.GetTypeInfo().GetProperty(name, bindingFlags)
+#else
+        t.GetProperty(name, bindingFlags)
+#endif    
+    match prop with
     | null -> 
         match t.GetField(name, bindingFlags) with
         | null -> failwithf "Couldn't find property or field '%s' inside type '%O'" name t
@@ -287,7 +294,11 @@ type private IR = IR of ExecutionInfo * Set<Tracker> * IR list
 /// or as a type argument in enumerable or option of root.
 let private canJoin (tRoot: Type) (tFrom: Type) =
     if tFrom = tRoot then true
+#if NETSTANDARD1_6 
+    elif tRoot.GetTypeInfo().IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
+#else 
     elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
+#endif
     then tFrom = (tRoot.GetGenericArguments().[0])
     else false
 
@@ -302,7 +313,11 @@ let private isOwn (track: Track) =
             match track.ParentType with
             | Gen.Enumerable tparam -> tparam
             | tval -> tval
+#if NETSTANDARD1_6
+        match track.ParentType.GetMember(name) with
+#else
         match track.ParentType.GetMember(name, fieldOrProperty, bindingFlags) with
+#endif
         | [||]  -> false
         | array -> 
             array |> Array.exists(fun m -> 

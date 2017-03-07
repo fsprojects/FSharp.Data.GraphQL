@@ -14,7 +14,7 @@ module GlobalId =
     /// Tries to parse Relay global node identifier.
     /// Relay identifiers are strings, which follows base64(typeName:nodeId) format.
     let fromGlobalId id = 
-        let decoded = Text.Encoding.Default.GetString(Convert.FromBase64String id)
+        let decoded = Text.Encoding.UTF8.GetString(Convert.FromBase64String id)
         match decoded.IndexOf ':' with
         | -1 -> None
         | idx -> Some(decoded.Substring(0, idx), decoded.Substring(idx + 1))
@@ -23,7 +23,7 @@ module GlobalId =
     let (|GlobalId|_|) = fromGlobalId
 
     /// Tries to parse typeName - id pair into single Relay-compatible global node identifier
-    let toGlobalId typeName id = Convert.ToBase64String(Text.Encoding.Default.GetBytes(typeName + ":" + id))
+    let toGlobalId typeName id = Convert.ToBase64String(Text.Encoding.UTF8.GetBytes(typeName + ":" + id))
     
     let private resolveTypeFun possibleTypes = 
         let map = lazy (

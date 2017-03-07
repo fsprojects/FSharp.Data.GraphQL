@@ -9,7 +9,6 @@ open FSharp.Linq
 open Microsoft.FSharp.Quotations
 open FSharp.Data.GraphQL.Linq
 open Xunit
-open FsCheck
 
 type DeepestType = 
     { Z : string }
