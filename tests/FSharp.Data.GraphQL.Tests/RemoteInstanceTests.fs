@@ -33,8 +33,6 @@ type Cat =
         member x.Weight = x.Weight
         member x.Friends = x.Friends
 
-type Human = { Name: string; }
-
 type Pet =
     | DogCase of Dog
     | CatCase of Cat
