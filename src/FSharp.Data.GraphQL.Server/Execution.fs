@@ -174,24 +174,7 @@ let internal findOperation doc opName =
     | defs, name -> 
         defs
         |> List.tryFind (fun def -> def.Name = name)
-            
-let private coerceDirectiveValue (ctx: ExecutionContext) (directive: Directive) =
-    match directive.If.Value with
-    | Variable vname -> downcast ctx.Variables.[vname]
-    | other -> 
-        match coerceBoolInput other with
-        | Some s -> s
-        | None ->
-            (directive.Name, other)
-            ||> sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A"
-            |> GraphQLException |> raise
 
-let private shouldSkip (ctx: ExecutionContext) (directive: Directive) =
-    match directive.Name with
-    | "skip" when not <| coerceDirectiveValue ctx directive -> false
-    | "include" when  coerceDirectiveValue ctx directive -> false
-    | _ -> true
-    
 let private defaultResolveType possibleTypesFn abstractDef : obj -> ObjectDef =
     let possibleTypes = possibleTypesFn abstractDef
     let mapper = match abstractDef with Union u -> u.ResolveValue | _ -> id
