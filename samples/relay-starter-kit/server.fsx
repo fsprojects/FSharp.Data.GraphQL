@@ -88,11 +88,11 @@ let handle : WebPart =
             | Some query ->
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = (query :?> string).Trim().Replace("\r\n", " ")
-                let! result = schema.AsyncExecute(q)
+                let! result = Executor(schema).AsyncExecute(q)
                 let serialized = json result
                 return! http |> Successful.OK serialized
             | None ->
-                let! schemaResult = schema.AsyncExecute(Introspection.introspectionQuery)
+                let! schemaResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery)
                 return! http |> Successful.OK (json schemaResult)
         }
 
