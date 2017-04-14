@@ -188,10 +188,11 @@ let graphiql : WebPart =
                 printfn "Received query: %s" query
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = query.Trim().Replace("\r\n", " ")
-                let! result = schema.AsyncExecute(q)   
+                let! result = Executor(schema).AsyncExecute(q)
+
                 return! http |> Successful.OK (json result)
             | None ->
-                let! schemaResult = schema.AsyncExecute(Introspection.introspectionQuery)
+                let! schemaResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery)
                 return! http |> Successful.OK (json schemaResult)
         }
 
