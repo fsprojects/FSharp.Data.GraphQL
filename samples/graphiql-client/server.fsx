@@ -1,10 +1,11 @@
 #r "../../packages/Suave/lib/net40/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
 #r "../../packages/System.Runtime/lib/net462/System.Runtime.dll"
-#r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Shared.dll"
-#r "../../bin/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Server.dll"
 
 open System
+open FSharp.Data
 
 // Data
 type Episode = 
@@ -177,21 +178,26 @@ let tryParse fieldName data =
     if raw <> null && raw <> ""
     then
         let map = JsonConvert.DeserializeObject<Map<string,string>>(raw)
-        Map.tryFind fieldName map
+        match Map.tryFind fieldName map with
+        | Some "" -> None
+        | s -> s
     else None
+
 
 let graphiql : WebPart =
     fun http ->
         async {
-            match tryParse "query" http.request.rawForm with
-            | Some query ->
+            let tryQuery = tryParse "query" http.request.rawForm
+            let tryVariables = tryParse "variables" http.request.rawForm |> Option.map (JsonConvert.DeserializeObject<Map<string, obj>>)
+            match tryQuery, tryVariables  with
+            | Some query, Some variables ->
                 printfn "Received query: %s" query
+                printfn "Recieved variables: %A" variables
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = query.Trim().Replace("\r\n", " ")
-                let! result = Executor(schema).AsyncExecute(q)
-
+                let! result = Executor(schema).AsyncExecute(q,variables)
                 return! http |> Successful.OK (json result)
-            | None ->
+            | None, _ ->
                 let! schemaResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery)
                 return! http |> Successful.OK (json schemaResult)
         }
