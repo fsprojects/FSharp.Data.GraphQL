@@ -8,7 +8,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
-type Executor (schema: ISchema) = 
+type Executor<'Root> (schema: ISchema<'Root>) = 
     let fieldExecuteMap = FieldExecuteMap()
 
     //FIXME: for some reason static do or do invocation in module doesn't work
@@ -115,6 +115,10 @@ type Executor (schema: ISchema) =
                     match schema.Mutation with
                     | Some m -> m
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
+                | Subscription ->
+                    match schema.Subscription with
+                    | Some s -> s
+                    | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
             planOperation (ast.GetHashCode()) planningCtx operation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")

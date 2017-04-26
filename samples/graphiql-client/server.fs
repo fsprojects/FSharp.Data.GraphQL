@@ -1,8 +1,3 @@
-#r "../../packages/Suave/lib/net40/Suave.dll"
-#r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../packages/System.Runtime/lib/net462/System.Runtime.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Server.dll"
 
 open System
 open FSharp.Data
@@ -26,6 +21,10 @@ type Droid =
       Friends : string list
       AppearsIn : Episode list
       PrimaryFunction : string option }
+
+type Root = 
+    { Hero : Human option
+      Droid : Droid option}
 
 let humans = 
     [ { Id = "1000"
@@ -138,25 +137,29 @@ and DroidType =
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
         Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) ])
 
+// Define our root query type, used to expose possible queries to the client
 let Query =
-  Define.Object(
+  Define.Object<Root>(
     name = "Query",
     fields = [
-        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx () -> getHuman (ctx.Arg("id")))
-        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx () -> getDroid (ctx.Arg("id"))) ])
+        Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
+        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
 
-let schema = Schema(Query)
+let schema = Schema(Query) :> ISchema<Root>
+let ex = Executor(schema)
 
 // server initialization
 open Suave
 open Suave.Operators
+open System.Reflection
+open FSharp.Reflection
 open Newtonsoft.Json
 
 type OptionConverter() =
     inherit JsonConverter()
     
     override x.CanConvert(t) = 
-        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
+        t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
 
     override x.WriteJson(writer, value, serializer) =
         let value = 
@@ -195,10 +198,15 @@ let graphiql : WebPart =
                 printfn "Recieved variables: %A" variables
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = query.Trim().Replace("\r\n", " ")
-                let! result = Executor(schema).AsyncExecute(q,variables)
+                let! result = ex.AsyncExecute(q, variables=variables)
                 return! http |> Successful.OK (json result)
-            | None, _ ->
-                let! schemaResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery)
+            | Some query, None ->
+                printfn "Received query: %s" query
+                let q = query.Trim().Replace("\r\n", " ")
+                let! result = ex.AsyncExecute(q)
+                return! http |> Successful.OK (json result)
+            | None, _  ->
+                let! schemaResult = ex.AsyncExecute(Introspection.introspectionQuery)
                 return! http |> Successful.OK (json schemaResult)
         }
 
@@ -206,7 +214,15 @@ let setCorsHeaders =
     Writers.setHeader  "Access-Control-Allow-Origin" "*"
     >=> Writers.setHeader "Access-Control-Allow-Headers" "content-type"
 
+let serverConfig =
+    { defaultConfig with
+        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8083]
 
-startWebServer defaultConfig (setCorsHeaders >=> graphiql >=> Writers.setMimeType "application/json")
+    }
+
+[<EntryPoint>]
+let main argv = 
+    startWebServer serverConfig (setCorsHeaders >=> graphiql >=> Writers.setMimeType "application/json")
+    0
 // Example:
 // curl --form 'query={ hero(id: "1000") { id, name, appearsIn, friends { id,name } } }' http://localhost:8083/

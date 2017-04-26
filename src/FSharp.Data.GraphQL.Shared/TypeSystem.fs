@@ -290,8 +290,12 @@ type ISchema =
         abstract Query : ObjectDef
 
         /// A mutation root object. Defines all top level operations,
-        /// that can be performend from GraphQL mutations.
+        /// that can be performed from GraphQL mutations.
         abstract Mutation : ObjectDef option
+
+        // A subscription root object. Defines all top level operations,
+        // that can be performed from GraphQL subscriptions. 
+        abstract Subscription : ObjectDef option
 
         /// List of all directives supported by the current schema.
         abstract Directives : DirectiveDef []
@@ -315,6 +319,14 @@ type ISchema =
         abstract Introspected : Introspection.IntrospectionSchema
 
         abstract ParseErrors : exn[] -> string[]
+    end
+
+and ISchema<'Root> = 
+    interface
+        inherit ISchema
+        abstract Query : ObjectDef<'Root>
+        abstract Mutation : ObjectDef<'Root> option
+        abstract Subscription : ObjectDef<'Root> option
     end
 
 and FieldExecuteMap () = 
