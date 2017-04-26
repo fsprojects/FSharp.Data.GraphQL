@@ -22,9 +22,17 @@ type Droid =
       AppearsIn : Episode list
       PrimaryFunction : string option }
 
+type Planet =
+    { Id : string
+      Name : string option
+      mutable IsMoon : bool option}
+    member x.SetMoon b =
+        x.IsMoon <- b
+        x
+
 type Root = 
     { Hero : Human option
-      Droid : Droid option}
+      Droid : Droid option }
 
 let humans = 
     [ { Id = "1000"
@@ -65,8 +73,20 @@ let droids =
         AppearsIn = [ Episode.NewHope; Episode.Empire; Episode.Jedi ]
         PrimaryFunction = Some "Astromech" } ]
 
+let planets =
+    [ { Id = "1"
+        Name = Some "Tatooine"
+        IsMoon = Some false}
+      { Id = "2"
+        Name = Some "Endor"
+        IsMoon = Some true}
+      { Id = "3"
+        Name = Some "Death Star"
+        IsMoon = Some false}]
+
 let getHuman id = humans |> List.tryFind (fun h -> h.Id = id)
 let getDroid id = droids |> List.tryFind (fun d -> d.Id = id)
+let getPlanet id = planets |> List.tryFind (fun p -> p.Id = id)
 
 type Character =
     | Human of Human
@@ -136,16 +156,48 @@ and DroidType =
             fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
         Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) ])
-
+and PlanetType =
+    Define.Object<Planet>(
+        name = "Planet",
+        description = "A planet in the Star Wars universe.",
+        isTypeOf = (fun o -> o :? Planet),
+        fieldsFn = fun () -> [
+            Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
+            Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
+            Define.Field("ismoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)])
 // Define our root query type, used to expose possible queries to the client
 let Query =
   Define.Object<Root>(
     name = "Query",
     fields = [
         Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
+        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) 
+        Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))])
 
-let schema = Schema(Query) :> ISchema<Root>
+let Mutation =
+    Define.Object<Root>(
+        name = "Mutation",
+        fields = [
+            Define.Field(
+                "setMoon", 
+                Nullable PlanetType, 
+                "Sets a moon status", 
+                [ Define.Input("id", String); Define.Input("ismoon", Boolean) ], 
+                fun ctx _ -> getPlanet(ctx.Arg("id")) |> Option.map (fun x -> x.SetMoon(Some(ctx.Arg("ismoon")))))])
+
+let Subscription = 
+    Define.Object<Root>(
+        name = "Subscription",
+        fields = [
+            Define.Field(
+                "watchMoon",
+                Nullable PlanetType,
+                "Watches to see if a planet is a moon",
+                [ Define.Input("id", String) ],
+                fun ctx _ -> getPlanet(ctx.Arg("id"))
+            )])
+
+let schema = Schema(Query, Mutation, Subscription) :> ISchema<Root>
 let ex = Executor(schema)
 
 // server initialization

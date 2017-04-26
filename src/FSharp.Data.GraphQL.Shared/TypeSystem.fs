@@ -344,6 +344,9 @@ and FieldExecuteMap () =
 
         if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
 
+
+
+
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.
 and TypeDef = 
@@ -2050,7 +2053,7 @@ module SchemaDefinitions =
         
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
@@ -2065,7 +2068,7 @@ module SchemaDefinitions =
         
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>

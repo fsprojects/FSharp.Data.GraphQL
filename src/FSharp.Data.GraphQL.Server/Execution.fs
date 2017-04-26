@@ -133,7 +133,7 @@ let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     | None -> acc
 
 let internal argumentValue variables (argdef: InputFieldDef) (argument: Argument) =
-    match argdef.ExecuteInput argument.Value variables  with
+    match argdef.ExecuteInput argument.Value variables with
     | null -> argdef.DefaultValue
     | value -> Some value    
 
@@ -263,6 +263,7 @@ let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (ret
     
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
+// Initiates resolving of each field
 and internal compileField possibleTypesFn (fieldDef: FieldDef) (fieldExecuteMap: FieldExecuteMap) : ExecuteField =
     match fieldDef.Resolve with
     | Resolve.BoxedSync(inType, outType, resolve) ->
@@ -403,7 +404,7 @@ let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteM
 let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
-                
+    
 let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> = 
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
