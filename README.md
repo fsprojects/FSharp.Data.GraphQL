@@ -37,7 +37,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### GraphiQL client
 
-Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build `FSharp.Data.GraphQL` project on Debug settings and run `server.fsx` with FSI - this will create a Suave.IO server compatible with GraphQL spec, running on port 8083. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL edito should appear. You may try it by applying following query:
+Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build `FSharp.Data.GraphQL` project on Debug settings and run `server.fsx` with FSI - this will create a Suave.IO server compatible with GraphQL spec, running on port 8083. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
 
 ```graphql
 {
