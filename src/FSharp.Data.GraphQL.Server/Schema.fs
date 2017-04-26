@@ -89,7 +89,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let m = 
             mutation 
             |> function Some(Named n) -> [n] | _ -> []
-        initialTypes @ m @ schemaConfig.Types
+        let s =
+            subscription
+            |> function Some(Named n) -> [n] | _ -> []
+        initialTypes @ s @ m @ schemaConfig.Types
         |> List.fold insert Map.empty
 
     let implementations =
@@ -224,7 +227,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let ischema =
             { QueryType = Map.find query.Name inamed
               MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-              SubscriptionType = None // not supported yet
+              SubscriptionType = subscription |> Option.map (fun s -> Map.find s.Name inamed)
               Types = itypes
               Directives = idirectives }
         ischema

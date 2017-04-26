@@ -13,6 +13,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
 
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
+    // Builds up our map of field -> resolver
     let __done =
     //     we don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
