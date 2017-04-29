@@ -30,9 +30,8 @@ type Planet =
         x.IsMoon <- b
         x
 
-type Root = 
-    { Hero : Human option
-      Droid : Droid option }
+type Root = { ClientId: string }
+    
 
 let humans = 
     [ { Id = "1000"
@@ -104,6 +103,8 @@ let getCharacter id = characters |> List.tryFind (matchesId id)
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Subscription
+open Newtonsoft.Json
 
 let EpisodeType =
   Define.Enum(
@@ -165,6 +166,13 @@ and PlanetType =
             Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
             Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
             Define.Field("ismoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)])
+and RootType =
+    Define.Object<Root>(
+        name = "Root",
+        description = "The Root type to be passed to all our resolvers",
+        isTypeOf = (fun o -> o :? Root),
+        fieldsFn = fun () -> [
+            Define.Field("clientid", String, "The ID of the client", fun _ r -> r.ClientId)])
 // Define our root query type, used to expose possible queries to the client
 let Query =
   Define.Object<Root>(
@@ -186,16 +194,18 @@ let Mutation =
                 fun ctx _ -> getPlanet(ctx.Arg("id")) |> Option.map (fun x -> x.SetMoon(Some(ctx.Arg("ismoon")))))])
 
 let Subscription = 
-    Define.Object<Root>(
+    Define.SubscriptionObject<Root>(
         name = "Subscription",
         fields = [
-            Define.Field(
+            Define.SubscriptionField(
                 "watchMoon",
-                Nullable PlanetType,
+                RootType,
+                PlanetType,
                 "Watches to see if a planet is a moon",
                 [ Define.Input("id", String) ],
-                fun ctx _ -> getPlanet(ctx.Arg("id"))
+                fun ctx d -> printfn "Subscription triggered!" 
             )])
+
 
 let schema = Schema(Query, Mutation, Subscription) :> ISchema<Root>
 let ex = Executor(schema)
@@ -205,7 +215,7 @@ open Suave
 open Suave.Operators
 open System.Reflection
 open FSharp.Reflection
-open Newtonsoft.Json
+
 
 type OptionConverter() =
     inherit JsonConverter()
@@ -249,8 +259,8 @@ let graphiql : WebPart =
                 printfn "Received query: %s" query
                 printfn "Recieved variables: %A" variables
                 // at the moment parser is not parsing new lines correctly, so we need to get rid of them
-                let q = query.Trim().Replace("\r\n", " ")
-                let! result = ex.AsyncExecute(q, variables=variables)
+                //let q = query.Trim().Replace("\r\n", " ")
+                let! result = ex.AsyncExecute(query, variables=variables)
                 return! http |> Successful.OK (json result)
             | Some query, None ->
                 printfn "Received query: %s" query

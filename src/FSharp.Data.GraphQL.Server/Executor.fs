@@ -7,10 +7,11 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
+open FSharp.Data.GraphQL.Subscription
 
 type Executor<'Root> (schema: ISchema<'Root>) = 
     let fieldExecuteMap = FieldExecuteMap()
-
+    let subscriptionHandler = SubscriptionHandler()
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     // Builds up our map of field -> resolver
@@ -29,7 +30,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                                    compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
 
     do
-        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
+        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap subscriptionHandler
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
@@ -43,7 +44,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap subscriptionHandler
                 let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
                 return result :> IDictionary<string,obj>
             with 
@@ -118,7 +119,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
                 | Subscription ->
                     match schema.Subscription with
-                    | Some s -> s
+                    | Some s -> s :> ObjectDef<'Root>
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
             planOperation (ast.GetHashCode()) planningCtx operation

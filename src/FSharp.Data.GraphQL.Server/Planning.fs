@@ -60,7 +60,11 @@ let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field,
         { Identifier = field.AliasOrName
           Kind = ResolveValue
           ParentDef = parentDef
-          ReturnDef = fdef.TypeDef
+          // Make sure that we use the proper type when dealing with subscriptions
+          ReturnDef = 
+            match parentDef with 
+            | SubscriptionObject s -> (fdef :?> SubscriptionFieldDef).InputTypeDef 
+            | Object o -> fdef.TypeDef
           Definition = fdef
           Ast = field
           Include = includer 
@@ -146,6 +150,7 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
 let rec private plan (ctx: PlanningContext) (info) : ExecutionInfo =
     match info.ReturnDef with
     | Leaf _ -> info
+    | SubscriptionObject _ -> planSelection ctx info info.Ast.SelectionSet (ref [])
     | Object _ -> planSelection ctx info info.Ast.SelectionSet (ref [])
     | Nullable returnDef -> 
         let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }

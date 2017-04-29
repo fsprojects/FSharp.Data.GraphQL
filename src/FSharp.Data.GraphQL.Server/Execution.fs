@@ -9,10 +9,12 @@ open System.Collections.Generic
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Resolve
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Data.GraphQL.Subscription
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection.FSharpReflectionExtensions
@@ -348,12 +350,33 @@ and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value:
     |> AsyncVal.collectParallel
     |> AsyncVal.map (fun x -> upcast NameValueLookup x)
 
-let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
-    let resultSet =
-        plan.Fields
-        |> List.filter (fun info -> info.Include ctx.Variables)
-        |> List.map (fun info -> (info.Identifier, info))
-        |> List.toArray
+// Helper function for resolving the values of the fields
+let internal resolveFieldValues (fields: ExecutionInfo list) (variables: Map<string, obj>) =
+    fields
+    |> List.filter (fun info -> info.Include variables)
+    |> List.map (fun info -> (info.Identifier, info))
+    |> List.toArray
+
+// Activates subscriptions by provinding them with context
+let internal executeSubscription (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: SubscriptionObjectDef) (subscriptionHandler: SubscriptionHandler) value :unit =
+     let resultSet = resolveFieldValues plan.Fields ctx.Variables
+     resultSet
+     |> Array.iter (fun (name, info) ->
+        let subdef = info.Definition :?> SubscriptionFieldDef
+        let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
+        let fieldCtx = 
+            { ExecutionInfo = info
+              Context = ctx
+              ReturnType = subdef.InputTypeDef
+              ParentType = objdef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables } 
+        // TODO: Remove testing code
+        let dict = new Dictionary<string, obj>()
+        subscriptionHandler.FireEvent subdef.Name fieldCtx dict)
+let internal executeQuery (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
+    let resultSet = resolveFieldValues plan.Fields ctx.Variables
     let results =
         resultSet
         |> Array.map (fun (name, info) ->
@@ -375,7 +398,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
     match plan.Strategy with
     | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
-    | ExecutionStrategy.Sequential   -> AsyncVal.collectSequential results
+    | ExecutionStrategy.Sequential -> AsyncVal.collectSequential results
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
@@ -383,21 +406,39 @@ let private compileInputObject (indef: InputObjectDef) =
         let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
         input.ExecuteInput <- compileByType errMsg input.TypeDef)
 
-let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteMap) =
+let compileSubscriptionField (subfield: SubscriptionFieldDef) = 
+    // This bears some explaining...
+    // We use the Resolve module to define our subscription callbacks,
+    // But unboxing a Resolve casts the untyped expr into a Expr<ResolveFieldContext -> obj -> obj>
+    // Subscription callbacks should be of type Expr<ResolveFieldContext -> obj -> unit>
+    // First we define a function that composes a function of two arguments with one that consumes one
+    let inline (>>+) f g x y = g (f x y)
+    match subfield.Resolve with
+    // Now we compose our resolve function with one that simply ignores the output
+    | Resolve.BoxedSync(inType, unit, resolve) -> resolve >>+ ignore
+    // TODO: Implement Async subscription callbacks
+    //| Resolve.BoxedAsync(inType, _, resolve) -> resolve
+    //| Resolve.BoxedExpr(resolve) -> resolve
+
+let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
+    objdef.Fields
+    |> Map.iter (fun _ fieldDef ->
+        executeFields fieldDef
+        fieldDef.Args
+        |> Array.iter (fun arg -> 
+            let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
+            arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+
+
+let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteMap) (subscriptionHandler: SubscriptionHandler) =
     types
     |> Map.toSeq 
     |> Seq.iter (fun (tName, x) ->
         match x with
+        | SubscriptionObject subdef -> 
+            compileObject subdef (fun sub -> subscriptionHandler.RegisterSubscription sub.Name (compileSubscriptionField (sub :?> SubscriptionFieldDef)))
         | Object objdef -> 
-            objdef.Fields
-            |> Map.iter (fun _ fieldDef -> 
-                
-                fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField possibleTypesFn fieldDef fieldExecuteMap)
-
-                fieldDef.Args
-                |> Array.iter (fun arg -> 
-                    let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
-                    arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+            compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField possibleTypesFn fieldDef fieldExecuteMap))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
@@ -405,7 +446,7 @@ let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
     
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> = 
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) (subscriptionHandler: SubscriptionHandler) : AsyncVal<NameValueLookup> = 
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema
@@ -413,5 +454,14 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         RootValue = root
         Variables = variables
         Errors = errors }
-    let result = executePlan ctx executionPlan schema.Query fieldExecuteMap root 
+    
+    let result = 
+        match executionPlan.Operation.OperationType with
+        | Subscription ->
+            match schema.Subscription with
+            | Some s -> 
+                executeSubscription ctx executionPlan s subscriptionHandler root
+                executeQuery ctx executionPlan schema.Query fieldExecuteMap root 
+            | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
+        | _ -> executeQuery ctx executionPlan schema.Query fieldExecuteMap root 
     result |> AsyncVal.map (NameValueLookup)
