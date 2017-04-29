@@ -10,8 +10,9 @@
   <ItemGroup>
     <Compile Include="../../FSharp.Data.GraphQL.Server/AssemblyInfo.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/ReflectionHelper.fs" />
-    <Compile Include="../../FSharp.Data.GraphQL.Server/Values.fs" />
+    <Compile Include="../../FSharp.Data.GraphQL.Server/Values.fs" /> 
     <Compile Include="../../FSharp.Data.GraphQL.Server/Planning.fs" />
+    <Compile Include="../../FSharp.Data.GraphQL.Server/SubscriptionHandler.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Execution.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Executor.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Schema.fs" />

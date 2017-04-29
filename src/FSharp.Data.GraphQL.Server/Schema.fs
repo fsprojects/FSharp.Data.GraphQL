@@ -32,7 +32,7 @@ type SchemaConfig =
           ParseErrors = Array.map (fun e -> e.Message) }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -43,6 +43,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         match typedef with
         | Scalar scalardef -> addOrReturn scalardef.Name typedef ns
         | Enum enumdef -> addOrReturn enumdef.Name typedef ns
+        | SubscriptionObject subobj ->
+            let ns' = addOrReturn subobj.Name typedef ns
+            let withFields' = 
+                subobj.Fields
+                |> Map.toArray
+                |> Array.map snd
+                |> Array.collect (fun x -> Array.append [| x.TypeDef :> TypeDef; x.InputTypeDef :> TypeDef|] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
+                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
+                |> Array.fold (fun n (Named t) -> insert n t) ns'
+            subobj.Implements
+            |> Array.fold insert withFields'
         | Object objdef -> 
             let ns' = addOrReturn objdef.Name typedef ns
             let withFields' =
@@ -144,6 +155,16 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
+    
+    let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
+        { Name = subdef.Name
+          Description = subdef.Description
+          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Type = introspectTypeRef false namedTypes subdef.InputTypeDef
+          IsDeprecated = Option.isSome subdef.DeprecationReason
+          DeprecationReason = subdef.DeprecationReason }
+
+
 
     let introspectEnumVal (enumVal: EnumVal) : IntrospectionEnumVal =
         { Name = enumVal.Name
@@ -167,6 +188,15 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         match typedef with
         | Scalar scalardef -> 
             IntrospectionType.Scalar(scalardef.Name, scalardef.Description)
+        | SubscriptionObject subdef ->
+            let fields =
+                subdef.Fields
+                |> Map.toArray
+                |> Array.map (snd >> instrospectSubscriptionField namedTypes)
+            let interfaces = 
+                subdef.Implements 
+                |> Array.map (fun idef -> Map.find idef.Name namedTypes)
+            IntrospectionType.Object(subdef.Name, subdef.Description, fields, interfaces)
         | Object objdef -> 
             let fields = 
                 objdef.Fields 

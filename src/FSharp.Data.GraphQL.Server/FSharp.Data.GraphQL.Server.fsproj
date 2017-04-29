@@ -48,14 +48,15 @@
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
+    <Compile Include="SubscriptionHandler.fs" />
     <Compile Include="Execution.fs" />
+    <Compile Include="Executor.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="Linq.fs" />
     <Compile Include="Relay/Node.fs" />
     <Compile Include="Relay/Connections.fs" />
     <None Include="paket.references" />
     <None Include="paket.template" />
-    <Compile Include="Executor.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj">
