@@ -203,7 +203,7 @@ let Subscription =
                 PlanetType,
                 "Watches to see if a planet is a moon",
                 [ Define.Input("id", String) ],
-                fun ctx d -> printfn "Subscription triggered!" 
+                fun ctx d -> (printfn "Subscription triggered with on id %A" (ctx.Arg("id")))
             )])
 
 
@@ -258,8 +258,6 @@ let graphiql : WebPart =
             | Some query, Some variables ->
                 printfn "Received query: %s" query
                 printfn "Recieved variables: %A" variables
-                // at the moment parser is not parsing new lines correctly, so we need to get rid of them
-                //let q = query.Trim().Replace("\r\n", " ")
                 let! result = ex.AsyncExecute(query, variables=variables)
                 return! http |> Successful.OK (json result)
             | Some query, None ->
