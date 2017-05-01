@@ -33,7 +33,8 @@ type SubscriptionHandler() =
         // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
         registeredSubscriptions.TryAdd(fieldName, {Callback = callback}) |> ignore
 
-    member this.ActivateSubscription (fieldName: string) (triggerType: #OutputDef) (ctx: ResolveFieldContext) =
+    member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) =
+        let triggerType = ctx.ReturnType
         // We need to know the type we are going to be subscribing to
         match registeredSubscriptions.TryGetValue fieldName with
         | true, subscription -> 
