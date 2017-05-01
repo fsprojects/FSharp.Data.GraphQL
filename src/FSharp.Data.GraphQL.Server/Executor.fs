@@ -133,3 +133,6 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         match operationName with
         | None -> this.CreateExecutionPlan(parse queryOrMutation)
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
+
+    member this.FireSubscriptionEvent(objdef: #OutputDef) (args: Map<string, obj>) (input: IDictionary<string,obj>) = 
+        subscriptionHandler.FireEvent objdef args input

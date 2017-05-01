@@ -358,8 +358,7 @@ let internal resolveFieldValues (fields: ExecutionInfo list) (variables: Map<str
     |> List.toArray
 
 // Activates subscriptions by provinding them with context
-let internal executeSubscription (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: SubscriptionObjectDef) (subscriptionHandler: SubscriptionHandler) value :unit =
-     let resultSet = resolveFieldValues plan.Fields ctx.Variables
+let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (subscriptionHandler: SubscriptionHandler) value :unit =
      resultSet
      |> Array.iter (fun (name, info) ->
         let subdef = info.Definition :?> SubscriptionFieldDef
@@ -372,11 +371,23 @@ let internal executeSubscription (ctx: ExecutionContext) (plan: ExecutionPlan) (
               Schema = ctx.Schema
               Args = args
               Variables = ctx.Variables } 
-        // TODO: Remove testing code
-        let dict = new Dictionary<string, obj>()
-        subscriptionHandler.FireEvent subdef.Name fieldCtx dict)
-let internal executeQuery (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
-    let resultSet = resolveFieldValues plan.Fields ctx.Variables
+        subscriptionHandler.ActivateSubscription subdef.Name subdef.InputTypeDef fieldCtx)
+
+
+let internal executeMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: ObjectDef) (subscriptionHandler: SubscriptionHandler) (result: AsyncVal<KeyValuePair<string, obj> []>) =
+    resultSet
+    |> Array.iter (fun (name, info) ->
+        let fdef = info.Definition
+        let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+        async {
+            let! nv = result |> AsyncVal.map (NameValueLookup)
+            let dict = nv :> IDictionary<string, obj>
+            // TODO: Ask John if he wants me to keep the *~magic~* in here
+            subscriptionHandler.FireEvent fdef.TypeDef args dict
+        }
+        |> Async.RunSynchronously)
+
+let internal executeQuery (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (strategy: ExecutionStrategy) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let results =
         resultSet
         |> Array.map (fun (name, info) ->
@@ -393,10 +404,10 @@ let internal executeQuery (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef:
             let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             let res = execute fieldCtx value
             //let res = //info.Definition.Execute fieldCtx value
-            res 
+            res
             |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
-    match plan.Strategy with
+    match strategy with
     | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
     | ExecutionStrategy.Sequential -> AsyncVal.collectSequential results
 
@@ -455,13 +466,21 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         Variables = variables
         Errors = errors }
     
+    let resultSet = resolveFieldValues executionPlan.Fields ctx.Variables
     let result = 
         match executionPlan.Operation.OperationType with
         | Subscription ->
             match schema.Subscription with
             | Some s -> 
-                executeSubscription ctx executionPlan s subscriptionHandler root
-                executeQuery ctx executionPlan schema.Query fieldExecuteMap root 
+                executeSubscription resultSet ctx s subscriptionHandler root
+                executeQuery resultSet ctx executionPlan.Strategy s fieldExecuteMap root 
             | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
-        | _ -> executeQuery ctx executionPlan schema.Query fieldExecuteMap root 
+        | Mutation -> 
+            match schema.Mutation with
+            | Some m ->
+                let res = executeQuery resultSet ctx executionPlan.Strategy m fieldExecuteMap root 
+                executeMutation resultSet ctx m subscriptionHandler res
+                res
+            | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
+        | Query -> executeQuery resultSet ctx executionPlan.Strategy schema.Query fieldExecuteMap root 
     result |> AsyncVal.map (NameValueLookup)
