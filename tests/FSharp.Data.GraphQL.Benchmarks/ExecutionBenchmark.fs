@@ -94,7 +94,7 @@ type SimpleExecutionBenchmark() =
     }"""
 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
-    let mutable schemaProcessor : Executor = Unchecked.defaultof<Executor>
+    let mutable schemaProcessor : Executor<unit> = Unchecked.defaultof<Executor<unit>>
     let mutable simpleAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable flatAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable nestedAst : Ast.Document = Unchecked.defaultof<Ast.Document>
