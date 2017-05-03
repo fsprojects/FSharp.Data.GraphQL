@@ -26,10 +26,12 @@ type FieldExecuteMap () =
 
 type internal Subscription = {
     Callback: (ResolveFieldContext -> IDictionary<string, obj> -> unit)
+    Filter: (ResolveFieldContext -> obj -> bool)
 }
 
 type internal ActiveSubscription = {
     Callback: (IDictionary<string, obj> -> unit)
+    Filter: (obj -> bool)
     Context: ResolveFieldContext
     Name: string
 }
@@ -65,9 +67,13 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
         }
         Async.Start asyncResult
     interface ISubscriptionHandler with 
-        member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> unit) =
+        member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> unit) (filter: ResolveFieldContext -> obj -> bool) =
             // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
-            registeredSubscriptions.Add(fieldName, {Callback = callback}) |> ignore
+            let sub = {
+                Callback = callback
+                Filter = filter
+            }
+            registeredSubscriptions.Add(fieldName, sub) |> ignore
 
         member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) =
             let triggerType = ctx.ReturnType
@@ -76,6 +82,7 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
             | true, subscription -> 
                 let active = {
                     Callback = (subscription.Callback ctx)
+                    Filter = (subscription.Filter ctx)
                     Context = ctx
                     Name = fieldName
                 }
@@ -83,21 +90,13 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
                 |> ignore
             | _ -> raise <| GraphQLException (sprintf "Attempted to activate a non-existent subscription %s" fieldName)
 
-        member this.FireEvent (triggerType: #OutputDef) (args: Map<string, obj>) value =
+        member this.FireEvent (triggerType: #OutputDef) value =
+            // TODO: Enable parallelism
             match activeSubscriptions.TryGetValue (getBaseTypeName triggerType) with
             | true, subs ->
                 subs
-                |> List.iter (fun s ->
-                    // Check to make sure each of the args in the active sub is in args
-                    let isMatch = 
-                        s.Context.Args
-                        |> Map.forall (fun k v ->
-                            match args.TryFind k with
-                            | Some v' -> 
-                                v = v'
-                            | None -> 
-                                false)
-                    if isMatch then resolveCallback s value else ())
+                |> List.filter (fun s -> s.Filter value)
+                |> List.iter (fun s -> resolveCallback s value)
             | _ -> ()
 
 

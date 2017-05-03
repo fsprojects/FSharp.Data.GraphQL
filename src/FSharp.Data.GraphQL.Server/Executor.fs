@@ -138,4 +138,4 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
 
     member this.FireSubscriptionEvent(objdef: #OutputDef<'Val>) (args: Map<string, obj>) (value: 'Val)  = 
-        executionHandler.SubscriptionHandler.FireEvent objdef args (box value)
+        executionHandler.SubscriptionHandler.FireEvent objdef (box value)
