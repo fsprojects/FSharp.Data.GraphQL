@@ -3,15 +3,18 @@
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Execution.SchemaCompiler
+open FSharp.Data.GraphQL.Execution.QueryExecution
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Subscription
 
 type Executor<'Root> (schema: ISchema<'Root>) = 
-    let fieldExecuteMap = FieldExecuteMap()
-    let subscriptionHandler = SubscriptionHandler()
+    
+    let executionHandler = ExecutionHandler()
+    let fieldExecuteMap = executionHandler.FieldExecuteMap
+    let subscriptionHandler = executionHandler.SubscriptionHandler
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     // Builds up our map of field -> resolver
@@ -134,5 +137,5 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         | None -> this.CreateExecutionPlan(parse queryOrMutation)
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
 
-    member this.FireSubscriptionEvent(objdef: #OutputDef) (args: Map<string, obj>) (input: IDictionary<string,obj>) = 
-        subscriptionHandler.FireEvent objdef args input
+    member this.FireSubscriptionEvent(objdef: #OutputDef<'Val>) (args: Map<string, obj>) (value: 'Val)  = 
+        subscriptionHandler.FireEvent objdef args (box value)

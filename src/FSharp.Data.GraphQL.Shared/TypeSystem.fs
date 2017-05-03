@@ -327,24 +327,17 @@ and ISchema<'Root> =
         abstract Mutation : ObjectDef<'Root> option
         abstract Subscription : SubscriptionObjectDef<'Root> option
     end
-
-and FieldExecuteMap () = 
-    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
-
-    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
-        let key = typeName, fieldName
-        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
-
-    member public this.GetExecute(typeName: string, fieldName: string) = 
-        let key = 
-            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
-            then "", fieldName
-            else typeName, fieldName
-
-        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
-
-
-
+and IFieldExecuteMap =
+    interface
+        abstract SetExecute : string * string * ExecuteField -> unit
+        abstract GetExecute : string * string -> ExecuteField
+    end
+and ISubscriptionHandler =
+    interface
+        abstract RegisterSubscription : string -> (ResolveFieldContext -> obj -> unit) -> unit
+        abstract ActivateSubscription : string -> ResolveFieldContext -> unit
+        abstract FireEvent : #OutputDef -> Map<string, obj> -> obj -> unit
+    end
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.

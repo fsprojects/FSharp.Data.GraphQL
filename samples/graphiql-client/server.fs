@@ -103,7 +103,6 @@ let getCharacter id = characters |> List.tryFind (matchesId id)
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Subscription
 open Newtonsoft.Json
 
 let EpisodeType =
@@ -203,7 +202,7 @@ let Subscription =
                 PlanetType,
                 "Watches to see if a planet is a moon",
                 [ Define.Input("id", String) ],
-                fun ctx d -> (printfn "Subscription triggered with on id %A" (ctx.Arg("id")))
+                fun ctx d -> (printfn "Subscription triggered with json %A on id %A" d (ctx.Arg("id")))
             )])
 
 
@@ -258,6 +257,7 @@ let graphiql : WebPart =
             | Some query, Some variables ->
                 printfn "Received query: %s" query
                 printfn "Recieved variables: %A" variables
+
                 let! result = ex.AsyncExecute(query, variables=variables)
                 return! http |> Successful.OK (json result)
             | Some query, None ->
