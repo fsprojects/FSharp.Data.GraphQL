@@ -12,7 +12,8 @@
     <Compile Include="../../FSharp.Data.GraphQL.Server/ReflectionHelper.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Values.fs" /> 
     <Compile Include="../../FSharp.Data.GraphQL.Server/Planning.fs" />
-    <Compile Include="../../FSharp.Data.GraphQL.Server/SubscriptionHandler.fs" />
+    <Compile Include="../../FSharp.Data.GraphQL.Server/ExecutionHelpers.fs" />
+    <Compile Include="../../FSharp.Data.GraphQL.Server/ExecutionHandler.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Execution.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Executor.fs" />
     <Compile Include="../../FSharp.Data.GraphQL.Server/Schema.fs" />
