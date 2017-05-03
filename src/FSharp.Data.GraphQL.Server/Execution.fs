@@ -248,7 +248,7 @@ module SchemaCompiler =
                 compileObject subdef (fun sub -> 
                     // Subscription Objects only contain subscription fields, so this cast is safe
                     let subField = (sub :?> SubscriptionFieldDef)
-                    subscriptionHandler.RegisterSubscription sub.Name (compileSubscriptionField subField)
+                    subscriptionHandler.RegisterSubscription sub.Name (compileSubscriptionField subField) subField.Filter
                     // Make sure that we register a call in the executeMap so that we know how to resolve the fields
                     fieldExecuteMap.SetExecute(tName, subField.Name, compileField possibleTypesFn subField execHandler))
             | Object objdef -> 

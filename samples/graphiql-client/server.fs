@@ -190,7 +190,12 @@ let Mutation =
                 Nullable PlanetType, 
                 "Sets a moon status", 
                 [ Define.Input("id", String); Define.Input("ismoon", Boolean) ], 
-                fun ctx _ -> getPlanet(ctx.Arg("id")) |> Option.map (fun x -> x.SetMoon(Some(ctx.Arg("ismoon")))))])
+                fun ctx _ -> 
+                    getPlanet(ctx.Arg("id")) 
+                    |> Option.map (fun x -> 
+                        x.SetMoon(Some(ctx.Arg("ismoon")))
+                        ctx.SubscriptionHandler.FireEvent PlanetType x
+                        x))])
 
 let Subscription = 
     Define.SubscriptionObject<Root>(
@@ -202,9 +207,8 @@ let Subscription =
                 PlanetType,
                 "Watches to see if a planet is a moon",
                 [ Define.Input("id", String) ],
-                fun ctx d -> (printfn "Subscription triggered with json %A on id %A" d (ctx.Arg("id")))
-            )])
-
+                (fun ctx d -> printfn "Subscription with dictionary %A" d),
+                (fun ctx p -> ctx.Arg("id") = p.Id))])
 
 let schema = Schema(Query, Mutation, Subscription) :> ISchema<Root>
 let ex = Executor(schema)

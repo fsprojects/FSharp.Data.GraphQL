@@ -334,9 +334,9 @@ and IFieldExecuteMap =
     end
 and ISubscriptionHandler =
     interface
-        abstract RegisterSubscription : string -> (ResolveFieldContext -> obj -> unit) -> unit
+        abstract RegisterSubscription : string -> (ResolveFieldContext -> obj -> unit) -> (ResolveFieldContext -> obj -> bool) -> unit
         abstract ActivateSubscription : string -> ResolveFieldContext -> unit
-        abstract FireEvent : #OutputDef -> Map<string, obj> -> obj -> unit
+        abstract FireEvent : #OutputDef -> obj -> unit
     end
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
@@ -577,7 +577,7 @@ and Resolve =
         | Async(_,_,e) -> e
         | Undefined -> failwith "Resolve function was not defined"
 
-
+    
 /// Execution strategy for provided queries. Defines if object fields should 
 /// be resolved either sequentially one-by-one or in parallel.
 and ExecutionStrategy = 
@@ -1384,6 +1384,7 @@ and SubscriptionFieldDef =
     interface 
         // Subscription Resolvers take in an output from a mutation
         abstract InputTypeDef : OutputDef
+        abstract Filter : (ResolveFieldContext -> obj -> bool)
         inherit FieldDef
     end
 and SubscriptionFieldDef<'Val> =
@@ -1402,6 +1403,9 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Val, 'Input> =
         TypeDef : OutputDef<'Val>
         // For a Subscription, the typedef will be the type of the associated mutation
         Resolve : Resolve
+        // We use this function to determine if a given object matches a subscription
+        Filter : ResolveFieldContext -> 'Input -> bool
+
         Args : InputFieldDef []
     }
     interface FieldDef with
@@ -1413,6 +1417,11 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Val, 'Input> =
         member x.Resolve = x.Resolve
 
     interface SubscriptionFieldDef with
+        member x.Filter = 
+            // Boxify the function to strip type information
+            <@@ fun ctx (o:obj) -> x.Filter ctx (o :?> 'Input)  @@>
+            |> LeafExpressionConverter.EvaluateQuotation
+            |> unbox
         member x.InputTypeDef = x.InputTypeDef :> OutputDef
     interface SubscriptionFieldDef<'Val>
 
@@ -2395,15 +2404,20 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      }
 
-        static member SubscriptionField(name: string, typedef : #OutputDef<'Val>, inputdef : #OutputDef<'Input>, description:string, 
+        static member SubscriptionField(name: string, 
+                                        typedef : #OutputDef<'Val>, 
+                                        inputdef : #OutputDef<'Input>, 
+                                        description:string, 
                                         args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] callback : Expr<ResolveFieldContext -> IDictionary<string, obj> -> unit>): SubscriptionFieldDef<'Val> =
+                                        [<ReflectedDefinition(true)>] callback : Expr<ResolveFieldContext -> IDictionary<string, obj> -> unit>,
+                                        filter : ResolveFieldContext -> 'Input -> bool): SubscriptionFieldDef<'Val> =
             { Name = name
               Description = Some description
               TypeDef = typedef
               InputTypeDef = inputdef
               DeprecationReason = None
-              Resolve = Resolve.Sync(typeof<IDictionary<string, obj>>, typeof<unit>, callback)
+              Filter = filter
+              Resolve = Sync(typeof<IDictionary<string, obj>>, typeof<unit>, callback)
               Args = args |> List.toArray
             } :> SubscriptionFieldDef<'Val>
         
