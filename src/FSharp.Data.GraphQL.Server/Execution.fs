@@ -49,12 +49,12 @@ module SchemaCompiler =
         | None -> defaultResolveType possibleTypesFn uniondef
                     
     /// Creates a function that returns only the selected set of fields
-    let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef) (fieldExecuteMap: FieldExecuteMap): ResolveFieldContext -> obj -> AsyncVal<obj> =
+    let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef) (execHandler: ExecutionHandler): ResolveFieldContext -> obj -> AsyncVal<obj> =
         match returnDef with
         | Object objdef -> 
             fun (ctx: ResolveFieldContext) value -> 
                 match ctx.ExecutionInfo.Kind with
-                | SelectFields fields -> executeFields objdef ctx value fields fieldExecuteMap
+                | SelectFields fields -> executeFields objdef ctx value fields execHandler
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
         
         | Scalar scalardef ->
@@ -65,7 +65,7 @@ module SchemaCompiler =
                 |> AsyncVal.wrap
         
         | List (Output innerdef) ->
-            let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef fieldExecuteMap
+            let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef execHandler
             fun ctx (value: obj) ->
                 let innerCtx =
                     match ctx.ExecutionInfo.Kind with
@@ -87,7 +87,7 @@ module SchemaCompiler =
                 | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
         
         | Nullable (Output innerdef) ->
-            let innerfn = createCompletion possibleTypesFn innerdef fieldExecuteMap
+            let innerfn = createCompletion possibleTypesFn innerdef execHandler
             let optionDef = typedefof<option<_>>
             fun ctx value ->
                 let t = value.GetType()
@@ -110,7 +110,7 @@ module SchemaCompiler =
                     | ResolveAbstraction typeMap -> typeMap
                     | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> executeFields resolvedDef ctx value fields fieldExecuteMap
+                | Some fields -> executeFields resolvedDef ctx value fields execHandler
                 | None -> raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
             
         | Union udef ->
@@ -122,7 +122,7 @@ module SchemaCompiler =
                     | ResolveAbstraction typeMap -> typeMap
                     | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields fieldExecuteMap
+                | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields execHandler
                 | None -> raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
             
         | Enum _ ->
@@ -141,7 +141,7 @@ module SchemaCompiler =
             | "__typename" -> Some (upcast TypeNameMetaFieldDef)
             | fieldName -> objectType.Fields |> Map.tryFind fieldName
             
-    and private createFieldContext objdef ctx (info: ExecutionInfo) =
+    and private createFieldContext objdef ctx (info: ExecutionInfo) (execHandler: ExecutionHandler)=
         let fdef = info.Definition
         let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
         { ExecutionInfo = info
@@ -150,9 +150,10 @@ module SchemaCompiler =
           ParentType = objdef
           Schema = ctx.Schema
           Args = args
+          SubscriptionHandler = execHandler.SubscriptionHandler
           Variables = ctx.Variables }         
     
-    and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos (fieldExecuteMap: FieldExecuteMap) : AsyncVal<obj> = 
+    and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos  (execHandler: ExecutionHandler): AsyncVal<obj> = 
         let resultSet =
             fieldInfos
             |> List.filter (fun info -> info.Include ctx.Variables)
@@ -160,8 +161,8 @@ module SchemaCompiler =
             |> List.toArray
         resultSet
         |> Array.map (fun (name, info) ->  
-            let innerCtx = createFieldContext objdef ctx info
-            let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
+            let innerCtx = createFieldContext objdef ctx info execHandler
+            let execute = execHandler.FieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             let res = execute innerCtx value
             res 
             |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x))
@@ -186,7 +187,7 @@ module SchemaCompiler =
         | Undefined -> 
             fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
-    let internal compileField possibleTypesFn (fieldDef: FieldDef) (fieldExecuteMap: FieldExecuteMap) : ExecuteField =
+    let internal compileField possibleTypesFn (fieldDef: FieldDef) (execHandler: ExecutionHandler): ExecuteField =
         // SubscriptionFieldDef's are a special case in that the type returned from the completion should be the input type
         // We do this so that when we call the resolver function when the event is fired, we can actually return the proper fields
         let returnType, resolve = 
@@ -194,7 +195,7 @@ module SchemaCompiler =
             | :? SubscriptionFieldDef as s -> s.InputTypeDef, (fun resolveFieldCtx value -> AsyncVal.wrap(value))
             | :? FieldDef as f -> f.TypeDef, resolveInitialObject f
             | _ -> raise(GraphQLException (sprintf "Invalid field type %A" fieldDef.GetType))   
-        let completed = createCompletion possibleTypesFn returnType fieldExecuteMap
+        let completed = createCompletion possibleTypesFn returnType execHandler
         fun resolveFieldCtx value ->
             try
                 resolve resolveFieldCtx value
@@ -236,7 +237,9 @@ module SchemaCompiler =
                 arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
     
     
-    let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteMap) (subscriptionHandler: SubscriptionHandler) =
+    let internal compileSchema possibleTypesFn types  (execHandler: ExecutionHandler)=
+        let subscriptionHandler = execHandler.SubscriptionHandler
+        let fieldExecuteMap = execHandler.FieldExecuteMap
         types
         |> Map.toSeq 
         |> Seq.iter (fun (tName, x) ->
@@ -247,9 +250,9 @@ module SchemaCompiler =
                     let subField = (sub :?> SubscriptionFieldDef)
                     subscriptionHandler.RegisterSubscription sub.Name (compileSubscriptionField subField)
                     // Make sure that we register a call in the executeMap so that we know how to resolve the fields
-                    fieldExecuteMap.SetExecute(tName, subField.Name, compileField possibleTypesFn subField fieldExecuteMap))
+                    fieldExecuteMap.SetExecute(tName, subField.Name, compileField possibleTypesFn subField execHandler))
             | Object objdef -> 
-                compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField possibleTypesFn fieldDef fieldExecuteMap))
+                compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField possibleTypesFn fieldDef execHandler))
             | InputObject indef -> compileInputObject indef
             | _ -> ())
 
@@ -268,8 +271,9 @@ module QueryExecution =
     open FSharp.Data.GraphQL.Values
     
     // Activates subscriptions by provinding them with context
-    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (subscriptionHandler: SubscriptionHandler) value :unit =
+    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (execHandler: ExecutionHandler)value :unit =
          // Activate subscriptions for all of the given Fields
+         let subscriptionHandler = execHandler.SubscriptionHandler
          resultSet
          |> Array.iter (fun (name, info) ->
             let subdef = info.Definition :?> SubscriptionFieldDef
@@ -281,10 +285,13 @@ module QueryExecution =
                   ParentType = objdef
                   Schema = ctx.Schema
                   Args = args
+                  SubscriptionHandler = subscriptionHandler
                   Variables = ctx.Variables } 
             subscriptionHandler.ActivateSubscription subdef.Name fieldCtx)
     
-    let internal executeQuery (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
+    let internal executeQuery (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: ObjectDef) (execHandler: ExecutionHandler) value =
+        let subscriptionHandler = execHandler.SubscriptionHandler
+        let fieldExecuteMap = execHandler.FieldExecuteMap
         let results =
             resultSet
             |> Array.map (fun (name, info) ->
@@ -297,6 +304,7 @@ module QueryExecution =
                       ParentType = objdef
                       Schema = ctx.Schema
                       Args = args
+                      SubscriptionHandler = subscriptionHandler
                       Variables = ctx.Variables } 
                 let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
                 let res = execute fieldCtx value
@@ -313,7 +321,7 @@ module QueryExecution =
         variables
         |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
         
-    let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) (subscriptionHandler: SubscriptionHandler) : AsyncVal<NameValueLookup> = 
+    let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (execHandler: ExecutionHandler): AsyncVal<NameValueLookup> = 
         let variables = coerceVariables executionPlan.Variables variables
         let ctx = {
             Schema = schema
@@ -328,7 +336,7 @@ module QueryExecution =
             | Subscription ->
                 match schema.Subscription with
                 | Some s -> 
-                    executeSubscription resultSet ctx s subscriptionHandler root
+                    executeSubscription resultSet ctx s execHandler root
                     // Return an object detailing the subscription
                     let a = async {
                         return [|KeyValuePair("result", box "Subscription Created")|]
@@ -338,8 +346,8 @@ module QueryExecution =
             | Mutation -> 
                 match schema.Mutation with
                 | Some m ->
-                    executeQuery resultSet ctx m fieldExecuteMap root 
+                    executeQuery resultSet ctx m execHandler root 
                 | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
-            | Query -> executeQuery resultSet ctx schema.Query fieldExecuteMap root 
+            | Query -> executeQuery resultSet ctx schema.Query execHandler root 
         result |> AsyncVal.map (NameValueLookup)
     

@@ -644,6 +644,8 @@ and ResolveFieldContext =
       ParentType : ObjectDef
       /// Current GraphQL schema.
       Schema : ISchema
+      /// Handles all subscription events
+      SubscriptionHandler : ISubscriptionHandler
       /// Untyped map of all argument values used for as current field's 
       /// parametrized inputs.
       Args : Map<string, obj>
