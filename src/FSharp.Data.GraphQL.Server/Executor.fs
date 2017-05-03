@@ -13,8 +13,8 @@ open FSharp.Data.GraphQL.Planning
 type Executor<'Root> (schema: ISchema<'Root>) = 
     
     let executionHandler = ExecutionHandler()
-    let fieldExecuteMap = executionHandler.FieldExecuteMap
     let subscriptionHandler = executionHandler.SubscriptionHandler
+    let fieldExecuteMap = executionHandler.FieldExecuteMap
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     // Builds up our map of field -> resolver
@@ -22,18 +22,18 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     //     we don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
                                    "__schema",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef executionHandler)
 
         fieldExecuteMap.SetExecute("",
                                    "__type",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef executionHandler)
 
         fieldExecuteMap.SetExecute("",
                                    "__typename",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef executionHandler)
 
     do
-        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap subscriptionHandler
+        compileSchema schema.GetPossibleTypes schema.TypeMap executionHandler
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
@@ -47,7 +47,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap subscriptionHandler
+                let res = evaluate schema executionPlan variables rootObj errors executionHandler
                 let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
                 return result :> IDictionary<string,obj>
             with 
@@ -138,4 +138,4 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
 
     member this.FireSubscriptionEvent(objdef: #OutputDef<'Val>) (args: Map<string, obj>) (value: 'Val)  = 
-        subscriptionHandler.FireEvent objdef args (box value)
+        executionHandler.SubscriptionHandler.FireEvent objdef args (box value)

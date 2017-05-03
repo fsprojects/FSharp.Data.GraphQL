@@ -9,18 +9,19 @@ open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Types.Patterns
 
 type FieldExecuteMap () = 
-    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
+    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>()
 
-    member this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
-        let key = typeName, fieldName
-        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
+    interface IFieldExecuteMap with
+        member this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
+            let key = typeName, fieldName
+            if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
 
-    member this.GetExecute(typeName: string, fieldName: string) = 
-        let key = 
-            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
-            then "", fieldName
-            else typeName, fieldName
-        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
+        member this.GetExecute(typeName: string, fieldName: string) = 
+            let key = 
+                if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
+                then "", fieldName
+                else typeName, fieldName
+            if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
 
 
 type internal Subscription = {
@@ -33,7 +34,7 @@ type internal ActiveSubscription = {
     Name: string
 }
 
-type SubscriptionHandler (fieldExecuteMap: FieldExecuteMap) =
+type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
 
     // The reason we use outputdef keys is that it allows us to use the type com
     let activeSubscriptions = new ConcurrentDictionary<string, ActiveSubscription list>()
@@ -63,43 +64,46 @@ type SubscriptionHandler (fieldExecuteMap: FieldExecuteMap) =
             return active.Callback dict
         }
         Async.Start asyncResult
-    member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> unit) =
-        // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
-        registeredSubscriptions.Add(fieldName, {Callback = callback}) |> ignore
+    interface ISubscriptionHandler with 
+        member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> unit) =
+            // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
+            registeredSubscriptions.Add(fieldName, {Callback = callback}) |> ignore
 
-    member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) =
-        let triggerType = ctx.ReturnType
-        // We need to know the type we are going to be subscribing to
-        match registeredSubscriptions.TryGetValue fieldName with
-        | true, subscription -> 
-            let active = {
-                Callback = (subscription.Callback ctx)
-                Context = ctx
-                Name = fieldName
-            }
-            activeSubscriptions.AddOrUpdate(getBaseTypeName triggerType, [active], fun key xs -> active::xs)
-            |> ignore
-        | _ -> raise <| GraphQLException (sprintf "Attempted to activate a non-existent subscription %s" fieldName)
+        member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) =
+            let triggerType = ctx.ReturnType
+            // We need to know the type we are going to be subscribing to
+            match registeredSubscriptions.TryGetValue fieldName with
+            | true, subscription -> 
+                let active = {
+                    Callback = (subscription.Callback ctx)
+                    Context = ctx
+                    Name = fieldName
+                }
+                activeSubscriptions.AddOrUpdate(getBaseTypeName triggerType, [active], fun key xs -> active::xs)
+                |> ignore
+            | _ -> raise <| GraphQLException (sprintf "Attempted to activate a non-existent subscription %s" fieldName)
 
-    member this.FireEvent (triggerType: #OutputDef) (args: Map<string, obj>) value =
-        match activeSubscriptions.TryGetValue (getBaseTypeName triggerType) with
-        | true, subs ->
-            subs
-            |> List.iter (fun s ->
-                // Check to make sure each of the args in the active sub is in args
-                let isMatch = 
-                    s.Context.Args
-                    |> Map.forall (fun k v ->
-                        match args.TryFind k with
-                        | Some v' -> 
-                            v = v'
-                        | None -> 
-                            false)
-                if isMatch then resolveCallback s value else ())
-        | _ -> ()
+        member this.FireEvent (triggerType: #OutputDef) (args: Map<string, obj>) value =
+            match activeSubscriptions.TryGetValue (getBaseTypeName triggerType) with
+            | true, subs ->
+                subs
+                |> List.iter (fun s ->
+                    // Check to make sure each of the args in the active sub is in args
+                    let isMatch = 
+                        s.Context.Args
+                        |> Map.forall (fun k v ->
+                            match args.TryFind k with
+                            | Some v' -> 
+                                v = v'
+                            | None -> 
+                                false)
+                    if isMatch then resolveCallback s value else ())
+            | _ -> ()
+
 
 /// Used to keep both our FieldExecuteMap and SubscriptionHandler in the same context
 type ExecutionHandler() =
-    let f = lazy FieldExecuteMap()
-    member this.FieldExecuteMap = f.Force()
-    member this.SubscriptionHandler = SubscriptionHandler(f.Force())
+    let f = FieldExecuteMap():> IFieldExecuteMap
+    let s = SubscriptionHandler(f) :> ISubscriptionHandler
+    member this.FieldExecuteMap = f 
+    member this.SubscriptionHandler = s
