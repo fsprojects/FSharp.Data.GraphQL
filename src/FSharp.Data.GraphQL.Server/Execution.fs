@@ -90,14 +90,13 @@ module SchemaCompiler =
             let innerfn = createCompletion possibleTypesFn innerdef execHandler
             let optionDef = typedefof<option<_>>
             fun ctx value ->
-                let t = value.GetType()
                 if value = null then AsyncVal.empty
     #if NETSTANDARD1_6           
-                elif t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
+                elif value.GetType().GetTypeInfo().IsGenericType && value.GetType().GetTypeInfo().GetGenericTypeDefinition() = optionDef then
     #else       
-                elif t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+                elif value.GetType().IsGenericType && value.getType().GetGenericTypeDefinition() = optionDef then
     #endif                  
-                    let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, t)
+                    let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
                     innerfn ctx fields.[0]
                 else innerfn ctx value
         
@@ -132,15 +131,6 @@ module SchemaCompiler =
         
         | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
     
-    
-    /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-    and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
-            match field.Name with
-            | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
-            | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
-            | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-            | fieldName -> objectType.Fields |> Map.tryFind fieldName
-            
     and private createFieldContext objdef ctx (info: ExecutionInfo) (execHandler: ExecutionHandler)=
         let fdef = info.Definition
         let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables

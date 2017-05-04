@@ -105,7 +105,7 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap, activeSubscriptions
     interface ISubscriptionHandler with 
         member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> obj -> unit) (filter: ResolveFieldContext -> obj -> obj -> bool) =
             // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
-            let sub = {
+            let sub:Subscription = {
                 Callback = callback
                 Filter = filter
             }
