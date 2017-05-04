@@ -85,6 +85,7 @@
     <Compile Include="VariablesTests.fs" />
     <Compile Include="PlanningTests.fs" />
     <Compile Include="PropertyTrackerTests.fs" />
+    <Compile Include="SubscriptionTests.fs" />
     <Compile Include="LinqTests.fs" />
     <None Include="paket.references" />
     <Content Include="App.config" />

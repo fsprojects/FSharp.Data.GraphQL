@@ -1576,7 +1576,6 @@ module Resolve =
     let private boxifyFilterExpr expr: ResolveFieldContext -> obj -> obj -> bool =
         match unwrapExpr expr with
         | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,_))) ->
-            printfn "r: %s \ni: %s" r.Name i.Name
             resolveUntyped resolver r i runtimeBoxifyFilter
         | resolver, _ -> failwithf "Unsupported signature for subscription Resolve %A"  (resolver.GetType())
     
