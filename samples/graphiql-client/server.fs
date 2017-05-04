@@ -207,8 +207,8 @@ let Subscription =
                 PlanetType,
                 "Watches to see if a planet is a moon",
                 [ Define.Input("id", String) ],
-                (fun ctx d -> printfn "Subscription with dictionary %A" d),
-                (fun ctx p -> ctx.Arg("id") = p.Id))])
+                (fun ctx r d -> printfn "Subscription with dictionary %A and client id %s" d r.ClientId),
+                (fun ctx r p -> ctx.Arg("id") = p.Id))])
 
 let schema = Schema(Query, Mutation, Subscription) :> ISchema<Root>
 let ex = Executor(schema)
@@ -255,6 +255,7 @@ let tryParse fieldName data =
 let graphiql : WebPart =
     fun http ->
         async {
+            let root = {ClientId = "5"}
             let tryQuery = tryParse "query" http.request.rawForm
             let tryVariables = tryParse "variables" http.request.rawForm |> Option.map (JsonConvert.DeserializeObject<Map<string, obj>>)
             match tryQuery, tryVariables  with
@@ -262,7 +263,7 @@ let graphiql : WebPart =
                 printfn "Received query: %s" query
                 printfn "Recieved variables: %A" variables
 
-                let! result = ex.AsyncExecute(query, variables=variables)
+                let! result = ex.AsyncExecute(query, variables=variables, data=root)
                 return! http |> Successful.OK (json result)
             | Some query, None ->
                 printfn "Received query: %s" query

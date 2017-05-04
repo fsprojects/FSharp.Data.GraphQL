@@ -214,18 +214,13 @@ module SchemaCompiler =
             input.ExecuteInput <- compileByType errMsg input.TypeDef)
     
     let compileSubscriptionField (subfield: SubscriptionFieldDef) = 
-        // This bears some explaining...
-        // We use the Resolve module to define our subscription callbacks,
-        // But unboxing a Resolve casts the untyped expr into a Expr<ResolveFieldContext -> obj -> obj>
-        // Subscription callbacks should be of type Expr<ResolveFieldContext -> obj -> unit>
-        // First we define a function that composes a function of two arguments with one that consumes one
-        let inline (>>+) f g x y = g (f x y)
-        match subfield.Resolve with
-        // Now we compose our resolve function with one that simply ignores the output
-        | Resolve.BoxedSync(inType, unit, resolve) -> resolve >>+ ignore
-        // TODO: Implement Async subscription callbacks
-        | Resolve.BoxedAsync(inType, unit, resolve) -> resolve >>+ ignore
-        | Resolve.BoxedExpr(resolve) -> resolve >>+ ignore
+        let callback = match subfield.Resolve with
+        | Resolve.SubscriptionExpr(rootType, inType, resolve) -> resolve
+        | _ -> raise <| GraphQLException ("Invalid resolve for subscription")
+        let filter = match subfield.Filter with
+        | Resolve.SubscriptionFilterExpr(rootType, inType, resolve) -> resolve
+        | _ -> raise <| GraphQLException ("Invalid filter for subscription")
+        callback, filter
     
     let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
         objdef.Fields
@@ -248,7 +243,8 @@ module SchemaCompiler =
                 compileObject subdef (fun sub -> 
                     // Subscription Objects only contain subscription fields, so this cast is safe
                     let subField = (sub :?> SubscriptionFieldDef)
-                    subscriptionHandler.RegisterSubscription sub.Name (compileSubscriptionField subField) subField.Filter
+                    let callback, filter = (compileSubscriptionField subField)
+                    subscriptionHandler.RegisterSubscription sub.Name callback filter
                     // Make sure that we register a call in the executeMap so that we know how to resolve the fields
                     fieldExecuteMap.SetExecute(tName, subField.Name, compileField possibleTypesFn subField execHandler))
             | Object objdef -> 
@@ -271,7 +267,7 @@ module QueryExecution =
     open FSharp.Data.GraphQL.Values
     
     // Activates subscriptions by provinding them with context
-    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (execHandler: ExecutionHandler)value :unit =
+    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (execHandler: ExecutionHandler) value :unit =
          // Activate subscriptions for all of the given Fields
          let subscriptionHandler = execHandler.SubscriptionHandler
          resultSet
@@ -287,7 +283,7 @@ module QueryExecution =
                   Args = args
                   SubscriptionHandler = subscriptionHandler
                   Variables = ctx.Variables } 
-            subscriptionHandler.ActivateSubscription subdef.Name fieldCtx)
+            subscriptionHandler.ActivateSubscription subdef.Name fieldCtx value)
     
     let internal executeQuery (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: ObjectDef) (execHandler: ExecutionHandler) value =
         let subscriptionHandler = execHandler.SubscriptionHandler

@@ -25,8 +25,8 @@ type FieldExecuteMap () =
 
 
 type internal Subscription = {
-    Callback: (ResolveFieldContext -> IDictionary<string, obj> -> unit)
-    Filter: (ResolveFieldContext -> obj -> bool)
+    Callback: (ResolveFieldContext -> obj -> IDictionary<string, obj> -> unit)
+    Filter: (ResolveFieldContext -> obj -> obj -> bool)
 }
 
 type internal ActiveSubscription = {
@@ -49,7 +49,6 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
         | t' -> t'.ToString()
 
     let resolveCallback (active: ActiveSubscription) value =
-        printfn "Resolving subscription with value %A" value
         let ctx = active.Context
         let execute = fieldExecuteMap.GetExecute(ctx.Context.ExecutionPlan.RootDef.Name, ctx.ExecutionInfo.Definition.Name)
         let res = 
@@ -67,7 +66,7 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
         }
         Async.Start asyncResult
     interface ISubscriptionHandler with 
-        member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> unit) (filter: ResolveFieldContext -> obj -> bool) =
+        member this.RegisterSubscription (fieldName: string) (callback: ResolveFieldContext -> obj -> obj -> unit) (filter: ResolveFieldContext -> obj -> obj -> bool) =
             // Adds the callback if it does not already exist, we need the ignore because the function returns a boolean
             let sub = {
                 Callback = callback
@@ -75,14 +74,14 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
             }
             registeredSubscriptions.Add(fieldName, sub) |> ignore
 
-        member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) =
+        member this.ActivateSubscription (fieldName: string) (ctx: ResolveFieldContext) (root: obj) =
             let triggerType = ctx.ReturnType
             // We need to know the type we are going to be subscribing to
             match registeredSubscriptions.TryGetValue fieldName with
             | true, subscription -> 
                 let active = {
-                    Callback = (subscription.Callback ctx)
-                    Filter = (subscription.Filter ctx)
+                    Callback = (subscription.Callback ctx root)
+                    Filter = (subscription.Filter ctx root)
                     Context = ctx
                     Name = fieldName
                 }
