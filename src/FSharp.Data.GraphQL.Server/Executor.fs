@@ -10,9 +10,14 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
-type Executor<'Root> (schema: ISchema<'Root>) = 
+type Executor<'Root> (schema: ISchema<'Root>, ?activeSubscriptionProvider:IActiveSubscriptionProvider) = 
     
-    let executionHandler = ExecutionHandler()
+    let active = 
+        match activeSubscriptionProvider with
+        | Some p -> p
+        | None -> upcast DefaultSubscriptionProvider() 
+
+    let executionHandler = ExecutionHandler(active)
     let subscriptionHandler = executionHandler.SubscriptionHandler
     let fieldExecuteMap = executionHandler.FieldExecuteMap
     //FIXME: for some reason static do or do invocation in module doesn't work
