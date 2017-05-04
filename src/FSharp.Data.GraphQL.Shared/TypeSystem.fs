@@ -334,8 +334,9 @@ and IFieldExecuteMap =
     end
 and ISubscriptionHandler =
     interface
-        abstract  RegisterSubscription : string -> (ResolveFieldContext -> obj -> obj -> unit) -> (ResolveFieldContext -> obj -> obj -> bool) -> unit
-        abstract ActivateSubscription : string -> ResolveFieldContext -> obj -> unit
+        abstract RegisterSubscription : string -> (ResolveFieldContext -> obj -> obj -> unit) -> (ResolveFieldContext -> obj -> obj -> bool) -> unit
+        abstract ActivateSubscription : string -> ResolveFieldContext -> obj -> string
+        abstract DeactivateSubscription : string -> string -> bool
         abstract FireEvent : #OutputDef -> obj -> unit
     end
 

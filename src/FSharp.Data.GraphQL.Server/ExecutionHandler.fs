@@ -24,22 +24,59 @@ type FieldExecuteMap () =
             if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
 
 
-type internal Subscription = {
+type Subscription = {
     Callback: (ResolveFieldContext -> obj -> IDictionary<string, obj> -> unit)
     Filter: (ResolveFieldContext -> obj -> obj -> bool)
 }
 
-type internal ActiveSubscription = {
+type ActiveSubscription = {
     Callback: (IDictionary<string, obj> -> unit)
     Filter: (obj -> bool)
     Context: ResolveFieldContext
     Name: string
 }
 
-type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
+type IActiveSubscriptionProvider =
+    interface
+        /// Add an active subscription to the collection, returns a unique identifier of type 'T
+        abstract AddSubscription : string -> ActiveSubscription -> string
+        /// Removes a subscription with a key string and a unique identifier 'T
+        abstract RemoveSubscription : string -> string -> bool
+        /// Retrieves a sequence of subscriptions for a given key
+        abstract GetSubscriptions : string -> ActiveSubscription seq
+    end
 
-    // The reason we use outputdef keys is that it allows us to use the type com
-    let activeSubscriptions = new ConcurrentDictionary<string, ActiveSubscription list>()
+/// Default implementation for IActiveSubscriptionProvider
+/// It implements the subscription provider using dictionaries
+type DefaultSubscriptionProvider () =
+    let activeSubscriptions = new ConcurrentDictionary<string, Dictionary<System.Guid, ActiveSubscription>>()
+    interface IActiveSubscriptionProvider with
+        member this.AddSubscription (key: string) (active: ActiveSubscription) =
+            let g = System.Guid.NewGuid()
+            let addNew = 
+                let dict = new Dictionary<System.Guid, ActiveSubscription>()
+                dict.Add(g, active)
+                dict
+            activeSubscriptions.AddOrUpdate(key, addNew, (fun k d -> d.Add(g, active); d)) |> ignore
+            g.ToString()
+        member this.RemoveSubscription (key: string) (g: string) =
+            let guid = System.Guid.Parse(g)
+            match activeSubscriptions.TryGetValue key with
+            | true, subs ->
+                subs.Remove guid
+            | _ -> false
+        
+        member this.GetSubscriptions (key:string) =
+            match activeSubscriptions.TryGetValue key with
+            | true, subs ->
+                subs
+                |> Seq.map(fun (KeyValue(_, v)) -> v)
+            | _ -> Seq.empty
+                
+
+type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap, activeSubscriptions: IActiveSubscriptionProvider) =
+
+
     let registeredSubscriptions = new Dictionary<string, Subscription>()
 
     let getBaseTypeName (t: TypeDef) =
@@ -85,23 +122,21 @@ type SubscriptionHandler (fieldExecuteMap: IFieldExecuteMap) =
                     Context = ctx
                     Name = fieldName
                 }
-                activeSubscriptions.AddOrUpdate(getBaseTypeName triggerType, [active], fun key xs -> active::xs)
-                |> ignore
+                activeSubscriptions.AddSubscription (getBaseTypeName triggerType) active
             | _ -> raise <| GraphQLException (sprintf "Attempted to activate a non-existent subscription %s" fieldName)
 
+        member this.DeactivateSubscription (key: string) (identifier: string) =
+            activeSubscriptions.RemoveSubscription key identifier
+
         member this.FireEvent (triggerType: #OutputDef) value =
-            // TODO: Enable parallelism
-            match activeSubscriptions.TryGetValue (getBaseTypeName triggerType) with
-            | true, subs ->
-                subs
-                |> List.filter (fun s -> s.Filter value)
-                |> List.iter (fun s -> resolveCallback s value)
-            | _ -> ()
+            activeSubscriptions.GetSubscriptions (getBaseTypeName triggerType)
+            |> Seq.filter (fun s -> s.Filter value)
+            |> Seq.iter (fun s -> resolveCallback s value)
 
 
 /// Used to keep both our FieldExecuteMap and SubscriptionHandler in the same context
-type ExecutionHandler() =
+type ExecutionHandler(activeSubscriptionProvider: IActiveSubscriptionProvider) =
     let f = FieldExecuteMap():> IFieldExecuteMap
-    let s = SubscriptionHandler(f) :> ISubscriptionHandler
+    let s = SubscriptionHandler(f, activeSubscriptionProvider) :> ISubscriptionHandler
     member this.FieldExecuteMap = f 
     member this.SubscriptionHandler = s

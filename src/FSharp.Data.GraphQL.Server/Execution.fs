@@ -267,11 +267,11 @@ module QueryExecution =
     open FSharp.Data.GraphQL.Values
     
     // Activates subscriptions by provinding them with context
-    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (execHandler: ExecutionHandler) value :unit =
+    let internal executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext)  (objdef: SubscriptionObjectDef) (execHandler: ExecutionHandler) value :string [] =
          // Activate subscriptions for all of the given Fields
          let subscriptionHandler = execHandler.SubscriptionHandler
          resultSet
-         |> Array.iter (fun (name, info) ->
+         |> Array.map (fun (name, info) ->
             let subdef = info.Definition :?> SubscriptionFieldDef
             let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
             let fieldCtx = 
@@ -332,10 +332,10 @@ module QueryExecution =
             | Subscription ->
                 match schema.Subscription with
                 | Some s -> 
-                    executeSubscription resultSet ctx s execHandler root
+                    let identifier = executeSubscription resultSet ctx s execHandler root
                     // Return an object detailing the subscription
                     let a = async {
-                        return [|KeyValuePair("result", box "Subscription Created")|]
+                        return [|KeyValuePair("result", box "Subscription Created"); KeyValuePair("Identifier", box identifier)|]
                     }
                     AsyncVal.ofAsync(a)
                 | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
