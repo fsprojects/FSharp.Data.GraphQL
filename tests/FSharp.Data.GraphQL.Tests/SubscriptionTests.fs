@@ -1,6 +1,7 @@
 module  FSharp.Data.GraphQL.Tests.SubscriptionTests
 
 open System
+open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -22,7 +23,7 @@ type TestSubject =
 
 
 type Root = {
-    a: string
+    id : string
 }
 
 let subjects = 
@@ -45,7 +46,7 @@ let RootType =
         description = "The Root type to be passed to all our resolvers",
         isTypeOf = (fun o -> o :? Root),
         fieldsFn = fun () -> [
-            Define.Field("a", String, "The ID of the client", fun _ r -> r.a)])
+            Define.Field("a", String, "The ID of the client", fun _ r -> r.id)])
 
 let TestType = 
     Define.Object<TestSubject>(
@@ -81,12 +82,7 @@ let Mutation =
                     |> Option.map(fun s -> ctx.SubscriptionHandler.FireEvent TestType s;s))
         ])
 
-
-
-[<Fact>]
-let ``Test a simple subscription`` () =
-    let id = "1"
-    let Subscription =
+let buildSubscription (args: InputFieldDef list) (callback: ResolveFieldContext -> 'Root -> IDictionary<string, obj> -> unit) (filter: ResolveFieldContext -> 'Root -> TestSubject -> bool) =
         Define.SubscriptionObject<Root>(
             name = "Subscription",
             fields = [
@@ -95,11 +91,32 @@ let ``Test a simple subscription`` () =
                     RootType,
                     TestType,
                     "Watches to see if a subscription with a given id changes",
-                    [ Define.Input("id", String)],
-                    (fun ctx root dict -> dict.["id"] |> equals (box id)),
-                    (fun ctx root subject -> ctx.Arg("id") = subject.id))
+                    args,
+                    callback,
+                    filter)
             ])
-    let schema = Schema(Query, Mutation, Subscription)
+
+[<Fact>]
+let ``Test a simple subscription`` () =
+    let subscription = buildSubscription [ Define.Input("id", String)](fun ctx root dict -> dict.["id"] |> equals (box "1")) (fun ctx root subject -> ctx.Arg("id") = subject.id)
+    let schema = Schema(Query, Mutation, subscription)
     let ex = Executor(schema)
     ex.AsyncExecute("subscription WatchSubject { watchSubject(id:\"1\") {id}}") |> ignore
+    ex.AsyncExecute("mutation SetM { setM(id:\"1\") {id}}") |> ignore
+
+[<Fact>]
+let ``Test a subscription using the root value`` () =
+    let root = { id = "1"}
+    let subscription = buildSubscription [] (fun ctx root dict -> dict.["id"] |> equals (box root.id) )(fun ctx root subject -> ctx.Arg("id") = root.id)
+    let schema = Schema(Query, Mutation, subscription)
+    let ex = Executor(schema)
+    ex.AsyncExecute("subscription WatchSubject { watchSubject {id}}", data=root) |> ignore
+    ex.AsyncExecute("mutation SetM { setM(id:\"1\") {id}}") |> ignore
+
+[<Fact>]
+let ``Test a subscription on a nullable value`` () =    
+    let subscription = buildSubscription [ Define.Input("o", String)](fun ctx root dict -> dict.["o"] |> equals (box "e") )(fun ctx root subject -> ctx.Arg("o") = subject.o)
+    let schema = Schema(Query, Mutation, subscription)
+    let ex = Executor(schema)
+    ex.AsyncExecute("subscription WatchSubject { watchSubject(o:\"e\") {id}}") |> ignore
     ex.AsyncExecute("mutation SetM { setM(id:\"1\") {id}}") |> ignore
