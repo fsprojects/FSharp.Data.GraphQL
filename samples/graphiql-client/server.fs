@@ -281,7 +281,7 @@ let setCorsHeaders =
 
 let serverConfig =
     { defaultConfig with
-        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8083]
+        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8084]
 
     }
 

@@ -7,6 +7,8 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
+// Supress indentation warnings
+#nowarn "58"
 #nowarn "40"
 
 type TestSubject = 
@@ -82,7 +84,7 @@ let Mutation =
                     |> Option.map(fun s -> ctx.SubscriptionHandler.FireEvent TestType s;s))
         ])
 
-let buildSubscription (args: InputFieldDef list) (callback: ResolveFieldContext -> 'Root -> IDictionary<string, obj> -> unit) (filter: ResolveFieldContext -> 'Root -> TestSubject -> bool) =
+let buildSubscription (args: InputFieldDef list) (callback: ResolveFieldContext -> Root -> IDictionary<string, obj> -> unit) (filter: ResolveFieldContext -> 'Root -> TestSubject -> bool) =
         Define.SubscriptionObject<Root>(
             name = "Subscription",
             fields = [

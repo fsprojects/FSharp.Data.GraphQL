@@ -11,6 +11,10 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Relay
 
+// Supress indentation warnings
+#nowarn "58"
+#nowarn "40"
+
 type IPet =
     interface
         abstract Name : string
