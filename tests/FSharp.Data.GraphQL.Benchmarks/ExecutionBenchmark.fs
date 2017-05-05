@@ -2,6 +2,8 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.ExecutionBenchmark
 
+#nowarn "40"
+
 open System
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types

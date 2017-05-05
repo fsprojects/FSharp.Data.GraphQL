@@ -9,6 +9,9 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
+// Supress indentation warnings
+#nowarn "58"
+
 [<Fact>]
 let ``Object type should be able to merge fields with matching signatures from different interfaces`` () = 
     let MovableType = Define.Interface("Movable", [Define.Field("speed", Int)])

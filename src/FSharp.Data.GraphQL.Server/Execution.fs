@@ -94,7 +94,7 @@ module SchemaCompiler =
     #if NETSTANDARD1_6           
                 elif value.GetType().GetTypeInfo().IsGenericType && value.GetType().GetTypeInfo().GetGenericTypeDefinition() = optionDef then
     #else       
-                elif value.GetType().IsGenericType && value.getType().GetGenericTypeDefinition() = optionDef then
+                elif value.GetType().IsGenericType && value.GetType().GetGenericTypeDefinition() = optionDef then
     #endif                  
                     let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
                     innerfn ctx fields.[0]
@@ -204,12 +204,14 @@ module SchemaCompiler =
             input.ExecuteInput <- compileByType errMsg input.TypeDef)
     
     let compileSubscriptionField (subfield: SubscriptionFieldDef) = 
-        let callback = match subfield.Resolve with
-        | Resolve.SubscriptionExpr(rootType, inType, resolve) -> resolve
-        | _ -> raise <| GraphQLException ("Invalid resolve for subscription")
-        let filter = match subfield.Filter with
-        | Resolve.SubscriptionFilterExpr(rootType, inType, resolve) -> resolve
-        | _ -> raise <| GraphQLException ("Invalid filter for subscription")
+        let callback = 
+            match subfield.Resolve with
+            | Resolve.SubscriptionExpr(rootType, inType, resolve) -> resolve
+            | _ -> raise <| GraphQLException ("Invalid resolve for subscription")
+        let filter = 
+            match subfield.Filter with
+            | Resolve.SubscriptionFilterExpr(rootType, inType, resolve) -> resolve
+            | _ -> raise <| GraphQLException ("Invalid filter for subscription")
         callback, filter
     
     let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
