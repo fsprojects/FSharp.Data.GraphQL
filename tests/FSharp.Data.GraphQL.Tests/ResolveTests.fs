@@ -21,13 +21,19 @@ let ``Execute uses default resolve to accesses properties`` () =
     let schema = testSchema [ Define.AutoField("test", String) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
     let actual = sync <| Executor(schema).AsyncExecute(parse "{ test }", { Test = "testValue" })
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
             
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema = testSchema [ Define.Field("test", String, "", [ Define.Input("a", String) ], resolve = fun ctx d -> d.Test + ctx.Arg("a")) ]
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
-    let actual = sync <| Executor(schema).AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    let actual = sync <| Executor(schema).AsyncExecute(parse "{ test(a: \"String\") }", { Test = "testValue" })    
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"

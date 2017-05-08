@@ -174,7 +174,12 @@ type OptionConverter() =
 let settings = JsonSerializerSettings()
 settings.Converters <- [| OptionConverter() :> JsonConverter |]
 settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
-let json o = JsonConvert.SerializeObject(o, settings)
+let json = 
+    function
+    | Direct(data, errors) -> 
+        JsonConvert.SerializeObject(data, settings)
+    | Deferred(data, errors, _) -> 
+        JsonConvert.SerializeObject(data, settings)
     
 let tryParse fieldName data =
     let raw = Text.Encoding.UTF8.GetString data
@@ -216,7 +221,7 @@ let setCorsHeaders =
 
 let serverConfig =
     { defaultConfig with
-        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8083]
+        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8084]
 
     }
 

@@ -19,6 +19,11 @@ let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors
     | false, _ -> ()
+
+let empty (xs: 'a list) =
+    Assert.Empty(xs)
+let fail (message: string) =
+    Assert.True(false, message)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't

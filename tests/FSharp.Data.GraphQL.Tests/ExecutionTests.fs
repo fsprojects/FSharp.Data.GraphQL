@@ -117,8 +117,11 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let schema = Schema(DataType)
     let schemaProcessor = Executor(schema)
     let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
 
 type TestThing = { mutable Thing: string }
 
@@ -164,8 +167,11 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         ]
     ]
     let result = sync <| schemaProcessor.AsyncExecute(ast, obj())
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () = 
@@ -173,7 +179,10 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     let data = { Thing = "" }
     let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing) ])
     let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, data)
-    noErrors result
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+    | _ -> fail "Expected Direct GQResponse"
     equals "thing" data.Thing
     
 type TestTarget =
@@ -195,7 +204,10 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     ])
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    noErrors result
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+    | _ -> fail "Expected Direct GQResponse"
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
     
@@ -209,8 +221,11 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
                     Define.Field("a", String, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", { A = "b" })
-    noErrors result
-    result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
@@ -220,8 +235,11 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
                     Define.Field("a", String, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", { A = "b" })
-    noErrors result
-    result.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
@@ -232,8 +250,11 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
                 ]))
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| Executor(schema).AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
-    noErrors result
-    result.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
+    | _ -> fail "Expected Direct GQResponse"
 
 type TwiceTest = { A : string; B : int }
 
@@ -251,8 +272,11 @@ let ``Execution when querying the same field twice will return it`` () =
       NameValueLookup.ofList [
         "a", upcast "aa"
         "b", upcast 2]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Execution when querying returns unique document id with response`` () =
@@ -263,8 +287,12 @@ let ``Execution when querying returns unique document id with response`` () =
                     Define.Field("b", Int, fun _ x -> x.B)
                 ]))
     let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
-    result1.["documentId"] |> notEquals (null)
-    result1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
-    result1.["documentId"] |> equals (result2.["documentId"])
+    match result1,result2 with
+    | Direct(data1, errors1), Direct(data2, errors2) ->
+      data1.["documentId"] |> notEquals (null)
+      data1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
+      data1.["documentId"] |> equals (data2.["documentId"])
+    | _ -> fail "Expected Direct GQResponse"
+
     

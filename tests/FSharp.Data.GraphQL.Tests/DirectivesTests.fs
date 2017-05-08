@@ -18,8 +18,11 @@ let schema =
 
 let private execAndCompare query expected =
     let actual = sync <| Executor(schema).AsyncExecute(parse query, data)
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail ""
     
 [<Fact>]
 let ``Execute works without directives``() = 

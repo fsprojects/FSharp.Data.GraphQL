@@ -72,8 +72,11 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
         "fourth", upcast NameValueLookup.ofList [ "theNumber", 4 :> obj]
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
     ]
-    noErrors mutationResult
-    mutationResult.["data"] |> equals (upcast expected)
+    match mutationResult with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
@@ -109,8 +112,12 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
         "sixth",  null
     ]
-    mutationResult.["data"] |> equals (upcast expected)
-    equals 2 (Seq.length (downcast mutationResult.["errors"]))
+
+    match mutationResult with
+    | Direct(data, errors) ->
+      data.["data"] |> equals (upcast expected)
+      List.length errors |> equals 2 
+    | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
 let ``Execute handles mutation with multiple arguments`` () =
@@ -125,5 +132,8 @@ let ``Execute handles mutation with multiple arguments`` () =
       NameValueLookup.ofList [
         "immediatelyChangeTheNumber", upcast NameValueLookup.ofList [ "theNumber", box 33]
         ]
-    noErrors mutationResult
-    mutationResult.["data"] |> equals (upcast expected)
+    match mutationResult with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"

@@ -86,8 +86,11 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             upcast NameValueLookup.ofList [
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) -> 
+        empty errors
+        data.["data"] |> equals (upcast expected)
+    | _ ->  fail "Expected a direct GQLResponse"
     
 [<Fact>]
 let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
@@ -137,8 +140,11 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
             upcast NameValueLookup.ofList [
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) -> 
+        empty errors
+        data.["data"] |> equals (upcast expected)
+    | _ ->  fail "Expected a direct GQLResponse"
 
 
 
@@ -220,5 +226,7 @@ let ``inner types `` () =
    let q = query.Trim().Replace("\r\n", " ")
 
    let result = sync <| schemaProcessor.AsyncExecute(parse query)
-    
-   noErrors result  
+   match result with
+   | Direct(data, errors) -> 
+       empty errors
+   | _ ->  fail "Expected a direct GQLResponse"
