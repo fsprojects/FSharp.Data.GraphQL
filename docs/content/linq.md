@@ -76,7 +76,7 @@ What it also does is free interpretation of field parameters into their LINQ "eq
 
 - `skip`, `take`, `orderBy` and `orderByDesc` will be translated into corresponding LINQ equivalent methods.
 - `id` will be translated into `.Where(x => x.Id == <id>)`. This requires returned type to provide an Id member used as entity identifier.
-- `first`/`after` and `last`/`before` combinations known to the [RelayJS](https://facebook.github.io/relay/) users will be translated into `.OrderBy(x => x.Id).Where(x => x.Id > <after>).Take(<first>)` and `.OrderByDescending(x => x.Id).Wherex(x => x.Id < <before>).Take(<last>)` equivalents. This also requires from queried elements to provide Id member used as entity identifier.
+- `first`/`after` and `last`/`before` combinations known to the [RelayJS](https://facebook.github.io/relay/) users will be translated into `.OrderBy(x => x.Id).Where(x => x.Id > <after>).Take(<first>)` and `.OrderByDescending(x => x.Id).Where(x => x.Id < <before>).Take(<last>)` equivalents. This also requires from queried elements to provide Id member used as entity identifier.
 
 This list can be extended and overriden by custom user implementation.
 

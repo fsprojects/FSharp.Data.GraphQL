@@ -30,6 +30,7 @@ and OperationDefinition = {
 and OperationType = 
     | Query
     | Mutation
+    | Subscription
 
 /// 2.2.2 Selection Sets
 and Selection = 

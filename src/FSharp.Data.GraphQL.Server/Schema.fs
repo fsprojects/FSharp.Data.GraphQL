@@ -32,7 +32,7 @@ type SchemaConfig =
           ParseErrors = Array.map (fun e -> e.Message) }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig) =
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -237,6 +237,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
         member val Introspected = introspected
         member x.Query = upcast query
         member x.Mutation = mutation |> Option.map (fun x -> upcast x)
+        member x.Subscription = subscription |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
         member x.ParseErrors exns = schemaConfig.ParseErrors exns
@@ -244,6 +245,11 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?confi
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
+
+    interface ISchema<'Root> with
+        member x.Query = query
+        member x.Mutation = mutation
+        member x.Subscription = subscription
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
         member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd).GetEnumerator()
