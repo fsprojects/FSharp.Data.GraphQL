@@ -372,6 +372,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             res 
             |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
+    let deferredResults = plan.DeferredFields
     match plan.Strategy with
     | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
     | ExecutionStrategy.Sequential   -> AsyncVal.collectSequential results
