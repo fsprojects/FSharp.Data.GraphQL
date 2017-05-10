@@ -164,9 +164,9 @@ let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (stage: PlanningStage) visitedFragments : PlanningStage = 
     let info, deferredFields, path = stage
     let parentDef = downcast info.ReturnDef
-    let plannedFields, deferedFields' =
+    let plannedFields, deferredFields' =
         selectionSet
-        |> List.fold(fun (fields: ExecutionInfo list, deferedFields: DeferredExecutionInfo list) selection ->
+        |> List.fold(fun (fields: ExecutionInfo list, deferredFields: DeferredExecutionInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives info.Include
             let updatedInfo = { info with Include = includer }
@@ -177,7 +177,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                 then fields, deferredFields
                 else 
                     let innerInfo = objectInfo(ctx, parentDef, field, includer)
-                    let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, innerInfo.Identifier::path)
+                    let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
                     if isDeferredField field
                     then (fields, {Info = executionPlan; Path = path'}::deferredFields')
                     else (fields @ [executionPlan], deferredFields')    // unfortunatelly, order matters here
@@ -199,13 +199,13 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | _ -> fields, deferredFields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferedFields, path) visitedFragments
+                 let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
                  let (SelectFields(fragmentFields)) = fragmentInfo.Kind
                  // filter out already existing fields
                  List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
-            | _ -> fields, deferedFields
+            | _ -> fields, deferredFields
         ) ([],deferredFields)
-    { info with Kind = SelectFields plannedFields }, deferedFields', path
+    { info with Kind = SelectFields plannedFields }, deferredFields', path
     
 and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list) (stage:PlanningStage) visitedFragments typeCondition : PlanningStage =
     let info, deferredFields, path = stage
@@ -220,7 +220,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 // Make sure that we properly deal with the deferred fields
                 let foldPlan (f:Map<string, ExecutionInfo list>, d, _) k data =
                     let f', d', p' = plan ctx (data, d, path)
-                    f.Add(k, [f']), d'@d, p'
+                    f.Add(k, [f']), d', p'
                 let infoMap, deferredFields', path' = Map.fold (foldPlan) (Map.empty, deferredFields, []) a  
                 if isDeferredField field
                 then fields, {Info = { innerData with Kind = ResolveAbstraction infoMap}; Path = path'}::deferredFields'
@@ -246,7 +246,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                  // filter out already existing fields
                  Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
             | _ -> fields, deferredFields
-        ) (Map.empty, [])
+        ) (Map.empty, deferredFields)
     { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 
 let private planVariables (schema: ISchema) (operation: OperationDefinition) =

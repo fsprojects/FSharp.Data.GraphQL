@@ -372,10 +372,26 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             res 
             |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
             |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
-    let deferredResults = plan.DeferredFields
+    let deferredResults = 
+        plan.DeferredFields
+        |> List.toArray
+        |> Array.map (fun {Info = info; Path=path} ->
+            let name = info.Identifier
+            let fdef = info.Definition
+            let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+            let fieldCtx = 
+                { ExecutionInfo = info
+                  Context = ctx
+                  ReturnType = fdef.TypeDef
+                  ParentType = objdef
+                  Schema = ctx.Schema
+                  Args = args
+                  Variables = ctx.Variables } 
+            createCompletion ctx.Schema.GetPossibleTypes info.ReturnDef fieldExecuteMap)
     match plan.Strategy with
     | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
-    | ExecutionStrategy.Sequential   -> AsyncVal.collectSequential results
+    | ExecutionStrategy.Sequential -> AsyncVal.collectSequential results
+
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
