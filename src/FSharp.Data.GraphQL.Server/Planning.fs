@@ -152,12 +152,12 @@ let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage
     let info, deferredFields, path = stage
     match info.ReturnDef with
     | Leaf _ -> info, deferredFields, info.Identifier::path
-    | Object _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, path) (ref [])
+    | Object _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
     | Nullable returnDef -> 
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)
         { inner with IsNullable = true}, deferredFields', path'
     | List returnDef -> 
-        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, "__index"::path)
+        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)
         { info with Kind = ResolveCollection inner }, deferredFields', path'
     | Abstract _ -> planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, path) (ref []) None 
 
@@ -273,6 +273,9 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         Include = incl 
         IsNullable = false }
     let resolvedInfo, deferredFields, _ = planSelection ctx operation.SelectionSet (rootInfo, [], []) (ref [])
+    let deferredFields' = 
+        deferredFields
+        |> List.map (fun d -> {d with Path = List.rev d.Path})
     let (SelectFields(topFields)) = resolvedInfo.Kind
     let variables = planVariables ctx.Schema operation
     match operation.OperationType with
@@ -280,7 +283,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         { DocumentId = documentId
           Operation = operation 
           Fields = topFields
-          DeferredFields = deferredFields
+          DeferredFields = deferredFields'
           RootDef = ctx.Schema.Query
           Strategy = Parallel
           Variables = variables }
@@ -290,7 +293,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
             { DocumentId = documentId
               Operation = operation
               Fields = topFields
-              DeferredFields = deferredFields
+              DeferredFields = deferredFields'
               RootDef = mutationDef
               Strategy = Sequential 
               Variables = variables }
@@ -302,7 +305,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
             { DocumentId = documentId
               Operation = operation
               Fields = topFields
-              DeferredFields = deferredFields
+              DeferredFields = deferredFields'
               RootDef = subscriptionDef
               Strategy = Sequential 
               Variables = variables }

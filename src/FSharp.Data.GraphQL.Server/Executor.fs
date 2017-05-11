@@ -1,9 +1,12 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
+open System.Reactive.Threading.Tasks
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Control.Reactive
+open FSharp.Control.Reactive.Observable
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
@@ -23,15 +26,15 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     //     we don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
                                    "__schema",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+                                   compileField SchemaMetaFieldDef)
 
         fieldExecuteMap.SetExecute("",
                                    "__type",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+                                   compileField TypeMetaFieldDef )
 
         fieldExecuteMap.SetExecute("",
                                    "__typename",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
+                                   compileField TypeNameMetaFieldDef )
 
     do
         compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
@@ -48,9 +51,9 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                let res, obs = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
                 let! result = res |> AsyncVal.map (fun x -> prepareOutput errors x)
-                return result 
+                return result
             with 
             | ex -> 
                 let msg = ex.ToString()
