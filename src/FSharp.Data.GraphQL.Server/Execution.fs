@@ -193,18 +193,6 @@ let private createFieldContext objdef ctx (info: ExecutionInfo) =
       Args = args
       Variables = ctx.Variables }         
                 
-// Deferred values require knowledge of their parent value
-// Also, the values we return for the non-deferred values are all leaves in the resolution tree
-// So what we do is build up a tree containing all of the result values, rather than just computing the leaves,
-// Then we use that tree to resolve the original query, and pass it along to the deferred fields
-// So that they know their parent values, and are able to properly resolve
-
-/// Represents the materialized tree of all non-scalar result values
-type ResolverTree = 
-    | ResolverLeaf of ResolverLeaf
-    | ResolverNode of ResolverNode
-and ResolverLeaf = {Name: string; Value: obj option; }
-and ResolverNode = {Name: string; Value: obj option; Children: AsyncVal<ResolverTree []> }
 
 let private optionCast (value: obj) =
             let optionDef = typedefof<option<_>>
@@ -237,7 +225,23 @@ let private toOption x =
     | SomeObj(v)
     | v -> Some(v)
 
-let rec buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : ResolverTree =
+// Deferred values require knowledge of their parent value
+// Also, the values we return for the non-deferred values are all leaves in the resolution tree
+// So what we do is build up a tree containing all of the result values, rather than just computing the leaves,
+// Then we use that tree to resolve the original query, and pass it along to the deferred fields
+// So that they know their parent values, and are able to properly resolve
+
+/// Represents the materialized tree of all non-scalar result values
+
+
+type ResolverTree = 
+    | ResolverLeaf of ResolverLeaf
+    | ResolverObjectNode of ResolverNode
+    | ResolverListNode of ResolverNode
+and ResolverLeaf = {Name: string; Value: obj option; }
+and ResolverNode = {Name: string; Value: obj option; Children: AsyncVal<ResolverTree []> }
+
+let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : ResolverTree =
     match returnDef with
     | Object objdef ->
         match ctx.ExecutionInfo.Kind with
@@ -246,14 +250,17 @@ let rec buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fie
                 match value with
                 | Some v -> buildObjectFields fields objdef ctx fieldExecuteMap v
                 | None -> AsyncVal.wrap [| |]
-            ResolverNode {Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children}
+            ResolverObjectNode {Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children}
         | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
     | Scalar scalardef ->
         let name = ctx.ExecutionInfo.Identifier
-        ResolverLeaf {Name = name; Value = value}
+        let (coerce: obj -> obj option) = scalardef.CoerceValue
+        let value' = value |> Option.bind(coerce)
+        ResolverLeaf {Name = name; Value = value'}
     | Enum enumdef ->
         let name = ctx.ExecutionInfo.Identifier
-        ResolverLeaf {Name = name; Value = value}
+        let value' = value |> Option.bind(fun v ->  coerceStringValue v |> Option.map(fun v' -> v' :> obj))
+        ResolverLeaf {Name = name; Value = value'}
     | List (Output innerdef) ->
         let innerCtx = 
             match ctx.ExecutionInfo.Kind with
@@ -268,7 +275,7 @@ let rec buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fie
                 |> Seq.toArray
             | None -> [| |]
             | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
-        ResolverNode{ Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children |> AsyncVal.wrap}
+        ResolverListNode{ Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children |> AsyncVal.wrap}
     | Nullable (Output innerdef) ->
         buildResolverTree innerdef ctx fieldExecuteMap value
     | Interface idef ->
@@ -278,15 +285,15 @@ let rec buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fie
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-        let children =
+        let name, children =
             match value with
             | Some v ->
                 let resolvedDef = resolver v
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap v
+                | Some fields -> resolvedDef.Name, buildObjectFields fields resolvedDef ctx fieldExecuteMap v
                 | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)
-            | None -> AsyncVal.wrap [| |]
-        ResolverNode {Name = idef.Name; Value = value; Children = children}
+            | None -> idef.Name, AsyncVal.wrap [| |]
+        ResolverObjectNode {Name = name; Value = value; Children = children}
     | Union udef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
         let resolver = resolveUnionType possibleTypesFn udef
@@ -294,17 +301,16 @@ let rec buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fie
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-        let children =
+        let name, children =
             match value with
             | Some v ->
                 let resolvedDef = resolver v
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap v
+                | Some fields -> resolvedDef.Name, buildObjectFields fields resolvedDef ctx fieldExecuteMap (udef.ResolveValue v)
                 | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)
-            | None -> AsyncVal.wrap [| |]
-        ResolverNode {Name = udef.Name; Value = value; Children = children}
+            | None -> udef.Name, AsyncVal.wrap [| |]
+        ResolverObjectNode {Name = name; Value = value; Children = children}
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
-            
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj) =
     fields
     |> List.map(fun info ->
@@ -316,91 +322,35 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
     |> List.toArray
     |> AsyncVal.collectParallel
 
+let rec treeFold (leafOp: ResolverLeaf -> AsyncVal<'T>) (nodeOp: string * obj option * AsyncVal<'T[]> -> AsyncVal<'T>) (listOp: string * obj option * AsyncVal<'T[]> -> AsyncVal<'T>) (item: ResolverTree) =
+    match item with
+    | ResolverLeaf leaf ->
+        leafOp leaf
+    | ResolverObjectNode node ->
+        let ts = node.Children |> AsyncVal.bind(fun c -> c |> Array.map(treeFold leafOp nodeOp listOp) |> AsyncVal.collectParallel)
+        nodeOp (node.Name, node.Value, ts)
+    | ResolverListNode node ->
+        let ts = node.Children |> AsyncVal.bind(fun c -> c |> Array.map(treeFold leafOp nodeOp listOp) |> AsyncVal.collectParallel)
+        listOp (node.Name, node.Value, ts)
 
-// let rec private createCompletion (possibleTypesFn: TypeDef -> ObjectDef []) (returnDef: OutputDef) (fieldExecuteMap: FieldExecuteMap) : ResolveFieldContext -> obj -> AsyncVal<obj> =
-//     match returnDef with
-//     | Object objdef -> 
-//         fun (ctx: ResolveFieldContext) value -> 
-//             match ctx.ExecutionInfo.Kind with
-//             | SelectFields fields -> executeFields objdef ctx value fields fieldExecuteMap
-//             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-    
-//     | Scalar scalardef ->
-//         let (coerce: obj -> obj option) = scalardef.CoerceValue
-//         fun _ value -> 
-//             coerce value
-//             |> Option.toObj
-//             |> AsyncVal.wrap
-    
-//     | List (Output innerdef) ->
-//         let (innerfn: ResolveFieldContext -> obj -> AsyncVal<obj>) = createCompletion possibleTypesFn innerdef fieldExecuteMap
-//         fun ctx (value: obj) ->
-//             let innerCtx =
-//                 match ctx.ExecutionInfo.Kind with
-//                 | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
-//                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-//             match value with
-//             | :? string as s -> 
-//                 innerfn innerCtx (s)
-//                 |> AsyncVal.map (fun x -> upcast [| x |])
-//             | :? System.Collections.IEnumerable as enumerable ->
-//                 let completed =
-//                     enumerable
-//                     |> Seq.cast<obj>
-//                     |> Seq.map (fun x -> innerfn innerCtx x)
-//                     |> Seq.toArray
-//                     |> AsyncVal.collectParallel
-//                     |> AsyncVal.map box
-//                 completed
-//             | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
-    
-//     | Nullable (Output innerdef) ->
-//         let innerfn = createCompletion possibleTypesFn innerdef fieldExecuteMap
-//         let optionDef = typedefof<option<_>>
-//         fun ctx value ->
-//             let t = value.GetType()
-//             if value = null then AsyncVal.empty
-// #if NETSTANDARD1_6           
-//             elif t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
-// #else       
-//             elif t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
-// #endif                  
-//                 let _, fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, t)
-//                 innerfn ctx fields.[0]
-//             else innerfn ctx value
-    
-//     | Interface idef ->
-//         let resolver = resolveInterfaceType possibleTypesFn idef
-//         fun ctx value -> 
-//             let resolvedDef = resolver value
-//             let typeMap =
-//                 match ctx.ExecutionInfo.Kind with
-//                 | ResolveAbstraction typeMap -> typeMap
-//                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-//             match Map.tryFind resolvedDef.Name typeMap with
-//             | Some fields -> executeFields resolvedDef ctx value fields fieldExecuteMap
-//             | None -> raise(GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name))   
-        
-//     | Union udef ->
-//         let resolver = resolveUnionType possibleTypesFn udef
-//         fun ctx value ->
-//             let resolvedDef = resolver value
-//             let typeMap =
-//                 match ctx.ExecutionInfo.Kind with
-//                 | ResolveAbstraction typeMap -> typeMap
-//                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-//             match Map.tryFind resolvedDef.Name typeMap with
-//             | Some fields -> executeFields resolvedDef ctx (udef.ResolveValue value) fields fieldExecuteMap
-//             | None -> raise(GraphQLException (sprintf "GraphQL union '%s' doesn't have a case of type '%s'" udef.Name resolvedDef.Name))   
-        
-//     | Enum _ ->
-//         fun _ value -> 
-//             let result = coerceStringValue value
-//             AsyncVal.wrap (result |> Option.map box |> Option.toObj)
-    
-//     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
+let treeToDict (tree: ResolverTree) : AsyncVal<KeyValuePair<string,obj>> = 
+    let leafOp = 
+        fun (l:ResolverLeaf) ->
+            KeyValuePair<_,_>(l.Name, match l.Value with | Some v -> v | None -> null)
+            |> AsyncVal.wrap
+    let nodeOp =
+        fun (name:string, _ , children:AsyncVal<KeyValuePair<string,obj> []>) ->
+            children
+            |> AsyncVal.map(fun c ->
+                KeyValuePair<_,_>(name, NameValueLookup(c) :> obj))
+    let listOp =
+        fun (name:string, _ , children:AsyncVal<KeyValuePair<string,obj> []>) ->
+            children
+            |> AsyncVal.map(fun c ->
+                KeyValuePair<_,_>(name, c |> Array.map(fun c' -> c'.Value) :> obj))
+    treeFold leafOp nodeOp listOp tree
 
-and internal compileField (fieldDef: FieldDef) : ExecuteField =
+let internal compileField (fieldDef: FieldDef) : ExecuteField =
     match fieldDef.Resolve with
     | Resolve.BoxedSync(_, _, resolve) ->
         fun resolveFieldCtx value ->
@@ -446,30 +396,13 @@ and internal compileField (fieldDef: FieldDef) : ExecuteField =
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
-and private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
+let private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
         match field.Name with
         | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
         | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objectType.Fields |> Map.tryFind fieldName
         
-
-and private executeFields (objdef: ObjectDef) (ctx: ResolveFieldContext) (value: obj) fieldInfos (fieldExecuteMap: FieldExecuteMap) : AsyncVal<obj> = 
-    let resultSet =
-        fieldInfos
-        |> List.filter (fun info -> info.Include ctx.Variables)
-        |> List.map (fun info -> (info.Identifier, info))
-        |> List.toArray
-    resultSet
-    |> Array.map (fun (name, info) ->  
-        let innerCtx = createFieldContext objdef ctx info
-        let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
-        let res = execute innerCtx value
-        res 
-        |> AsyncVal.map (fun x -> KeyValuePair<_,_>(name, x))
-        |> AsyncVal.rescue (fun e -> ctx.AddError e; KeyValuePair<_,_>(name, null)))
-    |> AsyncVal.collectParallel
-    |> AsyncVal.map (fun x -> upcast NameValueLookup x)
 
 let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultSet =
@@ -493,9 +426,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             let res = execute fieldCtx value
             let tree = res |> AsyncVal.map(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
-            res
-            |> AsyncVal.map (fun r -> KeyValuePair<_,_>(name, r))
-            |> AsyncVal.rescue (fun e -> fieldCtx.AddError e; KeyValuePair<_,_>(name, null)))
+            tree |> AsyncVal.bind(treeToDict))
     let dict = 
         match plan.Strategy with
         | ExecutionStrategy.Parallel -> AsyncVal.collectParallel results
