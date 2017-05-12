@@ -57,6 +57,7 @@ let rec Person = Define.Object<Person>(
                   StartCursor = data |> List.tryHead |> Option.map (fun edge -> edge.Cursor)
                   EndCursor = data |> List.tryLast |> Option.map (fun edge -> edge.Cursor) }
               Edges = data }
+            |> Some
         ) ])
 and Droid = Define.Object<Droid>(
     name = "Droid",
