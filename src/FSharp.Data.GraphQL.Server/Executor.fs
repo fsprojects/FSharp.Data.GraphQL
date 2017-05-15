@@ -52,6 +52,8 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
                 let res, obs = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                obs
+                |> Observable.add(printfn "Received deferred value %A")
                 let! result = res |> AsyncVal.map (fun x -> prepareOutput errors x)
                 return result
             with 
