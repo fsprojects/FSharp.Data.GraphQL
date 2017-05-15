@@ -1,6 +1,6 @@
 source https://nuget.org/api/v2
-nuget BenchmarkDotNet
-nuget BenchmarkDotNet.Diagnostics.Windows
+nuget BenchmarkDotNet 0.10.5
+nuget BenchmarkDotNet.Diagnostics.Windows 0.10.5
 nuget FParsec
 nuget FSCheck
 nuget FSharp.Data.TypeProviders
