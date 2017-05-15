@@ -180,7 +180,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let innerInfo = objectInfo(ctx, parentDef, field, includer)
                     let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
                     if isDeferredField field
-                    then (fields, {Info = executionPlan; Path = path'}::deferredFields')
+                    then (fields, {Info = {info with Kind = SelectFields [executionPlan]}; Path = path'}::deferredFields')
                     else (fields @ [executionPlan], deferredFields')    // unfortunatelly, order matters here
                     
             | FragmentSpread spread ->
