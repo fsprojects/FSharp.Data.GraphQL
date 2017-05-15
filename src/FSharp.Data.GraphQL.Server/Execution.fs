@@ -456,7 +456,6 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                 |> List.toArray
                 |> Array.map(fun d ->
                     let {Info = info; Path = path;} = d
-                    let name = info.Identifier + "_deferred"
                     let fdef = info.Definition
                     let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
                     let fieldCtx = { 
