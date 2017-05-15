@@ -483,9 +483,7 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                             |> AsyncVal.bind(fun c ->
                                 c
                                 |> Array.mapi(fun i c' -> 
-                                    // Skip the fake index value, and append the real one to the path accumulator
-                                    let p' = List.tail p
-                                    traversePath p' (AsyncVal.wrap c') (i.ToString()::pathAcc)
+                                    traversePath p (AsyncVal.wrap c') (i.ToString()::pathAcc)
                                 )
                                 |> AsyncVal.collectParallel
                                 |> AsyncVal.map(Array.fold (Array.append) [||]))
