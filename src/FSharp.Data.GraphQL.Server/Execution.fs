@@ -232,8 +232,6 @@ let private toOption x =
 // So that they know their parent values, and are able to properly resolve
 
 /// Represents the materialized tree of all non-scalar result values
-
-
 type ResolverTree = 
     | ResolverLeaf of ResolverLeaf
     | ResolverObjectNode of ResolverNode
@@ -254,6 +252,7 @@ type ResolverTree =
 and ResolverLeaf = { Name: string; Value: obj option}
 and ResolverNode = { Name: string; Value: obj option; Children: AsyncVal<ResolverTree []> }
 
+/// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : ResolverTree =
     match returnDef with
     | Object objdef ->
@@ -335,6 +334,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
     |> List.toArray
     |> AsyncVal.collectParallel
 
+/// Performs an abstract fold (Catamorphism) on a given tree
 let rec treeFold (leafOp: ResolverLeaf -> AsyncVal<'T>) (nodeOp: string * obj option * AsyncVal<'T[]> -> AsyncVal<'T>) (listOp: string * obj option * AsyncVal<'T[]> -> AsyncVal<'T>) (item: ResolverTree) =
     match item with
     | ResolverLeaf leaf ->
@@ -346,6 +346,7 @@ let rec treeFold (leafOp: ResolverLeaf -> AsyncVal<'T>) (nodeOp: string * obj op
         let ts = node.Children |> AsyncVal.bind(fun c -> c |> Array.map(treeFold leafOp nodeOp listOp) |> AsyncVal.collectParallel)
         listOp (node.Name, node.Value, ts)
 
+/// Converts a tree into a nested set of NameValueLookups
 let treeToDict (tree: ResolverTree) : AsyncVal<KeyValuePair<string,obj>> = 
     let leafOp = 
         fun (l:ResolverLeaf) ->
@@ -445,63 +446,66 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
         | ExecutionStrategy.Sequential -> resultTrees |> Array.map(AsyncVal.bind(treeToDict)) |> AsyncVal.collectSequential 
         |> AsyncVal.map (NameValueLookup)
     let deferredResults =
-        resultTrees
-        |> Array.map(AsyncVal.bind(fun tree ->
-            plan.DeferredFields
-            |> List.filter (fun d -> (List.head d.Path) = tree.Name)
-            |> List.toArray
-            |> Array.map(fun d ->
-                let {Info = info; Path = path;} = d
-                let name = info.Identifier + "_deferred"
-                let fdef = info.Definition
-                let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
-                let fieldCtx = { 
-                    ExecutionInfo = info
-                    Context = ctx
-                    ReturnType = fdef.TypeDef
-                    ParentType = objdef
-                    Schema = ctx.Schema
-                    Args = args
-                    Variables = ctx.Variables
-                } 
-                let rec traversePath (path: string list) (tree: AsyncVal<ResolverTree>) (pathAcc: string list): AsyncVal<(ResolverTree * string list) []> =
-                    tree 
-                    |> AsyncVal.bind(fun tree' ->
-                        match List.tail path, tree' with
-                        | [], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|])
-                        | [p], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
-                        | [p;"__index"], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
-                        | p, ResolverObjectNode n -> 
-                            n.Children 
-                            |> AsyncVal.bind(fun c ->
-                                let next = c |> Array.tryFind(fun c' -> c'.Name = (List.head p))
-                                match next with
-                                | Some next' -> traversePath p (AsyncVal.wrap next') ((List.head p)::pathAcc)
-                                | None -> AsyncVal.empty)
-                        | p, ResolverListNode l ->
-                            l.Children 
-                            |> AsyncVal.bind(fun c ->
-                                c
-                                |> Array.mapi(fun i c' -> 
-                                    traversePath p (AsyncVal.wrap c') (i.ToString()::pathAcc)
-                                )
-                                |> AsyncVal.collectParallel
-                                |> AsyncVal.map(Array.fold (Array.append) [||]))
-                        | _ ,_ -> raise <| GraphQLException("Deferred path terminated unexpectedly!"))
-                traversePath path (AsyncVal.wrap tree) [(List.head path)])
+        if plan.DeferredFields.Length = 0
+        then None
+        else
+            resultTrees
+            |> Array.map(AsyncVal.bind(fun tree ->
+                plan.DeferredFields
+                |> List.filter (fun d -> (List.head d.Path) = tree.Name)
+                |> List.toArray
+                |> Array.map(fun d ->
+                    let {Info = info; Path = path;} = d
+                    let name = info.Identifier + "_deferred"
+                    let fdef = info.Definition
+                    let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+                    let fieldCtx = { 
+                        ExecutionInfo = info
+                        Context = ctx
+                        ReturnType = fdef.TypeDef
+                        ParentType = objdef
+                        Schema = ctx.Schema
+                        Args = args
+                        Variables = ctx.Variables
+                    } 
+                    let rec traversePath (path: string list) (tree: AsyncVal<ResolverTree>) (pathAcc: string list): AsyncVal<(ResolverTree * string list) []> =
+                        tree 
+                        |> AsyncVal.bind(fun tree' ->
+                            match List.tail path, tree' with
+                            | [], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|])
+                            | [p], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
+                            | [p;"__index"], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
+                            | p, ResolverObjectNode n -> 
+                                n.Children 
+                                |> AsyncVal.bind(fun c ->
+                                    let next = c |> Array.tryFind(fun c' -> c'.Name = (List.head p))
+                                    match next with
+                                    | Some next' -> traversePath p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                                    | None -> AsyncVal.empty)
+                            | p, ResolverListNode l ->
+                                l.Children 
+                                |> AsyncVal.bind(fun c ->
+                                    c
+                                    |> Array.mapi(fun i c' -> 
+                                        traversePath p (AsyncVal.wrap c') (i.ToString()::pathAcc)
+                                    )
+                                    |> AsyncVal.collectParallel
+                                    |> AsyncVal.map(Array.fold (Array.append) [||]))
+                            | _ ,_ -> raise <| GraphQLException("Deferred path terminated unexpectedly!"))
+                    traversePath path (AsyncVal.wrap tree) [(List.head path)]
+                    |> AsyncVal.bind(Array.map(fun (tree, path) ->
+                        asyncVal {
+                            let! tree' = treeToDict tree
+                            return NameValueLookup.ofList["data", upcast tree'; "path", upcast path]
+                        }) >> AsyncVal.collectParallel))
+                |> AsyncVal.collectParallel
+                |> AsyncVal.map(Array.fold (Array.append) [||])))
             |> AsyncVal.collectParallel
-            |> AsyncVal.map(Array.fold (Array.append) [||])))
-        |> AsyncVal.collectParallel
-        |> AsyncVal.map(Array.fold (Array.append) [||])
-        |> AsyncVal.map(Array.map(fun (tree, path) -> NameValueLookup.ofList["data", upcast treeToDict tree; "path", upcast path]))
-        |> AsyncVal.toAsync
-        |> Observable.ofAsync
-        |> Observable.bind(Observable.ofSeq)
-        //|> AsyncVal.map(Array.map(fun (defTree, path) -> treeToDict defTree, path |> List.toArray |> NameValueLookup))
-        //     |> AsyncVal.map(NameValueLookup)) 
-        //     >> AsyncVal.toAsync 
-        //     >> Observable.ofAsync)
-        // |> Observable.concatArray
+            |> AsyncVal.map(Array.fold (Array.append) [||])
+            |> AsyncVal.toAsync
+            |> Observable.ofAsync
+            |> Observable.bind(Observable.ofSeq)
+            |> Some
     dict, deferredResults
 
 
@@ -531,7 +535,7 @@ let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
                 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> * IObservable<NameValueLookup> = 
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> * IObservable<NameValueLookup> option = 
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema

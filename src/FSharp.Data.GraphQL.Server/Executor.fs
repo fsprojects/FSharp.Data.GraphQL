@@ -43,18 +43,19 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
-        let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
-            if errors.IsEmpty 
-            then Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [])
-            else Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], errors.ToArray() |> schema.ParseErrors |> Array.toList)
+        let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) (deferred: IObservable<NameValueLookup> option) =
+            let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
+            match errors.IsEmpty, deferred with
+            | true, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [])
+            | false, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ; "errors", upcast errors'], errors')
+            | true, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [], d |> Observable.map(fun d' -> upcast d')) 
+            | false, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result; "errors", upcast errors' ], errors' , d |> Observable.map(fun d' -> upcast d'))
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res, obs = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
-                obs
-                |> Observable.add(printfn "Received deferred value %A")
-                let! result = res |> AsyncVal.map (fun x -> prepareOutput errors x)
+                let res, deferred = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                let! result = res |> AsyncVal.map (fun x -> prepareOutput errors x deferred)
                 return result
             with 
             | ex -> 
