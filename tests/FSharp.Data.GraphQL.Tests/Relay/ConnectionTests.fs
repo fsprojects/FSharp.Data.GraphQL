@@ -37,8 +37,9 @@ let inline toConnection cursor slice all =
           StartCursor = Some (cursor all.Head)
           EndCursor = Some (all |> List.last |> cursor) }
       TotalCount = Some (all.Length) }
+    |> Some
 
-let resolveSlice (cursor: 't -> string) (values: 't list) (SliceInfo slice) () : Connection<'t> =
+let resolveSlice (cursor: 't -> string) (values: 't list) (SliceInfo slice) () : Connection<'t> option =
     match slice with
     | Forward(first, after) -> 
         let idx = 
