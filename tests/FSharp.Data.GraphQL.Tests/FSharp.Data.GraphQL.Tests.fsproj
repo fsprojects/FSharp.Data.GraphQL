@@ -8,7 +8,7 @@
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp1.1'">
     <!-- Dotnet core tests expect an EXE -->
     <OutputType>Exe</OutputType>
-    <DefineConstants>$(DefineConstants);NETSTANDARD1_6</DefineConstants>
+    <DefineConstants>$(DefineConstants) NETSTANDARD1_6</DefineConstants>
   </PropertyGroup>
 
   <ItemGroup>
