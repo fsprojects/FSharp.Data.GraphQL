@@ -3,7 +3,7 @@
     <OutputType>Exe</OutputType>
     <TargetFramework>netcoreapp1.1</TargetFramework>
     <PackageTargetFallback>$(PackageTargetFallback);portable-net45+win8+wp8+wpa81;</PackageTargetFallback>
-    <DefineConstants>$(DefineConstants);NETSTANDARD1_6</DefineConstants>
+    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
   <ItemGroup>
@@ -20,7 +20,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\netcore\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
-    <ProjectReference Include="..\..\src\netcore\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
   </ItemGroup>
 </Project>
