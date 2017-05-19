@@ -6,6 +6,11 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
 
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
+  </PropertyGroup>
+
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard1.6' ">
     <DefineConstants>$(DefineConstants);NETSTANDARD1_6</DefineConstants>
   </PropertyGroup>
