@@ -1,12 +1,9 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
-open System.Reactive.Threading.Tasks
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
-open FSharp.Control.Reactive
-open FSharp.Control.Reactive.Observable
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns

@@ -4,11 +4,10 @@ module FSharp.Data.GraphQL.Execution
 
 open System
 open System.Reflection
+open System.Reactive
 open System.Runtime.InteropServices;
 open System.Collections.Generic
 open System.Collections.Concurrent
-open FSharp.Control.Reactive
-open FSharp.Control.Reactive.Observable
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns

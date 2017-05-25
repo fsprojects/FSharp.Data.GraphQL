@@ -1,8 +1,8 @@
 ﻿<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!--<TargetFrameworks>netstandard1.6;net45</TargetFrameworks>-->
-    <TargetFramework>net45</TargetFramework>
+    <TargetFrameworks>netstandard1.6;net45</TargetFrameworks>
+    <!--<TargetFramework>net45</TargetFramework>-->
     <PackageTargetFallback>$(PackageTargetFallback);portable-net45+win8+wp8+wpa81;</PackageTargetFallback>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
@@ -16,6 +16,7 @@
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
+    <Compile Include="ObservableExtensions.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="Linq.fs" />
@@ -34,7 +35,8 @@
     <PackageReference Include="FSharp.NET.Sdk" Version="1.0.*" PrivateAssets="All" />
     <PackageReference Include="FSharp.Core" Version="4.1.*" />
     <PackageReference Include="System.Linq.Expressions" Version="4.3.*" />
-    <PackageReference Include="FSharp.Control.Reactive" Version="3.*" />
+    <!--<PackageReference Include="FSharp.Control.Reactive" Version="3.*" />-->
+    <PackageReference Include="System.Reactive" Version="3.*" />
     <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>
