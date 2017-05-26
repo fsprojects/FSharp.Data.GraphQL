@@ -291,4 +291,4 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
               Strategy = Sequential 
               Variables = variables }
         | None -> 
-            raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no mutation type defined")
+            raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no subscription type defined")
