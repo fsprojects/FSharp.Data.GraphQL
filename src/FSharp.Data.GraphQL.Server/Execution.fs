@@ -470,9 +470,9 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
                         tree 
                         |> AsyncVal.bind(fun tree' ->
                             match List.tail path, tree' with
-                            | [], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|])
-                            | [p], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
-                            | [p;"__index"], t -> AsyncVal.wrap([|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|])
+                            | [], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|] })
+                            | [p], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] })
+                            | [p;"__index"], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] })
                             | p, ResolverObjectNode n -> 
                                 n.Children 
                                 |> AsyncVal.bind(fun c ->
