@@ -4,6 +4,8 @@
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
 #nowarn "25"
+// Supress indentation warnings
+#nowarn "58"
 
 open System
 open Xunit

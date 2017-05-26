@@ -3,32 +3,42 @@
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Execution.SchemaCompiler
+open FSharp.Data.GraphQL.Execution.QueryExecution
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
-type Executor<'Root> (schema: ISchema<'Root>) = 
-    let fieldExecuteMap = FieldExecuteMap()
+type Executor<'Root> (schema: ISchema<'Root>, ?activeSubscriptionProvider:IActiveSubscriptionProvider) = 
+    
+    let active = 
+        match activeSubscriptionProvider with
+        | Some p -> p
+        | None -> upcast DefaultSubscriptionProvider() 
 
+    let executionHandler = ExecutionHandler(active)
+    let subscriptionHandler = executionHandler.SubscriptionHandler
+    let fieldExecuteMap = executionHandler.FieldExecuteMap
     //FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
+    // Builds up our map of field -> resolver
     let __done =
     //     we don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
                                    "__schema",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef executionHandler)
 
         fieldExecuteMap.SetExecute("",
                                    "__type",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef executionHandler)
 
         fieldExecuteMap.SetExecute("",
                                    "__typename",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
+                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef executionHandler)
 
     do
-        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
+        compileSchema schema.GetPossibleTypes schema.TypeMap executionHandler
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
@@ -42,7 +52,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                let res = evaluate schema executionPlan variables rootObj errors executionHandler
                 let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
                 return result :> IDictionary<string,obj>
             with 
@@ -117,7 +127,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
                 | Subscription ->
                     match schema.Subscription with
-                    | Some s -> s
+                    | Some s -> s :> ObjectDef<'Root>
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
             planOperation (ast.GetHashCode()) planningCtx operation
@@ -131,3 +141,6 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         match operationName with
         | None -> this.CreateExecutionPlan(parse queryOrMutation)
         | Some o -> this.CreateExecutionPlan(parse queryOrMutation, o)
+
+    member this.FireSubscriptionEvent(objdef: #OutputDef<'Val>) (args: Map<string, obj>) (value: 'Val)  = 
+        executionHandler.SubscriptionHandler.FireEvent objdef (box value)

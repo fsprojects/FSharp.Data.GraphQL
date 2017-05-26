@@ -10,6 +10,8 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 
+// Supress indentation warnings
+#nowarn "58"
 #nowarn "40"
 
 type TestSubject = {

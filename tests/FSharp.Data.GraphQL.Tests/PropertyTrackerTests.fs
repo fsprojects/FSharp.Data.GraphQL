@@ -1,6 +1,8 @@
 ﻿/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.PropertyTrackerTests
+// Supress indentation warnings
+#nowarn "58"
 
 open Xunit
 open System

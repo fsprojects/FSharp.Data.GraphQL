@@ -1,5 +1,4 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+﻿/// Copyright (c) 2016 Bazinga Technologies Inc
 namespace FSharp.Data.GraphQL.Types
 
 open System
@@ -295,7 +294,7 @@ type ISchema =
 
         // A subscription root object. Defines all top level operations,
         // that can be performed from GraphQL subscriptions. 
-        abstract Subscription : ObjectDef option
+        abstract Subscription : SubscriptionObjectDef option
 
         /// List of all directives supported by the current schema.
         abstract Directives : DirectiveDef []
@@ -326,23 +325,20 @@ and ISchema<'Root> =
         inherit ISchema
         abstract Query : ObjectDef<'Root>
         abstract Mutation : ObjectDef<'Root> option
-        abstract Subscription : ObjectDef<'Root> option
+        abstract Subscription : SubscriptionObjectDef<'Root> option
     end
-
-and FieldExecuteMap () = 
-    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
-
-    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
-        let key = typeName, fieldName
-        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
-
-    member public this.GetExecute(typeName: string, fieldName: string) = 
-        let key = 
-            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
-            then "", fieldName
-            else typeName, fieldName
-
-        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
+and IFieldExecuteMap =
+    interface
+        abstract SetExecute : string * string * ExecuteField -> unit
+        abstract GetExecute : string * string -> ExecuteField
+    end
+and ISubscriptionHandler =
+    interface
+        abstract RegisterSubscription : string -> (ResolveFieldContext -> obj -> obj -> unit) -> (ResolveFieldContext -> obj -> obj -> bool) -> unit
+        abstract ActivateSubscription : string -> ResolveFieldContext -> obj -> string
+        abstract DeactivateSubscription : string -> string -> bool
+        abstract FireEvent : #OutputDef -> obj -> unit
+    end
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.
@@ -561,7 +557,8 @@ and Resolve =
     /// output defines .NET type of the returned value
     /// expr is untyped version of Expr<ResolveFieldContext->'Input->Async<'Output>>
     | Async of input:Type * output:Type * expr:Expr 
-
+    | Callback of root:Type * input:Type * expr:Expr
+    | Filter of root:Type * input:Type * expr:Expr
 
     | ResolveExpr of expr:Expr 
 
@@ -572,6 +569,7 @@ and Resolve =
         | Async(_,_,e) -> e
         | Undefined -> failwith "Resolve function was not defined"
 
+    
 /// Execution strategy for provided queries. Defines if object fields should 
 /// be resolved either sequentially one-by-one or in parallel.
 and ExecutionStrategy = 
@@ -638,6 +636,8 @@ and ResolveFieldContext =
       ParentType : ObjectDef
       /// Current GraphQL schema.
       Schema : ISchema
+      /// Handles all subscription events
+      SubscriptionHandler : ISubscriptionHandler
       /// Untyped map of all argument values used for as current field's 
       /// parametrized inputs.
       Args : Map<string, obj>
@@ -1370,6 +1370,124 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
     
     override x.ToString() = x.Name + ": " + x.TypeDef.ToString()
 
+// Untyped representation of a subscription field object
+// Used in the schema definition of a subscription
+and SubscriptionFieldDef =
+    interface 
+        // Subscription Resolvers take in an output from a mutation
+        abstract InputTypeDef : OutputDef
+        abstract Filter : Resolve
+        inherit FieldDef
+    end
+and SubscriptionFieldDef<'Val> =
+    interface
+        inherit SubscriptionFieldDef
+        inherit FieldDef<'Val>
+    end
+and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> = 
+    {
+        Name : string
+        Description : string option
+        DeprecationReason : string option
+        // The type of the value that we intend to be operating on, used to make sure that our field resolution makes sense
+        InputTypeDef : OutputDef<'Input>
+        // The Type of the root object, only used for defining subscriptions in the schema
+        TypeDef : OutputDef<'Root>
+        // For a Subscription, the typedef will be the type of the associated mutation
+        Resolve : Resolve
+        // We use this function to determine if a given object matches a subscription
+        Filter : Resolve
+        Args : InputFieldDef []
+    }
+    interface FieldDef with
+        member x.Name = x.Name
+        member x.Description = x.Description
+        member x.DeprecationReason = x.DeprecationReason
+        member x.TypeDef = x.TypeDef :> OutputDef
+        member x.Args = x.Args
+        member x.Resolve = x.Resolve
+
+    interface SubscriptionFieldDef with
+        member x.Filter = x.Filter
+        member x.InputTypeDef = x.InputTypeDef :> OutputDef
+    interface SubscriptionFieldDef<'Root>
+
+    interface IEquatable<FieldDef> with
+        member x.Equals f = 
+            x.Name = f.Name && 
+            x.TypeDef :> OutputDef = f.TypeDef &&
+            x.Args = f.Args && 
+            f :? SubscriptionFieldDef<'Root> 
+    override x.Equals y = 
+        match y with
+        | :? SubscriptionFieldDef as f -> (x :> IEquatable<FieldDef>).Equals(f)
+        | _ -> false
+    
+    override x.GetHashCode() = 
+        let mutable hash = x.Name.GetHashCode()
+        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
+        hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
+        hash
+    
+    override x.ToString() = 
+        if not (Array.isEmpty x.Args) 
+        then x.Name + "(" + String.Join(", ", x.Args) + "): " + x.TypeDef.ToString()
+        else x.Name + ": " + x.TypeDef.ToString()
+and SubscriptionObjectDef =
+    interface
+        abstract Fields : Map<string, SubscriptionFieldDef>
+        inherit ObjectDef
+    end
+and SubscriptionObjectDef<'Val> =
+    interface
+        inherit SubscriptionObjectDef
+        abstract Fields : Map<string, SubscriptionFieldDef<'Val>>
+        inherit ObjectDef<'Val>
+    end
+and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> =
+    {
+        Name : string
+        Description : string option
+        Fields : Map<string, SubscriptionFieldDef<'Val>>
+    }
+
+    interface TypeDef with
+        member __.Type = typeof<'Val>
+        
+        member x.MakeNullable() = 
+            let nullable : NullableDefinition<_> = { OfType = x }
+            upcast nullable
+        
+        member x.MakeList() = 
+            let list: ListOfDefinition<_,_> = { OfType = x }
+            upcast list
+    interface ObjectDef with
+        member x.Name = x.Name
+        member x.Description = x.Description
+        member x.Fields = x.Fields |> Map.map(fun _ f -> f :> FieldDef)
+        member x.Implements = Array.empty : InterfaceDef []
+        // TODO: Actually add istypeof
+        member x.IsTypeOf = None
+    interface ObjectDef<'Val> with
+         member x.Fields = x.Fields |> Map.map(fun _ f -> f :> FieldDef<'Val>)
+
+    interface NamedDef with
+        member x.Name = x.Name
+    interface SubscriptionObjectDef with
+        member x.Fields = x.Fields |> Map.map (fun _ f -> upcast f)
+    interface SubscriptionObjectDef<'Val> with
+        member x.Fields = x.Fields
+    override x.Equals y = 
+        match y with
+        | :? SubscriptionObjectDefinition<'Val> as f -> f.Name = x.Name
+        | _ -> false
+
+    override x.GetHashCode() = 
+        let mutable hash = x.Name.GetHashCode()
+        hash
+    
+    override x.ToString() = x.Name + "!"
+
 /// GraphQL directive defintion.
 and DirectiveDef = 
     { /// Directive's name - it's NOT '@' prefixed.
@@ -1407,6 +1525,16 @@ module Resolve =
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
     
+    let private boxifySubscription<'Root, 'Input>(f:ResolveFieldContext -> 'Root -> 'Input -> unit): ResolveFieldContext -> obj -> obj -> unit =
+        <@@ fun ctx (r:obj) (i:obj) -> f ctx (r :?> 'Root) (i :?> 'Input)@@>
+        |> LeafExpressionConverter.EvaluateQuotation
+        |> unbox
+
+    let private boxifyFilter<'Root, 'Input>(f:ResolveFieldContext -> 'Root -> 'Input -> bool): ResolveFieldContext -> obj -> obj -> bool =
+        <@@ fun ctx (r:obj) (i:obj) -> f ctx (r :?> 'Root) (i :?> 'Input)@@>
+        |> LeafExpressionConverter.EvaluateQuotation
+        |> unbox
+
     let private getRuntimeMethod name =
         let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods() 
         methods |> Seq.find (fun m -> m.Name.Equals name)
@@ -1414,6 +1542,10 @@ module Resolve =
     let private runtimeBoxify = getRuntimeMethod "boxify"
     
     let private runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
+
+    let private runtimeBoxifySubscription = getRuntimeMethod "boxifySubscription"
+
+    let private runtimeBoxifyFilter = getRuntimeMethod "boxifyFilter"
 
     let private unwrapExpr = function
         | WithValue(resolver, _, _) -> (resolver, resolver.GetType())
@@ -1434,6 +1566,18 @@ module Resolve =
         | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) -> 
             resolveUntyped resolver d c runtimeBoxifyAsync
         | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A"  (resolver.GetType())
+
+    let private boxifySubscriptionExpr expr: ResolveFieldContext -> obj -> obj -> unit =
+        match unwrapExpr expr with
+        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,_))) ->
+            resolveUntyped resolver r i runtimeBoxifySubscription
+        | resolver, _ -> failwithf "Unsupported signature for subscription Resolve %A"  (resolver.GetType())
+
+    let private boxifyFilterExpr expr: ResolveFieldContext -> obj -> obj -> bool =
+        match unwrapExpr expr with
+        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,_))) ->
+            resolveUntyped resolver r i runtimeBoxifyFilter
+        | resolver, _ -> failwithf "Unsupported signature for subscription Resolve %A"  (resolver.GetType())
     
     let (|BoxedSync|_|) = function 
         | Sync(d,c,expr) -> Some(d,c,boxifyExpr expr)
@@ -1447,6 +1591,12 @@ module Resolve =
         | ResolveExpr(e) -> Some(boxifyExpr e)
         | _ -> None 
 
+    let (|SubscriptionExpr|_|) = function
+        | Callback(r,i,expr) -> Some(r,i, boxifySubscriptionExpr expr)
+        | _ -> None
+    let (|SubscriptionFilterExpr|_|) = function
+        | Filter(r,i,expr) -> Some(r,i, boxifyFilterExpr expr)
+        | _ -> None
     let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
         let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
         let valueVar = Var("value", typeof<'Val>)
@@ -1483,7 +1633,6 @@ module Resolve =
             let methodInfo = typeInfo.GetDeclaredMethod(fieldName, ignoreCase = true)
             genMethodResolve<'Val, 'Res> typeInfo methodInfo            
         | p -> genPropertyResolve<'Val, 'Res> typeInfo p 
-
 module Patterns =
 
     /// Active pattern to match GraphQL type defintion with Scalar.
@@ -1520,6 +1669,11 @@ module Patterns =
     let (|InputObject|_|) (tdef : TypeDef) = 
         match tdef with
         | :? InputObjectDef as x -> Some x
+        | _ -> None
+    
+    let (|SubscriptionObject|_|) (tdef : TypeDef) =
+        match tdef with
+        | :? SubscriptionObjectDef as x -> Some x
         | _ -> None
     
     /// Active pattern to match GraphQL type defintion with List.
@@ -1569,6 +1723,7 @@ module Patterns =
         match tdef with
         | :? InterfaceDef | :? UnionDef -> Some(tdef :?> AbstractDef)
         | _ -> None
+    
     
     let rec private named (tdef : TypeDef) = 
         match tdef with
@@ -2050,7 +2205,7 @@ module SchemaDefinitions =
         
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
@@ -2065,7 +2220,7 @@ module SchemaDefinitions =
         
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
@@ -2075,6 +2230,12 @@ module SchemaDefinitions =
             { Name = name
               Description = description
               FieldsFn = fun () -> fields |> List.toArray }
+
+        static member SubscriptionObject<'Val>(name: string, fields: SubscriptionFieldDef<'Val> list, ?description: string):SubscriptionObjectDefinition<'Val> = 
+            { Name = name
+              Fields = (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
+              Description = description
+            }
         
         /// <summary>
         /// Creates field defined inside object types with automatically generated field resolve function. 
@@ -2261,6 +2422,22 @@ module SchemaDefinitions =
                      Args = [||]
                      DeprecationReason = None
                      }
+
+        static member SubscriptionField(name: string, typedef : #OutputDef<'Root>, inputdef : #OutputDef<'Input>, 
+                                        description:string, 
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] callback : Expr<ResolveFieldContext -> 'Root -> IDictionary<string, obj> -> unit>,
+                                        [<ReflectedDefinition(true)>] filter : Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>): SubscriptionFieldDef<'Root> =
+
+            { Name = name
+              Description = Some description
+              TypeDef = typedef
+              InputTypeDef = inputdef
+              DeprecationReason = None
+              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
+              Resolve = Resolve.Callback(typeof<'Root>, typeof<IDictionary<string, obj>>, callback)
+              Args = args |> List.toArray
+            } :> SubscriptionFieldDef<'Root>
         
         /// <summary>
         /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,

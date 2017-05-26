@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
 open FSharp.Reflection
+open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Quotations
@@ -83,7 +84,7 @@ let inline private flip fn a b = fn b a
 
 let inline private argVal vars argDef argOpt  = 
     match argOpt with
-    | Some arg -> Execution.argumentValue vars argDef arg
+    | Some arg -> argumentValue vars argDef arg
     | None -> argDef.DefaultValue
     
 /// Resolves an object representing one of the supported arguments

@@ -22,9 +22,16 @@ type Droid =
       AppearsIn : Episode list
       PrimaryFunction : string option }
 
-type Root = 
-    { Hero : Human option
-      Droid : Droid option}
+type Planet =
+    { Id : string
+      Name : string option
+      mutable IsMoon : bool option}
+    member x.SetMoon b =
+        x.IsMoon <- b
+        x
+
+type Root = { ClientId: string }
+    
 
 let humans = 
     [ { Id = "1000"
@@ -65,8 +72,20 @@ let droids =
         AppearsIn = [ Episode.NewHope; Episode.Empire; Episode.Jedi ]
         PrimaryFunction = Some "Astromech" } ]
 
+let planets =
+    [ { Id = "1"
+        Name = Some "Tatooine"
+        IsMoon = Some false}
+      { Id = "2"
+        Name = Some "Endor"
+        IsMoon = Some true}
+      { Id = "3"
+        Name = Some "Death Star"
+        IsMoon = Some false}]
+
 let getHuman id = humans |> List.tryFind (fun h -> h.Id = id)
 let getDroid id = droids |> List.tryFind (fun d -> d.Id = id)
+let getPlanet id = planets |> List.tryFind (fun p -> p.Id = id)
 
 type Character =
     | Human of Human
@@ -84,6 +103,7 @@ let getCharacter id = characters |> List.tryFind (matchesId id)
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open Newtonsoft.Json
 
 let EpisodeType =
   Define.Enum(
@@ -136,16 +156,61 @@ and DroidType =
             fun ctx d -> d.Friends |> List.map getCharacter |> List.toSeq)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
         Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) ])
-
+and PlanetType =
+    Define.Object<Planet>(
+        name = "Planet",
+        description = "A planet in the Star Wars universe.",
+        isTypeOf = (fun o -> o :? Planet),
+        fieldsFn = fun () -> [
+            Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
+            Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
+            Define.Field("ismoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)])
+and RootType =
+    Define.Object<Root>(
+        name = "Root",
+        description = "The Root type to be passed to all our resolvers",
+        isTypeOf = (fun o -> o :? Root),
+        fieldsFn = fun () -> [
+            Define.Field("clientid", String, "The ID of the client", fun _ r -> r.ClientId)])
 // Define our root query type, used to expose possible queries to the client
 let Query =
   Define.Object<Root>(
     name = "Query",
     fields = [
         Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
+        Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) 
+        Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))])
 
-let schema = Schema(Query) :> ISchema<Root>
+let Mutation =
+    Define.Object<Root>(
+        name = "Mutation",
+        fields = [
+            Define.Field(
+                "setMoon", 
+                Nullable PlanetType, 
+                "Sets a moon status", 
+                [ Define.Input("id", String); Define.Input("ismoon", Boolean) ], 
+                fun ctx _ -> 
+                    getPlanet(ctx.Arg("id")) 
+                    |> Option.map (fun x -> 
+                        x.SetMoon(Some(ctx.Arg("ismoon")))
+                        ctx.SubscriptionHandler.FireEvent PlanetType x
+                        x))])
+
+let Subscription = 
+    Define.SubscriptionObject<Root>(
+        name = "Subscription",
+        fields = [
+            Define.SubscriptionField(
+                "watchMoon",
+                RootType,
+                PlanetType,
+                "Watches to see if a planet is a moon",
+                [ Define.Input("id", String) ],
+                (fun ctx r d -> printfn "Subscription with dictionary %A and client id %s" d r.ClientId),
+                (fun ctx r p -> ctx.Arg("id") = p.Id))])
+
+let schema = Schema(Query, Mutation, Subscription) :> ISchema<Root>
 let ex = Executor(schema)
 
 // server initialization
@@ -153,7 +218,7 @@ open Suave
 open Suave.Operators
 open System.Reflection
 open FSharp.Reflection
-open Newtonsoft.Json
+
 
 type OptionConverter() =
     inherit JsonConverter()
@@ -190,15 +255,15 @@ let tryParse fieldName data =
 let graphiql : WebPart =
     fun http ->
         async {
+            let root = {ClientId = "5"}
             let tryQuery = tryParse "query" http.request.rawForm
             let tryVariables = tryParse "variables" http.request.rawForm |> Option.map (JsonConvert.DeserializeObject<Map<string, obj>>)
             match tryQuery, tryVariables  with
             | Some query, Some variables ->
                 printfn "Received query: %s" query
                 printfn "Recieved variables: %A" variables
-                // at the moment parser is not parsing new lines correctly, so we need to get rid of them
-                let q = query.Trim().Replace("\r\n", " ")
-                let! result = ex.AsyncExecute(q, variables=variables)
+
+                let! result = ex.AsyncExecute(query, variables=variables, data=root)
                 return! http |> Successful.OK (json result)
             | Some query, None ->
                 printfn "Received query: %s" query
@@ -216,7 +281,7 @@ let setCorsHeaders =
 
 let serverConfig =
     { defaultConfig with
-        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8083]
+        bindings = [ HttpBinding.createSimple HTTP "127.0.0.1" 8084]
 
     }
 
