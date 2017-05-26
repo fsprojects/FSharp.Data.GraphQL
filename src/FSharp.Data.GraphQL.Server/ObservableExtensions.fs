@@ -5,7 +5,7 @@ open System.Reactive
 open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of Fsharp.Control.Reactive
-module Observable =
+module internal Observable =
     let bind (f: 'T -> IObservable<'U>) (o: IObservable<'T>) = o.SelectMany(f)
     let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
 
