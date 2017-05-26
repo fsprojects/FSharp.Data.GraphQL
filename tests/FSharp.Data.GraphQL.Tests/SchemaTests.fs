@@ -59,6 +59,8 @@ let ``Schema config should be able to override default error handling`` () =
                 "failing1", null
                 "passing", box "ok"
                 "failing2", null ]]
-    actual.["data"] |> equals (upcast expected)
-    let e = actual.["errors"] :?> string seq
-    e |> Seq.toList |> equals ["0"; "1"]
+    match actual with
+    | Direct(data, errors) ->
+      data.["data"] |> equals (upcast expected)
+      errors |> equals ["0"; "1"]
+    | _ -> fail "Expected Direct GQResponse"

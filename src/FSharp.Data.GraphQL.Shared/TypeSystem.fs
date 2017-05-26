@@ -593,6 +593,10 @@ and VarDef =
 
 /// Execution plan of the current GraphQL operation. It describes, which
 /// fiels will be resolved and how to do so.
+and DeferredExecutionInfo = {
+    Info : ExecutionInfo
+    Path : string list
+}
 and ExecutionPlan = 
     { /// Unique identifier of the current execution plan.
       DocumentId : int
@@ -605,6 +609,8 @@ and ExecutionPlan =
       Strategy : ExecutionStrategy
       /// List of fields of top level query/mutation object to be resolved.
       Fields : ExecutionInfo list
+      /// A list of all deferred fields in the query
+      DeferredFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
       Variables: VarDef list }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
