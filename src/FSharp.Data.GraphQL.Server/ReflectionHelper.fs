@@ -79,16 +79,20 @@ module internal Gen =
         let methods = typeof<'t>.GetMethods().Where(System.Func<MethodInfo,bool>(fun x -> x.Name = methodName))
         methods.First().MakeGenericMethod typeParams
     
+    let private getCallInfo = function
+        | Patterns.Call(_, info, _) -> info
+        | _ -> failwith "Unexpected Quotation!"
+
     let listOfSeq = 
-        let (Patterns.Call(_, info, _)) = <@ List.ofSeq<_> Seq.empty @>
+        let info = getCallInfo <@ List.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
 
     let arrayOfSeq = 
-        let (Patterns.Call(_, info, _)) = <@ Array.ofSeq<_> Seq.empty @>
+        let info = getCallInfo <@ Array.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
 
     let setOfSeq = 
-        let (Patterns.Call(_, info, _)) = <@ Set.ofSeq<_> Seq.empty @>
+        let info = getCallInfo <@ Set.ofSeq<_> Seq.empty @>
         info.GetGenericMethodDefinition()
         
     let private em = typeof<Enumerable>.GetMethods()

@@ -570,6 +570,7 @@ and Resolve =
         match x with
         | Sync(_,_,e) -> e
         | Async(_,_,e) -> e
+        | ResolveExpr(e) -> e
         | Undefined -> failwith "Resolve function was not defined"
 
 /// Execution strategy for provided queries. Defines if object fields should 

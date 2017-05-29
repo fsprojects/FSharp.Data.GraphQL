@@ -148,6 +148,15 @@ let private isDeferredField (field: Field): bool =
                 
 type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * string list
 
+let private getSelectionFrag = function
+    | SelectFields(fragmentFields) -> fragmentFields
+    | _ -> failwith "Expected a Selection!"
+
+let private getAbstractionFrag = function
+    | ResolveAbstraction(fragmentFields) -> fragmentFields
+    | _ -> failwith "Expected an Abstraction!"
+
+
 let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage =
     let info, deferredFields, path = stage
     match info.ReturnDef with
@@ -161,6 +170,7 @@ let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, "__index"::info.Identifier::path)
         { info with Kind = ResolveCollection inner }, deferredFields', path'
     | Abstract _ -> planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, path) (ref []) None 
+    | _ -> failwith "Invalid Return Type in Planning!"
 
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (stage: PlanningStage) visitedFragments : PlanningStage = 
     let info, deferredFields, path = stage
@@ -194,14 +204,15 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                         // retrieve fragment data just as it was normal selection set
                         // TODO: Check if the path is correctly defined
                         let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
-                        let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                        let fragmentFields = getSelectionFrag fragmentInfo.Kind
                         // filter out already existing fields
                         List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
                     | _ -> fields, deferredFields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
                  let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
-                 let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                 let fragmentFields = getSelectionFrag fragmentInfo.Kind
+
                  // filter out already existing fields
                  List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
             | _ -> fields, deferredFields
@@ -236,16 +247,17 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
                         let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
-                        let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
+                        let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                         // filter out already existing fields
                         Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
                     | _ -> fields, deferredFields
             | InlineFragment fragment ->
-                 // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
-                 let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
-                 // filter out already existing fields
-                 Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
+                // retrieve fragment data just as it was normal selection set
+                let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
+                let fragmentFields = getAbstractionFrag fragmentInfo.Kind
+
+                // filter out already existing fields
+                Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
             | _ -> fields, deferredFields
         ) (Map.empty, deferredFields)
     { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path

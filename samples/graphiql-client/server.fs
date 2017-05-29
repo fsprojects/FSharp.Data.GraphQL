@@ -1,4 +1,6 @@
 
+#nowarn "40"
+
 open System
 open FSharp.Data
 
