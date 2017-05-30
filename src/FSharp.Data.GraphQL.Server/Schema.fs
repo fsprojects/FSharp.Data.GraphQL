@@ -5,6 +5,7 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
+open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
@@ -14,8 +15,36 @@ open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
+
+/// Represents a subscription as described in the schema
+type Subscription = {
+    /// The name of the subscription type in the schema
+    Name: string
+    /// A string identifier (not necessarily unique) for the subscription type
+    SubscriptionIdentifier: string
+    /// Filter function, used to determine what events we will propagate
+    /// The 1st obj is the boxed root value, the second is the boxed value of the input object
+    Filter: (ResolveFieldContext -> obj -> obj -> bool)
+}
+
+/// Configuration object for the subscription system
+/// <typeparam name="C">Type of the subscription identifier</typeparam>
+type SubscriptionProvider<'R> =
+    interface
+        /// Registers a new subscription type
+        /// Called at schema compilation time
+        abstract member Register: Subscription -> unit
+        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
+        abstract member Add : ResolveFieldContext -> 'R -> string -> string -> IObservable<obj>
+        /// Removes an active subscription when given the SubscriptionIdentifier and Identifier
+        /// Called when the associated IObservable stream is disposed of
+        abstract member Remove : string -> string -> bool
+        /// Publishes an event to the subscription system given the identifier of the subscription type
+        abstract member Publish<'T> : string -> 'T -> unit
+    end
+
 /// A configuration object fot the GraphQL server schema.
-type SchemaConfig =
+type SchemaConfig<'R> =
     { /// List of types that couldn't be resolved from schema query root 
       /// tree traversal, but should be included anyway.
       Types : NamedDef list
@@ -24,15 +53,50 @@ type SchemaConfig =
       /// Function called, when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseErrors: exn[] -> string[] }
-    /// Returns a default schema configuration.
-    static member Default = 
-        { Types = []
-          Directives = [IncludeDirective; SkipDirective]
-          ParseErrors = Array.map (fun e -> e.Message) }
+      ParseErrors: exn[] -> string[] 
+      SubscriptionConfig: SubscriptionProvider<'R>
+    }
+    /// Returns the default Subscription Provider, backed by Observable streams
+    static member DefaultSubscriptionProvider() = 
+        let registeredSubscriptions = new Dictionary<string, Subscription * ObservableSource<obj>>()
+        // String index is the Subscription type name prepended to the ident field
+        let activeSubscriptionHandles = new Dictionary<string, IDisposable>()
+        { new SubscriptionProvider<_> with
+            member this.Register (subscription: Subscription) =
+                registeredSubscriptions.Add(subscription.SubscriptionIdentifier, (subscription, ObservableSource<obj>()))
+            member this.Add (ctx: ResolveFieldContext) (root: _) (subIdent: string) (ident: string) =
+                let stream = ObservableSource<obj>()
+                match registeredSubscriptions.TryGetValue(subIdent) with
+                | true, (sub, channel) -> 
+                    let handle = 
+                        channel.Observable
+                        |> Observable.filter(fun o -> sub.Filter ctx (box root) o)
+                        |> Observable.subscribe(stream.Next)
+                    activeSubscriptionHandles.Add(ident, handle)
+                | false, _ -> ()
+                stream.Observable
+            member this.Remove (subIdent: string) (ident: string) =
+                match activeSubscriptionHandles.TryGetValue(subIdent + ident) with
+                | true, handle -> handle.Dispose(); true
+                | false, _ -> false
+            member this.Publish<'T> (subIdent: string) (value: 'T) =
+                match registeredSubscriptions.TryGetValue(subIdent) with
+                | true, (sub, channel) ->
+                    channel.Next(box value)
+                | false, _ -> ()
+        }
+
+    static member Default() = 
+        let (config: SchemaConfig<_>) =
+            { Types = []
+              Directives = [IncludeDirective; SkipDirective; DeferDirective]
+              ParseErrors = Array.map (fun e -> e.Message)
+              SubscriptionConfig = SchemaConfig<_>.DefaultSubscriptionProvider() }
+        config
+
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig<'Root>) =
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -84,7 +148,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         __Schema
         query]
 
-    let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
+    let schemaConfig = match config with None -> SchemaConfig.Default() | Some c -> c
     let mutable typeMap: Map<string, NamedDef> = 
         let m = 
             mutation 
