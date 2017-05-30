@@ -18,6 +18,12 @@ open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection.FSharpReflectionExtensions
 
+type Output = IDictionary<string, obj>
+type GQLResponse =
+    | Direct of data:Output * errors: string list
+    | Deferred of data:Output * errors:string list * defer:IObservable<Output>
+    | Stream of stream:IObservable<Output>
+    
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys
 /// can be set, but no new entry can be added or removed, once lookup
@@ -363,6 +369,12 @@ let treeToDict (tree: ResolverTree) : AsyncVal<KeyValuePair<string,obj>> =
                 KeyValuePair<_,_>(name, c |> Array.map(fun c' -> c'.Value) :> obj))
     treeFold leafOp nodeOp listOp tree
 
+
+let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
+    match subfield.Resolve with
+    | Resolve.BoxedFilterExpr(_, _, filter) -> filter
+    | _ -> raise <| GraphQLException ("Invalid filter expression for subscription field!")
+
 let internal compileField (fieldDef: FieldDef) : ExecuteField =
     match fieldDef.Resolve with
     | Resolve.BoxedSync(_, _, resolve) ->
@@ -404,8 +416,7 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
             | ex -> 
                 resolveFieldCtx.AddError(ex)
                 AsyncVal.empty
-
-    | Undefined -> 
+    | _ -> 
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
     /// Takes an object type and a field, and returns that field’s type on the object type, or null if the field is not valid on the object type
@@ -416,8 +427,7 @@ let private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objectType.Fields |> Map.tryFind fieldName
         
-
-let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
+let private executeQueryOrMutation (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultSet =
         plan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)
@@ -506,14 +516,13 @@ let internal executePlan (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: 
             |> Some
     dict, deferredResults
 
-
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun input -> 
         let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
         input.ExecuteInput <- compileByType errMsg input.TypeDef)
 
-let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteMap) =
+let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) =
     types
     |> Map.toSeq 
     |> Seq.iter (fun (tName, x) ->
@@ -532,8 +541,8 @@ let internal compileSchema possibleTypesFn types (fieldExecuteMap: FieldExecuteM
 let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
-                
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<NameValueLookup> * IObservable<NameValueLookup> option = 
+
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<GQLResponse> =
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema
@@ -541,4 +550,10 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         RootValue = root
         Variables = variables
         Errors = errors }
-    executePlan ctx executionPlan schema.Query fieldExecuteMap root 
+    let dict, deferred = executeQueryOrMutation ctx executionPlan schema.Query fieldExecuteMap root 
+    let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
+    match deferred with
+    | Some d -> dict |> AsyncVal.map(fun dict' -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
+    | None -> dict |> AsyncVal.map(fun dict' -> Direct(dict', errors'))
+
+

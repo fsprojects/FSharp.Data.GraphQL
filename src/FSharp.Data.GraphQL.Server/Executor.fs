@@ -9,10 +9,6 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
-type Output = IDictionary<string, obj>
-type GQLResponse =
-    | Direct of data:Output * errors: string list
-    | Deferred of data:Output * errors:string list * defer:IObservable<Output>
 
 type Executor<'Root> (schema: ISchema<'Root>) = 
     let fieldExecuteMap = FieldExecuteMap()
@@ -34,30 +30,37 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                                    compileField TypeNameMetaFieldDef )
 
     do
-        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
+        compileSchema schema.TypeMap fieldExecuteMap
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
-        let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) (deferred: IObservable<NameValueLookup> option) =
-            let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
-            match errors.IsEmpty, deferred with
-            | true, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [])
-            | false, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ; "errors", upcast errors'], errors')
-            | true, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [], d |> Observable.map(fun d' -> upcast d')) 
-            | false, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result; "errors", upcast errors' ], errors' , d |> Observable.map(fun d' -> upcast d'))
+        // let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) (deferred: IObservable<NameValueLookup> option) =
+        //     let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
+        //     match errors.IsEmpty, deferred with
+        //     | true, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [])
+        //     | false, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ; "errors", upcast errors'], errors')
+        //     | true, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [], d |> Observable.map(fun d' -> upcast d')) 
+        //     | false, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result; "errors", upcast errors' ], errors' , d |> Observable.map(fun d' -> upcast d'))
+        let prepareOutput res = 
+            let prepareData data = function
+                | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
+                | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
+            match res with
+            | Direct(data, errors) -> Direct(prepareData data errors, errors)
+            | Deferred(data, errors, deferred) -> Deferred(prepareData data errors, errors, deferred)
+            | Stream(stream) -> Stream(stream)
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res, deferred = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
-                let! result = res |> AsyncVal.map (fun x -> prepareOutput errors x deferred)
-                return result
+                let! res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                return prepareOutput res
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return Direct(new Dictionary<string, obj>(), [msg])
+                return Direct(new Dictionary<string, obj>() :> Output, [msg])
         }
     
     /// <summary>
