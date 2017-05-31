@@ -30,7 +30,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                                    compileField TypeNameMetaFieldDef )
 
     do
-        compileSchema schema.TypeMap fieldExecuteMap
+        compileSchema schema.TypeMap fieldExecuteMap schema.SubscriptionProvider
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
@@ -129,7 +129,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
                 | Subscription ->
                     match schema.Subscription with
-                    | Some s -> s
+                    | Some s -> upcast s
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
             planOperation (ast.GetHashCode()) planningCtx operation

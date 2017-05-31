@@ -60,7 +60,11 @@ let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field,
         { Identifier = field.AliasOrName
           Kind = ResolveValue
           ParentDef = parentDef
-          ReturnDef = fdef.TypeDef
+          ReturnDef = 
+            match parentDef with
+            | SubscriptionObject _ -> (fdef :?> SubscriptionFieldDef).InputTypeDef
+            | Object _ -> fdef.TypeDef
+            | _ -> raise (GraphQLException (sprintf "Unexpected parentdef type!"))
           Definition = fdef
           Ast = field
           Include = includer 
@@ -161,6 +165,7 @@ let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage
     let info, deferredFields, path = stage
     match info.ReturnDef with
     | Leaf _ -> info, deferredFields, info.Identifier::path
+    | SubscriptionObject _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
     | Object _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
     | Nullable returnDef -> 
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)

@@ -5,6 +5,7 @@ module FSharp.Data.GraphQL.Execution
 open System
 open System.Reflection
 open System.Reactive
+open System.Reactive.Linq
 open System.Runtime.InteropServices;
 open System.Collections.Generic
 open System.Collections.Concurrent
@@ -426,13 +427,9 @@ let private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (
         | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
         | "__typename" -> Some (upcast TypeNameMetaFieldDef)
         | fieldName -> objectType.Fields |> Map.tryFind fieldName
+
         
-let private executeQueryOrMutation (ctx: ExecutionContext) (plan: ExecutionPlan) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
-    let resultSet =
-        plan.Fields
-        |> List.filter (fun info -> info.Include ctx.Variables)
-        |> List.map (fun info -> (info.Identifier, info))
-        |> List.toArray
+let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultTrees =
         resultSet
         |> Array.map (fun (name, info) ->
@@ -450,17 +447,17 @@ let private executeQueryOrMutation (ctx: ExecutionContext) (plan: ExecutionPlan)
             let res = execute fieldCtx value
             res |> AsyncVal.map(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r)))
     let dict = 
-        match plan.Strategy with
+        match ctx.ExecutionPlan.Strategy with
         | ExecutionStrategy.Parallel -> resultTrees |> Array.map(AsyncVal.bind(treeToDict)) |> AsyncVal.collectParallel 
         | ExecutionStrategy.Sequential -> resultTrees |> Array.map(AsyncVal.bind(treeToDict)) |> AsyncVal.collectSequential 
         |> AsyncVal.map (NameValueLookup)
     let deferredResults =
-        if plan.DeferredFields.Length = 0
+        if ctx.ExecutionPlan.DeferredFields.Length = 0
         then None
         else
             resultTrees
             |> Array.map(AsyncVal.bind(fun tree ->
-                plan.DeferredFields
+                ctx.ExecutionPlan.DeferredFields
                 |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
                 |> Array.map(fun d ->
@@ -516,25 +513,60 @@ let private executeQueryOrMutation (ctx: ExecutionContext) (plan: ExecutionPlan)
             |> Some
     dict, deferredResults
 
+let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (FieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value = 
+    // Subscription queries can only have one root field
+    let name, info = Array.head resultSet
+    let subdef = info.Definition :?> SubscriptionFieldDef
+    let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
+    let returnType = subdef.InputTypeDef
+    let fieldCtx = 
+        { ExecutionInfo = info
+          Context = ctx
+          ReturnType = returnType
+          ParentType = objdef
+          Schema = ctx.Schema
+          Args = args
+          Variables = ctx.Variables } 
+    subscriptionProvider.Add fieldCtx value name 
+    |> Observable.bind(fun v -> 
+        buildResolverTree returnType fieldCtx FieldExecuteMap (Some v) 
+        |> treeToDict 
+        |> AsyncVal.map(fun data -> NameValueLookup.ofList["data", upcast data] :> Output)
+        |> AsyncVal.map(fun d -> printfn "Async dict %A" d;d)
+        |> AsyncVal.toAsync
+        |> Observable.ofAsync)
+    
+
+
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun input -> 
         let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
         input.ExecuteInput <- compileByType errMsg input.TypeDef)
 
-let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) =
+let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
+    objdef.Fields
+    |> Map.iter (fun _ fieldDef ->
+        executeFields fieldDef
+        fieldDef.Args
+        |> Array.iter (fun arg -> 
+            let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
+            arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+
+let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) =
     types
     |> Map.toSeq 
     |> Seq.iter (fun (tName, x) ->
         match x with
-        | Object objdef -> 
-            objdef.Fields
-            |> Map.iter (fun _ fieldDef -> 
-                fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef )
-                fieldDef.Args
-                |> Array.iter (fun arg -> 
-                    let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
-                    arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+        | SubscriptionObject subdef ->
+            compileObject subdef (fun sub ->
+                // Subscription Objects only contain subscription fields, so this cast is safe
+                let subField = (sub :?> SubscriptionFieldDef)
+                let filter = compileSubscriptionField subField
+                let subscription = { Name = subField.Name ; Filter = filter }
+                subscriptionProvider.Register subscription) 
+        | Object objdef ->
+            compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
@@ -550,10 +582,30 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         RootValue = root
         Variables = variables
         Errors = errors }
-    let dict, deferred = executeQueryOrMutation ctx executionPlan schema.Query fieldExecuteMap root 
-    let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
-    match deferred with
-    | Some d -> dict |> AsyncVal.map(fun dict' -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
-    | None -> dict |> AsyncVal.map(fun dict' -> Direct(dict', errors'))
+    let resultSet =
+        executionPlan.Fields
+        |> List.filter (fun info -> info.Include ctx.Variables)
+        |> List.map (fun info -> (info.Identifier, info))
+        |> List.toArray
+
+    let parseQuery o =
+        let dict, deferred = executeQueryOrMutation resultSet ctx o fieldExecuteMap root 
+        let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
+        match deferred with
+        | Some d -> dict |> AsyncVal.map(fun dict' -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
+        | None -> dict |> AsyncVal.map(fun dict' -> Direct(dict', errors'))
+
+    match executionPlan.Operation.OperationType with
+    | Subscription ->
+        match schema.Subscription with
+        | Some s -> 
+            AsyncVal.wrap(Stream(executeSubscription resultSet ctx s fieldExecuteMap schema.SubscriptionProvider root))
+        | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
+    | Mutation -> 
+        match schema.Mutation with
+        | Some m ->
+            parseQuery m
+        | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
+    | Query -> parseQuery schema.Query
 
 

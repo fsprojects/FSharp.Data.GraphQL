@@ -6,6 +6,10 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Collections.Generic
 open System.Collections.Concurrent
+open System.Reactive
+open System.Reactive.Subjects
+open System.Reactive.Disposables
+open System.Reactive.Linq
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
@@ -16,35 +20,9 @@ open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
 
-/// Represents a subscription as described in the schema
-type Subscription = {
-    /// The name of the subscription type in the schema
-    Name: string
-    /// A string identifier (not necessarily unique) for the subscription type
-    SubscriptionIdentifier: string
-    /// Filter function, used to determine what events we will propagate
-    /// The 1st obj is the boxed root value, the second is the boxed value of the input object
-    Filter: (ResolveFieldContext -> obj -> obj -> bool)
-}
-
-/// Configuration object for the subscription system
-/// <typeparam name="C">Type of the subscription identifier</typeparam>
-type SubscriptionProvider<'R> =
-    interface
-        /// Registers a new subscription type
-        /// Called at schema compilation time
-        abstract member Register: Subscription -> unit
-        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
-        abstract member Add : ResolveFieldContext -> 'R -> string -> string -> IObservable<obj>
-        /// Removes an active subscription when given the SubscriptionIdentifier and Identifier
-        /// Called when the associated IObservable stream is disposed of
-        abstract member Remove : string -> string -> bool
-        /// Publishes an event to the subscription system given the identifier of the subscription type
-        abstract member Publish<'T> : string -> 'T -> unit
-    end
 
 /// A configuration object fot the GraphQL server schema.
-type SchemaConfig<'R> =
+type SchemaConfig =
     { /// List of types that couldn't be resolved from schema query root 
       /// tree traversal, but should be included anyway.
       Types : NamedDef list
@@ -54,49 +32,37 @@ type SchemaConfig<'R> =
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
       ParseErrors: exn[] -> string[] 
-      SubscriptionConfig: SubscriptionProvider<'R>
+      /// Provider for the back-end of the subscription system
+      SubscriptionProvider: ISubscriptionProvider
     }
     /// Returns the default Subscription Provider, backed by Observable streams
     static member DefaultSubscriptionProvider() = 
-        let registeredSubscriptions = new Dictionary<string, Subscription * ObservableSource<obj>>()
-        // String index is the Subscription type name prepended to the ident field
-        let activeSubscriptionHandles = new Dictionary<string, IDisposable>()
-        { new SubscriptionProvider<_> with
+        let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
+        { new ISubscriptionProvider with
             member this.Register (subscription: Subscription) =
-                registeredSubscriptions.Add(subscription.SubscriptionIdentifier, (subscription, ObservableSource<obj>()))
-            member this.Add (ctx: ResolveFieldContext) (root: _) (subIdent: string) (ident: string) =
-                let stream = ObservableSource<obj>()
-                match registeredSubscriptions.TryGetValue(subIdent) with
+                registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
+            member this.Add (ctx: ResolveFieldContext) (root: obj) (name: string)  =
+                match registeredSubscriptions.TryGetValue(name) with
                 | true, (sub, channel) -> 
-                    let handle = 
-                        channel.Observable
-                        |> Observable.filter(fun o -> sub.Filter ctx (box root) o)
-                        |> Observable.subscribe(stream.Next)
-                    activeSubscriptionHandles.Add(ident, handle)
-                | false, _ -> ()
-                stream.Observable
-            member this.Remove (subIdent: string) (ident: string) =
-                match activeSubscriptionHandles.TryGetValue(subIdent + ident) with
-                | true, handle -> handle.Dispose(); true
-                | false, _ -> false
+                    channel
+                    |> Observable.filter(fun o -> sub.Filter ctx root o)
+                | false, _ -> Observable.Empty()
             member this.Publish<'T> (subIdent: string) (value: 'T) =
                 match registeredSubscriptions.TryGetValue(subIdent) with
                 | true, (sub, channel) ->
-                    channel.Next(box value)
-                | false, _ -> ()
+                    channel.OnNext(box value)
+                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent
         }
 
     static member Default() = 
-        let (config: SchemaConfig<_>) =
-            { Types = []
-              Directives = [IncludeDirective; SkipDirective; DeferDirective]
-              ParseErrors = Array.map (fun e -> e.Message)
-              SubscriptionConfig = SchemaConfig<_>.DefaultSubscriptionProvider() }
-        config
+        { Types = []
+          Directives = [IncludeDirective; SkipDirective; DeferDirective]
+          ParseErrors = Array.map (fun e -> e.Message)
+          SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig<'Root>) =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -153,7 +119,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let m = 
             mutation 
             |> function Some(Named n) -> [n] | _ -> []
-        initialTypes @ m @ schemaConfig.Types
+        let s =
+            subscription
+            |> function Some(Named n) -> [n] | _ -> []
+        initialTypes @ s @ m @ schemaConfig.Types
         |> List.fold insert Map.empty
 
     let implementations =
@@ -205,7 +174,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
-
+    let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
+        { Name = subdef.Name
+          Description = subdef.Description
+          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Type = introspectTypeRef false namedTypes subdef.InputTypeDef
+          IsDeprecated = Option.isSome subdef.DeprecationReason
+          DeprecationReason = subdef.DeprecationReason }
     let introspectEnumVal (enumVal: EnumVal) : IntrospectionEnumVal =
         { Name = enumVal.Name
           Description = enumVal.Description
@@ -228,6 +203,15 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         match typedef with
         | Scalar scalardef -> 
             IntrospectionType.Scalar(scalardef.Name, scalardef.Description)
+        | SubscriptionObject subdef ->
+            let fields =
+                subdef.Fields
+                |> Map.toArray
+                |> Array.map (snd >> instrospectSubscriptionField namedTypes)
+            let interfaces = 
+                subdef.Implements 
+                |> Array.map (fun idef -> Map.find idef.Name namedTypes)
+            IntrospectionType.Object(subdef.Name, subdef.Description, fields, interfaces)
         | Object objdef -> 
             let fields = 
                 objdef.Fields 
@@ -309,6 +293,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
+
+        member x.SubscriptionProvider = schemaConfig.SubscriptionProvider
 
     interface ISchema<'Root> with
         member x.Query = query
