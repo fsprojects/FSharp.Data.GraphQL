@@ -104,7 +104,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
-let schemaConfig = SchemaConfig.Default()
+let schemaConfig = SchemaConfig.Default
 
 let EpisodeType =
   Define.Enum(

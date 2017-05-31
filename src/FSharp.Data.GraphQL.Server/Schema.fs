@@ -54,7 +54,7 @@ type SchemaConfig =
                 | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent
         }
 
-    static member Default() = 
+    static member Default = 
         { Types = []
           Directives = [IncludeDirective; SkipDirective; DeferDirective]
           ParseErrors = Array.map (fun e -> e.Message)
@@ -114,7 +114,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         __Schema
         query]
 
-    let schemaConfig = match config with None -> SchemaConfig.Default() | Some c -> c
+    let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
     let mutable typeMap: Map<string, NamedDef> = 
         let m = 
             mutation 

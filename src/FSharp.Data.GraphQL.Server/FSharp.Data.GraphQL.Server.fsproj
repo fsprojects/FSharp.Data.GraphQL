@@ -1,10 +1,16 @@
 ﻿<Project Sdk="FSharp.NET.Sdk;Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <!--<TargetFrameworks>netstandard1.6;net45</TargetFrameworks>-->
-    <TargetFramework>netstandard1.6</TargetFramework>
+    <TargetFrameworks>netstandard1.6;net45</TargetFrameworks>
+    <!--<TargetFramework>netstandard1.6</TargetFramework>-->
+    <!--<TargetFramework>net45</TargetFramework>-->
     <PackageTargetFallback>$(PackageTargetFallback);portable-net45+win8+wp8+wpa81;</PackageTargetFallback>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+  </PropertyGroup>
+  
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>full</DebugType>
   </PropertyGroup>
 
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard1.6' ">
