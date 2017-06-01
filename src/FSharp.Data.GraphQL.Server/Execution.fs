@@ -303,15 +303,15 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-        let name, children =
+        let children =
             match value with
             | Some v ->
                 let resolvedDef = resolver v
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> resolvedDef.Name, buildObjectFields fields resolvedDef ctx fieldExecuteMap v
+                | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap v
                 | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)
-            | None -> idef.Name, AsyncVal.wrap [| |]
-        ResolverObjectNode {Name = name; Value = value; Children = children}
+            | None -> AsyncVal.wrap [| |]
+        ResolverObjectNode {Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children}
     | Union udef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
         let resolver = resolveUnionType possibleTypesFn udef
@@ -319,15 +319,15 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             match ctx.ExecutionInfo.Kind with
             | ResolveAbstraction typeMap -> typeMap
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
-        let name, children =
+        let children =
             match value with
             | Some v ->
                 let resolvedDef = resolver v
                 match Map.tryFind resolvedDef.Name typeMap with
-                | Some fields -> resolvedDef.Name, buildObjectFields fields resolvedDef ctx fieldExecuteMap (udef.ResolveValue v)
+                | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap (udef.ResolveValue v)
                 | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)
-            | None -> udef.Name, AsyncVal.wrap [| |]
-        ResolverObjectNode {Name = name; Value = value; Children = children}
+            | None -> AsyncVal.wrap [| |]
+        ResolverObjectNode {Name = ctx.ExecutionInfo.Identifier; Value = value; Children = children}
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj) =
     fields
