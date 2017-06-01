@@ -361,13 +361,15 @@ let treeToDict (tree: ResolverTree) : AsyncVal<KeyValuePair<string,obj>> =
     let nodeOp =
         fun (name:string, _ , children:AsyncVal<KeyValuePair<string,obj> []>) ->
             children
-            |> AsyncVal.map(fun c ->
-                KeyValuePair<_,_>(name, NameValueLookup(c) :> obj))
+            |> AsyncVal.map(function
+                | [||] -> KeyValuePair<_,_>(name, null)
+                | c -> KeyValuePair<_,_>(name, NameValueLookup(c) :> obj))
     let listOp =
         fun (name:string, _ , children:AsyncVal<KeyValuePair<string,obj> []>) ->
             children
-            |> AsyncVal.map(fun c ->
-                KeyValuePair<_,_>(name, c |> Array.map(fun c' -> c'.Value) :> obj))
+            |> AsyncVal.map(function
+                | [||] -> KeyValuePair<_,_>(name, null)
+                | c -> KeyValuePair<_,_>(name, c |> Array.map(fun c' -> c'.Value) :> obj))
     treeFold leafOp nodeOp listOp tree
 
 
