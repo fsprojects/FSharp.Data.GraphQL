@@ -13,7 +13,6 @@ nuget System.Runtime
 nuget FSharp.Core
 nuget FSharp.Data.GraphQL.Server
 nuget FSharp.Data.GraphQL.Client
-nuget xUnit
 
 group Build
   source https://nuget.org/api/v2
@@ -29,5 +28,5 @@ group Test
   source https://nuget.org/api/v2
   
 nuget FSCheck
-nuget xunit 1.9.2
-  nuget xUnit.runners 1.9.2
+nuget xunit 
+  nuget xUnit.runner.console
