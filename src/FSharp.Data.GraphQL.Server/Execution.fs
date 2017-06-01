@@ -475,30 +475,39 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         Args = args
                         Variables = ctx.Variables
                     } 
+
                     let rec traversePath (path: string list) (tree: AsyncVal<ResolverTree>) (pathAcc: string list): AsyncVal<(ResolverTree * string list) []> =
-                        tree 
-                        |> AsyncVal.bind(fun tree' ->
-                            match List.tail path, tree' with
-                            | [], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|] })
-                            | [p], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] })
-                            | [p;"__index"], t -> AsyncVal.ofAsync(async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] })
-                            | p, ResolverObjectNode n -> 
-                                n.Children 
-                                |> AsyncVal.bind(fun c ->
-                                    let next = c |> Array.tryFind(fun c' -> c'.Name = (List.head p))
-                                    match next with
-                                    | Some next' -> traversePath p (AsyncVal.wrap next') ((List.head p)::pathAcc)
-                                    | None -> AsyncVal.empty)
-                            | p, ResolverListNode l ->
-                                l.Children 
-                                |> AsyncVal.bind(fun c ->
-                                    c
-                                    |> Array.mapi(fun i c' -> 
-                                        traversePath p (AsyncVal.wrap c') (i.ToString()::pathAcc)
-                                    )
-                                    |> AsyncVal.collectParallel
-                                    |> AsyncVal.map(Array.fold (Array.append) [||]))
-                            | _ ,_ -> raise <| GraphQLException("Deferred path terminated unexpectedly!"))
+                        asyncVal {
+                            let! tree' = tree
+                            let! res = 
+                                match List.tail path, tree' with
+                                | [], t -> asyncVal { return! async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev ((List.head path)::pathAcc)|] } }
+                                | [p], t -> asyncVal { return! async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] } }
+                                | [p;"__index"], t -> asyncVal { return! async { return [|buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value, List.rev(p::pathAcc)|] } }
+                                | p, ResolverObjectNode n -> 
+                                    asyncVal {
+                                        let! children = n.Children 
+                                        let next = children |> Array.tryFind(fun c' -> c'.Name = (List.head p))
+                                        let! res =
+                                            match next with
+                                            | Some next' -> traversePath p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                                            | None -> AsyncVal.empty
+                                        return res
+                                    }
+                                | p, ResolverListNode l ->
+                                    asyncVal {
+                                        let! children = l.Children
+                                        let! res =
+                                            children
+                                            |> Array.mapi(fun i c -> 
+                                                traversePath p (AsyncVal.wrap c) (i.ToString()::pathAcc))
+                                            |> AsyncVal.collectParallel
+                                        return res |> Array.fold (Array.append) [||]
+                                    }
+                                | _ ,_ -> raise <| GraphQLException("Deferred path terminated unexpectedly!")
+                            return res
+                        }
+
                     traversePath path (AsyncVal.wrap tree) [(List.head path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
