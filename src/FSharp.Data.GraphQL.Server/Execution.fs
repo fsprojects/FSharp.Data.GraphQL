@@ -503,7 +503,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
                             let! tree' = treeToDict tree
-                            return NameValueLookup.ofList["data", upcast tree'; "path", upcast path]
+                            return NameValueLookup.ofList["data", tree'.Value; "path", upcast path]
                         }) >> AsyncVal.collectParallel))
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map(Array.fold (Array.append) [||])))
