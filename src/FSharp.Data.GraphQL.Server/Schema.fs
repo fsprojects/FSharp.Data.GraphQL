@@ -80,16 +80,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 |> Map.toArray
                 |> Array.map snd
                 |> Array.collect (fun x -> Array.append [| x.TypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
-                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-                |> Array.fold (fun n (Named t) -> insert n t) ns'
+                |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
+                |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+                |> Array.fold (insert) ns'
             objdef.Implements
             |> Array.fold insert withFields'
         | Interface interfacedef ->
             let ns' = addOrReturn typedef.Name typedef ns
             interfacedef.Fields
-            |> Array.map (fun x -> x.TypeDef)
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'    
+            |> Array.map (fun x -> match x.TypeDef with | Named n -> n | _ -> failwith "Expected a Named type!")
+            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (insert) ns'    
         | Union uniondef ->
             let ns' = addOrReturn typedef.Name typedef ns
             uniondef.Options
@@ -100,8 +101,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
             |> Array.collect (fun x -> [| x.TypeDef :> TypeDef |])
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'
+            |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
+            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (insert) ns'
+        | _ -> failwith "Unexpected type!"
         
     let initialTypes: NamedDef list = [ 
         Int
