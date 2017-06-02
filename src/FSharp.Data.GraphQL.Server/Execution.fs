@@ -295,8 +295,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 let tree = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
                 if (not innerCtx.ExecutionInfo.IsNullable) && isNull value
                 then [| |]
-                else build (Array.append acc [| tree |]) xs
-            | [] -> acc
+                else build (tree::acc) xs
+            | [] -> acc |> List.rev |> List.toArray
 
         let children =
             match value with
@@ -304,7 +304,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 enumerable
                 |> Seq.cast<obj>
                 |> Seq.toList
-                |> build [| |]
+                |> build []
             | None -> [| |]
             | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
         
@@ -365,10 +365,10 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
                     // Make sure to propagate null values
                     if (not fieldCtx.ExecutionInfo.IsNullable) && value.IsNone
                     then asyncVal { return [| |] }
-                    else build (Array.append acc [| tree |]) xs
+                    else build (tree::acc) xs
             }
-        | [] -> asyncVal { return acc } 
-    let children = build [||] fields
+        | [] -> asyncVal { return acc |> List.rev |> List.toArray } 
+    let children = build [] fields 
     // Propagate nulls
     let value' = asyncVal {
         let! c = children
