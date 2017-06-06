@@ -31,7 +31,7 @@ type SchemaConfig =
       /// Function called, when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseErrors: exn[] -> string[] 
+      ParseError: exn -> string
       /// Provider for the back-end of the subscription system
       SubscriptionProvider: ISubscriptionProvider
     }
@@ -57,7 +57,7 @@ type SchemaConfig =
     static member Default = 
         { Types = []
           Directives = [IncludeDirective; SkipDirective; DeferDirective]
-          ParseErrors = Array.map (fun e -> e.Message)
+          ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 
 
@@ -291,7 +291,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member x.Subscription = subscription |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
-        member x.ParseErrors exns = schemaConfig.ParseErrors exns
+        member x.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false

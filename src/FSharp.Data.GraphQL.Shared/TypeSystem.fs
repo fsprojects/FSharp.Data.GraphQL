@@ -341,7 +341,7 @@ and ISchema =
         /// Returns an introspected representation of current schema.
         abstract Introspected : Introspection.IntrospectionSchema
 
-        abstract ParseErrors : exn[] -> string[]
+        abstract ParseError : exn -> string
 
         abstract SubscriptionProvider: ISubscriptionProvider
 

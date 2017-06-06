@@ -419,7 +419,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
             |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = e.Message; PathToOrigin = []}) 
+            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []}) 
             |> AsyncVal.bind(fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
@@ -482,7 +482,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let res = execute fieldCtx value
             res 
             |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = "Critical Error!"; Message = e.Message + "\r\n" + e.StackTrace; PathToOrigin = []}))
 
     let dict = 
         asyncVal {

@@ -57,7 +57,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return Direct(new Dictionary<string, obj>() :> Output, [msg, []])
+                return prepareOutput Direct(new Dictionary<string, obj>() :> Output, [msg, []])
         }
     
     /// <summary>
