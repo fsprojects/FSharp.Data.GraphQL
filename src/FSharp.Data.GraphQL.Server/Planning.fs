@@ -263,7 +263,6 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
 
                 // filter out already existing fields
                 Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
-            | _ -> fields, deferredFields
         ) (Map.empty, deferredFields)
     { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 

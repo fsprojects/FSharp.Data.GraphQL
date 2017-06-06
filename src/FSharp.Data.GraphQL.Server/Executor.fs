@@ -36,15 +36,12 @@ type Executor<'Root> (schema: ISchema<'Root>) =
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
-        // let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) (deferred: IObservable<NameValueLookup> option) =
-        //     let errors' = errors.ToArray() |> schema.ParseErrors |> Array.toList
-        //     match errors.IsEmpty, deferred with
-        //     | true, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [])
-        //     | false, None -> Direct(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ; "errors", upcast errors'], errors')
-        //     | true, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result ], [], d |> Observable.map(fun d' -> upcast d')) 
-        //     | false, Some d -> Deferred(NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast result; "errors", upcast errors' ], errors' , d |> Observable.map(fun d' -> upcast d'))
         let prepareOutput res = 
-            let prepareData data = function
+            let prepareData data (errs: Error list) = 
+                let parsedErrors =
+                    errs
+                    |> List.map(fun (message, path) -> NameValueLookup.ofList [ "message", upcast message; "path", upcast path])
+                match parsedErrors with
                 | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
                 | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
             match res with
@@ -60,7 +57,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return Direct(new Dictionary<string, obj>() :> Output, [msg])
+                return Direct(new Dictionary<string, obj>() :> Output, [msg, []])
         }
     
     /// <summary>

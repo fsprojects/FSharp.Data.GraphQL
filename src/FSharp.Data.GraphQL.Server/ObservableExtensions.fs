@@ -10,8 +10,7 @@ module internal Observable =
 
     let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
 
-    let ofSeq<'Item>(items:'Item seq) : IObservable<'Item> =
-    {   
+    let ofSeq<'Item>(items:'Item seq) : IObservable<'Item> = {   
         new IObservable<_> with
             member __.Subscribe( observer:IObserver<_> ) =
                 for item in items do observer.OnNext item      
