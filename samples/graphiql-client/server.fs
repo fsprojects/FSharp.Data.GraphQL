@@ -143,6 +143,10 @@ and HumanType : ObjectDef<Human> =
                 |> List.map getCharacter 
                 |> List.toSeq)
         Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
+        Define.Field("justFuckMyShitUp", String, "Failure Guarunteed!", fun _ h -> failwith "Why did you call me???")
+        Define.Field("justFuckMyListUp", ListOf String, "List with nulls, oh my!", fun _ h -> ["1";"2";null] )
+        Define.Field("justFuckMyObjectUp", HumanType, "A null human, how scary!", fun _ h -> failwith "You adopted the null... I was born into it, molded by it")
+        Define.Field("bigGuy", DroidType, "OF COURSE", fun _ h -> {Id = null; Name =  Some "Bane"; Friends = []; AppearsIn = []; PrimaryFunction = Some "Crashing this code... with no survivors"; })
         Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet) ])
         
 and DroidType =

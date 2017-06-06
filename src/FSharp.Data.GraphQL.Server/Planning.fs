@@ -172,7 +172,7 @@ let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage
         { inner with IsNullable = true}, deferredFields', path'
     | List returnDef -> 
         // We dont yet know the indicies of our elements so we append a dummy value on
-        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, "__index"::info.Identifier::path)
+        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; Identifier = "__index" }, deferredFields, "__index"::info.Identifier::path)
         { info with Kind = ResolveCollection inner }, deferredFields', path'
     | Abstract _ -> planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, path) (ref []) None 
     | _ -> failwith "Invalid Return Type in Planning!"

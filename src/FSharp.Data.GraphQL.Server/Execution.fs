@@ -262,7 +262,7 @@ type ResolverTree =
 
 
 and ResolverLeaf = { Name: string; Value: obj option; }
-and ResolverError = { Name: string; Message: string; }
+and ResolverError = { Name: string; Message: string; PathToOrigin: string list; }
 and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree []; }
 
 module ResolverTree = 
@@ -286,9 +286,11 @@ module ResolverTree =
             | ResolverLeaf leaf ->
                 leafOp (leaf.Name::path) leaf
             | ResolverError err ->
-                errorOp (err.Name::path) err
+                let origin = (err.PathToOrigin |> List.rev)
+                let path' = if err.Name <> "__index" then origin@(err.Name::path) else origin@path
+                errorOp path' err
             | ResolverObjectNode node ->
-                let path' = node.Name::path
+                let path' = if node.Name <> "__index" then node.Name::path else path
                 let ts = node.Children |> Array.map(helper path') 
                 nodeOp path' node.Name node.Value ts
             | ResolverListNode node ->
@@ -297,7 +299,7 @@ module ResolverTree =
                 listOp path' node.Name node.Value ts
         helper [] 
 
-let treeToDict =
+let private treeToDict =
     ResolverTree.pathFold 
         (fun path leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
         (fun path error -> 
@@ -310,8 +312,8 @@ let treeToDict =
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
             KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors)
 
-let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; } }
-let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message} }
+let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
+let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = err.Name::err.PathToOrigin} }
 
 /// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
@@ -415,18 +417,14 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
         | info::xs ->
             let fieldCtx = createFieldContext objdef ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
-            asyncVal {
-                let! res = resolveField execute fieldCtx value
-                let! tree = (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap res) |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = e.Message; }) 
-                return!
-                    if not info.IsNullable && tree.Value.IsNone 
-                    then 
-                        asyncVal { return ResolverError { Name = name; Message = sprintf "Non-Null field %s resolved as a null!" info.Identifier}} 
-                    else 
-                        match tree with
-                        | ResolverError e when not ctx.ExecutionInfo.IsNullable -> propagateError name e
-                        | t -> build (t::acc) xs
-            }
+            resolveField execute fieldCtx value
+            |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
+            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = e.Message; PathToOrigin = []}) 
+            |> AsyncVal.bind(fun tree ->
+                match tree with
+                | ResolverError e when not info.IsNullable -> propagateError name e
+                | t when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = sprintf "Non-Null field %s resolved as a null!" info.Identifier; PathToOrigin = [info.Identifier]}} 
+                | t -> build (t::acc) xs)
         | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
 
@@ -443,42 +441,18 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
     | Resolve.BoxedSync(_, _, resolve) ->
         fun resolveFieldCtx value ->
             try
-                let res = resolve resolveFieldCtx value
-                if isNull res
-                then AsyncVal.empty
-                else AsyncVal.wrap res
-            with
-            | :? AggregateException as e ->
-                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
-                AsyncVal.empty
-            | ex -> 
-                resolveFieldCtx.AddError ex
-                AsyncVal.empty
+                resolve resolveFieldCtx value
+                |> AsyncVal.wrap
+            with e -> AsyncVal.Failure(e)
 
     | Resolve.BoxedAsync(_, _, resolve) ->
         fun resolveFieldCtx value -> 
-            try
-                resolve resolveFieldCtx value
-                |> AsyncVal.ofAsync
-            with
-            | :? AggregateException as e ->
-                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
-                AsyncVal.empty
-            | ex -> 
-                resolveFieldCtx.AddError(ex)
-                AsyncVal.empty
-
+            asyncVal {
+                return! resolve resolveFieldCtx value
+            }
     | Resolve.BoxedExpr (resolve) ->
         fun resolveFieldCtx value -> 
-            try
-                downcast resolve resolveFieldCtx value
-            with
-            | :? AggregateException as e ->
-                e.InnerExceptions |> Seq.iter (resolveFieldCtx.AddError)
-                AsyncVal.empty
-            | ex -> 
-                resolveFieldCtx.AddError(ex)
-                AsyncVal.empty
+            downcast resolve resolveFieldCtx value
     | _ -> 
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
@@ -507,7 +481,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             let res = execute fieldCtx value
             res 
-            |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r)))
+            |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
+            |> AsyncVal.rescue(fun e -> ResolverError{ Name = "Critical Error!"; Message = e.Message + "\r\n" + e.StackTrace; PathToOrigin = []}))
 
     let dict = 
         asyncVal {
