@@ -307,10 +307,14 @@ let private treeToDict =
             KeyValuePair<_,_>(error.Name, null :> obj), [e])
         (fun path name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
-            KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors)
+            match value with
+            | Some v -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
+            | None -> KeyValuePair<_,_>(name, null), errors)
         (fun path name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
-            KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors)
+            match value with
+            | Some v -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
+            | None -> KeyValuePair<_,_>(name, null), errors)
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = err.Name::err.PathToOrigin} }
@@ -479,9 +483,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                   Args = args
                   Variables = ctx.Variables } 
             let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-            let res = execute fieldCtx value
-            res 
+            execute fieldCtx value
             |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
+            |> AsyncVal.rescue(fun e -> ResolverError{ Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []}))
 
     let dict = 
         asyncVal {
@@ -494,7 +498,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 |> Array.fold(fun (kvps, errs) (tree) ->
                     let k, e = treeToDict tree
                     k::kvps, e@errs) ([],[])
-            return NameValueLookup(dicts |> List.rev |> List.toArray), errors
+            return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
 
     let deferredResults =

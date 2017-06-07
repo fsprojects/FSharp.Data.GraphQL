@@ -36,7 +36,13 @@ let ``Object type should be able to merge fields with matching signatures from d
 
 [<Fact>]
 let ``Schema config should be able to override default error handling`` () =
-    let conf = { SchemaConfig.Default with ParseErrors = Array.mapi (fun idx _ -> string idx) }
+    let mutable idx = 0
+    let conf = 
+        { SchemaConfig.Default with 
+            ParseError = (fun e ->
+                let i = idx
+                idx <- idx + 1
+                i.ToString())}
     let TestType = 
         Define.Object<obj>("TestType", [
             Define.Field("passing", String, fun _ _ -> "ok")
@@ -62,5 +68,5 @@ let ``Schema config should be able to override default error handling`` () =
     match actual with
     | Direct(data, errors) ->
       data.["data"] |> equals (upcast expected)
-      errors |> equals ["0"; "1"]
+      errors |> equals ["0", ["test"; "failing1"]; "1", ["test"; "failing2"]]
     | _ -> fail "Expected Direct GQResponse"

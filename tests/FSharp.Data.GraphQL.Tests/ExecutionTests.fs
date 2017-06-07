@@ -26,7 +26,7 @@ type TestSubject = {
 and DeepTestSubject = {
     a: string
     b: string
-    c: string list
+    c: string option list
 }
 
 [<Fact>]
@@ -47,7 +47,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         {
             a = "Already Been Done"
             b = "Boring"
-            c = ["Contrived"; null; "Confusing"]
+            c = [Some "Contrived"; None; Some "Confusing"]
         }
 
     let ast = parse """query Example($size: Int) {
@@ -96,7 +96,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             "DeepDataType", [
                 Define.Field("a", String, (fun _ dt -> dt.a))
                 Define.Field("b", String, (fun _ dt -> dt.b))
-                Define.Field("c", (ListOf String), (fun _ dt -> dt.c))
+                Define.Field("c", (ListOf (Nullable String)), (fun _ dt -> dt.c))
             ])
     let rec DataType =
       Define.Object<TestSubject>(

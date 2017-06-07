@@ -115,6 +115,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 
     match mutationResult with
     | Direct(data, errors) ->
+      printfn "Mutation errors: %A" errors
       data.["data"] |> equals (upcast expected)
       List.length errors |> equals 2 
     | _ -> fail "Expected Direct GQResponse"
