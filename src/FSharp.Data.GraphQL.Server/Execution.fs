@@ -351,7 +351,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan}
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind 
 
-        let rec build acc = function
+        let rec build acc (items: obj list) = 
+            match items with
             | value::xs ->
                     if not innerCtx.ExecutionInfo.IsNullable && isNull value
                     then nullResolverError innerCtx.ExecutionInfo.Identifier
@@ -391,7 +392,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let resolvedDef = resolver v
             match Map.tryFind resolvedDef.Name typeMap with
             | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap name v
-            | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)
+            | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)); PathToOrigin = [] } }
         | None -> 
             if ctx.ExecutionInfo.IsNullable 
             then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } } 
@@ -407,8 +408,14 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
         | Some v ->
             let resolvedDef = resolver v
             match Map.tryFind resolvedDef.Name typeMap with
-            | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap name (udef.ResolveValue v)
-            | None -> raise <| GraphQLException (sprintf "GraphQL interface '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)
+            | Some fields -> 
+                // Make sure to propagate the original union type to the object node
+                buildObjectFields fields resolvedDef ctx fieldExecuteMap name (udef.ResolveValue v)
+                |> AsyncVal.map(fun tree -> 
+                    match tree with
+                    | ResolverObjectNode node ->  ResolverObjectNode { node with Value = value }
+                    | t -> t)
+            | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)); PathToOrigin = [] } }
         | None -> 
             if ctx.ExecutionInfo.IsNullable 
             then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } } 
@@ -427,7 +434,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             |> AsyncVal.bind(fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
-                | t when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = sprintf "Non-Null field %s resolved as a null!" info.Identifier; PathToOrigin = [info.Identifier]}} 
+                | t when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
                 | t -> build (t::acc) xs)
         | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields

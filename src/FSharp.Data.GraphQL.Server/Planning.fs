@@ -240,7 +240,10 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                     f.Add(k, [f']), d', p'
                 let infoMap, deferredFields', path' = Map.fold (foldPlan) (Map.empty, deferredFields, []) a  
                 if isDeferredField field
-                then fields, {Info = { innerData with Kind = ResolveAbstraction infoMap}; Path = path'}::deferredFields'
+                then 
+                    printfn "Abstraction Info Keys: %A" (a |> Map.toSeq |> Seq.map fst)
+                    printfn "InfoMap Keys: %A" (infoMap |> Map.toSeq |> Seq.map fst)
+                    fields, {Info = { innerData with Kind = ResolveAbstraction infoMap}; Path = path'}::deferredFields'
                 else Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields infoMap, deferredFields'
             | FragmentSpread spread ->
                 let spreadName = spread.Name
