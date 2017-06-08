@@ -4,6 +4,7 @@
     <TargetFramework>net46</TargetFramework>
     <PackageTargetFallback>$(PackageTargetFallback);portable-net45+win8+wp8+wpa81;</PackageTargetFallback>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <NoWarn>;58;</NoWarn>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp1.1'">
     <!-- Dotnet core tests expect an EXE -->
@@ -19,6 +20,7 @@
     <Compile Include="Relay\ConnectionTests.fs" />
     <Compile Include="Relay\MutationTests.fs" />
     <Compile Include="AbstractionTests.fs" />
+    <Compile Include="DeferredTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="ValidationTests.fs" />
     <Compile Include="ParserTests.fs" />

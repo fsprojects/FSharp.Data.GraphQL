@@ -48,7 +48,7 @@ let ``AsyncVal computation allows to bind another AsyncVal`` () =
     
 [<Fact>]
 let ``AsyncVal computation defines zero value`` () =
-    let v = asyncVal { printf "aa" }
+    let v = AsyncVal.empty
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
     
