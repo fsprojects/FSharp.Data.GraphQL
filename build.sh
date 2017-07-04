@@ -66,7 +66,7 @@ then
   run $PAKET_BOOTSTRAPPER_EXE
 fi
 
-run $PAKET_EXE restore
+run $PAKET_EXE install
 echo "==========[MSBUILD RESTORE]=========="
 /usr/bin/msbuild /t:restore
 echo "==========[END MSBUILD RESTORE]=========="
