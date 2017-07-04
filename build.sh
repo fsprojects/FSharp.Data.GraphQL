@@ -66,10 +66,10 @@ then
   run $PAKET_BOOTSTRAPPER_EXE
 fi
 
-echo "==========[LOOK HERE]=========="
-/usr/bin/msbuild /t:restore
-echo "==========[LOOK HERE]=========="
 run $PAKET_EXE restore
+echo "==========[MSBUILD RESTORE]=========="
+/usr/bin/msbuild /t:restore
+echo "==========[END MSBUILD RESTORE]=========="
 
 [ ! -e build.fsx ] && run $PAKET_EXE update
 [ ! -e build.fsx ] && run $FAKE_EXE init.fsx
