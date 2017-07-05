@@ -28,7 +28,7 @@ let authors = [ "Bazinga Technologies Inc" ]
 let copyright = "Copyright (c) 2016 Bazinga Technologies Inc"
 let tags = "FSharp GraphQL Relay React"
 let solutionFile  = "FSharp.Data.GraphQL.sln"
-let testAssemblies = "tests/**/bin/Release/*Tests*.dll"
+let testAssemblies = "tests/**/bin/Release/**/*Tests*.dll"
 let gitOwner = "bazingatechnologies"
 let gitHome = "https://github.com/" + gitOwner
 let gitName = "FSharp.Data.GraphQL"
@@ -207,7 +207,7 @@ Target "Build" (fun _ ->
 
 Target "RunTests" (fun _ ->
     !! testAssemblies
-    |> xUnit (fun p ->
+    |> xUnit2 (fun p ->
         { p with
             ShadowCopy = false
             HtmlOutputPath = Some "TestResults.html"
