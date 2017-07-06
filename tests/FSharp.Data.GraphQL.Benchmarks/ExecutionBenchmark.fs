@@ -59,8 +59,9 @@ let Query =
                          fun ctx () -> getPerson (ctx.Arg("id"))) ])
 
 open BenchmarkDotNet.Attributes
+open BenchmarkDotNet.Running
 
-[<Config(typeof<GraphQLBenchConfig>)>]
+[<Config(typeof<GraphQLBenchConfig>); Jobs.MonoJob; Jobs.CoreJob>]
 type SimpleExecutionBenchmark() = 
     let simpleQueryString = """{ 
         hero(id: "1000") { 
