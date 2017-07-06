@@ -27,6 +27,6 @@ group Build
 group Test
   source https://nuget.org/api/v2
   
-nuget FSCheck
-nuget xunit 
+  nuget FSCheck
+  nuget xunit 
   nuget xUnit.runner.console

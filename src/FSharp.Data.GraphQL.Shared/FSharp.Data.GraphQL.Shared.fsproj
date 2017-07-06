@@ -3,6 +3,7 @@
     <TargetFrameworks>net45;netstandard1.6</TargetFrameworks>
     <!--<TargetFramework>netstandard1.6</TargetFramework>-->
     <!--<TargetFramework>net45</TargetFramework>-->
+    <TargetFrameworks>netstandard1.6;net45</TargetFrameworks>
     <PackageTargetFallback>$(PackageTargetFallback);portable-net45+win8+wp8+wpa81;</PackageTargetFallback>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
@@ -26,4 +27,6 @@
     <PackageReference Include="FSharp.Core" Version="4.1.*" />
     <PackageReference Include="FParsec" Version="1.0.*" />
   </ItemGroup>
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
