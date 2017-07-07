@@ -58,8 +58,11 @@ let ``Core type definitions are considered nullable`` () =
             "kind", upcast "SCALAR"
             "name", upcast "String"
             "ofType", null]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
 
 type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
@@ -118,8 +121,11 @@ let ``Default field type definitions are considered non-null`` () =
                             "kind", upcast "SCALAR"
                             "name", upcast "String"
                             "ofType", null]]]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
@@ -157,8 +163,11 @@ let ``Nullabe field type definitions are considered nullable`` () =
                         "kind", upcast "SCALAR"
                         "name", upcast "String"
                         "ofType", null]]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected) 
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
@@ -203,8 +212,11 @@ let ``Default field args type definitions are considered non-null`` () =
                                     "kind", upcast "SCALAR"
                                     "name", upcast "Int"
                                     "ofType", null]]]]]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected) 
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
@@ -246,8 +258,11 @@ let ``Nullable field args type definitions are considered nullable`` () =
                                 "kind", upcast "SCALAR"
                                 "name", upcast "Int"
                                 "ofType", null ]]]]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected) 
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "Investigate and fix the test, introspeciton is already working")>]
 let ``Introspection executes an introspection query`` () =
@@ -255,7 +270,6 @@ let ``Introspection executes an introspection query`` () =
     let schema = Schema(root)
     let (Patterns.Object raw) = root
     let result = sync <| Executor(schema).AsyncExecute(parse Introspection.introspectionQuery, raw)
-    noErrors result
     let expected =
       NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [
@@ -877,5 +891,8 @@ let ``Introspection executes an introspection query`` () =
                                                       "kind", upcast "SCALAR"
                                                       "name", upcast "Boolean"
                                                       "ofType", null]]];]];]]]
-
-    result.["data"]|> equals (upcast expected)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"

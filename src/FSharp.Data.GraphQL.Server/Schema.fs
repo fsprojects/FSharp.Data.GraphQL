@@ -5,6 +5,11 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
+open System.Collections.Concurrent
+open System.Reactive
+open System.Reactive.Subjects
+open System.Reactive.Disposables
+open System.Reactive.Linq
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
@@ -13,6 +18,8 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
+
+
 
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
@@ -24,15 +31,38 @@ type SchemaConfig =
       /// Function called, when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseErrors: exn[] -> string[] }
-    /// Returns a default schema configuration.
+      ParseError: exn -> string
+      /// Provider for the back-end of the subscription system
+      SubscriptionProvider: ISubscriptionProvider
+    }
+    /// Returns the default Subscription Provider, backed by Observable streams
+    static member DefaultSubscriptionProvider() = 
+        let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
+        { new ISubscriptionProvider with
+            member this.Register (subscription: Subscription) =
+                registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
+            member this.Add (ctx: ResolveFieldContext) (root: obj) (name: string)  =
+                match registeredSubscriptions.TryGetValue(name) with
+                | true, (sub, channel) -> 
+                    channel
+                    |> Observable.filter(fun o -> sub.Filter ctx root o)
+                | false, _ -> Observable.Empty()
+            member this.Publish<'T> (subIdent: string) (value: 'T) =
+                match registeredSubscriptions.TryGetValue(subIdent) with
+                | true, (sub, channel) ->
+                    channel.OnNext(box value)
+                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent
+        }
+
     static member Default = 
         { Types = []
-          Directives = [IncludeDirective; SkipDirective]
-          ParseErrors = Array.map (fun e -> e.Message) }
+          Directives = [IncludeDirective; SkipDirective; DeferDirective]
+          ParseError = fun e -> e.Message
+          SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
+
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
-type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: ObjectDef<'Root>, ?config: SchemaConfig) =
+type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
 
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
@@ -50,16 +80,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 |> Map.toArray
                 |> Array.map snd
                 |> Array.collect (fun x -> Array.append [| x.TypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
-                |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-                |> Array.fold (fun n (Named t) -> insert n t) ns'
+                |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
+                |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+                |> Array.fold (insert) ns'
             objdef.Implements
             |> Array.fold insert withFields'
         | Interface interfacedef ->
             let ns' = addOrReturn typedef.Name typedef ns
             interfacedef.Fields
-            |> Array.map (fun x -> x.TypeDef)
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'    
+            |> Array.map (fun x -> match x.TypeDef with | Named n -> n | _ -> failwith "Expected a Named type!")
+            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (insert) ns'    
         | Union uniondef ->
             let ns' = addOrReturn typedef.Name typedef ns
             uniondef.Options
@@ -70,8 +101,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             let ns' = addOrReturn objdef.Name typedef ns
             objdef.Fields
             |> Array.collect (fun x -> [| x.TypeDef :> TypeDef |])
-            |> Array.filter (fun (Named x) -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (fun n (Named t) -> insert n t) ns'
+            |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
+            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
+            |> Array.fold (insert) ns'
+        | _ -> failwith "Unexpected type!"
         
     let initialTypes: NamedDef list = [ 
         Int
@@ -89,7 +122,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let m = 
             mutation 
             |> function Some(Named n) -> [n] | _ -> []
-        initialTypes @ m @ schemaConfig.Types
+        let s =
+            subscription
+            |> function Some(Named n) -> [n] | _ -> []
+        initialTypes @ s @ m @ schemaConfig.Types
         |> List.fold insert Map.empty
 
     let implementations =
@@ -141,7 +177,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
-
+    let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
+        { Name = subdef.Name
+          Description = subdef.Description
+          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Type = introspectTypeRef false namedTypes subdef.InputTypeDef
+          IsDeprecated = Option.isSome subdef.DeprecationReason
+          DeprecationReason = subdef.DeprecationReason }
     let introspectEnumVal (enumVal: EnumVal) : IntrospectionEnumVal =
         { Name = enumVal.Name
           Description = enumVal.Description
@@ -164,6 +206,15 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         match typedef with
         | Scalar scalardef -> 
             IntrospectionType.Scalar(scalardef.Name, scalardef.Description)
+        | SubscriptionObject subdef ->
+            let fields =
+                subdef.Fields
+                |> Map.toArray
+                |> Array.map (snd >> instrospectSubscriptionField namedTypes)
+            let interfaces = 
+                subdef.Implements 
+                |> Array.map (fun idef -> Map.find idef.Name namedTypes)
+            IntrospectionType.Object(subdef.Name, subdef.Description, fields, interfaces)
         | Object objdef -> 
             let fields = 
                 objdef.Fields 
@@ -240,11 +291,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member x.Subscription = subscription |> Option.map (fun x -> upcast x)
         member x.TryFindType typeName = Map.tryFind typeName typeMap
         member x.GetPossibleTypes typedef = getPossibleTypes typedef
-        member x.ParseErrors exns = schemaConfig.ParseErrors exns
+        member x.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
+
+        member x.SubscriptionProvider = schemaConfig.SubscriptionProvider
 
     interface ISchema<'Root> with
         member x.Query = query

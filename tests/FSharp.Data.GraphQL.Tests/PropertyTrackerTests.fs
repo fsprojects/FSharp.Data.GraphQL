@@ -92,8 +92,8 @@ let ``Property tracker can track indirect properties`` () =
     let info = plan.["people"]
     let expected = 
         Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList [
-            Direct(track "FirstName" typeof<Person> typeof<string>, [])
-            Direct(track "LastName" typeof<Person> typeof<string>, []) ])
+            Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, [])
+            Tracker.Direct(track "LastName" typeof<Person> typeof<string>, []) ])
     let actual = tracker Map.empty info
     actual |> equals expected
 
@@ -117,8 +117,8 @@ let ``Property tracker can correctly jump over properties not being part of the 
     let info = plan.["people"]
     let expected = 
         Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList [
-            Direct(track "Id" typeof<Person> typeof<int>, [])
+            Tracker.Direct(track "Id" typeof<Person> typeof<int>, [])
             Compose(track "Friends" typeof<Person> typeof<Person list>, [], Set.ofList [
-                Direct(track "FirstName" typeof<Person> typeof<string>, []) ]) ])
+                Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, []) ]) ])
     let actual = tracker Map.empty info
     actual |> equals expected

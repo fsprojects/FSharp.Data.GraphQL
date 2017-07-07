@@ -60,7 +60,11 @@ let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field,
         { Identifier = field.AliasOrName
           Kind = ResolveValue
           ParentDef = parentDef
-          ReturnDef = fdef.TypeDef
+          ReturnDef = 
+            match parentDef with
+            | SubscriptionObject _ -> (fdef :?> SubscriptionFieldDef).InputTypeDef
+            | Object _ -> fdef.TypeDef
+            | _ -> raise (GraphQLException (sprintf "Unexpected parentdef type!"))
           Definition = fdef
           Ast = field
           Include = includer 
@@ -142,24 +146,43 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some conditionalType when conditionalType.Name = objectType.Name -> true
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
-                
-let rec private plan (ctx: PlanningContext) (info) : ExecutionInfo =
-    match info.ReturnDef with
-    | Leaf _ -> info
-    | Object _ -> planSelection ctx info info.Ast.SelectionSet (ref [])
-    | Nullable returnDef -> 
-        let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }
-        { inner with IsNullable = true}
-    | List returnDef -> 
-        let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }
-        { info with Kind = ResolveCollection inner }
-    | Abstract _ -> planAbstraction ctx info info.Ast.SelectionSet (ref []) None
 
-and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection list) visitedFragments : ExecutionInfo = 
+let private isDeferredField (field: Field): bool =
+    field.Directives |> List.exists(fun d -> d.Name = "defer")
+                
+type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * string list
+
+let private getSelectionFrag = function
+    | SelectFields(fragmentFields) -> fragmentFields
+    | _ -> failwith "Expected a Selection!"
+
+let private getAbstractionFrag = function
+    | ResolveAbstraction(fragmentFields) -> fragmentFields
+    | _ -> failwith "Expected an Abstraction!"
+
+
+let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage =
+    let info, deferredFields, path = stage
+    match info.ReturnDef with
+    | Leaf _ -> info, deferredFields, info.Identifier::path
+    | SubscriptionObject _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
+    | Object _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
+    | Nullable returnDef -> 
+        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)
+        { inner with IsNullable = true}, deferredFields', path'
+    | List returnDef -> 
+        // We dont yet know the indicies of our elements so we append a dummy value on
+        let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; Identifier = "__index" }, deferredFields, "__index"::info.Identifier::path)
+        { info with Kind = ResolveCollection inner }, deferredFields', path'
+    | Abstract _ -> planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, path) (ref []) None 
+    | _ -> failwith "Invalid Return Type in Planning!"
+
+and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (stage: PlanningStage) visitedFragments : PlanningStage = 
+    let info, deferredFields, path = stage
     let parentDef = downcast info.ReturnDef
-    let plannedFields =
+    let plannedFields, deferredFields' =
         selectionSet
-        |> List.fold(fun (fields: ExecutionInfo list) selection ->
+        |> List.fold(fun (fields: ExecutionInfo list, deferredFields: DeferredExecutionInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives info.Include
             let updatedInfo = { info with Include = includer }
@@ -167,69 +190,84 @@ and private planSelection (ctx: PlanningContext) (info) (selectionSet: Selection
             | Field field ->
                 let identifier = field.AliasOrName
                 if fields |> List.exists (fun f -> f.Identifier = identifier) 
-                then fields
+                then fields, deferredFields
                 else 
                     let innerInfo = objectInfo(ctx, parentDef, field, includer)
-                    let executionPlan = plan ctx innerInfo 
-                    fields @ [executionPlan]    // unfortunatelly, order matters here
+                    let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
+                    if isDeferredField field
+                    then (fields, {Info = {info with Kind = SelectFields [executionPlan]}; Path = path'}::deferredFields')
+                    else (fields @ [executionPlan], deferredFields')    // unfortunatelly, order matters here
+                    
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
-                then fields  // fragment already found
+                then fields, deferredFields  // fragment already found
                 else
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
-                        let fragmentInfo = planSelection ctx updatedInfo fragment.SelectionSet visitedFragments
-                        let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                        // TODO: Check if the path is correctly defined
+                        let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
+                        let fragmentFields = getSelectionFrag fragmentInfo.Kind
                         // filter out already existing fields
-                        List.mergeBy (fun field -> field.Identifier) fields fragmentFields
-                    | _ -> fields
+                        List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
+                    | _ -> fields, deferredFields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo = planSelection ctx updatedInfo fragment.SelectionSet visitedFragments
-                 let (SelectFields(fragmentFields)) = fragmentInfo.Kind
+                 let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
+                 let fragmentFields = getSelectionFrag fragmentInfo.Kind
+
                  // filter out already existing fields
-                 List.mergeBy (fun field -> field.Identifier) fields fragmentFields
-            | _ -> fields
-        ) []
-    { info with Kind = SelectFields plannedFields }
+                 List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
+            | _ -> fields, deferredFields
+        ) ([],deferredFields)
+    { info with Kind = SelectFields plannedFields }, deferredFields', path
     
-and private planAbstraction (ctx:PlanningContext) (info) (selectionSet: Selection list) visitedFragments typeCondition : ExecutionInfo =
-    let plannedTypeFields =
+and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list) (stage:PlanningStage) visitedFragments typeCondition : PlanningStage =
+    let info, deferredFields, path = stage
+    let plannedTypeFields, deferredFields' =
         selectionSet
-        |> List.fold(fun (fields: Map<string, ExecutionInfo list>) selection ->
+        |> List.fold(fun (fields: Map<string, ExecutionInfo list>, deferredFields: DeferredExecutionInfo list) selection ->
             let includer = getIncluder selection.Directives info.Include
             let innerData = { info with Include = includer }
             match selection with
             | Field field ->
-                abstractionInfo ctx (info.ReturnDef :?> AbstractDef) field typeCondition includer
-                |> Map.map (fun _ data -> [ plan ctx data ])
-                |> Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields
+                let a = abstractionInfo ctx (info.ReturnDef :?> AbstractDef) field typeCondition includer
+                // Make sure that we properly deal with the deferred fields
+                let foldPlan (f:Map<string, ExecutionInfo list>, d, _) k data =
+                    let f', d', p' = plan ctx (data, d, path)
+                    f.Add(k, [f']), d', p'
+                let infoMap, deferredFields', path' = Map.fold (foldPlan) (Map.empty, deferredFields, []) a  
+                if isDeferredField field
+                then 
+                    printfn "Abstraction Info Keys: %A" (a |> Map.toSeq |> Seq.map fst)
+                    printfn "InfoMap Keys: %A" (infoMap |> Map.toSeq |> Seq.map fst)
+                    fields, {Info = { innerData with Kind = ResolveAbstraction infoMap}; Path = path'}::deferredFields'
+                else Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields infoMap, deferredFields'
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
-                then fields  // fragment already found
+                then fields, deferredFields  // fragment already found
                 else
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
-                        let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
-                        let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
+                        let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
+                        let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                         // filter out already existing fields
-                        Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields
-                    | _ -> fields
+                        Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
+                    | _ -> fields, deferredFields
             | InlineFragment fragment ->
-                 // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo = planAbstraction ctx innerData fragment.SelectionSet visitedFragments fragment.TypeCondition
-                 let (ResolveAbstraction(fragmentFields)) = fragmentInfo.Kind
-                 // filter out already existing fields
-                 Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields
-            | _ -> fields
-        ) Map.empty
-    { info with Kind = ResolveAbstraction plannedTypeFields }
+                // retrieve fragment data just as it was normal selection set
+                let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
+                let fragmentFields = getAbstractionFrag fragmentInfo.Kind
+
+                // filter out already existing fields
+                Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
+        ) (Map.empty, deferredFields)
+    { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 
 let private planVariables (schema: ISchema) (operation: OperationDefinition) =
     operation.VariableDefinitions 
@@ -254,7 +292,10 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         Definition = Unchecked.defaultof<FieldDef> 
         Include = incl 
         IsNullable = false }
-    let resolvedInfo = planSelection ctx rootInfo operation.SelectionSet (ref [])
+    let resolvedInfo, deferredFields, _ = planSelection ctx operation.SelectionSet (rootInfo, [], []) (ref [])
+    let deferredFields' = 
+        deferredFields
+        |> List.map (fun d -> {d with Path = List.rev d.Path})
     let (SelectFields(topFields)) = resolvedInfo.Kind
     let variables = planVariables ctx.Schema operation
     match operation.OperationType with
@@ -262,6 +303,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         { DocumentId = documentId
           Operation = operation 
           Fields = topFields
+          DeferredFields = deferredFields'
           RootDef = ctx.Schema.Query
           Strategy = Parallel
           Variables = variables }
@@ -271,6 +313,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
             { DocumentId = documentId
               Operation = operation
               Fields = topFields
+              DeferredFields = deferredFields'
               RootDef = mutationDef
               Strategy = Sequential 
               Variables = variables }
@@ -282,6 +325,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
             { DocumentId = documentId
               Operation = operation
               Fields = topFields
+              DeferredFields = deferredFields'
               RootDef = subscriptionDef
               Strategy = Sequential 
               Variables = variables }

@@ -138,8 +138,11 @@ let ``Execute can introspect on union and intersection types`` () =
                 upcast NameValueLookup.ofList ["name", box "Dog"]]
             "enumValues", null
             "inputFields", null]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
 let ``Executes union types`` () =
@@ -168,8 +171,11 @@ let ``Executes union types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -203,8 +209,11 @@ let ``Executes union types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Executes interface types`` () =
@@ -232,8 +241,11 @@ let ``Executes interface types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true ]]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -265,8 +277,11 @@ let ``Executes interface types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -321,6 +336,9 @@ let ``Execute allows fragment conditions to be abstract types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    noErrors actual
-    actual.["data"] |> equals (upcast expected)
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
     

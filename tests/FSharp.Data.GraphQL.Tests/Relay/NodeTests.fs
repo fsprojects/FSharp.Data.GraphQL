@@ -54,8 +54,11 @@ open Xunit
 
 let execAndValidateNode (query: string) expected =
     let result = sync <| Executor(schema).AsyncExecute(query)
-    noErrors result
-    result.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expected])
+    match result with
+    | Direct(data, errors) -> 
+        empty errors
+        data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expected])
+    | _ ->  fail "Expected a direct GQLResponse"
    
 [<Fact>]
 let ``Node with global ID gets correct record`` () =

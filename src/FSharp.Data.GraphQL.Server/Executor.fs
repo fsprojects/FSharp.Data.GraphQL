@@ -1,5 +1,6 @@
 ﻿namespace FSharp.Data.GraphQL
 
+open System
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
@@ -7,6 +8,7 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
+
 
 type Executor<'Root> (schema: ISchema<'Root>) = 
     let fieldExecuteMap = FieldExecuteMap()
@@ -17,38 +19,45 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     //     we don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
                                    "__schema",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> SchemaMetaFieldDef fieldExecuteMap)
+                                   compileField SchemaMetaFieldDef)
 
         fieldExecuteMap.SetExecute("",
                                    "__type",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeMetaFieldDef fieldExecuteMap)
+                                   compileField TypeMetaFieldDef )
 
         fieldExecuteMap.SetExecute("",
                                    "__typename",
-                                   compileField Unchecked.defaultof<TypeDef -> ObjectDef[]> TypeNameMetaFieldDef fieldExecuteMap)
+                                   compileField TypeNameMetaFieldDef )
 
     do
-        compileSchema schema.GetPossibleTypes schema.TypeMap fieldExecuteMap
+        compileSchema schema.TypeMap fieldExecuteMap schema.SubscriptionProvider
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
-    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<IDictionary<string,obj>> =
-        let inline prepareOutput (errors: System.Collections.Concurrent.ConcurrentBag<exn>) (result: NameValueLookup) =
-            if errors.IsEmpty 
-            then [ "documentId", box executionPlan.DocumentId ; "data", upcast result ] 
-            else [ "documentId", box executionPlan.DocumentId ; "data", box result ; "errors", upcast (errors.ToArray() |> schema.ParseErrors) ]
+    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
+        let prepareOutput res = 
+            let prepareData data (errs: Error list) = 
+                let parsedErrors =
+                    errs
+                    |> List.map(fun (message, path) -> NameValueLookup.ofList [ "message", upcast message; "path", upcast path])
+                match parsedErrors with
+                | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
+                | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
+            match res with
+            | Direct(data, errors) -> Direct(prepareData data errors, errors)
+            | Deferred(data, errors, deferred) -> Deferred(prepareData data errors, errors, deferred)
+            | Stream(stream) -> Stream(stream)
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let rootObj = data |> Option.map box |> Option.toObj
-                let res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
-                let! result = res |> AsyncVal.map (fun x -> NameValueLookup.ofList (prepareOutput errors x))
-                return result :> IDictionary<string,obj>
+                let! res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
+                return prepareOutput res
             with 
             | ex -> 
                 let msg = ex.ToString()
-                return upcast NameValueLookup.ofList [ "errors", upcast [ msg ]]
+                return prepareOutput(Direct(new Dictionary<string, obj>() :> Output, [msg, []]))
         }
     
     /// <summary>
@@ -61,7 +70,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
-    member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+    member this.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<GQLResponse> =
         let executionPlan = 
             match operationName with
             | Some opname -> this.CreateExecutionPlan(ast, opname)
@@ -78,7 +87,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
-    member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<IDictionary<string,obj>> =
+    member this.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string): Async<GQLResponse> =
         let ast = parse queryOrMutation
         let executionPlan = 
             match operationName with
@@ -98,7 +107,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
-    member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<IDictionary<string,obj>> =
+    member this.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
         eval(executionPlan, data, defaultArg variables Map.empty)
 
     /// Creates an execution plan for provided GraphQL document AST without 
@@ -117,7 +126,7 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
                 | Subscription ->
                     match schema.Subscription with
-                    | Some s -> s
+                    | Some s -> upcast s
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
             planOperation (ast.GetHashCode()) planningCtx operation

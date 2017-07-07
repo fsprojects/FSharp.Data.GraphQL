@@ -4,7 +4,7 @@ import GraphiQL from 'graphiql';
 import fetch from 'isomorphic-fetch';
 
 function graphQLFetcher(graphQLParams) {
-  return fetch('http://localhost:8083/', {
+  return fetch('http://localhost:8084/', {
     method: 'post',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(graphQLParams),

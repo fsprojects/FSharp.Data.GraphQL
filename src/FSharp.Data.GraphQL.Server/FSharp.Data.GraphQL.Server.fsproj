@@ -16,6 +16,7 @@
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
+    <Compile Include="ObservableExtensions.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Executor.fs" />
     <Compile Include="Schema.fs" />

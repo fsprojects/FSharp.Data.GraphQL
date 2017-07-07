@@ -129,8 +129,11 @@ let ``Connection definition includes connection and edge fields for simple cases
             "edges", upcast [
                 box <| NameValueLookup.ofList [
                     "node", upcast "five" ]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) -> 
+        empty errors
+        data.["data"] |> equals (upcast expected)
+    | _ ->  fail "Expected a direct GQLResponse"
 
 [<Fact>]
 let ``Connection definition includes connection and edge fields for complex cases`` () =
@@ -175,8 +178,11 @@ let ``Connection definition includes connection and edge fields for complex case
                                     "node", upcast NameValueLookup.ofList [
                                         "name", upcast "Max"
                                         "barks", upcast false]]]]]]]]]
-    noErrors result
-    result.["data"] |> equals (upcast expected)
+    match result with
+    | Direct(data, errors) -> 
+        empty errors
+        data.["data"] |> equals (upcast expected)
+    | _ ->  fail "Expected a direct GQLResponse"
 
 
 [<Fact>]
