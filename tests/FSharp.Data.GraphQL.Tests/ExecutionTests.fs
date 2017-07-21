@@ -29,6 +29,14 @@ and DeepTestSubject = {
     c: string option list
 }
 
+and DUArg = 
+    | Case1
+    | Case2
+
+and EnumArg =
+    | Enum1 = 1 
+    | Enum2 = 2 
+
 [<Fact>]
 let ``Execution handles basic tasks: executes arbitrary code`` () =
     let rec data = 
@@ -212,6 +220,69 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     equals (Some "foo") data.Str
     
 type InlineTest = { A: string }
+
+[<Fact>]
+let ``Execution handles basic tasks: correctly handles discriminated union arguments`` () =
+    let query = """query Example {
+          b(enumArg: Case1)
+        }"""
+    let EnumType = Define.Enum(
+        name = "EnumArg",
+        options = [
+            Define.EnumValue("Case1", DUArg.Case1, "Case 1")
+            Define.EnumValue("Case2", DUArg.Case2, "Case 2")
+        ])
+    let data = { Num = None; Str = None }
+    let Type = Define.Object("Type", [
+        Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            fun ctx value ->
+                let arg = ctx.TryArg("enumArg")
+                match arg with
+                | Some(Case1) ->
+                    value.Str <- Some "foo"
+                    value.Num <- Some 123
+                    value.Str
+                | _ -> None)
+    ])
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+    | _ -> fail "Expected Direct GQResponse"
+    equals (Some 123) data.Num
+    equals (Some "foo") data.Str
+
+[<Fact>]
+let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
+    let query = """query Example {
+          b(enumArg: Enum1)
+        }"""
+    let EnumType = Define.Enum(
+        name = "EnumArg",
+        options = [
+            Define.EnumValue("Enum1", EnumArg.Enum1, "Enum 1")
+            Define.EnumValue("Enum2", EnumArg.Enum2, "Enum 2")
+        ])
+    let data = { Num = None; Str = None }
+    let Type = Define.Object("Type", [
+        Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            fun ctx value ->
+                let arg = ctx.TryArg("enumArg")
+                match arg with
+                | Some(Enum1) ->
+                    value.Str <- Some "foo"
+                    value.Num <- Some 123
+                    value.Str
+                | _ -> None)
+    ])
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+    | _ -> fail "Expected Direct GQResponse"
+    equals (Some 123) data.Num
+    equals (Some "foo") data.Str
+
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the inline operation if no operation name is provided`` () =
