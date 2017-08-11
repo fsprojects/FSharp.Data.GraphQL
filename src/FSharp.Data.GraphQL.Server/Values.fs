@@ -95,10 +95,10 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
             match value with
             | Variable variableName -> variables.[variableName]
             | _ ->
-                let coerced = coerceStringInput value
+                let coerced = coerceEnumInput value
                 match coerced with
                 | None -> null
-                | Some s -> Enum.Parse(enumdef.Type, s, ignoreCase = true)
+                | Some s -> ReflectionHelper.parseUnion enumdef.Type s
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
                 
 let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: obj) (errMsg: string) : obj = 

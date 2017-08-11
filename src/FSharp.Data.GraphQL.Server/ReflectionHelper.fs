@@ -5,6 +5,7 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Reflection
+open FSharp.Reflection
 open System.Collections
 open System.Collections.Generic
 open System.Linq
@@ -162,3 +163,23 @@ module internal ReflectionHelper =
                 // at last, default constructor should be used if defined
                 |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)    
             ctor
+            
+    let parseUnion (t: Type) (u: string) =
+    #if NETSTANDARD1_6        
+        if t.GetTypeInfo().IsEnum then Enum.Parse(t, u, ignoreCase = true)
+        else
+            try
+                match FSharpType.GetUnionCases(t, true)|> Array.filter(fun case -> case.Name.ToLower() = u.ToLower()) with
+                | [|case|] -> FSharpValue.MakeUnion(case, [||], true)
+                | _ -> null
+            with _ -> null
+    #else
+        if t.IsEnum then Enum.Parse(t, u, ignoreCase = true)
+        else
+            try
+                match FSharpType.GetUnionCases(t, (BindingFlags.NonPublic ||| BindingFlags.Public))|> Array.filter(fun case -> case.Name.ToLower() = u.ToLower()) with
+                | [|case|] -> FSharpValue.MakeUnion(case, [||], (BindingFlags.NonPublic ||| BindingFlags.Public))
+                | _ -> null
+            with _ -> null
+    #endif
+

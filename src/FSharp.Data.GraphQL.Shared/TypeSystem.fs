@@ -1938,6 +1938,11 @@ module SchemaDefinitions =
                  else "false")
         | _ -> None
     
+    let coerceEnumInput = 
+        function
+        | EnumValue e -> Some e
+        | _ -> None
+    
     /// Tries to resolve AST query input to bool.
     let coerceBoolInput = 
         function 
