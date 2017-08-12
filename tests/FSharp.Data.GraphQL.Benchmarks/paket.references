@@ -1,4 +1,3 @@
 FSharp.Core
+group Test
 BenchmarkDotNet
-System.Reflection.Metadata
-System.Collections.Immutable

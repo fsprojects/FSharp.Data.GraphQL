@@ -1,18 +1,10 @@
 source https://nuget.org/api/v2
 
-nuget BenchmarkDotNet
 nuget FParsec
-nuget FSCheck
-nuget FSharp.Data.TypeProviders
 nuget System.Reactive
 nuget Newtonsoft.Json
-nuget Suave
-nuget System.Collections.Immutable
-nuget System.Reflection.Metadata
 nuget System.Runtime
 nuget FSharp.Core
-nuget FSharp.Data.GraphQL.Server
-nuget FSharp.Data.GraphQL.Client
 
 group Build
   source https://nuget.org/api/v2
@@ -20,13 +12,13 @@ group Build
   nuget SourceLink.Fake
   nuget FAKE
   nuget FSharp.Formatting
-  nuget FParsec
 
   github fsharp/FAKE modules/Octokit/Octokit.fsx
 
 group Test
   source https://nuget.org/api/v2
-  
-  nuget FSCheck
+  nuget BenchmarkDotNet
   nuget xunit 
   nuget xUnit.runner.console
+  nuget System.Reflection.Metadata
+  nuget FSharp.Data.TypeProviders
