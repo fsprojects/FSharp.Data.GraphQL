@@ -2,4 +2,3 @@ FSharp.Core
 Newtonsoft.Json
 group Test
 xunit
-FSCheck
