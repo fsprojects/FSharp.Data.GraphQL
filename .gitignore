@@ -190,6 +190,7 @@ localpackages/
 paket-files
 *.orig
 .paket/paket.exe
+.paket/Paket.Restore.targets
 docs/content/license.md
 docs/content/release-notes.md
 .fake
