@@ -37,7 +37,7 @@ module Util =
 
     let requestSchema (url: string) =
         async {
-            let requestUrl = Uri(Uri(url), ("/?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
+            let requestUrl = Uri(Uri(url), ("?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
             let req = WebRequest.CreateHttp(requestUrl)
             req.Method <- "GET"
             use! resp = req.GetResponseAsync() |> Async.AwaitTask
