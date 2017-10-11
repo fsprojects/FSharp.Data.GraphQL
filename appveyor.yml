@@ -3,7 +3,8 @@ init:
 build_script:
   - cmd: build.cmd
 test: off
-version: 0.0.1.{build}
+version: 0.0.3.{build}
+image: Visual Studio 2017
 artifacts:
   - path: bin
     name: bin
