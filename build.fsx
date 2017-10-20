@@ -205,7 +205,9 @@ Target "Build" (fun _ ->
 )
 
 Target "RunTests" (fun _ ->
-    DotNetCli.Test (fun p -> { p with Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" }) 
+    DotNetCli.Test (fun p -> { p with 
+                                    Configuration = "Release"
+                                    Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" }) 
 )
 
 
