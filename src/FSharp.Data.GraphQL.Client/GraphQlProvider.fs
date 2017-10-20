@@ -77,8 +77,7 @@ module Util =
 
     let createPrimitiveMethod<'T> (serverUrl: string) (opName: string) (opField: IntrospectionField)
                                   (args: ProvidedParameter list) (returnType: Type) =
-        let m = ProvidedMethod(firstToUpper opField.Name, args, returnType, IsStaticMethod=true)
-        m.InvokeCode <-
+        let invokeCode = 
             let opField = opField.Name
             let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
             fun argValues ->
@@ -87,7 +86,7 @@ module Util =
                 |> buildQuery opField "" argNames
                 |> launchRequest serverUrl opName opField unbox<'T>
             @@>
-        m
+        ProvidedMethod(firstToUpper opField.Name, args, returnType, invokeCode, true)
 
     let createMethod (schemaTypes: Map<string,TypeReference>)
                      (serverUrl: string) (opName: string) (opField: IntrospectionField) =
@@ -117,8 +116,7 @@ module Util =
                 let funType = typedefof<obj->obj>.MakeGenericType(resType, typeof<Fields>)
                 typedefof<Expr<obj>>.MakeGenericType(funType)
             let projection = ProvidedParameter("projection", projType, IsReflectedDefinition=true)
-            let m = ProvidedMethod(firstToUpper opField.Name, args@[projection], asyncType, IsStaticMethod=true)
-            m.InvokeCode <-
+            let invokeCode =
                 let opField, argsLength = opField.Name, args.Length
                 let argNames = args |> Seq.map (fun x -> x.Name) |> Seq.toArray
                 if resType.Name = "FSharpOption`1" then
@@ -135,7 +133,8 @@ module Util =
                             |> buildQuery opField (extractFields (%%Expr.Coerce(List.last argValues, typeof<Expr>))) argNames
                             |> launchRequest serverUrl opName opField id
                         @@>
-            m
+            ProvidedMethod(firstToUpper opField.Name, args@[projection], asyncType, invokeCode, true)
+            
 
     let createMethods (tdef: ProvidedTypeDefinition) (serverUrl: string)
                       (schema: IntrospectionSchema) (schemaTypes: Map<string,TypeReference>)
@@ -165,7 +164,7 @@ type internal ProviderSchemaConfig =
 
 [<TypeProvider>]
 type GraphQlProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces ()
+    inherit TypeProviderForNamespaces (config)
 
     let asm = System.Reflection.Assembly.GetExecutingAssembly()
 
@@ -196,10 +195,9 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                     Util.createMethods tdef serverUrl schema schemaTypes schema.MutationType
                     Util.createMethods tdef serverUrl schema schemaTypes schema.SubscriptionType
                     // Generic query method
-                    let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>)
-                    m.IsStaticMethod <- true
-                    m.InvokeCode <- fun argValues ->
+                    let invokeCode = fun (argValues:Expr list) ->
                         <@@ launchRequest serverUrl null null id (%%argValues.[0]: string) @@>
+                    let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>, invokeCode, true)
                     tdef.AddMember m
                     tdef
                 | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
