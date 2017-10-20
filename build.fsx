@@ -195,20 +195,13 @@ Target "CleanDocs" (fun _ ->
 // Build library & test project
 
 Target "Restore" (fun _ ->
-    DotNetCli.Restore (fun p -> { p with Project = "src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" })
-    DotNetCli.Restore (fun p -> { p with Project = "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj" }) 
+    DotNetCli.Restore (fun p -> { p with Project = "FSharp.Data.GraphQL.sln" })
 )
 
 Target "Build" (fun _ ->
     DotNetCli.Build (fun p -> { p with 
                                     Configuration = "Release"
-                                    Project = "src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" }) 
-)
-
-Target "BuildClient" (fun _ ->
-    DotNetCli.Build (fun p -> { p with 
-                                    Configuration = "Release"
-                                    Project = "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj" }) 
+                                    Project = "FSharp.Data.GraphQL.sln" }) 
 )
 
 // --------------------------------------------------------------------------------------
@@ -476,7 +469,6 @@ Target "All" DoNothing
   ==> "Restore"
   =?> ("AssemblyInfo", isLocalBuild)
   ==> "Build"
-  ==> "BuildClient"
   ==> "CopyBinaries"
   ==> "RunTests"
   ==> "All"
