@@ -192,7 +192,13 @@ Target "CleanDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
+
+Target "Restore" (fun _ ->
+    RestoreMSSolutionPackages id solutionFile
+)
+
 Target "Build" (fun _ ->
+   
     !! solutionFile
 // #if MONO
 //     |> MSBuildReleaseExt "" [ ("DefineConstants","MONO") ] "Rebuild"
@@ -464,6 +470,7 @@ Target "PublishNpm" (fun _ ->
 Target "All" DoNothing
 
 "Clean"
+  ==> ("Restore")
   =?> ("AssemblyInfo", isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
