@@ -67,13 +67,6 @@ then
 fi
 
 run $PAKET_EXE install
-echo "==========[MSBUILD RESTORE]=========="
-if hash msbuild 2>/dev/null; then
-  msbuild /t:restore
-else 
-  /usr/bin/msbuild /t:restore
-fi
-echo "==========[END MSBUILD RESTORE]=========="
 
 [ ! -e build.fsx ] && run $PAKET_EXE update
 [ ! -e build.fsx ] && run $FAKE_EXE init.fsx

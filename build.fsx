@@ -5,6 +5,8 @@ open Fake.AssemblyInfoFile
 open Fake.ReleaseNotesHelper
 open Fake.UserInputHelper
 open Fake.Testing
+open Fake.MSBuildHelper
+open Fake.DotNetCli
 open System
 open System.IO
 #if MONO
@@ -192,21 +194,14 @@ Target "CleanDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-
 Target "Restore" (fun _ ->
-    RestoreMSSolutionPackages id solutionFile
+    DotNetCli.Restore (fun p -> { p with Project = "src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" }) 
 )
 
 Target "Build" (fun _ ->
-   
-    !! solutionFile
-// #if MONO
-//     |> MSBuildReleaseExt "" [ ("DefineConstants","MONO") ] "Rebuild"
-// #else
-    |> MSBuildRelease "" "Rebuild"
-// #endif
-    |> ignore
+    DotNetCli.Build (fun p -> { p with Project = "src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj" }) 
 )
+
 
 // --------------------------------------------------------------------------------------
 // Run the unit tests using test runner
@@ -470,7 +465,7 @@ Target "PublishNpm" (fun _ ->
 Target "All" DoNothing
 
 "Clean"
-  ==> ("Restore")
+  ==> "Restore"
   =?> ("AssemblyInfo", isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
