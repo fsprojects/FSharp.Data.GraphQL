@@ -204,18 +204,10 @@ Target "Build" (fun _ ->
                                     Project = "FSharp.Data.GraphQL.sln" }) 
 )
 
-// --------------------------------------------------------------------------------------
-// Run the unit tests using test runner
-
 Target "RunTests" (fun _ ->
-    !! testAssemblies
-    |> xUnit2 (fun p ->
-        { p with
-            ShadowCopy = false
-            HtmlOutputPath = Some "TestResults.html"
-            XmlOutputPath = Some "TestResults.xml"
-            TimeOut = TimeSpan.FromMinutes 20. })
+    DotNetCli.Test (fun p -> { p with Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" }) 
 )
+
 
 #if MONO
 #else
