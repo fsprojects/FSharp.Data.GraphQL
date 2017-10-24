@@ -1,5 +1,4 @@
 Newtonsoft.Json
 group Test
-FSharp.Core
 Microsoft.NET.Test.Sdk
 xunit
