@@ -2,7 +2,6 @@
   <PropertyGroup>
     <TargetFrameworks>netcoreapp1.1;net461</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <RuntimeFrameworkVersion>1.1.1</RuntimeFrameworkVersion>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
