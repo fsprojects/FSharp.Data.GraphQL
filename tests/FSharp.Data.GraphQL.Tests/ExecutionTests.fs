@@ -133,7 +133,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
 
 type TestThing = { mutable Thing: string }
 
-[<Fact(Skip="Fixme")>]
+[<Fact>]
 let ``Execution handles basic tasks: merges parallel fragments`` () = 
     let ast = parse """{ a, ...FragOne, ...FragTwo }
 
@@ -164,15 +164,15 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
       NameValueLookup.ofList [
         "a", upcast "Apple"
         "b", upcast "Banana"
-        "c", upcast "Cherry"
         "deep", upcast NameValueLookup.ofList [
             "b", upcast "Banana"
-            "c", upcast "Cherry"
             "deeper", upcast NameValueLookup.ofList [
                 "b", "Banana" :> obj
                 "c", upcast "Cherry"
             ]
+            "c", upcast "Cherry"
         ]
+        "c", upcast "Cherry"
     ]
     let result = sync <| schemaProcessor.AsyncExecute(ast, obj())
     match result with
