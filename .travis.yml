@@ -5,6 +5,6 @@ dotnet: 2.0.0
 before_install:
   - chmod +x build.sh
  
-script: 
-  - export FrameworkPathOverride=/usr/lib/mono/4.6.1-api/ && ./build.sh All
+#script: 
+#  - export FrameworkPathOverride=/usr/lib/mono/4.6.1-api/ && ./build.sh All
 dist: trusty
