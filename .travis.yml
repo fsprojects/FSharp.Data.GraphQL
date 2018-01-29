@@ -1,10 +1,10 @@
 language: csharp
 
-sudo: false  # use the new container-based Travis infrastructure 
-
+sudo: required 
+dotnet: 2.1.4
 before_install:
   - chmod +x build.sh
  
 script: 
-  - ./build.sh All
+  - export FrameworkPathOverride=/usr/lib/mono/4.6.1-api/ && ./build.sh All
 dist: trusty

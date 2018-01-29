@@ -76,18 +76,19 @@ module TypeCompiler =
             if forceNullable && ptype.Name <> "FSharpOption`1"
             then optionType.MakeGenericType [| ptype |]
             else ptype
-        let p = ProvidedProperty(ifield.Name, ptype)
-        p.AddXmlDoc(docPrefix + (defaultArg ifield.Description ""))
         // It's important to get the name of the field outside the quotation
         // in order to prevent errors at runtime
         let name = ifield.Name
-        p.GetterCode <- 
+        let getter = 
             match forceNullable, ifield.Type.Kind with
-            | false, TypeKind.NON_NULL -> fun args ->
+            | false, TypeKind.NON_NULL -> fun (args:Expr list) ->
                 getDynamicField name args.[0]
             | _ -> fun args ->
                 getDynamicField name args.[0]
                 |> makeOption ptype
+        let p = ProvidedProperty(ifield.Name, ptype, getterCode=getter)
+        p.AddXmlDoc(docPrefix + (defaultArg ifield.Description ""))
+      
         p
 
 //    let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =
@@ -123,9 +124,9 @@ module TypeCompiler =
         let genEnumValue (enumVal: IntrospectionEnumVal) =
             // Name must be obtained outside the quotation
             let name = enumVal.Name
-            let value = ProvidedProperty(name, t, IsStatic=true)
+            let getter = fun _ -> <@@ name @@>
+            let value = ProvidedProperty(name, t, getterCode=getter, isStatic=true)
             if enumVal.Description.IsSome then value.AddXmlDoc(enumVal.Description.Value)
-            value.GetterCode <- fun _ -> <@@ name @@>
             value
         if itype.Description.IsSome then
             t.AddXmlDoc("[ENUM] " + itype.Description.Value)
@@ -193,10 +194,10 @@ module TypeCompiler =
             let typeName = itype.Name
             let t = ProvidedTypeDefinition(typeName, Some typeof<obj>)
             let funType = typedefof<obj->obj>.MakeGenericType(t, typeof<Fields>)
-            let m = ProvidedMethod("On", [ProvidedParameter("selection", funType)], typeof<obj>)
-            m.IsStaticMethod <- true
-            m.InvokeCode <- fun args ->
-                <@@ InlineFragment(typeName, %%args.Head) @@>
+            let invokeCode = 
+                fun (args:Expr list) ->
+                    <@@ InlineFragment(typeName, %%args.Head) @@>
+            let m = ProvidedMethod("On", [ProvidedParameter("selection", funType)], typeof<obj>, invokeCode, true)
             t.AddMember m
             t
         | TypeKind.INPUT_OBJECT -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)

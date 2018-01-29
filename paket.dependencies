@@ -21,5 +21,7 @@ group Test
   nuget BenchmarkDotNet
   nuget xunit 
   nuget xUnit.runner.console
+  nuget xunit.runner.visualstudio
   nuget System.Reflection.Metadata
   nuget FSharp.Data.TypeProviders
+  nuget Microsoft.NET.Test.Sdk
