@@ -206,16 +206,11 @@ Target "Build" (fun _ ->
 
 Target "RunTests" (fun _ ->
     DotNetCli.Test (fun p -> { p with 
+#if MONO 
                                     Framework = "netcoreapp2.0"
+#endif
                                     Configuration = "Release"
-                                    Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" }) 
-
-    DotNetCli.Test (fun p -> { p with 
-                                Framework = "net461"
-                                Configuration = "Release"
-                                AdditionalArgs = [ "-appdomain IfAvailable" ]
-                                Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" }) 
-
+                                    Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" })  
 )
 
 
