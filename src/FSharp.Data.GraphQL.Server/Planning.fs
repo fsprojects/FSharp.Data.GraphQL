@@ -160,6 +160,28 @@ let private getAbstractionFrag = function
     | ResolveAbstraction(fragmentFields) -> fragmentFields
     | _ -> failwith "Expected an Abstraction!"
 
+let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
+     let rec merge (x: ExecutionInfo) (y: ExecutionInfo) =
+         match x.Kind, y.Kind with 
+         | ResolveValue, ResolveValue -> x
+         | ResolveCollection(x'), ResolveCollection(y') -> { x with Kind = ResolveCollection(merge x' y') }
+         | ResolveAbstraction(xs'), ResolveAbstraction(ys') -> { x with Kind = ResolveAbstraction(Map.merge (fun _ x' y' -> deepMerge x' y') xs' ys')} 
+         | SelectFields(xs'), SelectFields(ys') -> { x with Kind = SelectFields(deepMerge xs' ys') }
+         | k1, k2 -> failwithf "Cannot merge ExecutionInfos with different kinds!"
+     // Apply the merge to every conflict
+     let xs' = 
+         xs  
+         |> List.fold(fun acc x -> 
+             match List.tryFind(fun y -> y.Identifier = x.Identifier) ys with
+             | Some y -> (merge x y)::acc
+             | None -> x::acc) [] 
+         |> List.rev
+     // Remove all merged conflicts from ys
+     let ys' =
+         ys
+         |> List.filter(fun y -> not <| List.exists(fun x -> x.Identifier = y.Identifier) xs')
+     xs' @ ys'
+ 
 
 let rec private plan (ctx: PlanningContext) (stage:PlanningStage): PlanningStage =
     let info, deferredFields, path = stage
@@ -208,18 +230,19 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
                         // TODO: Check if the path is correctly defined
-                        let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
+                        let fragmentInfo, deferredFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
                         let fragmentFields = getSelectionFrag fragmentInfo.Kind
                         // filter out already existing fields
-                        List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
+                        deepMerge fields fragmentFields, deferredFields'
+                        // List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
                     | _ -> fields, deferredFields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo, deferedFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
+                 let fragmentInfo, deferredFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
                  let fragmentFields = getSelectionFrag fragmentInfo.Kind
 
                  // filter out already existing fields
-                 List.mergeBy (fun field -> field.Identifier) fields fragmentFields, deferedFields'
+                 deepMerge fields fragmentFields, deferredFields'
             | _ -> fields, deferredFields
         ) ([],deferredFields)
     { info with Kind = SelectFields plannedFields }, deferredFields', path
@@ -244,7 +267,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                     printfn "Abstraction Info Keys: %A" (a |> Map.toSeq |> Seq.map fst)
                     printfn "InfoMap Keys: %A" (infoMap |> Map.toSeq |> Seq.map fst)
                     fields, {Info = { innerData with Kind = ResolveAbstraction infoMap}; Path = path'}::deferredFields'
-                else Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields infoMap, deferredFields'
+                else Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields infoMap, deferredFields'
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
@@ -257,7 +280,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                         let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
                         let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                         // filter out already existing fields
-                        Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
+                        Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
                     | _ -> fields, deferredFields
             | InlineFragment fragment ->
                 // retrieve fragment data just as it was normal selection set
@@ -265,7 +288,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 let fragmentFields = getAbstractionFrag fragmentInfo.Kind
 
                 // filter out already existing fields
-                Map.merge (fun _ oldVal newVal -> oldVal @ newVal) fields fragmentFields, deferredFields'
+                Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
         ) (Map.empty, deferredFields)
     { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 
