@@ -54,7 +54,7 @@ module HttpHandlers =
         let removeSpacesAndNewLines (str : string) = 
             str.Trim().Replace("\r\n", " ")
         let readStream (s : Stream) =
-            use ms = MemoryStream(2048)
+            use ms = new MemoryStream(2048)
             s.CopyTo(ms)
             ms.ToArray()
         let root = { ClientId = "5" }
@@ -64,7 +64,7 @@ module HttpHandlers =
         match query, variables  with
         | Some query, Some variables ->
             printfn "Received query: %s" query
-            printfn "Recieved variables: %A" variables
+            printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
             let result = Schema.executor.AsyncExecute(query, variables = variables, data = root) |> Async.RunSynchronously
             return! okWithStr (json result) next ctx
