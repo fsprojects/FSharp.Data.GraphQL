@@ -203,13 +203,13 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
         b(numArg: 123, stringArg: "foo")
       }"""
     let data = { Num = None; Str = None }
-    let Type = Define.Object("Type", [
-        Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ], 
-            fun ctx value -> 
-                value.Num <- ctx.TryArg("numArg")
-                value.Str <- ctx.TryArg("stringArg")
-                value.Str) 
-    ])
+    let Type = 
+        Define.Object("Type", 
+            [ Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ], 
+                 fun ctx value -> 
+                     value.Num <- ctx.TryArg("numArg")
+                     value.Str <- ctx.TryArg("stringArg")
+                     value.Str) ])
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     match result with
@@ -226,24 +226,24 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
     let query = """query Example {
           b(enumArg: Case1)
         }"""
-    let EnumType = Define.Enum(
-        name = "EnumArg",
-        options = [
-            Define.EnumValue("Case1", DUArg.Case1, "Case 1")
-            Define.EnumValue("Case2", DUArg.Case2, "Case 2")
-        ])
+    let EnumType = 
+        Define.Enum(
+            name = "EnumArg",
+            options = 
+                [ Define.EnumValue("Case1", DUArg.Case1, "Case 1")
+                  Define.EnumValue("Case2", DUArg.Case2, "Case 2") ])
     let data = { Num = None; Str = None }
-    let Type = Define.Object("Type", [
-        Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
-            fun ctx value ->
-                let arg = ctx.TryArg("enumArg")
-                match arg with
-                | Some(Case1) ->
-                    value.Str <- Some "foo"
-                    value.Num <- Some 123
-                    value.Str
-                | _ -> None)
-    ])
+    let Type = 
+        Define.Object("Type", 
+            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+                 fun ctx value ->
+                 let arg = ctx.TryArg("enumArg")
+                 match arg with
+                 | Some (Case1) ->
+                     value.Str <- Some "foo"
+                     value.Num <- Some 123
+                     value.Str
+                 | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     match result with
     | Direct(data, errors) ->
@@ -257,24 +257,24 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
     let query = """query Example {
           b(enumArg: Enum1)
         }"""
-    let EnumType = Define.Enum(
-        name = "EnumArg",
-        options = [
-            Define.EnumValue("Enum1", EnumArg.Enum1, "Enum 1")
-            Define.EnumValue("Enum2", EnumArg.Enum2, "Enum 2")
-        ])
+    let EnumType = 
+        Define.Enum(
+            name = "EnumArg",
+            options = 
+                [ Define.EnumValue("Enum1", EnumArg.Enum1, "Enum 1")
+                  Define.EnumValue("Enum2", EnumArg.Enum2, "Enum 2") ])
     let data = { Num = None; Str = None }
-    let Type = Define.Object("Type", [
-        Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
-            fun ctx value ->
-                let arg = ctx.TryArg("enumArg")
-                match arg with
-                | Some(Enum1) ->
-                    value.Str <- Some "foo"
-                    value.Num <- Some 123
-                    value.Str
-                | _ -> None)
-    ])
+    let Type = 
+        Define.Object("Type", 
+            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+                  fun ctx value ->
+                  let arg = ctx.TryArg("enumArg")
+                  match arg with
+                  | Some _ ->
+                      value.Str <- Some "foo"
+                      value.Num <- Some 123
+                      value.Str
+                  | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     match result with
     | Direct(data, errors) ->

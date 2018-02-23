@@ -12,7 +12,9 @@ let ``AsyncVal computation allows to return constant values`` () =
     let v = asyncVal { return 1 }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with | Value v' -> v' |> equals 1
+    match v with 
+    | Value v' -> v' |> equals 1
+    | _ -> fail "unexpected result found in AsyncVal"
     
 [<Fact>]
 let ``AsyncVal computation allows to return from async computation`` () =
@@ -26,7 +28,9 @@ let ``AsyncVal computation allows to return from another AsyncVal`` () =
     let v = asyncVal { return! asyncVal { return 1 } }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with | Value v' -> v' |> equals 1
+    match v with 
+    | Value v' -> v' |> equals 1
+    | _ -> fail "unexpected result found in AsyncVal"
 
 [<Fact>]
 let ``AsyncVal computation allows to bind async computations`` () =
@@ -44,7 +48,9 @@ let ``AsyncVal computation allows to bind another AsyncVal`` () =
         return value }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with | Value v' -> v' |> equals 1
+    match v with 
+    | Value v' -> v' |> equals 1
+    | _ -> fail "unexpected result found in AsyncVal"
     
 [<Fact>]
 let ``AsyncVal computation defines zero value`` () =

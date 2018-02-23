@@ -1444,10 +1444,10 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
     interface SubscriptionFieldDef<'Root>
     interface IEquatable<FieldDef> with
         member x.Equals f = 
-        x.Name = f.Name && 
-        x.TypeDef :> OutputDef = f.TypeDef &&
-        x.Args = f.Args && 
-        f :? SubscriptionFieldDef<'Root> 
+            x.Name = f.Name && 
+            x.TypeDef :> OutputDef = f.TypeDef &&
+            x.Args = f.Args && 
+            f :? SubscriptionFieldDef<'Root> 
     override x.Equals y = 
         match y with
         | :? SubscriptionFieldDef as f -> (x :> IEquatable<FieldDef>).Equals(f)
