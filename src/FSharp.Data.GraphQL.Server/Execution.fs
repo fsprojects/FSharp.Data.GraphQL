@@ -207,7 +207,7 @@ let private optionCast (value: obj) =
             else
                 let t = value.GetType()
                 let v' = t.GetProperty("Value")
-#if NETSTANDARD1_6           
+#if NETSTANDARD2_0           
                 if t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
 #else       
                 if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then

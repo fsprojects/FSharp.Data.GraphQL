@@ -51,7 +51,7 @@ type internal OptionConverter() =
     inherit JsonConverter()
     
     override x.CanConvert(t) = 
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
         t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = typedefof<option<_>>
 #else    
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
@@ -65,7 +65,7 @@ type internal OptionConverter() =
         serializer.Serialize(writer, value)
 
     override x.ReadJson(reader, t, existingValue, serializer) = 
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
         let innerType = t.GetGenericArguments().[0]
         let innerType = 
             if innerType.GetTypeInfo().IsValueType then (typedefof<Nullable<_>>).GetTypeInfo().MakeGenericType([|innerType|])

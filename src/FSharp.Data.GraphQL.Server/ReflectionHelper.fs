@@ -45,7 +45,7 @@ module internal Gen =
     let inline defaultArgOnNull a b = if a <> null then a else b
     let private optionType = typedefof<option<_>>
     let (|Option|_|) (t: Type) =
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
         if t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() = optionType
         then Some (t.GetTypeInfo().GetGenericArguments().[0])
 #else 
@@ -57,7 +57,7 @@ module internal Gen =
     let (|Enumerable|_|) t =
         if typeof<System.Collections.IEnumerable>.IsAssignableFrom t 
         then
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
             let e = defaultArgOnNull (t.GetTypeInfo().GetInterface("IEnumerable`1")) t
 #else 
             let e = defaultArgOnNull (t.GetInterface("IEnumerable`1")) t
@@ -67,7 +67,7 @@ module internal Gen =
 
     let (|Queryable|_|) t =
         if typeof<IQueryable>.IsAssignableFrom t 
-#if NETSTANDARD1_6        
+#if NETSTANDARD2_0        
         then Some (Queryable (t.GetTypeInfo().GetInterface("IQueryable`1").GetGenericArguments().[0]))
 #else 
         then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
@@ -165,7 +165,7 @@ module internal ReflectionHelper =
             ctor
             
     let parseUnion (t: Type) (u: string) =
-    #if NETSTANDARD1_6        
+    #if NETSTANDARD2_0        
         if t.GetTypeInfo().IsEnum then Enum.Parse(t, u, ignoreCase = true)
         else
             try
