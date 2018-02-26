@@ -96,6 +96,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{D381D216-2
 		samples/todo-graphql/data/tasks.json = samples/todo-graphql/data/tasks.json
 	EndProjectSection
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.GiraffeServer", "src/FSharp.Data.GraphQL.Samples.GiraffeServer/FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj", "{C7DA852B-D30A-4209-B767-640224C7C31E}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -144,6 +146,14 @@ Global
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|Any CPU.Build.0 = Release|Any CPU
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|x64.ActiveCfg = Release|Any CPU
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|x64.Build.0 = Release|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x64.Build.0 = Debug|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x64.ActiveCfg = Release|Any CPU
+		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x64.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

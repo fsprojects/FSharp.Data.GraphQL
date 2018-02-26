@@ -1,10 +1,12 @@
 source https://nuget.org/api/v2
 
 nuget FParsec
+nuget Giraffe
+nuget Microsoft.AspNetCore.All
 nuget System.Reactive
 nuget Newtonsoft.Json
 nuget System.Runtime
-nuget FSharp.Core 
+nuget FSharp.Core
 
 group Build
   source https://nuget.org/api/v2
