@@ -2211,7 +2211,7 @@ namespace ProviderImplementation.ProvidedTypes.AssemblyReader
             match x.Version with 
             | USome v -> asmName.Version <- v
             | UNone -> ()
-    #if NETSTANDARD
+    #if NETSTANDARD2_0
             asmName.CultureName <- System.Globalization.CultureInfo.InvariantCulture.Name
     #else
             asmName.CultureInfo <- System.Globalization.CultureInfo.InvariantCulture
@@ -3280,7 +3280,7 @@ namespace ProviderImplementation.ProvidedTypes.AssemblyReader
             match x.Version with 
             | USome v -> asmName.Version <- v
             | UNone -> ()
-    #if NETSTANDARD
+    #if NETSTANDARD2_0
             asmName.CultureName <- System.Globalization.CultureInfo.InvariantCulture.Name
     #else
             asmName.CultureInfo <- System.Globalization.CultureInfo.InvariantCulture

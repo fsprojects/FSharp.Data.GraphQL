@@ -103,7 +103,7 @@ let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||Bin
 let private memberExpr (t: Type) name parameter =
     
     let prop =
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
         t.GetTypeInfo().GetProperty(name, bindingFlags)
 #else
         t.GetProperty(name, bindingFlags)
@@ -294,7 +294,7 @@ type private IR = IR of ExecutionInfo * Set<Tracker> * IR list
 /// or as a type argument in enumerable or option of root.
 let private canJoin (tRoot: Type) (tFrom: Type) =
     if tFrom = tRoot then true
-#if NETSTANDARD1_6 
+#if NETSTANDARD2_0 
     elif tRoot.GetTypeInfo().IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
 #else 
     elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
@@ -313,7 +313,7 @@ let private isOwn (track: Track) =
             match track.ParentType with
             | Gen.Enumerable tparam -> tparam
             | tval -> tval
-#if NETSTANDARD1_6
+#if NETSTANDARD2_0
         match track.ParentType.GetMember(name) with
 #else
         match track.ParentType.GetMember(name, fieldOrProperty, bindingFlags) with
