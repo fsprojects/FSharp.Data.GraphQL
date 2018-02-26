@@ -6,6 +6,7 @@ open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Microsoft.Extensions.Logging
 open System
+open Microsoft.AspNetCore.Http
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -21,6 +22,8 @@ type Startup private () =
             clearResponse >=> setStatusCode 500
         app
             .UseGiraffeErrorHandler(errorHandler)
+            .UseWebSockets()
+            .UseMiddleware<WebSockets.Middleware>()
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set

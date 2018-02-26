@@ -10,6 +10,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="OptionConverter.fs" />
     <Compile Include="Schema.fs" />
+    <Compile Include="WebSocketMiddleware.fs" />
     <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />

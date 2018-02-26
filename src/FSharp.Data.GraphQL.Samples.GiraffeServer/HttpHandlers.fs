@@ -37,7 +37,13 @@ module HttpHandlers =
                 deferred |> Observable.add(fun d -> printfn "Deferred: %s" (JsonConvert.SerializeObject(d, jsonSettings)))
                 JsonConvert.SerializeObject(data, jsonSettings)
             | Stream(data) ->
-                data |> Observable.add(fun d -> printfn "Subscription: %s" (JsonConvert.SerializeObject(d, jsonSettings)))
+                data 
+                |> Observable.add(
+                    fun d -> 
+                        JsonConvert.SerializeObject(d, jsonSettings)
+                        |> WebSockets.sendMessageToSockets
+                        |> Async.AwaitTask 
+                        |> Async.RunSynchronously)
                 "{}"
         let tryParse fieldName data =
             let raw = Encoding.UTF8.GetString data
@@ -54,7 +60,7 @@ module HttpHandlers =
         let removeSpacesAndNewLines (str : string) = 
             str.Trim().Replace("\r\n", " ")
         let readStream (s : Stream) =
-            use ms = new MemoryStream(2048)
+            use ms = new MemoryStream(4096)
             s.CopyTo(ms)
             ms.ToArray()
         let root = { ClientId = "5" }
