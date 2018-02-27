@@ -25,8 +25,9 @@ module WebSockets =
                 sockets <- removeSocket sockets socket
     }
 
+
     let private receiveMessages (socket : WebSocket) = async {
-        let buffer : byte[] = Array.zeroCreate 4096
+        let buffer = Array.zeroCreate 4096
         let segment = ArraySegment<byte>(buffer)
         let! ct = Async.CancellationToken
         try
@@ -34,6 +35,7 @@ module WebSockets =
             while not (result.CloseStatus.HasValue) do
                 result <- socket.ReceiveAsync(segment, ct).Result
             socket.CloseAsync(result.CloseStatus.Value, result.CloseStatusDescription, ct) |> Async.AwaitTask |> ignore
+            sockets <- removeSocket sockets socket
         with
         | _ -> sockets <- removeSocket sockets socket
     }
@@ -52,10 +54,9 @@ module WebSockets =
                 if ctx.Request.Path = PathString("/subscriptions") then
                     match ctx.WebSockets.IsWebSocketRequest with
                     | true ->
-                        let! ws = ctx.WebSockets.AcceptWebSocketAsync() |> Async.AwaitTask
-                        sockets <- addSocket sockets ws
-                        do! receiveMessages ws
-
+                        let! socket = ctx.WebSockets.AcceptWebSocketAsync() |> Async.AwaitTask
+                        sockets <- addSocket sockets socket
+                        do! receiveMessages socket
                     | false ->
                         ctx.Response.StatusCode <- 400
                 else
