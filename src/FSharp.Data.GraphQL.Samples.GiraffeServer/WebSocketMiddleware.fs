@@ -25,7 +25,6 @@ module WebSockets =
                 sockets <- removeSocket sockets socket
     }
 
-
     let private receiveMessages (socket : WebSocket) = async {
         let buffer = Array.zeroCreate 4096
         let segment = ArraySegment<byte>(buffer)
@@ -40,10 +39,10 @@ module WebSockets =
         | _ -> sockets <- removeSocket sockets socket
     }
 
-    let sendMessageToSockets message = task {
+    let broadcast msg = task {
         for socket in sockets do
             try
-                do! sendMessage socket message
+                do! sendMessage socket msg
             with
             | _ -> sockets <- removeSocket sockets socket
     }

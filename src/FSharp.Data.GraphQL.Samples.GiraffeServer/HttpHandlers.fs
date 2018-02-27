@@ -41,7 +41,7 @@ module HttpHandlers =
                 |> Observable.add(
                     fun d -> 
                         JsonConvert.SerializeObject(d, jsonSettings)
-                        |> WebSockets.sendMessageToSockets
+                        |> WebSockets.broadcast
                         |> Async.AwaitTask 
                         |> Async.RunSynchronously)
                 "{}"
