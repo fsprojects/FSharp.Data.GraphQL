@@ -31,19 +31,12 @@ module HttpHandlers =
                 s.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver())
         let json =
             function
-            | Direct(data, _) ->
+            | Direct (data, _) ->
                 JsonConvert.SerializeObject(data, jsonSettings)
-            | Deferred(data, _, deferred) ->
+            | Deferred (data, _, deferred) ->
                 deferred |> Observable.add(fun d -> printfn "Deferred: %s" (JsonConvert.SerializeObject(d, jsonSettings)))
                 JsonConvert.SerializeObject(data, jsonSettings)
-            | Stream(data) ->
-                data 
-                |> Observable.add(
-                    fun d -> 
-                        JsonConvert.SerializeObject(d, jsonSettings)
-                        |> WebSockets.broadcast
-                        |> Async.AwaitTask 
-                        |> Async.RunSynchronously)
+            | Stream _ ->
                 "{}"
         let tryParse fieldName data =
             let raw = Encoding.UTF8.GetString data
