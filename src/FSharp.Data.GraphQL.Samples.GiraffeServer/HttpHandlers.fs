@@ -56,7 +56,6 @@ module HttpHandlers =
             use ms = new MemoryStream(4096)
             s.CopyTo(ms)
             ms.ToArray()
-        let root = { ClientId = "5" }
         let body = readStream ctx.Request.Body
         let query = body |> tryParse "query"
         let variables = body |> tryParse "variables" |> mapString
@@ -65,7 +64,7 @@ module HttpHandlers =
             printfn "Received query: %s" query
             printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query, variables = variables, data = root) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
             return! okWithStr (json result) next ctx
         | Some query, None ->
             printfn "Received query: %s" query
