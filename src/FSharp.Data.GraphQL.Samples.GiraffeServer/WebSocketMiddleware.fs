@@ -39,11 +39,8 @@ type GraphQLWebSocket(innerSocket : WebSocket) =
         |> Seq.iter (fun (_, unsubscriber) -> unsubscriber.Dispose())
         subscriptions <- Map<string, IDisposable> Seq.empty
 
-module WebSockets =
+module internal SocketManager =
     let mutable private sockets = list<GraphQLWebSocket>.Empty
-
-    let private addSocket socket = 
-        sockets <- socket :: sockets
 
     let private disposeSocket socket =
         sockets <- sockets |> List.choose (fun s -> if s <> socket then Some s else None)
@@ -88,8 +85,8 @@ module WebSockets =
             |> Async.RunSynchronously
         let handle id =
             function
-            | Stream data -> 
-                let unsubscriber = data |> Observable.subscribe (fun o -> send id o)
+            | Stream output -> 
+                let unsubscriber = output |> Observable.subscribe (fun o -> send id o)
                 socket.Subscribe(id, unsubscriber)
             | _ -> ()
         try
@@ -118,18 +115,21 @@ module WebSockets =
         | _ -> disposeSocket socket
     }
 
-    type Middleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
-        member __.Invoke(ctx : HttpContext) =
-            async {
-                if ctx.Request.Path = PathString("/subscriptions") then
-                    match ctx.WebSockets.IsWebSocketRequest with
-                    | true ->
-                        let! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-ws") |> Async.AwaitTask
-                        use socket = new GraphQLWebSocket(socket)
-                        addSocket socket
-                        do! handleMessages executor root socket
-                    | false ->
-                        ctx.Response.StatusCode <- 400
-                else
-                    next.Invoke(ctx) |> ignore
-            } |> Async.StartAsTask :> Task
+    let startSocket socket (executor : Executor<'Root>) (root : 'Root) = 
+        sockets <- socket :: sockets
+        handleMessages executor root socket |> Async.RunSynchronously
+
+type GraphQLSubscriptionsMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
+    member __.Invoke(ctx : HttpContext) =
+        async {
+            if ctx.Request.Path = PathString("/subscriptions") then
+                match ctx.WebSockets.IsWebSocketRequest with
+                | true ->
+                    let! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-ws") |> Async.AwaitTask
+                    use socket = new GraphQLWebSocket(socket)
+                    SocketManager.startSocket socket executor root
+                | false ->
+                    ctx.Response.StatusCode <- 400
+            else
+                next.Invoke(ctx) |> ignore
+        } |> Async.StartAsTask :> Task

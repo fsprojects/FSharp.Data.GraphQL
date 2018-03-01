@@ -6,7 +6,6 @@ open Microsoft.Extensions.DependencyInjection
 open Giraffe
 open Microsoft.Extensions.Logging
 open System
-open Microsoft.AspNetCore.Http
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -23,7 +22,7 @@ type Startup private () =
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
-            .UseMiddleware<WebSockets.Middleware<Root>>(Schema.executor, { ClientId = "5" })
+            .UseMiddleware<GraphQLSubscriptionsMiddleware<Root>>(Schema.executor, Schema.root)
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set
