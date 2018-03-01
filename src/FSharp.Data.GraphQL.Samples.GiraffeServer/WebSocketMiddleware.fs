@@ -39,16 +39,16 @@ type GraphQLWebSocket(innerSocket : WebSocket) =
         |> Seq.iter (fun (_, unsubscriber) -> unsubscriber.Dispose())
         subscriptions <- Map<string, IDisposable> Seq.empty
 
-module internal SocketManager =
+module SocketManager =
     let mutable private sockets = list<GraphQLWebSocket>.Empty
 
     let private disposeSocket socket =
         sockets <- sockets |> List.choose (fun s -> if s <> socket then Some s else None)
         socket.Dispose()
 
-    let private sendMessage (socket : GraphQLWebSocket) (message : SubscriptionSocketServerMessage) = async {
+    let private sendMessage (socket : GraphQLWebSocket) (message : SubscriptionServerMessage) = async {
         let settings = 
-            SubscriptionSocketServerMessageConverter() :> JsonConverter
+            SubscriptionServerMessageConverter() :> JsonConverter
             |> Seq.singleton
             |> jsonSerializerSettings
         let json = JsonConvert.SerializeObject(message, settings)
@@ -72,10 +72,10 @@ module internal SocketManager =
             return None
         else
             let settings =
-                SubscriptionSocketClientMessageConverter(executor, replacements) :> JsonConverter
+                SubscriptionClientMessageConverter(executor, replacements) :> JsonConverter
                 |> Seq.singleton
                 |> jsonSerializerSettings
-            return JsonConvert.DeserializeObject<SubscriptionSocketClientMessage>(message, settings) |> Some
+            return JsonConvert.DeserializeObject<SubscriptionClientMessage>(message, settings) |> Some
     }
 
     let private handleMessages (executor : Executor<'Root>) (root : 'Root) (socket : GraphQLWebSocket) = async {

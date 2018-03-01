@@ -27,9 +27,9 @@ type OptionConverter() =
     override __.ReadJson(_, _, _, _) = failwith "Not supported"
 
 [<Sealed>]
-type StartPayloadConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
+type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
     inherit JsonConverter()
-    override __.CanConvert(t) = t = typeof<StartPayload>    
+    override __.CanConvert(t) = t = typeof<GraphQLQuery>    
     override __.WriteJson(_, _, _) =  failwith "Not supported"    
     override __.ReadJson(reader, _, _, serializer) =
         let jobj = JObject.Load reader
@@ -60,10 +60,10 @@ type StartPayloadConverter<'a>(executor : Executor<'a>, replacements: Map<string
             upcast { ExecutionPlan = plan; Variables = variables }
 
 [<Sealed>]
-type SubscriptionSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
+type SubscriptionClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
     inherit JsonConverter()
     override __.CanWrite = false
-    override __.CanConvert(t) = t = typeof<SubscriptionSocketClientMessage>
+    override __.CanConvert(t) = t = typeof<SubscriptionClientMessage>
     override __.WriteJson(_, _, _) = failwith "Not supported"
     override __.ReadJson(reader, _, _, _) =
         let jobj = JObject.Load reader
@@ -78,9 +78,9 @@ type SubscriptionSocketClientMessageConverter<'a>(executor : Executor<'a>, repla
             | Some id, Some payload ->
                 try
                     let settings = JsonSerializerSettings()
-                    settings.Converters <- [| OptionConverter() :> JsonConverter; StartPayloadConverter(executor, replacements) :> JsonConverter; |]
+                    settings.Converters <- [| OptionConverter() :> JsonConverter; GraphQLQueryConverter(executor, replacements) :> JsonConverter; |]
                     settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
-                    let req = JsonConvert.DeserializeObject<StartPayload>(payload, settings)
+                    let req = JsonConvert.DeserializeObject<GraphQLQuery>(payload, settings)
                     upcast Start(id, req)
                 with e -> upcast ParseError(Some id, "Parse Failed with Exception: " + e.Message)
             | None, _ -> upcast ParseError(None, "Malformed GQL_START message, expected id field but found none")
@@ -92,12 +92,12 @@ type SubscriptionSocketClientMessageConverter<'a>(executor : Executor<'a>, repla
         | typ -> upcast ParseError(None, "Message Type " + typ + " is not supported!")
 
 [<Sealed>]
-type SubscriptionSocketServerMessageConverter() =
+type SubscriptionServerMessageConverter() =
     inherit JsonConverter()
     override __.CanRead = false
-    override __.CanConvert(t) = t = typedefof<SubscriptionSocketServerMessage> || t.DeclaringType = typedefof<SubscriptionSocketServerMessage>
+    override __.CanConvert(t) = t = typedefof<SubscriptionServerMessage> || t.DeclaringType = typedefof<SubscriptionServerMessage>
     override __.WriteJson(writer, value, _) =
-        let value = value :?> SubscriptionSocketServerMessage
+        let value = value :?> SubscriptionServerMessage
         let jobj = JObject()
         match value with
         | ConnectionAck ->
