@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 
+open System
 open System.Text
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
@@ -22,6 +23,9 @@ module StringHelpers =
 
     let utf8Bytes (str : string) =
         str |> Encoding.UTF8.GetBytes
+
+    let isNullOrWhiteSpace (str : string) =
+        String.IsNullOrWhiteSpace(str)
 
 [<AutoOpen>]
 module JsonHelpers =
