@@ -60,10 +60,10 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
             upcast { ExecutionPlan = plan; Variables = variables }
 
 [<Sealed>]
-type SubscriptionClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
+type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
     inherit JsonConverter()
     override __.CanWrite = false
-    override __.CanConvert(t) = t = typeof<SubscriptionClientMessage>
+    override __.CanConvert(t) = t = typeof<WebSocketClientMessage>
     override __.WriteJson(_, _, _) = failwith "Not supported"
     override __.ReadJson(reader, _, _, _) =
         let jobj = JObject.Load reader
@@ -92,12 +92,12 @@ type SubscriptionClientMessageConverter<'a>(executor : Executor<'a>, replacement
         | typ -> upcast ParseError(None, "Message Type " + typ + " is not supported!")
 
 [<Sealed>]
-type SubscriptionServerMessageConverter() =
+type WebSocketServerMessageConverter() =
     inherit JsonConverter()
     override __.CanRead = false
-    override __.CanConvert(t) = t = typedefof<SubscriptionServerMessage> || t.DeclaringType = typedefof<SubscriptionServerMessage>
+    override __.CanConvert(t) = t = typedefof<WebSocketServerMessage> || t.DeclaringType = typedefof<WebSocketServerMessage>
     override __.WriteJson(writer, value, _) =
-        let value = value :?> SubscriptionServerMessage
+        let value = value :?> WebSocketServerMessage
         let jobj = JObject()
         match value with
         | ConnectionAck ->

@@ -22,7 +22,7 @@ type Startup private () =
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
-            .UseMiddleware<GraphQLSubscriptionsMiddleware<Root>>(Schema.executor, Schema.root)
+            .UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, Schema.root)
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set

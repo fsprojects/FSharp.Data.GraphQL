@@ -46,9 +46,9 @@ module SocketManager =
         sockets <- sockets |> List.choose (fun s -> if s <> socket then Some s else None)
         socket.Dispose()
 
-    let private sendMessage (socket : GraphQLWebSocket) (message : SubscriptionServerMessage) = async {
+    let private sendMessage (socket : GraphQLWebSocket) (message : WebSocketServerMessage) = async {
         let settings = 
-            SubscriptionServerMessageConverter() :> JsonConverter
+            WebSocketServerMessageConverter() :> JsonConverter
             |> Seq.singleton
             |> jsonSerializerSettings
         let json = JsonConvert.SerializeObject(message, settings)
@@ -72,23 +72,28 @@ module SocketManager =
             return None
         else
             let settings =
-                SubscriptionClientMessageConverter(executor, replacements) :> JsonConverter
+                WebSocketClientMessageConverter(executor, replacements) :> JsonConverter
                 |> Seq.singleton
                 |> jsonSerializerSettings
-            return JsonConvert.DeserializeObject<SubscriptionClientMessage>(message, settings) |> Some
+            return JsonConvert.DeserializeObject<WebSocketClientMessage>(message, settings) |> Some
     }
 
     let private handleMessages (executor : Executor<'Root>) (root : 'Root) (socket : GraphQLWebSocket) = async {
         let send id output =
             Data (id, output)
             |> sendMessage socket
-            |> Async.RunSynchronously
+            |> Async.RunSynchronously     
         let handle id =
             function
             | Stream output -> 
                 let unsubscriber = output |> Observable.subscribe (fun o -> send id o)
                 socket.Subscribe(id, unsubscriber)
-            | _ -> ()
+            | Deferred (data, _, output) ->
+                send id data
+                let unsubscriber = output |> Observable.subscribe (fun o -> send id o)
+                socket.Subscribe(id, unsubscriber)
+            | Direct (data, _) ->
+                send id data
         try
             let mutable loop = true
             while loop do
@@ -119,17 +124,14 @@ module SocketManager =
         sockets <- socket :: sockets
         handleMessages executor root socket |> Async.RunSynchronously
 
-type GraphQLSubscriptionsMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
+type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
     member __.Invoke(ctx : HttpContext) =
         async {
-            if ctx.Request.Path = PathString("/subscriptions") then
-                match ctx.WebSockets.IsWebSocketRequest with
-                | true ->
-                    let! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-ws") |> Async.AwaitTask
-                    use socket = new GraphQLWebSocket(socket)
-                    SocketManager.startSocket socket executor root
-                | false ->
-                    ctx.Response.StatusCode <- 400
-            else
-                next.Invoke(ctx) |> ignore
+            match ctx.WebSockets.IsWebSocketRequest with
+            | true ->
+                let! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-ws") |> Async.AwaitTask
+                use socket = new GraphQLWebSocket(socket)
+                SocketManager.startSocket socket executor root
+            | false ->
+                next.Invoke(ctx) |> ignore                       
         } |> Async.StartAsTask :> Task
