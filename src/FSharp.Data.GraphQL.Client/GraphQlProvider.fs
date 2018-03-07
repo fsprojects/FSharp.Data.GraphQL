@@ -201,9 +201,12 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                 tdef.AddMember m
                 tdef
             | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
-        generator.DefineStaticParameters([ProvidedStaticParameter("url", typeof<string>)], fun typeName parameterValues ->
+        let staticParams = 
+            [ ProvidedStaticParameter("url", typeof<string>)
+              ProvidedStaticParameter("introspection", typeof<string>, "") ]
+        generator.DefineStaticParameters(staticParams, fun typeName parameterValues ->
             match parameterValues with 
-            | [| :? string as serverUrl |] ->
+            | [| :? string as serverUrl; :? string as introspection |] when String.IsNullOrWhiteSpace(introspection) ->
                 Util.requestSchema(serverUrl) 
                 |> Async.RunSynchronously
                 |> handleSchema typeName serverUrl
