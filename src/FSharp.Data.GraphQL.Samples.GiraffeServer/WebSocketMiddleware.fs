@@ -82,7 +82,10 @@ module SocketManager =
         let send id output =
             Data (id, output)
             |> sendMessage socket
-            |> Async.RunSynchronously     
+            |> Async.RunSynchronously
+        let sendDelayed id output =
+            Thread.Sleep(5000)
+            send id output    
         let handle id =
             function
             | Stream output -> 
@@ -90,7 +93,7 @@ module SocketManager =
                 socket.Subscribe(id, unsubscriber)
             | Deferred (data, _, output) ->
                 send id data
-                let unsubscriber = output |> Observable.subscribe (fun o -> send id o)
+                let unsubscriber = output |> Observable.subscribe (fun o -> sendDelayed id o)
                 socket.Subscribe(id, unsubscriber)
             | Direct (data, _) ->
                 send id data
