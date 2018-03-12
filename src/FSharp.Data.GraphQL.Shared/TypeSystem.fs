@@ -630,6 +630,10 @@ and DeferredExecutionInfo = {
     Info : ExecutionInfo
     Path : string list
 }
+and StreamedExecutionInfo = {
+    Info : ExecutionInfo
+    Path : string list
+}
 and ExecutionPlan = 
     { /// Unique identifier of the current execution plan.
       DocumentId : int
@@ -644,6 +648,8 @@ and ExecutionPlan =
       Fields : ExecutionInfo list
       /// A list of all deferred fields in the query
       DeferredFields : DeferredExecutionInfo list
+      /// A list of all streamed fields in the query
+      StreamedFields : StreamedExecutionInfo list
       /// List of variables defined within executed query.
       Variables: VarDef list }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
@@ -2120,10 +2126,19 @@ module SchemaDefinitions =
                                        >> Option.map box
                                        >> Option.toObj) } |] }
 
+    /// GraphQL @defer directive.
     let DeferDirective : DirectiveDef =
         { Name = "defer"
           Description = Some "Defers the resolution of this field or fragment"
           Locations =
+            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
+          Args = [||] }
+
+    /// GraphQL @stream directive.
+    let StreamDirective : DirectiveDef =
+        { Name = "stream"
+          Description = Some "Streams the resolution of this field or fragment"
+          Locations = 
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
     

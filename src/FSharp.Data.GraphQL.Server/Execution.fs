@@ -518,11 +518,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
                 |> Array.map(fun d ->
-                    let {Info = info; Path = path;} = d
-                    let fdef = info.Definition
-                    let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+                    let fdef = d.Info.Definition
+                    let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
                     let fieldCtx = { 
-                        ExecutionInfo = info
+                        ExecutionInfo = d.Info
                         Context = ctx
                         ReturnType = fdef.TypeDef
                         ParentType = objdef
@@ -538,17 +537,17 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 match List.tail path, tree' with
                                 | [], t -> 
                                     asyncVal { 
-                                        let! res = buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                                         return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
                                     }
                                 | [p], t -> 
                                     asyncVal { 
-                                        let! res = buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                                         return! async { return [|res, List.rev(p::pathAcc)|] }
                                     }
                                 | [p;"__index"], t -> 
                                     asyncVal { 
-                                        let! res = buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                                         return! async { return [|res, List.rev(p::pathAcc)|] }
                                     }
                                 | p, ResolverObjectNode n -> 
@@ -573,7 +572,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             return res
                         }
 
-                    traversePath path (AsyncVal.wrap tree) [(List.head path)]
+                    traversePath d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
                             // TODO: what to do with deferred errors?
