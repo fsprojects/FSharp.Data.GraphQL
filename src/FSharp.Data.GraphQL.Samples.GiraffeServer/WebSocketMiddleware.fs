@@ -9,10 +9,12 @@ open Newtonsoft.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open System.Collections.Generic
+open System.Collections.Concurrent
 
 type GraphQLWebSocket(innerSocket : WebSocket) =
     inherit WebSocket()
-    let mutable subscriptions : Map<string, IDisposable> = Map<string, IDisposable> Seq.empty
+    let subscriptions = ConcurrentDictionary<string, IDisposable>() :> IDictionary<string, IDisposable>
+    let id = Guid.NewGuid()
     override __.CloseStatus = innerSocket.CloseStatus
     override __.CloseStatusDescription = innerSocket.CloseStatusDescription
     override __.State = innerSocket.State
@@ -25,25 +27,25 @@ type GraphQLWebSocket(innerSocket : WebSocket) =
     override __.ReceiveAsync(buffer, ct) = innerSocket.ReceiveAsync(buffer, ct)
     override __.SendAsync(buffer, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
     override __.Abort() = innerSocket.Abort()
-    member __.Subscribe(id, unsubscriber) =
-        subscriptions <- subscriptions.Add (id, unsubscriber)
-    member __.Unsubscribe(id) =
-        match subscriptions.TryFind id with
-        | Some unsubscriber ->
-            unsubscriber.Dispose()
-            subscriptions <- subscriptions.Remove id
-        | None -> ()
+    member __.Subscribe(id : string, unsubscriber : IDisposable) =
+        subscriptions.Add(id, unsubscriber)
+    member __.Unsubscribe(id : string) =
+        match subscriptions.ContainsKey(id) with
+        | true ->
+            subscriptions.[id].Dispose()
+            subscriptions.Remove(id) |> ignore
+        | false -> ()
     member __.UnsubscribeAll() =
         subscriptions
-        |> Map.toSeq
-        |> Seq.iter (fun (_, unsubscriber) -> unsubscriber.Dispose())
-        subscriptions <- Map<string, IDisposable> Seq.empty
+        |> Seq.iter (fun x -> x.Value.Dispose())
+        subscriptions.Clear()
+    member __.Id = id
 
 module SocketManager =
-    let mutable private sockets = list<GraphQLWebSocket>.Empty
+    let private sockets = ConcurrentDictionary<Guid, GraphQLWebSocket>() :> IDictionary<Guid, GraphQLWebSocket>
 
-    let private disposeSocket socket =
-        sockets <- sockets |> List.choose (fun s -> if s <> socket then Some s else None)
+    let private disposeSocket (socket : GraphQLWebSocket) =
+        sockets.Remove(socket.Id) |> ignore
         socket.Dispose()
 
     let private sendMessage (socket : GraphQLWebSocket) (message : WebSocketServerMessage) = async {
@@ -123,8 +125,8 @@ module SocketManager =
         | _ -> disposeSocket socket
     }
 
-    let startSocket socket (executor : Executor<'Root>) (root : 'Root) = 
-        sockets <- socket :: sockets
+    let startSocket (socket : GraphQLWebSocket) (executor : Executor<'Root>) (root : 'Root) = 
+        sockets.Add(socket.Id, socket)
         handleMessages executor root socket |> Async.RunSynchronously
 
 type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
