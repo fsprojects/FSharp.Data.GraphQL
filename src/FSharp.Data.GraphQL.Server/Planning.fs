@@ -153,7 +153,7 @@ let private isDeferredField (field: Field) : bool =
 let private isStreamedField (field : Field) : bool =
     field.Directives |> List.exists (fun d -> d.Name = "stream")
                 
-type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * StreamedExecutionInfo list * string list
+type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * DeferredExecutionInfo list * string list
 
 let private getSelectionFrag = function
     | SelectFields(fragmentFields) -> fragmentFields
@@ -207,7 +207,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
     let parentDef = downcast info.ReturnDef
     let plannedFields, deferredFields', streamedFields' =
         selectionSet
-        |> List.fold(fun (fields : ExecutionInfo list, deferredFields : DeferredExecutionInfo list, streamedFields : StreamedExecutionInfo list) selection ->
+        |> List.fold(fun (fields : ExecutionInfo list, deferredFields : DeferredExecutionInfo list, streamedFields : DeferredExecutionInfo list) selection ->
             //FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives info.Include
             let updatedInfo = { info with Include = includer }
@@ -254,7 +254,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
     let info, deferredFields, streamedFields, path = stage
     let plannedTypeFields, deferredFields', streamedFields' =
         selectionSet
-        |> List.fold(fun (fields : Map<string, ExecutionInfo list>, deferredFields : DeferredExecutionInfo list, streamedFields : StreamedExecutionInfo list) selection ->
+        |> List.fold(fun (fields : Map<string, ExecutionInfo list>, deferredFields : DeferredExecutionInfo list, streamedFields : DeferredExecutionInfo list) selection ->
             let includer = getIncluder selection.Directives info.Include
             let innerData = { info with Include = includer }
             match selection with
