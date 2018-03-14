@@ -591,21 +591,27 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         Schema = ctx.Schema
                         Args = args
                         Variables = ctx.Variables
-                    } 
+                    }
+                    let nvli (path : string list) (index : int) data =
+                        let path' = path |> List.map (fun p -> p :> obj)
+                        NameValueLookup.ofList ["data", data; "path", upcast (path' @ [index])]
+                    let nvl (path : string list) data =
+                        NameValueLookup.ofList ["data", data; "path", upcast path]
+                    let mapResult (d : KeyValuePair<string, obj>) path =
+                        match d.Value with
+                        | :? NameValueLookup as x -> 
+                            x
+                            |> Seq.map (fun x -> 
+                                match x.Value with
+                                | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
+                                | _ -> nvl path x |> Seq.singleton)
+                            |> Seq.collect id
+                        | x -> nvl path x |> Seq.singleton
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
                             let d, _ = treeToDict tree
-                            match d.Value with
-                            | :? NameValueLookup as x -> 
-                                return 
-                                    x |> Seq.map (fun x -> 
-                                        match x.Value with
-                                        | :? IEnumerable<obj> as y -> 
-                                            y |> Seq.mapi (fun i x -> NameValueLookup.ofList["data", x; "path", upcast ((path |> List.map (fun x -> x :> obj)) @ [i])])
-                                        | _ -> Seq.singleton (NameValueLookup.ofList["data", d.Value; "path", upcast path]))
-                                    |> Seq.collect id
-                            | _ -> return Seq.singleton (NameValueLookup.ofList["data", d.Value; "path", upcast path])
+                            return mapResult d path
                         }) >> AsyncVal.collectParallel))
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
