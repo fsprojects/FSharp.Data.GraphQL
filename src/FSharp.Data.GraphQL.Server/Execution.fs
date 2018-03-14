@@ -290,30 +290,9 @@ module ResolverTree =
                 nodeOp path' node.Name node.Value ts
             | ResolverListNode node ->
                 let path' = node.Name::path
-                let ts = node.Children |> Array.mapi(fun i c -> helper (i.ToString()::path') c) 
+                let ts = node.Children |> Array.mapi(fun i c -> helper (i.ToString()::path') c)
                 listOp path' node.Name node.Value ts
         helper []
-
-    let rec pathFoldSeq leafOp errorOp nodeOp listOp =
-        let rec helperSeq path = function
-            | ResolverLeaf leaf ->
-                leafOp (leaf.Name::path) leaf |> Seq.singleton
-            | ResolverError err ->
-                let origin = (err.PathToOrigin |> List.rev)
-                let path' = if err.Name <> "__index" then origin@(err.Name::path) else origin@path
-                errorOp path' err |> Seq.singleton
-            | ResolverObjectNode node ->
-                let path' = if node.Name <> "__index" then node.Name::path else path
-                node.Children
-                |> Seq.collect (helperSeq path')
-                |> nodeOp path' node.Name node.Value
-            | ResolverListNode node ->
-                let path' = node.Name::path
-                node.Children
-                |> Seq.mapi (fun i c -> helperSeq (i.ToString()::path') c)
-                |> Seq.collect id
-                |> listOp path' node.Name node.Value
-        helperSeq [] 
 
 let private treeToDict =
     ResolverTree.pathFold 
@@ -331,25 +310,6 @@ let private treeToDict =
             match value with
             | Some v -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
-
-let private treeToDictSeq =
-    ResolverTree.pathFoldSeq 
-        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
-        (fun path error -> 
-            let (e:Error) = (error.Message, path |> List.rev)
-            KeyValuePair<_,_>(error.Name, null :> obj), [e])
-        (fun _ name value children -> 
-            match value with
-            | Some _ -> children |> Seq.map (fun (c, e) -> KeyValuePair<_, _>(name, NameValueLookup([|c|]) :> obj), e)
-            | None -> 
-                let _, errors = children |> Seq.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
-                (KeyValuePair<_,_>(name, null), errors) |> Seq.singleton)
-        (fun _ name value children -> 
-            match value with
-            | Some _ -> children |> Seq.map (fun (c, e) -> KeyValuePair<_, _>(name, [|c.Value|] :> obj), e)
-            | None -> 
-                let _, errors = children |> Seq.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
-                (KeyValuePair<_,_>(name, null), errors) |> Seq.singleton)
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = err.Name::err.PathToOrigin} }
@@ -604,12 +564,12 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             return NameValueLookup.ofList["data", d.Value; "path", upcast path]
                         }) >> AsyncVal.collectParallel))
                 |> AsyncVal.collectParallel
-                |> AsyncVal.map(Array.fold (Array.append) [||])))
+                |> AsyncVal.map (Array.fold Array.append Array.empty)))
             |> AsyncVal.collectParallel
-            |> AsyncVal.map(Array.fold (Array.append) [||])
+            |> AsyncVal.map (Array.fold Array.append Array.empty)
             |> AsyncVal.toAsync
             |> Observable.ofAsync
-            |> Observable.bind(Observable.ofSeq)
+            |> Observable.bind Observable.ofSeq
             |> Some
     let streamedResults =
         if ctx.ExecutionPlan.StreamedFields.Length = 0
@@ -635,19 +595,26 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
-                            return
-                                // TODO: what to do with streamed errors?
-                                treeToDictSeq tree
-                                |> Seq.map (fun (d, _) -> NameValueLookup.ofList["data", d.Value; "path", upcast path])
+                            let d, _ = treeToDict tree
+                            match d.Value with
+                            | :? NameValueLookup as x -> 
+                                return 
+                                    x |> Seq.map (fun x -> 
+                                        match x.Value with
+                                        | :? IEnumerable<obj> as y -> 
+                                            y |> Seq.mapi (fun i x -> NameValueLookup.ofList["data", x; "path", upcast ((path |> List.map (fun x -> x :> obj)) @ [i])])
+                                        | _ -> Seq.singleton (NameValueLookup.ofList["data", d.Value; "path", upcast path]))
+                                    |> Seq.collect id
+                            | _ -> return Seq.singleton (NameValueLookup.ofList["data", d.Value; "path", upcast path])
                         }) >> AsyncVal.collectParallel))
                 |> AsyncVal.collectParallel
-                |> AsyncVal.map(Array.fold (Array.append) [||])))
+                |> AsyncVal.map (Array.fold Array.append Array.empty)))
             |> AsyncVal.collectParallel
-            |> AsyncVal.map(Array.fold (Array.append) [||])
+            |> AsyncVal.map (Array.fold Array.append Array.empty)
             |> AsyncVal.toAsync
             |> Observable.ofAsync
-            |> Observable.bind(fun i -> i |> Observable.ofSeq)
-            |> Observable.bind(fun i -> i |> Observable.ofSeq)
+            |> Observable.bind Observable.ofSeq
+            |> Observable.bind Observable.ofSeq
             |> Some
     dict, deferredResults, streamedResults
 
