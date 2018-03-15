@@ -535,6 +535,42 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
+    // let deferredResults =
+    //     if ctx.ExecutionPlan.DeferredFields.Length = 0
+    //     then None
+    //     else
+    //         resultTrees
+    //         |> Array.map(AsyncVal.bind(fun tree ->
+    //             ctx.ExecutionPlan.DeferredFields
+    //             |> List.filter (fun d -> (List.head d.Path) = tree.Name)
+    //             |> List.toArray
+    //             |> Array.map(fun d ->
+    //                 let fdef = d.Info.Definition
+    //                 let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
+    //                 let fieldCtx = { 
+    //                     ExecutionInfo = d.Info
+    //                     Context = ctx
+    //                     ReturnType = fdef.TypeDef
+    //                     ParentType = objdef
+    //                     Schema = ctx.Schema
+    //                     Args = args
+    //                     Variables = ctx.Variables
+    //                 }
+    //                 traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
+    //                 |> AsyncVal.bind(Array.map(fun (tree, path) ->
+    //                     asyncVal {
+    //                         // TODO: what to do with deferred errors?
+    //                         let d, _ = treeToDict tree
+    //                         return NameValueLookup.ofList["data", d.Value; "path", upcast path]
+    //                     }) >> AsyncVal.collectParallel))
+    //             |> AsyncVal.collectParallel
+    //             |> AsyncVal.map (Array.fold Array.append Array.empty)))
+    //         |> AsyncVal.collectParallel
+    //         |> AsyncVal.map (Array.fold Array.append Array.empty)
+    //         |> AsyncVal.toAsync
+    //         |> Observable.ofAsync
+    //         |> Observable.bind Observable.ofSeq
+    //         |> Some
     let deferredResults =
         if ctx.ExecutionPlan.DeferredFields.Length = 0
         then None
@@ -542,43 +578,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             resultTrees
             |> Array.map(AsyncVal.bind(fun tree ->
                 ctx.ExecutionPlan.DeferredFields
-                |> List.filter (fun d -> (List.head d.Path) = tree.Name)
-                |> List.toArray
-                |> Array.map(fun d ->
-                    let fdef = d.Info.Definition
-                    let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
-                    let fieldCtx = { 
-                        ExecutionInfo = d.Info
-                        Context = ctx
-                        ReturnType = fdef.TypeDef
-                        ParentType = objdef
-                        Schema = ctx.Schema
-                        Args = args
-                        Variables = ctx.Variables
-                    }
-                    traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
-                    |> AsyncVal.bind(Array.map(fun (tree, path) ->
-                        asyncVal {
-                            // TODO: what to do with deferred errors?
-                            let d, _ = treeToDict tree
-                            return NameValueLookup.ofList["data", d.Value; "path", upcast path]
-                        }) >> AsyncVal.collectParallel))
-                |> AsyncVal.collectParallel
-                |> AsyncVal.map (Array.fold Array.append Array.empty)))
-            |> AsyncVal.collectParallel
-            |> AsyncVal.map (Array.fold Array.append Array.empty)
-            |> AsyncVal.toAsync
-            |> Observable.ofAsync
-            |> Observable.bind Observable.ofSeq
-            |> Some
-    let streamedResults =
-        if ctx.ExecutionPlan.StreamedFields.Length = 0
-        then None
-        else
-            resultTrees
-            |> Array.map(AsyncVal.bind(fun tree ->
-                ctx.ExecutionPlan.StreamedFields
-                |> List.filter (fun d -> (List.head d.Path) = tree.Name)
+                |> List.filter (fun d -> 
+                (List.head d.Path) = tree.Name)
                 |> List.toArray
                 |> Array.map(fun d ->
                     let fdef = d.Info.Definition
@@ -594,24 +595,30 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     }
                     let nvli (path : string list) (index : int) data =
                         let path' = path |> List.map (fun p -> p :> obj)
-                        NameValueLookup.ofList ["data", data; "path", upcast (path' @ [index])]
+                        let data' = [|data|] :> obj
+                        NameValueLookup.ofList ["data", data'; "path", upcast (path' @ [index])]
                     let nvl (path : string list) data =
                         NameValueLookup.ofList ["data", data; "path", upcast path]
-                    let mapResult (d : KeyValuePair<string, obj>) path =
-                        match d.Value with
-                        | :? NameValueLookup as x -> 
-                            x
-                            |> Seq.map (fun x -> 
-                                match x.Value with
-                                | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
-                                | _ -> nvl path x |> Seq.singleton)
-                            |> Seq.collect id
-                        | x -> nvl path x |> Seq.singleton
+                    let mapResult (d : KeyValuePair<string, obj>) path (kind : DeferredExecutionInfoKind) =
+                        match kind with
+                        | DeferredExecution ->
+                            match d.Value with
+                            | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
+                            | x -> nvl path x |> Seq.singleton
+                        | StreamedExecution ->
+                            match d.Value with
+                            | :? NameValueLookup as x -> 
+                                x |> Seq.map (fun x -> 
+                                    match x.Value with
+                                    | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
+                                    | _ -> nvl path x  |> Seq.singleton)
+                                |> Seq.collect id
+                            | x -> nvl path x |> Seq.singleton
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
-                            let d, _ = treeToDict tree
-                            return mapResult d path
+                            let data, _ = treeToDict tree
+                            return mapResult data path d.Kind
                         }) >> AsyncVal.collectParallel))
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
@@ -622,7 +629,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             |> Observable.bind Observable.ofSeq
             |> Observable.bind Observable.ofSeq
             |> Some
-    dict, deferredResults, streamedResults
+    dict, deferredResults
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value = 
     // Subscription queries can only have one root field
@@ -698,12 +705,10 @@ let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variabl
         |> List.toArray
 
     let parseQuery o =
-        let dict, deferred, streamed = executeQueryOrMutation resultSet ctx o fieldExecuteMap root 
-        match deferred, streamed with
-        | Some d, None -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
-        | None, Some s -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', s |> Observable.map(fun x -> upcast x)))
-        | Some d, Some s -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors')) // TODO: this case should not exist. Deferred should hold streamed, deferred and live results
-        | None, None -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors'))
+        let dict, deferred = executeQueryOrMutation resultSet ctx o fieldExecuteMap root 
+        match deferred with
+        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
+        | None -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors'))
 
     match executionPlan.Operation.OperationType with
     | Subscription ->

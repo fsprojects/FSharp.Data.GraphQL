@@ -629,7 +629,14 @@ and VarDef =
 and DeferredExecutionInfo = {
     Info : ExecutionInfo
     Path : string list
+    Kind : DeferredExecutionInfoKind
 }
+
+/// Kind of deferred execution.
+and DeferredExecutionInfoKind =
+    | DeferredExecution
+    | StreamedExecution
+
 and ExecutionPlan = 
     { /// Unique identifier of the current execution plan.
       DocumentId : int
@@ -644,8 +651,6 @@ and ExecutionPlan =
       Fields : ExecutionInfo list
       /// A list of all deferred fields in the query
       DeferredFields : DeferredExecutionInfo list
-      /// A list of all streamed fields in the query
-      StreamedFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
       Variables: VarDef list }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)

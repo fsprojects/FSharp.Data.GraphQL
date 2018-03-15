@@ -45,9 +45,9 @@ type Executor<'Root> (schema: ISchema<'Root>) =
                 | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
                 | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
             match res with
-            | Direct(data, errors) -> Direct(prepareData data errors, errors)
-            | Deferred(data, errors, deferred) -> Deferred(prepareData data errors, errors, deferred)
-            | Stream(stream) -> Stream(stream)
+            | Direct (data, errors) -> Direct (prepareData data errors, errors)
+            | Deferred (data, errors, deferred) -> Deferred (prepareData data errors, errors, deferred)
+            | Stream (stream) -> Stream(stream)
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
