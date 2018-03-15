@@ -535,42 +535,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
-    // let deferredResults =
-    //     if ctx.ExecutionPlan.DeferredFields.Length = 0
-    //     then None
-    //     else
-    //         resultTrees
-    //         |> Array.map(AsyncVal.bind(fun tree ->
-    //             ctx.ExecutionPlan.DeferredFields
-    //             |> List.filter (fun d -> (List.head d.Path) = tree.Name)
-    //             |> List.toArray
-    //             |> Array.map(fun d ->
-    //                 let fdef = d.Info.Definition
-    //                 let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
-    //                 let fieldCtx = { 
-    //                     ExecutionInfo = d.Info
-    //                     Context = ctx
-    //                     ReturnType = fdef.TypeDef
-    //                     ParentType = objdef
-    //                     Schema = ctx.Schema
-    //                     Args = args
-    //                     Variables = ctx.Variables
-    //                 }
-    //                 traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
-    //                 |> AsyncVal.bind(Array.map(fun (tree, path) ->
-    //                     asyncVal {
-    //                         // TODO: what to do with deferred errors?
-    //                         let d, _ = treeToDict tree
-    //                         return NameValueLookup.ofList["data", d.Value; "path", upcast path]
-    //                     }) >> AsyncVal.collectParallel))
-    //             |> AsyncVal.collectParallel
-    //             |> AsyncVal.map (Array.fold Array.append Array.empty)))
-    //         |> AsyncVal.collectParallel
-    //         |> AsyncVal.map (Array.fold Array.append Array.empty)
-    //         |> AsyncVal.toAsync
-    //         |> Observable.ofAsync
-    //         |> Observable.bind Observable.ofSeq
-    //         |> Some
     let deferredResults =
         if ctx.ExecutionPlan.DeferredFields.Length = 0
         then None
