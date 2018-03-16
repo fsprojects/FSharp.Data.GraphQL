@@ -500,21 +500,36 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let! res = 
                 match List.tail path, tree' with
                 | [], t -> 
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx t
+                    // printfn "Done"
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
                     }
                 | [p], t -> 
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx t
+                    // printfn "Done"
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
                     }
-                | [p;"__index"], t -> 
+                | [p;"__index"], t ->
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx t
+                    // printfn "Done"
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
                     }
-                | p, ResolverObjectNode n -> 
+                | [p;"__index";_;"__index"], t ->
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx t
+                    // printfn "Done"
+                    asyncVal { 
+                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                        return! async { return [|res, List.rev(p::pathAcc)|] }
+                    }
+                | p, ResolverObjectNode n ->
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx n
+                    // printfn "Done"
                     asyncVal {
                         let next = n.Children |> Array.tryFind(fun c' -> c'.Name = (List.head p))
                         let! res =
@@ -524,6 +539,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         return res
                     }
                 | p, ResolverListNode l ->
+                    // printfn "%A\n\n%A\n\n%A" d fieldCtx l
+                    // printfn "Done"
                     asyncVal {
                         let! res =
                             l.Children
