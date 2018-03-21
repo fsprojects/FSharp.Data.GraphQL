@@ -7,6 +7,11 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open System.Threading
+open FSharp.Data.GraphQL.Tests
+open System.Collections.Generic
+open System.Collections.Concurrent
+open System.Collections.Concurrent
 
 #nowarn "40"
 
@@ -95,11 +100,11 @@ let executor =
     Executor(schema)
 
 let asts query = 
-    ["defer"; "stream" ]
+    ["defer"; "stream"]
     |> Seq.map (query >> parse)
 
 [<Fact>]
-let ``Simple Defer`` () =
+let ``Simple Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
@@ -127,66 +132,35 @@ let ``Simple Defer`` () =
             deferred |> Observable.add(equals (upcast expectedDeferred))
         | _ -> fail "Expected Deferred GQLResponse")
 
-[<Fact(Skip="FIXME: investigate reason of failure")>]
-let ``Partial Union Defer`` () = 
-    let expectedDirect = 
-        NameValueLookup.ofList [
-            "testData", upcast NameValueLookup.ofList [
-                "a", upcast "Apple"
-                "union", upcast NameValueLookup.ofList[
-                    "id", upcast "1"
-                ]
-            ]
-        ]
-    let query = sprintf """{
-        testData {
-            a
-            union {
-                ... on A {
-                    id
-                    a @%s
-                }
-                ... on B {
-                    id
-                    b
-                }
-            }
-        }
-    }"""
-    asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
-        match result with
-        | Deferred(data, errors, deferred) ->
-            empty errors
-            data.["data"] |> equals (upcast expectedDirect)
-            // deferred |> Observable.add(printfn "Deferred: %A")
-        | _ -> fail "Expected Deferred GQLRespnse")
-
 [<Fact>]
 let ``List Union Defer``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
-                "list", upcast [
-                    NameValueLookup.ofList [
-                        "id", upcast "2"
-                    ]
-                    NameValueLookup.ofList [
-                        "id", upcast "3"
-                        "b", upcast 4
-                    ]
-                ]
             ]
         ]
-    let query = sprintf """{
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "id", upcast "2"
+                    "a", upcast "Union A"
+                ] :> obj
+                NameValueLookup.ofList [
+                    "id", upcast "3"
+                    "b", upcast 4
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData"; "list"]
+        ]
+    let query = parse """{
         testData {
             a
-            list {
+            list @defer {
                 ... on A {
                     id
-                    a @%s
+                    a
                 }
                 ... on B {
                     id
@@ -195,48 +169,114 @@ let ``List Union Defer``() =
             }
         }
     }"""
-    asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
-        match result with
-        | Deferred(data, errors, deferred) ->
-            empty errors
-            data.["data"] |> equals (upcast expectedDirect)
-            // deferred |> Observable.add(printfn "Deferred: %A")
-        | _ -> fail "Expected Deferred GQLRespnse")
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+        then fail "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
-[<Fact(Skip="FIXME: investigate reason of failure")>]
-let ``Complex Defer`` () =
+[<Fact>]
+let ``List Stream``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "id", upcast "2"
+                    "a", upcast "Union A"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData" :> obj; "list" :> obj; 0 :> obj]
+        ]        
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "id", upcast "3"
+                    "b", upcast 4
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData" :> obj; "list" :> obj; 1 :> obj]
+        ]
+    let query = parse """{
+        testData {
+            a
+            list @stream {
+                ... on A {
+                    id
+                    a
+                }
+                ... on B {
+                    id
+                    b
+                }
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred 
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then mre.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+        then fail "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Union Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
                 "b", upcast "Banana"
-                "union", upcast NameValueLookup.ofList [ "id", upcast "1" ]
             ]
         ]
     let expectedDeferred =
         NameValueLookup.ofList [
-            "data", upcast NameValueLookup.ofList [ "a", upcast "Union A" ]
-            "path", upcast ["Data"; "union"; "a"]
+            "data", upcast NameValueLookup.ofList [ "id", upcast "1"; "a", upcast "Union A" ]
+            "path", upcast ["testData"; "union"]
         ]
-    let query d = 
-        sprintf """{
-            testData {
-                a
-                b
-                union {
-                    ... on A {
-                        id
-                        a @%s
-                    }
-                    ... on B {
-                        id
-                        b @%s
-                    }
+    let query = sprintf """{
+        testData {
+            a
+            b
+            union @%s {
+                ... on A {
+                    id
+                    a
+                }
+                ... on B {
+                    id
+                    b
                 }
             }
-        }""" d d
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
     asts query
     |> Seq.map (executor.AsyncExecute >> sync)
     |> Seq.iter (fun result ->
@@ -244,5 +284,8 @@ let ``Complex Defer`` () =
         | Deferred(data, errors, deferred) -> 
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add(equals (upcast expectedDeferred))
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLRespnse")
