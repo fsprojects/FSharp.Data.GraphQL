@@ -516,11 +516,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
                     }
-                | [p;"__index";_;"__index"], t ->
-                    asyncVal { 
-                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                        return! async { return [|res, List.rev(p::pathAcc)|] }
-                    }
+                | [_;"__index";_;"__index"], _ ->
+                    raise <| GraphQLException("Nested defer directives are not supported yet.")
                 | p, ResolverObjectNode n ->
                     asyncVal {
                         let next = n.Children |> Array.tryFind(fun c' -> c'.Name = (List.head p))
