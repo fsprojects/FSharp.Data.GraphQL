@@ -10,6 +10,9 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Execution
+open System.Collections.Concurrent
+open System.Threading
+open System.Collections
 
 let equals (expected : 'x) (actual : 'x) = 
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
@@ -19,33 +22,33 @@ let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors
     | false, _ -> ()
-
-let empty (xs: 'a list) =
+let single (xs : 'a seq) =
+    Assert.Single(xs)
+let empty (xs: 'a seq) =
     Assert.Empty(xs)
 let fail (message: string) =
     Assert.True(false, message)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
-let hasError errMsg (errors: Error list) =
-    let containsMessage = 
-        errors
-        |> List.exists (fun (message, path) -> message.Contains(errMsg))
+let hasError errMsg (errors: Error seq) =
+    let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
-
 let (<??) opt other = 
     match opt with
     | None -> Some other
     | _ -> opt
-
 let undefined (value: 't) = 
     Assert.True((value = Unchecked.defaultof<'t>), sprintf "Expected value to be undefined, but was: %A" value)
+let contains (expected : 'a) (xs : 'a seq) =
+    Assert.Contains(expected, xs); xs
 
 open System
 open System.Reflection
 open Newtonsoft.Json
 open Newtonsoft.Json.Serialization
 open Microsoft.FSharp.Reflection
+open FSharp.Data.GraphQL.Types
 
 type internal OptionConverter() =
     inherit JsonConverter()
