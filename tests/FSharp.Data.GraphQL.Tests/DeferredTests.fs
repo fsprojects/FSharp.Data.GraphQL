@@ -88,7 +88,6 @@ let executor =
            ]
        }
 
-
     let Query = 
         Define.Object<TestSubject>(
             name = "Query",
@@ -113,8 +112,8 @@ let ``Simple Defer and Stream`` () =
         ]
     let expectedDeferred =
         NameValueLookup.ofList [
-            "data", upcast NameValueLookup.ofList [ "a", upcast "Apple" ]
-            "path", upcast ["Data"; "a"]
+            "data", upcast "Apple"
+            "path", upcast ["testData"; "a"]
         ]
     let query = sprintf """{
         testData {
@@ -122,6 +121,8 @@ let ``Simple Defer and Stream`` () =
             b
         }
     }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
     asts query
     |> Seq.map (executor.AsyncExecute >> sync)
     |> Seq.iter (fun result ->
@@ -129,7 +130,10 @@ let ``Simple Defer and Stream`` () =
         | Deferred(data, errors, deferred) -> 
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add(equals (upcast expectedDeferred))
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
