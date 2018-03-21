@@ -506,12 +506,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | SelectFields [f] -> return! async { return [|res, List.rev (f.Identifier :: pathAcc)|] }
                         | _ -> return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
                     }
-                | [p], t -> 
-                    asyncVal { 
-                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                        return! async { return [|res, List.rev(p::pathAcc)|] }
-                    }
-                | [p;"__index"], t ->
+                | ([p;"__index"] | [p]), t ->
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
