@@ -7,3 +7,8 @@
 * Replaced current asynchronous API resolver internals.
 * Ability to use records as complex input variables.
 * Minor bugfixes and performance optimizations.
+
+### 0.0.3-beta - March 22 2018
+* Introduced support for GraphQL over WebSocket Protocol
+* Introduced support for Stream and Defer directives
+* Minor bugfixes.
