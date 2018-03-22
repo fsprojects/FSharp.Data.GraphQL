@@ -56,7 +56,7 @@ type SchemaConfig =
 
     static member Default = 
         { Types = []
-          Directives = [IncludeDirective; SkipDirective; DeferDirective]
+          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 

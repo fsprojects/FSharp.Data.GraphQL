@@ -11,4 +11,7 @@ function graphQLFetcher(graphQLParams) {
   }).then(response => response.json());
 }
 
-ReactDOM.render(<GraphiQL fetcher={graphQLFetcher} />, document.getElementById('graphiql-app'));
+var subscriptionsClient = new window.SubscriptionsTransportWs.SubscriptionClient('ws://localhost:8084/', { reconnect: true });
+var subscriptionsFetcher = window.GraphiQLSubscriptionsFetcher.graphQLFetcher(subscriptionsClient, graphQLFetcher);
+
+ReactDOM.render(<GraphiQL fetcher={subscriptionsFetcher} />, document.getElementById('graphiql-app'));

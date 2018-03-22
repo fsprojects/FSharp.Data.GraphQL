@@ -228,3 +228,5 @@ module Schema =
     let schema = Schema(Query, Mutation, Subscription, schemaConfig) :> ISchema<Root>
         
     let executor = Executor(schema)
+
+    let root = { ClientId = "5" }

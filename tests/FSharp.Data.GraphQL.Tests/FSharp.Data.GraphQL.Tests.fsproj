@@ -34,6 +34,7 @@
     <Compile Include="PlanningTests.fs" />
     <Compile Include="PropertyTrackerTests.fs" />
     <Compile Include="LinqTests.fs" />
+    <Compile Include="DeferredTests.fs" />
     <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.0' " />
   </ItemGroup>
   <ItemGroup>

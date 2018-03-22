@@ -21,6 +21,8 @@ type Startup private () =
             clearResponse >=> setStatusCode 500
         app
             .UseGiraffeErrorHandler(errorHandler)
+            .UseWebSockets()
+            .UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, Schema.root)
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set
