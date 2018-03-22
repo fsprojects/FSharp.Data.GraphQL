@@ -121,11 +121,11 @@ let ``Simple Defer and Stream`` () =
             b
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     asts query
     |> Seq.map (executor.AsyncExecute >> sync)
     |> Seq.iter (fun result ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
         match result with
         | Deferred(data, errors, deferred) -> 
             empty errors
@@ -279,11 +279,11 @@ let ``Union Defer and Stream`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     asts query
     |> Seq.map (executor.AsyncExecute >> sync)
     |> Seq.iter (fun result ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
         match result with
         | Deferred(data, errors, deferred) -> 
             empty errors

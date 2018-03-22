@@ -575,8 +575,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 x |> Seq.map (fun x -> 
                                     match x.Value with
                                     | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
-                                    | _ -> nvl path x  |> Seq.singleton)
-                                |> Seq.collect id
+                                    | _ -> nvl path x.Value |> Seq.singleton)
+                                  |> Seq.collect id
                             | x -> nvl path x |> Seq.singleton
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
