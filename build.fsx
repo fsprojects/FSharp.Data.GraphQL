@@ -418,7 +418,7 @@ Target "AdHocBuild" (fun _ ->
     |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
 )
 
-let publishPackage id =
+let pack id =
     CleanDir <| sprintf "nuget/%s.%s" project id
     Paket.Pack(fun p ->
         { p with
@@ -426,7 +426,10 @@ let publishPackage id =
             OutputPath = sprintf "nuget/%s.%s" project id
             TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
             IncludeReferencedProjects = true
+            LockDependencies = true
         })
+let publishPackage id =
+    pack id
     Paket.Push(fun p ->
         { p with 
             WorkingDir = sprintf "nuget/%s.%s" project id
@@ -438,6 +441,14 @@ Target "PublishServer" (fun _ ->
 
 Target "PublishClient" (fun _ ->
     publishPackage "Client"
+)
+
+Target "PackServer" (fun _ ->
+    pack "Server"
+)
+
+Target "PackClient" (fun _ ->
+    pack "Client"
 )
 
 Target "PublishNpm" (fun _ ->
