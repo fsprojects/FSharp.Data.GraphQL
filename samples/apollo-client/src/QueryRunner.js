@@ -59,14 +59,17 @@ query TestQuery {
 export default class QueryRunner extends React.Component {
     constructor(props) {
         super(props);
+        var subscription = new SubscriptionClient('ws://localhost:8084/', {
+            reconnect: true
+        });
+        var client = new ApolloClient({
+            link: subscription,
+            cache: new InMemoryCache()
+        });
         this.state = { 
             query: deferQuery,
-            client: new ApolloClient({
-                link: new SubscriptionClient('ws://localhost:8084/', {
-                        reconnect: true
-                }),
-                cache: new InMemoryCache()
-            }),
+            subscription: subscription,
+            client: client,
             results : ''
         };
 
@@ -98,6 +101,7 @@ export default class QueryRunner extends React.Component {
 
     handleRun(event) {
         this.setState({ results: '' });
+        this.state.subscription.unsubscribeAll();
         this.state.client.subscribe({
             query: gql`${this.state.query}`,
             variables: {}
