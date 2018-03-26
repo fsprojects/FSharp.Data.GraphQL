@@ -122,7 +122,7 @@ let ``Simple Defer and Stream`` () =
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
-let ``List Union Defer``() =
+let ``List Defer``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -170,6 +170,110 @@ let ``List Union Defer``() =
         then fail "Timeout while waiting for Deferred GQLResponse"
         actualDeferred |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``List Fragment Defer and Stream - Exclusive``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+                "list", [
+                    NameValueLookup.ofList [
+                        "id", upcast "2"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast "3"
+                        "b", upcast 4
+                    ]
+                ] :> obj
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast "Union A"
+            "path", upcast ["testData" :> obj; "list" :> obj; 0 :> obj; "a" :> obj]
+        ]
+    let query = sprintf """{
+        testData {
+            a
+            list {
+                ... on A {
+                    id
+                    a @%s
+                }
+                ... on B {
+                    id
+                    b
+                }
+            }
+        }
+    }"""
+    asts query
+    |> Seq.map (executor.AsyncExecute >> sync)
+    |> Seq.iter (fun result ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
+
+[<Fact>]
+let ``List Fragment Defer and Stream - Common``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "a", upcast "Apple"
+                "list", [
+                    NameValueLookup.ofList [
+                        "a", upcast "Union A"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast "3"
+                        "b", upcast 4
+                    ]
+                ] :> obj
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast "2"
+            "path", upcast ["testData" :> obj; "list" :> obj; 0 :> obj; "id" :> obj]
+        ]
+    let query = sprintf """{
+        testData {
+            a
+            list {
+                ... on A {
+                    id @%s
+                    a
+                }
+                ... on B {
+                    id
+                    b
+                }
+            }
+        }
+    }"""
+    asts query
+    |> Seq.map (executor.AsyncExecute >> sync)
+    |> Seq.iter (fun result ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``List Stream``() =
