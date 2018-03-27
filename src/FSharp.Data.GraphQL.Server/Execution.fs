@@ -533,8 +533,16 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
                     }
-                | [_; String "__index";_; String "__index"], _ ->
-                    raise <| GraphQLException("Nested defer directives are not supported yet.")
+                | [head'; String "__index"; head; String "__index"], ResolverObjectNode n ->
+                    asyncVal { 
+                        let p = [head'; "__index" :> obj; head; "__index" :> obj]
+                        let next = n.Children |> Array.tryFind(fun c' -> c'.Name = head.ToString())
+                        let! res =
+                            match next with
+                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                            | None -> AsyncVal.empty
+                        return res
+                    }
                 | p, ResolverObjectNode n ->
                     asyncVal {
                         let head = p |> List.head
@@ -557,6 +565,66 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
+    let rec deferredResult (acc : AsyncVal<seq<NameValueLookup>> list) (tree : ResolverTree) (d : DeferredExecutionInfo) : AsyncVal<seq<NameValueLookup> []> =
+        let fdef = d.Info.Definition
+        let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
+        let fieldCtx = { 
+            ExecutionInfo = d.Info
+            Context = ctx
+            ReturnType = fdef.TypeDef
+            ParentType = objdef
+            Schema = ctx.Schema
+            Args = args
+            Variables = ctx.Variables
+        }
+        let nvli (path : obj list) (index : int) data =
+            let data' = [ data ] :> obj
+            NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
+        let nvl (path : obj list) data =
+            NameValueLookup.ofList ["data", data; "path", upcast path]
+        let mapResult (d : KeyValuePair<string, obj>) (path : obj list) (kind : DeferredExecutionInfoKind) =
+            match kind with
+            | DeferredExecution ->
+                match d.Value with
+                | null -> Seq.empty
+                | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
+                | x -> nvl path x |> Seq.singleton
+            | StreamedExecution ->
+                match d.Value with
+                | null -> Seq.empty
+                | :? NameValueLookup as x -> 
+                    x |> Seq.map (fun x -> 
+                        match x.Value with
+                        | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
+                        | _ -> nvl path x.Value |> Seq.singleton)
+                      |> Seq.collect id
+                | x -> nvl path x |> Seq.singleton
+        let path = d.Path |> List.map (fun x -> x :> obj)
+        traversePath d fieldCtx path (AsyncVal.wrap tree) [(List.head path)]
+        |> AsyncVal.bind(Array.map(fun (tree, path) ->
+            let outerResult = 
+                asyncVal {
+                    let data, _ = treeToDict tree
+                    return mapResult data path d.Kind
+                } |> Array.singleton |> AsyncVal.collectParallel
+            let innerResult =
+                d.DeferredFields
+                |> List.map (fun d ->
+                    let fieldCtx = { fieldCtx with ExecutionInfo = d.Info }
+                    let path = d.Path |> List.rev |> List.map (fun x -> x :> obj)
+                    traversePath d fieldCtx path (AsyncVal.wrap tree) [(List.head path)]
+                    |> AsyncVal.bind(Array.map(fun (tree, path) ->
+                        asyncVal {
+                            let data, _ = treeToDict tree
+                            return mapResult data path d.Kind
+                        }) >> AsyncVal.collectParallel))
+                |> Array.ofList
+                |> AsyncVal.collectParallel
+                |> AsyncVal.map (Array.fold Array.append Array.empty)
+            [| outerResult; innerResult |] 
+            |> AsyncVal.collectParallel
+            |> AsyncVal.map (Array.fold Array.append Array.empty)
+        ) >> AsyncVal.collectParallel >> AsyncVal.map (Array.fold Array.append Array.empty))
     let deferredResults =
         if ctx.ExecutionPlan.DeferredFields.Length = 0
         then None
@@ -564,50 +632,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             resultTrees
             |> Array.map(AsyncVal.bind(fun tree ->
                 ctx.ExecutionPlan.DeferredFields
-                |> List.filter (fun d -> 
-                (List.head d.Path) = tree.Name)
+                |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
-                |> Array.map(fun d ->
-                    let fdef = d.Info.Definition
-                    let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
-                    let fieldCtx = { 
-                        ExecutionInfo = d.Info
-                        Context = ctx
-                        ReturnType = fdef.TypeDef
-                        ParentType = objdef
-                        Schema = ctx.Schema
-                        Args = args
-                        Variables = ctx.Variables
-                    }
-                    let nvli (path : obj list) (index : int) data =
-                        let data' = [ data ] :> obj
-                        NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
-                    let nvl (path : obj list) data =
-                        NameValueLookup.ofList ["data", data; "path", upcast path]
-                    let mapResult (d : KeyValuePair<string, obj>) (path : obj list) (kind : DeferredExecutionInfoKind) =
-                        match kind with
-                        | DeferredExecution ->
-                            match d.Value with
-                            | null -> Seq.empty
-                            | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
-                            | x -> nvl path x |> Seq.singleton
-                        | StreamedExecution ->
-                            match d.Value with
-                            | null -> Seq.empty
-                            | :? NameValueLookup as x -> 
-                                x |> Seq.map (fun x -> 
-                                    match x.Value with
-                                    | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
-                                    | _ -> nvl path x.Value |> Seq.singleton)
-                                  |> Seq.collect id
-                            | x -> nvl path x |> Seq.singleton
-                    let path = d.Path |> List.map (fun x -> x :> obj)
-                    traversePath d fieldCtx path (AsyncVal.wrap tree) [(List.head d.Path)]
-                    |> AsyncVal.bind(Array.map(fun (tree, path) ->
-                        asyncVal {
-                            let data, _ = treeToDict tree
-                            return mapResult data path d.Kind
-                        }) >> AsyncVal.collectParallel))
+                |> Array.map(deferredResult [] tree)
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
             |> AsyncVal.collectParallel
