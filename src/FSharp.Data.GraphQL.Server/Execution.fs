@@ -8,8 +8,15 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
+open FSharp.Data.GraphQL.Types.Introspection
+open FSharp.Data.GraphQL.Introspection
+open FSharp.Quotations
+open FSharp.Quotations.Patterns
+open FSharp.Reflection.FSharpReflectionExtensions
+open System.Collections.Generic
+open FParsec
 
-type Error = string * string list
+type Error = string * obj list
 
 type Output = IDictionary<string, obj>
 
@@ -273,7 +280,7 @@ type ResolverTree =
         | ResolverObjectNode node -> node.Value
         | ResolverListNode l -> l.Value
 and ResolverLeaf = { Name: string; Value: obj option; }
-and ResolverError = { Name: string; Message: string; PathToOrigin: string list; }
+and ResolverError = { Name: string; Message: string; PathToOrigin: obj list; }
 and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree []; }
 
 module ResolverTree = 
@@ -294,18 +301,18 @@ module ResolverTree =
     let rec pathFold leafOp errorOp nodeOp listOp =
         let rec helper path = function
             | ResolverLeaf leaf ->
-                leafOp (leaf.Name::path) leaf
+                leafOp ((leaf.Name :> obj)::path) leaf
             | ResolverError err ->
                 let origin = (err.PathToOrigin |> List.rev)
-                let path' = if err.Name <> "__index" then origin@(err.Name::path) else origin@path
+                let path' = if err.Name <> "__index" then origin@((err.Name :> obj)::path) else origin@path
                 errorOp path' err
             | ResolverObjectNode node ->
-                let path' = if node.Name <> "__index" then node.Name::path else path
+                let path' = if node.Name <> "__index" then (node.Name :> obj)::path else path
                 let ts = node.Children |> Array.map(helper path')
                 nodeOp path' node.Name node.Value ts
             | ResolverListNode node ->
-                let path' = node.Name::path
-                let ts = node.Children |> Array.mapi(fun i c -> helper (i.ToString()::path') c)
+                let path' = (node.Name :> obj)::path
+                let ts = node.Children |> Array.mapi(fun i c -> helper ((i :> obj)::path') c)
                 listOp path' node.Name node.Value ts
         helper []
 
@@ -326,8 +333,12 @@ let private treeToDict =
             | Some _ -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
 
+let private errorDict tree message path =
+    let data, err = treeToDict tree
+    (data, (message, path) :: err)
+
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
-let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = err.Name::err.PathToOrigin} }
+let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = (err.Name :> obj)::err.PathToOrigin} }
 
 /// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
@@ -516,6 +527,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     k::kvps, e@errs) ([],[])
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
+    let endsWith tail arr =
+        let skipCount = List.length arr - List.length tail
+        tail = List.skip skipCount arr
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
         asyncVal {
             let! tree' = tree
@@ -565,7 +579,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
-    let rec deferredResult (acc : AsyncVal<seq<NameValueLookup>> list) (tree : ResolverTree) (d : DeferredExecutionInfo) : AsyncVal<seq<NameValueLookup> []> =
+    let rec deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) : AsyncVal<seq<NameValueLookup> []> =
         let fdef = d.Info.Definition
         let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
         let fieldCtx = { 
@@ -577,35 +591,44 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             Args = args
             Variables = ctx.Variables
         }
-        let nvli (path : obj list) (index : int) data =
+        let formatErrors (errors : Error list) =
+            errors 
+            |> List.map (fun err ->
+                let (message, path) = err
+                NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+        let nvli (path : obj list) (index : int) (err : Error list) data =
             let data' = [ data ] :> obj
-            NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
-        let nvl (path : obj list) data =
-            NameValueLookup.ofList ["data", data; "path", upcast path]
-        let mapResult (d : KeyValuePair<string, obj>) (path : obj list) (kind : DeferredExecutionInfoKind) =
+            match err with
+            | [] -> NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
+            | _ -> NameValueLookup.ofList ["data", data'; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
+        let nvl (path : obj list) (err : Error list) data =
+            match err with
+            | [] -> NameValueLookup.ofList ["data", data; "path", upcast path]
+            | _ -> NameValueLookup.ofList ["data", data; "errors", upcast (formatErrors err); "path", upcast path]
+        let mapResult (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (kind : DeferredExecutionInfoKind) =
             match kind with
             | DeferredExecution ->
-                match d.Value with
-                | null -> Seq.empty
-                | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
-                | x -> nvl path x |> Seq.singleton
+                match d.Value, e with
+                | null, [] -> Seq.empty
+                | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
+                | x, _ -> nvl path e x |> Seq.singleton
             | StreamedExecution ->
-                match d.Value with
-                | null -> Seq.empty
-                | :? NameValueLookup as x -> 
+                match d.Value, e with
+                | null, [] -> Seq.empty
+                | :? NameValueLookup as x, _ -> 
                     x |> Seq.map (fun x -> 
                         match x.Value with
-                        | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
-                        | _ -> nvl path x.Value |> Seq.singleton)
+                        | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i e d)
+                        | _ -> nvl path e x.Value |> Seq.singleton)
                       |> Seq.collect id
-                | x -> nvl path x |> Seq.singleton
+                | x, _ -> nvl path e x |> Seq.singleton
         let path = d.Path |> List.map (fun x -> x :> obj)
         traversePath d fieldCtx path (AsyncVal.wrap tree) [(List.head path)]
         |> AsyncVal.bind(Array.map(fun (tree, path) ->
             let outerResult = 
                 asyncVal {
-                    let data, _ = treeToDict tree
-                    return mapResult data path d.Kind
+                    let data, err = treeToDict tree
+                    return mapResult data err path d.Kind
                 } |> Array.singleton |> AsyncVal.collectParallel
             let innerResult =
                 d.DeferredFields
@@ -615,16 +638,17 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     traversePath d fieldCtx path (AsyncVal.wrap tree) [(List.head path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
-                            let data, _ = treeToDict tree
-                            return mapResult data path d.Kind
+                            let data, err =
+                                if d.DeferredFields.Length > 0
+                                then errorDict tree "Maximum degree of nested defer executions reached." path
+                                else treeToDict tree
+                            return mapResult data err path d.Kind
                         }) >> AsyncVal.collectParallel))
                 |> Array.ofList
-                |> AsyncVal.collectParallel
-                |> AsyncVal.map (Array.fold Array.append Array.empty)
+                |> AsyncVal.appendParallel
             [| outerResult; innerResult |] 
-            |> AsyncVal.collectParallel
-            |> AsyncVal.map (Array.fold Array.append Array.empty)
-        ) >> AsyncVal.collectParallel >> AsyncVal.map (Array.fold Array.append Array.empty))
+            |> AsyncVal.appendParallel
+        ) >> AsyncVal.appendParallel)
     let deferredResults =
         if ctx.ExecutionPlan.DeferredFields.Length = 0
         then None
@@ -634,11 +658,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 ctx.ExecutionPlan.DeferredFields
                 |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
-                |> Array.map(deferredResult [] tree)
+                |> Array.map(deferredResult tree)
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
-            |> AsyncVal.collectParallel
-            |> AsyncVal.map (Array.fold Array.append Array.empty)
+            |> AsyncVal.appendParallel
             |> AsyncVal.toAsync
             |> Observable.ofAsync
             |> Observable.bind Observable.ofSeq
