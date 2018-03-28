@@ -15,6 +15,7 @@ open FSharp.Quotations.Patterns
 open FSharp.Reflection.FSharpReflectionExtensions
 open System.Collections.Generic
 open FParsec
+open FSharp.Data.GraphQL
 
 type Error = string * obj list
 
@@ -440,7 +441,6 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             else nullResolverError name
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
-
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
     let rec build (acc: ResolverTree list) = function
         | info::xs ->
@@ -530,6 +530,37 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
     let endsWith tail arr =
         let skipCount = List.length arr - List.length tail
         tail = List.skip skipCount arr
+    let tryGetFragmentField (s : Selection list) (t : ResolverTree) fieldName =
+        let tryFindFragmentDefinition (typeCondition : string) =
+            s |> List.map (fun s -> match s with InlineFragment def -> Some def | _ -> None)
+              |> List.choose id
+              |> List.tryFind (fun def -> match def.TypeCondition with Some tc when tc = typeCondition -> true | _ -> false)
+        let tryFindType (child : ResolverTree) =
+            match child with
+            | ResolverObjectNode n | ResolverListNode n -> 
+                n.Children
+                |> Array.filter (fun c -> c.Name = "__typename") 
+                |> Array.map (fun c -> c.Value)
+                |> Array.choose id
+                |> Array.map (fun c -> c :?> string)
+                |> Array.tryHead
+            | _ -> None
+        let tryFindFieldDefinition (fragment : FragmentDefinition) =
+            fragment.SelectionSet
+            |> List.map (fun s -> match s with Field def -> Some def | _ -> None)
+            |> List.choose id
+            |> List.tryFind (fun def -> def.Name = fieldName)
+        let typeName = tryFindType t
+        let fragment = 
+            match typeName with 
+            | Some typeName -> tryFindFragmentDefinition typeName 
+            | _ -> None
+        match fragment with 
+        | Some fragDef -> tryFindFieldDefinition fragDef
+        | _ -> None
+    let isDeferredField (field : Field) =
+        field.Directives
+        |> List.exists (fun d -> d.Name = DeferDirective.Name || d.Name = StreamDirective.Name)
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
         asyncVal {
             let! tree' = tree
@@ -541,6 +572,17 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         match d.Info.Kind with
                         | SelectFields [f] -> return! async { return [|res, List.rev (f.Identifier :> obj :: pathAcc)|] }
                         | _ -> return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
+                    }
+                | [String p], t ->
+                    asyncVal { 
+                        let resolve = asyncVal {
+                            let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                            return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
+                        }
+                        let empty = asyncVal { return! async { return [||] } }
+                        match tryGetFragmentField d.Info.Ast.SelectionSet t p with
+                        | Some field -> if isDeferredField field then return! resolve else return! empty
+                        | _ -> return! resolve
                     }
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal { 
