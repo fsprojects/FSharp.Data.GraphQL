@@ -527,29 +527,29 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     k::kvps, e@errs) ([],[])
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
-    let endsWith tail arr =
-        let skipCount = List.length arr - List.length tail
-        tail = List.skip skipCount arr
-    let tryGetFragmentField (s : Selection list) (t : ResolverTree) fieldName =
+    let endsWith tail seq =
+        let skipCount = Seq.length seq - Seq.length tail
+        tail = Seq.skip skipCount seq
+    let tryGetFragmentField (s : Selection seq) (t : ResolverTree) fieldName =
         let tryFindFragmentDefinition (typeCondition : string) =
-            s |> List.map (fun s -> match s with InlineFragment def -> Some def | _ -> None)
-              |> List.choose id
-              |> List.tryFind (fun def -> match def.TypeCondition with Some tc when tc = typeCondition -> true | _ -> false)
+            s |> Seq.map (fun s -> match s with InlineFragment def -> Some def | _ -> None)
+              |> Seq.choose id
+              |> Seq.tryFind (fun def -> match def.TypeCondition with Some tc when tc = typeCondition -> true | _ -> false)
         let tryFindType (child : ResolverTree) =
             match child with
             | ResolverObjectNode n | ResolverListNode n -> 
                 n.Children
-                |> Array.filter (fun c -> c.Name = "__typename") 
-                |> Array.map (fun c -> c.Value)
-                |> Array.choose id
-                |> Array.map (fun c -> c :?> string)
-                |> Array.tryHead
+                |> Seq.filter (fun c -> c.Name = "__typename") 
+                |> Seq.map (fun c -> c.Value)
+                |> Seq.choose id
+                |> Seq.map (fun c -> c :?> string)
+                |> Seq.tryHead
             | _ -> None
         let tryFindFieldDefinition (fragment : FragmentDefinition) =
             fragment.SelectionSet
-            |> List.map (fun s -> match s with Field def -> Some def | _ -> None)
-            |> List.choose id
-            |> List.tryFind (fun def -> def.Name = fieldName)
+            |> Seq.map (fun s -> match s with Field def -> Some def | _ -> None)
+            |> Seq.choose id
+            |> Seq.tryFind (fun def -> def.Name = fieldName)
         let typeName = tryFindType t
         let fragment = 
             match typeName with 
