@@ -20,12 +20,15 @@ let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors
     | false, _ -> ()
-let single (xs : 'a seq) =
-    Assert.Single(xs)
 let empty (xs: 'a seq) =
     Assert.True(Seq.isEmpty xs, sprintf "expected empty sequence, but got %A" xs)
 let fail (message: string) =
     Assert.True(false, message)
+let single (xs : 'a seq) =
+    let length = Seq.length xs
+    if length <> 1 
+    then fail <| sprintf "Expected single item in sequence, but found %i items.\n%A" length xs
+    Seq.head xs
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't

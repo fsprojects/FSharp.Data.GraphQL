@@ -527,10 +527,14 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     k::kvps, e@errs) ([],[])
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
-    let endsWith tail seq =
-        let skipCount = Seq.length seq - Seq.length tail
-        tail = Seq.skip skipCount seq
-    let tryGetFragmentField (s : Selection seq) (t : ResolverTree) fieldName =
+    let endsWith tail arr =
+        let skipCount = List.length arr - List.length tail
+        tail = List.skip skipCount arr
+    let fieldExists (s : Selection list) fieldName =
+        s |> List.map (fun def -> match def with Field def -> Some def | _ -> None)
+          |> List.choose id
+          |> List.exists(fun def -> def.Name = fieldName)
+    let tryGetFragmentField (s : Selection list) (t : ResolverTree) fieldName =
         let tryFindFragmentDefinition (typeCondition : string) =
             s |> Seq.map (fun s -> match s with InlineFragment def -> Some def | _ -> None)
               |> Seq.choose id
@@ -582,7 +586,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         let empty = asyncVal { return! async { return [||] } }
                         match tryGetFragmentField d.Info.Ast.SelectionSet t p with
                         | Some field -> if isDeferredField field then return! resolve else return! empty
-                        | _ -> return! resolve
+                        | _ -> if fieldExists d.Info.Ast.SelectionSet p then return! resolve else return! empty
                     }
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal { 

@@ -107,10 +107,10 @@ let ``Simple Defer and Stream`` () =
         }
     }"""
     asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
+    |> Seq.iter (fun query ->
         use mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) -> 
             empty errors
@@ -209,10 +209,10 @@ let ``List Fragment Defer and Stream - Exclusive``() =
         }
     }"""
     asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
+    |> Seq.iter (fun query ->
         use mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
@@ -261,10 +261,10 @@ let ``List Fragment Defer and Stream - Common``() =
         }
     }"""
     asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
+    |> Seq.iter (fun query ->
         use mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
@@ -369,10 +369,10 @@ let ``Union Defer and Stream`` () =
         }
     }"""
     asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
-    |> Seq.iter (fun result ->
+    |> Seq.iter (fun query ->
         use mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) -> 
             empty errors
