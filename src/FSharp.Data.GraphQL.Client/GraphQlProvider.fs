@@ -8,6 +8,7 @@ open System.IO
 open System.Net
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
+
 open FSharp.Data.GraphQL.Types.Introspection
 open TypeCompiler
 open System.Collections.Generic
@@ -15,19 +16,11 @@ open Newtonsoft.Json.Linq
 open Newtonsoft.Json
 open Microsoft.FSharp.Quotations
 open QuotationHelpers
-open System.Text.RegularExpressions
-open FSharp.Data.GraphQL
-open QuotationHelpers
 
 module Util =
-
-    let tryLoadSchema basePath relativePath =
-        try
-            Path.Combine(basePath, relativePath)
-            |> File.ReadAllText
-            |> Some
-        with
-        | _ -> None        
+    open System.Text.RegularExpressions
+    open FSharp.Data.GraphQL
+    open QuotationHelpers
 
     let getOrFail (err: string) = function
         | Some v -> v
@@ -218,9 +211,7 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
                 |> Async.RunSynchronously
                 |> handleSchema typeName serverUrl
             | [| :? string as serverUrl; :? string as introspection |] ->
-                match Util.tryLoadSchema config.ResolutionFolder introspection with
-                | Some i -> Util.deserializeSchema i
-                | None -> Util.deserializeSchema introspection
+                Util.deserializeSchema introspection
                 |> handleSchema typeName serverUrl
             | _ -> failwith "unexpected parameter values")
         this.AddNamespace(ns, [generator])
