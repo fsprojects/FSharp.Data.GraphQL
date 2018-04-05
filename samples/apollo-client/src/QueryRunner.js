@@ -10,12 +10,12 @@ const deferQuery = `# This is a sample query with defer directive.
 
 query TestQuery {
     hero(id:"1000") {
-        id,
-        name,
-        appearsIn,
-        homePlanet,
+        id
+        name
+        appearsIn
+        homePlanet
         friends @defer {
-            id,
+            id
             name
         }
     }
@@ -27,9 +27,10 @@ const streamQuery = `# This is a sample query with stream and defer directive.
 
 query TestQuery {
     hero(id:"1000") {
-        name,
-        appearsIn,
-        homePlanet @defer,
+        id
+        name
+        appearsIn @defer
+        homePlanet
         friends @stream {
             ... on Human {
               name

@@ -15,6 +15,12 @@ type TestSubject = {
     b: string
     union: UnionTestSubject
     list: UnionTestSubject list
+    innerList: InnerTestSubject list
+}
+
+and InnerTestSubject = {
+    a : string
+    innerList : InnerTestSubject list
 }
 
 and UnionTestSubject =
@@ -30,7 +36,7 @@ and B = {
     id: string
     b: int
 }
-let executor =     
+let executor =
     let AType =
         Define.Object<A>(
             "A", [
@@ -55,14 +61,25 @@ let executor =
                 match u with
                 | A _ -> upcast AType
                 | B _ -> upcast BType))
+    let rec InnerDataType =
+        Define.Object<InnerTestSubject>(
+            name = "InnerData",
+            fieldsFn = fun () ->
+            [
+                Define.Field("a", String, (fun _ d -> d.a))
+                Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
+            ])
     let DataType =
         Define.Object<TestSubject>(
             name = "Data", 
             fieldsFn = fun () -> 
-                [ Define.Field("a", String, resolve = fun _ d -> d.a)
-                  Define.Field("b", String, resolve = fun _ d -> d.b)
-                  Define.Field("union", UnionType, resolve = fun _ d -> d.union)
-                  Define.Field("list", ListOf UnionType, resolve = fun _ d -> d.list) ])
+            [
+                Define.Field("a", String, (fun _ d -> d.a))
+                Define.Field("b", String, (fun _ d -> d.b))
+                Define.Field("union", UnionType, (fun _ d -> d.union))
+                Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
+                Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
+            ])
     let data = {
            a = "Apple"
            b = "Banana"
@@ -70,15 +87,19 @@ let executor =
                id = "1"
                a = "Union A"
            }
-           list = 
-            [ A { 
+           list = [
+               A { 
                    id = "2"
                    a = "Union A" 
                }; 
                B { 
                    id = "3"
                    b = 4
-               } ]
+               } 
+           ]
+           innerList = [ 
+               { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } 
+           ]
        }
     let Query = 
         Define.Object<TestSubject>(
@@ -86,6 +107,173 @@ let executor =
             fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
     let schema = Schema(Query)
     Executor(schema)
+
+[<Fact>]
+let ``Inner Object List Defer and Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+           "testData", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner A"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData"; "innerList"]
+        ]
+    let query = sprintf """{
+            testData {
+                b
+                innerList @%s {
+                    a                    
+                }
+            }
+        }"""
+    asts query
+    |> Seq.iter (fun query ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) -> 
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+            wait mre "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
+
+[<Fact>]
+let ``Nested Inner Object List Defer`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+           "testData", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner A"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData"; "innerList"]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner B"
+                ] :> obj
+                NameValueLookup.ofList [
+                    "a", upcast "Inner C"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData" :> obj; "innerList" :> obj; 0 :> obj; "innerList" :> obj]
+        ]
+    let query = parse """{
+            testData {
+                b
+                innerList @defer {
+                    a
+                    innerList @defer {
+                        a
+                    }                    
+                }
+            }
+        }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred 
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Nested Inner Object List Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+           "testData", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner A"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData"; "innerList"]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner B"
+                ] :> obj
+                NameValueLookup.ofList [
+                    "a", upcast "Inner C"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData" :> obj; "innerList" :> obj; 0 :> obj; "innerList" :> obj; 0 :> obj]
+        ]
+    let expectedDeferred3 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner C"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData" :> obj; "innerList" :> obj; 0 :> obj; "innerList" :> obj; 1 :> obj]
+        ]
+    let query = parse """{
+            testData {
+                b
+                innerList @defer {
+                    a
+                    innerList @stream {
+                        a
+                    }                    
+                }
+            }
+        }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred 
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 3 then set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> contains expectedDeferred3
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Simple Defer and Stream`` () =

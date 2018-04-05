@@ -535,10 +535,18 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
           |> List.choose id
           |> List.exists(fun def -> def.Name = fieldName)
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
+        let removeDuplicatedIndexes (path : obj list) =
+            let value = Some ("__index" :> obj)
+            let rec remove (path : obj list) last =
+                match path with
+                | [] -> []
+                | x :: xs when last = Some x && last = value -> remove xs <| Some x
+                | x :: xs -> x :: (remove xs <| Some x)
+            remove path None
         asyncVal {
             let! tree' = tree
             let! res = 
-                match List.tail path, tree' with
+                match List.tail (removeDuplicatedIndexes path), tree' with
                 | [], t -> 
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
@@ -549,25 +557,21 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | [String p], t ->
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                        // If a fragment of a union type have the same field for two cases,
-                        // in which one of them is deferred and the other not, the planning phase
-                        // is returning both of them in the deferred execution, causing an resolver error on this path.
                         match res with
                         | ResolverError _ -> return! async { return [||] }
                         | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
                     }
-                | ([p; String "__index"] | [p; String "__index"; String "__index"] | [p]), t ->
+                | ([p; String "__index"] | [p]), t ->
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
                     }
-                | [head'; String "__index"; head; String "__index"], ResolverObjectNode n ->
+                | [head'; String "__index"; head; String "__index"] as p, ResolverObjectNode n ->
                     asyncVal { 
-                        let p = [head'; "__index" :> obj; head; "__index" :> obj]
                         let next = n.Children |> Array.tryFind(fun c' -> c'.Name = head.ToString())
                         let! res =
                             match next with
-                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') (head'::pathAcc)
                             | None -> AsyncVal.empty
                         return res
                     }
