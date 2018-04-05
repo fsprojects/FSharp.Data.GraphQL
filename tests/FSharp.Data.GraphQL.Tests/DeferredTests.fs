@@ -109,6 +109,59 @@ let executor =
     Executor(schema)
 
 [<Fact>]
+let ``Parallell Defer and Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+           "testData", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast "Apple"
+            "path", upcast ["testData"; "a"]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", [
+                NameValueLookup.ofList [
+                    "a", upcast "Inner A"
+                ] :> obj
+            ] :> obj
+            "path", upcast ["testData"; "innerList"]
+        ]
+    let query s = 
+        sprintf """{
+            testData {
+                a @%s
+                b
+                innerList @%s {
+                    a                    
+                }
+            }
+        }""" s s
+    asts query
+    |> Seq.iter (fun query ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) -> 
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred
+            |> Observable.add (fun x -> 
+                actualDeferred.Add(x)
+                if actualDeferred.Count = 2 then set mre)
+            wait mre "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred
+            |> Seq.cast<NameValueLookup>
+            |> contains expectedDeferred1
+            |> contains expectedDeferred2
+            |> ignore
+        | _ -> fail "Expected Deferred GQLResponse")
+
+[<Fact>]
 let ``Inner Object List Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
