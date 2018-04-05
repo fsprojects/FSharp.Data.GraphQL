@@ -556,7 +556,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | ResolverError _ -> return! async { return [||] }
                         | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
                     }
-                | ([p; String "__index"] | [p]), t ->
+                | ([p; String "__index"] | [p; String "__index"; String "__index"] | [p]), t ->
                     asyncVal { 
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         return! async { return [|res, List.rev(p::pathAcc)|] }
