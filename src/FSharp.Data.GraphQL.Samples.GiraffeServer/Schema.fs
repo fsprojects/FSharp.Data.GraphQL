@@ -138,7 +138,7 @@ module Schema =
 
     and HumanType : ObjectDef<Human> =
         Define.Object<Human>(
-            name = "Human",
+            name = "CustomHuman",
             description = "A humanoid creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Human),
             fieldsFn = fun () ->

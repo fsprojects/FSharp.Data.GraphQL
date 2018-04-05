@@ -534,37 +534,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         s |> List.map (fun def -> match def with Field def -> Some def | _ -> None)
           |> List.choose id
           |> List.exists(fun def -> def.Name = fieldName)
-    let tryGetFragmentField (s : Selection list) (t : ResolverTree) fieldName =
-        let tryFindFragmentDefinition (typeCondition : string) =
-            s |> Seq.map (fun s -> match s with InlineFragment def -> Some def | _ -> None)
-              |> Seq.choose id
-              |> Seq.tryFind (fun def -> match def.TypeCondition with Some tc when tc = typeCondition -> true | _ -> false)
-        let tryFindType (child : ResolverTree) =
-            match child with
-            | ResolverObjectNode n | ResolverListNode n -> 
-                n.Children
-                |> Seq.filter (fun c -> c.Name = "__typename") 
-                |> Seq.map (fun c -> c.Value)
-                |> Seq.choose id
-                |> Seq.map (fun c -> c :?> string)
-                |> Seq.tryHead
-            | _ -> None
-        let tryFindFieldDefinition (fragment : FragmentDefinition) =
-            fragment.SelectionSet
-            |> Seq.map (fun s -> match s with Field def -> Some def | _ -> None)
-            |> Seq.choose id
-            |> Seq.tryFind (fun def -> def.Name = fieldName)
-        let typeName = tryFindType t
-        let fragment = 
-            match typeName with 
-            | Some typeName -> tryFindFragmentDefinition typeName 
-            | _ -> None
-        match fragment with 
-        | Some fragDef -> tryFindFieldDefinition fragDef
-        | _ -> None
-    let isDeferredField (field : Field) =
-        field.Directives
-        |> List.exists (fun d -> d.Name = DeferDirective.Name || d.Name = StreamDirective.Name)
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
         asyncVal {
             let! tree' = tree
@@ -579,14 +548,13 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     }
                 | [String p], t ->
                     asyncVal { 
-                        let resolve = asyncVal {
-                            let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                            return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
-                        }
-                        let empty = asyncVal { return! async { return [||] } }
-                        match tryGetFragmentField d.Info.Ast.SelectionSet t p with
-                        | Some field -> if isDeferredField field then return! resolve else return! empty
-                        | _ -> if fieldExists d.Info.Ast.SelectionSet p then return! resolve else return! empty
+                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                        // If a fragment of a union type have the same field for two cases,
+                        // in which one of them is deferred and the other not, the planning phase
+                        // is returning both of them in the deferred execution, causing an resolver error on this path.
+                        match res with
+                        | ResolverError _ -> return! async { return [||] }
+                        | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
                     }
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal { 
