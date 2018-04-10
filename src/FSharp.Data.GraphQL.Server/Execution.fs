@@ -563,21 +563,28 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     let nvl (path : string list) data =
                         let path' = path |> List.map (fun p -> p :> obj)
                         NameValueLookup.ofList ["data", data; "path", upcast path']
+                    let window path size item =
+                        if size > 1
+                        then item |> Seq.windowed size |> Seq.map ((fun i -> i :> obj) >> (fun d -> nvl path d))
+                        else item
+                    let stream (path : string list) (batchSize : int) (value : obj) =
+                        match value with
+                        | :? NameValueLookup as x -> 
+                            x |> Seq.map (fun x -> 
+                                match x.Value with
+                                | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d) |> window path batchSize
+                                | _ -> nvl path x.Value |> Seq.singleton)
+                              |> Seq.collect id
+                        | x -> nvl path x |> Seq.singleton
+                    let defer (path : string list) (value : obj) =
+                        match value with
+                        | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
+                        | x -> nvl path x |> Seq.singleton
                     let mapResult (d : KeyValuePair<string, obj>) path (kind : DeferredExecutionInfoKind) =
                         match kind with
-                        | DeferredExecution ->
-                            match d.Value with
-                            | :? NameValueLookup as x -> x |> Seq.map (fun x -> nvl path x.Value)
-                            | x -> nvl path x |> Seq.singleton
-                        | StreamedExecution ->
-                            match d.Value with
-                            | :? NameValueLookup as x -> 
-                                x |> Seq.map (fun x -> 
-                                    match x.Value with
-                                    | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d)
-                                    | _ -> nvl path x.Value |> Seq.singleton)
-                                  |> Seq.collect id
-                            | x -> nvl path x |> Seq.singleton
+                        | DeferredExecution -> d.Value |> defer path
+                        | StreamedExecution OneByOne -> d.Value |> stream path 1
+                        | StreamedExecution (Batched count) -> d.Value |> stream path count
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {

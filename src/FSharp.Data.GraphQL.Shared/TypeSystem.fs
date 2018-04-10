@@ -635,7 +635,12 @@ and DeferredExecutionInfo = {
 /// Kind of deferred execution.
 and DeferredExecutionInfoKind =
     | DeferredExecution
-    | StreamedExecution
+    | StreamedExecution of StreamedExecutionKind
+
+/// Kind of streamed execution.
+and StreamedExecutionKind =
+    | OneByOne
+    | Batched of int
 
 and ExecutionPlan = 
     { /// Unique identifier of the current execution plan.
