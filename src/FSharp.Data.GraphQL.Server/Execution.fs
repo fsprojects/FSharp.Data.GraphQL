@@ -563,16 +563,16 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     let nvl (path : string list) data =
                         let path' = path |> List.map (fun p -> p :> obj)
                         NameValueLookup.ofList ["data", data; "path", upcast path']
-                    let window path size item =
+                    let chunkBySize path size item =
                         if size > 1
-                        then item |> Seq.windowed size |> Seq.map ((fun i -> i :> obj) >> (fun d -> nvl path d))
+                        then item |> Seq.chunkBySize size |> Seq.map ((fun i -> i :> obj) >> (fun d -> nvl path d))
                         else item
                     let stream (path : string list) (batchSize : int) (value : obj) =
                         match value with
                         | :? NameValueLookup as x -> 
                             x |> Seq.map (fun x -> 
                                 match x.Value with
-                                | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d) |> window path batchSize
+                                | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i d) |> chunkBySize path batchSize
                                 | _ -> nvl path x.Value |> Seq.singleton)
                               |> Seq.collect id
                         | x -> nvl path x |> Seq.singleton
@@ -584,7 +584,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         match kind with
                         | DeferredExecution -> d.Value |> defer path
                         | StreamedExecution OneByOne -> d.Value |> stream path 1
-                        | StreamedExecution (Batched count) -> d.Value |> stream path count
+                        | StreamedExecution (BatchesOf batchSize) -> d.Value |> stream path batchSize
                     traversePath d fieldCtx d.Path (AsyncVal.wrap tree) [(List.head d.Path)]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
