@@ -2309,14 +2309,19 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
         /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> = 
+        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, 
+            ?args: InputFieldDef list, ?deprecationReason: string,
+            ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                      }
         
         /// <summary>
