@@ -723,12 +723,14 @@ and FieldDef =
         abstract TypeDef : OutputDef
         /// Field's arguments list.
         abstract Args : InputFieldDef []
+        /// Field's metadata.
+        abstract Metadata : Metadata
         /// Field resolution function.
         abstract Resolve : Resolve
         /// INTERNAL API: Compiled field executor. To be set only by the runtime.
         inherit IEquatable<FieldDef>
     end
-    
+
 /// A paritally typed representation of the GraphQL field defintion.
 /// Contains type parameter describing .NET type used as it's container.
 /// Can be used only withing object and interface definitions.
@@ -750,6 +752,8 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
       Args : InputFieldDef []
       /// Optional field deprecation warning.
       DeprecationReason : string option
+      /// Field metadata definition.
+      Metadata : Metadata
       }
     
     interface FieldDef with
@@ -759,6 +763,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
         member x.TypeDef = x.TypeDef :> OutputDef
         member x.Args = x.Args
         member x.Resolve = x.Resolve
+        member x.Metadata = x.Metadata
     
     interface FieldDef<'Val>
     
@@ -1436,6 +1441,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
         RootTypeDef : OutputDef<'Root>
         Filter : Resolve
         Args : InputFieldDef []
+        Metadata : Metadata
     }
     interface FieldDef with
         member x.Name = x.Name
@@ -1444,6 +1450,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
         member x.TypeDef = x.RootTypeDef :> OutputDef
         member x.Resolve = x.Filter
         member x.Args = x.Args
+        member x.Metadata = x.Metadata
     interface SubscriptionFieldDef with
         member x.InputTypeDef = x.InputTypeDef :> OutputDef
     interface FieldDef<'Root>
@@ -1535,6 +1542,17 @@ and DirectiveDef =
       Locations : DirectiveLocation
       /// Array of arguments defined within that directive.
       Args : InputFieldDef [] }
+
+/// Field metadata definition.
+and Metadata() =
+    inherit Dictionary<string, obj>()
+    static member FromList(l : (string * obj) list) =
+        let rec add (m : Metadata) (l : (string * obj) list) =
+            match l with
+            | [] -> m
+            | (k, v) :: xs -> m.Add(k, v); add m xs
+        add (Metadata()) l
+    static member Empty = Metadata.FromList [ ]
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =
@@ -2298,6 +2316,7 @@ module SchemaDefinitions =
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2306,13 +2325,17 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
+        static member Field(name : string, typedef : #OutputDef<'Res>, ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Undefined
                      Args = [||]
                      DeprecationReason = None
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                      }
         
         /// <summary>
@@ -2329,6 +2352,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                       }
         
         /// <summary>
@@ -2346,6 +2370,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                       }
         
         /// <summary>
@@ -2364,6 +2389,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2384,6 +2410,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2400,6 +2427,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                       }
         
         /// <summary>
@@ -2417,6 +2445,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                       }
         
         /// <summary>
@@ -2436,6 +2465,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2457,6 +2487,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
+                     Metadata = Metadata.Empty
                    }
 
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
@@ -2466,6 +2497,7 @@ module SchemaDefinitions =
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                    }
 
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, inputdef: #OutputDef<'Input>,
@@ -2479,6 +2511,7 @@ module SchemaDefinitions =
               DeprecationReason = None
               Args = args |> List.toArray
               Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
+              Metadata = Metadata.Empty
             } :> SubscriptionFieldDef<'Root>
         
         /// <summary>
