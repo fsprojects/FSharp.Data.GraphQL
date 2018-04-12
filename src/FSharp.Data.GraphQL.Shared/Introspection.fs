@@ -2,11 +2,13 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Introspection
 
+#nowarn "40"
+
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Extensions
-    
 open System.Reflection
+
 let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if property = null then null else property.GetValue(o, null)
