@@ -69,10 +69,10 @@ and Droid = Define.Object<Droid>(
 and Node = Define.Node<obj>(fun () -> [ Person; Droid ])
 and Query = Define.Object<obj list>("Query", [
     Define.Field("all", ListOf Node, fun ctx data -> data)
-    Define.Field("people", ListOf Person, fun ctx data -> 
+    Define.Field("people", ListOf Person, resolve = fun ctx data -> 
         data 
         |> List.choose (fun o -> match o with | :? Person as p-> Some p | _ -> None))
-    Define.Field("droid", ListOf Droid, fun ctx data -> 
+    Define.Field("droid", ListOf Droid, resolve = fun ctx data -> 
         data 
         |> List.choose (fun o -> match o with | :? Droid as d-> Some d | _ -> None))
 ])

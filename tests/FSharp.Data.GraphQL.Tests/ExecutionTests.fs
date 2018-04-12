@@ -111,9 +111,9 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
           "DataType",
           fieldsFn = fun () ->
           [
-            Define.Field("a", String, fun _ dt -> dt.a)
-            Define.Field("b", String, fun _ dt -> dt.b)
-            Define.Field("c", String, fun _ dt -> dt.c)
+            Define.Field("a", String, resolve = fun _ dt -> dt.a)
+            Define.Field("b", String, resolve = fun _ dt -> dt.b)
+            Define.Field("c", String, resolve = fun _ dt -> dt.c)
             Define.Field("d", String, fun _ dt -> dt.d)
             Define.Field("e", String, fun _ dt -> dt.e)
             Define.Field("f", String, fun _ dt -> dt.f)

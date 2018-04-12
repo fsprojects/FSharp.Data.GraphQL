@@ -39,8 +39,8 @@ let executor =
     let AType =
         Define.Object<A>(
             "A", [
-                Define.Field("a", String, (fun _ a -> a.a))
-                Define.Field("id", String, (fun _ a -> a.id))
+                Define.Field("a", String, resolve = fun _ a -> a.a)
+                Define.Field("id", String, resolve = fun _ a -> a.id)
             ])
     let BType = 
         Define.Object<B>(
@@ -64,10 +64,10 @@ let executor =
         Define.Object<TestSubject>(
             name = "Data", 
             fieldsFn = fun () -> [
-                Define.Field("a", String, (fun _ d -> d.a))
-                Define.Field("b", String, (fun _ d -> d.b))
-                Define.Field("union", UnionType, (fun _ d -> d.union))
-                Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
+                Define.Field("a", String, resolve = fun _ d -> d.a)
+                Define.Field("b", String, resolve = fun _ d -> d.b)
+                Define.Field("union", UnionType, resolve = fun _ d -> d.union)
+                Define.Field("list", ListOf UnionType, resolve = fun _ d -> d.list)
             ])
     let data = {
            a = "Apple"

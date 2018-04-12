@@ -45,7 +45,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, fun _ d -> d.Name)
+            Define.Field("name", String, resolve = fun _ d -> d.Name)
             Define.Field("woofs", Boolean, fun _ d -> d.Woofs)
         ])
     let CatType =
@@ -54,7 +54,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, fun _ c -> c.Name)
+            Define.Field("name", String, resolve = fun _ c -> c.Name)
             Define.Field("meows", Boolean, fun _ c -> c.Meows)
         ])
     let schema =
@@ -177,7 +177,7 @@ let ``inner types `` () =
        interfaces = [ Node ],
        fields = [
            Define.GlobalIdField(fun _ w -> w.Id)
-           Define.Field("name", String, fun _ w -> w.Name)
+           Define.Field("name", String, resolve = fun _ w -> w.Name)
            ])
 
    //and WidgetConnection = ConnectionOf Widget

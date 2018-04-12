@@ -2325,6 +2325,10 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
@@ -2344,15 +2348,23 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
+                            ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                       }
         
         /// <summary>
@@ -2362,15 +2374,23 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
+                            ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                       }
         
         /// <summary>
@@ -2381,15 +2401,23 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
+                            ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                      }
         
         /// <summary>
@@ -2401,16 +2429,24 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
-                            deprecationReason : string) : FieldDef<'Val> = 
+                            deprecationReason : string,
+                            ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                      }
         
         /// <summary>
@@ -2419,15 +2455,23 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                       }
         
         /// <summary>
@@ -2437,15 +2481,23 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                       }
         
         /// <summary>
@@ -2456,16 +2508,24 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                      }
         
         /// <summary>
@@ -2477,33 +2537,45 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
-                                 deprecationReason : string) : FieldDef<'Val> = 
+                                 deprecationReason : string,
+                                 ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                    }
 
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
+        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>, ?weight : float) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = Obj
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata = Metadata.Empty
+                     Metadata =
+                        match weight with
+                        | Some w -> Metadata.FromList [ "weight", upcast w ]
+                        | None -> Metadata.Empty
                    }
 
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, inputdef: #OutputDef<'Input>,
                                         description: string,
                                         args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>): SubscriptionFieldDef<'Root> =
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>,
+                                        ?weight : float): SubscriptionFieldDef<'Root> =
             { Name = name
               Description = Some description
               RootTypeDef = rootdef
@@ -2511,7 +2583,10 @@ module SchemaDefinitions =
               DeprecationReason = None
               Args = args |> List.toArray
               Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
-              Metadata = Metadata.Empty
+              Metadata =
+                match weight with
+                | Some w -> Metadata.FromList [ "weight", upcast w ]
+                | None -> Metadata.Empty
             } :> SubscriptionFieldDef<'Root>
         
         /// <summary>
