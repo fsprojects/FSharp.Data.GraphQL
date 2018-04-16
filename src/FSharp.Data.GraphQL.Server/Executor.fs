@@ -72,7 +72,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
     let rec runMiddlewares executionPlan data variables (middlewares : ExecutionMiddlewareFunc<'Root> list) =
         match middlewares with
         | [] -> execute (executionPlan, data, variables)
-        | [x] -> x (executionPlan, data, variables) (fun (plan, data, variables) -> runMiddlewares plan data variables [])
         | x :: xs -> x (executionPlan, data, variables) (fun (plan, data, variables) -> runMiddlewares plan data variables xs)
 
     let executeWithMiddlewares (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
