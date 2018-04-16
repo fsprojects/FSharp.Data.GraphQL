@@ -2,6 +2,8 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.ExecutionBenchmark
 
+#nowarn "40"
+
 open System
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -103,7 +105,7 @@ type SimpleExecutionBenchmark() =
     let mutable flatExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable nestedExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     
-    [<Setup>]
+    [<GlobalSetup>]
     member x.Setup() = 
         schema <- Schema(Query)
         schemaProcessor <- Executor(schema)

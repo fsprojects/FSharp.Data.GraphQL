@@ -95,6 +95,6 @@ open BenchmarkDotNet.Attributes
 
 [<Config(typeof<GraphQLBenchConfig>)>]
 type ParsingBenchmark() = 
-    [<Setup>] member x.Setup () = ()
+    [<GlobalSetup>] member x.Setup () = ()
     [<Benchmark>] member x.ParseSimpleQuery () =  parse simpleQueryString
     [<Benchmark>] member x.ParseComplexQuery () = parse complexQuery

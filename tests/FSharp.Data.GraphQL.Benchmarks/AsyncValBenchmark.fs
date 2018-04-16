@@ -63,7 +63,7 @@ type AsyncValBenchmark() =
     let mutable allAsyncVals : AsyncVal<_> [] = [||]
     let mutable allAsync : Async<_> [] = [||]
     
-    [<Setup>]
+    [<GlobalSetup>]
     member x.Setup() = 
         allImmediate <- prepareAsyncVals 100 0
         sync90async10 <- prepareAsyncVals 90 10
