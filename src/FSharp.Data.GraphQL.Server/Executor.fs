@@ -14,7 +14,7 @@ type ExecutionMiddlewareFunc<'Root> =
     ExecutionPlan * 'Root option * Map<string, obj> option -> ExecutionFunc<'Root> -> Async<GQLResponse>
 
 type IExecutionMiddleware<'Root> =
-    abstract member AsyncResolve : ExecutionMiddlewareFunc<'Root>
+    abstract member ResolveAsync : ExecutionMiddlewareFunc<'Root>
 
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<'Root> seq) = 
     let fieldExecuteMap = FieldExecuteMap()
@@ -76,7 +76,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
 
     let executeWithMiddlewares (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         middlewares
-        |> Seq.map (fun m -> m.AsyncResolve)
+        |> Seq.map (fun m -> m.ResolveAsync)
         |> List.ofSeq
         |> runMiddlewares executionPlan data variables
 
@@ -85,7 +85,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
     new(schema, middlewareFuncs : ExecutionMiddlewareFunc<'Root> seq) = 
         let middlewares = 
             middlewareFuncs 
-            |> Seq.map (fun m -> { new IExecutionMiddleware<'Root> with member __.AsyncResolve = m })
+            |> Seq.map (fun m -> { new IExecutionMiddleware<'Root> with member __.ResolveAsync = m })
         Executor(schema, middlewares = middlewares)
 
     /// <summary>
