@@ -6,13 +6,7 @@ module Helpers
 open System
 open System.Collections.Generic
 open Xunit
-open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Execution
-open System.Collections.Concurrent
-open System.Threading
-open System.Collections
 
 let equals (expected : 'x) (actual : 'x) = 
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
@@ -54,11 +48,7 @@ type internal OptionConverter() =
     inherit JsonConverter()
     
     override x.CanConvert(t) = 
-#if NETSTANDARD2_0
-        t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = typedefof<option<_>>
-#else    
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
-#endif
     override x.WriteJson(writer, value, serializer) =
         let value = 
             if value = null then null
@@ -68,18 +58,10 @@ type internal OptionConverter() =
         serializer.Serialize(writer, value)
 
     override x.ReadJson(reader, t, existingValue, serializer) = 
-#if NETSTANDARD2_0
-        let innerType = t.GetGenericArguments().[0]
-        let innerType = 
-            if innerType.GetTypeInfo().IsValueType then (typedefof<Nullable<_>>).GetTypeInfo().MakeGenericType([|innerType|])
-            else innerType 
-#else
         let innerType = t.GetGenericArguments().[0]
         let innerType = 
             if innerType.IsValueType then (typedefof<Nullable<_>>).MakeGenericType([|innerType|])
             else innerType
-#endif
-
         let value = serializer.Deserialize(reader, innerType)
         let cases = FSharpType.GetUnionCases(t)
         if value = null then FSharpValue.MakeUnion(cases.[0], [||])

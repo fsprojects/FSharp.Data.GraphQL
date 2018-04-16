@@ -3,22 +3,11 @@
 module FSharp.Data.GraphQL.Execution
 
 open System
-open System.Reflection
-open System.Reactive
-open System.Reactive.Linq
-open System.Runtime.InteropServices;
 open System.Collections.Generic
-open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Types.Introspection
-open FSharp.Data.GraphQL.Introspection
-open FSharp.Quotations
-open FSharp.Quotations.Patterns
-open FSharp.Reflection.FSharpReflectionExtensions
-open System.Collections.Generic
 
 type Error = string * string list
 type Output = IDictionary<string, obj>
@@ -55,7 +44,8 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                     | :? NameValueLookup, :? NameValueLookup as o -> structEq (downcast fst o) (downcast snd o)
                     | :? seq<obj>, :? seq<obj> -> Seq.forall2 (=) (a.Value :?> seq<obj>) (b.Value :?> seq<obj>)
                     | a1, b1 -> a1 = b1) y.Buffer
-    let pad (sb: System.Text.StringBuilder) times = for i in 0..times do sb.Append("\t") |> ignore
+    let pad (sb: System.Text.StringBuilder) times = 
+        for _ in 0..times do sb.Append("\t") |> ignore
     let rec stringify (sb: System.Text.StringBuilder) deep (o:obj) =
         match o with
         | :? NameValueLookup as lookup ->
@@ -76,27 +66,25 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                 sb.Append(", ") |> ignore
             sb.Append("]") |> ignore
         | other -> 
-            if other <> null 
+            if isNull other |> not
             then sb.Append(other.ToString()) |> ignore
             else sb.Append("null") |> ignore
         ()
-    /// Create new NameValueLookup from given list of key-value tuples.
-    static member ofList (l: (string * obj) list) = NameValueLookup(l)
     /// Returns raw content of the current lookup.
-    member private x.Buffer : KeyValuePair<string, obj> [] = kvals
+    member private __.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
-    member x.Count = kvals.Length
+    member __.Count = kvals.Length
     /// Updates an entry's value under given key. It will throw an exception
     /// if provided key cannot be found in provided lookup.
-    member x.Update key value = setValue key value
+    member __.Update key value = setValue key value
     override x.Equals(other) = 
         match other with
         | :? NameValueLookup as lookup -> structEq x lookup
         | _ -> false
-    override x.GetHashCode() =
+    override __.GetHashCode() =
         let mutable hash = 0
         for kv in kvals do
-            hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if kv.Value = null then 0 else kv.Value.GetHashCode())
+            hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if isNull kv.Value then 0 else kv.Value.GetHashCode())
         hash
     override x.ToString() = 
         let sb =Text.StringBuilder()
@@ -105,30 +93,30 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     interface IEquatable<NameValueLookup> with
         member x.Equals(other) = structEq x other
     interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
+        member __.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
     interface IEnumerable<KeyValuePair<string, obj>> with
-        member x.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
+        member __.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
     interface IDictionary<string, obj> with
-        member x.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Contains(item) = kvals |> Array.exists ((=) item)
-        member x.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
-        member x.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
+        member __.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Contains(item) = kvals |> Array.exists ((=) item)
+        member __.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
+        member __.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
         member x.Count = x.Count
-        member x.IsReadOnly = true
-        member x.Item
+        member __.IsReadOnly = true
+        member __.Item
             with get (key) = getValue key
             and set (key) v = setValue key v
-        member x.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
-        member x.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
-        member x.Remove(_:string) = 
+        member __.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
+        member __.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
+        member __.Remove(_:string) = 
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member x.Remove(_:KeyValuePair<string,obj>) = 
+        member __.Remove(_:KeyValuePair<string,obj>) = 
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member x.TryGetValue(key, value) = 
+        member __.TryGetValue(key, value) = 
             match kvals |> Array.tryFind (fun kv -> kv.Key = key) with
             | Some kv -> value <- kv.Value; true
             | None -> value <- null; false
@@ -136,6 +124,10 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
         NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
+
+module NameValueLookup =
+    /// Create new NameValueLookup from given list of key-value tuples.
+    let ofList (l: (string * obj) list) = NameValueLookup(l) 
                 
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
@@ -208,11 +200,7 @@ let private optionCast (value: obj) =
             else
                 let t = value.GetType()
                 let v' = t.GetProperty("Value")
-#if NETSTANDARD2_0           
-                if t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
-#else       
                 if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
-#endif                  
                     Some(v'.GetValue(value, [| |]))
                 else None
 
@@ -254,7 +242,7 @@ type ResolverTree =
     member x.Value =
         match x with
         | ResolverLeaf leaf -> leaf.Value
-        | ResolverError err -> None
+        | ResolverError _ -> None
         | ResolverObjectNode node -> node.Value
         | ResolverListNode l -> l.Value
 and ResolverLeaf = { Name: string; Value: obj option; }
@@ -296,19 +284,19 @@ module ResolverTree =
 
 let private treeToDict =
     ResolverTree.pathFold 
-        (fun path leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
+        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
         (fun path error -> 
             let (e:Error) = (error.Message, path |> List.rev)
             KeyValuePair<_,_>(error.Name, null :> obj), [e])
-        (fun path name value children -> 
+        (fun _ name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
             match value with
-            | Some v -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
+            | Some _ -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
-        (fun path name value children -> 
+        (fun _ name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
             match value with
-            | Some v -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
+            | Some _ -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
@@ -334,7 +322,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
         asyncVal {
             return ResolverLeaf { Name = name; Value = value |> Option.bind(coerce) }
         }
-    | Enum enumdef ->
+    | Enum _ ->
         let name = ctx.ExecutionInfo.Identifier
         asyncVal {
             let value' = value |> Option.bind(fun v ->  coerceStringValue v |> Option.map(fun v' -> v' :> obj))
@@ -426,7 +414,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             |> AsyncVal.bind(fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
-                | t when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
+                | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
                 | t -> build (t::acc) xs)
         | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields

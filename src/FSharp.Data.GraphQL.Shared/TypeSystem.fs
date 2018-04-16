@@ -604,6 +604,7 @@ and Resolve =
         | Async(_,_,e) -> e
         | ResolveExpr(e) -> e
         | Undefined -> failwith "Resolve function was not defined"
+        | x -> failwith <| sprintf "Unexpected resolve function %A" x
 
 /// Execution strategy for provided queries. Defines if object fields should 
 /// be resolved either sequentially one-by-one or in parallel.
@@ -2309,19 +2310,14 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
         /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, 
-            ?args: InputFieldDef list, ?deprecationReason: string,
-            ?weight : float) : FieldDef<'Val> = 
+        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2334,17 +2330,14 @@ module SchemaDefinitions =
         /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, ?weight : float) : FieldDef<'Val> = 
+        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Undefined
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2358,19 +2351,14 @@ module SchemaDefinitions =
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?weight : float) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2384,19 +2372,14 @@ module SchemaDefinitions =
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?weight : float) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2411,19 +2394,14 @@ module SchemaDefinitions =
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?weight : float) : FieldDef<'Val> = 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type. Fields is marked as deprecated.
@@ -2440,19 +2418,14 @@ module SchemaDefinitions =
         /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
-                            deprecationReason : string,
-                            ?weight : float) : FieldDef<'Val> = 
+                            deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2465,19 +2438,14 @@ module SchemaDefinitions =
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?weight : float) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2491,19 +2459,14 @@ module SchemaDefinitions =
         /// the higher the cost of the field on a query, and less is the capability of nesting it.
         /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?weight : float) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2519,19 +2482,14 @@ module SchemaDefinitions =
         /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?weight : float) : FieldDef<'Val> = 
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value. Fields is marked as deprecated.
@@ -2549,38 +2507,28 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
-                                 deprecationReason : string,
-                                 ?weight : float) : FieldDef<'Val> = 
+                                 deprecationReason : string) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                   }
+                     Metadata = Metadata.Empty }
 
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>, ?weight : float) : FieldDef<'Val> = 
+        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = Obj
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None
-                     Metadata =
-                        match weight with
-                        | Some w -> Metadata.FromList [ "weight", upcast w ]
-                        | None -> Metadata.Empty
-                   }
+                     Metadata = Metadata.Empty }
 
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, inputdef: #OutputDef<'Input>,
                                         description: string,
                                         args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>,
-                                        ?weight : float): SubscriptionFieldDef<'Root> =
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>): SubscriptionFieldDef<'Root> =
             { Name = name
               Description = Some description
               RootTypeDef = rootdef
@@ -2588,10 +2536,7 @@ module SchemaDefinitions =
               DeprecationReason = None
               Args = args |> List.toArray
               Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
-              Metadata =
-                match weight with
-                | Some w -> Metadata.FromList [ "weight", upcast w ]
-                | None -> Metadata.Empty
+              Metadata = Metadata.Empty
             } :> SubscriptionFieldDef<'Root>
         
         /// <summary>

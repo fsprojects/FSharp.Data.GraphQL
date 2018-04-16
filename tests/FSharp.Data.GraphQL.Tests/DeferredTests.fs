@@ -8,9 +8,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open System.Threading
-open FSharp.Data.GraphQL.Tests
-open System.Collections.Generic
-open System.Collections.Concurrent
 open System.Collections.Concurrent
 
 #nowarn "40"
@@ -63,12 +60,11 @@ let executor =
     let DataType =
         Define.Object<TestSubject>(
             name = "Data", 
-            fieldsFn = fun () -> [
-                Define.Field("a", String, resolve = fun _ d -> d.a)
-                Define.Field("b", String, resolve = fun _ d -> d.b)
-                Define.Field("union", UnionType, resolve = fun _ d -> d.union)
-                Define.Field("list", ListOf UnionType, resolve = fun _ d -> d.list)
-            ])
+            fieldsFn = fun () -> 
+                [ Define.Field("a", String, resolve = fun _ d -> d.a)
+                  Define.Field("b", String, resolve = fun _ d -> d.b)
+                  Define.Field("union", UnionType, resolve = fun _ d -> d.union)
+                  Define.Field("list", ListOf UnionType, resolve = fun _ d -> d.list) ])
     let data = {
            a = "Apple"
            b = "Banana"
@@ -76,25 +72,20 @@ let executor =
                id = "1"
                a = "Union A"
            }
-           list = [
-               A { 
+           list = 
+            [ A { 
                    id = "2"
                    a = "Union A" 
                }; 
                B { 
                    id = "3"
                    b = 4
-               } 
-           ]
+               } ]
        }
-
     let Query = 
         Define.Object<TestSubject>(
             name = "Query",
-            fieldsFn = fun () -> [
-                Define.Field("testData", DataType, (fun _ d -> data))
-            ]
-        )
+            fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
     let schema = Schema(Query)
     Executor(schema)
 

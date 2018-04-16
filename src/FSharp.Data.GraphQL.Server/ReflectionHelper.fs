@@ -6,10 +6,8 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Reflection
 open FSharp.Reflection
-open System.Collections
 open System.Collections.Generic
 open System.Linq
-open System.Linq.Expressions
 open FSharp.Data.GraphQL.Types
 open FSharp.Quotations
 
@@ -42,36 +40,23 @@ module internal Gen =
         if t = tArray then Some typeParam
         else None
 
-    let inline defaultArgOnNull a b = if a <> null then a else b
+    let inline defaultArgOnNull a b = if isNull a |> not then a else b
     let private optionType = typedefof<option<_>>
     let (|Option|_|) (t: Type) =
-#if NETSTANDARD2_0
-        if t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() = optionType
-        then Some (t.GetTypeInfo().GetGenericArguments().[0])
-#else 
         if t.IsGenericType && t.GetGenericTypeDefinition() = optionType
         then Some (t.GetGenericArguments().[0])
-#endif 
         else None
 
     let (|Enumerable|_|) t =
         if typeof<System.Collections.IEnumerable>.IsAssignableFrom t 
         then
-#if NETSTANDARD2_0
-            let e = defaultArgOnNull (t.GetTypeInfo().GetInterface("IEnumerable`1")) t
-#else 
             let e = defaultArgOnNull (t.GetInterface("IEnumerable`1")) t
-#endif
             Some (e.GetGenericArguments().[0])
         else None
 
     let (|Queryable|_|) t =
         if typeof<IQueryable>.IsAssignableFrom t 
-#if NETSTANDARD2_0        
-        then Some (Queryable (t.GetTypeInfo().GetInterface("IQueryable`1").GetGenericArguments().[0]))
-#else 
         then Some (Queryable (t.GetInterface("IQueryable`1").GetGenericArguments().[0]))
-#endif 
         else None
 
     let genericType<'t> typeParams = typedefof<'t>.MakeGenericType typeParams
@@ -143,8 +128,6 @@ module internal Gen =
             methods.First()
         }
 
-open FSharp.Reflection
-
 module internal ReflectionHelper =
 
     let matchConstructor (t: Type) (fields: string []) =
@@ -165,15 +148,6 @@ module internal ReflectionHelper =
             ctor
             
     let parseUnion (t: Type) (u: string) =
-    #if NETSTANDARD2_0        
-        if t.GetTypeInfo().IsEnum then Enum.Parse(t, u, ignoreCase = true)
-        else
-            try
-                match FSharpType.GetUnionCases(t, true)|> Array.filter(fun case -> case.Name.ToLower() = u.ToLower()) with
-                | [|case|] -> FSharpValue.MakeUnion(case, [||], true)
-                | _ -> null
-            with _ -> null
-    #else
         if t.IsEnum then Enum.Parse(t, u, ignoreCase = true)
         else
             try
@@ -181,5 +155,4 @@ module internal ReflectionHelper =
                 | [|case|] -> FSharpValue.MakeUnion(case, [||], (BindingFlags.NonPublic ||| BindingFlags.Public))
                 | _ -> null
             with _ -> null
-    #endif
 

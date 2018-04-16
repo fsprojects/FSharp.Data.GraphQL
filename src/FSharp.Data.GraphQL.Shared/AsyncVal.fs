@@ -16,7 +16,7 @@ type AsyncVal<'T> =
     override x.ToString () = 
         match x with
         | Value v -> "AsyncVal(" + v.ToString() + ")"
-        | Async a -> "AsyncVal(Async<>)"
+        | Async _ -> "AsyncVal(Async<>)"
         | Failure f -> "AsyncVal(Failure:" + f.Message + ")"
     
 [<RequireQualifiedAccess>]
@@ -162,13 +162,13 @@ module AsyncVal =
                 return results })
 
 type AsyncValBuilder () =
-    member x.Zero () = AsyncVal.empty
-    member x.Return v = AsyncVal.wrap v
-    member x.ReturnFrom (v: AsyncVal<_>) = v
-    member x.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
-    member x.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) = 
+    member __.Zero () = AsyncVal.empty
+    member __.Return v = AsyncVal.wrap v
+    member __.ReturnFrom (v: AsyncVal<_>) = v
+    member __.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
+    member __.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) = 
         AsyncVal.bind binder v
-    member x.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) = 
+    member __.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) = 
         Async(async {
             let! value = a
             let bound = binder value
@@ -192,13 +192,13 @@ module AsyncExtensions =
 
     type Microsoft.FSharp.Control.AsyncBuilder with
 
-        member x.ReturnFrom (v: AsyncVal<'T>) =
+        member __.ReturnFrom (v: AsyncVal<'T>) =
             match v with
             | Value v -> async.Return v
             | Async a -> async.ReturnFrom a
             | Failure f -> async.Return (raise f)
 
-        member x.Bind (v: AsyncVal<'T>, binder) =
+        member __.Bind (v: AsyncVal<'T>, binder) =
             match v with
             | Value v -> async.Bind(async.Return v, binder)
             | Async a -> async.Bind(a, binder)
