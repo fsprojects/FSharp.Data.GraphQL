@@ -7,14 +7,22 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
+/// Arguments used to execute a GraphQL query.
+type ExecutionArgs<'Root> =
+    ExecutionPlan * 'Root option * Map<string, obj> option
+
+/// Represents the function used to execute a parsed query.
 type ExecutionFunc<'Root> = 
-    ExecutionPlan * 'Root option * Map<string, obj> option -> Async<GQLResponse>
+    ExecutionArgs<'Root> -> Async<GQLResponse>
 
+/// Represents the interception function used by a query execution middleware.
 type ExecutionMiddlewareFunc<'Root> = 
-    ExecutionPlan * 'Root option * Map<string, obj> option -> ExecutionFunc<'Root> -> Async<GQLResponse>
+    ExecutionArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
 
+/// Interface to implement query execution middlewares.
 type IExecutionMiddleware<'Root> =
-    abstract member ResolveAsync : ExecutionMiddlewareFunc<'Root>
+    /// Contains the function used to execute a query execution middleware.
+    abstract member ExecuteAsync : ExecutionMiddlewareFunc<'Root>
 
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<'Root> seq) = 
     let fieldExecuteMap = FieldExecuteMap()
@@ -76,7 +84,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
 
     let executeWithMiddlewares (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         middlewares
-        |> Seq.map (fun m -> m.ResolveAsync)
+        |> Seq.map (fun m -> m.ExecuteAsync)
         |> List.ofSeq
         |> runMiddlewares executionPlan data variables
 
@@ -85,7 +93,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
     new(schema, middlewareFuncs : ExecutionMiddlewareFunc<'Root> seq) = 
         let middlewares = 
             middlewareFuncs 
-            |> Seq.map (fun m -> { new IExecutionMiddleware<'Root> with member __.ResolveAsync = m })
+            |> Seq.map (fun m -> { new IExecutionMiddleware<'Root> with member __.ExecuteAsync = m })
         Executor(schema, middlewares = middlewares)
 
     /// <summary>
