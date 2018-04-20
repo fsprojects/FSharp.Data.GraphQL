@@ -333,7 +333,8 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
           DeferredFields = deferredFields'
           RootDef = ctx.Schema.Query
           Strategy = Parallel
-          Variables = variables }
+          Variables = variables
+          Metadata = Metadata.Empty }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
@@ -343,7 +344,8 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
               DeferredFields = deferredFields'
               RootDef = mutationDef
               Strategy = Sequential 
-              Variables = variables }
+              Variables = variables
+              Metadata = Metadata.Empty }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
     | Subscription ->
@@ -355,6 +357,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
               DeferredFields = deferredFields'
               RootDef = subscriptionDef
               Strategy = Sequential 
-              Variables = variables }
+              Variables = variables
+              Metadata = Metadata.Empty }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no mutation type defined")

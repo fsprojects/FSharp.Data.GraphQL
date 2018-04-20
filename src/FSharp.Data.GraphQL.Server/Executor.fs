@@ -12,11 +12,11 @@ type ExecutionArgs<'Root> =
     ExecutionPlan * 'Root option * Map<string, obj> option
 
 /// Represents the function used to execute a parsed query.
-type ExecutionFunc<'Root> = 
+type ExecutionFunc<'Root> =
     ExecutionArgs<'Root> -> Async<GQLResponse>
 
 /// Represents the interception function used by a query execution middleware.
-type ExecutionMiddlewareFunc<'Root> = 
+type ExecutionMiddlewareFunc<'Root> =
     ExecutionArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
 
 /// Interface to implement query execution middlewares.
@@ -24,7 +24,7 @@ type IExecutionMiddleware<'Root> =
     /// Contains the function used to execute a query execution middleware.
     abstract member ExecuteAsync : ExecutionMiddlewareFunc<'Root>
 
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<'Root> seq) = 
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<'Root> seq) =
     let fieldExecuteMap = FieldExecuteMap()
 
     //FIXME: for some reason static do or do invocation in module doesn't work
@@ -50,8 +50,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
-        let prepareOutput res = 
-            let prepareData data (errs: Error list) = 
+        let prepareOutput res =
+            let prepareData data (errs: Error list) =
                 let parsedErrors =
                     errs
                     |> List.map(fun (message, path) -> NameValueLookup.ofList [ "message", upcast message; "path", upcast path])
@@ -68,13 +68,13 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                 let rootObj = data |> Option.map box |> Option.toObj
                 let! res = evaluate schema executionPlan variables rootObj errors fieldExecuteMap
                 return prepareOutput res
-            with 
-            | ex -> 
+            with
+            | ex ->
                 let msg = ex.ToString()
                 return prepareOutput(Direct(new Dictionary<string, obj>() :> Output, [msg, []]))
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) = 
+    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         eval(executionPlan, data, defaultArg variables Map.empty)
 
     let rec runMiddlewares executionPlan data variables (middlewares : ExecutionMiddlewareFunc<'Root> list) =
@@ -165,7 +165,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                     | Some s -> upcast s
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
-            planOperation (ast.GetHashCode()) planningCtx operation
+            let result = planOperation (ast.GetHashCode()) planningCtx operation
+            { result with Metadata = schema.Metadata }
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
         
     /// Creates an execution plan for provided GraphQL query string without 

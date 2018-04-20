@@ -40,7 +40,9 @@ type Character =
     | Droid of Droid
 
 module Schema =
-    let humans = 
+    open FSharp.Data.GraphQL.Server.Middlewares
+
+    let humans =
         [ { Id = "1000"
             Name = Some "Luke Skywalker"
             Friends = [ "1002"; "1003"; "2000"; "2001" ]
@@ -140,32 +142,32 @@ module Schema =
             name = "Human",
             description = "A humanoid creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Human),
-            fieldsFn = fun () -> 
+            fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
-                Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
+                Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
+                Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
-                    fun _ (h : Human) -> 
+                    fun _ (h : Human) ->
                         h.Friends
-                        |> List.map getCharacter 
-                        |> List.toSeq)
-                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
-                Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet) 
+                        |> List.map getCharacter
+                        |> List.toSeq).WithWeight(1.0)
+                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
+                Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
-        
+
     and DroidType =
         Define.Object<Droid>(
             name = "Droid",
             description = "A mechanical creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Droid),
-            fieldsFn = fun () -> 
+            fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the droid.", fun _ (d : Droid) -> d.Id)
-                Define.Field("name", Nullable String, "The name of the Droid.", fun _ (d : Droid) -> d.Name)
-                Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.", 
+                Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
+                Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
+                Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
                     fun _ d -> d.Friends |> List.map getCharacter |> List.toSeq)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
-                Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction) 
+                Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)
             ])
 
     and PlanetType =
@@ -173,7 +175,7 @@ module Schema =
             name = "Planet",
             description = "A planet in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Planet),
-            fieldsFn = fun () -> 
+            fieldsFn = fun () ->
             [
                 Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
                 Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
@@ -185,11 +187,11 @@ module Schema =
             name = "Root",
             description = "The Root type to be passed to all our resolvers",
             isTypeOf = (fun o -> o :? Root),
-            fieldsFn = fun () -> 
+            fieldsFn = fun () ->
             [
                 Define.Field("clientid", String, "The ID of the client", fun _ r -> r.ClientId)
             ])
-    
+
     let Query =
         Define.Object<Root>(
             name = "Query",
@@ -202,18 +204,18 @@ module Schema =
             name = "Mutation",
             fields = [
                 Define.Field(
-                    "setMoon", 
-                    Nullable PlanetType, 
-                    "Sets a moon status", 
-                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ], 
-                    fun ctx _ -> 
-                        getPlanet(ctx.Arg("id")) 
-                        |> Option.map (fun x -> 
+                    "setMoon",
+                    Nullable PlanetType,
+                    "Sets a moon status",
+                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
+                    fun ctx _ ->
+                        getPlanet(ctx.Arg("id"))
+                        |> Option.map (fun x ->
                             x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
                             schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
                             x))])
 
-    let Subscription = 
+    let Subscription =
         Define.SubscriptionObject<Root>(
             name = "Subscription",
             fields = [
@@ -225,8 +227,10 @@ module Schema =
                     [ Define.Input("id", String) ],
                     (fun ctx _ p -> ctx.Arg("id") = p.Id))])
 
-    let schema = Schema(Query, Mutation, Subscription, schemaConfig) :> ISchema<Root>
-        
-    let executor = Executor(schema)
+    let schema = Schema(Query, Mutation, Subscription, schemaConfig).WithWeightThreshold(5.0)
+
+    let middlewares = [ ComplexityThresholdMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+
+    let executor = Executor(schema, middlewares)
 
     let root = { ClientId = "5" }

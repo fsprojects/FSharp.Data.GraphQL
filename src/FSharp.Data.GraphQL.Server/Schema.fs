@@ -282,22 +282,24 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         
     let introspected = introspectSchema typeMap      
 
+    let metadata = Metadata.Empty
+
     interface ISchema with        
         member val TypeMap = typeMap
         member val Directives = schemaConfig.Directives |> List.toArray
         member val Introspected = introspected
-        member x.Query = upcast query
-        member x.Mutation = mutation |> Option.map (fun x -> upcast x)
-        member x.Subscription = subscription |> Option.map (fun x -> upcast x)
-        member x.TryFindType typeName = Map.tryFind typeName typeMap
-        member x.GetPossibleTypes typedef = getPossibleTypes typedef
-        member x.ParseError exn = schemaConfig.ParseError exn
+        member __.Query = upcast query
+        member __.Mutation = mutation |> Option.map (fun x -> upcast x)
+        member __.Subscription = subscription |> Option.map (fun x -> upcast x)
+        member __.TryFindType typeName = Map.tryFind typeName typeMap
+        member __.GetPossibleTypes typedef = getPossibleTypes typedef
+        member __.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
-
-        member x.SubscriptionProvider = schemaConfig.SubscriptionProvider
+        member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
+        member __.Metadata = metadata
 
     interface ISchema<'Root> with
         member x.Query = query

@@ -345,14 +345,16 @@ and ISchema =
 
         abstract SubscriptionProvider: ISubscriptionProvider
 
+        abstract Metadata : Metadata
+
     end
 
-and ISchema<'Root> = 
+and ISchema<'Root> =
     interface
         inherit ISchema
         abstract Query : ObjectDef<'Root>
         abstract Mutation : ObjectDef<'Root> option
-        abstract Subscription : SubscriptionObjectDef<'Root> option 
+        abstract Subscription : SubscriptionObjectDef<'Root> option
     end
 
 and FieldExecuteMap () = 
@@ -638,7 +640,7 @@ and DeferredExecutionInfoKind =
     | DeferredExecution
     | StreamedExecution
 
-and ExecutionPlan = 
+and ExecutionPlan =
     { /// Unique identifier of the current execution plan.
       DocumentId : int
       /// AST defintion of current operation.
@@ -653,13 +655,15 @@ and ExecutionPlan =
       /// A list of all deferred fields in the query
       DeferredFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
-      Variables: VarDef list }
+      Variables : VarDef list
+      /// Metadata associated with this execution plan.
+      Metadata : Metadata }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full
 /// knowledge about which fields will be accessed, what types are associated 
 /// with them and what variable values have been set by incoming query.
-and ExecutionContext = 
+and ExecutionContext =
     { /// GraphQL schema definition.
       Schema : ISchema
       /// Boxed value of the top level type, root query/mutation.
@@ -1554,6 +1558,8 @@ and Metadata() =
             | (k, v) :: xs -> m.Add(k, v); add m xs
         add (Metadata()) l
     static member Empty = Metadata.FromList [ ]
+    member this.TryFind<'Value>(key : string) =
+        if this.ContainsKey(key) then this.[key] :?> 'Value |> Some else None
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =
