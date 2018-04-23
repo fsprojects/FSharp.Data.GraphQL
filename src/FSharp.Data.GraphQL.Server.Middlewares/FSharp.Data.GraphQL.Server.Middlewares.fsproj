@@ -7,7 +7,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Constants.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
-    <Compile Include="ComplexityThresholdMiddleware.fs" />
+    <Compile Include="QueryWeightMiddleware.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />

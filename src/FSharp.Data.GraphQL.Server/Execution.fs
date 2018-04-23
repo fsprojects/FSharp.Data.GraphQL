@@ -10,11 +10,18 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 
 type Error = string * string list
+
 type Output = IDictionary<string, obj>
+
 type GQLResponse =
-    | Direct of data:Output * errors: Error list
-    | Deferred of data:Output * errors:Error list * defer:IObservable<Output>
-    | Stream of stream:IObservable<Output>
+    | Direct of data : Output * errors: Error list
+    | Deferred of data : Output * errors : Error list * defer : IObservable<Output>
+    | Stream of stream : IObservable<Output>
+
+module GQLResponse =
+    let directError msg path = Direct(Dictionary<string, obj>(), [ (msg, path) ])
+    
+    let directErrorAsync msg path = async { return directError msg path }
     
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys

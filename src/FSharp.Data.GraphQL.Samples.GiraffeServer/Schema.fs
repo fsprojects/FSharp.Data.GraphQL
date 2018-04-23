@@ -147,10 +147,7 @@ module Schema =
                 Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
-                    fun _ (h : Human) ->
-                        h.Friends
-                        |> List.map getCharacter
-                        |> List.toSeq).WithWeight(1.0)
+                    fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
@@ -165,7 +162,7 @@ module Schema =
                 Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
                 Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
-                    fun _ d -> d.Friends |> List.map getCharacter |> List.toSeq)
+                    fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
                 Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)
             ])
@@ -229,7 +226,7 @@ module Schema =
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig).WithWeightThreshold(5.0)
 
-    let middlewares = [ ComplexityThresholdMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
 
     let executor = Executor(schema, middlewares)
 

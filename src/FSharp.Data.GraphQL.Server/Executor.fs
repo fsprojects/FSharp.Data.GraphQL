@@ -15,6 +15,9 @@ type ExecutionArgs<'Root> =
 type ExecutionFunc<'Root> =
     ExecutionArgs<'Root> -> Async<GQLResponse>
 
+module ExecutionFunc =
+    let directMessage msg path : ExecutionFunc<'Root> = fun _ -> GQLResponse.directErrorAsync msg path
+
 /// Represents the interception function used by a query execution middleware.
 type ExecutionMiddlewareFunc<'Root> =
     ExecutionArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
