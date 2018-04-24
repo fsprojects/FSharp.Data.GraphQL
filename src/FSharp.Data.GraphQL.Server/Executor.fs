@@ -7,20 +7,23 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
+/// Execution arguments to be used by customization through middlewares
+type ExecutionArgs = Metadata
+
 /// Arguments used to execute a GraphQL query.
-type ExecutionArgs<'Root> =
+type ExecutionFuncArgs<'Root> =
     ExecutionPlan * 'Root option * Map<string, obj> option
 
 /// Represents the function used to execute a parsed query.
 type ExecutionFunc<'Root> =
-    ExecutionArgs<'Root> -> Async<GQLResponse>
+    ExecutionFuncArgs<'Root> -> Async<GQLResponse>
 
 module ExecutionFunc =
-    let error msg path : ExecutionFunc<'Root> = fun _ -> GQLResponse.directErrorAsync msg path
+    let error<'Root> msg path : ExecutionFunc<'Root> = fun _ -> GQLResponse.directErrorAsync msg path
 
 /// Represents the interception function used by a query execution middleware.
 type ExecutionMiddlewareFunc<'Root> =
-    ExecutionArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
+    ExecutionFuncArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
 
 /// Interface to implement query execution middlewares.
 type IExecutionMiddleware<'Root> =
@@ -168,8 +171,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                     | Some s -> upcast s
                     | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = { Schema = schema; RootDef = rootDef; Document = ast }
-            let result = planOperation (ast.GetHashCode()) planningCtx operation
-            { result with Metadata = schema.Metadata }
+            planOperation (ast.GetHashCode()) planningCtx operation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
         
     /// Creates an execution plan for provided GraphQL query string without 

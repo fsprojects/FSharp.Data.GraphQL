@@ -63,7 +63,6 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-
     let rec insert ns typedef =
         let inline addOrReturn tname (tdef: NamedDef) acc =
             if Map.containsKey tname acc 
@@ -282,8 +281,6 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         
     let introspected = introspectSchema typeMap      
 
-    let metadata = Metadata.Empty
-
     interface ISchema with        
         member val TypeMap = typeMap
         member val Directives = schemaConfig.Directives |> List.toArray
@@ -299,7 +296,6 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
         member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
-        member __.Metadata = metadata
 
     interface ISchema<'Root> with
         member x.Query = query

@@ -224,9 +224,9 @@ module Schema =
                     [ Define.Input("id", String) ],
                     (fun ctx _ p -> ctx.Arg("id") = p.Id))])
 
-    let schema = Schema(Query, Mutation, Subscription, schemaConfig).WithQueryWeightThreshold(5.0)
+    let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
-    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware<Root>(5.0) :> IExecutionMiddleware<Root> ]
 
     let executor = Executor(schema, middlewares)
 

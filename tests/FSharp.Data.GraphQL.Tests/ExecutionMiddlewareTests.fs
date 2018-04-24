@@ -44,7 +44,7 @@ let ast = parse """{
         }
     }"""
 
-let middlewareFunc (args : ExecutionArgs<TestSubject>) (next : ExecutionFunc<TestSubject>) =
+let middlewareFunc (args : ExecutionFuncArgs<TestSubject>) (next : ExecutionFunc<TestSubject>) =
     let (plan, data, variables) = args
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)

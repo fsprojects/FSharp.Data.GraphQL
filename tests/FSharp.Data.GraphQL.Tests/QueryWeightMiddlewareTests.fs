@@ -1,11 +1,15 @@
 module FSharp.Data.GraphQL.Tests.QueryWeightMiddlewareTests
 
+open System
+open System.Threading
+open System.Collections.Concurrent
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+
 
 #nowarn "40"
 
@@ -58,7 +62,7 @@ let executor =
                 [ Define.Field("id", Int, resolve = fun _ a -> a.id)
                   Define.Field("value", String, resolve = fun _ a -> a.value)
                   Define.Field("subjects", ListOf (Nullable SubjectType), 
-                    resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq).WithQueryWeight(0.5) ])
+                    resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq).WithQueryWeight(1.0) ])
     and BType = 
         Define.Object<B>(
             name = "B",
@@ -67,16 +71,19 @@ let executor =
                 [ Define.Field("id", Int, resolve = fun _ b -> b.id)
                   Define.Field("value", Int, resolve = fun _ b -> b.value)
                   Define.Field("subjects", ListOf (Nullable SubjectType), 
-                    resolve = fun _ (b : B) -> b.subjects |> List.map getSubject |> List.toSeq).WithQueryWeight(0.5) ])
+                    resolve = fun _ (b : B) -> b.subjects |> List.map getSubject |> List.toSeq).WithQueryWeight(1.0) ])
     let Query =
         Define.Object<Root>(
             name = "Query",
             fields = 
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
-    let schema = Schema(Query).WithQueryWeightThreshold(1.5)
-    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+    let schema = Schema(Query)
+    let middlewares = [ QueryWeightMiddleware<Root>(2.0) :> IExecutionMiddleware<Root> ]
     Executor(schema, middlewares)
+
+let expectedErrors : Error list =
+    [ ("Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again.", [ "" ]) ]
 
 [<Fact>]
 let ``Simple query: Should pass when below threshold``() =
@@ -107,7 +114,7 @@ let ``Simple query: Should pass when below threshold``() =
                     ]
                 ]
             ]
-    ]
+        ]
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Direct (data, errors) ->
@@ -132,6 +139,164 @@ let ``Simple query: Should not pass when above threshold``() =
                 }                
             }
         }"""
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Direct (data, errors) ->
+        errors |> equals expectedErrors
+        empty data
+    | _ -> fail "Expected Direct GQLResponse"
+
+[<Fact>]
+let ``Deferred queries : Should pass when below threshold``() =
+    let query = 
+        parse """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects @defer {
+                    id
+                    value
+                }                
+            }
+        }"""
+    let expected = 
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+            ]
+        ]
+    let expectedDeferred = 
+        NameValueLookup.ofList [
+            "data", upcast [
+                NameValueLookup.ofList [
+                    "id", upcast 2
+                    "value", upcast "A2"                    
+                ]
+                NameValueLookup.ofList [
+                    "id", upcast 6
+                    "value", upcast 3000
+                ]
+            ]
+            "path", upcast [ "A" :> obj; "subjects" :> obj ]
+        ]
+    let result = query |> executor.AsyncExecute |> sync
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expected)
+        deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+        then fail "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Streamed queries : Should pass when below threshold``() =
+    let query = 
+        parse """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects @stream {
+                    id
+                    value
+                }                
+            }
+        }"""
+    let expected = 
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+            ]
+        ]
+    let expectedDeferred1 = 
+        NameValueLookup.ofList [
+            "data", upcast [
+                NameValueLookup.ofList [
+                    "id", upcast 2
+                    "value", upcast "A2"                    
+                ]
+            ]
+            "path", upcast [ "A" :> obj; "subjects" :> obj; 0 :> obj ]
+        ]
+    let expectedDeferred2 = 
+        NameValueLookup.ofList [
+            "data", upcast [
+                NameValueLookup.ofList [
+                    "id", upcast 6
+                    "value", upcast 3000
+                ]
+            ]
+            "path", upcast [ "A" :> obj; "subjects" :> obj; 1 :> obj ]
+        ]
+    let result = query |> executor.AsyncExecute |> sync
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expected)
+        deferred 
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then mre.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+        then fail "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Deferred and Streamed queries : Should not pass when above threshold``() =
+    let query = 
+        sprintf """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects @%s {
+                    id
+                    value
+                    subjects {
+                        id
+                        value
+                    }
+                }                
+            }
+        }"""
+    asts query
+    |> Seq.map (executor.AsyncExecute >> sync)
+    |> Seq.iter (fun result ->
+        match result with
+        | Direct(data, errors) ->
+            errors |> equals expectedErrors
+            empty data
+        | _ -> fail "Expected Direct GQLResponse")
+
+[<Fact>]
+let ``Inline fragment query : Should pass when below threshold``() =
+    let query = 
+        parse """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects {
+                    ... on A {
+                        id
+                        value
+                    }
+                    ... on B {
+                        id
+                    }
+                }                
+            }
+        }"""
     let expected = 
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
@@ -140,43 +305,14 @@ let ``Simple query: Should not pass when above threshold``() =
                 "subjects", upcast [ 
                     NameValueLookup.ofList [
                         "id", upcast 2
-                        "value", upcast "A2"
-                        "subjects", upcast [
-                            NameValueLookup.ofList [
-                                "id", upcast 1
-                                "value", upcast "A1"
-                            ]
-                            NameValueLookup.ofList [
-                                "id", upcast 3
-                                "value", upcast "A3"
-                            ]
-                            NameValueLookup.ofList [
-                                "id", upcast 5
-                                "value", upcast 2000
-                            ]
-                        ]
+                        "value", upcast "A2"                    
                     ]
                     NameValueLookup.ofList [
                         "id", upcast 6
-                        "value", upcast 3000
-                        "subjects", upcast [
-                            NameValueLookup.ofList [
-                                "id", upcast 1
-                                "value", upcast "A1"
-                            ]
-                            NameValueLookup.ofList [
-                                "id", upcast 3
-                                "value", upcast "A3"
-                            ]
-                            NameValueLookup.ofList [
-                                "id", upcast 5
-                                "value", upcast 2000
-                            ]
-                        ]
                     ]
                 ]
             ]
-    ]
+        ]
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Direct (data, errors) ->
@@ -185,17 +321,34 @@ let ``Simple query: Should not pass when above threshold``() =
     | _ -> fail "Expected Direct GQLResponse"
 
 [<Fact>]
-let ``Deferred and Streamed queries : Should pass when below threshold``() =
-    ()
-
-[<Fact>]
-let ``Deferred and Streamed queries : Should not pass when above threshold``() =
-    ()
-
-[<Fact>]
-let ``Inline fragment query : Should pass when below threshold``() =
-    ()
-
-[<Fact>]
 let ``Inline fragment query : Should not pass when above threshold``() =
-    ()
+    let query = 
+        parse """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects {
+                    ... on A {
+                        id
+                        value
+                    }
+                    ... on B {
+                        id
+                        subjects {
+                            id
+                            value
+                            subjects {
+                                id
+                                value
+                            }
+                        }
+                    }
+                }                
+            }
+        }"""
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Direct (data, errors) ->
+        errors |> equals expectedErrors
+        empty data
+    | _ -> fail "Expected Direct GQLResponse"

@@ -1,5 +1,4 @@
 import React from 'react';
-import { WebSocketLink } from 'apollo-link-ws';
 import ApolloClient from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
@@ -74,6 +73,8 @@ export default class QueryRunner extends React.Component {
                 break;
             case "stream":
                 this.setState({ query: streamQuery });
+                break;
+            default:
                 break;
         }
     }

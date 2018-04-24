@@ -3,7 +3,7 @@
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
-type QueryWeightMiddleware<'Root>() =
+type QueryWeightMiddleware<'Root>(threshold : float) =
     let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
         let getWeight f =
             match f.Definition.Metadata.TryFind<float>(Constants.MetadataKeys.weight) with
@@ -32,14 +32,10 @@ type QueryWeightMiddleware<'Root>() =
     interface IExecutionMiddleware<'Root> with
         member __.ExecuteAsync = fun args next ->
             let (plan, _, _) = args
-            let threshold = plan.Metadata.TryFind<float>(Constants.MetadataKeys.weightThreshold)
             let deferredFields = plan.DeferredFields |> List.map (fun x -> x.Info)
             let fields = plan.Fields @ deferredFields
             let error msg = ExecutionFunc.error msg [ "" ] args
-            match threshold with
-            | Some threshold -> 
-                let (pass, _) = measureThreshold threshold fields
-                if pass 
-                then next args 
-                else error "Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again."
-            | None -> next args
+            let (pass, _) = measureThreshold threshold fields
+            if pass
+            then next args
+            else error "Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again."
