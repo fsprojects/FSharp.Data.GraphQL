@@ -74,7 +74,7 @@ let executor =
             fields = 
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
-    let schema = Schema(Query).WithQueryWeightThreshold(5.0)
+    let schema = Schema(Query).WithQueryWeightThreshold(1.5)
     let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
     Executor(schema, middlewares)
 
