@@ -37,43 +37,42 @@ let undefined (value: 't) =
 let contains (expected : 'a) (xs : 'a seq) =
     Assert.Contains(expected, xs); xs
 
-open System
-open System.Reflection
 open Newtonsoft.Json
 open Newtonsoft.Json.Serialization
 open Microsoft.FSharp.Reflection
-open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Parser
 
 type internal OptionConverter() =
     inherit JsonConverter()
     
-    override x.CanConvert(t) = 
+    override __.CanConvert(t) = 
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
-    override x.WriteJson(writer, value, serializer) =
+    override __.WriteJson(writer, value, serializer) =
         let value = 
-            if value = null then null
+            if isNull value then null
             else 
                 let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
                 fields.[0]  
         serializer.Serialize(writer, value)
 
-    override x.ReadJson(reader, t, existingValue, serializer) = 
+    override __.ReadJson(reader, t, _, serializer) = 
         let innerType = t.GetGenericArguments().[0]
         let innerType = 
             if innerType.IsValueType then (typedefof<Nullable<_>>).MakeGenericType([|innerType|])
             else innerType
         let value = serializer.Deserialize(reader, innerType)
         let cases = FSharpType.GetUnionCases(t)
-        if value = null then FSharpValue.MakeUnion(cases.[0], [||])
+        if isNull value then FSharpValue.MakeUnion(cases.[0], [||])
         else FSharpValue.MakeUnion(cases.[1], [|value|])
 
 let internal settings = JsonSerializerSettings()
 settings.Converters <- [| OptionConverter() |]
 settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
 
-/// Serializes provided object to JSON format.
 let toJson (o: 't) : string = JsonConvert.SerializeObject(o, settings)
 
-/// Deserializes provided JSON string to object of given type.
 let fromJson<'t> (json: string) : 't = JsonConvert.DeserializeObject<'t>(json, settings)
 
+let asts query = 
+    ["defer"; "stream"]
+    |> Seq.map (query >> parse)
