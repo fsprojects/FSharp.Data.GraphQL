@@ -35,10 +35,11 @@ type QueryWeightMiddleware<'Root>() =
             let threshold = plan.Metadata.TryFind<float>(Constants.MetadataKeys.weightThreshold)
             let deferredFields = plan.DeferredFields |> List.map (fun x -> x.Info)
             let fields = plan.Fields @ deferredFields
+            let error msg = ExecutionFunc.error msg [ "" ] args
             match threshold with
             | Some threshold -> 
                 let (pass, _) = measureThreshold threshold fields
                 if pass 
                 then next args 
-                else ExecutionFunc.directMessage "Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again." [ "" ] args
+                else error "Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again."
             | None -> next args
