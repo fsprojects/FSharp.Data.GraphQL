@@ -7,28 +7,44 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
-type CompileSchemaFunc = 
+/// A function signature that represents a middleware for schema compile phase.
+/// I takes two arguments: A schema compile context, containing all the data used for the
+/// compilation phase, and another function that can be called to pass
+/// the execution for the next middleware.
+type SchemaCompileMiddleware = 
     SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
-type PlanOperationFunc = 
+/// A function signature that represents a middleware for operation planning phase.
+/// I takes two arguments: A planning context, containing all the data used for the
+/// planning phase, and another function that can be called to pass
+/// the execution for the next middleware.
+type OperationPlanningMiddleware = 
     PlanningContext -> (PlanningContext -> ExecutionPlan) -> ExecutionPlan
 
-type ExecuteOperationFunc =
+/// A function signature that represents a middleware for query execution phase.
+/// I takes two arguments: An execution context, containing all the data used for the
+/// execution phase, and another function that can be called to pass
+/// the execution for the next middleware.
+type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
-type ISchemaCompileMiddleware =
-    abstract member CompileSchema : CompileSchemaFunc
-
-type IOperationPlanningMiddleware =
-    abstract member PlanOperation : PlanOperationFunc
-
-type IOperationExecutionMiddleware =
-    abstract member ExecuteOperationAsync : ExecuteOperationFunc
-
+/// An interface to implement a middleware for the Executor.
+/// It contains sub middlewares for three phases in the execution process.
 type IExecutorMiddleware =
-    abstract member CompileSchema : ISchemaCompileMiddleware option
-    abstract member PlanOperation : IOperationPlanningMiddleware option
-    abstract member ExecuteOperationAsync : IOperationExecutionMiddleware option
+    /// Contains the function that holds the schema compile phase for this middleware.
+    abstract member CompileSchema : SchemaCompileMiddleware option
+    /// Contains the function that holds the operation planning phase for this middleware.
+    abstract member PlanOperation : OperationPlanningMiddleware option
+    /// Contains the function that holds the operation execution phase for this middleware.
+    abstract member ExecuteOperationAsync : OperationExecutionMiddleware option
+
+/// A simple implementation for an executor middleware interface.
+/// It can hold one to three functions for each sub phase of the execution process.
+type ExecutorMiddleware(?compile, ?plan, ?execute) =
+    interface IExecutorMiddleware with
+        member __.CompileSchema = compile
+        member __.PlanOperation = plan
+        member __.ExecuteOperationAsync = execute
 
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
     let fieldExecuteMap = FieldExecuteMap()
@@ -49,7 +65,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                                    "__typename",
                                    compileField TypeNameMetaFieldDef )
 
-    let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : CompileSchemaFunc list) =
+    let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : SchemaCompileMiddleware list) =
         match middlewares with
         | [] -> compileSchema ctx
         | x :: xs -> x ctx (fun ctx -> runSchemaCompilingMiddlewares ctx xs)
@@ -58,7 +74,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         middlewares
         |> Seq.map (fun m -> m.CompileSchema)
         |> Seq.choose id
-        |> Seq.map (fun m -> m.CompileSchema)
         |> List.ofSeq
         |> runSchemaCompilingMiddlewares ctx
 
@@ -69,7 +84,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
-    let rec runOperationExecutionMiddlewares (ctx : ExecutionContext) (middlewares : ExecuteOperationFunc list) =
+    let rec runOperationExecutionMiddlewares (ctx : ExecutionContext) (middlewares : OperationExecutionMiddleware list) =
         match middlewares with
         | [] -> executeOperation ctx
         | x :: xs -> x ctx (fun ctx -> runOperationExecutionMiddlewares ctx xs)
@@ -78,7 +93,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         middlewares
         |> Seq.map (fun m -> m.ExecuteOperationAsync)
         |> Seq.choose id
-        |> Seq.map (fun m -> m.ExecuteOperationAsync)
         |> List.ofSeq
         |> runOperationExecutionMiddlewares ctx
 
@@ -120,7 +134,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let variables = defaultArg variables Map.empty
         eval(executionPlan, data, variables, meta)
 
-    let rec runOperationPlanningMiddlewares (ctx : PlanningContext) (middlewares : PlanOperationFunc list) =
+    let rec runOperationPlanningMiddlewares (ctx : PlanningContext) (middlewares : OperationPlanningMiddleware list) =
         match middlewares with
         | [] -> planOperation ctx
         | x :: xs -> x ctx (fun ctx -> runOperationPlanningMiddlewares ctx xs)
@@ -129,7 +143,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         middlewares
         |> Seq.map (fun m -> m.PlanOperation)
         |> Seq.choose id
-        |> Seq.map (fun m -> m.PlanOperation)
         |> List.ofSeq
         |> runOperationPlanningMiddlewares ctx
 
@@ -213,7 +226,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
-    /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
+    /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
     member __.CreateExecutionPlan(ast: Document, ?operationName: string, ?meta : Metadata): ExecutionPlan =
         let meta = defaultArg meta Metadata.Empty
         createExecutionPlan (ast, operationName, meta)
@@ -222,7 +235,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
-    /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
+    /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
     member __.CreateExecutionPlan(queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation

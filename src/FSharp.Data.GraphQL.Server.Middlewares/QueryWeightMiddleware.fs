@@ -43,11 +43,7 @@ type QueryWeightMiddleware() =
                 then next ctx
                 else (fun _ -> error "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.") ctx
             | None -> next ctx
-    interface IOperationExecutionMiddleware with
-        member __.ExecuteOperationAsync = middleware
     interface IExecutorMiddleware with
-        member __.ExecuteOperationAsync = Some <|
-            { new IOperationExecutionMiddleware with 
-                member __.ExecuteOperationAsync = middleware }
+        member __.ExecuteOperationAsync = Some middleware
         member __.PlanOperation = None
         member __.CompileSchema = None

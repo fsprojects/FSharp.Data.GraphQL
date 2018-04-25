@@ -6,7 +6,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Server.Middlewares
 
 #nowarn "40"
 
@@ -45,7 +44,7 @@ let ast = parse """{
         }
     }"""
 
-let operationMiddlewareFunc (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+let operationMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -62,10 +61,6 @@ let operationMiddlewareFunc (ctx : ExecutionContext) (next : ExecutionContext ->
     let plan = { ctx.ExecutionPlan with Operation = operation; Fields = fields  }
     let ctx' = { ctx with ExecutionPlan = plan }
     next ctx'
-
-let operationMiddleware = 
-    { new IOperationExecutionMiddleware with 
-        member __.ExecuteOperationAsync = operationMiddlewareFunc }
 
 let executorMiddleware =
     { new IExecutorMiddleware with
