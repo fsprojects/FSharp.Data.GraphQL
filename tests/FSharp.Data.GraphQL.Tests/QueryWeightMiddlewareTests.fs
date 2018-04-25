@@ -125,6 +125,7 @@ let ``Simple query: Should pass when below threshold``() =
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Simple query: Should not pass when above threshold``() =
@@ -149,6 +150,7 @@ let ``Simple query: Should not pass when above threshold``() =
         errors |> equals expectedErrors
         data.["data"] |> isNameValueDict |> empty
     | _ -> fail "Expected Direct GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Deferred queries : Should pass when below threshold``() =
@@ -196,6 +198,7 @@ let ``Deferred queries : Should pass when below threshold``() =
         then fail "Timeout while waiting for Deferred GQLResponse"
         actualDeferred |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Streamed queries : Should pass when below threshold``() =
@@ -256,6 +259,7 @@ let ``Streamed queries : Should pass when below threshold``() =
         |> contains expectedDeferred2
         |> ignore
     | _ -> fail "Expected Deferred GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Deferred and Streamed queries : Should not pass when above threshold``() =
@@ -281,7 +285,8 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
         | Direct(data, errors) ->
             errors |> equals expectedErrors
             data.["data"] |> isNameValueDict |> empty
-        | _ -> fail "Expected Direct GQLResponse")
+        | _ -> fail "Expected Direct GQLResponse"
+        result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0))
 
 [<Fact>]
 let ``Inline fragment query : Should pass when below threshold``() =
@@ -323,6 +328,7 @@ let ``Inline fragment query : Should pass when below threshold``() =
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Inline fragment query : Should not pass when above threshold``() =
@@ -356,3 +362,4 @@ let ``Inline fragment query : Should not pass when above threshold``() =
         errors |> equals expectedErrors
         data.["data"] |> isNameValueDict |> empty
     | _ -> fail "Expected Direct GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
