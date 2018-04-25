@@ -469,7 +469,10 @@ and NamedDef =
 and PlanningContext = 
     { Schema : ISchema
       RootDef : ObjectDef
-      Document : Document }
+      Document : Document
+      Operation : OperationDefinition
+      DocumentId : int
+      Metadata : Metadata }
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
@@ -638,6 +641,10 @@ and DeferredExecutionInfoKind =
     | DeferredExecution
     | StreamedExecution
 
+and SchemaCompileContext =
+    { Schema : ISchema
+      FieldExecuteMap : FieldExecuteMap }
+
 and ExecutionPlan =
     { /// Unique identifier of the current execution plan.
       DocumentId : int
@@ -670,6 +677,8 @@ and ExecutionContext =
       Variables : Map<string, obj>
       /// Collection of errors that occurred while executing current operation.
       Errors : ConcurrentBag<exn>
+      /// A map of all fields of the query and their respective execution operations.
+      FieldExecuteMap : FieldExecuteMap
       /// A simple dictionary to hold metadata that can be used by execution customizations.
       Metadata : Metadata }
 

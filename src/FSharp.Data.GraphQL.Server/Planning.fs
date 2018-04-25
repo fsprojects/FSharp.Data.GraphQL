@@ -305,7 +305,7 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
                 { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
             | _ -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
 
-let internal planOperation documentId (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
+let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // create artificial plan info to start with
     let rootInfo = { 
         Identifier = null
@@ -316,7 +316,7 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         Definition = Unchecked.defaultof<FieldDef> 
         Include = incl 
         IsNullable = false }
-    let resolvedInfo, deferredFields, _ = planSelection ctx operation.SelectionSet (rootInfo, [], []) (ref [])
+    let resolvedInfo, deferredFields, _ = planSelection ctx ctx.Operation.SelectionSet (rootInfo, [], []) (ref [])
     let deferredFields' = 
         deferredFields
         |> List.map (fun d -> {d with Path = List.rev d.Path})
@@ -324,11 +324,11 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         match resolvedInfo.Kind with
         | SelectFields tf -> tf
         | x -> failwith <| sprintf "Expected SelectFields Kind, but got %A" x
-    let variables = planVariables ctx.Schema operation
-    match operation.OperationType with
+    let variables = planVariables ctx.Schema ctx.Operation
+    match ctx.Operation.OperationType with
     | Query ->
-        { DocumentId = documentId
-          Operation = operation 
+        { DocumentId = ctx.DocumentId
+          Operation = ctx.Operation 
           Fields = topFields
           DeferredFields = deferredFields'
           RootDef = ctx.Schema.Query
@@ -337,8 +337,8 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
-            { DocumentId = documentId
-              Operation = operation
+            { DocumentId = ctx.DocumentId
+              Operation = ctx.Operation
               Fields = topFields
               DeferredFields = deferredFields'
               RootDef = mutationDef
@@ -349,8 +349,8 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some subscriptionDef ->
-            { DocumentId = documentId
-              Operation = operation
+            { DocumentId = ctx.DocumentId
+              Operation = ctx.Operation
               Fields = topFields
               DeferredFields = deferredFields'
               RootDef = subscriptionDef

@@ -628,8 +628,8 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
             let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
             arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
 
-let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) =
-    types
+let internal compileSchema (ctx : SchemaCompileContext) =
+    ctx.Schema.TypeMap
     |> Map.toSeq 
     |> Seq.iter (fun (tName, x) ->
         match x with
@@ -639,46 +639,36 @@ let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) (subscriptio
                 let subField = (sub :?> SubscriptionFieldDef)
                 let filter = compileSubscriptionField subField
                 let subscription = { Name = subField.Name ; Filter = filter }
-                subscriptionProvider.Register subscription) 
+                ctx.Schema.SubscriptionProvider.Register subscription) 
         | Object objdef ->
-            compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef))
+            compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
-let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
+let internal coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) (meta : Metadata) : AsyncVal<GQLResponse> =
-    let variables = coerceVariables executionPlan.Variables variables
-    let ctx = {
-        Schema = schema
-        ExecutionPlan = executionPlan
-        RootValue = root
-        Variables = variables
-        Errors = errors
-        Metadata = meta }
+let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
     let resultSet =
-        executionPlan.Fields
+        ctx.ExecutionPlan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)
         |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
-
     let parseQuery o =
-        let dict, deferred = executeQueryOrMutation resultSet ctx o fieldExecuteMap root 
+        let dict, deferred = executeQueryOrMutation resultSet ctx o ctx.FieldExecuteMap ctx.RootValue 
         match deferred with
         | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
         | None -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors'))
-
-    match executionPlan.Operation.OperationType with
+    match ctx.ExecutionPlan.Operation.OperationType with
     | Subscription ->
-        match schema.Subscription with
+        match ctx.Schema.Subscription with
         | Some s -> 
-            AsyncVal.wrap(Stream(executeSubscription resultSet ctx s fieldExecuteMap schema.SubscriptionProvider root))
+            AsyncVal.wrap(Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue))
         | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
     | Mutation -> 
-        match schema.Mutation with
+        match ctx.Schema.Mutation with
         | Some m ->
             parseQuery m
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
-    | Query -> parseQuery schema.Query
+    | Query -> parseQuery ctx.Schema.Query
