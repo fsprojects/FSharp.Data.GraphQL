@@ -109,9 +109,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
                 | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
             match res with
-            | Direct (data, errors) -> Direct (prepareData data errors, errors)
-            | Deferred (data, errors, deferred) -> Deferred (prepareData data errors, errors, deferred)
-            | Stream (stream) -> Stream(stream)
+            | Direct (data, errors) -> GQLResponse.Direct(prepareData data errors, errors)
+            | Deferred (data, errors, deferred) -> GQLResponse.Deferred(prepareData data errors, errors, deferred)
+            | Stream (stream) -> GQLResponse.Stream(stream)
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
@@ -128,9 +128,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 let! res = executeOperationWithMiddlewares executionCtx
                 return prepareOutput res
             with
-            | ex ->
-                let msg = ex.ToString()
-                return prepareOutput(Direct(new Dictionary<string, obj>() :> Output, [msg, []]))
+            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString()))
         }
 
     let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option, meta : Metadata) =

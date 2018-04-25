@@ -13,16 +13,36 @@ type Error = string * string list
 
 type Output = IDictionary<string, obj>
 
-type GQLResponse =
+type GQLResponseContent =
     | Direct of data : Output * errors: Error list
     | Deferred of data : Output * errors : Error list * defer : IObservable<Output>
     | Stream of stream : IObservable<Output>
 
-module GQLResponse =
-    let directError msg path = Direct(Dictionary<string, obj>(), [ (msg, path) ])
-    
-    let directErrorAsync msg path = asyncVal { return directError msg path }
-    
+type GQLResponse =
+    { Content : GQLResponseContent
+      Metadata : Metadata option }
+    static member Direct(data, errors) =
+        { Content = Direct (data, errors)
+          Metadata = None }
+    static member Deferred(data, errors, deferred) =
+        { Content = Deferred (data, errors, deferred)
+          Metadata = None }
+    static member Stream(data) =
+        { Content = Stream data
+          Metadata = None }
+    static member Empty =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [])
+    static member Error(msg) =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ])
+    static member ErrorAsync(msg) =
+        asyncVal { return GQLResponse.Error(msg) }
+
+let (|Direct|Deferred|Stream|) (response : GQLResponse) =
+    match response.Content with
+    | Direct (data, errors) -> Direct (data, errors)
+    | Deferred (data, errors, deferred) -> Deferred (data, errors, deferred)
+    | Stream data -> Stream data
+
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys
 /// can be set, but no new entry can be added or removed, once lookup
@@ -658,13 +678,13 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
     let parseQuery o =
         let dict, deferred = executeQueryOrMutation resultSet ctx o ctx.FieldExecuteMap ctx.RootValue 
         match deferred with
-        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
-        | None -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors'))
+        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
+        | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors'))
     match ctx.ExecutionPlan.Operation.OperationType with
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some s -> 
-            AsyncVal.wrap(Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue))
+            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue))
         | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
     | Mutation -> 
         match ctx.Schema.Mutation with

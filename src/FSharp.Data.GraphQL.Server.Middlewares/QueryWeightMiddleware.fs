@@ -35,13 +35,12 @@ type QueryWeightMiddleware() =
             let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
             let directFields = ctx.ExecutionPlan.Fields
             let fields = directFields @ deferredFields
-            let error msg = GQLResponse.directErrorAsync msg [ "" ]
             match threshold with
             | Some threshold ->
                 let pass = measureThreshold threshold fields |> fst
                 if pass
                 then next ctx
-                else (fun _ -> error "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.") ctx
+                else (fun _ -> GQLResponse.ErrorAsync("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.")) ctx
             | None -> next ctx
     interface IExecutorMiddleware with
         member __.ExecuteOperationAsync = Some middleware
