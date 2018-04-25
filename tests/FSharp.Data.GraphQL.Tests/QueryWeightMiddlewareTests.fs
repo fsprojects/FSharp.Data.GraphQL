@@ -87,7 +87,7 @@ let execute (query : Document) =
     executor.AsyncExecute(query, meta = Metadata.QueryWeightThreshold(2.0)) |> sync
 
 let expectedErrors : Error list =
-    [ ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", [ "" ]) ]
+    [ "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", [] ]
 
 [<Fact>]
 let ``Simple query: Should pass when below threshold``() =
