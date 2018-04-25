@@ -226,8 +226,10 @@ module Schema =
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
-    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware() :> IExecutorMiddleware ]
 
     let executor = Executor(schema, middlewares)
+
+    let executionMetadata = Metadata.QueryWeightThreshold(2.0)
 
     let root = { ClientId = "5" }

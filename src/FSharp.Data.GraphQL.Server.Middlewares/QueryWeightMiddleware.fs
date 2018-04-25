@@ -2,8 +2,9 @@
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Execution
 
-type QueryWeightMiddleware<'Root>() =
+type QueryWeightMiddleware() =
     let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
         let getWeight f =
             match f.Definition.Metadata.TryFind<float>(Constants.MetadataKeys.queryWeight) with
@@ -29,16 +30,24 @@ type QueryWeightMiddleware<'Root>() =
                      | _ -> 
                         checkThreshold current xs
         checkThreshold 0.0 fields
-    interface IExecutionMiddleware<'Root> with
-        member __.ExecuteAsync = fun (plan, data, variables, args) next ->
-            let threshold = args.TryFind<float>(Constants.MetadataKeys.queryWeightThreshold)
-            let deferredFields = plan.DeferredFields |> List.map (fun x -> x.Info)
-            let fields = plan.Fields @ deferredFields
-            let error msg = ExecutionFunc.error msg [ "" ] (plan, data, variables, args)
+    let middleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+            let threshold = ctx.Metadata.TryFind<float>(Constants.MetadataKeys.queryWeightThreshold)
+            let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
+            let directFields = ctx.ExecutionPlan.Fields
+            let fields = directFields @ deferredFields
+            let error msg = GQLResponse.directErrorAsync msg [ "" ]
             match threshold with
-            | Some threshold -> 
+            | Some threshold ->
                 let pass = measureThreshold threshold fields |> fst
                 if pass
-                then next (plan, data, variables, args)
-                else error "Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again."
-            | None -> next (plan, data, variables, args)
+                then next ctx
+                else (fun _ -> error "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.") ctx
+            | None -> next ctx
+    interface IOperationExecutionMiddleware with
+        member __.ExecuteOperationAsync = middleware
+    interface IExecutorMiddleware with
+        member __.ExecuteOperationAsync = Some <|
+            { new IOperationExecutionMiddleware with 
+                member __.ExecuteOperationAsync = middleware }
+        member __.PlanOperation = None
+        member __.CompileSchema = None

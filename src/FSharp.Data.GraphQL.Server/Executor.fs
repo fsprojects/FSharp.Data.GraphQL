@@ -7,34 +7,36 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
-/// Arguments used to execute a GraphQL query.
-type ExecutionFuncArgs<'Root> =
-    ExecutionPlan * 'Root option * Map<string, obj> option * Metadata
+type CompileSchemaFunc = 
+    SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
-/// Represents the function used to execute a parsed query.
-type ExecutionFunc<'Root> =
-    ExecutionFuncArgs<'Root> -> Async<GQLResponse>
+type PlanOperationFunc = 
+    PlanningContext -> (PlanningContext -> ExecutionPlan) -> ExecutionPlan
 
-module ExecutionFunc =
-    let error<'Root> msg path : ExecutionFunc<'Root> = 
-        fun _ -> GQLResponse.directErrorAsync msg path
+type ExecuteOperationFunc =
+    ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
-/// Represents the interception function used by a query execution middleware.
-type ExecutionMiddlewareFunc<'Root> =
-    ExecutionFuncArgs<'Root> -> ExecutionFunc<'Root> -> Async<GQLResponse>
+type ISchemaCompileMiddleware =
+    abstract member CompileSchema : CompileSchemaFunc
 
-/// Interface to implement query execution middlewares.
-type IExecutionMiddleware<'Root> =
-    /// Contains the function used to execute a query execution middleware.
-    abstract member ExecuteAsync : ExecutionMiddlewareFunc<'Root>
+type IOperationPlanningMiddleware =
+    abstract member PlanOperation : PlanOperationFunc
 
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<'Root> seq) =
+type IOperationExecutionMiddleware =
+    abstract member ExecuteOperationAsync : ExecuteOperationFunc
+
+type IExecutorMiddleware =
+    abstract member CompileSchema : ISchemaCompileMiddleware option
+    abstract member PlanOperation : IOperationPlanningMiddleware option
+    abstract member ExecuteOperationAsync : IOperationExecutionMiddleware option
+
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
     let fieldExecuteMap = FieldExecuteMap()
 
-    //FIXME: for some reason static do or do invocation in module doesn't work
+    // FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     let __done =
-    //     we don't need to know possible types at this point
+        // We don't need to know possible types at this point
         fieldExecuteMap.SetExecute("",
                                    "__schema",
                                    compileField SchemaMetaFieldDef)
@@ -47,12 +49,38 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                                    "__typename",
                                    compileField TypeNameMetaFieldDef )
 
+    let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : CompileSchemaFunc list) =
+        match middlewares with
+        | [] -> compileSchema ctx
+        | x :: xs -> x ctx (fun ctx -> runSchemaCompilingMiddlewares ctx xs)
+
+    let compileSchemaWithMiddlewares (ctx : SchemaCompileContext) =
+        middlewares
+        |> Seq.map (fun m -> m.CompileSchema)
+        |> Seq.choose id
+        |> Seq.map (fun m -> m.CompileSchema)
+        |> List.ofSeq
+        |> runSchemaCompilingMiddlewares ctx
+
     do
         let compileCtx = { Schema = schema; FieldExecuteMap = fieldExecuteMap }
-        compileSchema compileCtx
+        compileSchemaWithMiddlewares compileCtx
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
+
+    let rec runOperationExecutionMiddlewares (ctx : ExecutionContext) (middlewares : ExecuteOperationFunc list) =
+        match middlewares with
+        | [] -> executeOperation ctx
+        | x :: xs -> x ctx (fun ctx -> runOperationExecutionMiddlewares ctx xs)
+
+    let executeOperationWithMiddlewares (ctx : ExecutionContext) =
+        middlewares
+        |> Seq.map (fun m -> m.ExecuteOperationAsync)
+        |> Seq.choose id
+        |> Seq.map (fun m -> m.ExecuteOperationAsync)
+        |> List.ofSeq
+        |> runOperationExecutionMiddlewares ctx
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>, meta : Metadata): Async<GQLResponse> =
         let prepareOutput res =
@@ -80,7 +108,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                       Errors = errors
                       FieldExecuteMap = fieldExecuteMap
                       Metadata = meta }
-                let! res = executeOperation executionCtx
+                let! res = executeOperationWithMiddlewares executionCtx
                 return prepareOutput res
             with
             | ex ->
@@ -92,16 +120,18 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
         let variables = defaultArg variables Map.empty
         eval(executionPlan, data, variables, meta)
 
-    let rec runMiddlewares executionPlan data variables meta (middlewares : ExecutionMiddlewareFunc<'Root> list) =
+    let rec runOperationPlanningMiddlewares (ctx : PlanningContext) (middlewares : PlanOperationFunc list) =
         match middlewares with
-        | [] -> execute (executionPlan, data, variables, meta)
-        | x :: xs -> x (executionPlan, data, variables, meta) (fun (plan, data, variables, meta) -> runMiddlewares plan data variables meta xs)
+        | [] -> planOperation ctx
+        | x :: xs -> x ctx (fun ctx -> runOperationPlanningMiddlewares ctx xs)
 
-    let executeWithMiddlewares (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option, meta : Metadata) =
+    let planOperationWithMiddlewares (ctx : PlanningContext) =
         middlewares
-        |> Seq.map (fun m -> m.ExecuteAsync)
+        |> Seq.map (fun m -> m.PlanOperation)
+        |> Seq.choose id
+        |> Seq.map (fun m -> m.PlanOperation)
         |> List.ofSeq
-        |> runMiddlewares executionPlan data variables meta
+        |> runOperationPlanningMiddlewares ctx
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
         match findOperation ast operationName with
@@ -124,16 +154,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
                   Metadata = meta
                   Operation = operation
                   DocumentId = ast.GetHashCode() }
-            planOperation planningCtx
+            planOperationWithMiddlewares planningCtx
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
 
     new(schema) = Executor(schema, middlewares = Seq.empty)
-
-    new(schema, middlewareFuncs : ExecutionMiddlewareFunc<'Root> seq) = 
-        let middlewares = 
-            middlewareFuncs 
-            |> Seq.map (fun m -> { new IExecutionMiddleware<'Root> with member __.ExecuteAsync = m })
-        Executor(schema, middlewares = middlewares)
 
     /// <summary>
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed 
@@ -150,7 +174,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
     member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>, ?meta : Metadata): Async<GQLResponse> =
         let meta = defaultArg meta Metadata.Empty
-        executeWithMiddlewares (executionPlan, data, variables, meta)
+        execute (executionPlan, data, variables, meta)
     
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -166,7 +190,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
     member __.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
         let meta = defaultArg meta Metadata.Empty
         let executionPlan = createExecutionPlan (ast, operationName, meta)
-        executeWithMiddlewares (executionPlan, data, variables, meta)
+        execute (executionPlan, data, variables, meta)
         
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -183,7 +207,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutionMiddleware<
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         let executionPlan = createExecutionPlan (ast, operationName, meta)
-        executeWithMiddlewares (executionPlan, data, variables, meta)
+        execute (executionPlan, data, variables, meta)
 
     /// Creates an execution plan for provided GraphQL document AST without 
     /// executing it. This is useful in cases when you have the same query executed 

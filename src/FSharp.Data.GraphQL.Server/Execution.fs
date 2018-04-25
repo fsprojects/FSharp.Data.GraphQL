@@ -21,7 +21,7 @@ type GQLResponse =
 module GQLResponse =
     let directError msg path = Direct(Dictionary<string, obj>(), [ (msg, path) ])
     
-    let directErrorAsync msg path = async { return directError msg path }
+    let directErrorAsync msg path = asyncVal { return directError msg path }
     
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys

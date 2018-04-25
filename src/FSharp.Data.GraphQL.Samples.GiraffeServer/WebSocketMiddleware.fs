@@ -107,7 +107,7 @@ module SocketManager =
                 | Some ConnectionInit ->
                     do! sendMessage socket ConnectionAck
                 | Some (Start (id, payload)) ->
-                    executor.AsyncExecute(payload.ExecutionPlan, root, payload.Variables)
+                    executor.AsyncExecute(payload.ExecutionPlan, root, payload.Variables, meta = Schema.executionMetadata)
                     |> Async.RunSynchronously
                     |> handle id
                     do! Data (id, Dictionary<string, obj>()) |> sendMessage socket

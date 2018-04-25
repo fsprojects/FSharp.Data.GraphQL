@@ -30,7 +30,7 @@
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ExecutionTests.fs" />
-    <Compile Include="ExecutionMiddlewareTests.fs" />
+    <Compile Include="OperationExecutionMiddlewareTests.fs" />
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />

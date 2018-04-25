@@ -1,13 +1,13 @@
 ﻿namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 
-open System
 open System.Text
 open Giraffe
 open Microsoft.AspNetCore.Http
 open Newtonsoft.Json
-open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open System.IO
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
@@ -40,7 +40,7 @@ module HttpHandlers =
                 "{}"
         let tryParse fieldName data =
             let raw = Encoding.UTF8.GetString data
-            if String.IsNullOrWhiteSpace(raw) |> not
+            if System.String.IsNullOrWhiteSpace(raw) |> not
             then
                 let map = JsonConvert.DeserializeObject<Map<string,string>>(raw)
                 match Map.tryFind fieldName map with
@@ -64,15 +64,15 @@ module HttpHandlers =
             printfn "Received query: %s" query
             printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root, meta = Schema.executionMetadata) |> Async.RunSynchronously
             return! okWithStr (json result) next ctx
         | Some query, None ->
             printfn "Received query: %s" query
             let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(query, meta = Schema.executionMetadata) |> Async.RunSynchronously
             return! okWithStr (json result) next ctx
         | None, _ ->
-            let result = Schema.executor.AsyncExecute(Introspection.introspectionQuery) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(Introspection.introspectionQuery, meta = Schema.executionMetadata) |> Async.RunSynchronously
             return! okWithStr (json result) next ctx
     }
 

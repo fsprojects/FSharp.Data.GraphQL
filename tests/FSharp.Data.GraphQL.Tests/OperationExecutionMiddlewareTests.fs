@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Tests.ExecutionMiddlewareTests
+module FSharp.Data.GraphQL.Tests.OperationExecutionMiddlewareTests
 
 open Xunit
 open FSharp.Data.GraphQL
@@ -44,8 +44,7 @@ let ast = parse """{
         }
     }"""
 
-let middlewareFunc (args : ExecutionFuncArgs<TestSubject>) (next : ExecutionFunc<TestSubject>) =
-    let (plan, data, variables, args) = args
+let middlewareFunc (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -53,15 +52,23 @@ let middlewareFunc (args : ExecutionFuncArgs<TestSubject>) (next : ExecutionFunc
         | SelectFields fields -> fields |> List.choose (fun f -> if f.Identifier <> "c" then Some f else None) |> SelectFields
         | other -> other
     let selection = 
-        plan.Operation.SelectionSet
+        ctx.ExecutionPlan.Operation.SelectionSet
         |> List.map (fun x -> match x with Field f -> Field { f with SelectionSet = chooserS f.SelectionSet } | _ -> x)
     let fields =
-        plan.Fields
+        ctx.ExecutionPlan.Fields
         |> List.map (fun x -> { x with Ast = { x.Ast with SelectionSet = chooserS x.Ast.SelectionSet }; Kind = chooserK x.Kind })
-    let plan' = { plan with Operation = { plan.Operation with SelectionSet = selection }; Fields = fields }
-    next (plan', data, variables, args)
+    let operation = { ctx.ExecutionPlan.Operation with SelectionSet = selection }
+    let plan = { ctx.ExecutionPlan with Operation = operation; Fields = fields  }
+    let ctx' = { ctx with ExecutionPlan = plan }
+    next ctx'
 
-let middleware = { new IExecutionMiddleware<TestSubject> with member __.ExecuteAsync = middlewareFunc }
+let middleware = { new IOperationExecutionMiddleware with member __.ExecuteOperationAsync = middlewareFunc }
+
+let executorMiddleware =
+    { new IExecutorMiddleware with
+        member __.CompileSchema = None
+        member __.PlanOperation = None
+        member __.ExecuteOperationAsync = Some middleware }
 
 let doTest (executor : Executor<TestSubject>) =
     let result = sync <| executor.AsyncExecute(ast)
@@ -78,11 +85,6 @@ let doTest (executor : Executor<TestSubject>) =
     | _ -> fail "Expected Direct GQLResponse"
 
 [<Fact>]
-let ``Execution middleware 1: remove field from execution plan (as function)`` () =
-    let executor = Executor(schema, [ middlewareFunc ])
-    doTest executor
-
-[<Fact>]
-let ``Execution middleware 2: remove field from execution plan (as Interface)`` () =
-    let executor = Executor(schema, [ middleware ])
+let ``Execution middleware: remove field from execution plan`` () =
+    let executor = Executor(schema, [ executorMiddleware ])
     doTest executor

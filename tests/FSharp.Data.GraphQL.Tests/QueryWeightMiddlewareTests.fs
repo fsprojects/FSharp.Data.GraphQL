@@ -80,7 +80,7 @@ let executor =
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
-    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware() :> IExecutorMiddleware ]
     Executor(schema, middlewares)
 
 let execute (query : Document) =
