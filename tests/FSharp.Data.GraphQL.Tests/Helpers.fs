@@ -8,6 +8,10 @@ open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
 
+let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
+let isSeq<'a> actual = isType<'a seq> actual
+let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
+let isNameValueDict actual = isDict<string, obj> actual
 let equals (expected : 'x) (actual : 'x) = 
     Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
 let notEquals (expected : 'x) (actual : 'x) = 

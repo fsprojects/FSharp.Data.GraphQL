@@ -6,6 +6,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Server.Middlewares
 
 #nowarn "40"
 
@@ -44,7 +45,7 @@ let ast = parse """{
         }
     }"""
 
-let middlewareFunc (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+let operationMiddlewareFunc (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -62,15 +63,20 @@ let middlewareFunc (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal
     let ctx' = { ctx with ExecutionPlan = plan }
     next ctx'
 
-let middleware = { new IOperationExecutionMiddleware with member __.ExecuteOperationAsync = middlewareFunc }
+let operationMiddleware = 
+    { new IOperationExecutionMiddleware with 
+        member __.ExecuteOperationAsync = operationMiddlewareFunc }
 
 let executorMiddleware =
     { new IExecutorMiddleware with
         member __.CompileSchema = None
         member __.PlanOperation = None
-        member __.ExecuteOperationAsync = Some middleware }
+        member __.ExecuteOperationAsync = Some operationMiddleware }
 
-let doTest (executor : Executor<TestSubject>) =
+let executor = Executor(schema, [ executorMiddleware ])
+
+[<Fact>]
+let ``Execution middleware: remove field from execution plan`` () =
     let result = sync <| executor.AsyncExecute(ast)
     let expected = 
             NameValueLookup.ofList 
@@ -83,8 +89,3 @@ let doTest (executor : Executor<TestSubject>) =
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
-
-[<Fact>]
-let ``Execution middleware: remove field from execution plan`` () =
-    let executor = Executor(schema, [ executorMiddleware ])
-    doTest executor

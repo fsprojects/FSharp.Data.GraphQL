@@ -147,7 +147,7 @@ let ``Simple query: Should not pass when above threshold``() =
     match result with
     | Direct (data, errors) ->
         errors |> equals expectedErrors
-        empty data
+        data.["data"] |> isNameValueDict |> empty
     | _ -> fail "Expected Direct GQLResponse"
 
 [<Fact>]
@@ -280,7 +280,7 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
         match result with
         | Direct(data, errors) ->
             errors |> equals expectedErrors
-            empty data
+            data.["data"] |> isNameValueDict |> empty
         | _ -> fail "Expected Direct GQLResponse")
 
 [<Fact>]
@@ -354,5 +354,5 @@ let ``Inline fragment query : Should not pass when above threshold``() =
     match result with
     | Direct (data, errors) ->
         errors |> equals expectedErrors
-        empty data
+        data.["data"] |> isNameValueDict |> empty
     | _ -> fail "Expected Direct GQLResponse"
