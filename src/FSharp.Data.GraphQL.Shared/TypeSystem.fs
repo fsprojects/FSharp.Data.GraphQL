@@ -466,6 +466,7 @@ and NamedDef =
         abstract Name : string
     end
 
+/// A context holding all the information needed for planning an operation.
 and PlanningContext = 
     { Schema : ISchema
       RootDef : ObjectDef
@@ -641,10 +642,13 @@ and DeferredExecutionInfoKind =
     | DeferredExecution
     | StreamedExecution
 
+/// The context used to hold all the information for a schema compiling proccess.
 and SchemaCompileContext =
     { Schema : ISchema
       FieldExecuteMap : FieldExecuteMap }
 
+/// A planning of an execution phase.
+/// It is used by the execution process to execute an operation.
 and ExecutionPlan =
     { /// Unique identifier of the current execution plan.
       DocumentId : int

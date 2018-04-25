@@ -46,6 +46,9 @@ type ExecutorMiddleware(?compile, ?plan, ?execute) =
         member __.PlanOperation = plan
         member __.ExecuteOperationAsync = execute
 
+/// The standard schema executor.
+/// It compiles the schema and offers an interface for planning and executing queries.
+/// The execution process can be customized through usage of middlewares.
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
     let fieldExecuteMap = FieldExecuteMap()
 
