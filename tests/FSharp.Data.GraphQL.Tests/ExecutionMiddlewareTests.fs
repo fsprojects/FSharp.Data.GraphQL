@@ -45,7 +45,7 @@ let ast = parse """{
     }"""
 
 let middlewareFunc (args : ExecutionFuncArgs<TestSubject>) (next : ExecutionFunc<TestSubject>) =
-    let (plan, data, variables) = args
+    let (plan, data, variables, args) = args
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -59,7 +59,7 @@ let middlewareFunc (args : ExecutionFuncArgs<TestSubject>) (next : ExecutionFunc
         plan.Fields
         |> List.map (fun x -> { x with Ast = { x.Ast with SelectionSet = chooserS x.Ast.SelectionSet }; Kind = chooserK x.Kind })
     let plan' = { plan with Operation = { plan.Operation with SelectionSet = selection }; Fields = fields }
-    next (plan', data, variables)
+    next (plan', data, variables, args)
 
 let middleware = { new IExecutionMiddleware<TestSubject> with member __.ExecuteAsync = middlewareFunc }
 

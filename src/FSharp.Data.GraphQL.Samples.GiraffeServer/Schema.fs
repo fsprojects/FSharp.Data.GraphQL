@@ -226,7 +226,7 @@ module Schema =
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
-    let middlewares = [ QueryWeightMiddleware<Root>(5.0) :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
 
     let executor = Executor(schema, middlewares)
 

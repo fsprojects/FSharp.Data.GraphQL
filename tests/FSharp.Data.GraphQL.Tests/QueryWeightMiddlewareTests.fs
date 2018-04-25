@@ -9,6 +9,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Ast
 
 
 #nowarn "40"
@@ -79,8 +80,11 @@ let executor =
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
-    let middlewares = [ QueryWeightMiddleware<Root>(2.0) :> IExecutionMiddleware<Root> ]
+    let middlewares = [ QueryWeightMiddleware<Root>() :> IExecutionMiddleware<Root> ]
     Executor(schema, middlewares)
+
+let execute (query : Document) =
+    executor.AsyncExecute(query, meta = Metadata.QueryWeightThreshold(2.0)) |> sync
 
 let expectedErrors : Error list =
     [ ("Query complexity exceeds maximum threshold. Please reduce the amount of queried data and try again.", [ "" ]) ]
@@ -115,7 +119,7 @@ let ``Simple query: Should pass when below threshold``() =
                 ]
             ]
         ]
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     match result with
     | Direct (data, errors) ->
         empty errors
@@ -139,7 +143,7 @@ let ``Simple query: Should not pass when above threshold``() =
                 }                
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     match result with
     | Direct (data, errors) ->
         errors |> equals expectedErrors
@@ -180,7 +184,7 @@ let ``Deferred queries : Should pass when below threshold``() =
             ]
             "path", upcast [ "A" :> obj; "subjects" :> obj ]
         ]
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     use mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     match result with
@@ -233,7 +237,7 @@ let ``Streamed queries : Should pass when below threshold``() =
             ]
             "path", upcast [ "A" :> obj; "subjects" :> obj; 1 :> obj ]
         ]
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     use mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     match result with
@@ -271,7 +275,7 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
             }
         }"""
     asts query
-    |> Seq.map (executor.AsyncExecute >> sync)
+    |> Seq.map execute
     |> Seq.iter (fun result ->
         match result with
         | Direct(data, errors) ->
@@ -313,7 +317,7 @@ let ``Inline fragment query : Should pass when below threshold``() =
                 ]
             ]
         ]
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     match result with
     | Direct (data, errors) ->
         empty errors
@@ -346,7 +350,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
                 }                
             }
         }"""
-    let result = query |> executor.AsyncExecute |> sync
+    let result = execute query
     match result with
     | Direct (data, errors) ->
         errors |> equals expectedErrors

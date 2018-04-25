@@ -649,14 +649,15 @@ let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<GQLResponse> =
+let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) (meta : Metadata) : AsyncVal<GQLResponse> =
     let variables = coerceVariables executionPlan.Variables variables
     let ctx = {
         Schema = schema
         ExecutionPlan = executionPlan
         RootValue = root
         Variables = variables
-        Errors = errors }
+        Errors = errors
+        Metadata = meta }
     let resultSet =
         executionPlan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)

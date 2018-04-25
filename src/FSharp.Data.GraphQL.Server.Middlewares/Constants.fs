@@ -2,5 +2,5 @@
 
 module internal Constants =
     module internal MetadataKeys =
-        let [<Literal>] weight = "weight"
-        let [<Literal>] weightThreshold = "weightThreshold"
+        let [<Literal>] queryWeight = "queryWeight"
+        let [<Literal>] queryWeightThreshold = "queryWeightThreshold"

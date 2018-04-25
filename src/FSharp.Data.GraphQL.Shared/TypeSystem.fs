@@ -669,7 +669,9 @@ and ExecutionContext =
       /// Collection of variables provided to execute current operation.
       Variables : Map<string, obj>
       /// Collection of errors that occurred while executing current operation.
-      Errors : ConcurrentBag<exn> }
+      Errors : ConcurrentBag<exn>
+      /// A simple dictionary to hold metadata that can be used by execution customizations.
+      Metadata : Metadata }
 
 /// An execution context for the particular field, applied as the first
 /// parameter for target resolve function.
