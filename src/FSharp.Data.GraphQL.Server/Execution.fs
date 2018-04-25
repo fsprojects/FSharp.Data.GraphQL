@@ -13,29 +13,29 @@ type Error = string * string list
 
 type Output = IDictionary<string, obj>
 
-type GQLResponseContent =
+type GQLResponse =
+    { Content : GQLResponseContent
+      Metadata : Metadata }
+    static member Direct(data, errors, meta) =
+        { Content = Direct (data, errors)
+          Metadata = meta }
+    static member Deferred(data, errors, deferred, meta) =
+        { Content = Deferred (data, errors, deferred)
+          Metadata = meta }
+    static member Stream(data, meta) =
+        { Content = Stream data
+          Metadata = meta }
+    static member Empty(meta) =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [], meta)
+    static member Error(msg, meta) =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ], meta)
+    static member ErrorAsync(msg, meta) =
+        asyncVal { return GQLResponse.Error(msg, meta) }
+
+and GQLResponseContent =
     | Direct of data : Output * errors: Error list
     | Deferred of data : Output * errors : Error list * defer : IObservable<Output>
     | Stream of stream : IObservable<Output>
-
-type GQLResponse =
-    { Content : GQLResponseContent
-      Metadata : Metadata option }
-    static member Direct(data, errors) =
-        { Content = Direct (data, errors)
-          Metadata = None }
-    static member Deferred(data, errors, deferred) =
-        { Content = Deferred (data, errors, deferred)
-          Metadata = None }
-    static member Stream(data) =
-        { Content = Stream data
-          Metadata = None }
-    static member Empty =
-        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [])
-    static member Error(msg) =
-        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ])
-    static member ErrorAsync(msg) =
-        asyncVal { return GQLResponse.Error(msg) }
 
 let (|Direct|Deferred|Stream|) (response : GQLResponse) =
     match response.Content with
@@ -678,13 +678,13 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
     let parseQuery o =
         let dict, deferred = executeQueryOrMutation resultSet ctx o ctx.FieldExecuteMap ctx.RootValue 
         match deferred with
-        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
-        | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors'))
+        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x), ctx.Metadata))
+        | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors', ctx.Metadata))
     match ctx.ExecutionPlan.Operation.OperationType with
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some s -> 
-            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue))
+            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue, ctx.Metadata))
         | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
     | Mutation -> 
         match ctx.Schema.Mutation with

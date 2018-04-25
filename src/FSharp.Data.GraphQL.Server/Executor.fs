@@ -109,9 +109,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
                 | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
             match res with
-            | Direct (data, errors) -> GQLResponse.Direct(prepareData data errors, errors)
-            | Deferred (data, errors, deferred) -> GQLResponse.Deferred(prepareData data errors, errors, deferred)
-            | Stream (stream) -> GQLResponse.Stream(stream)
+            | Direct (data, errors) -> GQLResponse.Direct(prepareData data errors, errors, res.Metadata)
+            | Deferred (data, errors, deferred) -> GQLResponse.Deferred(prepareData data errors, errors, deferred, res.Metadata)
+            | Stream (stream) -> GQLResponse.Stream(stream, res.Metadata)
         async {
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
@@ -128,7 +128,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 let! res = executeOperationWithMiddlewares executionCtx
                 return prepareOutput res
             with
-            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString()))
+            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), meta))
         }
 
     let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option, meta : Metadata) =
