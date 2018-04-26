@@ -10,11 +10,13 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open System.Collections.Generic
 open System.Collections.Concurrent
+open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Types
 
 type GraphQLWebSocket(innerSocket : WebSocket) =
     inherit WebSocket()
     let subscriptions = ConcurrentDictionary<string, IDisposable>() :> IDictionary<string, IDisposable>
-    let id = Guid.NewGuid()
+    let id = System.Guid.NewGuid()
     override __.CloseStatus = innerSocket.CloseStatus
     override __.CloseStatusDescription = innerSocket.CloseStatusDescription
     override __.State = innerSocket.State
@@ -74,7 +76,7 @@ module SocketManager =
             return None
         else
             let settings =
-                WebSocketClientMessageConverter(executor, replacements) :> JsonConverter
+                WebSocketClientMessageConverter(executor, replacements, Metadata.QueryWeightThreshold(2.0)) :> JsonConverter
                 |> Seq.singleton
                 |> jsonSerializerSettings
             return JsonConvert.DeserializeObject<WebSocketClientMessage>(message, settings) |> Some
@@ -107,7 +109,7 @@ module SocketManager =
                 | Some ConnectionInit ->
                     do! sendMessage socket ConnectionAck
                 | Some (Start (id, payload)) ->
-                    executor.AsyncExecute(payload.ExecutionPlan, root, payload.Variables, meta = Schema.executionMetadata)
+                    executor.AsyncExecute(payload.ExecutionPlan, root, payload.Variables)
                     |> Async.RunSynchronously
                     |> handle id
                     do! Data (id, Dictionary<string, obj>()) |> sendMessage socket

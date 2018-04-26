@@ -27,13 +27,17 @@ type OptionConverter() =
     override __.ReadJson(_, _, _, _) = failwith "Not supported"
 
 [<Sealed>]
-type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
+type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
     override __.CanConvert(t) = t = typeof<GraphQLQuery>    
     override __.WriteJson(_, _, _) =  failwith "Not supported"    
     override __.ReadJson(reader, _, _, serializer) =
         let jobj = JObject.Load reader
-        let plan = jobj.Property("query").Value.ToString() |> executor.CreateExecutionPlan
+        let query = jobj.Property("query").Value.ToString()
+        let plan = 
+            match meta with
+            | Some meta -> executor.CreateExecutionPlan(query, meta = meta)
+            | None -> executor.CreateExecutionPlan(query)
         let varDefs = plan.Variables
         match varDefs with
         | [] -> upcast { ExecutionPlan = plan; Variables = Map.empty }
@@ -60,7 +64,7 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
             upcast { ExecutionPlan = plan; Variables = variables }
 
 [<Sealed>]
-type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>) =
+type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
     override __.CanWrite = false
     override __.CanConvert(t) = t = typeof<WebSocketClientMessage>
@@ -78,7 +82,12 @@ type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: 
             | Some id, Some payload ->
                 try
                     let settings = JsonSerializerSettings()
-                    settings.Converters <- [| OptionConverter() :> JsonConverter; GraphQLQueryConverter(executor, replacements) :> JsonConverter; |]
+                    let queryConverter =
+                        match meta with
+                        | Some meta -> GraphQLQueryConverter(executor, replacements, meta) :> JsonConverter
+                        | None -> GraphQLQueryConverter(executor, replacements) :> JsonConverter
+                    let optionConverter = OptionConverter() :> JsonConverter
+                    settings.Converters <- [| optionConverter; queryConverter |]
                     settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
                     let req = JsonConvert.DeserializeObject<GraphQLQuery>(payload, settings)
                     upcast Start(id, req)

@@ -664,7 +664,9 @@ and ExecutionPlan =
       /// A list of all deferred fields in the query
       DeferredFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
-      Variables : VarDef list }
+      Variables : VarDef list
+      /// A dictionary of metadata associated with custom operations on the planning of this plan.
+      Metadata : Metadata }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full

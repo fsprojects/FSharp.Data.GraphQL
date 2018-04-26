@@ -58,7 +58,7 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     System.Threading.Thread.Sleep(5) // To make sure a minimum time will be needed to do this
     let result = next ctx
     watch.Stop()
-    ctx.Metadata.Add("planningTime", 5L)
+    result.Metadata.Add("planningTime", watch.ElapsedMilliseconds)
     result
 
 // On the execution phase, we remove the evaluation of the c field
@@ -83,7 +83,7 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
 let executorMiddleware =
     { new IExecutorMiddleware with
         member __.CompileSchema = Some compileMiddleware
-        member __.PlanOperation = None
+        member __.PlanOperation = Some planningMiddleware
         member __.ExecuteOperationAsync = Some executionMiddleware }
 
 let executor = Executor(schema, [ executorMiddleware ])

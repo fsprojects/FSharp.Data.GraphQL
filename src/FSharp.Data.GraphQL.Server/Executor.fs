@@ -1,6 +1,5 @@
 ﻿namespace FSharp.Data.GraphQL
 
-open System.Collections.Generic
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
@@ -56,17 +55,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     // for this reason we're compiling executors as part of identifier evaluation
     let __done =
         // We don't need to know possible types at this point
-        fieldExecuteMap.SetExecute("",
-                                   "__schema",
-                                   compileField SchemaMetaFieldDef)
-
-        fieldExecuteMap.SetExecute("",
-                                   "__type",
-                                   compileField TypeMetaFieldDef )
-
-        fieldExecuteMap.SetExecute("",
-                                   "__typename",
-                                   compileField TypeNameMetaFieldDef )
+        fieldExecuteMap.SetExecute("", "__schema", compileField SchemaMetaFieldDef)
+        fieldExecuteMap.SetExecute("", "__type", compileField TypeMetaFieldDef)
+        fieldExecuteMap.SetExecute("", "__typename", compileField TypeNameMetaFieldDef)
 
     let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : SchemaCompileMiddleware list) =
         match middlewares with
@@ -99,7 +90,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         |> List.ofSeq
         |> runOperationExecutionMiddlewares ctx
 
-    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>, meta : Metadata): Async<GQLResponse> =
+    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
         let prepareOutput res =
             let prepareData data (errs: Error list) =
                 let parsedErrors =
@@ -124,16 +115,16 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                       Variables = variables
                       Errors = errors
                       FieldExecuteMap = fieldExecuteMap
-                      Metadata = meta }
+                      Metadata = executionPlan.Metadata }
                 let! res = executeOperationWithMiddlewares executionCtx
                 return prepareOutput res
             with
-            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), meta))
+            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), executionPlan.Metadata))
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option, meta : Metadata) =
+    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         let variables = defaultArg variables Map.empty
-        eval(executionPlan, data, variables, meta)
+        eval(executionPlan, data, variables)
 
     let rec runOperationPlanningMiddlewares (ctx : PlanningContext) (middlewares : OperationPlanningMiddleware list) =
         match middlewares with
@@ -185,10 +176,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
-    /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>, ?meta : Metadata): Async<GQLResponse> =
-        let meta = defaultArg meta Metadata.Empty
-        execute (executionPlan, data, variables, meta)
+    member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
+        execute (executionPlan, data, variables)
     
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -204,7 +193,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     member __.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
         let meta = defaultArg meta Metadata.Empty
         let executionPlan = createExecutionPlan (ast, operationName, meta)
-        execute (executionPlan, data, variables, meta)
+        execute (executionPlan, data, variables)
         
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
@@ -221,7 +210,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         let executionPlan = createExecutionPlan (ast, operationName, meta)
-        execute (executionPlan, data, variables, meta)
+        execute (executionPlan, data, variables)
 
     /// Creates an execution plan for provided GraphQL document AST without 
     /// executing it. This is useful in cases when you have the same query executed 
