@@ -46,8 +46,8 @@ const thresholdQuery = `# This is a sample query that will be denied by a query 
 # The field "friends" of both Human and Droid have a query weight of 0.5.
 # The maximum query weight (threshold) is set to 2.0 on the server.
 # Hero friends will have a weight of 0.5.
-# Friends of hero friends will have a weight of 1.0 (since it can be both Human and Droid).
-# Also, their inner friends will have a weight of 1.0
+# Friends of friends of hero will have a weight of 1.0 (since they can be both Human and Droid).
+# Also, their inner friends will have a weight of 1.0.
 # Total weight is 2.5, making the query too complex for the threshold meter.
 
 query TestQuery {
