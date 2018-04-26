@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Tests.OperationExecutionMiddlewareTests
+module FSharp.Data.GraphQL.Tests.ExecutorMiddlewareTests
 
 open Xunit
 open FSharp.Data.GraphQL
@@ -6,6 +6,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open System.Diagnostics
 
 #nowarn "40"
 
@@ -44,7 +45,24 @@ let ast = parse """{
         }
     }"""
 
-let operationMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+// On the schema compile phase, we hack the compiling to make the field a return the value of c
+let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
+    let fieldDef = Define.Field("a", String, fun _ dt -> dt.c)
+    ctx.FieldExecuteMap.SetExecute("Data", "a", compileField fieldDef)
+    next ctx
+
+// On the planning phase, we watch the time needed to do the operation
+let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
+    let watch = Stopwatch()
+    watch.Start()
+    System.Threading.Thread.Sleep(5) // To make sure a minimum time will be needed to do this
+    let result = next ctx
+    watch.Stop()
+    ctx.Metadata.Add("planningTime", 5L)
+    result
+
+// On the execution phase, we remove the evaluation of the c field
+let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -64,23 +82,26 @@ let operationMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
 
 let executorMiddleware =
     { new IExecutorMiddleware with
-        member __.CompileSchema = None
+        member __.CompileSchema = Some compileMiddleware
         member __.PlanOperation = None
-        member __.ExecuteOperationAsync = Some operationMiddleware }
+        member __.ExecuteOperationAsync = Some executionMiddleware }
 
 let executor = Executor(schema, [ executorMiddleware ])
 
 [<Fact>]
-let ``Execution middleware: remove field from execution plan`` () =
+let ``Execution middleware: change fields and measure planning time`` () =
     let result = sync <| executor.AsyncExecute(ast)
     let expected = 
             NameValueLookup.ofList 
                 [ "testData", 
                     upcast NameValueLookup.ofList 
-                        [ "a", upcast "Apple" 
+                        [ "a", upcast "Cookie" 
                           "b", upcast "Banana" ] ]
     match result with
     | Direct (data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
+    match result.Metadata.TryFind<int64>("planningTime") with
+    | Some time -> time |> greaterThanOrEqual 5L
+    | None -> fail "Expected planning time on GQLResponse metadata, but it was not found"

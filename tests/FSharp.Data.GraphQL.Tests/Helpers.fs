@@ -41,6 +41,9 @@ let undefined (value: 't) =
 let contains (expected : 'a) (xs : 'a seq) =
     Assert.Contains(expected, xs); xs
 
+let greaterThanOrEqual expected actual =
+    Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
+
 open Newtonsoft.Json
 open Newtonsoft.Json.Serialization
 open Microsoft.FSharp.Reflection

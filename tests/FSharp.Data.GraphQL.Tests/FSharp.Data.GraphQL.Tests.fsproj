@@ -29,7 +29,7 @@
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ExecutionTests.fs" />
-    <Compile Include="OperationExecutionMiddlewareTests.fs" />
+    <Compile Include="ExecutorMiddlewareTests.fs" />
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
