@@ -6,11 +6,13 @@ open FSharp.Data.GraphQL.Types
 module TypeSystemExtensions =
     type FieldDef<'Val> with
         member this.WithQueryWeight(weight : float) =
-            this.Metadata.Add(Constants.MetadataKeys.queryWeight, weight); this
+            this.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeight, weight); this
+        member this.SortableBy(fields : string list) =
+            this.Metadata.Add(MetadataKeys.QueryExtensionsMiddleware.SortableBy, fields); this
 
     type Metadata with
         member this.WithQueryWeightThreshold(threshold : float) =
-            this.Add(Constants.MetadataKeys.queryWeightThreshold, threshold); this
+            this.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, threshold); this
         
         static member QueryWeightThreshold(threshold : float) =
             Metadata.Empty.WithQueryWeightThreshold(threshold)

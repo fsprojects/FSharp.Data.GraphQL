@@ -9,9 +9,10 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Constants.fs" />
+    <Compile Include="MetadataKeys.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="QueryWeightMiddleware.fs" />
+    <Compile Include="QueryExtensionsMiddleware.fs" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />

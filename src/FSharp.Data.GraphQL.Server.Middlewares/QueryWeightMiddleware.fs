@@ -7,7 +7,7 @@ open FSharp.Data.GraphQL.Execution
 type QueryWeightMiddleware() =
     let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
         let getWeight f =
-            match f.Definition.Metadata.TryFind<float>(Constants.MetadataKeys.queryWeight) with
+            match f.Definition.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeight) with
             | Some w -> w
             | None -> 0.0
         let rec checkThreshold acc fields =
@@ -31,7 +31,7 @@ type QueryWeightMiddleware() =
                         checkThreshold current xs
         checkThreshold 0.0 fields
     let middleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
-            let threshold = ctx.Metadata.TryFind<float>(Constants.MetadataKeys.queryWeightThreshold)
+            let threshold = ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
             let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
             let directFields = ctx.ExecutionPlan.Fields
             let fields = directFields @ deferredFields
