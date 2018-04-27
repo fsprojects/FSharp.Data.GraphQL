@@ -1,22 +1,20 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="MetadataKeys.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
-    <Compile Include="QueryWeightMiddleware.fs" />
-    <Compile Include="QueryExtensionsMiddleware.fs" />
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="MetadataKeys.fs" />
+    <Compile Include="QueryWeightMiddleware.fs" />
+    <Compile Include="TypeSystemExtensions.fs" />
+    <Compile Include="QueryExtensionsMiddleware.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
