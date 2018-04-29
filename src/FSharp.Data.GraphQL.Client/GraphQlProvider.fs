@@ -8,7 +8,6 @@ open System.IO
 open System.Net
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Core.CompilerServices
-
 open FSharp.Data.GraphQL.Types.Introspection
 open TypeCompiler
 open System.Collections.Generic
@@ -16,11 +15,19 @@ open Newtonsoft.Json.Linq
 open Newtonsoft.Json
 open Microsoft.FSharp.Quotations
 open QuotationHelpers
+open System.Text.RegularExpressions
+open FSharp.Data.GraphQL
+open QuotationHelpers
 
 module Util =
-    open System.Text.RegularExpressions
-    open FSharp.Data.GraphQL
-    open QuotationHelpers
+
+    let tryLoadSchema basePath relativePath =
+        try
+            Path.Combine(basePath, relativePath)
+            |> File.ReadAllText
+            |> Some
+        with
+        | _ -> None        
 
     let getOrFail (err: string) = function
         | Some v -> v
@@ -35,6 +42,15 @@ module Util =
         then str.[0].ToString().ToUpper() + str.Substring(1)
         else str
 
+    let deserializeSchema (json : string) =
+        let result = Serialization.fromJson json
+        match result.Errors with
+        | None ->
+            let introspectionSchema = result.Data.__schema
+            Choice1Of2 introspectionSchema
+        | Some errors ->
+            Choice2Of2 errors
+
     let requestSchema (url: string) =
         async {
             let requestUrl = Uri(Uri(url), ("?query=" + FSharp.Data.GraphQL.Introspection.introspectionQuery))
@@ -44,13 +60,7 @@ module Util =
             use stream = resp.GetResponseStream()
             use reader = new StreamReader(stream)
             let! json = reader.ReadToEndAsync() |> Async.AwaitTask
-            let result = Serialization.fromJson json
-            match result.Errors with
-            | None ->
-                let introspectionSchema = result.Data.__schema
-                return Choice1Of2 introspectionSchema
-            | Some errors ->
-                return Choice2Of2 errors
+            return deserializeSchema json
         }
 
     let compileTypesFromSchema asm ns (schema: IntrospectionSchema) = 
@@ -171,36 +181,47 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
     do
         let ns = "FSharp.Data.GraphQL"
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
-        generator.DefineStaticParameters([ProvidedStaticParameter("url", typeof<string>)], fun typeName parameterValues ->
+        let handleSchema typeName serverUrl choice =
+            match choice with
+            | Choice1Of2 schema ->
+                let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
+                let schemaTypes =
+                    Util.compileTypesFromSchema asm "GraphQLTypes" schema
+                // Inner types
+                let typesWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>)
+                schemaTypes
+                |> Seq.choose (fun kv ->
+                    match kv.Value with
+                    | ProvidedType(t,_) -> Some t
+                    | NativeType _ -> None)
+                |> Seq.toList
+                |> typesWrapper.AddMembers
+                tdef.AddMember typesWrapper
+                // Static methods
+                Util.createMethods tdef serverUrl schema schemaTypes (Some schema.QueryType)
+                Util.createMethods tdef serverUrl schema schemaTypes schema.MutationType
+                Util.createMethods tdef serverUrl schema schemaTypes schema.SubscriptionType
+                // Generic query method
+                let invokeCode = fun (argValues:Expr list) ->
+                    <@@ launchRequest serverUrl null null id (%%argValues.[0]: string) @@>
+                let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>, invokeCode, true)
+                tdef.AddMember m
+                tdef
+            | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
+        let staticParams = 
+            [ ProvidedStaticParameter("url", typeof<string>)
+              ProvidedStaticParameter("introspection", typeof<string>, "") ]
+        generator.DefineStaticParameters(staticParams, fun typeName parameterValues ->
             match parameterValues with 
-            | [| :? string as serverUrl|] ->
-                let choice = Util.requestSchema(serverUrl) |> Async.RunSynchronously
-                match choice with
-                | Choice1Of2 schema ->
-                    let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
-                    let schemaTypes =
-                        Util.compileTypesFromSchema asm "GraphQLTypes" schema
-                    // Inner types
-                    let typesWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>)
-                    schemaTypes
-                    |> Seq.choose (fun kv ->
-                        match kv.Value with
-                        | ProvidedType(t,_) -> Some t
-                        | NativeType _ -> None)
-                    |> Seq.toList
-                    |> typesWrapper.AddMembers
-                    tdef.AddMember typesWrapper
-                    // Static methods
-                    Util.createMethods tdef serverUrl schema schemaTypes (Some schema.QueryType)
-                    Util.createMethods tdef serverUrl schema schemaTypes schema.MutationType
-                    Util.createMethods tdef serverUrl schema schemaTypes schema.SubscriptionType
-                    // Generic query method
-                    let invokeCode = fun (argValues:Expr list) ->
-                        <@@ launchRequest serverUrl null null id (%%argValues.[0]: string) @@>
-                    let m = ProvidedMethod("Query", [ProvidedParameter("query", typeof<string>)], typeof<Async<obj>>, invokeCode, true)
-                    tdef.AddMember m
-                    tdef
-                | Choice2Of2 ex -> String.concat "\n" ex |> failwithf "%s"
+            | [| :? string as serverUrl; :? string as introspection |] when String.IsNullOrWhiteSpace(introspection) ->
+                Util.requestSchema(serverUrl) 
+                |> Async.RunSynchronously
+                |> handleSchema typeName serverUrl
+            | [| :? string as serverUrl; :? string as introspection |] ->
+                match Util.tryLoadSchema config.ResolutionFolder introspection with
+                | Some i -> Util.deserializeSchema i
+                | None -> Util.deserializeSchema introspection
+                |> handleSchema typeName serverUrl
             | _ -> failwith "unexpected parameter values")
         this.AddNamespace(ns, [generator])
 
