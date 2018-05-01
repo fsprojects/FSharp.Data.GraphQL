@@ -13,6 +13,7 @@
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="MetadataKeys.fs" />
     <Compile Include="QueryWeightMiddleware.fs" />
+    <Compile Include="ListField.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="QueryExtensionsMiddleware.fs" />
   </ItemGroup>
