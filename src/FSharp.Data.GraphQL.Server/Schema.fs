@@ -63,48 +63,6 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let rec insert ns typedef =
-        let inline addOrReturn tname (tdef: NamedDef) acc =
-            if Map.containsKey tname acc 
-            then acc 
-            else Map.add tname tdef acc
-
-        match typedef with
-        | Scalar scalardef -> addOrReturn scalardef.Name typedef ns
-        | Enum enumdef -> addOrReturn enumdef.Name typedef ns
-        | Object objdef -> 
-            let ns' = addOrReturn objdef.Name typedef ns
-            let withFields' =
-                objdef.Fields
-                |> Map.toArray
-                |> Array.map snd
-                |> Array.collect (fun x -> Array.append [| x.TypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
-                |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
-                |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
-                |> Array.fold (insert) ns'
-            objdef.Implements
-            |> Array.fold insert withFields'
-        | Interface interfacedef ->
-            let ns' = addOrReturn typedef.Name typedef ns
-            interfacedef.Fields
-            |> Array.map (fun x -> match x.TypeDef with | Named n -> n | _ -> failwith "Expected a Named type!")
-            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (insert) ns'    
-        | Union uniondef ->
-            let ns' = addOrReturn typedef.Name typedef ns
-            uniondef.Options
-            |> Array.fold insert ns'
-        | List (Named innerdef) -> insert ns innerdef 
-        | Nullable (Named innerdef) -> insert ns innerdef
-        | InputObject objdef -> 
-            let ns' = addOrReturn objdef.Name typedef ns
-            objdef.Fields
-            |> Array.collect (fun x -> [| x.TypeDef :> TypeDef |])
-            |> Array.map(function | Named n -> n | _ -> failwith "Expected a Named type!")
-            |> Array.filter (fun x -> not (Map.containsKey x.Name ns'))
-            |> Array.fold (insert) ns'
-        | _ -> failwith "Unexpected type!"
-        
     let initialTypes: NamedDef list = [ 
         Int
         String
@@ -117,19 +75,12 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         query]
 
     let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
-    let mutable typeMap: Map<string, NamedDef> = 
-        let m = 
-            mutation 
-            |> function Some(Named n) -> [n] | _ -> []
-        let s =
-            subscription
-            |> function Some(Named n) -> [n] | _ -> []
-        initialTypes @ s @ m @ schemaConfig.Types
-        |> List.fold insert Map.empty
-
+    let typeMap : TypeMap =
+        let m = mutation |> function Some(Named n) -> [n] | _ -> []
+        let s = subscription |> function Some(Named n) -> [n] | _ -> []
+        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromEnumerable
     let implementations =
-        typeMap
-        |> Map.toSeq
+        typeMap.ToEnumerable()
         |> Seq.choose (fun (_, v) ->
             match v with
             | Object odef -> Some odef
@@ -139,8 +90,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             |> Array.fold (fun acc' iface ->
                 match Map.tryFind iface.Name acc' with
                 | Some list -> Map.add iface.Name (objdef::list) acc'
-                | None -> Map.add iface.Name [objdef] acc') acc
-            ) Map.empty
+                | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
     
     let getPossibleTypes abstractDef =
         match abstractDef with
@@ -248,9 +198,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
         | _ -> failwithf "Unexpected value of typedef: %O" typedef            
 
-    let introspectSchema types : IntrospectionSchema =
+    let introspectSchema (types : TypeMap) : IntrospectionSchema =
         let inamed = 
-            types 
+            types.ToMap()
             |> Map.map (fun typeName typedef -> 
                 match typedef with
                 | Scalar x -> { Kind = TypeKind.SCALAR; Name = Some typeName; Description = x.Description; OfType = None }
@@ -262,7 +212,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 | _ -> failwithf "Unexpected value of typedef: %O" typedef)
 
         let itypes =
-            types
+            types.ToMap()
             |> Map.toArray
             |> Array.map (snd >> (introspectType inamed))
 
@@ -274,7 +224,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let ischema =
             { QueryType = Map.find query.Name inamed
               MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-              SubscriptionType = None // not supported yet
+              SubscriptionType = None
               Types = itypes
               Directives = idirectives }
         ischema
@@ -288,7 +238,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member __.Query = upcast query
         member __.Mutation = mutation |> Option.map (fun x -> upcast x)
         member __.Subscription = subscription |> Option.map (fun x -> upcast x)
-        member __.TryFindType typeName = Map.tryFind typeName typeMap
+        member __.TryFindType typeName = typeMap.TryFind(typeName)
         member __.GetPossibleTypes typedef = getPossibleTypes typedef
         member __.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
@@ -303,8 +253,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member x.Subscription = subscription
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
-        member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd).GetEnumerator()
+        member x.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (typeMap |> Map.toSeq |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        member x.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
         

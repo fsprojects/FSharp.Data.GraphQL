@@ -14,6 +14,7 @@ open FSharp.Quotations.Patterns
 open FSharp.Reflection
 open FSharp.Linq.RuntimeHelpers
 
+
 /// Enum describing parts of the GraphQL query document AST, where 
 /// related directive is valid to be used.
 [<Flags>]
@@ -306,7 +307,7 @@ and ISchema =
         inherit seq<NamedDef>
         
         /// Map of defined types by their names.
-        abstract TypeMap : Map<string, NamedDef>
+        abstract TypeMap : TypeMap
 
         /// A query root object. Defines all top level fields, 
         /// that can be accessed from GraphQL queries.
@@ -343,7 +344,7 @@ and ISchema =
 
         abstract ParseError : exn -> string
 
-        abstract SubscriptionProvider: ISubscriptionProvider
+        abstract SubscriptionProvider : ISubscriptionProvider
 
     end
 
@@ -1573,6 +1574,131 @@ and Metadata() =
     static member Empty = Metadata.FromList [ ]
     member this.TryFind<'Value>(key : string) =
         if this.ContainsKey(key) then this.[key] :?> 'Value |> Some else None
+
+and TypeMap() =
+    inherit Dictionary<string, NamedDef>()
+
+    let isInternalName name =
+        let internalNames = 
+            [ "__Schema"
+              "__Directive"
+              "__InputValue"
+              "__Type"
+              "__EnumValue"
+              "__Field"
+              "__TypeKind"
+              "__DirectiveLocation" ]
+        internalNames |> List.exists (fun x -> x = name)
+
+    member this.SetType(def : NamedDef, ?overwrite : bool) =
+        let add name def overwrite =
+            if not (this.ContainsKey(name)) 
+            then this.Add(name, def)
+            elif overwrite
+            then this.[name] <- def
+        let overwrite = defaultArg overwrite false
+        let rec named (tdef : TypeDef) = 
+            match tdef with
+            | :? NamedDef as n -> Some n
+            | :? NullableDef as n -> named n.OfType
+            | :? ListOfDef as l -> named l.OfType
+            | _ -> None
+        let rec insert (def : NamedDef) =
+            match def with
+            | :? ScalarDef as sdef -> add sdef.Name def overwrite
+            | :? EnumDef as edef -> add edef.Name def overwrite
+            | :? ObjectDef as odef -> 
+                add odef.Name def overwrite
+                odef.Fields
+                |> Map.toSeq
+                |> Seq.map snd
+                |> Seq.collect (fun x -> Seq.append (x.TypeDef :> TypeDef |> Seq.singleton) (x.Args |> Seq.map (fun a -> upcast a.TypeDef)))
+                |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.iter insert
+                odef.Implements
+                |> Seq.iter insert
+            | :? InterfaceDef as idef ->
+                add idef.Name def overwrite
+                idef.Fields
+                |> Seq.map (fun x -> match named x.TypeDef with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.iter insert
+            | :? UnionDef as udef ->
+                add udef.Name def overwrite
+                udef.Options
+                |> Seq.iter insert
+            | :? ListOfDef as ldef ->
+                match named ldef.OfType with
+                | Some innerdef -> insert innerdef
+                | None -> ()
+            | :? NullableDef as ndef ->
+                match named ndef.OfType with
+                | Some innerdef -> insert innerdef
+                | None -> ()
+            | :? InputObjectDef as iodef ->
+                add iodef.Name def overwrite
+                iodef.Fields
+                |> Seq.collect (fun x -> (x.TypeDef :> TypeDef) |> Seq.singleton)
+                |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.iter insert
+            | _ -> failwith "Unexpected type!"
+        insert def
+
+    member this.ToEnumerable() =
+        this |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
+
+    member this.ToMap() =
+        this.ToEnumerable() |> Map.ofSeq
+
+    member this.TryFind(name : string) =
+        if isInternalName name 
+        then 
+            None
+        else
+            match this.TryGetValue(name) with
+            | (true, item) -> Some item
+            | _ -> None
+
+    member this.TryFind<'Type when 'Type :> NamedDef>(name : string) =
+        match this.TryFind(name) with
+        | Some item -> 
+            match item with
+            | :? 'Type as item -> Some item
+            | _ -> None
+        | _ -> None
+
+    member this.OfType<'Type when 'Type :> NamedDef>() =
+        this.ToEnumerable()
+        |> Seq.filter (fun (k, _) -> not (isInternalName k))
+        |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
+        |> Seq.choose id
+
+    member this.TryFindField(objname : string, fname : string) =
+        match this.TryFind<ObjectDef>(objname) with
+        | Some odef -> odef.Fields |> Map.tryFind fname
+        | None -> None
+
+    member this.TryFindField<'Type when 'Type :> OutputDef>(objname : string, fname : string) =
+        match this.TryFindField(objname, fname) with
+        | Some fdef ->
+            match fdef.TypeDef with
+            | :? 'Type -> Some fdef
+            | _ -> None
+        | _ -> None
+
+    member this.FieldsOfType<'Type when 'Type :> OutputDef>() =
+        this.OfType<ObjectDef>()
+        |> Seq.collect (fun x -> x.Fields |> Map.toSeq |> Seq.map snd)
+        |> Seq.map (fun x -> match x.TypeDef with :? 'Type as x -> Some x | _ -> None)
+        |> Seq.choose id
+        |> Seq.distinct
+
+    static member FromEnumerable(defs : NamedDef seq) =
+        let map = TypeMap()
+        defs |> Seq.iter (fun def -> map.SetType(def))
+        map
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =
