@@ -1,21 +1,21 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.Middlewares.ObjectListFieldHelpers
+open FSharp.Data.GraphQL.Server.Middlewares.ObjectListFilter.Helpers
 
 [<AutoOpen>]
 module TypeSystemExtensions =
     type Define with
+        static member FilterInputs (typedef : #OutputDef) =
+            let typedef = typedef :> OutputDef
+            match typedef with
+            | :? ObjectDef | :? NullableDef | :? UnionDef -> 
+                let fields = getFields typedef
+                [ Define.Input("filter", ObjectListFilter fields) ]
+            | _ -> []
         static member ListField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                 resolve : ResolveFieldContext -> 'Val -> 'Res seq) : FieldDef<'Val> =                          
-            let itemdef = typedef :> OutputDef                            
-            let inputArgs = 
-                match itemdef with
-                | :? ObjectDef ->
-                    let fields = getFields itemdef
-                    [ Define.Input("filter", ObjectListFilter fields) ]
-                | _ -> []
-            Define.Field(name, ListOf typedef, description, inputArgs, resolve)
+            Define.Field(name, ListOf typedef, description, Define.FilterInputs(typedef), resolve)
 
     type FieldDef<'Val> with
         member this.WithQueryWeight(weight : float) =

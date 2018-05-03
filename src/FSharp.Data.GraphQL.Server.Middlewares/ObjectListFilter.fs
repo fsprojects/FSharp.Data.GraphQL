@@ -34,11 +34,20 @@ type ObjectListFilter =
         | Contains f -> sprintf "%s contains \"%s\"" f.FieldName f.Value
         | Field f -> sprintf "%s.(%A)" f.FieldName f.Value
 
-module internal ObjectListFieldHelpers =
-    let getFields (def : OutputDef) = 
-        match def with 
-        | :? ObjectDef as x -> x.Fields |> Map.map (fun _ v -> v.TypeDef)
-        | _ -> Map.empty 
+module ObjectListFilter =
+    module internal Helpers =
+        let rec getFields (def : OutputDef) =
+            let mapObj (x : ObjectDef) =
+                x.Name, (x.Fields |> Map.toSeq |> Seq.map (snd >> (fun x -> x.TypeDef)) |> List.ofSeq)
+            match def with 
+            | :? NullableDef as x ->
+                match x.OfType with
+                | :? ObjectDef as x -> mapObj x |> Seq.singleton |> Map.ofSeq
+                | :? UnionDef as x -> x.Options |> Seq.map mapObj |> Map.ofSeq
+                | _ -> Map.empty
+            | :? ObjectDef as x -> mapObj x |> Seq.singleton |> Map.ofSeq
+            | :? UnionDef as x -> x.Options |> Seq.map mapObj |> Map.ofSeq
+            | _ -> Map.empty
 
 [<AutoOpen>]
 module ObjectListFilterOperators =

@@ -2,11 +2,11 @@ namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Server.Middlewares.ObjectListFieldHelpers
+open FSharp.Data.GraphQL.Server.Middlewares.ObjectListFilter.Helpers
 
 [<AutoOpen>]
 module SchemaDefinitions =
-    let rec private coerceObjectListFilterInput (validFields : Map<string, OutputDef>) x = 
+    let rec private coerceObjectListFilterInput (validFields : Map<string, OutputDef list>) x = 
         let (|EndsWith|StartsWith|GreaterThan|LessThan|Contains|Equals|) (s : string) =
             let s = s.ToLowerInvariant()
             match s with
@@ -56,8 +56,15 @@ module SchemaDefinitions =
             | Contains fname, StringValue value -> if validFields.ContainsKey fname then Some (fname @=@ value) else None
             | Equals fname, ObjectValue value -> 
                 match validFields.TryFind fname with
-                | Some def -> match mapInput (getFields def) value with Some filter -> Some (fname --> filter) | None -> None
-                | None -> None
+                | Some fields -> 
+                    fields 
+                    |> List.map (fun field ->
+                        match mapInput (getFields field) value with 
+                        | Some filter -> Some (fname --> filter) 
+                        | None -> None)
+                    |> List.choose id
+                    |> List.tryHead
+                | _ -> None
             | Equals fname, EquatableValue value -> if validFields.ContainsKey fname then Some (fname === value) else None
             | GreaterThan fname, ComparableValue value -> if validFields.ContainsKey fname then Some (fname ==> value) else None
             | LessThan fname, ComparableValue value -> if validFields.ContainsKey fname then Some (fname <== value) else None
@@ -75,7 +82,7 @@ module SchemaDefinitions =
         | :? ObjectListFilter as x -> Some x
         | _ -> None
 
-    let ObjectListFilter (validFields : Map<string, OutputDef>) : ScalarDefinition<ObjectListFilter> =
+    let ObjectListFilter (validFields : Map<string, OutputDef list>) : ScalarDefinition<ObjectListFilter> =
         { Name = "ObjectListFilter"
           Description = 
               Some 
