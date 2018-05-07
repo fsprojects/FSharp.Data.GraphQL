@@ -123,9 +123,9 @@ let ``Execute can introspect on union and intersection types`` () =
                 box (NameValueLookup.ofList [ "name", box "name"])]
             "interfaces", null
             "possibleTypes", upcast [
-                box (NameValueLookup.ofList ["name", box "Person"])
-                upcast NameValueLookup.ofList ["name", box "Dog"]
-                upcast NameValueLookup.ofList ["name", box "Cat"]]
+                box (NameValueLookup.ofList ["name", box "Dog"])
+                upcast NameValueLookup.ofList ["name", box "Cat"]
+                upcast NameValueLookup.ofList ["name", box "Person"]]
             "enumValues", null
             "inputFields", null]
         "Pet", upcast NameValueLookup.ofList [

@@ -5,6 +5,8 @@ open FSharp.Data.GraphQL
 
 type QueryExtensionsMiddleware() =
     let middleware = fun (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) ->
+        let lists = ctx.Schema.TypeMap.WithFieldsOfType<ListOfDef>()
+        printfn "%A" lists
         next ctx
 
     interface IExecutorMiddleware with

@@ -1695,6 +1695,10 @@ and TypeMap() =
         |> Seq.choose id
         |> Seq.distinct
 
+    member this.WithFieldsOfType<'Type when 'Type :> OutputDef and 'Type : equality>() =
+        this.OfType<ObjectDef>()
+        |> Seq.filter(fun x -> x.Fields |> Map.toSeq |> Seq.map snd |> Seq.exists (fun y -> y.TypeDef :? 'Type))
+
     static member FromEnumerable(defs : NamedDef seq) =
         let map = TypeMap()
         defs |> Seq.iter (fun def -> map.SetType(def))
