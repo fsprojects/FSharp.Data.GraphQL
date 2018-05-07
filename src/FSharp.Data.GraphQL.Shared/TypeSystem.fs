@@ -1649,6 +1649,9 @@ and TypeMap() =
     member this.ToEnumerable() =
         this |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
+    member this.ToList() =
+        this.ToEnumerable() |> List.ofSeq
+
     member this.ToMap() =
         this.ToEnumerable() |> Map.ofSeq
 
@@ -1670,10 +1673,10 @@ and TypeMap() =
         | _ -> None
 
     member this.OfType<'Type when 'Type :> NamedDef>() =
-        this.ToEnumerable()
-        |> Seq.filter (fun (k, _) -> not (isInternalName k))
-        |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
-        |> Seq.choose id
+        this.ToList()
+        |> List.filter (fun (k, _) -> not (isInternalName k))
+        |> List.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
+        |> List.choose id
 
     member this.TryFindField(objname : string, fname : string) =
         match this.TryFind<ObjectDef>(objname) with
@@ -1688,16 +1691,11 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
-    member this.FieldsOfType<'Type when 'Type :> OutputDef and 'Type : equality>() =
-        this.OfType<ObjectDef>()
-        |> Seq.collect (fun x -> x.Fields |> Map.toSeq |> Seq.map snd)
-        |> Seq.map (fun x -> match x.TypeDef with :? 'Type as x -> Some x | _ -> None)
-        |> Seq.choose id
-        |> Seq.distinct
-
-    member this.WithFieldsOfType<'Type when 'Type :> OutputDef and 'Type : equality>() =
-        this.OfType<ObjectDef>()
-        |> Seq.filter(fun x -> x.Fields |> Map.toSeq |> Seq.map snd |> Seq.exists (fun y -> y.TypeDef :? 'Type))
+    member this.ListFields<'Val, 'Res>() =
+        let toList map = map |> Map.toList |> List.map snd
+        let map (f : FieldDef<'Val>) = match f.TypeDef with :? ListOfDef<'Res, 'Res seq> -> Some f | _ -> None
+        this.OfType<ObjectDef<'Val>>()
+        |> List.map (fun x -> x, (x.Fields |> toList |> List.map map |> List.choose id))
 
     static member FromEnumerable(defs : NamedDef seq) =
         let map = TypeMap()
