@@ -1688,7 +1688,7 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
-    member this.FieldsOfType<'Type when 'Type :> OutputDef>() =
+    member this.FieldsOfType<'Type when 'Type :> OutputDef and 'Type : equality>() =
         this.OfType<ObjectDef>()
         |> Seq.collect (fun x -> x.Fields |> Map.toSeq |> Seq.map snd)
         |> Seq.map (fun x -> match x.TypeDef with :? 'Type as x -> Some x | _ -> None)
