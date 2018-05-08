@@ -3,7 +3,11 @@ namespace FSharp.Data.GraphQL.Server.Middlewares
 open System
 open FSharp.Data.GraphQL.Types
 open Microsoft.FSharp.Quotations
-open FSharp.Data.GraphQL.Types
+open Microsoft.FSharp.Quotations.Patterns
+open Microsoft.FSharp.Linq.RuntimeHelpers
+
+type FieldResolveMiddleware<'Val, 'Res> =
+    ResolveFieldContext -> 'Val -> (ResolveFieldContext -> 'Val -> 'Res) -> 'Res
 
 [<AutoOpen>]
 module TypeSystemExtensions =
@@ -40,6 +44,30 @@ module TypeSystemExtensions =
                 member __.Name = (this :> NamedDef).Name }
 
     type FieldDef<'Val> with
+        member this.WithResolveMiddleware<'Res>(middleware : FieldResolveMiddleware<'Val, 'Res>) =
+            { new FieldDef<'Val> with
+                member __.Name = this.Name
+                member __.Description = this.Description
+                member __.DeprecationReason = this.DeprecationReason
+                member __.TypeDef = this.TypeDef
+                member __.Args = this.Args
+                member __.Metadata = this.Metadata
+                member __.Resolve =
+                    let changeResolver expr = 
+                        let expr =
+                            match expr with 
+                            | WithValue (_, _, e) -> e
+                            | _ -> failwith "Unexpected resolver expression."
+                        let newResolver = <@ fun ctx input -> middleware ctx input %%expr @>
+                        let compiledResolver = LeafExpressionConverter.EvaluateQuotation newResolver
+                        Expr.WithValue(compiledResolver, newResolver.Type, newResolver)
+                    match this.Resolve with
+                    | Sync (input, output, expr) -> Sync (input, output, changeResolver expr)
+                    | Async (input, output, expr) -> Async (input, output, changeResolver expr)
+                    | Undefined -> failwith "Field has no resolve function."
+                    | x -> failwith <| sprintf "Resolver '%A' is not supported." x
+              interface IEquatable<FieldDef> with
+                member __.Equals(other) = this.Equals(other) }
         member this.WithQueryWeight(weight : float) =
             this.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeight, weight); this
 
@@ -56,23 +84,6 @@ module TypeSystemExtensions =
                     |> Array.append (args |> Array.ofSeq)
                 member __.Metadata = this.Metadata
                 member __.Resolve = this.Resolve
-              interface IEquatable<FieldDef> with
-                member __.Equals(other) = this.Equals(other) }
-
-        member this.WithResolveMiddleware<'Res>(middleware : ResolveFieldContext -> 'Val -> (ResolveFieldContext -> 'Val -> 'Res) -> 'Res) =
-            { new FieldDef<'Val> with
-                member __.Name = this.Name
-                member __.Description = this.Description
-                member __.DeprecationReason = this.DeprecationReason
-                member __.TypeDef = this.TypeDef
-                member __.Args = this.Args
-                member __.Metadata = this.Metadata
-                member __.Resolve =
-                    let resolve expr = <@ fun ctx input -> middleware ctx input %%expr @>
-                    match this.Resolve with
-                    | Sync (input, output, expr) -> Sync (input, output, resolve expr)
-                    | Async (input, output, expr) -> Async (input, output, expr)
-                    | resolver -> failwith <| sprintf "Resolver '%A' is not supported!" resolver
               interface IEquatable<FieldDef> with
                 member __.Equals(other) = this.Equals(other) }
 

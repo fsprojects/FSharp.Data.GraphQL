@@ -276,6 +276,7 @@ module Introspection =
           Types : IntrospectionType []
           /// Array of all directives supported by current schema.
           Directives : IntrospectionDirective [] }
+open Introspection
 
 
 /// Represents a subscription as described in the schema
@@ -1590,19 +1591,39 @@ and TypeMap() =
               "__DirectiveLocation" ]
         internalNames |> List.exists (fun x -> x = name)
 
-    member this.SetType(def : NamedDef, ?overwrite : bool) =
+    let rec named (tdef : TypeDef) = 
+        match tdef with
+        | :? NamedDef as n -> Some n
+        | :? NullableDef as n -> named n.OfType
+        | :? ListOfDef as l -> named l.OfType
+        | _ -> None
+
+    member this.Implementations =
+        this.ToEnumerable()
+        |> Seq.choose (fun (_, v) ->
+            match v :> TypeDef with
+            | :? ObjectDef as odef -> Some odef
+            | _ -> None)
+        |> Seq.fold (fun acc objdef -> 
+            objdef.Implements
+            |> Array.fold (fun acc' iface ->
+                match Map.tryFind iface.Name acc' with
+                | Some list -> Map.add iface.Name (objdef::list) acc'
+                | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
+    
+    member this.GetPossibleTypes(abstractDef : TypeDef) =
+        match abstractDef with
+        | :? UnionDef as u -> u.Options
+        | :? InterfaceDef as i -> Map.find i.Name this.Implementations |> Array.ofList
+        | _ -> [||]
+
+    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
         let add name def overwrite =
             if not (this.ContainsKey(name)) 
             then this.Add(name, def)
             elif overwrite
             then this.[name] <- def
         let overwrite = defaultArg overwrite false
-        let rec named (tdef : TypeDef) = 
-            match tdef with
-            | :? NamedDef as n -> Some n
-            | :? NullableDef as n -> named n.OfType
-            | :? ListOfDef as l -> named l.OfType
-            | _ -> None
         let rec insert (def : NamedDef) =
             match def with
             | :? ScalarDef as sdef -> add sdef.Name def overwrite
@@ -1646,6 +1667,10 @@ and TypeMap() =
             | _ -> failwith "Unexpected type!"
         insert def
 
+    member this.AddOrOverwriteTypes(defs : NamedDef seq, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite))
+
     member this.ToEnumerable() =
         this |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
@@ -1673,10 +1698,11 @@ and TypeMap() =
         | _ -> None
 
     member this.OfType<'Type when 'Type :> NamedDef>() =
-        this.ToList()
-        |> List.filter (fun (k, _) -> not (isInternalName k))
-        |> List.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
-        |> List.choose id
+        this.ToEnumerable()
+        |> Seq.filter (fun (k, _) -> not (isInternalName k))
+        |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
+        |> Seq.choose id
+        |> List.ofSeq
 
     member this.TryFindField(objname : string, fname : string) =
         match this.TryFind<ObjectDef>(objname) with
@@ -1691,15 +1717,19 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
-    member this.ListFields<'Val, 'Res>() =
-        let toList map = map |> Map.toList |> List.map snd
-        let map (f : FieldDef<'Val>) = match f.TypeDef with :? ListOfDef<'Res, 'Res seq> -> Some f | _ -> None
+    member this.GetTypesWithListFields<'Val, 'Res>() =
+        let toSeq map = map |> Map.toSeq |> Seq.map snd
+        let map (f : FieldDef<'Val>) = 
+            match f.TypeDef with 
+            | :? ListOfDef<'Res, 'Res seq> -> Some f 
+            | _ -> None
         this.OfType<ObjectDef<'Val>>()
-        |> List.map (fun x -> x, (x.Fields |> toList |> List.map map |> List.choose id))
+        |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
+        |> List.ofSeq
 
     static member FromEnumerable(defs : NamedDef seq) =
         let map = TypeMap()
-        defs |> Seq.iter (fun def -> map.SetType(def))
+        defs |> Seq.iter (fun def -> map.AddOrOverwriteType(def))
         map
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

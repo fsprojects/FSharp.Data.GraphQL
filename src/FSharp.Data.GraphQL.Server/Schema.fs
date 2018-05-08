@@ -19,8 +19,6 @@ open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL.Execution
 
-
-
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
     { /// List of types that couldn't be resolved from schema query root 
@@ -32,53 +30,53 @@ type SchemaConfig =
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
       ParseError: exn -> string
-      /// Provider for the back-end of the subscription system
+      /// Provider for the back-end of the subscription system.
       SubscriptionProvider: ISubscriptionProvider
     }
-    /// Returns the default Subscription Provider, backed by Observable streams
+    /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() = 
         let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
         { new ISubscriptionProvider with
-            member this.Register (subscription: Subscription) =
+            member __.Register (subscription: Subscription) =
                 registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
-            member this.Add (ctx: ResolveFieldContext) (root: obj) (name: string)  =
+            member __.Add (ctx: ResolveFieldContext) (root: obj) (name: string)  =
                 match registeredSubscriptions.TryGetValue(name) with
                 | true, (sub, channel) -> 
                     channel
                     |> Observable.filter(fun o -> sub.Filter ctx root o)
                 | false, _ -> Observable.Empty()
-            member this.Publish<'T> (subIdent: string) (value: 'T) =
+            member __.Publish<'T> (subIdent: string) (value: 'T) =
                 match registeredSubscriptions.TryGetValue(subIdent) with
-                | true, (sub, channel) ->
+                | true, (_, channel) ->
                     channel.OnNext(box value)
-                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent
-        }
-
+                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent }
+    /// Default SchemaConfig value for Schemas.
     static member Default = 
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 
-
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let initialTypes: NamedDef list = [ 
-        Int
-        String
-        Boolean
-        Float
-        ID
-        Date
-        Uri
-        __Schema
-        query]
+    let initialTypes: NamedDef list = 
+        [ Int
+          String
+          Boolean
+          Float
+          ID
+          Date
+          Uri
+          __Schema
+          query ]
 
     let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
+
     let typeMap : TypeMap =
         let m = mutation |> function Some(Named n) -> [n] | _ -> []
         let s = subscription |> function Some(Named n) -> [n] | _ -> []
         initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromEnumerable
+
     let implementations =
         typeMap.ToEnumerable()
         |> Seq.choose (fun (_, v) ->
@@ -97,8 +95,6 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Union u -> u.Options
         | Interface i -> Map.find i.Name implementations |> Array.ofList
         | _ -> [||]
-
-    //-- INTROSPECTION SCHEMA GENERATION
 
     let rec introspectTypeRef isNullable (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
@@ -221,13 +217,11 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             |> List.map (introspectDirective inamed)
             |> List.toArray
             
-        let ischema =
-            { QueryType = Map.find query.Name inamed
-              MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-              SubscriptionType = None
-              Types = itypes
-              Directives = idirectives }
-        ischema
+        { QueryType = Map.find query.Name inamed
+          MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
+          SubscriptionType = None
+          Types = itypes
+          Directives = idirectives }
         
     let introspected = introspectSchema typeMap      
 
@@ -248,13 +242,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
 
     interface ISchema<'Root> with
-        member x.Query = query
-        member x.Mutation = mutation
-        member x.Subscription = subscription
+        member __.Query = query
+        member __.Mutation = mutation
+        member __.Subscription = subscription
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
-        member x.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd).GetEnumerator()
+        member __.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        member __.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
         
