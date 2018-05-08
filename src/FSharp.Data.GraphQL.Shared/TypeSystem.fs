@@ -1598,13 +1598,17 @@ and TypeMap() =
         | :? ListOfDef as l -> named l.OfType
         | _ -> None
 
-    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
+    let mutable onChange : (TypeMap -> unit) option = None
+
+    member __.OnChange(evt : TypeMap -> unit) =
+        onChange <- Some evt
+
+    member private this.AddOrOverwriteType(def : NamedDef, overwrite : bool, triggerOnChange : bool) =
         let add name def overwrite =
             if not (this.ContainsKey(name)) 
             then this.Add(name, def)
             elif overwrite
             then this.[name] <- def
-        let overwrite = defaultArg overwrite false
         let rec insert (def : NamedDef) =
             match def with
             | :? ScalarDef as sdef -> add sdef.Name def overwrite
@@ -1647,10 +1651,20 @@ and TypeMap() =
                 |> Seq.iter insert
             | _ -> failwith "Unexpected type!"
         insert def
+        match triggerOnChange, onChange with
+        | true, Some evt -> evt this
+        | _ -> ()
+
+    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        this.AddOrOverwriteType(def, overwrite, true)
 
     member this.AddOrOverwriteTypes(defs : NamedDef seq, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
-        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite))
+        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite, false))
+        match onChange with
+        | Some evt -> evt this
+        | None -> ()
 
     member this.ToEnumerable() =
         this |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))

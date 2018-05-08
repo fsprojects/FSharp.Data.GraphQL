@@ -220,7 +220,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Types = itypes
           Directives = idirectives }
         
-    let mutable introspected = introspectSchema typeMap      
+    let mutable introspected = introspectSchema typeMap
+
+    do typeMap.OnChange(fun _ -> introspected <- introspectSchema typeMap)
 
     interface ISchema with        
         member __.TypeMap = typeMap
