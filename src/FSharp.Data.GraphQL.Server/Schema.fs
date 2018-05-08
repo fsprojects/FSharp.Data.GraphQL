@@ -206,33 +206,30 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 | Enum x -> { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
                 | Interface x -> { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
                 | _ -> failwithf "Unexpected value of typedef: %O" typedef)
-
         let itypes =
             types.ToMap()
             |> Map.toArray
             |> Array.map (snd >> (introspectType inamed))
-
         let idirectives = 
             schemaConfig.Directives 
             |> List.map (introspectDirective inamed)
             |> List.toArray
-            
         { QueryType = Map.find query.Name inamed
           MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
           SubscriptionType = None
           Types = itypes
           Directives = idirectives }
         
-    let introspected = introspectSchema typeMap      
+    let mutable introspected = introspectSchema typeMap      
 
     interface ISchema with        
-        member val TypeMap = typeMap
-        member val Directives = schemaConfig.Directives |> List.toArray
-        member val Introspected = introspected
+        member __.TypeMap = typeMap
+        member __.Directives = schemaConfig.Directives |> List.toArray
+        member __.Introspected = introspected
         member __.Query = upcast query
         member __.Mutation = mutation |> Option.map (fun x -> upcast x)
         member __.Subscription = subscription |> Option.map (fun x -> upcast x)
-        member __.TryFindType typeName = typeMap.TryFind(typeName)
+        member __.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
         member __.GetPossibleTypes typedef = getPossibleTypes typedef
         member __.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =

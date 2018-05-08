@@ -1579,8 +1579,8 @@ and Metadata() =
 and TypeMap() =
     inherit Dictionary<string, NamedDef>()
 
-    let isInternalName name =
-        let internalNames = 
+    let isDefaultType name =
+        let defaultTypes = 
             [ "__Schema"
               "__Directive"
               "__InputValue"
@@ -1589,7 +1589,7 @@ and TypeMap() =
               "__Field"
               "__TypeKind"
               "__DirectiveLocation" ]
-        internalNames |> List.exists (fun x -> x = name)
+        defaultTypes |> List.exists (fun x -> x = name)
 
     let rec named (tdef : TypeDef) = 
         match tdef with
@@ -1597,25 +1597,6 @@ and TypeMap() =
         | :? NullableDef as n -> named n.OfType
         | :? ListOfDef as l -> named l.OfType
         | _ -> None
-
-    member this.Implementations =
-        this.ToEnumerable()
-        |> Seq.choose (fun (_, v) ->
-            match v :> TypeDef with
-            | :? ObjectDef as odef -> Some odef
-            | _ -> None)
-        |> Seq.fold (fun acc objdef -> 
-            objdef.Implements
-            |> Array.fold (fun acc' iface ->
-                match Map.tryFind iface.Name acc' with
-                | Some list -> Map.add iface.Name (objdef::list) acc'
-                | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
-    
-    member this.GetPossibleTypes(abstractDef : TypeDef) =
-        match abstractDef with
-        | :? UnionDef as u -> u.Options
-        | :? InterfaceDef as i -> Map.find i.Name this.Implementations |> Array.ofList
-        | _ -> [||]
 
     member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
         let add name def overwrite =
@@ -1680,8 +1661,9 @@ and TypeMap() =
     member this.ToMap() =
         this.ToEnumerable() |> Map.ofSeq
 
-    member this.TryFind(name : string) =
-        if isInternalName name 
+    member this.TryFind(name : string, ?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        if not includeDefaultTypes && isDefaultType name 
         then 
             None
         else
@@ -1689,17 +1671,19 @@ and TypeMap() =
             | (true, item) -> Some item
             | _ -> None
 
-    member this.TryFind<'Type when 'Type :> NamedDef>(name : string) =
-        match this.TryFind(name) with
+    member this.TryFind<'Type when 'Type :> NamedDef>(name : string, ?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        match this.TryFind(name, includeDefaultTypes) with
         | Some item -> 
             match item with
             | :? 'Type as item -> Some item
             | _ -> None
         | _ -> None
 
-    member this.OfType<'Type when 'Type :> NamedDef>() =
+    member this.OfType<'Type when 'Type :> NamedDef>(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
         this.ToEnumerable()
-        |> Seq.filter (fun (k, _) -> not (isInternalName k))
+        |> Seq.filter (fun (name, _) -> not includeDefaultTypes && not (isDefaultType name))
         |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
         |> Seq.choose id
         |> List.ofSeq
@@ -1717,13 +1701,14 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
-    member this.GetTypesWithListFields<'Val, 'Res>() =
+    member this.GetTypesWithListFields<'Val, 'Res>(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
         let toSeq map = map |> Map.toSeq |> Seq.map snd
         let map (f : FieldDef<'Val>) = 
             match f.TypeDef with 
             | :? ListOfDef<'Res, 'Res seq> -> Some f 
             | _ -> None
-        this.OfType<ObjectDef<'Val>>()
+        this.OfType<ObjectDef<'Val>>(includeDefaultTypes)
         |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
         |> List.ofSeq
 
