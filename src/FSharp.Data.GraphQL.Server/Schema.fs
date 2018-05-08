@@ -77,7 +77,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         let s = subscription |> function Some(Named n) -> [n] | _ -> []
         initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromEnumerable
 
-    let implementations =
+    let getImplementations (typeMap : TypeMap) =
         typeMap.ToEnumerable()
         |> Seq.choose (fun (_, v) ->
             match v with
@@ -89,6 +89,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 match Map.tryFind iface.Name acc' with
                 | Some list -> Map.add iface.Name (objdef::list) acc'
                 | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
+
+    let mutable implementations = getImplementations typeMap
     
     let getPossibleTypes abstractDef =
         match abstractDef with
@@ -222,7 +224,9 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         
     let mutable introspected = introspectSchema typeMap
 
-    do typeMap.OnChange(fun _ -> introspected <- introspectSchema typeMap)
+    do typeMap.OnChange(fun _ -> 
+        implementations <- getImplementations typeMap
+        introspected <- introspectSchema typeMap)
 
     interface ISchema with        
         member __.TypeMap = typeMap
