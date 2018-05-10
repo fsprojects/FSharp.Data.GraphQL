@@ -18,6 +18,7 @@
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="ObjectFilterMiddleware.fs" />
+    <Compile Include="DefineExtensions.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

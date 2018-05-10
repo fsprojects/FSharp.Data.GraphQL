@@ -70,7 +70,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           __Schema
           query ]
 
-    let schemaConfig = match config with None -> SchemaConfig.Default | Some c -> c
+    let schemaConfig = 
+        match config with
+        | None -> SchemaConfig.Default
+        | Some c -> c
 
     let typeMap : TypeMap =
         let m = mutation |> function Some(Named n) -> [n] | _ -> []

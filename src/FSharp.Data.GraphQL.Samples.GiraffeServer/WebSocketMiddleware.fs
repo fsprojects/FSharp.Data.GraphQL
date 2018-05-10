@@ -76,7 +76,7 @@ module SocketManager =
             return None
         else
             let settings =
-                WebSocketClientMessageConverter(executor, replacements, Metadata.QueryWeightThreshold(2.0)) :> JsonConverter
+                WebSocketClientMessageConverter(executor, replacements) :> JsonConverter
                 |> Seq.singleton
                 |> jsonSerializerSettings
             return JsonConvert.DeserializeObject<WebSocketClientMessage>(message, settings) |> Some

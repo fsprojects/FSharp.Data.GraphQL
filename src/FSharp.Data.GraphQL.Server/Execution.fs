@@ -209,9 +209,9 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef ctx (info: ExecutionInfo) =
+let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
     let fdef = info.Definition
-    let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+    let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
     { ExecutionInfo = info
       Context = ctx.Context
       ReturnType = fdef.TypeDef
@@ -433,7 +433,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
     let rec build (acc: ResolverTree list) = function
         | info::xs ->
-            let fieldCtx = createFieldContext objdef ctx info
+            let argDefs = fieldExecuteMap.GetArgs(objdef.Name, info.Definition.Name)
+            let fieldCtx = createFieldContext objdef argDefs ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
             |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
@@ -483,7 +484,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         resultSet
         |> Array.map (fun (name, info) ->
             let fdef = info.Definition
-            let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+            let argDefs = fieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+            let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
             let fieldCtx = 
                 { ExecutionInfo = info
                   Context = ctx

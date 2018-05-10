@@ -3,20 +3,17 @@ namespace FSharp.Data.GraphQL.Server.Middlewares
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL
 
-type ObjectFilterMiddleware<'Val, 'Res>() =
+type ObjectFilterMiddleware<'ObjectType, 'ListType>() =
     let middleware = fun (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) ->
-        let addArgsAndResolver (field : FieldDef<'Val>) = 
-            field.WithArgs([ Define.ObjectFilterInput ])
-                 .WithResolveMiddleware<'Res seq>(fun ctx input next ->
-                    printfn "%A" (ctx.Args |> Map.toList)
-                    next ctx input)
-        let modifyFields (object : ObjectDef<'Val>) (fields : FieldDef<'Val> seq) =
-            object.WithFields(fields |> Seq.map addArgsAndResolver)
+        let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
+            let args = [ Define.Input("filter", ObjectListFilter) ]
+            let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
+            object.WithFields(fields)
         let typesWithListFields =
-            ctx.Schema.TypeMap.GetTypesWithListFields<'Val, 'Res>()
+            ctx.Schema.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
         let modifiedTypes =
             typesWithListFields 
-            |> Seq.map (fun (o, fields) -> fields |> modifyFields o)
+            |> Seq.map (fun (object, fields) -> modifyFields object fields)
             |> Seq.cast<NamedDef>
         ctx.Schema.TypeMap.AddOrOverwriteTypes(modifiedTypes, overwrite = true)
         next ctx

@@ -4,6 +4,7 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Server.Middlewares
 
 type Episode =
     | NewHope = 1
@@ -40,8 +41,6 @@ type Character =
     | Droid of Droid
 
 module Schema =
-    open FSharp.Data.GraphQL.Server.Middlewares
-
     let humans =
         [ { Id = "1000"
             Name = Some "Luke Skywalker"
@@ -146,10 +145,10 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
-                // Define.ListField("friends", Nullable CharacterType, "The friends of the human, or an empty list if they have none.",
-                //     fun ctx (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
-                    fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
+                    fun ctx (h : Human) -> 
+                        ctx.Filter |> printfn "Human friends filter: %A"
+                        h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
@@ -164,7 +163,9 @@ module Schema =
                 Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
                 Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
-                    fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
+                    fun ctx (d : Droid) -> 
+                        ctx.Filter |> printfn "Droid friends filter: %A"
+                        d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
                 Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)
             ])
@@ -229,11 +230,10 @@ module Schema =
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
-        [ QueryWeightMiddleware() :> IExecutorMiddleware
-          ObjectFilterMiddleware<Human, Character option>() :> IExecutorMiddleware ]
+        [ Define.QueryWeightMiddleware(2.0)
+          Define.ObjectFilterMiddleware<Human, Character option>()
+          Define.ObjectFilterMiddleware<Droid, Character option>() ]
 
     let executor = Executor(schema, middlewares)
-
-    let executionMetadata = Metadata.QueryWeightThreshold(2.0)
 
     let root = { ClientId = "5" }

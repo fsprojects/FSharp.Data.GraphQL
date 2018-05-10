@@ -34,7 +34,12 @@ type internal CustomFieldsObjectDefinition<'Val>(source : ObjectDef<'Val>, field
         member __.Name = (source :> NamedDef).Name
     override __.Equals y = source.Equals y
     override __.GetHashCode() = source.GetHashCode()
-    override __.ToString() = source.ToString()
+    //override __.ToString() = source.ToString()
+    override __.ToString() = 
+        fields
+        |> Map.toSeq
+        |> Seq.map (snd >> (fun x -> sprintf "Field: %A, Args: %A" x.Name x.Args))
+        |> Seq.reduce (fun x1 x2 -> x1 + "\n" + x2)
 
 type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, middleware : FieldResolveMiddleware<'Val, 'Res>) =
     interface FieldDef<'Val> with
@@ -66,17 +71,20 @@ type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, 
 
 type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : InputFieldDef seq) =
     let exists aname = args |> Seq.exists (fun x -> x.Name = aname)
+    let args =
+        source.Args
+        |> Seq.filter (fun x -> not (exists x.Name))
+        |> Seq.append (args |> Array.ofSeq)
+        |> Array.ofSeq
     interface FieldDef<'Val> with
         member __.Name = source.Name
         member __.Description = source.Description
         member __.DeprecationReason = source.DeprecationReason
         member __.TypeDef = source.TypeDef
-        member __.Args = 
-            source.Args
-            |> Array.filter (fun x -> not (exists x.Name))
-            |> Array.append (args |> Array.ofSeq)
+        member __.Args = args
         member __.Metadata = source.Metadata
         member __.Resolve = source.Resolve
+
     interface IEquatable<FieldDef> with
         member __.Equals(other) = source.Equals(other)
     override __.Equals y = source.Equals y
@@ -85,14 +93,6 @@ type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : In
 
 [<AutoOpen>]
 module TypeSystemExtensions =
-    type Define with
-        static member ObjectFilterInput =
-            Define.Input("filter", ObjectListFilter)
-
-        static member ListField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                resolve : ResolveFieldContext -> 'Val -> 'Res seq) : FieldDef<'Val> =
-            Define.Field(name, ListOf typedef, description, [ Define.ObjectFilterInput ], resolve)
-
     type ObjectDef<'Val> with
         member this.WithFields(fields : FieldDef<'Val> seq) : ObjectDef<'Val> =
             upcast CustomFieldsObjectDefinition(this, fields)
@@ -112,3 +112,9 @@ module TypeSystemExtensions =
         
         static member QueryWeightThreshold(threshold : float) =
             Metadata.Empty.WithQueryWeightThreshold(threshold)
+
+    type ResolveFieldContext with
+        member this.Filter =
+            match this.Args.TryFind("filter") with
+            | Some (:? ObjectListFilter as f) -> Some f
+            | _ -> None
