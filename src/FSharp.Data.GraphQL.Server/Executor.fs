@@ -49,15 +49,15 @@ type ExecutorMiddleware(?compile, ?plan, ?execute) =
 /// It compiles the schema and offers an interface for planning and executing queries.
 /// The execution process can be customized through usage of middlewares.
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
-    let fieldExecuteMap = FieldExecuteMap()
+    let fieldExecuteMap = FieldExecuteMap(compileField)
 
     // FIXME: for some reason static do or do invocation in module doesn't work
     // for this reason we're compiling executors as part of identifier evaluation
     let __done =
         // We don't need to know possible types at this point
-        fieldExecuteMap.SetExecute("", "__schema", compileField SchemaMetaFieldDef)
-        fieldExecuteMap.SetExecute("", "__type", compileField TypeMetaFieldDef)
-        fieldExecuteMap.SetExecute("", "__typename", compileField TypeNameMetaFieldDef)
+        fieldExecuteMap.SetExecute(SchemaMetaFieldDef)
+        fieldExecuteMap.SetExecute(TypeMetaFieldDef)
+        fieldExecuteMap.SetExecute(TypeNameMetaFieldDef)
 
     let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : SchemaCompileMiddleware list) =
         match middlewares with

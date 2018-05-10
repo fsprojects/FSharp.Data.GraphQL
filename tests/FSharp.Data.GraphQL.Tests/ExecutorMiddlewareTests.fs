@@ -48,7 +48,7 @@ let ast = parse """{
 // On the schema compile phase, we hack the compiling to make the field a return the value of c
 let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
     let fieldDef = Define.Field("a", String, fun _ dt -> dt.c)
-    ctx.FieldExecuteMap.SetExecute("Data", "a", compileField fieldDef)
+    ctx.FieldExecuteMap.SetExecute("Data", fieldDef)
     next ctx
 
 // On the planning phase, we watch the time needed to do the operation

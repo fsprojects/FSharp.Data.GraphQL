@@ -660,7 +660,7 @@ let internal compileSchema (ctx : SchemaCompileContext) =
                 let subscription = { Name = subField.Name ; Filter = filter }
                 ctx.Schema.SubscriptionProvider.Register subscription) 
         | Object objdef ->
-            compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef))
+            compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 

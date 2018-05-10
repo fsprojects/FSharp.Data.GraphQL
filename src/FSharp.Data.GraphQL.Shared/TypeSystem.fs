@@ -357,20 +357,32 @@ and ISchema<'Root> =
         abstract Subscription : SubscriptionObjectDef<'Root> option
     end
 
-and FieldExecuteMap () = 
-    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
+and FieldExecuteCompiler = FieldDef -> ExecuteField
 
-    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
-        let key = typeName, fieldName
-        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
+and FieldExecuteMap(compiler : FieldExecuteCompiler) = 
+    let map = new Dictionary<string * string, ExecuteField * InputFieldDef []>()
 
-    member public this.GetExecute(typeName: string, fieldName: string) = 
-        let key = 
-            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
+    let getKey typeName fieldName =
+        if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
             then "", fieldName
             else typeName, fieldName
 
-        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
+    member __.SetExecute(typeName: string, def: FieldDef) = 
+        let key = typeName, def.Name
+        let compiled = compiler def
+        let args = def.Args
+        if not (map.ContainsKey(key)) then map.Add(key, (compiled, args))
+
+    member this.SetExecute(def : FieldDef) =
+        this.SetExecute("", def)
+
+    member __.GetExecute(typeName: string, fieldName: string) = 
+        let key = getKey typeName fieldName
+        if map.ContainsKey(key) then fst map.[key] else Unchecked.defaultof<ExecuteField>
+
+    member __.GetArgs(typeName : string, fieldName : string) =
+        let key = getKey typeName fieldName
+        if map.ContainsKey(key) then snd map.[key] else Unchecked.defaultof<InputFieldDef []>
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.
@@ -1576,8 +1588,9 @@ and Metadata() =
     member this.TryFind<'Value>(key : string) =
         if this.ContainsKey(key) then this.[key] :?> 'Value |> Some else None
 
+/// Map of types used in a Schema definition.
 and TypeMap() =
-    inherit Dictionary<string, NamedDef>()
+    let map = Dictionary<string, NamedDef>()
 
     let isDefaultType name =
         let defaultTypes = 
@@ -1605,10 +1618,10 @@ and TypeMap() =
 
     member private this.AddOrOverwriteType(def : NamedDef, overwrite : bool, triggerOnChange : bool) =
         let add name def overwrite =
-            if not (this.ContainsKey(name)) 
-            then this.Add(name, def)
+            if not (map.ContainsKey(name)) 
+            then map.Add(name, def)
             elif overwrite
-            then this.[name] <- def
+            then map.[name] <- def
         let rec insert (def : NamedDef) =
             match def with
             | :? ScalarDef as sdef -> add sdef.Name def overwrite
@@ -1620,7 +1633,7 @@ and TypeMap() =
                 |> Seq.map snd
                 |> Seq.collect (fun x -> Seq.append (x.TypeDef :> TypeDef |> Seq.singleton) (x.Args |> Seq.map (fun a -> upcast a.TypeDef)))
                 |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
-                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
                 odef.Implements
                 |> Seq.iter insert
@@ -1628,7 +1641,7 @@ and TypeMap() =
                 add idef.Name def overwrite
                 idef.Fields
                 |> Seq.map (fun x -> match named x.TypeDef with Some n -> n | _ -> failwith "Expected a Named type!")
-                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
             | :? UnionDef as udef ->
                 add udef.Name def overwrite
@@ -1647,7 +1660,7 @@ and TypeMap() =
                 iodef.Fields
                 |> Seq.collect (fun x -> (x.TypeDef :> TypeDef) |> Seq.singleton)
                 |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
-                |> Seq.filter (fun x -> not (this.ContainsKey(x.Name)))
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
             | _ -> failwith "Unexpected type!"
         insert def
@@ -1666,8 +1679,8 @@ and TypeMap() =
         | Some evt -> evt this
         | None -> ()
 
-    member this.ToEnumerable() =
-        this |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
+    member __.ToEnumerable() =
+        map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
     member this.ToList() =
         this.ToEnumerable() |> List.ofSeq
@@ -1675,13 +1688,13 @@ and TypeMap() =
     member this.ToMap() =
         this.ToEnumerable() |> Map.ofSeq
 
-    member this.TryFind(name : string, ?includeDefaultTypes : bool) =
+    member __.TryFind(name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         if not includeDefaultTypes && isDefaultType name 
         then 
             None
         else
-            match this.TryGetValue(name) with
+            match map.TryGetValue(name) with
             | (true, item) -> Some item
             | _ -> None
 
