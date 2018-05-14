@@ -1270,6 +1270,7 @@ and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
         inherit TypeDef<'Seq>
         inherit InputDef<'Seq>
         inherit OutputDef<'Seq>
+        inherit ListOfDef
     end
 
 and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = 
@@ -1318,6 +1319,7 @@ and NullableDef<'Val> =
         abstract OfType : TypeDef<'Val>
         inherit InputDef<'Val option>
         inherit OutputDef<'Val option>
+        inherit NullableDef
     end
 
 and internal NullableDefinition<'Val> = 

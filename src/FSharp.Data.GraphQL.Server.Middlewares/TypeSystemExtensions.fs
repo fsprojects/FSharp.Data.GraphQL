@@ -30,8 +30,8 @@ type internal CustomFieldsObjectDefinition<'Val>(source : ObjectDef<'Val>, field
         member __.Implements = source.Implements
         member __.IsTypeOf = source.IsTypeOf
     interface TypeDef with
-        member __.MakeList() = source.MakeList() // TODO : This may need to be changed
-        member __.MakeNullable() = source.MakeNullable() // TODO : This may need to be changed
+        member this.MakeList() = upcast (ListOf this)
+        member this.MakeNullable() = upcast (Nullable this)
         member __.Type = (source :> TypeDef).Type
     interface NamedDef with
         member __.Name = (source :> NamedDef).Name
