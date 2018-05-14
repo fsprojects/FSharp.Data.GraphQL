@@ -80,11 +80,11 @@ let executor =
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
-    let middlewares = [ QueryWeightMiddleware() :> IExecutorMiddleware ]
+    let middlewares = [ Define.QueryWeightMiddleware(2.0) ]
     Executor(schema, middlewares)
 
 let execute (query : Document) =
-    executor.AsyncExecute(query, meta = Metadata.QueryWeightThreshold(2.0)) |> sync
+    executor.AsyncExecute(query) |> sync
 
 let expectedErrors : Error list =
     [ "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", [] ]

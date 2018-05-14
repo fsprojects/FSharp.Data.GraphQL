@@ -2,11 +2,12 @@ namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Server.Middlewares.Literals
 
-type ObjectFilterMiddleware<'ObjectType, 'ListType>() =
+type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
     let middleware = fun (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) ->
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
-            let args = [ Define.Input("filter", ObjectListFilter) ]
+            let args = [ Define.Input(ArgumentKeys.ObjectListFilterMiddleware.Filter, ObjectListFilter) ]
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =

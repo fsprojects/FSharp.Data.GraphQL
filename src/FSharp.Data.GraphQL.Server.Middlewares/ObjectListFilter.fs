@@ -1,9 +1,11 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares
 
+/// A filter definition for a field value.
 type FieldFilter<'Val> =
     { FieldName : string
       Value : 'Val }
 
+/// A filter definition for an object list.
 type ObjectListFilter =
     | And of ObjectListFilter * ObjectListFilter
     | Or of ObjectListFilter * ObjectListFilter
@@ -16,15 +18,35 @@ type ObjectListFilter =
     | Contains of FieldFilter<string>
     | Field of FieldFilter<ObjectListFilter>
 
+/// Contains operators for building and comparing ObjectListFilter values.
 [<AutoOpen>]
 module ObjectListFilterOperators =
+    /// Creates a new ObjectListFilter representing an AND operation between two existing ones.
     let ( &&& ) x y = And (x, y)
+
+    /// Creates a new ObjectListFilter representing an OR operation between two existing ones.
     let ( ||| ) x y = Or (x, y)
+
+    /// Creates a new ObjectListFilter representing an EQUALS operation between two comparable values.
     let ( === ) fname value = Equals { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing a GREATER THAN operation of a comparable value.
     let ( ==> ) fname value = GreaterThan { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing a LESS THAN operation of a comparable value.
     let ( <== ) fname value = LessThan { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing a STARTS WITH operation of a string value.
     let ( =@@ ) fname value = StartsWith { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing an ENDS WITH operation of a string value.
     let ( @@= ) fname value = EndsWith { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing a CONTAINS operation.
     let ( @=@ ) fname value = Contains { FieldName = fname; Value = value }
+
+    /// Creates a new ObjectListFilter representing a field sub comparison.
     let ( --> ) fname filter = Field { FieldName = fname; Value = filter }
+
+    /// Creates a new ObjectListFilter representing a NOT opreation for the existing one.
     let ( !!! ) filter = Not filter

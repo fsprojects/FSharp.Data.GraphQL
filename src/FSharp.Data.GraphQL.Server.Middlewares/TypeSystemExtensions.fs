@@ -5,7 +5,10 @@ open FSharp.Data.GraphQL.Types
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
 open Microsoft.FSharp.Linq.RuntimeHelpers
+open FSharp.Data.GraphQL.Server.Middlewares.Literals
 
+/// A function for field resolve that acts as a middleware, running
+/// before the actual field resolve function.
 type FieldResolveMiddleware<'Val, 'Res> =
     ResolveFieldContext -> 'Val -> (ResolveFieldContext -> 'Val -> 'Res) -> 'Res
 
@@ -34,12 +37,7 @@ type internal CustomFieldsObjectDefinition<'Val>(source : ObjectDef<'Val>, field
         member __.Name = (source :> NamedDef).Name
     override __.Equals y = source.Equals y
     override __.GetHashCode() = source.GetHashCode()
-    //override __.ToString() = source.ToString()
-    override __.ToString() = 
-        fields
-        |> Map.toSeq
-        |> Seq.map (snd >> (fun x -> sprintf "Field: %A, Args: %A" x.Name x.Args))
-        |> Seq.reduce (fun x1 x2 -> x1 + "\n" + x2)
+    override __.ToString() = source.ToString()
 
 type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, middleware : FieldResolveMiddleware<'Val, 'Res>) =
     interface FieldDef<'Val> with
@@ -91,29 +89,69 @@ type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : In
     override __.GetHashCode() = source.GetHashCode()
     override __.ToString() = source.ToString()
 
+/// Contains extensions for the type system.
 [<AutoOpen>]
 module TypeSystemExtensions =
     type ObjectDef<'Val> with
+        /// <summary>
+        /// Creates a new object definition based on the existing one, containing
+        /// the fields of the existing one, plus customized fields.
+        /// </summary>
+        /// <remarks>
+        /// If the object definition has customized fields, and any existing field
+        /// has the name of a custom field definition, it is discarded and
+        /// replaced by the supplied one.
+        /// </remarks>
+        /// <param name="fields">Additional field definitions for the derived object definition.</param>
         member this.WithFields(fields : FieldDef<'Val> seq) : ObjectDef<'Val> =
             upcast CustomFieldsObjectDefinition(this, fields)
 
     type FieldDef<'Val> with
+        /// <summary>
+        /// Creates a new field definition based on the existing one, containing
+        /// a field resolve middleware, that is run before the actual resolve function.
+        /// </summary>
+        /// <param name="middleware">The middleware function for the field resolve.</param>
         member this.WithResolveMiddleware<'Res>(middleware : FieldResolveMiddleware<'Val, 'Res>) : FieldDef<'Val> =
             upcast CustomResolveFieldDefinition(this, middleware)
+
+        /// <summary>
+        /// Adds metadata information to existing field definition, containing
+        /// the query weight value for it. This value is used by the QueryWeightMiddleware to calculate a query weight.
+        /// </summary>
+        /// <param name="weight">A float value representing the weight that this field have on the query.</param>
         member this.WithQueryWeight(weight : float) =
             this.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeight, weight); this
 
+        /// <summary>
+        /// Creates a new field definition based on the existing one, containing
+        /// the arguments of the existing one, plus customized arguments.
+        /// </summary>
+        /// <remarks>
+        /// If the field definition has customized arguments, and any existing argument
+        /// has the name of a customized argument, it is discarded and
+        /// replaced by the supplied one.
+        /// </remarks>
+        /// <param name="args">Additional argument definitions for the derived field definition.</param>
         member this.WithArgs(args : InputFieldDef seq) : FieldDef<'Val> =
             upcast CustomArgsFieldDefinition(this, args)
 
     type Metadata with
+        /// <summary>
+        /// Adds metadata information to the current metadata definition, containing
+        /// the maximum query weight (threshold) for query execution.
+        /// This value is used by the QueryWeightMiddleware to measure if a query weight is 
+        /// below a defined threshold.
+        /// </summary>
+        /// <param name="threshold">A float value, representing the threshold weight.</param>
         member this.WithQueryWeightThreshold(threshold : float) =
             this.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, threshold); this
-        
-        static member QueryWeightThreshold(threshold : float) =
-            Metadata.Empty.WithQueryWeightThreshold(threshold)
 
     type ResolveFieldContext with
+        /// <summary>
+        /// Gets the filter argument value for this field, if it does have one.
+        /// Field argument is defined by the ObjectFilterMiddleware.
+        /// </summary>
         member this.Filter =
             match this.Args.TryFind("filter") with
             | Some (:? ObjectListFilter as f) -> Some f

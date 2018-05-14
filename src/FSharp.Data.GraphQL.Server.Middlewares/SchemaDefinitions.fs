@@ -3,6 +3,7 @@ namespace FSharp.Data.GraphQL.Server.Middlewares
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
 
+/// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
 module SchemaDefinitions =
     let rec private coerceObjectListFilterInput x = 
@@ -81,6 +82,7 @@ module SchemaDefinitions =
         | :? ObjectListFilter as x -> Some x
         | _ -> None
 
+    /// Defines an object list filter for use as an argument for filter list of object fields.
     let ObjectListFilter : ScalarDefinition<ObjectListFilter> =
         { Name = "ObjectListFilter"
           Description = 

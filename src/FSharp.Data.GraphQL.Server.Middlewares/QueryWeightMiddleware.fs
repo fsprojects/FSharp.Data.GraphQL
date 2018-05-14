@@ -3,8 +3,9 @@
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Server.Middlewares.Literals
 
-type QueryWeightMiddleware(?threshold : float) =
+type internal QueryWeightMiddleware(?threshold : float) =
     let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
         let getWeight f =
             match f.Definition.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeight) with
