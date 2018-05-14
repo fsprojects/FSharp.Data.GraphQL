@@ -32,10 +32,13 @@ type internal QueryWeightMiddleware(?threshold : float) =
                         checkThreshold current xs
         checkThreshold 0.0 fields
     let middleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
-            let threshold =
-                match threshold with
-                | Some t -> Some t
-                | None -> ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
+            match threshold with
+            | Some t -> 
+                if ctx.Metadata.ContainsKey(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
+                then ctx.Metadata.Remove(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold) |> ignore
+                ctx.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, t)
+            | None -> ()
+            let threshold = ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
             let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
             let directFields = ctx.ExecutionPlan.Fields
             let fields = directFields @ deferredFields
