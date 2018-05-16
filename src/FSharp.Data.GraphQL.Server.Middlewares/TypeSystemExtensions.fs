@@ -89,6 +89,22 @@ type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : In
     override __.GetHashCode() = source.GetHashCode()
     override __.ToString() = source.ToString()
 
+type internal CustomMetadataFieldDefinition<'Val>(source : FieldDef<'Val>, metadata : Metadata) =
+    interface FieldDef<'Val> with
+        member __.Name = source.Name
+        member __.Description = source.Description
+        member __.DeprecationReason = source.DeprecationReason
+        member __.TypeDef = source.TypeDef
+        member __.Args = source.Args
+        member __.Metadata = metadata
+        member __.Resolve = source.Resolve
+
+    interface IEquatable<FieldDef> with
+        member __.Equals(other) = source.Equals(other)
+    override __.Equals y = source.Equals y
+    override __.GetHashCode() = source.GetHashCode()
+    override __.ToString() = source.ToString()
+
 /// Contains extensions for the type system.
 [<AutoOpen>]
 module TypeSystemExtensions =
@@ -116,12 +132,21 @@ module TypeSystemExtensions =
             upcast CustomResolveFieldDefinition(this, middleware)
 
         /// <summary>
-        /// Adds metadata information to existing field definition, containing
-        /// the query weight value for it. This value is used by the QueryWeightMiddleware to calculate a query weight.
+        /// Creates a new field definition based on the existing one, containing
+        /// the metadata supplied. Metadata from old field is replaced by the provided one.
+        /// </summary>
+        member this.WithMetadata(metadata : Metadata) : FieldDef<'Val> =
+            upcast CustomMetadataFieldDefinition(this, metadata)
+
+        /// <summary>
+        /// Creates a new field definition based on the existing one, containing
+        /// the existing metadata information, plus a new entry used to calculate the query
+        /// weight by the QueryWeightMiddleware.
         /// </summary>
         /// <param name="weight">A float value representing the weight that this field have on the query.</param>
-        member this.WithQueryWeight(weight : float) =
-            this.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeight, weight); this
+        member this.WithQueryWeight(weight : float) : FieldDef<'Val> =
+            let metadata = this.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeight, weight)
+            upcast CustomMetadataFieldDefinition(this, metadata)
 
         /// <summary>
         /// Creates a new field definition based on the existing one, containing
@@ -145,7 +170,7 @@ module TypeSystemExtensions =
         /// </summary>
         /// <param name="threshold">A float value, representing the threshold weight.</param>
         member this.WithQueryWeightThreshold(threshold : float) =
-            this.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, threshold); this
+            this.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, threshold)
 
     type ResolveFieldContext with
         /// <summary>

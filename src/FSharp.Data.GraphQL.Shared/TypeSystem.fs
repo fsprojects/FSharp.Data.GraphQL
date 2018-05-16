@@ -1578,17 +1578,18 @@ and DirectiveDef =
       Args : InputFieldDef [] }
 
 /// Field metadata definition.
-and Metadata() =
-    inherit Dictionary<string, obj>()
+and Metadata(data : Map<string, obj>) =
+    new() = Metadata(Map.empty)
+    member __.Add(key : string, value : obj) = Metadata(data.Add (key, value))
     static member FromList(l : (string * obj) list) =
         let rec add (m : Metadata) (l : (string * obj) list) =
             match l with
             | [] -> m
-            | (k, v) :: xs -> m.Add(k, v); add m xs
+            | (k, v) :: xs -> add (m.Add(k, v)) xs
         add (Metadata()) l
     static member Empty = Metadata.FromList [ ]
-    member this.TryFind<'Value>(key : string) =
-        if this.ContainsKey(key) then this.[key] :?> 'Value |> Some else None
+    member __.TryFind<'Value>(key : string) =
+        if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
 
 /// Map of types used in a Schema definition.
 and TypeMap() =

@@ -58,8 +58,8 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     System.Threading.Thread.Sleep(5) // To make sure a minimum time will be needed to do this
     let result = next ctx
     watch.Stop()
-    result.Metadata.Add("planningTime", watch.ElapsedMilliseconds)
-    result
+    let metadata = result.Metadata.Add("planningTime", watch.ElapsedMilliseconds)
+    { result with Metadata = metadata }
 
 // On the execution phase, we remove the evaluation of the c field
 let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
