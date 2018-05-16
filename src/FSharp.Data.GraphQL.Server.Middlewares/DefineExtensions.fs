@@ -10,7 +10,10 @@ module DefineExtensions =
         /// <summary>
         /// Creates a query weight middleware, with the specified query weight threshold.
         /// </summary>
-        /// <param name="threshold">A float value representing the maximum threshold for any query analyzed by the middleware.</param>
+        /// <param name="threshold">
+        /// A float value representing the maximum threshold for any query analyzed by the middleware.
+        /// If no value is provided, then the middleware will try to recover the threshold in the ExecutionContext Metadata.
+        /// </param>
         static member QueryWeightMiddleware(?threshold : float) : IExecutorMiddleware =
             match threshold with
             | Some t -> upcast QueryWeightMiddleware(t)

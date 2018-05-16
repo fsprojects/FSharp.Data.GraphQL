@@ -28,26 +28,32 @@ module SchemaDefinitions =
             | BooleanValue v -> EquatableValue (v :> System.IComparable)
             | StringValue v -> EquatableValue (v :> System.IComparable)
             | EnumValue v -> EquatableValue (v :> System.IComparable)
-            | v -> Other v // TODO: Should ListValue, ObjectValue and Variable be treated as equatable values?
+            | v -> Other v
         let (|ComparableValue|Other|) v =
             match v with
             | IntValue v -> ComparableValue (v :> System.IComparable)
             | FloatValue v -> ComparableValue (v :> System.IComparable)
             | BooleanValue v -> ComparableValue (v :> System.IComparable)
             | StringValue v -> ComparableValue (v :> System.IComparable)
-            | v -> Other v // TODO: Should EnumValue, ListValue, ObjectValue and Variable be treated as comparable values?
+            | v -> Other v
         let rec mapFilter (name : string, value : Value) =
             let buildAnd x =
                 let rec build acc x =
                     match x with
                     | [] -> acc
-                    | x :: xs -> match acc with Some acc -> build (Some (acc &&& x)) xs | None -> build (Some x) xs
+                    | x :: xs -> 
+                        match acc with 
+                        | Some acc -> build (Some (And (acc, x))) xs 
+                        | None -> build (Some x) xs
                 build None x
             let buildOr x =
                 let rec build acc x =
                     match x with
                     | [] -> acc
-                    | x :: xs -> match acc with Some acc -> build (Some (acc ||| x)) xs | None -> build (Some x) xs
+                    | x :: xs -> 
+                        match acc with 
+                        | Some acc -> build (Some (And (acc, x))) xs 
+                        | None -> build (Some x) xs
                 build None x
             let mapFilters fields = fields |> List.map coerceObjectListFilterInput |> List.choose id
             match name, value with
@@ -55,18 +61,18 @@ module SchemaDefinitions =
             | Equals "or", ListValue fields -> fields |> mapFilters |> buildOr
             | Equals "not", ObjectValue value -> 
                 match mapInput value with
-                | Some filter -> Some !!!filter
+                | Some filter -> Some (Not filter)
                 | None -> None
-            | EndsWith fname, StringValue value -> Some (fname @@= value)
-            | StartsWith fname, StringValue value -> Some (fname =@@ value)
-            | Contains fname, StringValue value -> Some (fname @=@ value)
+            | EndsWith fname, StringValue value -> Some (EndsWith { FieldName = fname; Value = value })
+            | StartsWith fname, StringValue value -> Some (StartsWith { FieldName = fname; Value = value })
+            | Contains fname, StringValue value -> Some (Contains { FieldName = fname; Value = value })
             | Equals fname, ObjectValue value -> 
                 match mapInput value with 
-                | Some filter -> Some (fname --> filter) 
+                | Some filter -> Some (FilterField { FieldName = fname; Value = filter }) 
                 | None -> None
-            | Equals fname, EquatableValue value -> Some (fname === value)
-            | GreaterThan fname, ComparableValue value -> Some (fname ==> value)
-            | LessThan fname, ComparableValue value -> Some (fname <== value)
+            | Equals fname, EquatableValue value -> Some (Equals { FieldName = fname; Value = value })
+            | GreaterThan fname, ComparableValue value -> Some (GreaterThan { FieldName = fname; Value = value })
+            | LessThan fname, ComparableValue value -> Some (LessThan { FieldName = fname; Value = value })
             | _ -> None
         and mapInput value =
             match value |> Map.toList with
