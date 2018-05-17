@@ -46,10 +46,16 @@ module internal MiddlewareDefinitions =
                          | _ -> 
                             checkThreshold current xs
             checkThreshold 0.0 fields
+        let metadataThreshold =
+            ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
         let threshold = 
             match threshold with
             | Some t -> Some t
-            | None -> ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
+            | None -> metadataThreshold
+        let ctx =
+            match threshold with
+            | Some t -> { ctx with Metadata = ctx.Metadata.WithQueryWeightThreshold(t) }
+            | None -> ctx
         let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
         let directFields = ctx.ExecutionPlan.Fields
         let fields = directFields @ deferredFields
