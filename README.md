@@ -12,22 +12,24 @@ type Person =
     { FirstName: string
       LastName: string }
 
-// define GraphQL type 
+// Define GraphQL type 
 let PersonType = Define.Object(
     name = "Person",
     fields = [
-        // property resolver will be auto-generated
+        // Property resolver will be auto-generated
         Define.AutoField("firstName", String)   
-        // asynchronous explicit member resolver
-        Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })   
+        // Asynchronous explicit member resolver
+        Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })
     ])
-    
-// include person as a root query of a schema
-let schema = Schema(query = PersonType)
 
-// retrieve person data
+// Include person as a root query of a schema
+let schema = Schema(query = PersonType)
+// Create an Exector for the schema
+let executor = Executor(schema)
+
+// Retrieve person data
 let johnSnow = { FirstName = "John"; LastName = "Snow" }
-let reply = schema.AsyncExecute(parse "{ firstName, lastName }", johnSnow) |> Async.RunSynchronously
+let reply = executor.AsyncExecute(parse "{ firstName, lastName }", johnSnow) |> Async.RunSynchronously
 // #> { data: { "firstName", "John", "lastName", "Snow" } } 
 ```
 
@@ -163,9 +165,9 @@ let middlewares = [ Define.QueryWeightMiddleware(2.0) ]
 
 This middleware can be used to automatically generate a filter for list fields inside an object of the schema. This filter can be passed as an argument for the field on the query, and recovered in the `ResolveFieldContext` argument of the resolve function of the field.
 
+For example, we can create a middleware for filtering list fields of an `Human` object, that are of the type `Character option`:
+
 ```fsharp
-/// Defines a middleware for filtering fields of Human object
-/// that are lists of nullable, Character objects
 let middlewares = [ Define.ObjectListFilterMiddleware<Human, Character option>() ]
 ```
 
@@ -209,8 +211,8 @@ type ObjectListFilter =
 And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easy access it, you can use the extension method `Filter`, wich returns an `ObjectListFilter option` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter on the query).
 
 ```fsharp
-Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
-    fun ctx (d : Droid) -> 
+Define.Field("friends", ListOf (Nullable CharacterType),
+    resolve = fun ctx (d : Droid) -> 
         ctx.Filter |> printfn "Droid friends filter: %A"
         d.Friends |> List.map getCharacter |> List.toSeq)
 ```
