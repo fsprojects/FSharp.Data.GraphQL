@@ -15,7 +15,7 @@ module DefineExtensions =
         /// If no value is provided, then the middleware will try to recover the threshold in the ExecutionContext Metadata.
         /// </param>
         static member QueryWeightMiddleware(?threshold : float) =
-            OperationExecution (QueryWeightMiddleware.middleware threshold)
+            OperationExecution (MiddlewareDefinitions.queryWeight threshold)
 
         /// <summary>
         /// Creates a object list filter middleware for an object of 'ObjectType, and a list field of 'ListType type.
@@ -27,4 +27,4 @@ module DefineExtensions =
         /// field of the specified object of 'ObjectType type.
         /// </remarks>
         static member ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
-            SchemaCompile ObjectListFilterMiddleware.middleware<'ObjectType, 'ListType>
+            SchemaCompile MiddlewareDefinitions.objectListFilter<'ObjectType, 'ListType>

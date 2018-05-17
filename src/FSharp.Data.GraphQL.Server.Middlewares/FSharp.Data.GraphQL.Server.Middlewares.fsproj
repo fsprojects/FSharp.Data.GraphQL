@@ -13,11 +13,10 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Literals.fs" />
-    <Compile Include="QueryWeightMiddleware.fs" />
     <Compile Include="ObjectListFilter.fs" />
-    <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
-    <Compile Include="ObjectListFilterMiddleware.fs" />
+    <Compile Include="SchemaDefinitions.fs" />
+    <Compile Include="MiddlewareDefinitions.fs" />
     <Compile Include="DefineExtensions.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />

@@ -18,9 +18,8 @@ type ObjectListFilter =
     | Contains of FieldFilter<string>
     | FilterField of FieldFilter<ObjectListFilter>
 
-/// Contains tooling for ObjectListFilter.
+/// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
-
     /// Contains operators for building and comparing ObjectListFilter values.
     module Operators =
         /// Creates a new ObjectListFilter representing an AND operation between two existing ones.
