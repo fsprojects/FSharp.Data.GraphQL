@@ -14,10 +14,8 @@ module DefineExtensions =
         /// A float value representing the maximum threshold for any query analyzed by the middleware.
         /// If no value is provided, then the middleware will try to recover the threshold in the ExecutionContext Metadata.
         /// </param>
-        static member QueryWeightMiddleware(?threshold : float) : IExecutorMiddleware =
-            match threshold with
-            | Some t -> upcast QueryWeightMiddleware(t)
-            | None -> upcast QueryWeightMiddleware()
+        static member QueryWeightMiddleware(?threshold : float) =
+            OperationExecution (QueryWeightMiddleware.middleware threshold)
 
         /// <summary>
         /// Creates a object list filter middleware for an object of 'ObjectType, and a list field of 'ListType type.
@@ -28,5 +26,5 @@ module DefineExtensions =
         /// This argument can be used on the query to specify a filter with operations like "less than", "equals", etc. on the
         /// field of the specified object of 'ObjectType type.
         /// </remarks>
-        static member ObjectListFilterMiddleware<'ObjectType, 'ListType>() : IExecutorMiddleware =
-            upcast ObjectListFilterMiddleware<'ObjectType, 'ListType>()
+        static member ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
+            SchemaCompile ObjectListFilterMiddleware.middleware<'ObjectType, 'ListType>

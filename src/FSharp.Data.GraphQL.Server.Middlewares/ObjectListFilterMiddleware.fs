@@ -4,8 +4,8 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.Middlewares.Literals
 
-type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
-    let middleware = fun (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) ->
+module internal ObjectListFilterMiddleware =
+    let middleware<'ObjectType, 'ListType> (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
             let args = [ Define.Input(ArgumentKeys.ObjectListFilterMiddleware.Filter, ObjectListFilter) ]
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
@@ -18,8 +18,3 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
             |> Seq.cast<NamedDef>
         ctx.Schema.TypeMap.AddOrOverwriteTypes(modifiedTypes, overwrite = true)
         next ctx
-
-    interface IExecutorMiddleware with
-        member __.ExecuteOperationAsync = None
-        member __.PlanOperation = None
-        member __.CompileSchema = Some middleware

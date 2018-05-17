@@ -5,8 +5,8 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Server.Middlewares.Literals
 
-type internal QueryWeightMiddleware(?threshold : float) =
-    let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
+module internal QueryWeightMiddleware =
+    let private measureThreshold (threshold : float) (fields : ExecutionInfo list) =
         let getWeight f =
             match f.Definition.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeight) with
             | Some w -> w
@@ -31,14 +31,11 @@ type internal QueryWeightMiddleware(?threshold : float) =
                      | _ -> 
                         checkThreshold current xs
         checkThreshold 0.0 fields
-    let middleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
-            let ctx =
+    let middleware (threshold : float option) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+            let threshold = 
                 match threshold with
-                | Some t -> 
-                    let metadata = ctx.Metadata.Add(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold, t)
-                    { ctx with Metadata = metadata }
-                | None -> ctx
-            let threshold = ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
+                | Some t -> Some t
+                | None -> ctx.Metadata.TryFind<float>(MetadataKeys.QueryWeightMiddleware.QueryWeightThreshold)
             let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
             let directFields = ctx.ExecutionPlan.Fields
             let fields = directFields @ deferredFields
@@ -51,7 +48,3 @@ type internal QueryWeightMiddleware(?threshold : float) =
                 then next ctx
                 else error ctx
             | None -> next ctx
-    interface IExecutorMiddleware with
-        member __.ExecuteOperationAsync = Some middleware
-        member __.PlanOperation = None
-        member __.CompileSchema = None

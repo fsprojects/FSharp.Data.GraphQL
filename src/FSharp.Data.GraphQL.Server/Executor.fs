@@ -27,28 +27,17 @@ type OperationPlanningMiddleware =
 type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
-/// An interface to implement a middleware for the Executor.
-/// It contains sub middlewares for three phases in the execution process.
-type IExecutorMiddleware =
-    /// Contains the function that holds the schema compile phase for this middleware.
-    abstract member CompileSchema : SchemaCompileMiddleware option
-    /// Contains the function that holds the operation planning phase for this middleware.
-    abstract member PlanOperation : OperationPlanningMiddleware option
-    /// Contains the function that holds the operation execution phase for this middleware.
-    abstract member ExecuteOperationAsync : OperationExecutionMiddleware option
-
-/// A simple implementation for an executor middleware interface.
-/// It can hold one to three functions for each sub phase of the execution process.
-type ExecutorMiddleware(?compile, ?plan, ?execute) =
-    interface IExecutorMiddleware with
-        member __.CompileSchema = compile
-        member __.PlanOperation = plan
-        member __.ExecuteOperationAsync = execute
+/// An Executor Middleware. Can be used for customize, or add features to schema compiling,
+/// operation planning and execution processes.
+type ExecutorMiddleware =
+    | SchemaCompile of SchemaCompileMiddleware
+    | OperationPlanning of OperationPlanningMiddleware
+    | OperationExecution of OperationExecutionMiddleware
 
 /// The standard schema executor.
 /// It compiles the schema and offers an interface for planning and executing queries.
 /// The execution process can be customized through usage of middlewares.
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : ExecutorMiddleware seq) =
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
     // FIXME: for some reason static do or do invocation in module doesn't work
@@ -66,7 +55,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let compileSchemaWithMiddlewares (ctx : SchemaCompileContext) =
         middlewares
-        |> Seq.map (fun m -> m.CompileSchema)
+        |> Seq.map (function SchemaCompile x -> Some x | _ -> None)
         |> Seq.choose id
         |> List.ofSeq
         |> runSchemaCompilingMiddlewares ctx
@@ -85,7 +74,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let executeOperationWithMiddlewares (ctx : ExecutionContext) =
         middlewares
-        |> Seq.map (fun m -> m.ExecuteOperationAsync)
+        |> Seq.map (function OperationExecution x -> Some x | _ -> None)
         |> Seq.choose id
         |> List.ofSeq
         |> runOperationExecutionMiddlewares ctx
@@ -133,7 +122,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let planOperationWithMiddlewares (ctx : PlanningContext) =
         middlewares
-        |> Seq.map (fun m -> m.PlanOperation)
+        |> Seq.map (function OperationPlanning x -> Some x | _ -> None)
         |> Seq.choose id
         |> List.ofSeq
         |> runOperationPlanningMiddlewares ctx
