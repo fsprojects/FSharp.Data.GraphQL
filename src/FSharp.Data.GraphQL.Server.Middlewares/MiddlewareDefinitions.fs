@@ -68,3 +68,9 @@ module internal MiddlewareDefinitions =
             then next ctx
             else error ctx
         | None -> next ctx
+
+type internal QueryWeightMiddleware(?threshold : float) =
+    inherit ExecutorMiddleware(execute = MiddlewareDefinitions.queryWeight threshold)
+
+type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>() =
+    inherit ExecutorMiddleware(compile = MiddlewareDefinitions.objectListFilter)

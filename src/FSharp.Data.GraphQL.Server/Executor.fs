@@ -27,17 +27,27 @@ type OperationPlanningMiddleware =
 type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
-/// An Executor Middleware. Can be used for customize, or add features to schema compiling,
-/// operation planning and execution processes.
-type ExecutorMiddleware =
-    | SchemaCompile of SchemaCompileMiddleware
-    | OperationPlanning of OperationPlanningMiddleware
-    | OperationExecution of OperationExecutionMiddleware
+/// An interface to implement Executor middlewares.
+/// A middleware can have one to three sub-middlewares, one for each phase of the query execution.
+type IExecutorMiddleware =
+    /// Defines the sub-middleware that intercepts the schema compile process of the Executor.
+    abstract CompileSchema : SchemaCompileMiddleware option
+    /// Defines the sub-middleware that intercepts the operation planning phase of the Executor.
+    abstract PlanOperation : OperationPlanningMiddleware option
+    /// Defines the sub-middleware that intercepts the operation execution phase of the Executor.
+    abstract ExecuteOperationAsync : OperationExecutionMiddleware option
+
+/// A simple, concrete implementation for the IExecutorMiddleware interface.
+type ExecutorMiddleware(?compile, ?plan, ?execute) =
+    interface IExecutorMiddleware with
+        member __.CompileSchema = compile
+        member __.PlanOperation = plan
+        member __.ExecuteOperationAsync = execute
 
 /// The standard schema executor.
 /// It compiles the schema and offers an interface for planning and executing queries.
 /// The execution process can be customized through usage of middlewares.
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : ExecutorMiddleware seq) =
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
     // FIXME: for some reason static do or do invocation in module doesn't work
@@ -55,7 +65,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : ExecutorMiddleware se
 
     let compileSchemaWithMiddlewares (ctx : SchemaCompileContext) =
         middlewares
-        |> Seq.map (function SchemaCompile x -> Some x | _ -> None)
+        |> Seq.map (fun x -> x.CompileSchema)
         |> Seq.choose id
         |> List.ofSeq
         |> runSchemaCompilingMiddlewares ctx
@@ -74,7 +84,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : ExecutorMiddleware se
 
     let executeOperationWithMiddlewares (ctx : ExecutionContext) =
         middlewares
-        |> Seq.map (function OperationExecution x -> Some x | _ -> None)
+        |> Seq.map (fun x -> x.ExecuteOperationAsync)
         |> Seq.choose id
         |> List.ofSeq
         |> runOperationExecutionMiddlewares ctx
@@ -122,7 +132,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : ExecutorMiddleware se
 
     let planOperationWithMiddlewares (ctx : PlanningContext) =
         middlewares
-        |> Seq.map (function OperationPlanning x -> Some x | _ -> None)
+        |> Seq.map (fun x -> x.PlanOperation)
         |> Seq.choose id
         |> List.ofSeq
         |> runOperationPlanningMiddlewares ctx

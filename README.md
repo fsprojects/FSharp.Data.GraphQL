@@ -226,7 +226,7 @@ You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` packa
 As field definitions are immutable by default, generating copies of them with improved features can be a hard work sometimes. This is where the extension methods can help: for example, if you need to add an argument to an already defined field inside the schema compile phase, you can use the method `WithArgs` of the `FieldDef<'Val>` interface:
 
 ```fsharp
-let field : FieldDef<'Val> = (** search for field inside ISchema **)
+let field : FieldDef<'Val> = // Search for field inside ISchema...
 let arg : Define.Input("id", String)
 let fieldWithArg = field.WithArgs([ arg ])
 ```

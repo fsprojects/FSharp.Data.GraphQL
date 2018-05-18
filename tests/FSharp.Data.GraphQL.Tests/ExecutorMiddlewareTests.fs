@@ -80,15 +80,16 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
     let ctx' = { ctx with ExecutionPlan = plan }
     next ctx'
 
-let middlewares =
-    [ SchemaCompile compileMiddleware
-      OperationPlanning planningMiddleware
-      OperationExecution executionMiddleware ]
+let middleware =
+    { new IExecutorMiddleware with
+        member __.CompileSchema = Some compileMiddleware
+        member __.PlanOperation = Some planningMiddleware
+        member __.ExecuteOperationAsync = Some executionMiddleware }
 
-let executor = Executor(schema, middlewares)
+let executor = Executor(schema, [ middleware ])
 
 [<Fact>]
-let ``Execution middlewares: change fields and measure planning time`` () =
+let ``Executor middleware: change fields and measure planning time`` () =
     let result = sync <| executor.AsyncExecute(ast)
     let expected = 
             NameValueLookup.ofList 
