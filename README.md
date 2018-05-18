@@ -95,7 +95,7 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
 
 That way, in the compile schema phase, the Schema is modified and execution maps are generated inside the `SchemaCompileContext` object. On the operation planning phase, values of the `PlanningContext` object are used to generate an execution plan, and finally, this plan is passed alongside other values in the `ExecutionContext` object to the operation execution phase, wich finally uses them to execute the query and generate a `GQLResponse`.
 
-With that being said, a middleware can be used to intercept each of those phases, and make customizations to them, modifying operations as needed. Each middleware must be implemented as a function with specific signature, and wrapped inside an `ExecutorMiddleware` union case:
+With that being said, a middleware can be used to intercept each of those phases, and make customizations to them, modifying operations as needed. Each middleware must be implemented as a function with specific signature, and wrapped inside an `IExecutorMiddleware` interface:
 
 ```fsharp
 type SchemaCompileMiddleware = 
@@ -107,20 +107,26 @@ type OperationPlanningMiddleware =
 type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
-type ExecutorMiddleware =
-    | SchemaCompile of SchemaCompileMiddleware
-    | OperationPlanning of OperationPlanningMiddleware
-    | OperationExecution of OperationExecutionMiddleware
+type IExecutorMiddleware =
+    abstract CompileSchema : SchemaCompileMiddleware option
+    abstract PlanOperation : OperationPlanningMiddleware option
+    abstract ExecuteOperationAsync : OperationExecutionMiddleware option
+```
+
+Optionally, for ease of implementation, concrete class to derive from can be used, receiving only the optional sub-middleware functions in the constructor:
+
+```fsharp
+type ExecutorMiddleware(?compile, ?plan, ?execute) =
+    interface IExecutorMiddleware with
+        member __.CompileSchema = compile
+        member __.PlanOperation = plan
+        member __.ExecuteOperationAsync = execute
 ```
 
 Each of the middleware functions acts like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
 
 ```fsharp
-let middlewares =
-    [ SchemaCompile compileMiddleware
-      OperationPlanning planningMiddleware
-      OperationExecution executionMiddleware ]
-
+let middlewares = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
 let executor = Executor(schema, middlewares)
 ```
 
