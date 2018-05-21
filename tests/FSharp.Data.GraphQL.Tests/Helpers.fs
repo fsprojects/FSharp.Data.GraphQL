@@ -23,7 +23,7 @@ let noErrors (result: IDictionary<string, obj>) =
 let single (xs : 'a seq) =
     Assert.Single(xs)
 let empty (xs: 'a seq) =
-    Assert.Empty(xs)
+    Assert.True(Seq.isEmpty xs, sprintf "expected empty sequence, but got %A" xs)
 let fail (message: string) =
     Assert.True(false, message)
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)

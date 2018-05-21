@@ -146,9 +146,7 @@ module Schema =
                 Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
-                    fun ctx (h : Human) -> 
-                        ctx.Filter |> printfn "Human friends filter: %A"
-                        h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
+                    fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
@@ -163,9 +161,7 @@ module Schema =
                 Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
                 Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
-                    fun ctx (d : Droid) -> 
-                        ctx.Filter |> printfn "Droid friends filter: %A"
-                        d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
+                    fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
                 Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)
             ])
@@ -230,9 +226,9 @@ module Schema =
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
-        [ Define.QueryWeightMiddleware(2.0)
-          Define.ObjectListFilterMiddleware<Human, Character option>()
-          Define.ObjectListFilterMiddleware<Droid, Character option>() ]
+        [ Define.QueryWeightMiddleware(2.0, true)
+          Define.ObjectListFilterMiddleware<Human, Character option>(true)
+          Define.ObjectListFilterMiddleware<Droid, Character option>(true) ]
 
     let executor = Executor(schema, middlewares)
 

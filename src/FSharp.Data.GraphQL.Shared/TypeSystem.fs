@@ -1591,6 +1591,8 @@ and Metadata(data : Map<string, obj>) =
     member __.TryFind<'Value>(key : string) =
         if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
 
+    override __.ToString() = sprintf "%A" data
+
 /// Map of types used in a Schema definition.
 and TypeMap() =
     let map = Dictionary<string, NamedDef>()

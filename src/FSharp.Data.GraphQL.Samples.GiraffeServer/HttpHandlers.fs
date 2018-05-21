@@ -65,14 +65,17 @@ module HttpHandlers =
             printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
             let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
+            printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
         | Some query, None ->
             printfn "Received query: %s" query
             let query = query |> removeSpacesAndNewLines
             let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
+            printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
         | None, _ ->
             let result = Schema.executor.AsyncExecute(Introspection.introspectionQuery) |> Async.RunSynchronously
+            printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
     }
 

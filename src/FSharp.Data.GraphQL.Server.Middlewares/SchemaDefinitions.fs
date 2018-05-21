@@ -36,25 +36,25 @@ module SchemaDefinitions =
             | BooleanValue v -> ComparableValue (v :> System.IComparable)
             | StringValue v -> ComparableValue (v :> System.IComparable)
             | v -> Other v
+        let buildAnd x =
+            let rec build acc x =
+                match x with
+                | [] -> acc
+                | x :: xs -> 
+                    match acc with 
+                    | Some acc -> build (Some (And (acc, x))) xs 
+                    | None -> build (Some x) xs
+            build None x
+        let buildOr x =
+            let rec build acc x =
+                match x with
+                | [] -> acc
+                | x :: xs -> 
+                    match acc with 
+                    | Some acc -> build (Some (Or (acc, x))) xs 
+                    | None -> build (Some x) xs
+            build None x
         let rec mapFilter (name : string, value : Value) =
-            let buildAnd x =
-                let rec build acc x =
-                    match x with
-                    | [] -> acc
-                    | x :: xs -> 
-                        match acc with 
-                        | Some acc -> build (Some (And (acc, x))) xs 
-                        | None -> build (Some x) xs
-                build None x
-            let buildOr x =
-                let rec build acc x =
-                    match x with
-                    | [] -> acc
-                    | x :: xs -> 
-                        match acc with 
-                        | Some acc -> build (Some (And (acc, x))) xs 
-                        | None -> build (Some x) xs
-                build None x
             let mapFilters fields = fields |> List.map coerceObjectListFilterInput |> List.choose id
             match name, value with
             | Equals "and", ListValue fields -> fields |> mapFilters |> buildAnd
@@ -75,9 +75,9 @@ module SchemaDefinitions =
             | LessThan fname, ComparableValue value -> Some (LessThan { FieldName = fname; Value = value })
             | _ -> None
         and mapInput value =
-            match value |> Map.toList with
-            | [ field ] -> mapFilter field
-            | _ -> None
+            let filters = value |> Map.toSeq |> Seq.map mapFilter
+            if filters |> Seq.contains None then None
+            else filters |> Seq.choose id |> List.ofSeq |> buildAnd
         match x with
         | ObjectValue x -> 
             mapInput x
