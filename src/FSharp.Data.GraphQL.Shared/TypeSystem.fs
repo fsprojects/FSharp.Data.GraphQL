@@ -1616,12 +1616,8 @@ and TypeMap() =
         | :? ListOfDef as l -> named l.OfType
         | _ -> None
 
-    let mutable onChange : (TypeMap -> unit) option = None
-
-    member __.OnChange(evt : TypeMap -> unit) =
-        onChange <- Some evt
-
-    member private this.AddOrOverwriteType(def : NamedDef, overwrite : bool, triggerOnChange : bool) =
+    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
         let add name def overwrite =
             if not (map.ContainsKey(name)) 
             then map.Add(name, def)
@@ -1669,29 +1665,16 @@ and TypeMap() =
                 |> Seq.iter insert
             | _ -> failwith "Unexpected type!"
         insert def
-        match triggerOnChange, onChange with
-        | true, Some evt -> evt this
-        | _ -> ()
-
-    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
-        let overwrite = defaultArg overwrite false
-        this.AddOrOverwriteType(def, overwrite, true)
 
     member this.AddOrOverwriteTypes(defs : NamedDef seq, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
-        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite, false))
-        match onChange with
-        | Some evt -> evt this
-        | None -> ()
+        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite))
 
-    member __.ToEnumerable() =
+    member __.ToSeq() =
         map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
     member this.ToList() =
-        this.ToEnumerable() |> List.ofSeq
-
-    member this.ToMap() =
-        this.ToEnumerable() |> Map.ofSeq
+        this.ToSeq() |> List.ofSeq
 
     member __.TryFind(name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
@@ -1714,7 +1697,7 @@ and TypeMap() =
 
     member this.OfType<'Type when 'Type :> NamedDef>(?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
-        this.ToEnumerable()
+        this.ToSeq()
         |> Seq.filter (fun (name, _) -> not includeDefaultTypes && not (isDefaultType name))
         |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
         |> Seq.choose id

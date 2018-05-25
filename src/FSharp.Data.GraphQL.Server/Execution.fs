@@ -651,7 +651,7 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
             arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
 
 let internal compileSchema (ctx : SchemaCompileContext) =
-    ctx.Schema.TypeMap.ToEnumerable()
+    ctx.Schema.TypeMap.ToSeq()
     |> Seq.iter (fun (tName, x) ->
         match x with
         | SubscriptionObject subdef ->

@@ -81,7 +81,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromEnumerable
 
     let getImplementations (typeMap : TypeMap) =
-        typeMap.ToEnumerable()
+        typeMap.ToSeq()
         |> Seq.choose (fun (_, v) ->
             match v with
             | Object odef -> Some odef
@@ -93,12 +93,12 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 | Some list -> Map.add iface.Name (objdef::list) acc'
                 | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
 
-    let mutable implementations = getImplementations typeMap
+    let implementations = lazy (getImplementations typeMap)
     
     let getPossibleTypes abstractDef =
         match abstractDef with
         | Union u -> u.Options
-        | Interface i -> Map.find i.Name implementations |> Array.ofList
+        | Interface i -> Map.find i.Name (implementations.Force()) |> Array.ofList
         | _ -> [||]
 
     let rec introspectTypeRef isNullable (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
@@ -127,6 +127,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
+
     let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
         { Name = subdef.Name
           Description = subdef.Description
@@ -134,12 +135,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           Type = introspectTypeRef false namedTypes subdef.InputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
+
     let introspectEnumVal (enumVal: EnumVal) : IntrospectionEnumVal =
         { Name = enumVal.Name
           Description = enumVal.Description
           IsDeprecated = Option.isSome enumVal.DeprecationReason
           DeprecationReason = enumVal.DeprecationReason }
-          
+
     let locationToList location =
         System.Enum.GetValues(typeof<DirectiveLocation>)
         |> Seq.cast<DirectiveLocation>
@@ -197,23 +199,24 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 getPossibleTypes idef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
-        | _ -> failwithf "Unexpected value of typedef: %O" typedef            
+        | _ -> failwithf "Unexpected value of typedef: %O" typedef  
 
     let introspectSchema (types : TypeMap) : IntrospectionSchema =
         let inamed = 
-            types.ToMap()
-            |> Map.map (fun typeName typedef -> 
+            types.ToSeq()
+            |> Seq.map (fun (typeName, typedef) -> 
                 match typedef with
-                | Scalar x -> { Kind = TypeKind.SCALAR; Name = Some typeName; Description = x.Description; OfType = None }
-                | Object x -> { Kind = TypeKind.OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
-                | InputObject x -> { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
-                | Union x -> { Kind = TypeKind.UNION; Name = Some typeName; Description = x.Description; OfType = None }
-                | Enum x -> { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
-                | Interface x -> { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
+                | Scalar x -> typeName, { Kind = TypeKind.SCALAR; Name = Some typeName; Description = x.Description; OfType = None }
+                | Object x -> typeName, { Kind = TypeKind.OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
+                | InputObject x -> typeName, { Kind = TypeKind.INPUT_OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
+                | Union x -> typeName, { Kind = TypeKind.UNION; Name = Some typeName; Description = x.Description; OfType = None }
+                | Enum x -> typeName, { Kind = TypeKind.ENUM; Name = Some typeName; Description = x.Description; OfType = None }
+                | Interface x -> typeName, { Kind = TypeKind.INTERFACE; Name = Some typeName; Description = x.Description; OfType = None }
                 | _ -> failwithf "Unexpected value of typedef: %O" typedef)
+            |> Map.ofSeq
         let itypes =
-            types.ToMap()
-            |> Map.toArray
+            types.ToSeq()
+            |> Seq.toArray
             |> Array.map (snd >> (introspectType inamed))
         let idirectives = 
             schemaConfig.Directives 
@@ -224,17 +227,13 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           SubscriptionType = None
           Types = itypes
           Directives = idirectives }
-        
-    let mutable introspected = introspectSchema typeMap
-
-    do typeMap.OnChange(fun _ -> 
-        implementations <- getImplementations typeMap
-        introspected <- introspectSchema typeMap)
+          
+    let introspected = lazy (introspectSchema typeMap)
 
     interface ISchema with        
         member __.TypeMap = typeMap
         member __.Directives = schemaConfig.Directives |> List.toArray
-        member __.Introspected = introspected
+        member __.Introspected = introspected.Force()
         member __.Query = upcast query
         member __.Mutation = mutation |> Option.map (fun x -> upcast x)
         member __.Subscription = subscription |> Option.map (fun x -> upcast x)
@@ -253,8 +252,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member __.Subscription = subscription
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
-        member __.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd).GetEnumerator()
+        member __.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
-        member __.GetEnumerator() = (typeMap.ToEnumerable() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        member __.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
         

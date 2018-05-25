@@ -55,6 +55,6 @@ let validateType typedef =
     | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
 let validate (namedTypes: TypeMap) : ValidationResult =
-    namedTypes.ToEnumerable()
+    namedTypes.ToSeq()
     |> Seq.map snd
     |> Seq.fold (fun acc namedDef -> acc @ validateType namedDef) Success
