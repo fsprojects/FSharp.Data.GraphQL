@@ -56,14 +56,14 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =
-            ctx.Schema.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
+            ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
         if Seq.isEmpty typesWithListFields 
         then failwith <| sprintf "No lists with specified type '%A' where found on object of type '%A'." typeof<'ObjectType> typeof<'ListType>
         let modifiedTypes =
             typesWithListFields 
             |> Seq.map (fun (object, fields) -> modifyFields object fields)
             |> Seq.cast<NamedDef>
-        ctx.Schema.TypeMap.AddTypes(modifiedTypes, overwrite = true)
+        ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
