@@ -4,8 +4,9 @@ namespace FSharp.Data.GraphQL.Types
 
 open System
 open System.Reflection
+open System.Collections
 open System.Collections.Concurrent
-open System.Collections.Generic;
+open System.Collections.Generic
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
@@ -357,8 +358,11 @@ and ISchema<'Root> =
         abstract Subscription : SubscriptionObjectDef<'Root> option
     end
 
+/// A type alias for a field execute compiler function.
 and FieldExecuteCompiler = FieldDef -> ExecuteField
 
+/// A field execute map object.
+/// Field execute maps are mutable objects built to compile fields at runtime.
 and FieldExecuteMap(compiler : FieldExecuteCompiler) = 
     let map = new Dictionary<string * string, ExecuteField * InputFieldDef []>()
 
@@ -367,22 +371,61 @@ and FieldExecuteMap(compiler : FieldExecuteCompiler) =
             then "", fieldName
             else typeName, fieldName
 
-    member __.SetExecute(typeName: string, def: FieldDef) = 
+    /// <summary>
+    /// Sets an execute function for a field of a named type of the schema.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="def">The FieldDef that will have its execute function configured into the FieldExecuteMap.</param>
+    /// <param name="overwrite">
+    /// If set to true, and an exists an entry with the <paramref name="typeName"/> and the name of the FieldDef,
+    /// then it will be overwritten.
+    /// </param>
+    member __.SetExecute(typeName: string, def: FieldDef, ?overwrite : bool) = 
+        let overwrite = defaultArg overwrite false
         let key = typeName, def.Name
         let compiled = compiler def
         let args = def.Args
-        if not (map.ContainsKey(key)) then map.Add(key, (compiled, args))
+        match map.ContainsKey(key), overwrite with
+        | true, true -> map.Remove(key) |> ignore; map.Add(key, (compiled, args))
+        | false, _ -> map.Add(key, (compiled, args))
+        | _ -> ()
 
-    member this.SetExecute(def : FieldDef) =
-        this.SetExecute("", def)
+    /// <summary>
+    /// Sets an execute function for a field of an unamed type in the schema.
+    /// </summary>
+    /// <param name="def">The FieldDef that will have its execute function configured into the FieldExecuteMap.</param>
+    /// <param name="overwrite">If set to true, and an exists an entry with the FieldDef name, then it will be overwritten.</param>
+    member this.SetExecute(def : FieldDef, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        this.SetExecute("", def, overwrite)
 
+    /// <summary>
+    /// Gets an ExecuteField based on the name of the type and the name of the field.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
     member __.GetExecute(typeName: string, fieldName: string) = 
         let key = getKey typeName fieldName
         if map.ContainsKey(key) then fst map.[key] else Unchecked.defaultof<ExecuteField>
 
+    /// <summary>
+    /// Gets the field arguments based on the name of the type and the name of the field.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
     member __.GetArgs(typeName : string, fieldName : string) =
         let key = getKey typeName fieldName
         if map.ContainsKey(key) then snd map.[key] else Unchecked.defaultof<InputFieldDef []>
+
+    interface IEnumerable<string * string * ExecuteField> with
+        member __.GetEnumerator() =
+            let seq = map |> Seq.map(fun kvp -> fst kvp.Key, snd kvp.Key, fst kvp.Value)
+            seq.GetEnumerator()
+
+    interface IEnumerable with
+        member __.GetEnumerator() =
+            let seq = map |> Seq.map(fun kvp -> fst kvp.Value)
+            upcast seq.GetEnumerator()
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.
@@ -659,6 +702,7 @@ and DeferredExecutionInfoKind =
 /// The context used to hold all the information for a schema compiling proccess.
 and SchemaCompileContext =
     { Schema : ISchema
+      TypeMap : TypeMap
       FieldExecuteMap : FieldExecuteMap }
 
 /// A planning of an execution phase.
@@ -1577,26 +1621,46 @@ and DirectiveDef =
       /// Array of arguments defined within that directive.
       Args : InputFieldDef [] }
 
-/// Field metadata definition.
+/// Metadata object.
+/// Metadata objects are used to hold custom information inside fields and contexts
+/// used by the GraphQL executor and ISchema.
 and Metadata(data : Map<string, obj>) =
     new() = Metadata(Map.empty)
+    
+    /// <summary>
+    /// Adds (or overwrites) an information to the metadata object, generating a new instance of it.
+    /// </summary>
+    /// <param name="key">The key to be used to search information for.</param>
+    /// <param name="value">The value to be stored inside the metadata.</param>
     member __.Add(key : string, value : obj) = Metadata(data.Add (key, value))
+    
+    /// <summary>
+    /// Generates a new Metadata instance, filled with items of a string * obj list.
+    /// </summary>
+    /// <param name="l">A list of string * obj tuples to be used to fill the Metadata object.</param>
     static member FromList(l : (string * obj) list) =
         let rec add (m : Metadata) (l : (string * obj) list) =
             match l with
             | [] -> m
             | (k, v) :: xs -> add (m.Add(k, v)) xs
         add (Metadata()) l
+    
+    /// Creates an empty Metadata object.
     static member Empty = Metadata.FromList [ ]
+
+    /// <summary>
+    /// Tries to find an value inside the metadata by it's key.
+    /// </summary>
+    /// <param name="key">The key to be used to search information for.</param>
     member __.TryFind<'Value>(key : string) =
         if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
 
     override __.ToString() = sprintf "%A" data
 
-/// Map of types used in a Schema definition.
+/// Map of types of an ISchema.
+/// The map of types is used to plan and execute queries.
 and TypeMap() =
     let map = Dictionary<string, NamedDef>()
-
     let isDefaultType name =
         let defaultTypes = 
             [ "__Schema"
@@ -1616,7 +1680,12 @@ and TypeMap() =
         | :? ListOfDef as l -> named l.OfType
         | _ -> None
 
-    member this.AddOrOverwriteType(def : NamedDef, ?overwrite : bool) =
+    /// <summary>
+    /// Adds (or optionally overwrites) a type to the type map.
+    /// </summary>
+    /// <param name="def">The NamedDef to be added to the type map. It's name will be used as the key.</param>
+    /// <param name="overwrite">If set to true, and another NamedDef exists with the same name, it will be overwritten.</param>
+    member __.AddType(def : NamedDef, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
         let add name def overwrite =
             if not (map.ContainsKey(name)) 
@@ -1666,16 +1735,28 @@ and TypeMap() =
             | _ -> failwith "Unexpected type!"
         insert def
 
-    member this.AddOrOverwriteTypes(defs : NamedDef seq, ?overwrite : bool) =
+    /// <summary>
+    /// Adds (or optionally overwrites) types to the type map.
+    /// </summary>
+    /// <param name="defs">The NamedDef sequence to be added to the type map. Their names will be used as keys.</param>
+    /// <param name="overwrite">If set to true, and another NamedDef exists with the same name on the sequence, it will be overwritten.</param>
+    member this.AddTypes(defs : NamedDef seq, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
-        defs |> Seq.iter (fun def -> this.AddOrOverwriteType(def, overwrite))
+        defs |> Seq.iter (fun def -> this.AddType(def, overwrite))
 
+    /// Converts this type map to a sequence of string * NamedDef values, with the first item being the key.
     member __.ToSeq() =
         map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
+    /// Converts this type map to a list of string * NamedDef values, with the first item being the key.
     member this.ToList() =
         this.ToSeq() |> List.ofSeq
 
+    /// <summary>
+    /// Tries to find a NamedDef in the map by it's key (the name).
+    /// </summary>
+    /// <param name="name">The name of the NamedDef to be searched for.</param>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
     member __.TryFind(name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         if not includeDefaultTypes && isDefaultType name 
@@ -1686,6 +1767,11 @@ and TypeMap() =
             | (true, item) -> Some item
             | _ -> None
 
+    /// <summary>
+    /// Tries to find a NamedDef of a specific type in the map by it's key (the name).
+    /// </summary>
+    /// <param name="name">The name of the NamedDef to be searched for.</param>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
     member this.TryFind<'Type when 'Type :> NamedDef>(name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         match this.TryFind(name, includeDefaultTypes) with
@@ -1695,6 +1781,10 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
+    /// <summary>
+    /// Gets all NamedDef's inside the map that are, or implements the specified type.
+    /// </summary>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
     member this.OfType<'Type when 'Type :> NamedDef>(?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         this.ToSeq()
@@ -1703,11 +1793,23 @@ and TypeMap() =
         |> Seq.choose id
         |> List.ofSeq
 
+    /// <summary>
+    /// Tries to find a FieldDef inside an ObjectDef by the object name and the field name.
+    /// If the map has no ObjectDef types, it won't find anything.
+    /// </summary>
+    /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
+    /// <param name="fname">The name of the FieldDef to be searched for.</param>
     member this.TryFindField(objname : string, fname : string) =
         match this.TryFind<ObjectDef>(objname) with
         | Some odef -> odef.Fields |> Map.tryFind fname
         | None -> None
 
+    /// <summary>
+    /// Tries to find a FieldDef inside an ObjectDef by its type, the object name and the field name.
+    /// If the map has no ObjectDef types, it won't find anything.
+    /// </summary>
+    /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
+    /// <param name="fname">The name of the FieldDef to be searched for.</param>
     member this.TryFindField<'Type when 'Type :> OutputDef>(objname : string, fname : string) =
         match this.TryFindField(objname, fname) with
         | Some fdef ->
@@ -1716,6 +1818,10 @@ and TypeMap() =
             | _ -> None
         | _ -> None
 
+    /// <summary>
+    /// Tries to find ObjectDef<'Val> types inside the map, that have fields that are lists of 'Res type.
+    /// </summary>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
     member this.GetTypesWithListFields<'Val, 'Res>(?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         let toSeq map = map |> Map.toSeq |> Seq.map snd
@@ -1727,9 +1833,13 @@ and TypeMap() =
         |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
         |> List.ofSeq
 
-    static member FromEnumerable(defs : NamedDef seq) =
+    /// <summary>
+    /// Creates a new TypeMap instance, using a sequence of NamedDef's to fill it.
+    /// </summary>
+    /// <param name="defs">The NamedDef sequence that has the NamedDef's that will be filled into the TypeMap.</param>
+    static member FromSeq(defs : NamedDef seq) =
         let map = TypeMap()
-        defs |> Seq.iter (fun def -> map.AddOrOverwriteType(def))
+        defs |> Seq.iter (fun def -> map.AddType(def))
         map
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]

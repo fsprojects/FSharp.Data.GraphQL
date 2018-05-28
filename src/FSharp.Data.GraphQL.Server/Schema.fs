@@ -3,21 +3,13 @@
 
 namespace FSharp.Data.GraphQL
 
-open System
 open System.Collections.Generic
-open System.Collections.Concurrent
-open System.Reactive
 open System.Reactive.Subjects
-open System.Reactive.Disposables
 open System.Reactive.Linq
-open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
-open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Execution
 
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
@@ -78,7 +70,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let typeMap : TypeMap =
         let m = mutation |> function Some(Named n) -> [n] | _ -> []
         let s = subscription |> function Some(Named n) -> [n] | _ -> []
-        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromEnumerable
+        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
         typeMap.ToSeq()

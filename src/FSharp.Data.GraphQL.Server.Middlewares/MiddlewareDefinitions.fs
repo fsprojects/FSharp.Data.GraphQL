@@ -63,7 +63,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             typesWithListFields 
             |> Seq.map (fun (object, fields) -> modifyFields object fields)
             |> Seq.cast<NamedDef>
-        ctx.Schema.TypeMap.AddOrOverwriteTypes(modifiedTypes, overwrite = true)
+        ctx.Schema.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =

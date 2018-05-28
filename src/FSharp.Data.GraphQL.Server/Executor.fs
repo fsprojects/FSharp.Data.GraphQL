@@ -71,7 +71,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         |> runSchemaCompilingMiddlewares ctx
 
     do
-        let compileCtx = { Schema = schema; FieldExecuteMap = fieldExecuteMap }
+        let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
         compileSchemaWithMiddlewares compileCtx
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
