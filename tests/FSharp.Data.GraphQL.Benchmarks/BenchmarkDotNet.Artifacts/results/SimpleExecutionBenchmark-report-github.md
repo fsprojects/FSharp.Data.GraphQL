@@ -1,0 +1,31 @@
+``` ini
+
+BenchmarkDotNet=v0.10.9, OS=Windows 10.0.17134
+Processor=Intel Core i7-2600 CPU 3.40GHz (Sandy Bridge), ProcessorCount=8
+.NET Core SDK=2.1.201
+  [Host] : .NET Core 2.0.7 (Framework 4.6.26328.01), 64bit RyuJIT DEBUG
+  Core   : .NET Core 2.0.7 (Framework 4.6.26328.01), 64bit RyuJIT
+  Mono   : Mono 5.12.0 (Visual Studio), 32bit 
+
+
+```
+ |                       Method |  Job | Runtime |      Mean |      Error |     StdDev |       Min |       Max |     Op/s |
+ |----------------------------- |----- |-------- |----------:|-----------:|-----------:|----------:|----------:|---------:|
+ | BenchmarkSimpleQueryUnparsed | Core |    Core |  87.44 us |  1.7344 us |  3.2576 us |  83.06 us |  95.28 us | 11,436.6 |
+ |   BenchmarkSimpleQueryParsed | Core |    Core |  37.94 us |  0.7529 us |  1.4326 us |  35.06 us |  40.89 us | 26,357.9 |
+ |  BenchmarkSimpleQueryPlanned | Core |    Core |  30.65 us |  0.4835 us |  0.4038 us |  30.05 us |  31.36 us | 32,626.0 |
+ |   BenchmarkFlatQueryUnparsed | Core |    Core | 825.69 us | 15.7601 us | 16.1845 us | 808.71 us | 865.96 us |  1,211.1 |
+ |     BenchmarkFlatQueryParsed | Core |    Core | 715.69 us | 13.9688 us | 21.3318 us | 666.92 us | 752.01 us |  1,397.3 |
+ |    BenchmarkFlatQueryPlanned | Core |    Core | 722.30 us | 14.3229 us | 28.2720 us | 680.92 us | 795.99 us |  1,384.5 |
+ | BenchmarkNestedQueryUnparsed | Core |    Core | 621.18 us | 12.0947 us | 21.1829 us | 589.45 us | 673.65 us |  1,609.8 |
+ |   BenchmarkNestedQueryParsed | Core |    Core | 433.76 us |  8.5847 us |  7.6101 us | 417.77 us | 442.84 us |  2,305.4 |
+ |  BenchmarkNestedQueryPlanned | Core |    Core | 429.68 us |  8.4662 us | 10.3972 us | 409.93 us | 446.23 us |  2,327.3 |
+ | BenchmarkSimpleQueryUnparsed | Mono |    Mono |  84.09 us |  1.6770 us |  3.8531 us |  77.81 us |  93.11 us | 11,892.4 |
+ |   BenchmarkSimpleQueryParsed | Mono |    Mono |  50.50 us |  1.0065 us |  1.9392 us |  47.26 us |  55.14 us | 19,803.9 |
+ |  BenchmarkSimpleQueryPlanned | Mono |    Mono |  40.53 us |  0.8080 us |  1.2580 us |  38.16 us |  42.67 us | 24,671.3 |
+ |   BenchmarkFlatQueryUnparsed | Mono |    Mono | 690.85 us | 13.2714 us | 11.7647 us | 674.67 us | 711.17 us |  1,447.5 |
+ |     BenchmarkFlatQueryParsed | Mono |    Mono | 618.32 us | 12.1542 us | 23.7058 us | 580.03 us | 685.70 us |  1,617.3 |
+ |    BenchmarkFlatQueryPlanned | Mono |    Mono | 640.07 us | 12.4870 us | 20.1642 us | 601.77 us | 686.05 us |  1,562.3 |
+ | BenchmarkNestedQueryUnparsed | Mono |    Mono | 843.37 us | 16.8001 us | 19.9993 us | 812.70 us | 888.71 us |  1,185.7 |
+ |   BenchmarkNestedQueryParsed | Mono |    Mono | 683.01 us | 13.5683 us | 29.4964 us | 633.62 us | 763.32 us |  1,464.1 |
+ |  BenchmarkNestedQueryPlanned | Mono |    Mono | 668.05 us | 13.1844 us | 25.4018 us | 630.95 us | 728.93 us |  1,496.9 |
