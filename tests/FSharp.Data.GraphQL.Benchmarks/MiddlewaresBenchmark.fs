@@ -14,7 +14,7 @@ open FSharp.Data.GraphQL.Server.Middlewares
 [<Config(typeof<GraphQLBenchConfig>); Jobs.MonoJob; Jobs.CoreJob>]
 type SimpleExecutionWithMiddlewaresBenchmark() = 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
-    let mutable middlewares = [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
+    let mutable middlewares : IExecutorMiddleware list = []
     let mutable schemaProcessor : Executor<unit> = Unchecked.defaultof<Executor<unit>>
     let mutable simpleAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable flatAst : Ast.Document = Unchecked.defaultof<Ast.Document>
@@ -37,6 +37,7 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
         nestedExecutionPlan <- schemaProcessor.CreateExecutionPlan(nestedAst)
         filteredAst <- parse QueryStrings.filtered
         filteredExecutionPlan <- schemaProcessor.CreateExecutionPlan(filteredAst)
+        middlewares <- [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
     
     [<Benchmark>]
     member __.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously
