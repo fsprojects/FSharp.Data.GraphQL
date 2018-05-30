@@ -15,17 +15,6 @@ module TypeSystemExtensions =
         member this.WithQueryWeight(weight : float) : FieldDef<'Val> =
             this.WithMetadata(this.Metadata.Add("queryWeight", weight))
 
-    type Metadata with
-        /// <summary>
-        /// Adds metadata information to the current metadata definition, containing
-        /// the maximum query weight (threshold) for query execution.
-        /// This value is used by the QueryWeightMiddleware to measure if a query weight is 
-        /// below a defined threshold.
-        /// </summary>
-        /// <param name="threshold">A float value, representing the threshold weight.</param>
-        member this.WithQueryWeightThreshold(threshold : float) =
-            this.Add("queryWeightThreshold", threshold)
-
     type ResolveFieldContext with
         /// <summary>
         /// Gets the filter argument value for this field, if it does have one.

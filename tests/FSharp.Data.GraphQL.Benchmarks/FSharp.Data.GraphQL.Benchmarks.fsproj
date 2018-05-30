@@ -18,9 +18,11 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Prolog.fs" />
+    <Compile Include="Schema.fs" />
     <Compile Include="AsyncValBenchmark.fs" />
     <Compile Include="ParsingBenchmark.fs" />
     <Compile Include="ExecutionBenchmark.fs" />
+    <Compile Include="MiddlewaresBenchmark.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -29,6 +31,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

@@ -39,7 +39,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         let (pass, totalWeight) = measureThreshold threshold fields
         let ctx =
             match reportToMetadata with
-            | true -> { ctx with Metadata = ctx.Metadata.WithQueryWeightThreshold(threshold).Add("queryWeight", totalWeight) }
+            | true -> { ctx with Metadata = ctx.Metadata.Add("queryWeightThreshold", threshold).Add("queryWeight", totalWeight) }
             | false -> ctx
         if pass
         then next ctx

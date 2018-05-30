@@ -1,6 +1,6 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
-module FSharp.Data.GraphQL.ExecutionBenchmark
+module FSharp.Data.GraphQL.MiddlewaresBenchmark
 
 #nowarn "40"
 
@@ -9,10 +9,12 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open BenchmarkDotNet.Attributes
 open FSharp.Data.GraphQL.Benchmarks
+open FSharp.Data.GraphQL.Server.Middlewares
 
 [<Config(typeof<GraphQLBenchConfig>); Jobs.MonoJob; Jobs.CoreJob>]
-type SimpleExecutionBenchmark() = 
+type SimpleExecutionWithMiddlewaresBenchmark() = 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
+    let mutable middlewares = [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
     let mutable schemaProcessor : Executor<unit> = Unchecked.defaultof<Executor<unit>>
     let mutable simpleAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     let mutable flatAst : Ast.Document = Unchecked.defaultof<Ast.Document>
@@ -20,17 +22,21 @@ type SimpleExecutionBenchmark() =
     let mutable simpleExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable flatExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
     let mutable nestedExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
+    let mutable filteredExecutionPlan : ExecutionPlan = Unchecked.defaultof<ExecutionPlan>
+    let mutable filteredAst : Ast.Document = Unchecked.defaultof<Ast.Document>
     
     [<GlobalSetup>]
     member __.Setup() = 
         schema <- Schema(SchemaDefinition.Query)
-        schemaProcessor <- Executor(schema)
+        schemaProcessor <- Executor(schema, middlewares)
         simpleAst <- parse QueryStrings.simple
         flatAst <- parse QueryStrings.flat
         nestedAst <- parse QueryStrings.nested
         simpleExecutionPlan <- schemaProcessor.CreateExecutionPlan(simpleAst)
         flatExecutionPlan <- schemaProcessor.CreateExecutionPlan(flatAst)
         nestedExecutionPlan <- schemaProcessor.CreateExecutionPlan(nestedAst)
+        filteredAst <- parse QueryStrings.filtered
+        filteredExecutionPlan <- schemaProcessor.CreateExecutionPlan(filteredAst)
     
     [<Benchmark>]
     member __.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously
@@ -59,3 +65,11 @@ type SimpleExecutionBenchmark() =
     [<Benchmark>]
     member __.BenchmarkNestedQueryPlanned() = schemaProcessor.AsyncExecute(nestedExecutionPlan) |> Async.RunSynchronously
 
+    [<Benchmark>]
+    member __.BenchmarkFilteredQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.filtered) |> Async.RunSynchronously
+
+    [<Benchmark>]
+    member __.BenchmarkFilteredQueryParsed() = schemaProcessor.AsyncExecute(filteredAst) |> Async.RunSynchronously
+
+    [<Benchmark>]
+    member __.BenchmarkFilteredQueryPlanned() = schemaProcessor.AsyncExecute(filteredExecutionPlan) |> Async.RunSynchronously
