@@ -9,23 +9,23 @@ Processor=Intel Core i7-2600 CPU 3.40GHz (Sandy Bridge), ProcessorCount=8
 
 
 ```
- |                       Method |  Job | Runtime |      Mean |      Error |     StdDev |       Min |       Max |     Op/s |
- |----------------------------- |----- |-------- |----------:|-----------:|-----------:|----------:|----------:|---------:|
- | BenchmarkSimpleQueryUnparsed | Core |    Core |  87.44 us |  1.7344 us |  3.2576 us |  83.06 us |  95.28 us | 11,436.6 |
- |   BenchmarkSimpleQueryParsed | Core |    Core |  37.94 us |  0.7529 us |  1.4326 us |  35.06 us |  40.89 us | 26,357.9 |
- |  BenchmarkSimpleQueryPlanned | Core |    Core |  30.65 us |  0.4835 us |  0.4038 us |  30.05 us |  31.36 us | 32,626.0 |
- |   BenchmarkFlatQueryUnparsed | Core |    Core | 825.69 us | 15.7601 us | 16.1845 us | 808.71 us | 865.96 us |  1,211.1 |
- |     BenchmarkFlatQueryParsed | Core |    Core | 715.69 us | 13.9688 us | 21.3318 us | 666.92 us | 752.01 us |  1,397.3 |
- |    BenchmarkFlatQueryPlanned | Core |    Core | 722.30 us | 14.3229 us | 28.2720 us | 680.92 us | 795.99 us |  1,384.5 |
- | BenchmarkNestedQueryUnparsed | Core |    Core | 621.18 us | 12.0947 us | 21.1829 us | 589.45 us | 673.65 us |  1,609.8 |
- |   BenchmarkNestedQueryParsed | Core |    Core | 433.76 us |  8.5847 us |  7.6101 us | 417.77 us | 442.84 us |  2,305.4 |
- |  BenchmarkNestedQueryPlanned | Core |    Core | 429.68 us |  8.4662 us | 10.3972 us | 409.93 us | 446.23 us |  2,327.3 |
- | BenchmarkSimpleQueryUnparsed | Mono |    Mono |  84.09 us |  1.6770 us |  3.8531 us |  77.81 us |  93.11 us | 11,892.4 |
- |   BenchmarkSimpleQueryParsed | Mono |    Mono |  50.50 us |  1.0065 us |  1.9392 us |  47.26 us |  55.14 us | 19,803.9 |
- |  BenchmarkSimpleQueryPlanned | Mono |    Mono |  40.53 us |  0.8080 us |  1.2580 us |  38.16 us |  42.67 us | 24,671.3 |
- |   BenchmarkFlatQueryUnparsed | Mono |    Mono | 690.85 us | 13.2714 us | 11.7647 us | 674.67 us | 711.17 us |  1,447.5 |
- |     BenchmarkFlatQueryParsed | Mono |    Mono | 618.32 us | 12.1542 us | 23.7058 us | 580.03 us | 685.70 us |  1,617.3 |
- |    BenchmarkFlatQueryPlanned | Mono |    Mono | 640.07 us | 12.4870 us | 20.1642 us | 601.77 us | 686.05 us |  1,562.3 |
- | BenchmarkNestedQueryUnparsed | Mono |    Mono | 843.37 us | 16.8001 us | 19.9993 us | 812.70 us | 888.71 us |  1,185.7 |
- |   BenchmarkNestedQueryParsed | Mono |    Mono | 683.01 us | 13.5683 us | 29.4964 us | 633.62 us | 763.32 us |  1,464.1 |
- |  BenchmarkNestedQueryPlanned | Mono |    Mono | 668.05 us | 13.1844 us | 25.4018 us | 630.95 us | 728.93 us |  1,496.9 |
+ |                       Method |  Job | Runtime |      Mean |      Error |     StdDev |    Median |       Min |       Max |     Op/s |
+ |----------------------------- |----- |-------- |----------:|-----------:|-----------:|----------:|----------:|----------:|---------:|
+ | BenchmarkSimpleQueryUnparsed | Core |    Core |  70.61 us |  1.2678 us |  1.0587 us |  70.58 us |  69.43 us |  72.92 us | 14,161.4 |
+ |   BenchmarkSimpleQueryParsed | Core |    Core |  29.29 us |  0.1040 us |  0.0922 us |  29.28 us |  29.10 us |  29.42 us | 34,144.8 |
+ |  BenchmarkSimpleQueryPlanned | Core |    Core |  23.84 us |  0.1595 us |  0.1414 us |  23.83 us |  23.62 us |  24.09 us | 41,938.3 |
+ |   BenchmarkFlatQueryUnparsed | Core |    Core | 677.40 us |  9.0777 us |  8.4913 us | 673.82 us | 668.15 us | 696.07 us |  1,476.2 |
+ |     BenchmarkFlatQueryParsed | Core |    Core | 633.78 us |  9.8231 us |  8.7079 us | 635.11 us | 617.74 us | 647.35 us |  1,577.8 |
+ |    BenchmarkFlatQueryPlanned | Core |    Core | 629.42 us | 12.5782 us | 18.8264 us | 623.48 us | 599.89 us | 660.47 us |  1,588.8 |
+ | BenchmarkNestedQueryUnparsed | Core |    Core | 579.11 us | 18.1092 us | 18.5968 us | 574.11 us | 558.88 us | 616.71 us |  1,726.8 |
+ |   BenchmarkNestedQueryParsed | Core |    Core | 360.04 us |  3.4169 us |  3.0290 us | 358.93 us | 354.63 us | 366.52 us |  2,777.4 |
+ |  BenchmarkNestedQueryPlanned | Core |    Core | 347.80 us |  4.9268 us |  4.6086 us | 345.91 us | 342.66 us | 357.99 us |  2,875.2 |
+ | BenchmarkSimpleQueryUnparsed | Mono |    Mono |  69.27 us |  0.4717 us |  0.4413 us |  69.17 us |  68.74 us |  70.29 us | 14,436.2 |
+ |   BenchmarkSimpleQueryParsed | Mono |    Mono |  38.82 us |  0.2182 us |  0.1935 us |  38.78 us |  38.55 us |  39.15 us | 25,758.7 |
+ |  BenchmarkSimpleQueryPlanned | Mono |    Mono |  34.47 us |  0.2483 us |  0.2073 us |  34.49 us |  34.18 us |  34.94 us | 29,011.3 |
+ |   BenchmarkFlatQueryUnparsed | Mono |    Mono | 575.04 us |  6.9764 us |  6.1844 us | 573.79 us | 568.51 us | 589.01 us |  1,739.0 |
+ |     BenchmarkFlatQueryParsed | Mono |    Mono | 529.85 us |  2.9890 us |  2.6497 us | 529.42 us | 525.88 us | 535.42 us |  1,887.3 |
+ |    BenchmarkFlatQueryPlanned | Mono |    Mono | 517.76 us |  3.4877 us |  3.0918 us | 517.31 us | 513.31 us | 524.77 us |  1,931.4 |
+ | BenchmarkNestedQueryUnparsed | Mono |    Mono | 690.36 us |  4.0268 us |  3.7666 us | 690.33 us | 684.63 us | 698.87 us |  1,448.5 |
+ |   BenchmarkNestedQueryParsed | Mono |    Mono | 611.72 us | 22.3732 us | 61.6223 us | 583.89 us | 562.85 us | 812.03 us |  1,634.7 |
+ |  BenchmarkNestedQueryPlanned | Mono |    Mono | 557.39 us |  4.3306 us |  4.0509 us | 557.47 us | 550.87 us | 566.38 us |  1,794.1 |

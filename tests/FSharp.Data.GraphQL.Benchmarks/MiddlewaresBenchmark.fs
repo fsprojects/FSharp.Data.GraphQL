@@ -28,6 +28,7 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
     [<GlobalSetup>]
     member __.Setup() = 
         schema <- Schema(SchemaDefinition.Query)
+        middlewares <- [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
         schemaProcessor <- Executor(schema, middlewares)
         simpleAst <- parse QueryStrings.simple
         flatAst <- parse QueryStrings.flat
@@ -37,7 +38,6 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
         nestedExecutionPlan <- schemaProcessor.CreateExecutionPlan(nestedAst)
         filteredAst <- parse QueryStrings.filtered
         filteredExecutionPlan <- schemaProcessor.CreateExecutionPlan(filteredAst)
-        middlewares <- [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
     
     [<Benchmark>]
     member __.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously
