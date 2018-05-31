@@ -12,3 +12,15 @@
 * Introduced a sample for GraphQL over WebSocket Protocol
 * Introduced support for Stream and Defer directives
 * Minor bugfixes.
+
+### 0.0.4-beta - May 31 2018
+* Introduced support for middlewares in the execution pipeline.
+* Introduced new package, named FSharp.Data.GraphQL.Server.Middlewares, with generic, built-in middlewares.
+* Introduced QueryWeightMiddleware, a generic execution middleware to measure query complexity and optionally block qurey execution with a threshold.
+* Introduced ObjectListFilterMiddleware, a generic schema compile middleware to add filter options to list fields of specific objects.
+* Changed GQLResponse object to be a Record, which supports a Metadata bag object, that can be used to hold custom information per query request.
+* Changed FieldDef interface to be able to support a Metadata bag object, that can be used to hold custom information per field.
+* ISchema TypeMap is now a mutable object, to ease schema customization through schema compile middlewares.
+* Fixing many minor errors when deferring or streaming results with Union and Enum types (specially when queried using fragments).
+* Deferred and streamed error results now are handled.
+* Added support for nested deferred and streamed results (currently does have a maximum degree of two nested operations).
