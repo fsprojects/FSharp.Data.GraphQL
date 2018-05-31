@@ -16,7 +16,7 @@ requireLicenseAcceptance
 copyright
     Copyright 2015
 tags
-    FSharp GraphQL Relay React Middleware
+    FSharp GraphQL Relay React Middlewares
 summary
     FSharp implementation of Facebook GraphQL query language
 description

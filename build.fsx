@@ -443,12 +443,20 @@ Target "PublishClient" (fun _ ->
     publishPackage "Client"
 )
 
+Target "PublishMiddlewares" (fun _ ->
+    publishPackage "Server.Middlewares"
+)
+
 Target "PackServer" (fun _ ->
     pack "Server"
 )
 
 Target "PackClient" (fun _ ->
     pack "Client"
+)
+
+Target "PackMiddlewares" (fun _ ->
+    pack "Server.Middlewares"
 )
 
 Target "PublishNpm" (fun _ ->
