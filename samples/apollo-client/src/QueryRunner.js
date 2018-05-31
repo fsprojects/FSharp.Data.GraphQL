@@ -10,12 +10,12 @@ const deferQuery = `# This is a sample query with defer directive.
 
 query TestQuery {
     hero(id:"1000") {
-        id,
-        name,
-        appearsIn,
-        homePlanet,
+        id
+        name
+        appearsIn
+        homePlanet
         friends @defer {
-            id,
+            id
             name
         }
     }
@@ -27,9 +27,10 @@ const streamQuery = `# This is a sample query with stream and defer directive.
 
 query TestQuery {
     hero(id:"1000") {
-        name,
-        appearsIn,
-        homePlanet @defer,
+        id
+        name
+        appearsIn @defer
+        homePlanet
         friends @stream {
             ... on Human {
               name
@@ -59,14 +60,17 @@ query TestQuery {
 export default class QueryRunner extends React.Component {
     constructor(props) {
         super(props);
+        var subscription = new SubscriptionClient('ws://localhost:8084/', {
+            reconnect: true
+        });
+        var client = new ApolloClient({
+            link: subscription,
+            cache: new InMemoryCache()
+        });
         this.state = { 
             query: deferQuery,
-            client: new ApolloClient({
-                link: new SubscriptionClient('ws://localhost:8084/', {
-                        reconnect: true
-                }),
-                cache: new InMemoryCache()
-            }),
+            subscription: subscription,
+            client: client,
             results : ''
         };
 
@@ -98,6 +102,7 @@ export default class QueryRunner extends React.Component {
 
     handleRun(event) {
         this.setState({ results: '' });
+        this.state.subscription.unsubscribeAll();
         this.state.client.subscribe({
             query: gql`${this.state.query}`,
             variables: {}

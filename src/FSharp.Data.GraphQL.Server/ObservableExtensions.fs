@@ -1,7 +1,6 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Reactive
 open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of Fsharp.Control.Reactive
@@ -17,6 +16,9 @@ module internal Observable =
                 observer.OnCompleted()     
                 {   new IDisposable with member __.Dispose() = ()   }
     }
+
+    let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
+        obs.Catch(fx)
 
 open System.Collections.Concurrent
 

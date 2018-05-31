@@ -692,6 +692,7 @@ and DeferredExecutionInfo = {
     Info : ExecutionInfo
     Path : string list
     Kind : DeferredExecutionInfoKind
+    DeferredFields : DeferredExecutionInfo list
 }
 
 /// Kind of deferred execution.

@@ -161,6 +161,20 @@ module AsyncVal =
                     results.[indexes.[i]] <- vals.[i]
                 return results })
 
+    /// Converts array of AsyncVals of arrays into AsyncVal with array results
+    /// by calling collectParallel and then appending the results.
+    let appendParallel (values: AsyncVal<'T []> []) : AsyncVal<'T []> =
+        values
+        |> collectParallel
+        |> map (Array.fold Array.append Array.empty)
+
+    /// Converts array of AsyncVals of arrays into AsyncVal with array results
+    /// by calling collectSequential and then appending the results.
+    let appendSequential (values: AsyncVal<'T []> []) : AsyncVal<'T []> =
+        values
+        |> collectSequential
+        |> map (Array.fold Array.append Array.empty)
+
 type AsyncValBuilder () =
     member __.Zero () = AsyncVal.empty
     member __.Return v = AsyncVal.wrap v
