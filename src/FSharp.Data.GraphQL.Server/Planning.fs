@@ -4,16 +4,11 @@
 module FSharp.Data.GraphQL.Planning
 
 open System
-open System.Reflection
-open System.Collections.Generic
-open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
-open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Types
 
 /// Field definition allowing to access the current type schema of this server.
 let SchemaMetaFieldDef = 
@@ -177,7 +172,7 @@ let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
          | ResolveCollection(x'), ResolveCollection(y') -> { x with Kind = ResolveCollection(merge x' y') }
          | ResolveAbstraction(xs'), ResolveAbstraction(ys') -> { x with Kind = ResolveAbstraction(Map.merge (fun _ x' y' -> deepMerge x' y') xs' ys')} 
          | SelectFields(xs'), SelectFields(ys') -> { x with Kind = SelectFields(deepMerge xs' ys') }
-         | k1, k2 -> failwithf "Cannot merge ExecutionInfos with different kinds!"
+         | _ -> failwithf "Cannot merge ExecutionInfos with different kinds!"
      // Apply the merge to every conflict
      let xs' = 
          xs  
@@ -240,7 +235,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // retrieve fragment data just as it was normal selection set
                         // TODO: Check if the path is correctly defined
-                        let fragmentInfo, deferredFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
+                        let fragmentInfo, deferredFields', _ = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
                         let fragmentFields = getSelectionFrag fragmentInfo.Kind
                         // filter out already existing fields
                         deepMerge fields fragmentFields, deferredFields'
@@ -248,7 +243,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | _ -> fields, deferredFields
             | InlineFragment fragment when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                  // retrieve fragment data just as it was normal selection set
-                 let fragmentInfo, deferredFields', path' = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
+                 let fragmentInfo, deferredFields', _ = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments
                  let fragmentFields = getSelectionFrag fragmentInfo.Kind
                  // filter out already existing fields
                  deepMerge fields fragmentFields, deferredFields'
@@ -284,14 +279,14 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // retrieve fragment data just as it was normal selection set
-                        let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
+                        let fragmentInfo, deferredFields', _ = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
                         let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                         // filter out already existing fields
                         Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
                     | _ -> fields, deferredFields
             | InlineFragment fragment ->
                 // retrieve fragment data just as it was normal selection set
-                let fragmentInfo, deferredFields', path' = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
+                let fragmentInfo, deferredFields', _ = planAbstraction ctx fragment.SelectionSet (innerData, deferredFields, path) visitedFragments fragment.TypeCondition
                 let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                 // filter out already existing fields
                 Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
@@ -310,7 +305,7 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
                 { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
             | _ -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
 
-let internal planOperation documentId (ctx: PlanningContext) (operation: OperationDefinition) : ExecutionPlan =
+let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // create artificial plan info to start with
     let rootInfo = { 
         Identifier = null
@@ -321,42 +316,48 @@ let internal planOperation documentId (ctx: PlanningContext) (operation: Operati
         Definition = Unchecked.defaultof<FieldDef> 
         Include = incl 
         IsNullable = false }
-    let resolvedInfo, deferredFields, _ = planSelection ctx operation.SelectionSet (rootInfo, [], []) (ref [])
+    let resolvedInfo, deferredFields, _ = planSelection ctx ctx.Operation.SelectionSet (rootInfo, [], []) (ref [])
     let deferredFields' = 
         deferredFields
         |> List.map (fun d -> {d with Path = List.rev d.Path})
-    let (SelectFields(topFields)) = resolvedInfo.Kind
-    let variables = planVariables ctx.Schema operation
-    match operation.OperationType with
+    let topFields =
+        match resolvedInfo.Kind with
+        | SelectFields tf -> tf
+        | x -> failwith <| sprintf "Expected SelectFields Kind, but got %A" x
+    let variables = planVariables ctx.Schema ctx.Operation
+    match ctx.Operation.OperationType with
     | Query ->
-        { DocumentId = documentId
-          Operation = operation 
+        { DocumentId = ctx.DocumentId
+          Operation = ctx.Operation 
           Fields = topFields
           DeferredFields = deferredFields'
           RootDef = ctx.Schema.Query
           Strategy = Parallel
-          Variables = variables }
+          Variables = variables
+          Metadata = ctx.Metadata }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
-            { DocumentId = documentId
-              Operation = operation
+            { DocumentId = ctx.DocumentId
+              Operation = ctx.Operation
               Fields = topFields
               DeferredFields = deferredFields'
               RootDef = mutationDef
               Strategy = Sequential 
-              Variables = variables }
+              Variables = variables
+              Metadata = ctx.Metadata }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some subscriptionDef ->
-            { DocumentId = documentId
-              Operation = operation
+            { DocumentId = ctx.DocumentId
+              Operation = ctx.Operation
               Fields = topFields
               DeferredFields = deferredFields'
               RootDef = subscriptionDef
               Strategy = Sequential 
-              Variables = variables }
+              Variables = variables
+              Metadata = ctx.Metadata }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no mutation type defined")

@@ -7,19 +7,16 @@
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="Extensions.fs" />
-    <Compile Include="Prolog.fs" />
-    <Compile Include="Ast.fs" />
-    <Compile Include="AsyncVal.fs" />
-    <Compile Include="TypeSystem.fs" />
-    <Compile Include="Validation.fs" />
-    <Compile Include="Introspection.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="paket.references" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="ObjectListFilter.fs" />
+    <Compile Include="TypeSystemExtensions.fs" />
+    <Compile Include="SchemaDefinitions.fs" />
+    <Compile Include="MiddlewareDefinitions.fs" />
+    <Compile Include="DefineExtensions.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

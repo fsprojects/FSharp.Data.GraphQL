@@ -5,14 +5,10 @@ module FSharp.Data.GraphQL.Tests.PropertyTrackerTests
 #nowarn "40"
 
 open Xunit
-open System
-open System.Linq
-open System.Collections.Generic
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Linq
 open FSharp.Data.GraphQL.Relay
-open FSharp.Data.GraphQL.Execution
 
 type Person = { Id: int; FirstName: string; LastName: string; Friends: Person list }
 type Droid = { Id: int; Number: string; Function: string }
@@ -71,13 +67,13 @@ and Droid =
 and Node = Define.Node<obj>(fun () -> [ Person; Droid ])
 and Query = 
     Define.Object<obj list>("Query", 
-        [ Define.Field("all", ListOf Node, fun ctx data -> data)
-          Define.Field("people", ListOf Person, fun ctx data -> 
+        [ Define.Field("all", ListOf Node, fun _ data -> data)
+          Define.Field("people", ListOf Person, fun _ data -> 
               data 
-              |> List.choose (fun o -> match o with | :? Person as p-> Some p | _ -> None))
-          Define.Field("droid", ListOf Droid, fun ctx data -> 
+              |> List.choose (fun (o : obj) -> match o with | :? Person as p -> Some p | _ -> None))
+          Define.Field("droid", ListOf Droid, fun _ data -> 
               data 
-              |> List.choose (fun o -> match o with | :? Droid as d-> Some d | _ -> None)) ])
+              |> List.choose (fun (o : obj) -> match o with | :? Droid as d -> Some d | _ -> None)) ])
 
 let schema = Schema(Query)
 let schemaProcessor = Executor(schema)

@@ -28,7 +28,7 @@ let rec Person =
     name = "Person",
     interfaces = [ Node ],
     fields = [
-        Define.Field("id", ID, fun _ person -> toGlobalId "person" person.Id)
+        Define.Field("id", ID, resolve = fun _ person -> toGlobalId "person" person.Id)
         Define.Field("name", String, fun _ person -> person.Name)
         Define.Field("age", Int, fun _ person -> person.Age) ])
 

@@ -10,11 +10,13 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open System.Collections.Generic
 open System.Collections.Concurrent
+open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Types
 
 type GraphQLWebSocket(innerSocket : WebSocket) =
     inherit WebSocket()
     let subscriptions = ConcurrentDictionary<string, IDisposable>() :> IDictionary<string, IDisposable>
-    let id = Guid.NewGuid()
+    let id = System.Guid.NewGuid()
     override __.CloseStatus = innerSocket.CloseStatus
     override __.CloseStatusDescription = innerSocket.CloseStatusDescription
     override __.State = innerSocket.State
@@ -49,7 +51,7 @@ module SocketManager =
         socket.Dispose()
 
     let private sendMessage (socket : GraphQLWebSocket) (message : WebSocketServerMessage) = async {
-        let settings = 
+        let settings =
             WebSocketServerMessageConverter() :> JsonConverter
             |> Seq.singleton
             |> jsonSerializerSettings
@@ -87,10 +89,10 @@ module SocketManager =
             |> Async.RunSynchronously
         let sendDelayed id output =
             Thread.Sleep(5000)
-            send id output    
+            send id output
         let handle id =
             function
-            | Stream output -> 
+            | Stream output ->
                 let unsubscriber = output |> Observable.subscribe (fun o -> send id o)
                 socket.Subscribe(id, unsubscriber)
             | Deferred (data, _, output) ->
@@ -125,7 +127,7 @@ module SocketManager =
         | _ -> disposeSocket socket
     }
 
-    let startSocket (socket : GraphQLWebSocket) (executor : Executor<'Root>) (root : 'Root) = 
+    let startSocket (socket : GraphQLWebSocket) (executor : Executor<'Root>) (root : 'Root) =
         sockets.Add(socket.Id, socket)
         handleMessages executor root socket |> Async.RunSynchronously
 
@@ -138,5 +140,5 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Execut
                 use socket = new GraphQLWebSocket(socket)
                 SocketManager.startSocket socket executor root
             | false ->
-                next.Invoke(ctx) |> ignore                       
+                next.Invoke(ctx) |> ignore
         } |> Async.StartAsTask :> Task

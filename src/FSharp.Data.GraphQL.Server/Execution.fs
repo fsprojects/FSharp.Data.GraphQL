@@ -3,30 +3,46 @@
 module FSharp.Data.GraphQL.Execution
 
 open System
-open System.Reflection
-open System.Reactive
-open System.Reactive.Linq
-open System.Runtime.InteropServices;
 open System.Collections.Generic
-open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Types.Introspection
-open FSharp.Data.GraphQL.Introspection
-open FSharp.Quotations
-open FSharp.Quotations.Patterns
-open FSharp.Reflection.FSharpReflectionExtensions
-open System.Collections.Generic
 
 type Error = string * string list
+
 type Output = IDictionary<string, obj>
+
 type GQLResponse =
-    | Direct of data:Output * errors: Error list
-    | Deferred of data:Output * errors:Error list * defer:IObservable<Output>
-    | Stream of stream:IObservable<Output>
-    
+    { Content : GQLResponseContent
+      Metadata : Metadata }
+    static member Direct(data, errors, meta) =
+        { Content = Direct (data, errors)
+          Metadata = meta }
+    static member Deferred(data, errors, deferred, meta) =
+        { Content = Deferred (data, errors, deferred)
+          Metadata = meta }
+    static member Stream(data, meta) =
+        { Content = Stream data
+          Metadata = meta }
+    static member Empty(meta) =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [], meta)
+    static member Error(msg, meta) =
+        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ], meta)
+    static member ErrorAsync(msg, meta) =
+        asyncVal { return GQLResponse.Error(msg, meta) }
+
+and GQLResponseContent =
+    | Direct of data : Output * errors: Error list
+    | Deferred of data : Output * errors : Error list * defer : IObservable<Output>
+    | Stream of stream : IObservable<Output>
+
+let (|Direct|Deferred|Stream|) (response : GQLResponse) =
+    match response.Content with
+    | Direct (data, errors) -> Direct (data, errors)
+    | Deferred (data, errors, deferred) -> Deferred (data, errors, deferred)
+    | Stream data -> Stream data
+
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys
 /// can be set, but no new entry can be added or removed, once lookup
@@ -55,7 +71,8 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                     | :? NameValueLookup, :? NameValueLookup as o -> structEq (downcast fst o) (downcast snd o)
                     | :? seq<obj>, :? seq<obj> -> Seq.forall2 (=) (a.Value :?> seq<obj>) (b.Value :?> seq<obj>)
                     | a1, b1 -> a1 = b1) y.Buffer
-    let pad (sb: System.Text.StringBuilder) times = for i in 0..times do sb.Append("\t") |> ignore
+    let pad (sb: System.Text.StringBuilder) times = 
+        for _ in 0..times do sb.Append("\t") |> ignore
     let rec stringify (sb: System.Text.StringBuilder) deep (o:obj) =
         match o with
         | :? NameValueLookup as lookup ->
@@ -76,27 +93,25 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                 sb.Append(", ") |> ignore
             sb.Append("]") |> ignore
         | other -> 
-            if other <> null 
+            if isNull other |> not
             then sb.Append(other.ToString()) |> ignore
             else sb.Append("null") |> ignore
         ()
-    /// Create new NameValueLookup from given list of key-value tuples.
-    static member ofList (l: (string * obj) list) = NameValueLookup(l)
     /// Returns raw content of the current lookup.
-    member private x.Buffer : KeyValuePair<string, obj> [] = kvals
+    member private __.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
-    member x.Count = kvals.Length
+    member __.Count = kvals.Length
     /// Updates an entry's value under given key. It will throw an exception
     /// if provided key cannot be found in provided lookup.
-    member x.Update key value = setValue key value
+    member __.Update key value = setValue key value
     override x.Equals(other) = 
         match other with
         | :? NameValueLookup as lookup -> structEq x lookup
         | _ -> false
-    override x.GetHashCode() =
+    override __.GetHashCode() =
         let mutable hash = 0
         for kv in kvals do
-            hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if kv.Value = null then 0 else kv.Value.GetHashCode())
+            hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if isNull kv.Value then 0 else kv.Value.GetHashCode())
         hash
     override x.ToString() = 
         let sb =Text.StringBuilder()
@@ -105,30 +120,30 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     interface IEquatable<NameValueLookup> with
         member x.Equals(other) = structEq x other
     interface System.Collections.IEnumerable with
-        member x.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
+        member __.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
     interface IEnumerable<KeyValuePair<string, obj>> with
-        member x.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
+        member __.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
     interface IDictionary<string, obj> with
-        member x.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member x.Contains(item) = kvals |> Array.exists ((=) item)
-        member x.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
-        member x.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
+        member __.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member __.Contains(item) = kvals |> Array.exists ((=) item)
+        member __.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
+        member __.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
         member x.Count = x.Count
-        member x.IsReadOnly = true
-        member x.Item
+        member __.IsReadOnly = true
+        member __.Item
             with get (key) = getValue key
             and set (key) v = setValue key v
-        member x.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
-        member x.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
-        member x.Remove(_:string) = 
+        member __.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
+        member __.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
+        member __.Remove(_:string) = 
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member x.Remove(_:KeyValuePair<string,obj>) = 
+        member __.Remove(_:KeyValuePair<string,obj>) = 
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member x.TryGetValue(key, value) = 
+        member __.TryGetValue(key, value) = 
             match kvals |> Array.tryFind (fun kv -> kv.Key = key) with
             | Some kv -> value <- kv.Value; true
             | None -> value <- null; false
@@ -136,6 +151,10 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
         NameValueLookup(t |> List.map (fun (k, v) -> KeyValuePair<string,obj>(k, v)) |> List.toArray)
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
+
+module NameValueLookup =
+    /// Create new NameValueLookup from given list of key-value tuples.
+    let ofList (l: (string * obj) list) = NameValueLookup(l) 
                 
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
     match argdef.DefaultValue with
@@ -190,9 +209,9 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef ctx (info: ExecutionInfo) =
+let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
     let fdef = info.Definition
-    let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+    let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
     { ExecutionInfo = info
       Context = ctx.Context
       ReturnType = fdef.TypeDef
@@ -208,11 +227,7 @@ let private optionCast (value: obj) =
             else
                 let t = value.GetType()
                 let v' = t.GetProperty("Value")
-#if NETSTANDARD2_0           
-                if t.GetTypeInfo().IsGenericType && t.GetTypeInfo().GetGenericTypeDefinition() = optionDef then
-#else       
                 if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
-#endif                  
                     Some(v'.GetValue(value, [| |]))
                 else None
 
@@ -254,7 +269,7 @@ type ResolverTree =
     member x.Value =
         match x with
         | ResolverLeaf leaf -> leaf.Value
-        | ResolverError err -> None
+        | ResolverError _ -> None
         | ResolverObjectNode node -> node.Value
         | ResolverListNode l -> l.Value
 and ResolverLeaf = { Name: string; Value: obj option; }
@@ -296,19 +311,19 @@ module ResolverTree =
 
 let private treeToDict =
     ResolverTree.pathFold 
-        (fun path leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
+        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
         (fun path error -> 
             let (e:Error) = (error.Message, path |> List.rev)
             KeyValuePair<_,_>(error.Name, null :> obj), [e])
-        (fun path name value children -> 
+        (fun _ name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
             match value with
-            | Some v -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
+            | Some _ -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
-        (fun path name value children -> 
+        (fun _ name value children -> 
             let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
             match value with
-            | Some v -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
+            | Some _ -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
             | None -> KeyValuePair<_,_>(name, null), errors)
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
@@ -334,7 +349,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
         asyncVal {
             return ResolverLeaf { Name = name; Value = value |> Option.bind(coerce) }
         }
-    | Enum enumdef ->
+    | Enum _ ->
         let name = ctx.ExecutionInfo.Identifier
         asyncVal {
             let value' = value |> Option.bind(fun v ->  coerceStringValue v |> Option.map(fun v' -> v' :> obj))
@@ -418,7 +433,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
     let rec build (acc: ResolverTree list) = function
         | info::xs ->
-            let fieldCtx = createFieldContext objdef ctx info
+            let argDefs = fieldExecuteMap.GetArgs(objdef.Name, info.Definition.Name)
+            let fieldCtx = createFieldContext objdef argDefs ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
             |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
@@ -426,7 +442,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             |> AsyncVal.bind(fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
-                | t when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
+                | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
                 | t -> build (t::acc) xs)
         | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
@@ -468,7 +484,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         resultSet
         |> Array.map (fun (name, info) ->
             let fdef = info.Definition
-            let args = getArgumentValues fdef.Args info.Ast.Arguments ctx.Variables
+            let argDefs = fieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+            let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
             let fieldCtx = 
                 { ExecutionInfo = info
                   Context = ctx
@@ -633,9 +650,8 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
             let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
             arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
 
-let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) =
-    types
-    |> Map.toSeq 
+let internal compileSchema (ctx : SchemaCompileContext) =
+    ctx.Schema.TypeMap.ToSeq()
     |> Seq.iter (fun (tName, x) ->
         match x with
         | SubscriptionObject subdef ->
@@ -644,45 +660,36 @@ let internal compileSchema types (fieldExecuteMap: FieldExecuteMap) (subscriptio
                 let subField = (sub :?> SubscriptionFieldDef)
                 let filter = compileSubscriptionField subField
                 let subscription = { Name = subField.Name ; Filter = filter }
-                subscriptionProvider.Register subscription) 
+                ctx.Schema.SubscriptionProvider.Register subscription) 
         | Object objdef ->
-            compileObject objdef (fun fieldDef -> fieldExecuteMap.SetExecute(tName, fieldDef.Name, compileField fieldDef))
+            compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef))
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
-let private coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
+let internal coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
 
-let internal evaluate (schema: #ISchema) (executionPlan: ExecutionPlan) (variables: Map<string, obj>) (root: obj) errors (fieldExecuteMap: FieldExecuteMap) : AsyncVal<GQLResponse> =
-    let variables = coerceVariables executionPlan.Variables variables
-    let ctx = {
-        Schema = schema
-        ExecutionPlan = executionPlan
-        RootValue = root
-        Variables = variables
-        Errors = errors }
+let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
     let resultSet =
-        executionPlan.Fields
+        ctx.ExecutionPlan.Fields
         |> List.filter (fun info -> info.Include ctx.Variables)
         |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
-
     let parseQuery o =
-        let dict, deferred = executeQueryOrMutation resultSet ctx o fieldExecuteMap root 
+        let dict, deferred = executeQueryOrMutation resultSet ctx o ctx.FieldExecuteMap ctx.RootValue 
         match deferred with
-        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> Deferred(dict', errors', d |> Observable.map(fun x -> upcast x)))
-        | None -> dict |> AsyncVal.map(fun (dict', errors') -> Direct(dict', errors'))
-
-    match executionPlan.Operation.OperationType with
+        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x), ctx.Metadata))
+        | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors', ctx.Metadata))
+    match ctx.ExecutionPlan.Operation.OperationType with
     | Subscription ->
-        match schema.Subscription with
+        match ctx.Schema.Subscription with
         | Some s -> 
-            AsyncVal.wrap(Stream(executeSubscription resultSet ctx s fieldExecuteMap schema.SubscriptionProvider root))
+            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue, ctx.Metadata))
         | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
     | Mutation -> 
-        match schema.Mutation with
+        match ctx.Schema.Mutation with
         | Some m ->
             parseQuery m
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
-    | Query -> parseQuery schema.Query
+    | Query -> parseQuery ctx.Schema.Query

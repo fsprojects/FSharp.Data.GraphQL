@@ -31,9 +31,9 @@ let validateImplements (objdef: ObjectDef) (idef: InterfaceDef) =
     | [] -> Success
     | err -> Error err
             
-let validateType (namedTypes: Map<string, NamedDef>) typedef =
+let validateType typedef =
     match typedef with
-    | Scalar scalardef -> Success
+    | Scalar _ -> Success
     | Object objdef -> 
         let nonEmptyResult = if objdef.Fields.Count > 0 then Success else Error [ objdef.Name + " must have at least one field defined" ]
         let implementsResult =
@@ -54,8 +54,7 @@ let validateType (namedTypes: Map<string, NamedDef>) typedef =
         nonEmptyResult
     | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
-let validate (namedTypes: Map<string, NamedDef>) : ValidationResult =
-    namedTypes
-    |> Map.toArray
-    |> Array.map snd
-    |> Array.fold (fun acc namedDef -> acc @ validateType namedTypes namedDef) Success
+let validate (namedTypes: TypeMap) : ValidationResult =
+    namedTypes.ToSeq()
+    |> Seq.map snd
+    |> Seq.fold (fun acc namedDef -> acc @ validateType namedDef) Success

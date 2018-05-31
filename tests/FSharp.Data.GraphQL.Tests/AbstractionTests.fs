@@ -4,7 +4,6 @@ module FSharp.Data.GraphQL.Tests.AbstractionTests
 
 #nowarn "40"
 
-open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -46,7 +45,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, fun _ d -> d.Name)
+            Define.Field("name", String, resolve = fun _ d -> d.Name)
             Define.Field("woofs", Boolean, fun _ d -> d.Woofs)
         ])
     let CatType =
@@ -55,7 +54,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, fun _ c -> c.Name)
+            Define.Field("name", String, resolve = fun _ c -> c.Name)
             Define.Field("meows", Boolean, fun _ c -> c.Meows)
         ])
     let schema =
@@ -176,7 +175,7 @@ let ``inner types `` () =
             interfaces = [ Node ],
             fields = 
                 [ Define.GlobalIdField(fun _ w -> w.Id)
-                  Define.Field("name", String, fun _ w -> w.Name) ]
+                  Define.Field("name", String, fun _ (w : Widget) -> w.Name) ]
         )
 
     and WidgetsField name (getUser: ResolveFieldContext -> 'a -> User) =
@@ -202,7 +201,7 @@ let ``inner types `` () =
 
     let Query =
         Define.Object("Query", 
-            [ Define.NodeField(Node, fun ctx () id -> 
+            [ Define.NodeField(Node, fun _ () id -> 
                  match id with
                  | GlobalId("User", i) -> getUser i |> Option.map box
                  | GlobalId("Widget", i) -> getWidget i |> Option.map box
@@ -217,10 +216,8 @@ let ``inner types `` () =
     let query = "{
                     viewer {name}, widgets { edges }
                 }"
-    let q = query.Trim().Replace("\r\n", " ")
-
     let result = sync <| schemaProcessor.AsyncExecute(parse query)
     match result with
-    | Direct(data, errors) -> 
+    | Direct(_, errors) -> 
         empty errors
     | _ ->  fail "Expected a direct GQLResponse"

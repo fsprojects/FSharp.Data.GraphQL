@@ -1,5 +1,4 @@
 import React from 'react';
-import { WebSocketLink } from 'apollo-link-ws';
 import ApolloClient from 'apollo-client';
 import { InMemoryCache } from 'apollo-cache-inmemory';
 import { SubscriptionClient } from 'subscriptions-transport-ws';
@@ -43,6 +42,20 @@ query TestQuery {
     }
 }`
 
+const thresholdQuery = `# This is a sample query that will be denied by a query complexity threshold middleware.
+# The field "friends" of both Human and Droid have a query weight of 0.5.
+# The maximum query weight (threshold) is set to 2.0 on the server.
+# Hero friends will have a weight of 0.5.
+# Friends of friends of hero will have a weight of 1.0 (since they can be both Human and Droid).
+# Also, their inner friends will have a weight of 1.0.
+# Total weight is 2.5, making the query too complex for the threshold meter.
+
+query TestQuery {
+    hero(id:"1000") {
+        id, friends { id, friends { id, friends { id } } }
+    }
+}`
+
 export default class QueryRunner extends React.Component {
     constructor(props) {
         super(props);
@@ -74,6 +87,11 @@ export default class QueryRunner extends React.Component {
                 break;
             case "stream":
                 this.setState({ query: streamQuery });
+                break;
+            case "threshold" :
+                this.setState( {query: thresholdQuery });
+                break;
+            default:
                 break;
         }
     }
@@ -111,6 +129,7 @@ export default class QueryRunner extends React.Component {
                         <select onChange={this.handleSampleQueryChange}>
                             <option value="defer">Deferred query sample</option>
                             <option value="stream">Streamed query sample</option>
+                            <option value="threshold">Threshold for complex queries sample</option>
                         </select>
                     </p>
                 </div>

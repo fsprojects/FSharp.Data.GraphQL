@@ -4,8 +4,9 @@ namespace FSharp.Data.GraphQL.Types
 
 open System
 open System.Reflection
+open System.Collections
 open System.Collections.Concurrent
-open System.Collections.Generic;
+open System.Collections.Generic
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
@@ -13,6 +14,7 @@ open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
 open FSharp.Linq.RuntimeHelpers
+
 
 /// Enum describing parts of the GraphQL query document AST, where 
 /// related directive is valid to be used.
@@ -275,6 +277,7 @@ module Introspection =
           Types : IntrospectionType []
           /// Array of all directives supported by current schema.
           Directives : IntrospectionDirective [] }
+open Introspection
 
 
 /// Represents a subscription as described in the schema
@@ -306,7 +309,7 @@ and ISchema =
         inherit seq<NamedDef>
         
         /// Map of defined types by their names.
-        abstract TypeMap : Map<string, NamedDef>
+        abstract TypeMap : TypeMap
 
         /// A query root object. Defines all top level fields, 
         /// that can be accessed from GraphQL queries.
@@ -343,32 +346,86 @@ and ISchema =
 
         abstract ParseError : exn -> string
 
-        abstract SubscriptionProvider: ISubscriptionProvider
+        abstract SubscriptionProvider : ISubscriptionProvider
 
     end
 
-and ISchema<'Root> = 
+and ISchema<'Root> =
     interface
         inherit ISchema
         abstract Query : ObjectDef<'Root>
         abstract Mutation : ObjectDef<'Root> option
-        abstract Subscription : SubscriptionObjectDef<'Root> option 
+        abstract Subscription : SubscriptionObjectDef<'Root> option
     end
 
-and FieldExecuteMap () = 
-    let fieldExecuteMap = new Dictionary<string * string, ExecuteField>();
+/// A type alias for a field execute compiler function.
+and FieldExecuteCompiler = FieldDef -> ExecuteField
 
-    member public this.SetExecute(typeName: string, fieldName: string, executeField: ExecuteField) = 
-        let key = typeName, fieldName
-        if not (fieldExecuteMap.ContainsKey(key)) then fieldExecuteMap.Add(key, executeField)
+/// A field execute map object.
+/// Field execute maps are mutable objects built to compile fields at runtime.
+and FieldExecuteMap(compiler : FieldExecuteCompiler) = 
+    let map = new Dictionary<string * string, ExecuteField * InputFieldDef []>()
 
-    member public this.GetExecute(typeName: string, fieldName: string) = 
-        let key = 
-            if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
+    let getKey typeName fieldName =
+        if List.exists ((=) fieldName) ["__schema"; "__type"; "__typename" ]
             then "", fieldName
             else typeName, fieldName
 
-        if fieldExecuteMap.ContainsKey(key) then fieldExecuteMap.[key] else Unchecked.defaultof<ExecuteField>
+    /// <summary>
+    /// Sets an execute function for a field of a named type of the schema.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="def">The FieldDef that will have its execute function configured into the FieldExecuteMap.</param>
+    /// <param name="overwrite">
+    /// If set to true, and an exists an entry with the <paramref name="typeName"/> and the name of the FieldDef,
+    /// then it will be overwritten.
+    /// </param>
+    member __.SetExecute(typeName: string, def: FieldDef, ?overwrite : bool) = 
+        let overwrite = defaultArg overwrite false
+        let key = typeName, def.Name
+        let compiled = compiler def
+        let args = def.Args
+        match map.ContainsKey(key), overwrite with
+        | true, true -> map.Remove(key) |> ignore; map.Add(key, (compiled, args))
+        | false, _ -> map.Add(key, (compiled, args))
+        | _ -> ()
+
+    /// <summary>
+    /// Sets an execute function for a field of an unamed type in the schema.
+    /// </summary>
+    /// <param name="def">The FieldDef that will have its execute function configured into the FieldExecuteMap.</param>
+    /// <param name="overwrite">If set to true, and an exists an entry with the FieldDef name, then it will be overwritten.</param>
+    member this.SetExecute(def : FieldDef, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        this.SetExecute("", def, overwrite)
+
+    /// <summary>
+    /// Gets an ExecuteField based on the name of the type and the name of the field.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
+    member __.GetExecute(typeName: string, fieldName: string) = 
+        let key = getKey typeName fieldName
+        if map.ContainsKey(key) then fst map.[key] else Unchecked.defaultof<ExecuteField>
+
+    /// <summary>
+    /// Gets the field arguments based on the name of the type and the name of the field.
+    /// </summary>
+    /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
+    /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
+    member __.GetArgs(typeName : string, fieldName : string) =
+        let key = getKey typeName fieldName
+        if map.ContainsKey(key) then snd map.[key] else Unchecked.defaultof<InputFieldDef []>
+
+    interface IEnumerable<string * string * ExecuteField> with
+        member __.GetEnumerator() =
+            let seq = map |> Seq.map(fun kvp -> fst kvp.Key, snd kvp.Key, fst kvp.Value)
+            seq.GetEnumerator()
+
+    interface IEnumerable with
+        member __.GetEnumerator() =
+            let seq = map |> Seq.map(fun kvp -> fst kvp.Value)
+            upcast seq.GetEnumerator()
 
 /// Root of GraphQL type system. All type definitions use TypeDef as
 /// a common root.
@@ -466,10 +523,14 @@ and NamedDef =
         abstract Name : string
     end
 
+/// A context holding all the information needed for planning an operation.
 and PlanningContext = 
     { Schema : ISchema
       RootDef : ObjectDef
-      Document : Document }
+      Document : Document
+      Operation : OperationDefinition
+      DocumentId : int
+      Metadata : Metadata }
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
@@ -604,6 +665,7 @@ and Resolve =
         | Async(_,_,e) -> e
         | ResolveExpr(e) -> e
         | Undefined -> failwith "Resolve function was not defined"
+        | x -> failwith <| sprintf "Unexpected resolve function %A" x
 
 /// Execution strategy for provided queries. Defines if object fields should 
 /// be resolved either sequentially one-by-one or in parallel.
@@ -637,7 +699,15 @@ and DeferredExecutionInfoKind =
     | DeferredExecution
     | StreamedExecution
 
-and ExecutionPlan = 
+/// The context used to hold all the information for a schema compiling proccess.
+and SchemaCompileContext =
+    { Schema : ISchema
+      TypeMap : TypeMap
+      FieldExecuteMap : FieldExecuteMap }
+
+/// A planning of an execution phase.
+/// It is used by the execution process to execute an operation.
+and ExecutionPlan =
     { /// Unique identifier of the current execution plan.
       DocumentId : int
       /// AST defintion of current operation.
@@ -652,13 +722,15 @@ and ExecutionPlan =
       /// A list of all deferred fields in the query
       DeferredFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
-      Variables: VarDef list }
+      Variables : VarDef list
+      /// A dictionary of metadata associated with custom operations on the planning of this plan.
+      Metadata : Metadata }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full
 /// knowledge about which fields will be accessed, what types are associated 
 /// with them and what variable values have been set by incoming query.
-and ExecutionContext = 
+and ExecutionContext =
     { /// GraphQL schema definition.
       Schema : ISchema
       /// Boxed value of the top level type, root query/mutation.
@@ -668,7 +740,11 @@ and ExecutionContext =
       /// Collection of variables provided to execute current operation.
       Variables : Map<string, obj>
       /// Collection of errors that occurred while executing current operation.
-      Errors : ConcurrentBag<exn> }
+      Errors : ConcurrentBag<exn>
+      /// A map of all fields of the query and their respective execution operations.
+      FieldExecuteMap : FieldExecuteMap
+      /// A simple dictionary to hold metadata that can be used by execution customizations.
+      Metadata : Metadata }
 
 /// An execution context for the particular field, applied as the first
 /// parameter for target resolve function.
@@ -723,12 +799,14 @@ and FieldDef =
         abstract TypeDef : OutputDef
         /// Field's arguments list.
         abstract Args : InputFieldDef []
+        /// Field's metadata.
+        abstract Metadata : Metadata
         /// Field resolution function.
         abstract Resolve : Resolve
         /// INTERNAL API: Compiled field executor. To be set only by the runtime.
         inherit IEquatable<FieldDef>
     end
-    
+
 /// A paritally typed representation of the GraphQL field defintion.
 /// Contains type parameter describing .NET type used as it's container.
 /// Can be used only withing object and interface definitions.
@@ -750,6 +828,8 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
       Args : InputFieldDef []
       /// Optional field deprecation warning.
       DeprecationReason : string option
+      /// Field metadata definition.
+      Metadata : Metadata
       }
     
     interface FieldDef with
@@ -759,6 +839,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
         member x.TypeDef = x.TypeDef :> OutputDef
         member x.Args = x.Args
         member x.Resolve = x.Resolve
+        member x.Metadata = x.Metadata
     
     interface FieldDef<'Val>
     
@@ -1233,6 +1314,7 @@ and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
         inherit TypeDef<'Seq>
         inherit InputDef<'Seq>
         inherit OutputDef<'Seq>
+        inherit ListOfDef
     end
 
 and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = 
@@ -1281,6 +1363,7 @@ and NullableDef<'Val> =
         abstract OfType : TypeDef<'Val>
         inherit InputDef<'Val option>
         inherit OutputDef<'Val option>
+        inherit NullableDef
     end
 
 and internal NullableDefinition<'Val> = 
@@ -1436,6 +1519,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
         RootTypeDef : OutputDef<'Root>
         Filter : Resolve
         Args : InputFieldDef []
+        Metadata : Metadata
     }
     interface FieldDef with
         member x.Name = x.Name
@@ -1444,6 +1528,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
         member x.TypeDef = x.RootTypeDef :> OutputDef
         member x.Resolve = x.Filter
         member x.Args = x.Args
+        member x.Metadata = x.Metadata
     interface SubscriptionFieldDef with
         member x.InputTypeDef = x.InputTypeDef :> OutputDef
     interface FieldDef<'Root>
@@ -1535,6 +1620,227 @@ and DirectiveDef =
       Locations : DirectiveLocation
       /// Array of arguments defined within that directive.
       Args : InputFieldDef [] }
+
+/// Metadata object.
+/// Metadata objects are used to hold custom information inside fields and contexts
+/// used by the GraphQL executor and ISchema.
+and Metadata(data : Map<string, obj>) =
+    new() = Metadata(Map.empty)
+    
+    /// <summary>
+    /// Adds (or overwrites) an information to the metadata object, generating a new instance of it.
+    /// </summary>
+    /// <param name="key">The key to be used to search information for.</param>
+    /// <param name="value">The value to be stored inside the metadata.</param>
+    member __.Add(key : string, value : obj) = Metadata(data.Add (key, value))
+    
+    /// <summary>
+    /// Generates a new Metadata instance, filled with items of a string * obj list.
+    /// </summary>
+    /// <param name="l">A list of string * obj tuples to be used to fill the Metadata object.</param>
+    static member FromList(l : (string * obj) list) =
+        let rec add (m : Metadata) (l : (string * obj) list) =
+            match l with
+            | [] -> m
+            | (k, v) :: xs -> add (m.Add(k, v)) xs
+        add (Metadata()) l
+    
+    /// Creates an empty Metadata object.
+    static member Empty = Metadata.FromList [ ]
+
+    /// <summary>
+    /// Tries to find an value inside the metadata by it's key.
+    /// </summary>
+    /// <param name="key">The key to be used to search information for.</param>
+    member __.TryFind<'Value>(key : string) =
+        if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
+
+    override __.ToString() = sprintf "%A" data
+
+/// Map of types of an ISchema.
+/// The map of types is used to plan and execute queries.
+and TypeMap() =
+    let map = Dictionary<string, NamedDef>()
+    let isDefaultType name =
+        let defaultTypes = 
+            [ "__Schema"
+              "__Directive"
+              "__InputValue"
+              "__Type"
+              "__EnumValue"
+              "__Field"
+              "__TypeKind"
+              "__DirectiveLocation" ]
+        defaultTypes |> List.exists (fun x -> x = name)
+
+    let rec named (tdef : TypeDef) = 
+        match tdef with
+        | :? NamedDef as n -> Some n
+        | :? NullableDef as n -> named n.OfType
+        | :? ListOfDef as l -> named l.OfType
+        | _ -> None
+
+    /// <summary>
+    /// Adds (or optionally overwrites) a type to the type map.
+    /// </summary>
+    /// <param name="def">The NamedDef to be added to the type map. It's name will be used as the key.</param>
+    /// <param name="overwrite">If set to true, and another NamedDef exists with the same name, it will be overwritten.</param>
+    member __.AddType(def : NamedDef, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        let add name def overwrite =
+            if not (map.ContainsKey(name)) 
+            then map.Add(name, def)
+            elif overwrite
+            then map.[name] <- def
+        let rec insert (def : NamedDef) =
+            match def with
+            | :? ScalarDef as sdef -> add sdef.Name def overwrite
+            | :? EnumDef as edef -> add edef.Name def overwrite
+            | :? ObjectDef as odef -> 
+                add odef.Name def overwrite
+                odef.Fields
+                |> Map.toSeq
+                |> Seq.map snd
+                |> Seq.collect (fun x -> Seq.append (x.TypeDef :> TypeDef |> Seq.singleton) (x.Args |> Seq.map (fun a -> upcast a.TypeDef)))
+                |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
+                |> Seq.iter insert
+                odef.Implements
+                |> Seq.iter insert
+            | :? InterfaceDef as idef ->
+                add idef.Name def overwrite
+                idef.Fields
+                |> Seq.map (fun x -> match named x.TypeDef with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
+                |> Seq.iter insert
+            | :? UnionDef as udef ->
+                add udef.Name def overwrite
+                udef.Options
+                |> Seq.iter insert
+            | :? ListOfDef as ldef ->
+                match named ldef.OfType with
+                | Some innerdef -> insert innerdef
+                | None -> ()
+            | :? NullableDef as ndef ->
+                match named ndef.OfType with
+                | Some innerdef -> insert innerdef
+                | None -> ()
+            | :? InputObjectDef as iodef ->
+                add iodef.Name def overwrite
+                iodef.Fields
+                |> Seq.collect (fun x -> (x.TypeDef :> TypeDef) |> Seq.singleton)
+                |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
+                |> Seq.iter insert
+            | _ -> failwith "Unexpected type!"
+        insert def
+
+    /// <summary>
+    /// Adds (or optionally overwrites) types to the type map.
+    /// </summary>
+    /// <param name="defs">The NamedDef sequence to be added to the type map. Their names will be used as keys.</param>
+    /// <param name="overwrite">If set to true, and another NamedDef exists with the same name on the sequence, it will be overwritten.</param>
+    member this.AddTypes(defs : NamedDef seq, ?overwrite : bool) =
+        let overwrite = defaultArg overwrite false
+        defs |> Seq.iter (fun def -> this.AddType(def, overwrite))
+
+    /// Converts this type map to a sequence of string * NamedDef values, with the first item being the key.
+    member __.ToSeq() =
+        map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
+
+    /// Converts this type map to a list of string * NamedDef values, with the first item being the key.
+    member this.ToList() =
+        this.ToSeq() |> List.ofSeq
+
+    /// <summary>
+    /// Tries to find a NamedDef in the map by it's key (the name).
+    /// </summary>
+    /// <param name="name">The name of the NamedDef to be searched for.</param>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
+    member __.TryFind(name : string, ?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        if not includeDefaultTypes && isDefaultType name 
+        then 
+            None
+        else
+            match map.TryGetValue(name) with
+            | (true, item) -> Some item
+            | _ -> None
+
+    /// <summary>
+    /// Tries to find a NamedDef of a specific type in the map by it's key (the name).
+    /// </summary>
+    /// <param name="name">The name of the NamedDef to be searched for.</param>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
+    member this.TryFind<'Type when 'Type :> NamedDef>(name : string, ?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        match this.TryFind(name, includeDefaultTypes) with
+        | Some item -> 
+            match item with
+            | :? 'Type as item -> Some item
+            | _ -> None
+        | _ -> None
+
+    /// <summary>
+    /// Gets all NamedDef's inside the map that are, or implements the specified type.
+    /// </summary>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
+    member this.OfType<'Type when 'Type :> NamedDef>(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        this.ToSeq()
+        |> Seq.filter (fun (name, _) -> not includeDefaultTypes && not (isDefaultType name))
+        |> Seq.map (snd >> (fun x -> match x with :? 'Type as x -> Some x | _ -> None))
+        |> Seq.choose id
+        |> List.ofSeq
+
+    /// <summary>
+    /// Tries to find a FieldDef inside an ObjectDef by the object name and the field name.
+    /// If the map has no ObjectDef types, it won't find anything.
+    /// </summary>
+    /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
+    /// <param name="fname">The name of the FieldDef to be searched for.</param>
+    member this.TryFindField(objname : string, fname : string) =
+        match this.TryFind<ObjectDef>(objname) with
+        | Some odef -> odef.Fields |> Map.tryFind fname
+        | None -> None
+
+    /// <summary>
+    /// Tries to find a FieldDef inside an ObjectDef by its type, the object name and the field name.
+    /// If the map has no ObjectDef types, it won't find anything.
+    /// </summary>
+    /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
+    /// <param name="fname">The name of the FieldDef to be searched for.</param>
+    member this.TryFindField<'Type when 'Type :> OutputDef>(objname : string, fname : string) =
+        match this.TryFindField(objname, fname) with
+        | Some fdef ->
+            match fdef.TypeDef with
+            | :? 'Type -> Some fdef
+            | _ -> None
+        | _ -> None
+
+    /// <summary>
+    /// Tries to find ObjectDef<'Val> types inside the map, that have fields that are lists of 'Res type.
+    /// </summary>
+    /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
+    member this.GetTypesWithListFields<'Val, 'Res>(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        let toSeq map = map |> Map.toSeq |> Seq.map snd
+        let map (f : FieldDef<'Val>) = 
+            match f.TypeDef with 
+            | :? ListOfDef<'Res, 'Res seq> -> Some f 
+            | _ -> None
+        this.OfType<ObjectDef<'Val>>(includeDefaultTypes)
+        |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
+        |> List.ofSeq
+
+    /// <summary>
+    /// Creates a new TypeMap instance, using a sequence of NamedDef's to fill it.
+    /// </summary>
+    /// <param name="defs">The NamedDef sequence that has the NamedDef's that will be filled into the TypeMap.</param>
+    static member FromSeq(defs : NamedDef seq) =
+        let map = TypeMap()
+        defs |> Seq.iter (fun def -> map.AddType(def))
+        map
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =
@@ -2298,6 +2604,7 @@ module SchemaDefinitions =
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2306,6 +2613,10 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
@@ -2313,6 +2624,7 @@ module SchemaDefinitions =
                      Resolve = Undefined
                      Args = [||]
                      DeprecationReason = None
+                     Metadata = Metadata.Empty
                      }
         
         /// <summary>
@@ -2321,6 +2633,10 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2329,7 +2645,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2338,6 +2654,10 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2346,7 +2666,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type.
@@ -2356,6 +2676,10 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2364,7 +2688,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type. Fields is marked as deprecated.
@@ -2375,6 +2699,10 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
                             deprecationReason : string) : FieldDef<'Val> = 
@@ -2384,7 +2712,7 @@ module SchemaDefinitions =
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2392,6 +2720,10 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2400,7 +2732,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2409,6 +2741,10 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2417,7 +2753,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
                      DeprecationReason = None
-                      }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value.
@@ -2427,6 +2763,10 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
@@ -2436,7 +2776,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = None
-                     }
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates field defined inside object type with asynchronously resolved value. Fields is marked as deprecated.
@@ -2447,6 +2787,10 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
+        /// <param name="weight">
+        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
+        /// the higher the cost of the field on a query, and less is the capability of nesting it.
+        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
@@ -2457,7 +2801,7 @@ module SchemaDefinitions =
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
                      DeprecationReason = Some deprecationReason
-                   }
+                     Metadata = Metadata.Empty }
 
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2466,7 +2810,7 @@ module SchemaDefinitions =
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None
-                   }
+                     Metadata = Metadata.Empty }
 
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, inputdef: #OutputDef<'Input>,
                                         description: string,
@@ -2479,6 +2823,7 @@ module SchemaDefinitions =
               DeprecationReason = None
               Args = args |> List.toArray
               Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
+              Metadata = Metadata.Empty
             } :> SubscriptionFieldDef<'Root>
         
         /// <summary>

@@ -19,6 +19,11 @@ type Arg =
       Name: string; 
       /// Value of the argument, provided with user request, query string or as default argument value.
       Value: obj }
+    override x.Equals(y) =
+        match y with
+        | :? Arg as a -> x.Name = a.Name
+        | _ -> false
+    override x.GetHashCode() = x.Name.GetHashCode()
     interface IEquatable<Arg> with
         member x.Equals y = x.Name = y.Name      
     interface IComparable with
@@ -38,6 +43,11 @@ type Track =
       ParentType: Type
       /// Type of value returned or stored by field or property.
       ReturnType: Type }
+    override x.Equals(y) =
+        match y with
+        | :? Track as t -> x.Name = t.Name
+        | _ -> false
+    override x.GetHashCode() = x.Name.GetHashCode()
     override x.ToString() = sprintf "(%s: %s -> %s)" (defaultArg x.Name "") x.ParentType.Name x.ReturnType.Name
     interface IEquatable<Track> with
         member x.Equals y = (x.Name = y.Name && x.ParentType.FullName = y.ParentType.FullName && x.ReturnType.FullName = y.ReturnType.FullName)
@@ -103,11 +113,7 @@ let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||Bin
 let private memberExpr (t: Type) name parameter =
     
     let prop =
-#if NETSTANDARD2_0
-        t.GetTypeInfo().GetProperty(name, bindingFlags)
-#else
         t.GetProperty(name, bindingFlags)
-#endif    
     match prop with
     | null -> 
         match t.GetField(name, bindingFlags) with
@@ -275,13 +281,13 @@ let rec private track set e =
     | Patterns.WhileLoop(condition, body) -> (flip track condition >> flip track body) set
     | Patterns.WithValue(_, _, expr) -> track set expr
     //TODO: move all unnecessary calls into else `_` case
-    | Patterns.Value(expr, _) -> set
-    | Patterns.ValueWithName(_, _, _) -> set
-    | Patterns.AddressOf(_) -> set
-    | Patterns.AddressSet(_, _) -> set
-    | Patterns.DefaultValue(_) -> set
-    | Patterns.FieldSet(_, _, _) -> set
-    | Patterns.PropertySet(_, _, _, _) -> set
+    | Patterns.Value _ -> set
+    | Patterns.ValueWithName _ -> set
+    | Patterns.AddressOf _ -> set
+    | Patterns.AddressSet _ -> set
+    | Patterns.DefaultValue _ -> set
+    | Patterns.FieldSet _ -> set
+    | Patterns.PropertySet _ -> set
     | _ -> set   
 
 /// Intermediate representation containing info about all resolved
@@ -294,11 +300,7 @@ type private IR = IR of ExecutionInfo * Set<Tracker> * IR list
 /// or as a type argument in enumerable or option of root.
 let private canJoin (tRoot: Type) (tFrom: Type) =
     if tFrom = tRoot then true
-#if NETSTANDARD2_0 
-    elif tRoot.GetTypeInfo().IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
-#else 
     elif tRoot.IsGenericType && (typeof<IEnumerable>.IsAssignableFrom tRoot || typedefof<Option<_>>.IsAssignableFrom tRoot)
-#endif
     then tFrom = (tRoot.GetGenericArguments().[0])
     else false
 
@@ -309,15 +311,7 @@ let private isOwn (track: Track) =
     match track.Name with
     | None -> false
     | Some name ->
-        let t = 
-            match track.ParentType with
-            | Gen.Enumerable tparam -> tparam
-            | tval -> tval
-#if NETSTANDARD2_0
-        match track.ParentType.GetMember(name) with
-#else
         match track.ParentType.GetMember(name, fieldOrProperty, bindingFlags) with
-#endif
         | [||]  -> false
         | array -> 
             array |> Array.exists(fun m -> 
@@ -355,7 +349,12 @@ let rec private merge (parent: Tracker) (members: Set<Tracker>) =
 let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tracker> = 
     let rootTrack = root.Track 
     let parentType = rootTrack.ReturnType  
-    let members = allTracks |> Set.filter (fun (Direct(track, _)) -> canJoin parentType track.ParentType && isOwn track)
+    let members = 
+        allTracks 
+        |> Set.filter (fun track -> 
+            match track with
+            | Direct (track, _) -> canJoin parentType track.ParentType && isOwn track
+            | x -> failwith <| sprintf "Expected Direct Track, but got %A" x)
     if Set.isEmpty members
     then
         // check for artificial property
@@ -364,7 +363,12 @@ let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tra
         // we don't want to return fullName Tracker (as such field doesn't exists)
         // but fname and lname instead
         let grandpaType = rootTrack.ParentType
-        let members = allTracks |> Set.filter (fun (Direct(track, _)) -> canJoin grandpaType track.ParentType && isOwn track)
+        let members = 
+            allTracks 
+            |> Set.filter (fun track -> 
+                match track with
+                | Direct (track, _) -> canJoin grandpaType track.ParentType && isOwn track
+                | x -> failwith <| sprintf "Expected Direct Track, but got %A" x)
         if Set.isEmpty members
         then root |> Set.singleton
         else
@@ -396,7 +400,10 @@ let rec private compose vars ir =
 /// Get unrelated tracks from current info and its children (if any)
 /// Returned set of trackers ALWAYS consists of Direct trackers only
 let rec private getTracks alreadyFound info =
-    let (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(root, expr))))) = info.Definition.Resolve.Expr
+    let expr =
+        match info.Definition.Resolve.Expr with
+        | (Patterns.WithValue(_,_, (Patterns.Lambda(_, Patterns.Lambda(_, expr))))) -> expr
+        | _ -> failwith <| sprintf "Unexpected Resolve Definition Expression!"
     let tracks = 
         track Set.empty expr 
         |> Set.map(fun track -> Direct(track, []))
@@ -410,8 +417,7 @@ let rec private getTracks alreadyFound info =
         let children = 
             typeMap
             |> Map.toSeq
-            |> Seq.map snd
-            |> Seq.map (List.map (getTracks found))
+            |> Seq.map (snd >> (List.map (getTracks found)))
             |> Seq.collect id
             |> Seq.toList
         IR(info, found, children) 
@@ -421,7 +427,7 @@ let rec private assignableChildren (parentType: Type) (childTracks: Set<Tracker>
         childTracks 
         |> Set.partition (fun child -> parentType.IsAssignableFrom (coreType child.Track.ParentType))
     unassignable 
-    |> Set.collect (function Direct(_,_) -> Set.empty | Compose(_, _, grandChildren) -> assignableChildren parentType grandChildren)
+    |> Set.collect (function Direct _ -> Set.empty | Compose(_, _, grandChildren) -> assignableChildren parentType grandChildren)
     |> ((+) assignable)
 
 let rec private join (parentTracks: Set<Tracker>) childIRs =
@@ -474,7 +480,7 @@ let private castTo tCollection callExpr : Expression =
 
 let rec private construct (argApplicators: Map<string, ArgApplication>) tracker (inParam: Expression) : Expression =
     match tracker with
-    | Direct(track, _) -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
+    | Direct _ -> inParam// upcast Expression.PropertyOrField(inParam, track.Name)
     | Compose(track, _, fields) -> 
         match track.ReturnType with
         | Gen.Enumerable _ -> constructCollection argApplicators tracker inParam |> castTo track.ReturnType
@@ -523,7 +529,10 @@ and private constructObject argApplicators tObj fields (inParam: Expression) : E
         upcast Expression.MemberInit(Expression.New(ctor, ctorArgs), memberBindings) 
     
 and private constructCollection argApplicators tracker (inParam: Expression) : Expression =
-    let (Compose(track, args, fields)) = tracker
+    let track, args, fields =
+        match tracker with
+        | Compose (track, args, fields) -> track, args, fields
+        | x -> failwith <| sprintf "Expected Compose Track, but got %A" x
     let tSource, methods = sourceAndMethods track
     let p0 = Expression.Parameter(tSource)
     let body = constructObject argApplicators tSource fields p0
@@ -572,7 +581,7 @@ let private defaultArgApplicators: Map<string, ArgApplication> =
 let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =       
     let ir = getTracks Set.empty info
     let composed = compose vars ir
-    let (IR(info, trackers, children)) = composed
+    let (IR(_, trackers, children)) = composed
     join trackers children |> Seq.head
 
 let private toLinq info (query: IQueryable<'Source>) variables (argApplicators: Map<string, ArgApplication>) : IQueryable<'Source> =
