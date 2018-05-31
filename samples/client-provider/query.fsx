@@ -1,14 +1,27 @@
-﻿#r "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
+﻿#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
+#load "literals.fsx"
 
+open System
 open FSharp.Data.GraphQL
 open System.Collections.Generic
+open Literals
 
 #if FABLE_COMPILER
 #r "node_modules/fable-core/Fable.Core.dll"
 Fable.Core.JsInterop.importAll<unit> "isomorphic-fetch"
 #endif
 
-type MyClient = GraphQLProvider<"http://localhost:8084">
+// Using the provider like this loads the introspection schema from the server
+// It needs a connection to the server to work in design time
+//type MyClient = GraphQLProvider<url>
+
+// Using the provider like this makes you load the introspection schema from a string
+// The introspection literal is in the literals.fsx file
+//type MyClient = GraphQLProvider<url, introspection>
+
+// Using the provider like this makes you load the introspection schema from a file
+// The file can be load as a relative path to the path of the project or script
+type MyClient = GraphQLProvider<url, "introspection.json">
 
 async {
     let! hero = MyClient.Queries.Hero("1000", fun c ->
