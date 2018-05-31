@@ -7,6 +7,7 @@ open System
 open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
+open System.Threading
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
@@ -86,3 +87,10 @@ let fromJson<'t> (json: string) : 't = JsonConvert.DeserializeObject<'t>(json, s
 let asts query = 
     ["defer"; "stream"]
     |> Seq.map (query >> parse)
+
+let set (mre : ManualResetEvent) =
+    mre.Set() |> ignore
+
+let wait (mre : ManualResetEvent) errorMsg =
+    if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+    then fail errorMsg
