@@ -426,7 +426,7 @@ let pack id =
             OutputPath = sprintf "nuget/%s.%s" project id
             TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
             IncludeReferencedProjects = true
-            LockDependencies = true
+            MinimumFromLockFile = true
         })
 let publishPackage id =
     pack id
