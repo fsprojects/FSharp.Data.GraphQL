@@ -21,3 +21,6 @@
 * Changed GQLResponse object to be a Record, which supports a Metadata bag object, that can be used to hold custom information per query request.
 * Changed FieldDef interface to be able to support a Metadata bag object, that can be used to hold custom information per field.
 * ISchema TypeMap is now a mutable object, to ease schema customization through schema compile middlewares.
+* Fixing many minor errors when deferring or streaming results with Union and Enum types (specially when queried using fragments).
+* Deferred and streamed error results now are handled.
+* Added support for nested deferred and streamed results (currently does have a maximum degree of two nested operations).
