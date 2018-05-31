@@ -24,3 +24,6 @@
 * Fixing many minor errors when deferring or streaming results with Union and Enum types (specially when queried using fragments).
 * Deferred and streamed error results now are handled.
 * Added support for nested deferred and streamed results (currently does have a maximum degree of two nested operations).
+
+### 0.0.4-beta01 - May 31 2018
+* Fix package dependency versions
