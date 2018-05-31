@@ -28,7 +28,7 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
     [<GlobalSetup>]
     member __.Setup() = 
         schema <- Schema(SchemaDefinition.Query)
-        middlewares <- [ Define.QueryWeightMiddleware(2.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
+        middlewares <- [ Define.QueryWeightMiddleware(20.0); Define.ObjectListFilterMiddleware<Person, Person option>() ]
         schemaProcessor <- Executor(schema, middlewares)
         simpleAst <- parse QueryStrings.simple
         flatAst <- parse QueryStrings.flat

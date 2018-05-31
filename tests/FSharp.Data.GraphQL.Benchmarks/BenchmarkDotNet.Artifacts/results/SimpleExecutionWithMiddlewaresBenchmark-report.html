@@ -23,32 +23,32 @@ Processor=Intel Core i7-2600 CPU 3.40GHz (Sandy Bridge), ProcessorCount=8
 <pre><code></code></pre>
 
 <table>
-<thead><tr><th>                  Method</th><th>Job</th><th>Runtime</th><th>Mean</th><th>Error</th><th>StdDev</th><th> Min</th><th> Max</th><th>Op/s</th>
+<thead><tr><th>                  Method</th><th>Job</th><th>Runtime</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Min</th><th>Max</th><th>Op/s</th>
 </tr>
-</thead><tbody><tr><td>BenchmarkSimpleQueryUnparsed</td><td>Core</td><td>Core</td><td>70.222 us</td><td>1.3893 us</td><td>1.3645 us</td><td>68.482 us</td><td>73.643 us</td><td>14,240.5</td>
-</tr><tr><td>BenchmarkSimpleQueryParsed</td><td>Core</td><td>Core</td><td>31.415 us</td><td>0.3700 us</td><td>0.3090 us</td><td>30.959 us</td><td>31.832 us</td><td>31,831.7</td>
-</tr><tr><td>BenchmarkSimpleQueryPlanned</td><td>Core</td><td>Core</td><td>25.489 us</td><td>0.5543 us</td><td>0.7010 us</td><td>24.734 us</td><td>27.211 us</td><td>39,233.0</td>
-</tr><tr><td>BenchmarkFlatQueryUnparsed</td><td>Core</td><td>Core</td><td>710.705 us</td><td>14.0351 us</td><td>26.3614 us</td><td>677.630 us</td><td>773.004 us</td><td>1,407.1</td>
-</tr><tr><td>BenchmarkFlatQueryParsed</td><td>Core</td><td>Core</td><td>627.403 us</td><td>5.0556 us</td><td>4.7290 us</td><td>620.780 us</td><td>636.468 us</td><td>1,593.9</td>
-</tr><tr><td>BenchmarkFlatQueryPlanned</td><td>Core</td><td>Core</td><td>616.673 us</td><td>6.0117 us</td><td>5.3292 us</td><td>610.028 us</td><td>626.901 us</td><td>1,621.6</td>
-</tr><tr><td>BenchmarkNestedQueryUnparsed</td><td>Core</td><td>Core</td><td>150.129 us</td><td>1.1027 us</td><td>1.0314 us</td><td>148.794 us</td><td>152.328 us</td><td>6,660.9</td>
-</tr><tr><td>BenchmarkNestedQueryParsed</td><td>Core</td><td>Core</td><td>15.417 us</td><td>0.1597 us</td><td>0.1416 us</td><td>15.146 us</td><td>15.616 us</td><td>64,862.4</td>
-</tr><tr><td>BenchmarkNestedQueryPlanned</td><td>Core</td><td>Core</td><td>4.044 us</td><td>0.0870 us</td><td>0.1275 us</td><td>3.909 us</td><td>4.389 us</td><td>247,302.5</td>
-</tr><tr><td>BenchmarkFilteredQueryUnparsed</td><td>Core</td><td>Core</td><td>183.466 us</td><td>3.7612 us</td><td>5.3942 us</td><td>178.835 us</td><td>197.409 us</td><td>5,450.6</td>
-</tr><tr><td>BenchmarkFilteredQueryParsed</td><td>Core</td><td>Core</td><td>92.881 us</td><td>0.6615 us</td><td>0.5864 us</td><td>91.973 us</td><td>94.113 us</td><td>10,766.5</td>
-</tr><tr><td>BenchmarkFilteredQueryPlanned</td><td>Core</td><td>Core</td><td>79.968 us</td><td>0.7689 us</td><td>0.7192 us</td><td>79.020 us</td><td>81.899 us</td><td>12,505.0</td>
-</tr><tr><td>BenchmarkSimpleQueryUnparsed</td><td>Mono</td><td>Mono</td><td>72.967 us</td><td>0.4540 us</td><td>0.4024 us</td><td>72.159 us</td><td>73.640 us</td><td>13,704.8</td>
-</tr><tr><td>BenchmarkSimpleQueryParsed</td><td>Mono</td><td>Mono</td><td>43.347 us</td><td>0.3269 us</td><td>0.3058 us</td><td>42.828 us</td><td>43.859 us</td><td>23,069.7</td>
-</tr><tr><td>BenchmarkSimpleQueryPlanned</td><td>Mono</td><td>Mono</td><td>36.891 us</td><td>0.7255 us</td><td>0.9686 us</td><td>35.831 us</td><td>38.821 us</td><td>27,106.6</td>
-</tr><tr><td>BenchmarkFlatQueryUnparsed</td><td>Mono</td><td>Mono</td><td>825.092 us</td><td>7.6628 us</td><td>7.1678 us</td><td>815.492 us</td><td>838.577 us</td><td>1,212.0</td>
-</tr><tr><td>BenchmarkFlatQueryParsed</td><td>Mono</td><td>Mono</td><td>799.586 us</td><td>19.6811 us</td><td>21.0586 us</td><td>782.516 us</td><td>857.978 us</td><td>1,250.6</td>
-</tr><tr><td>BenchmarkFlatQueryPlanned</td><td>Mono</td><td>Mono</td><td>781.850 us</td><td>2.9210 us</td><td>2.4392 us</td><td>776.687 us</td><td>786.387 us</td><td>1,279.0</td>
-</tr><tr><td>BenchmarkNestedQueryUnparsed</td><td>Mono</td><td>Mono</td><td>135.812 us</td><td>2.6401 us</td><td>3.1429 us</td><td>132.374 us</td><td>143.884 us</td><td>7,363.1</td>
-</tr><tr><td>BenchmarkNestedQueryParsed</td><td>Mono</td><td>Mono</td><td>21.007 us</td><td>0.2646 us</td><td>0.2475 us</td><td>20.624 us</td><td>21.473 us</td><td>47,602.3</td>
-</tr><tr><td>BenchmarkNestedQueryPlanned</td><td>Mono</td><td>Mono</td><td>5.221 us</td><td>0.0228 us</td><td>0.0213 us</td><td>5.187 us</td><td>5.254 us</td><td>191,542.0</td>
-</tr><tr><td>BenchmarkFilteredQueryUnparsed</td><td>Mono</td><td>Mono</td><td>211.628 us</td><td>0.8910 us</td><td>0.7898 us</td><td>210.571 us</td><td>213.310 us</td><td>4,725.3</td>
-</tr><tr><td>BenchmarkFilteredQueryParsed</td><td>Mono</td><td>Mono</td><td>140.005 us</td><td>1.2816 us</td><td>1.0006 us</td><td>138.854 us</td><td>142.521 us</td><td>7,142.6</td>
-</tr><tr><td>BenchmarkFilteredQueryPlanned</td><td>Mono</td><td>Mono</td><td>128.832 us</td><td>1.4877 us</td><td>1.2423 us</td><td>127.452 us</td><td>131.460 us</td><td>7,762.0</td>
+</thead><tbody><tr><td>BenchmarkSimpleQueryUnparsed</td><td>Core</td><td>Core</td><td>70.38 us</td><td>1.4118 us</td><td>1.8847 us</td><td>68.37 us</td><td>75.13 us</td><td>14,208.6</td>
+</tr><tr><td>BenchmarkSimpleQueryParsed</td><td>Core</td><td>Core</td><td>32.10 us</td><td>0.5598 us</td><td>0.4963 us</td><td>31.42 us</td><td>33.15 us</td><td>31,153.7</td>
+</tr><tr><td>BenchmarkSimpleQueryPlanned</td><td>Core</td><td>Core</td><td>25.55 us</td><td>0.5096 us</td><td>0.7144 us</td><td>24.75 us</td><td>27.34 us</td><td>39,145.9</td>
+</tr><tr><td>BenchmarkFlatQueryUnparsed</td><td>Core</td><td>Core</td><td>684.94 us</td><td>6.8459 us</td><td>6.4036 us</td><td>676.80 us</td><td>701.67 us</td><td>1,460.0</td>
+</tr><tr><td>BenchmarkFlatQueryParsed</td><td>Core</td><td>Core</td><td>623.55 us</td><td>3.7850 us</td><td>2.9551 us</td><td>619.72 us</td><td>628.48 us</td><td>1,603.7</td>
+</tr><tr><td>BenchmarkFlatQueryPlanned</td><td>Core</td><td>Core</td><td>613.85 us</td><td>4.8045 us</td><td>4.4941 us</td><td>608.82 us</td><td>621.94 us</td><td>1,629.1</td>
+</tr><tr><td>BenchmarkNestedQueryUnparsed</td><td>Core</td><td>Core</td><td>512.57 us</td><td>10.1313 us</td><td>14.2027 us</td><td>498.33 us</td><td>544.54 us</td><td>1,951.0</td>
+</tr><tr><td>BenchmarkNestedQueryParsed</td><td>Core</td><td>Core</td><td>361.61 us</td><td>1.7930 us</td><td>1.4972 us</td><td>359.53 us</td><td>364.88 us</td><td>2,765.4</td>
+</tr><tr><td>BenchmarkNestedQueryPlanned</td><td>Core</td><td>Core</td><td>352.86 us</td><td>8.1333 us</td><td>12.1736 us</td><td>341.14 us</td><td>390.51 us</td><td>2,834.0</td>
+</tr><tr><td>BenchmarkFilteredQueryUnparsed</td><td>Core</td><td>Core</td><td>180.70 us</td><td>1.2709 us</td><td>1.1888 us</td><td>179.06 us</td><td>183.18 us</td><td>5,534.1</td>
+</tr><tr><td>BenchmarkFilteredQueryParsed</td><td>Core</td><td>Core</td><td>92.51 us</td><td>0.6357 us</td><td>0.5946 us</td><td>91.21 us</td><td>93.51 us</td><td>10,809.3</td>
+</tr><tr><td>BenchmarkFilteredQueryPlanned</td><td>Core</td><td>Core</td><td>80.48 us</td><td>0.7093 us</td><td>0.6635 us</td><td>79.78 us</td><td>81.83 us</td><td>12,426.2</td>
+</tr><tr><td>BenchmarkSimpleQueryUnparsed</td><td>Mono</td><td>Mono</td><td>74.38 us</td><td>1.4549 us</td><td>1.4289 us</td><td>72.59 us</td><td>76.79 us</td><td>13,444.5</td>
+</tr><tr><td>BenchmarkSimpleQueryParsed</td><td>Mono</td><td>Mono</td><td>43.24 us</td><td>0.3037 us</td><td>0.2692 us</td><td>42.83 us</td><td>43.70 us</td><td>23,125.4</td>
+</tr><tr><td>BenchmarkSimpleQueryPlanned</td><td>Mono</td><td>Mono</td><td>35.40 us</td><td>0.2841 us</td><td>0.2657 us</td><td>34.88 us</td><td>35.82 us</td><td>28,249.2</td>
+</tr><tr><td>BenchmarkFlatQueryUnparsed</td><td>Mono</td><td>Mono</td><td>808.01 us</td><td>3.7499 us</td><td>3.3242 us</td><td>802.62 us</td><td>815.69 us</td><td>1,237.6</td>
+</tr><tr><td>BenchmarkFlatQueryParsed</td><td>Mono</td><td>Mono</td><td>766.00 us</td><td>5.1742 us</td><td>4.0397 us</td><td>758.99 us</td><td>771.95 us</td><td>1,305.5</td>
+</tr><tr><td>BenchmarkFlatQueryPlanned</td><td>Mono</td><td>Mono</td><td>757.02 us</td><td>4.1596 us</td><td>3.8909 us</td><td>750.66 us</td><td>762.52 us</td><td>1,321.0</td>
+</tr><tr><td>BenchmarkNestedQueryUnparsed</td><td>Mono</td><td>Mono</td><td>733.36 us</td><td>2.9784 us</td><td>2.6403 us</td><td>728.92 us</td><td>737.69 us</td><td>1,363.6</td>
+</tr><tr><td>BenchmarkNestedQueryParsed</td><td>Mono</td><td>Mono</td><td>579.53 us</td><td>6.1527 us</td><td>5.7553 us</td><td>573.14 us</td><td>592.08 us</td><td>1,725.5</td>
+</tr><tr><td>BenchmarkNestedQueryPlanned</td><td>Mono</td><td>Mono</td><td>565.22 us</td><td>4.3185 us</td><td>3.8283 us</td><td>558.93 us</td><td>572.56 us</td><td>1,769.2</td>
+</tr><tr><td>BenchmarkFilteredQueryUnparsed</td><td>Mono</td><td>Mono</td><td>216.07 us</td><td>5.0906 us</td><td>7.1363 us</td><td>209.37 us</td><td>240.12 us</td><td>4,628.0</td>
+</tr><tr><td>BenchmarkFilteredQueryParsed</td><td>Mono</td><td>Mono</td><td>140.25 us</td><td>1.4424 us</td><td>1.3492 us</td><td>138.28 us</td><td>142.42 us</td><td>7,130.3</td>
+</tr><tr><td>BenchmarkFilteredQueryPlanned</td><td>Mono</td><td>Mono</td><td>126.45 us</td><td>1.6673 us</td><td>1.3923 us</td><td>124.77 us</td><td>129.90 us</td><td>7,908.1</td>
 </tr></tbody></table>
 </body>
 </html>
