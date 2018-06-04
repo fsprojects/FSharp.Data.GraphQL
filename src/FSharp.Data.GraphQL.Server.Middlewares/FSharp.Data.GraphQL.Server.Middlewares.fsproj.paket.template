@@ -13,4 +13,3 @@ description
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 dependencies
     FSharp.Data.GraphQL.Server >= CURRENTVERSION
-    FSharp.Data.GraphQL.Shared >= CURRENTVERSION
