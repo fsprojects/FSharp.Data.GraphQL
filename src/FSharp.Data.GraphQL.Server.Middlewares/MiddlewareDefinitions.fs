@@ -52,7 +52,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata : bool) =
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
-            let args = [ Define.Input("filter", ObjectListFilter) ]
+            let args = [ Define.Input("filter", Nullable ObjectListFilter) ]
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =
