@@ -253,6 +253,7 @@ let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (par
 /// Lifts an object to an option unless it is already an option
 let private toOption x = 
     match x with
+    | null -> None
     | SomeObj(v)
     | v -> Some(v)
 
