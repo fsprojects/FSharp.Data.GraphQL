@@ -17,34 +17,69 @@ open System.Collections.Generic
 open FParsec
 open FSharp.Data.GraphQL
 
+/// Type alias for string * obj list.
+/// Represents an error of an operation inside a GQLResponse object.
 type Error = string * obj list
 
+/// Type alias for IDictionary<string, obj>.
+/// Represents the result of a query inside a GQLResponse object.
 type Output = IDictionary<string, obj>
 
+/// GraphQL server response object.
+/// Holds information about the result of a GraphQL operation on the server.
 type GQLResponse =
-    { Content : GQLResponseContent
+    { /// Gets the content of the response operation.
+      Content : GQLResponseContent
+      /// Gets the metadata associated with the operation.
+      /// Metadata comes from operation and execution phases, and can be
+      /// transformed by middlewares or user input from schema definition.
       Metadata : Metadata }
+    /// <summary> Generates a GQLResponse object with a Direct response content. </summary>
+    /// <param name="data">The output from the response content (query result).</param>
+    /// <param name="errors">Errors associated with the operation.</param>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member Direct(data, errors, meta) =
         { Content = Direct (data, errors)
           Metadata = meta }
+    /// <summary> Generates a GQLResponse object with a Deferred, Streamed or Live response content. </summary>
+    /// <param name="data">The output from the response content (query result).</param>
+    /// <param name="errors">Errors associated with the operation.</param>
+    /// <param name="deferred">The deferred data as an IObservable to subscribe on.</param>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member Deferred(data, errors, deferred, meta) =
         { Content = Deferred (data, errors, deferred)
           Metadata = meta }
+    /// <summary> Generates a GQLResponse object with a Subscription response content.</summary>
+    /// <param name="data">The output from the response content (query result) as an IObservable to subscribe on.</param>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member Stream(data, meta) =
         { Content = Stream data
           Metadata = meta }
+    /// <summary> Generates an empty GQLResponse object.</summary>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member Empty(meta) =
         GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [], meta)
+    /// <summary> Generates an Error GQLResponse object, with no data.</summary>
+    /// <param name="msg">The error message to be sent with the response.</param>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member Error(msg, meta) =
         GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ], meta)
+    /// <summary> Generates an asynchronous Error GQLResponse object, with no data.</summary>
+    /// <param name="msg">The error message to be sent with the response.</param>
+    /// <param name="meta">Metadata bag object associated with the operation.</param>
     static member ErrorAsync(msg, meta) =
         asyncVal { return GQLResponse.Error(msg, meta) }
 
+/// Contains the content of a GraphQL response, holding the result of the operation.
 and GQLResponseContent =
+    /// Represents a direct response, when no defer directives were used in the original query.
     | Direct of data : Output * errors: Error list
+    /// Represents a deferred response, when defer, stream or live directives were used in the original query.
     | Deferred of data : Output * errors : Error list * defer : IObservable<Output>
+    /// Represents a stream response, returned from subscription queries.
     | Stream of stream : IObservable<Output>
 
+/// Matches the result of a GQLResponse into its categories.
 let (|Direct|Deferred|Stream|) (response : GQLResponse) =
     match response.Content with
     | Direct (data, errors) -> Direct (data, errors)
@@ -160,8 +195,9 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     new(t: string []) = 
         NameValueLookup(t |> Array.map (fun k -> KeyValuePair<string,obj>(k, null)))
 
+/// Basic operations and helpers to work with NameValueLookup objects.
 module NameValueLookup =
-    /// Create new NameValueLookup from given list of key-value tuples.
+    /// Creates a new NameValueLookup from given list of key-value tuples.
     let ofList (l: (string * obj) list) = NameValueLookup(l) 
                 
 let private collectDefaultArgValue acc (argdef: InputFieldDef) =
