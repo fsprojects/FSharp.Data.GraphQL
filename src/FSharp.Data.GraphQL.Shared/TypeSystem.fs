@@ -1296,6 +1296,48 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> =
     
     override x.ToString() = x.Name + "!"
 
+/// GraphQL type definition for live types.
+/// Live types are types that can be subscribed on and receive
+/// live results from it.
+and LiveDef =
+    interface
+        /// GraphQL type definition of the container element type.
+        abstract OfType : TypeDef
+        inherit OutputDef
+    end
+
+/// GraphQL type definition for live types.
+/// Live types are types that can be subscribed on and receive
+/// live results from it.
+and LiveDef<'Val> =
+    interface
+        /// GraphQL type definition of the container element type.  
+        abstract OfType : TypeDef<'Val>
+        inherit OutputDef<IObservable<'Val>>
+        inherit LiveDef
+    end
+
+and internal LiveDefinition<'Val> =
+    { OfType : TypeDef<'Val> }
+    interface OutputDef
+    interface TypeDef with
+        member __.Type = typeof<IObservable<'Val>>
+        member this.MakeNullable() =
+            let nullable : NullableDefinition<_> = { OfType = this }
+            upcast nullable
+        member this.MakeList() =
+            let list : ListOfDefinition<_, _> = { OfType = this }
+            upcast list
+    interface LiveDef with
+        member this.OfType = upcast this.OfType
+    interface LiveDef<'Val> with
+        member this.OfType = this.OfType
+    override this.ToString() = 
+        match this.OfType with
+        | :? NamedDef as named -> named.Name
+        | :? ListOfDef as list -> "[" + list.OfType.ToString() + "]"
+        | other -> other.ToString()
+
 /// GraphQL type definition for collection types. Lists are both
 /// valid input and output types.
 and ListOfDef = 
@@ -2307,6 +2349,10 @@ module SchemaDefinitions =
             | false, _ -> None
         | _ -> None
     
+    /// Wraps a GraphQL type definition, allowing defining field
+    /// to take observable of provided value.
+    let Live(innerDef : #TypeDef<'Val>) : LiveDef<'Val> = upcast { LiveDefinition.OfType = innerDef }
+
     /// Wraps a GraphQL type definition, allowing defining field/argument 
     /// to take option of provided value.
     let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
