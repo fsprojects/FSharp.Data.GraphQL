@@ -1721,6 +1721,7 @@ and TypeMap() =
         | :? NamedDef as n -> Some n
         | :? NullableDef as n -> named n.OfType
         | :? ListOfDef as l -> named l.OfType
+        | :? LiveDef as l -> named l.OfType
         | _ -> None
 
     /// <summary>
@@ -2085,6 +2086,12 @@ module Patterns =
         match tdef with
         | :? ObjectDef | :? InterfaceDef | :? UnionDef -> Some tdef
         | _ -> None
+
+    /// Active pattern to match GraphQL type definition with valid live types.
+    let (|Live|_|) (tdef : TypeDef) =
+        match tdef with
+        | :? LiveDef as x -> Some x.OfType
+        | _ -> None
     
     /// Active pattern to match GraphQL type defintion with valid abstract types.
     let (|Abstract|_|) (tdef : TypeDef) = 
@@ -2097,6 +2104,7 @@ module Patterns =
         | :? NamedDef as n -> Some n
         | Nullable inner -> named inner
         | List inner -> named inner
+        | Live inner -> named inner
         | _ -> None
     
     /// Active pattern to match GraphQL type defintion with named types.
