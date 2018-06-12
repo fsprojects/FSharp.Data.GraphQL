@@ -265,26 +265,50 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       Variables = ctx.Variables }         
                 
 
-let private optionCast (value: obj) =
-            let optionDef = typedefof<option<_>>
-            if isNull value then None
-            else
-                let t = value.GetType()
-                let v' = t.GetProperty("Value")
-                if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
-                    Some(v'.GetValue(value, [| |]))
-                else None
+let private optionCast (value : obj) =
+    let optionDef = typedefof<option<_>>
+    if isNull value then None
+    else
+        let t = value.GetType()
+        let valueProperty = t.GetProperty("Value")
+        if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+            Some(valueProperty.GetValue(value, [| |]))
+        else None
 
 let private (|SomeObj|_|) = optionCast
 
-let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
+let tryCastObservable (value : obj) =
+    let observableDef = typedefof<IObservable<_>>
+    let t = value.GetType()
+    let isObservable =
+        t.GetInterfaces()
+        |> Seq.exists (fun t -> t.IsGenericType && t.GetGenericTypeDefinition() = observableDef)
+    if isObservable then
+        if isNull value 
+            then Observable.ofSeq Seq.empty |> Some
+        else
+            let subscribeMethod = t.GetMethod("Subscribe")
+            { new IObservable<obj> with
+                member __.Subscribe(subscriber) =
+                    downcast subscribeMethod.Invoke(value, [| subscriber |]) }
+            |> Some
+    else None
+
+let rec private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue : obj) =
     if ctx.ExecutionInfo.IsNullable
     then
         execute ctx parentValue 
-        |> AsyncVal.map(optionCast)
-    else 
-        execute ctx parentValue
-        |> AsyncVal.map(fun v -> if isNull v then None else Some v)
+        |> AsyncVal.map optionCast
+    else
+        match tryCastObservable parentValue with
+        | Some observable ->
+            observable
+            |> Observable.map (resolveField execute ctx)
+            |> Observable.toSeq
+            |> Seq.head
+        | None ->
+            execute ctx parentValue
+            |> AsyncVal.map (fun v -> if isNull v then None else Some v)
 
 /// Lifts an object to an option unless it is already an option
 let private toOption x = 
@@ -485,13 +509,13 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
             |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []}) 
+            |> AsyncVal.rescue(fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []}) 
             |> AsyncVal.bind(fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
                 | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}} 
-                | t -> build (t::acc) xs)
-        | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
+                | t -> build (t :: acc) xs)
+        | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
 
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 

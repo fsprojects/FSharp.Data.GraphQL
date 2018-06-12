@@ -127,8 +127,9 @@ module Schema =
           Minute = dt.Minute
           Second = dt.Second }
 
-    let getDateTime = 
-        Observable.Interval(System.TimeSpan.FromSeconds(float 1)).Select(fun _ -> buildDateTime System.DateTime.Now)
+    let dateTime = 
+        let span = System.TimeSpan.FromSeconds(float 0.1)
+        Observable.Interval(span).Select(fun _ -> buildDateTime System.DateTime.Now)
 
     let schemaConfig =
         SchemaConfig.Default
@@ -229,7 +230,7 @@ module Schema =
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
                 Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) 
-                Define.Field("time", Live DateTimeType, "Gets server's current date and time", fun _ _ -> getDateTime)])
+                Define.Field("time", Live DateTimeType, "Gets server's current date and time", fun _ _ -> dateTime)])
 
     let Mutation =
         Define.Object<Root>(
