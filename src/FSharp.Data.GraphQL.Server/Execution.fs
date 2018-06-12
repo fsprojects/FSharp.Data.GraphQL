@@ -277,7 +277,7 @@ let private optionCast (value : obj) =
 
 let private (|SomeObj|_|) = optionCast
 
-let tryCastObservable (value : obj) =
+let private tryCastObservable (value : obj) =
     let observableDef = typedefof<IObservable<_>>
     let t = value.GetType()
     let isObservable =
@@ -300,15 +300,8 @@ let rec private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) 
         execute ctx parentValue 
         |> AsyncVal.map optionCast
     else
-        match tryCastObservable parentValue with
-        | Some observable ->
-            observable
-            |> Observable.map (resolveField execute ctx)
-            |> Observable.toSeq
-            |> Seq.head
-        | None ->
-            execute ctx parentValue
-            |> AsyncVal.map (fun v -> if isNull v then None else Some v)
+        execute ctx parentValue
+        |> AsyncVal.map (fun v -> if isNull v then None else Some v)
 
 /// Lifts an object to an option unless it is already an option
 let private toOption x = 
@@ -502,6 +495,10 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
+    let value = 
+        match tryCastObservable value with
+        | Some o -> o |> Observable.toSeq |> Seq.head
+        | None -> value
     let rec build (acc: ResolverTree list) = function
         | info::xs ->
             let argDefs = fieldExecuteMap.GetArgs(objdef.Name, info.Definition.Name)
