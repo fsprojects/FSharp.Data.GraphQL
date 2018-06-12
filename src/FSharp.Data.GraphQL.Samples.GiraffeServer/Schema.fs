@@ -128,7 +128,7 @@ module Schema =
           Second = dt.Second }
 
     let dateTime = 
-        let span = System.TimeSpan.FromSeconds(float 0.1)
+        let span = System.TimeSpan.FromSeconds(float 1)
         Observable.Interval(span).Select(fun _ -> buildDateTime System.DateTime.Now)
 
     let schemaConfig =
