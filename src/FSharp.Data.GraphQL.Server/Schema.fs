@@ -45,13 +45,9 @@ type SchemaConfig =
     /// Default SchemaConfig value for Schemas.
     static member Default = 
         { Types = []
-          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective ]
+          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
-    /// Default SchemaConfig value for Live Schemas.
-    static member DefaultLive =
-        { SchemaConfig.Default with
-            Directives = SchemaConfig.Default.Directives @ [ LiveDirective ] }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
