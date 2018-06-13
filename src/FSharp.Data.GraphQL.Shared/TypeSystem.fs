@@ -2088,7 +2088,7 @@ module Patterns =
         | _ -> None
 
     /// Active pattern to match GraphQL type definition with valid live types.
-    let (|Live|_|) (tdef : TypeDef) =
+    let (|Observable|_|) (tdef : TypeDef) =
         match tdef with
         | :? LiveDef as x -> Some x.OfType
         | _ -> None
@@ -2104,7 +2104,7 @@ module Patterns =
         | :? NamedDef as n -> Some n
         | Nullable inner -> named inner
         | List inner -> named inner
-        | Live inner -> named inner
+        | Observable inner -> named inner
         | _ -> None
     
     /// Active pattern to match GraphQL type defintion with named types.
@@ -2506,7 +2506,7 @@ module SchemaDefinitions =
 
     /// GraphQL @live directive.
     let LiveDirective : DirectiveDef =
-        { Name = "Live"
+        { Name = "live"
           Description = Some "Resolves this field or fragment, and streams any updates on it"
           Locations =
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
