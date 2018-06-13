@@ -10,6 +10,8 @@ open System.Threading
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
 
+#nowarn "40"
+
 type TestSubject = {
     a: string
     b: string
@@ -83,23 +85,12 @@ let executor =
     let data = {
            a = "Apple"
            b = "Banana"
-           union = A {
-               id = "1"
-               a = "Union A"
-           }
-           list = [
-               A { 
-                   id = "2"
-                   a = "Union A" 
-               }; 
-               B { 
-                   id = "3"
-                   b = 4
-               } 
-           ]
-           innerList = [ 
-               { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } 
-           ]
+           union = A { id = "1"; a = "Union A" }
+           list = 
+                [ A { id = "2"; a = "Union A" }
+                  B { id = "3"; b = 4 } ]
+           innerList = 
+                [ { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } ]
        }
     let Query = 
         Define.Object<TestSubject>(

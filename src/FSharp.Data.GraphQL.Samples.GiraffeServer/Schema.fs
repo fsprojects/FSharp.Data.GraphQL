@@ -5,6 +5,7 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
+open System.Reactive.Linq
 
 type Episode =
     | NewHope = 1
@@ -32,6 +33,14 @@ type Planet =
     member x.SetMoon b =
         x.IsMoon <- b
         x
+
+type DateTime =
+    { Day : int
+      Month : int
+      Year : int
+      Hour : int
+      Minute : int
+      Second : int }
 
 type Root =
     { ClientId: string }
@@ -110,8 +119,35 @@ module Schema =
     let getCharacter id =
         characters |> List.tryFind (matchesId id)
 
+    let buildDateTime (dt : System.DateTime) =
+        { Day = dt.Day
+          Month = dt.Month
+          Year = dt.Year
+          Hour = dt.Hour
+          Minute = dt.Minute
+          Second = dt.Second }
+
+    let dateTime = 
+        let span = System.TimeSpan.FromSeconds(float 1)
+        Observable.Interval(span).Select(fun _ -> buildDateTime System.DateTime.Now)
+
     let schemaConfig =
         SchemaConfig.Default
+
+    let DateTimeType : ObjectDef<DateTime> =
+        Define.Object<DateTime>(
+            name = "DateTime",
+            description = "A live object representing current server's date and time.",
+            isTypeOf = (fun o -> o :? DateTime),
+            fieldsFn = fun () ->
+            [
+                Define.Field("day", Int, "The number of the day.", fun _ dt -> dt.Day)
+                Define.Field("month", Int, "The number of the month.", fun _ dt -> dt.Month)
+                Define.Field("year", Int, "The number of the year.", fun _ dt -> dt.Year)
+                Define.Field("hour", Int, "The hour.", fun _ dt -> dt.Hour)
+                Define.Field("minute", Int, "The minute.", fun _ dt -> dt.Minute)
+                Define.Field("second", Int, "The second.", fun _ dt -> dt.Second)
+            ])
 
     let EpisodeType =
         Define.Enum(
@@ -193,7 +229,8 @@ module Schema =
             name = "Query",
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
+                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) 
+                Define.Field("time", Live DateTimeType, "Gets server's current date and time", fun _ _ -> dateTime)])
 
     let Mutation =
         Define.Object<Root>(

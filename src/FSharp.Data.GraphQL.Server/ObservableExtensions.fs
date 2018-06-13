@@ -2,12 +2,16 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Reactive.Linq
+open System.Collections.Generic
 
 /// Extension methods to observable, used in place of Fsharp.Control.Reactive
 module internal Observable =
     let bind (f: 'T -> IObservable<'U>) (o: IObservable<'T>) = o.SelectMany(f)
 
     let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
+
+    let toSeq (o : IObservable<'T>) : 'T seq =
+        Observable.ToEnumerable(o)
 
     let ofSeq<'Item>(items:'Item seq) : IObservable<'Item> = {   
         new IObservable<_> with
