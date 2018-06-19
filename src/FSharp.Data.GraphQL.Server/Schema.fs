@@ -42,10 +42,10 @@ type SchemaConfig =
                 | true, (_, channel) ->
                     channel.OnNext(box value)
                 | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent }
-    /// Default SchemaConfig value for Schemas.
+    /// Default SchemaConfig used by Schema when no config is provided.
     static member Default = 
         { Types = []
-          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective ]
+          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 
