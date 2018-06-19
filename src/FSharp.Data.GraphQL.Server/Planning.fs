@@ -144,15 +144,19 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
 
-let private isDeferredField (field: Field) : bool =
+let private isDeferredField (field: Field) =
     field.Directives |> List.exists(fun d -> d.Name = "defer")
 
-let private isStreamedField (field : Field) : bool =
+let private isStreamedField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "stream")
 
-let private (|Planned|Deferred|Streamed|) field =
+let private isLiveField (field : Field) =
+    field.Directives |> List.exists (fun d -> d.Name = "live")
+
+let private (|Planned|Deferred|Streamed|Live|) field =
     if isStreamedField field then Streamed
     elif isDeferredField field then Deferred
+    elif isLiveField field then Live
     else Planned
                 
 type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * string list

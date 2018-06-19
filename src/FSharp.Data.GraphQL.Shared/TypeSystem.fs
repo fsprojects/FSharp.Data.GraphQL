@@ -2489,6 +2489,14 @@ module SchemaDefinitions =
           Locations = 
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
+
+    /// GraphQL @live directive.
+    let LiveDirective : DirectiveDef =
+        { Name = "live"
+          Description = Some "Subscribes for live updates of this field or fragment"
+          Locations = 
+            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
+          Args = [||] }
     
     let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) = 
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))

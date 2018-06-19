@@ -38,6 +38,7 @@ type SchemaConfig =
                     |> Observable.map(fun o -> sub.Filter ctx root o)
                     |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
+
             member __.Publish (def: SubscriptionFieldDef<'Root, 'Input, 'Output>) (value: 'Input) =
                 match registeredSubscriptions.TryGetValue(def.Name) with
                 | true, (_, channel) -> channel.OnNext(box value)
@@ -45,7 +46,7 @@ type SchemaConfig =
     /// Default SchemaConfig value for Schemas.
     static member Default = 
         { Types = []
-          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective ]
+          Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
 
