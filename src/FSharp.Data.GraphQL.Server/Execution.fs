@@ -8,13 +8,6 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Types.Introspection
-open FSharp.Data.GraphQL.Introspection
-open FSharp.Quotations
-open FSharp.Quotations.Patterns
-open FSharp.Reflection.FSharpReflectionExtensions
-open System.Collections.Generic
-open FParsec
 open FSharp.Data.GraphQL
 
 type Error = string * obj list
