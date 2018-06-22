@@ -228,7 +228,8 @@ module Schema =
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
-          Define.ObjectListFilterMiddleware<Droid, Character option>(true) ]
+          Define.ObjectListFilterMiddleware<Droid, Character option>(true)
+          Define.LiveQueryMiddleware() ]
 
     let executor = Executor(schema, middlewares)
 

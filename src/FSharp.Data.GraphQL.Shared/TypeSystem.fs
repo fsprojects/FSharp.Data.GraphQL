@@ -352,6 +352,8 @@ and ILiveFieldSubscriptionProvider =
         abstract member IsRegistered : string -> string -> bool
         /// Registers a new live query subscription type, called at schema compilation time.
         abstract member Register : ILiveFieldSubscription -> unit
+        /// Tries to find a subscription based on the type name and field name.
+        abstract member TryFindSubscription : string -> string -> ILiveFieldSubscription option
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : obj -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
@@ -763,6 +765,7 @@ and DeferredExecutionInfo = {
 and DeferredExecutionInfoKind =
     | DeferredExecution
     | StreamedExecution
+    | LiveExecution
 
 /// The context used to hold all the information for a schema compiling proccess.
 and SchemaCompileContext =
@@ -1810,12 +1813,17 @@ and TypeMap() =
         defs |> Seq.iter (fun def -> this.AddType(def, overwrite))
 
     /// Converts this type map to a sequence of string * NamedDef values, with the first item being the key.
-    member __.ToSeq() =
-        map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
+    member __.ToSeq(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        let result = map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
+        if not includeDefaultTypes
+        then result |> Seq.filter (fun (k, _) -> not (isDefaultType k))
+        else result
 
     /// Converts this type map to a list of string * NamedDef values, with the first item being the key.
-    member this.ToList() =
-        this.ToSeq() |> List.ofSeq
+    member this.ToList(?includeDefaultTypes : bool) =
+        let includeDefaultTypes = defaultArg includeDefaultTypes false
+        this.ToSeq(includeDefaultTypes) |> List.ofSeq
 
     /// <summary>
     /// Tries to find a NamedDef in the map by it's key (the name).

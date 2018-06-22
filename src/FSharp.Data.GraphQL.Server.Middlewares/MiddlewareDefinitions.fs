@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
@@ -100,3 +101,39 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         member __.CompileSchema = Some compileMiddleware
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = Some reportMiddleware
+
+/// A function that resolves an identity name for a schema object, based on a object definition of it.
+type IdentityNameResolver = ObjectDef -> string
+
+type internal LiveQueryMiddleware(identityName : IdentityNameResolver) =
+    let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
+        let identity (identityName : string) (x : obj) = 
+            x.GetType().GetProperty(identityName).GetValue(x)
+        let makeSubscription id typeName fieldName : LiveFieldSubscription =
+            { Identity = identity id; TypeName = typeName; FieldName = fieldName }
+        let getObjDefs (def : FieldDef) =
+            let rec helper (acc : ObjectDef list) (def : TypeDef) =
+                match def with
+                | Object objdef -> objdef :: acc
+                | Nullable innerdef -> helper acc innerdef
+                | List innerdef -> helper acc innerdef
+                | Union udef -> (udef.Options |> List.ofArray) @ acc
+                | _ -> []
+            helper [] def.TypeDef
+        ctx.Schema.Query.Fields
+        |> Map.toSeq
+        |> Seq.collect (snd >> getObjDefs)
+        |> Seq.map (fun objdef -> identityName objdef, objdef)
+        |> Seq.filter (fun (id, objdef) -> not (isNull (objdef.Type.GetProperty(id))))
+        |> Seq.collect (fun (id, objdef) -> 
+            objdef.Fields
+            |> Map.toSeq
+            |> Seq.map (snd >> (fun fdef -> makeSubscription id objdef.Name fdef.Name)))
+        |> Seq.iter (fun x ->
+            if not (ctx.Schema.LiveFieldSubscriptionProvider.IsRegistered x.TypeName x.FieldName)
+            then ctx.Schema.LiveFieldSubscriptionProvider.Register x)
+        next ctx
+    interface IExecutorMiddleware with
+        member __.CompileSchema = Some middleware
+        member __.PlanOperation = None
+        member __.ExecuteOperationAsync = None
