@@ -58,7 +58,7 @@ type SchemaConfig =
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
                 registeredSubscriptions.Add(key, value)
-            member __.TryFindSubscription (typeName : string) (fieldName : string) =
+            member __.TryFind (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | (true, (sub, _)) -> Some sub
