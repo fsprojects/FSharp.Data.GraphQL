@@ -45,7 +45,8 @@ type SchemaConfig =
             member __.Publish (def: SubscriptionFieldDef<'Root, 'Input, 'Output>) (value: 'Input) =
                 match registeredSubscriptions.TryGetValue(def.Name) with
                 | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" def.Name }
+                | false, _ -> () }
+
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
@@ -57,6 +58,11 @@ type SchemaConfig =
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
                 registeredSubscriptions.Add(key, value)
+            member __.TryFindSubscription (typeName : string) (fieldName : string) =
+                let key = typeName, fieldName
+                match registeredSubscriptions.TryGetValue(key) with
+                | (true, (sub, _)) -> Some sub
+                | _ -> None
             member __.Add (identity) (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
@@ -66,7 +72,7 @@ type SchemaConfig =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> failwith (sprintf "A publish to a live query channel '%A' was made, but the channel does not exist." key) }
+                | false, _ -> () }
     /// Default SchemaConfig used by Schema when no config is provided.
     static member Default = 
         { Types = []
@@ -74,6 +80,7 @@ type SchemaConfig =
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
+
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
