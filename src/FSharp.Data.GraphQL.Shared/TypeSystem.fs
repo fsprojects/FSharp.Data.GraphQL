@@ -277,10 +277,8 @@ module Introspection =
           Types : IntrospectionType []
           /// Array of all directives supported by current schema.
           Directives : IntrospectionDirective [] }
-open Introspection
 
-
-/// Represents a subscription as described in the schema
+/// Represents a subscription as described in the schema.
 type Subscription = {
     /// The name of the subscription type in the schema
     Name: string
@@ -289,16 +287,75 @@ type Subscription = {
     Filter: (ResolveFieldContext -> obj -> obj -> obj option)
 }
 
-/// Describes the backing implementation for a subscription system
+/// Describes the backing implementation for a subscription system.
 and ISubscriptionProvider =
     interface
-        /// Registers a new subscription type
-        /// Called at schema compilation time
+        /// Registers a new subscription type, called at schema compilation time.
         abstract member Register: Subscription -> unit
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
         abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type
         abstract member Publish : SubscriptionFieldDef<'Root, 'Input, 'Output> -> 'Input -> unit
+    end
+
+/// Represents a subscription of a field in a live query.
+and ILiveFieldSubscription =
+    interface
+        /// A function that given the object marked with live directive, returns fields representing the identity of it.
+        abstract member Identity : obj -> obj
+        /// The type name of the object that is ready for live query in this subscription.
+        abstract member TypeName : string
+        /// The field name of the object that is ready for live query in this subscription.
+        abstract member FieldName : string
+    end
+
+/// Represents a generic typed, subscription field in a live query.
+and ILiveFieldSubscription<'Object, 'Identity> =
+    interface
+        inherit ILiveFieldSubscription
+        /// A function that given the object marked with live directive, returns fields representing the identity of it.
+        abstract member Identity : 'Object -> 'Identity
+    end
+
+/// Represents a subscription of a field in a live query.
+and LiveFieldSubscription = 
+    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
+      Identity : obj -> obj
+      /// The type name of the object that is ready for live query in this subscription.
+      TypeName : string
+      /// The field name of the object that is ready for live query in this subscription.
+      FieldName : string }
+    interface ILiveFieldSubscription with
+        member this.Identity x = this.Identity x
+        member this.TypeName = this.TypeName
+        member this.FieldName = this.FieldName
+
+/// Represents a generic typed, subscription field in a live query.
+and LiveFieldSubscription<'Object, 'Identity> =
+    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
+      Identity : 'Object -> 'Identity
+      /// The type name of the object that is ready for live query in this subscription.
+      TypeName : string
+      /// The field name of the object that is ready for live query in this subscription.
+      FieldName : string }
+    interface ILiveFieldSubscription<'Object, 'Identity> with
+        member this.Identity x = this.Identity x
+    interface ILiveFieldSubscription with
+        member this.Identity x = upcast this.Identity (downcast x)
+        member this.TypeName = this.TypeName
+        member this.FieldName = this.FieldName
+
+/// Describes the backing implementation of a live query subscription system.
+and ILiveFieldSubscriptionProvider =
+    interface
+        /// Checks if a type and a field is registered in the provider.
+        abstract member IsRegistered : string -> string -> bool
+        /// Registers a new live query subscription type, called at schema compilation time.
+        abstract member Register : ILiveFieldSubscription -> unit
+        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
+        abstract member Add : obj -> string -> string -> IObservable<obj>
+        /// Publishes an event to the subscription system, given the key of the subscription type.
+        abstract member Publish<'T> : string -> string -> 'T -> unit
     end
 
 
@@ -344,9 +401,16 @@ and ISchema =
         /// Returns an introspected representation of current schema.
         abstract Introspected : Introspection.IntrospectionSchema
 
+        /// Returns a function called when errors occurred during query execution.
+        /// It's used to retrieve messages shown as output to the client.
+        /// May be also used to log messages before returning them.
         abstract ParseError : exn -> string
 
+        /// Returns the subscription provider implementation for this schema.
         abstract SubscriptionProvider : ISubscriptionProvider
+
+        /// Returns the live query subscription provider implementation for this schema.
+        abstract LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
 
     end
 

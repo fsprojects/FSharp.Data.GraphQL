@@ -18,19 +18,22 @@ type SchemaConfig =
       Types : NamedDef list
       /// List of custom directives that should be included as known to the schema.
       Directives : DirectiveDef list
-      /// Function called, when errors occurred during query execution.
+      /// Function called when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseError: exn -> string
+      ParseError : exn -> string
       /// Provider for the back-end of the subscription system.
-      SubscriptionProvider: ISubscriptionProvider
+      SubscriptionProvider : ISubscriptionProvider
+      /// Provider for the back-end of the live query subscription system.
+      LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() = 
         let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
         { new ISubscriptionProvider with
-            member __.Register (subscription: Subscription) =
+            member __.Register (subscription : Subscription) =
                 registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
+
             member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
                 match registeredSubscriptions.TryGetValue(subdef.Name) with
                 | true, (sub, channel) -> 
@@ -43,12 +46,34 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(def.Name) with
                 | true, (_, channel) -> channel.OnNext(box value)
                 | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" def.Name }
-    /// Default SchemaConfig value for Schemas.
+    /// Returns the default live field Subscription Provider, backed by Observable streams.
+    static member DefaultLiveFieldSubscriptionProvider() =
+        let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
+        { new ILiveFieldSubscriptionProvider with 
+            member __.IsRegistered (typeName : string) (fieldName : string) =
+                let key = typeName, fieldName
+                registeredSubscriptions.ContainsKey(key)
+            member __.Register (subscription : ILiveFieldSubscription) =
+                let key = subscription.TypeName, subscription.FieldName
+                let value = subscription, new Subject<obj>()
+                registeredSubscriptions.Add(key, value)
+            member __.Add (identity) (typeName : string) (fieldName : string) =
+                let key = typeName, fieldName
+                match registeredSubscriptions.TryGetValue(key) with
+                | true, (sub, channel) -> channel |> Observable.filter (fun o -> sub.Identity o = identity)
+                | false, _ -> Observable.Empty()
+            member __.Publish<'T> (typeName : string) (fieldName : string) (value : 'T) =
+                let key = typeName, fieldName
+                match registeredSubscriptions.TryGetValue(key) with
+                | true, (_, channel) -> channel.OnNext(box value)
+                | false, _ -> failwith (sprintf "A publish to a live query channel '%A' was made, but the channel does not exist." key) }
+    /// Default SchemaConfig used by Schema when no config is provided.
     static member Default = 
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError = fun e -> e.Message
-          SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider() }
+          SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
+          LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
@@ -238,6 +263,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
         member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
+        member __.LiveFieldSubscriptionProvider = schemaConfig.LiveFieldSubscriptionProvider        
 
     interface ISchema<'Root> with
         member __.Query = query
