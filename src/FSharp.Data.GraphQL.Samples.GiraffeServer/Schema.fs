@@ -5,6 +5,9 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
+open System.Threading
+open System.Threading.Tasks
+open FSharp.Data.GraphQL.Ast
 
 type Episode =
     | NewHope = 1
@@ -193,7 +196,8 @@ module Schema =
             name = "Query",
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
+                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
+                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id"))) ])
 
     let Mutation =
         Define.Object<Root>(
@@ -205,10 +209,11 @@ module Schema =
                     "Sets a moon status",
                     [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
                     fun ctx _ ->
-                        getPlanet(ctx.Arg("id"))
+                        getPlanet (ctx.Arg("id"))
                         |> Option.map (fun x ->
                             x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
                             schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
+                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "ismoon" x
                             x))])
 
     let Subscription =
