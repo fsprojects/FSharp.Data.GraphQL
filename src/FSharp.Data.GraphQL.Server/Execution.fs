@@ -10,9 +10,6 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Helpers
-open System.Reactive.Linq
-open System.Reactive.Linq
-open FSharp.Data.GraphQL
 
 type Error = string * obj list
 
@@ -607,34 +604,24 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     | _ -> nvl path e x.Value |> Seq.singleton)
                   |> Seq.collect id
             | x, _ -> nvl path e x |> Seq.singleton
-    let getFieldName (node : ResolverNode) =
-        match node.Children |> Array.tryHead with
-        | Some c -> c.Name
-        | None -> failwithf "Expected a child for the object %A, but got none." node.Value
-    let rec getObjectName (returnDef : OutputDef) (value : obj) (possibleTypesFn : TypeDef -> ObjectDef []) =
-        match returnDef with
-        | Object objdef -> objdef.Name
-        | Scalar scalardef -> scalardef.Name
-        | Enum enumdef -> enumdef.Name
-        | Nullable (Output innerdef) -> getObjectName innerdef value possibleTypesFn
-        | Interface idef -> idef.Name
-        | Union udef ->
-            let resolver = resolveUnionType possibleTypesFn udef
-            match toOption value with
-            | Some v -> getObjectName (resolver v) value possibleTypesFn
-            | None -> failwithf "Unexpected value of returnDef: %O" returnDef
-        | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
-    let getFieldCtx (d : DeferredExecutionInfo) =
-        let fdef = d.Info.Definition
-        let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
-        { ExecutionInfo = d.Info
-          Context = ctx
-          ReturnType = fdef.TypeDef
-          ParentType = objdef
-          Schema = ctx.Schema
-          Args = args
-          Variables = ctx.Variables }
     let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
+        let getFieldName (node : ResolverNode) =
+            match node.Children |> Array.tryHead with
+            | Some c -> c.Name
+            | None -> failwithf "Expected a child for the object %A, but got none." node.Value
+        let rec getObjectName (returnDef : OutputDef) (value : obj) (possibleTypesFn : TypeDef -> ObjectDef []) =
+            match returnDef with
+            | Object objdef -> objdef.Name
+            | Scalar scalardef -> scalardef.Name
+            | Enum enumdef -> enumdef.Name
+            | Nullable (Output innerdef) -> getObjectName innerdef value possibleTypesFn
+            | Interface idef -> idef.Name
+            | Union udef ->
+                let resolver = resolveUnionType possibleTypesFn udef
+                match toOption value with
+                | Some v -> getObjectName (resolver v) value possibleTypesFn
+                | None -> failwithf "Unexpected value of returnDef: %O" returnDef
+            | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
         match d.Kind with
         | LiveExecution ->
             match tree with
@@ -657,7 +644,16 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             | _ -> Seq.empty
         | _ -> Seq.empty
     let rec deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) =
-        let fieldCtx = getFieldCtx d
+        let fdef = d.Info.Definition
+        let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
+        let fieldCtx = 
+            { ExecutionInfo = d.Info
+              Context = ctx
+              ReturnType = fdef.TypeDef
+              ParentType = objdef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables }
         let path = d.Path |> List.map (fun x -> x :> obj)
         traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
