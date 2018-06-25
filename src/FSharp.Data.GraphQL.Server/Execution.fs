@@ -635,22 +635,25 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
           Args = args
           Variables = ctx.Variables }
     let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
-        match tree with
-        | ResolverObjectNode node ->
-            let value = tree.Value
-            let typeName = getObjectName d.Info.ReturnDef value ctx.Schema.GetPossibleTypes
-            let fieldName = getFieldName node
-            let provider = ctx.Schema.LiveFieldSubscriptionProvider
-            let identity = provider.TryFind typeName fieldName |> Option.map (fun x -> x.Identity)
-            match identity, toOption value with
-            | Some identity, Some value ->
-                provider.Add (identity value) typeName fieldName
-                |> Observable.map (fun v ->
-                    let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
-                    let data, err = treeToDict tree
-                    mapResult data err path d.Kind)
-                |> Observable.toSeq
-                |> Seq.concat
+        match d.Kind with
+        | LiveExecution ->
+            match tree with
+            | ResolverObjectNode node ->
+                let value = tree.Value
+                let typeName = getObjectName d.Info.ReturnDef value ctx.Schema.GetPossibleTypes
+                let fieldName = getFieldName node
+                let provider = ctx.Schema.LiveFieldSubscriptionProvider
+                let identity = provider.TryFind typeName fieldName |> Option.map (fun x -> x.Identity)
+                match identity, toOption value with
+                | Some identity, Some value ->
+                    provider.Add (identity value) typeName fieldName
+                    |> Observable.map (fun v ->
+                        let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
+                        let data, err = treeToDict tree
+                        mapResult data err path d.Kind)
+                    |> Observable.toSeq
+                    |> Seq.concat
+                | _ -> Seq.empty
             | _ -> Seq.empty
         | _ -> Seq.empty
     let rec deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) =
