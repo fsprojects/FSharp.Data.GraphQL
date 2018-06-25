@@ -9,13 +9,18 @@ open FSharp.Data.GraphQL.Execution
 open System.Threading
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Tests
+
+#nowarn "40"
 
 type TestSubject = {
+    id: string
     a: string
     b: string
     union: UnionTestSubject
     list: UnionTestSubject list
     innerList: InnerTestSubject list
+    mutable live: string
 }
 
 and InnerTestSubject = {
@@ -36,77 +41,147 @@ and B = {
     id: string
     b: int
 }
-let executor =
-    let AType =
-        Define.Object<A>(
-            "A", [
-                Define.Field("a", String, resolve = fun _ a -> a.a)
-                Define.Field("id", String, resolve = fun _ a -> a.id)
-            ])
-    let BType = 
-        Define.Object<B>(
-            "B", [
-                Define.Field("id", String, (fun _ b -> b.id))
-                Define.Field("b", Int, (fun _ b -> b.b))
-            ])
-    let UnionType =
-        Define.Union(
-            name = "Union",
-            options = [ AType; BType ] ,
-            resolveValue = (fun u ->
-                match u with
-                | A a -> box a 
-                | B b -> box b),
-            resolveType = (fun u ->
-                match u with
-                | A _ -> upcast AType
-                | B _ -> upcast BType))
-    let rec InnerDataType =
-        Define.Object<InnerTestSubject>(
-            name = "InnerData",
-            fieldsFn = fun () ->
-            [
-                Define.Field("a", String, (fun _ d -> d.a))
-                Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
-            ])
-    let DataType =
-        Define.Object<TestSubject>(
-            name = "Data", 
-            fieldsFn = fun () -> 
-            [
-                Define.Field("a", String, (fun _ d -> d.a))
-                Define.Field("b", String, (fun _ d -> d.b))
-                Define.Field("union", UnionType, (fun _ d -> d.union))
-                Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
-                Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
-            ])
-    let data = {
-           a = "Apple"
-           b = "Banana"
-           union = A {
-               id = "1"
-               a = "Union A"
-           }
-           list = [
-               A { 
-                   id = "2"
-                   a = "Union A" 
-               }; 
-               B { 
-                   id = "3"
-                   b = 4
-               } 
-           ]
-           innerList = [ 
-               { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } 
-           ]
+
+let AType =
+    Define.Object<A>(
+        "A", [
+            Define.Field("a", String, resolve = fun _ a -> a.a)
+            Define.Field("id", String, resolve = fun _ a -> a.id)
+        ])
+
+let BType = 
+    Define.Object<B>(
+        "B", [
+            Define.Field("id", String, (fun _ b -> b.id))
+            Define.Field("b", Int, (fun _ b -> b.b))
+        ])
+
+let UnionType =
+    Define.Union(
+        name = "Union",
+        options = [ AType; BType ] ,
+        resolveValue = (fun u ->
+            match u with
+            | A a -> box a 
+            | B b -> box b),
+        resolveType = (fun u ->
+            match u with
+            | A _ -> upcast AType
+            | B _ -> upcast BType))
+
+let rec InnerDataType =
+    Define.Object<InnerTestSubject>(
+        name = "InnerData",
+        fieldsFn = fun () ->
+        [
+            Define.Field("a", String, (fun _ d -> d.a))
+            Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
+        ])
+
+let DataType =
+    Define.Object<TestSubject>(
+        name = "Data", 
+        fieldsFn = fun () -> 
+        [
+            Define.Field("id", String, (fun _ d -> d.id))
+            Define.Field("a", String, (fun _ d -> d.a))
+            Define.Field("b", String, (fun _ d -> d.b))
+            Define.Field("union", UnionType, (fun _ d -> d.union))
+            Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
+            Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
+            Define.Field("live", String, (fun _ d -> d.live))
+        ])
+
+let data = {
+       id = "1"
+       a = "Apple"
+       b = "Banana"
+       union = A {
+           id = "1"
+           a = "Union A"
        }
-    let Query = 
-        Define.Object<TestSubject>(
-            name = "Query",
-            fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
-    let schema = Schema(Query)
-    Executor(schema)
+       list = [
+           A { 
+               id = "2"
+               a = "Union A" 
+           }; 
+           B { 
+               id = "3"
+               b = 4
+           } 
+       ]
+       innerList = [ 
+           { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } 
+       ]
+       live = "some value"
+   }
+
+let Query = 
+    Define.Object<TestSubject>(
+        name = "Query",
+        fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
+
+let config = SchemaConfig.Default
+
+let sub =
+    { FieldName = "live"
+      TypeName = "Data"
+      Identity = fun (x : TestSubject) -> x.id }
+
+config.LiveFieldSubscriptionProvider.Register sub
+
+let schema = Schema(Query, config = config)
+    
+let executor = Executor(schema)
+
+let updateData () =
+    data.live <- "another value"
+    config.LiveFieldSubscriptionProvider.Publish "Data" "live" data
+
+
+[<Fact>]
+let ``Live Query`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "id", upcast "1"
+            ]
+        ]
+    let expectedLive2 =
+        NameValueLookup.ofList [
+            "data", upcast "some value"
+            "path", upcast ["testData"; "live"]
+        ]
+    let expectedLive1 =
+        NameValueLookup.ofList [
+            "data", upcast "another value"
+            "path", upcast ["testData"; "live"]
+        ]
+    let query = parse """{
+        testData {
+            id
+            live @live
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred 
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then set mre)
+        updateData ()
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedLive1
+        |> contains expectedLive2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Parallell Defer and Stream`` () =
