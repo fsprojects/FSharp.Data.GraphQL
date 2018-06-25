@@ -779,14 +779,14 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
         | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x), ctx.Metadata))
         | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors', ctx.Metadata))
     match ctx.ExecutionPlan.Operation.OperationType with
-    | Subscription ->
-        match ctx.Schema.Subscription with
-        | Some s ->
-            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue, ctx.Metadata))
-        | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
+    | Query -> parseQuery ctx.Schema.Query
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some m ->
             parseQuery m
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
-    | Query -> parseQuery ctx.Schema.Query
+    | Subscription ->
+        match ctx.Schema.Subscription with
+        | Some s ->
+            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue, ctx.Metadata))
+        | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))
