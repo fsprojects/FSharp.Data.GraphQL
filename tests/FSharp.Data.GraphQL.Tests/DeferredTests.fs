@@ -49,7 +49,7 @@ let AType =
             Define.Field("id", String, resolve = fun _ a -> a.id)
         ])
 
-let BType = 
+let BType =
     Define.Object<B>(
         "B", [
             Define.Field("id", String, (fun _ b -> b.id))
@@ -62,7 +62,7 @@ let UnionType =
         options = [ AType; BType ] ,
         resolveValue = (fun u ->
             match u with
-            | A a -> box a 
+            | A a -> box a
             | B b -> box b),
         resolveType = (fun u ->
             match u with
@@ -80,8 +80,8 @@ let rec InnerDataType =
 
 let DataType =
     Define.Object<TestSubject>(
-        name = "Data", 
-        fieldsFn = fun () -> 
+        name = "Data",
+        fieldsFn = fun () ->
         [
             Define.Field("id", String, (fun _ d -> d.id))
             Define.Field("a", String, (fun _ d -> d.a))
@@ -101,22 +101,22 @@ let data = {
            a = "Union A"
        }
        list = [
-           A { 
+           A {
                id = "2"
-               a = "Union A" 
-           }; 
-           B { 
+               a = "Union A"
+           };
+           B {
                id = "3"
                b = 4
-           } 
+           }
        ]
-       innerList = [ 
-           { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] } 
+       innerList = [
+           { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] }
        ]
        live = "some value"
    }
 
-let Query = 
+let Query =
     Define.Object<TestSubject>(
         name = "Query",
         fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
@@ -131,13 +131,15 @@ let sub =
 config.LiveFieldSubscriptionProvider.Register sub
 
 let schema = Schema(Query, config = config)
-    
+
 let executor = Executor(schema)
+
+let hasSubscribers () =
+    config.LiveFieldSubscriptionProvider.HasSubscribers "Data" "live"
 
 let updateData () =
     data.live <- "another value"
     config.LiveFieldSubscriptionProvider.Publish "Data" "live" data
-
 
 [<Fact>]
 let ``Live Query`` () =
@@ -170,10 +172,11 @@ let ``Live Query`` () =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred 
-        |> Observable.add (fun x -> 
+        deferred
+        |> Observable.add (fun x ->
             actualDeferred.Add(x)
             if actualDeferred.Count = 2 then set mre)
+        waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
         updateData ()
         wait mre "Timeout while waiting for Deferred GQLResponse"
         actualDeferred
@@ -205,13 +208,13 @@ let ``Parallell Defer and Stream`` () =
             ] :> obj
             "path", upcast ["testData"; "innerList"]
         ]
-    let query s = 
+    let query s =
         sprintf """{
             testData {
                 a @%s
                 b
                 innerList @%s {
-                    a                    
+                    a
                 }
             }
         }""" s s
@@ -221,11 +224,11 @@ let ``Parallell Defer and Stream`` () =
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
-        | Deferred(data, errors, deferred) -> 
+        | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
             deferred
-            |> Observable.add (fun x -> 
+            |> Observable.add (fun x ->
                 actualDeferred.Add(x)
                 if actualDeferred.Count = 2 then set mre)
             wait mre "Timeout while waiting for Deferred GQLResponse"
@@ -257,7 +260,7 @@ let ``Inner Object List Defer and Stream`` () =
             testData {
                 b
                 innerList @%s {
-                    a                    
+                    a
                 }
             }
         }"""
@@ -267,7 +270,7 @@ let ``Inner Object List Defer and Stream`` () =
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
-        | Deferred(data, errors, deferred) -> 
+        | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
             deferred |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
@@ -311,7 +314,7 @@ let ``Nested Inner Object List Defer`` () =
                     a
                     innerList @defer {
                         a
-                    }                    
+                    }
                 }
             }
         }"""
@@ -322,8 +325,8 @@ let ``Nested Inner Object List Defer`` () =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred 
-        |> Observable.add (fun x -> 
+        deferred
+        |> Observable.add (fun x ->
             actualDeferred.Add(x)
             if actualDeferred.Count = 2 then set mre)
         wait mre "Timeout while waiting for Deferred GQLResponse"
@@ -379,7 +382,7 @@ let ``Nested Inner Object List Stream`` () =
                     a
                     innerList @stream {
                         a
-                    }                    
+                    }
                 }
             }
         }"""
@@ -390,8 +393,8 @@ let ``Nested Inner Object List Stream`` () =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred 
-        |> Observable.add (fun x -> 
+        deferred
+        |> Observable.add (fun x ->
             actualDeferred.Add(x)
             if actualDeferred.Count = 3 then set mre)
         wait mre "Timeout while waiting for Deferred GQLResponse"
@@ -428,7 +431,7 @@ let ``Simple Defer and Stream`` () =
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
-        | Deferred(data, errors, deferred) -> 
+        | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
             deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
@@ -608,7 +611,7 @@ let ``List Stream``() =
                 ] :> obj
             ] :> obj
             "path", upcast ["testData" :> obj; "list" :> obj; 0 :> obj]
-        ]        
+        ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", [
@@ -641,8 +644,8 @@ let ``List Stream``() =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred 
-        |> Observable.add (fun x -> 
+        deferred
+        |> Observable.add (fun x ->
             actualDeferred.Add(x)
             if actualDeferred.Count = 2 then mre.Set() |> ignore)
         if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
@@ -690,7 +693,7 @@ let ``Union Defer and Stream`` () =
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
-        | Deferred(data, errors, deferred) -> 
+        | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
             deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)

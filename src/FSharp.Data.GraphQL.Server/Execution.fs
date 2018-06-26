@@ -646,7 +646,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
     let rec deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) =
         let fdef = d.Info.Definition
         let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
-        let fieldCtx = 
+        let fieldCtx =
             { ExecutionInfo = d.Info
               Context = ctx
               ReturnType = fdef.TypeDef
@@ -676,7 +676,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 if d.DeferredFields.Length > 0
                                 then errorDict tree "Maximum degree of nested deferred executions reached." path
                                 else treeToDict tree
-                            return mapResult data err path d.Kind
+                            let deferred = mapResult data err path d.Kind
+                            let live = mapLiveResult tree path d fieldCtx
+                            return Seq.append deferred live
                         }) >> AsyncVal.collectParallel))
                 |> Array.ofList
                 |> AsyncVal.appendParallel

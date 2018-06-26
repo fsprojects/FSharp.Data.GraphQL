@@ -13,7 +13,7 @@ open FSharp.Data.GraphQL.Introspection
 
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
-    { /// List of types that couldn't be resolved from schema query root 
+    { /// List of types that couldn't be resolved from schema query root
       /// tree traversal, but should be included anyway.
       Types : NamedDef list
       /// List of custom directives that should be included as known to the schema.
@@ -28,7 +28,7 @@ type SchemaConfig =
       LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
-    static member DefaultSubscriptionProvider() = 
+    static member DefaultSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
         { new ISubscriptionProvider with
             member __.Register (subscription : Subscription) =
@@ -44,7 +44,12 @@ type SchemaConfig =
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
-        { new ILiveFieldSubscriptionProvider with 
+        { new ILiveFieldSubscriptionProvider with
+            member __.HasSubscribers (typeName : string) (fieldName : string) =
+                let key = typeName, fieldName
+                match registeredSubscriptions.TryGetValue(key) with
+                | true, (_, channel) -> channel.HasObservers
+                | _ -> false
             member __.IsRegistered (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 registeredSubscriptions.ContainsKey(key)
@@ -68,17 +73,16 @@ type SchemaConfig =
                 | true, (_, channel) -> channel.OnNext(box value)
                 | false, _ -> failwith (sprintf "A publish to a live field channel '%A' was made, but the channel does not exist." key) }
     /// Default SchemaConfig used by Schema when no config is provided.
-    static member Default = 
+    static member Default =
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
 
-
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let initialTypes: NamedDef list = 
+    let initialTypes: NamedDef list =
         [ Int
           String
           Boolean
@@ -89,7 +93,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           __Schema
           query ]
 
-    let schemaConfig = 
+    let schemaConfig =
         match config with
         | None -> SchemaConfig.Default
         | Some c -> c
@@ -105,7 +109,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             match v with
             | Object odef -> Some odef
             | _ -> None)
-        |> Seq.fold (fun acc objdef -> 
+        |> Seq.fold (fun acc objdef ->
             objdef.Implements
             |> Array.fold (fun acc' iface ->
                 match Map.tryFind iface.Name acc' with
@@ -113,7 +117,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
                 | None -> Map.add iface.Name [objdef] acc') acc) Map.empty
 
     let implementations = lazy (getImplementations typeMap)
-    
+
     let getPossibleTypes abstractDef =
         match abstractDef with
         | Union u -> u.Options
@@ -123,11 +127,11 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let rec introspectTypeRef isNullable (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
         | Nullable inner -> introspectTypeRef true namedTypes inner
-        | List inner -> 
-            if isNullable 
+        | List inner ->
+            if isNullable
             then IntrospectionTypeRef.List(introspectTypeRef false namedTypes inner)
             else IntrospectionTypeRef.NonNull(introspectTypeRef true namedTypes typedef)
-        | Named named -> 
+        | Named named ->
             if isNullable
             then Map.find named.Name namedTypes
             else IntrospectionTypeRef.NonNull(introspectTypeRef true namedTypes typedef)
@@ -142,7 +146,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
           Description = fdef.Description
-          Args = fdef.Args |> Array.map (introspectInput namedTypes) 
+          Args = fdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes fdef.TypeDef
           IsDeprecated = Option.isSome fdef.DeprecationReason
           DeprecationReason = fdef.DeprecationReason }
@@ -150,7 +154,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
         { Name = subdef.Name
           Description = subdef.Description
-          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Args = subdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes subdef.InputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
@@ -175,55 +179,55 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     let introspectType (namedTypes: Map<string, IntrospectionTypeRef>) typedef =
         match typedef with
-        | Scalar scalardef -> 
+        | Scalar scalardef ->
             IntrospectionType.Scalar(scalardef.Name, scalardef.Description)
         | SubscriptionObject subdef ->
             let fields =
                 subdef.Fields
                 |> Map.toArray
                 |> Array.map (snd >> instrospectSubscriptionField namedTypes)
-            let interfaces = 
-                subdef.Implements 
+            let interfaces =
+                subdef.Implements
                 |> Array.map (fun idef -> Map.find idef.Name namedTypes)
             IntrospectionType.Object(subdef.Name, subdef.Description, fields, interfaces)
-        | Object objdef -> 
-            let fields = 
-                objdef.Fields 
+        | Object objdef ->
+            let fields =
+                objdef.Fields
                 |> Map.toArray
                 |> Array.map (snd >> introspectField namedTypes)
-            let interfaces = 
-                objdef.Implements 
+            let interfaces =
+                objdef.Implements
                 |> Array.map (fun idef -> Map.find idef.Name namedTypes)
             IntrospectionType.Object(objdef.Name, objdef.Description, fields, interfaces)
-        | InputObject inObjDef -> 
-            let inputs = 
-                inObjDef.Fields 
+        | InputObject inObjDef ->
+            let inputs =
+                inObjDef.Fields
                 |> Array.map (introspectInput namedTypes)
             IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
-        | Union uniondef -> 
-            let possibleTypes = 
+        | Union uniondef ->
+            let possibleTypes =
                 getPossibleTypes uniondef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Union(uniondef.Name, uniondef.Description, possibleTypes)
-        | Enum enumdef -> 
-            let enumVals = 
+        | Enum enumdef ->
+            let enumVals =
                 enumdef.Options
                 |> Array.map introspectEnumVal
             IntrospectionType.Enum(enumdef.Name, enumdef.Description, enumVals)
         | Interface idef ->
-            let fields = 
-                idef.Fields 
+            let fields =
+                idef.Fields
                 |> Array.map (introspectField namedTypes)
-            let possibleTypes = 
+            let possibleTypes =
                 getPossibleTypes idef
                 |> Array.map (fun tdef -> Map.find tdef.Name namedTypes)
             IntrospectionType.Interface(idef.Name, idef.Description, fields, possibleTypes)
-        | _ -> failwithf "Unexpected value of typedef: %O" typedef  
+        | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let introspectSchema (types : TypeMap) : IntrospectionSchema =
-        let inamed = 
+        let inamed =
             types.ToSeq()
-            |> Seq.map (fun (typeName, typedef) -> 
+            |> Seq.map (fun (typeName, typedef) ->
                 match typedef with
                 | Scalar x -> typeName, { Kind = TypeKind.SCALAR; Name = Some typeName; Description = x.Description; OfType = None }
                 | Object x -> typeName, { Kind = TypeKind.OBJECT; Name = Some typeName; Description = x.Description; OfType = None }
@@ -237,8 +241,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             types.ToSeq()
             |> Seq.toArray
             |> Array.map (snd >> (introspectType inamed))
-        let idirectives = 
-            schemaConfig.Directives 
+        let idirectives =
+            schemaConfig.Directives
             |> List.map (introspectDirective inamed)
             |> List.toArray
         { QueryType = Map.find query.Name inamed
@@ -246,10 +250,10 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           SubscriptionType = None
           Types = itypes
           Directives = idirectives }
-          
+
     let introspected = lazy (introspectSchema typeMap)
 
-    interface ISchema with        
+    interface ISchema with
         member __.TypeMap = typeMap
         member __.Directives = schemaConfig.Directives |> List.toArray
         member __.Introspected = introspected.Force()
@@ -264,7 +268,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
         member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
-        member __.LiveFieldSubscriptionProvider = schemaConfig.LiveFieldSubscriptionProvider        
+        member __.LiveFieldSubscriptionProvider = schemaConfig.LiveFieldSubscriptionProvider
 
     interface ISchema<'Root> with
         member __.Query = query
@@ -276,4 +280,3 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     interface System.Collections.IEnumerable with
         member __.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
-        
