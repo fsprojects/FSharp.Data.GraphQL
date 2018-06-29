@@ -109,6 +109,7 @@ export default class QueryRunner extends React.Component {
                 break;
             case "live":
                 this.setState({ query: liveQuery });
+                break;
             default:
                 break;
         }

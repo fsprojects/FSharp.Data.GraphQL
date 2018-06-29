@@ -274,6 +274,27 @@ Define.Field("friends", ListOf (Nullable CharacterType),
 
 By retrieving this filter on the field resolution context, it is possible to use client code to customize the query against a database, for example, and extend your GraphQL API features.
 
+### LiveQueryMiddleware
+
+This middleware can be used to quickly allow your schema fields to be able to be queried with a `live` directive, assuming that all of them have an identity property name that can be discovered by a function, `IdentityNameResolver`:
+
+```fsharp
+/// A function that resolves an identity name for a schema object, based on a object definition of it.
+type IdentityNameResolver = ObjectDef -> string
+```
+
+For example, if all of our schema objects have an identity field named `Id`, we could use our middleware like this:
+
+```fsharp
+let schema = Schema(query = queryType)
+
+let middlewares = [ Define.LiveQueryMiddleware(fun _ -> "Id") ]
+
+let executor = Executor(schema, middlewares)
+```
+
+The `IdentityNameResolver` is optional, though. If no resolver function is provided, this default implementation of is used. Also, notifications to subscribers must be done via `Publish` of `ILiveFieldSubscriptionProvider`, like explained above.
+
 ### Using extensions to build your own middlewares
 
 You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` package to help building your own middlewares. When making a middleware, often you will need to modify schema definitions to add features to the schema defined by the user code. The `ObjectListFilter` middleware is an example, where all fields that implements lists of a certain type needs to be modified, by accepting an argument called `filter`.
