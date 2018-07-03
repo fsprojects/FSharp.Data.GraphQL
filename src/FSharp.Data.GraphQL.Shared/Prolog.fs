@@ -13,6 +13,30 @@ type GraphQLException(msg) =
 type MalformedQueryException(msg) =
     inherit GraphQLException(msg)
 
+/// General helper functions and types.
+module Helpers =
+    /// Casts a System.Object to an option to a System.Object option.
+    let optionCast (value: obj) =
+        let optionDef = typedefof<option<_>>
+        if isNull value then None
+        else
+            let t = value.GetType()
+            let p = t.GetProperty("Value")
+            if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+                Some (p.GetValue(value, [||]))
+            else None
+
+    /// Matches a System.Object with an option.
+    /// If the object is an Option, returns it as Some, otherwise, return None.
+    let (|ObjectOption|_|) = optionCast
+
+    /// Lifts a System.Object to an option, unless it is already an option.
+    let toOption x = 
+        match x with
+        | null -> None
+        | ObjectOption v
+        | v -> Some v
+
 module internal Array =
 
     /// <summary>

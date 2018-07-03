@@ -8,14 +8,8 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Planning
-open FSharp.Data.GraphQL.Types.Introspection
-open FSharp.Data.GraphQL.Introspection
-open FSharp.Quotations
-open FSharp.Quotations.Patterns
-open FSharp.Reflection.FSharpReflectionExtensions
-open System.Collections.Generic
-open FParsec
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Helpers
 
 type Error = string * obj list
 
@@ -228,19 +222,6 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       Args = args
       Variables = ctx.Variables }         
                 
-
-let private optionCast (value: obj) =
-            let optionDef = typedefof<option<_>>
-            if isNull value then None
-            else
-                let t = value.GetType()
-                let v' = t.GetProperty("Value")
-                if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
-                    Some(v'.GetValue(value, [| |]))
-                else None
-
-let private (|SomeObj|_|) = optionCast
-
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
     then
@@ -249,12 +230,6 @@ let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (par
     else 
         execute ctx parentValue
         |> AsyncVal.map(fun v -> if isNull v then None else Some v)
-
-/// Lifts an object to an option unless it is already an option
-let private toOption x = 
-    match x with
-    | SomeObj(v)
-    | v -> Some(v)
 
 // Deferred values require knowledge of their parent value
 // Also, the values we return for the non-deferred values are all leaves in the resolution tree
@@ -390,7 +365,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
         match value with
         | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
         | None -> asyncVal{ return ResolverListNode{ Name = name; Value = None; Children = [| |]; } }
-        | SomeObj(:? System.Collections.IEnumerable as enumerable) ->
+        | ObjectOption (:? System.Collections.IEnumerable as enumerable) ->
             enumerable
             |> Seq.cast<obj>
             |> Seq.toList

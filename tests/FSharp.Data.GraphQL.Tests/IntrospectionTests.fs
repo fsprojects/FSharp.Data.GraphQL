@@ -121,6 +121,106 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
+[<Fact>]
+let ``Input field should be marked as nullable when its type is nullable`` () =
+    let root = Define.Object("Query", [ 
+        Define.Field("onlyField", String, "The only field", [ 
+            Define.Input("in", Nullable String) 
+        ], fun _ _ -> "Only value") 
+    ])
+    let schema = Schema(root)
+    let query = """{
+  __type(name: "Query") {
+    fields {
+      name
+      args {
+        name
+        type {
+          kind
+          name
+        }
+        defaultValue
+      }
+    }
+  }
+}
+"""
+    let result = sync <| Executor(schema).AsyncExecute(query)
+    let expected = NameValueLookup.ofList [
+        "__type", upcast NameValueLookup.ofList [
+            "fields", upcast [ 
+                NameValueLookup.ofList [
+                    "name", upcast "onlyField"
+                    "args", upcast [
+                        NameValueLookup.ofList [
+                            "name", upcast "in"
+                            "type", upcast NameValueLookup.ofList [
+                                "kind", upcast "SCALAR"
+                                "name", upcast "String"
+                            ]
+                            "defaultValue", null
+                        ]
+                    ]
+                ] 
+            ]
+        ]
+    ]
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Input field should be marked as nullable when its type is nullable and have default value provided`` () =
+    let root = Define.Object("Query", [ 
+        Define.Field("onlyField", String, "The only field", [ 
+            Define.Input("in", Nullable String, defaultValue = Some "1") 
+        ], fun _ _ -> "Only value") 
+    ])
+    let schema = Schema(root)
+    let query = """{
+  __type(name: "Query") {
+    fields {
+      name
+      args {
+        name
+        type {
+          kind
+          name
+        }
+        defaultValue
+      }
+    }
+  }
+}
+"""
+    let result = sync <| Executor(schema).AsyncExecute(query)
+    let expected = NameValueLookup.ofList [
+        "__type", upcast NameValueLookup.ofList [
+            "fields", upcast [ 
+                NameValueLookup.ofList [
+                    "name", upcast "onlyField"
+                    "args", upcast [
+                        NameValueLookup.ofList [
+                            "name", upcast "in"
+                            "type", upcast NameValueLookup.ofList [
+                                "kind", upcast "SCALAR"
+                                "name", upcast "String"
+                            ]
+                            "defaultValue", upcast "1"
+                        ]
+                    ]
+                ] 
+            ]
+        ]
+    ]
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
 [<Fact(Skip="FIXME: investigate reason of failure")>]
 let ``Introspection schema should be serializable back and forth using json`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
