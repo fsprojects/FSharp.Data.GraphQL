@@ -21,15 +21,7 @@ type IntrospectionData = {
     Data:  IntrospectionResult
 }
 
-[<Fact>]
-let ``Input field should be marked as nullable when defaultValue is provided`` () =
-    let root = Define.Object("Query", [ 
-        Define.Field("onlyField", String, "The only field", [ 
-            Define.Input("in", String, defaultValue = "1") 
-        ], fun _ _ -> "Only value") 
-    ])
-    let schema = Schema(root)
-    let query = """{
+let inputFieldQuery = """{
   __type(name: "Query") {
     fields {
       name
@@ -45,7 +37,16 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
   }
 }
 """
-    let result = sync <| Executor(schema).AsyncExecute(query)
+
+[<Fact>]
+let ``Input field should be marked as nullable when defaultValue is provided`` () =
+    let root = Define.Object("Query", [ 
+        Define.Field("onlyField", String, "The only field", [ 
+            Define.Input("in", String, defaultValue = "1") 
+        ], fun _ _ -> "Only value") 
+    ])
+    let schema = Schema(root)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [ 
@@ -79,23 +80,7 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
         ], fun _ _ -> "Only value") 
     ])
     let schema = Schema(root)
-    let query = """{
-  __type(name: "Query") {
-    fields {
-      name
-      args {
-        name
-        type {
-          kind
-          name
-        }
-        defaultValue
-      }
-    }
-  }
-}
-"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [ 
@@ -129,23 +114,7 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
         ], fun _ _ -> "Only value") 
     ])
     let schema = Schema(root)
-    let query = """{
-  __type(name: "Query") {
-    fields {
-      name
-      args {
-        name
-        type {
-          kind
-          name
-        }
-        defaultValue
-      }
-    }
-  }
-}
-"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [ 
@@ -179,23 +148,7 @@ let ``Input field should be marked as nullable when its type is nullable and hav
         ], fun _ _ -> "Only value") 
     ])
     let schema = Schema(root)
-    let query = """{
-  __type(name: "Query") {
-    fields {
-      name
-      args {
-        name
-        type {
-          kind
-          name
-        }
-        defaultValue
-      }
-    }
-  }
-}
-"""
-    let result = sync <| Executor(schema).AsyncExecute(query)
+    let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
             "fields", upcast [ 
