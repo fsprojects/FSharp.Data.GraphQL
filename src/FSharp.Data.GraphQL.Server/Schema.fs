@@ -109,7 +109,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         { Name = inputDef.Name
           Description = inputDef.Description
-          Type = introspectTypeRef false namedTypes inputDef.TypeDef
+          Type = introspectTypeRef (Option.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
           DefaultValue = inputDef.DefaultValue |> Option.map string }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
