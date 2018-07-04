@@ -172,22 +172,21 @@ type UserInput = { Name: string }
 
 [<Fact>]
 let ``Introspection works with query and mutation sharing same generic param`` =
-    let User = 
+    let user = 
         Define.Object<User>("User", 
             [ Define.AutoField("firstName", String)
               Define.AutoField("lastName", String) ])
-    let UserInput = 
+    let userInput = 
         Define.InputObject<UserInput>("UserInput", 
             [ Define.Input("name", String) ])
-    let Query = 
+    let query = 
         Define.Object<User list>("Query", 
-            [ Define.Field("users", ListOf User, fun _ u -> u) ])
-    let Mutation = 
+            [ Define.Field("users", ListOf user, "Query object", [ Define.Input("input", userInput) ], fun _ u -> u) ])
+    let mutation = 
         Define.Object<User list>("Mutation", 
-            [ Define.Field("addUser", User, fun _ u -> u |> List.head)])
-    let schema = Schema(Query, Mutation)
+            [ Define.Field("addUser", user, "Adds an user", [ Define.Input("input", userInput) ], fun _ u -> u |> List.head)])
+    let schema = Schema(query, mutation)
     Executor(schema).AsyncExecute(Introspection.introspectionQuery) |> sync |> ignore
-    ()
     
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
