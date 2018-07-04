@@ -5,7 +5,6 @@ module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
 #nowarn "25"
 
-open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -21,15 +20,119 @@ type IntrospectionData = {
     Data:  IntrospectionResult
 }
 
-
-[<Fact(Skip="FIXME: investigate reason of failure")>]
+[<Fact>]
 let ``Introspection schema should be serializable back and forth using json`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
     let schema = Schema(root)
-    let introResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery) |> sync
-    let json = toJson introResult
-    let deserialized:IntrospectionData = Helpers.fromJson json
-    deserialized.Data.__schema |> equals (schema :> ISchema).Introspected
+    let query = """query IntrospectionQuery {
+      __schema {
+        queryType { 
+          kind
+          name
+          description
+          ofType {
+            ...FullType
+          } 
+        }
+        mutationType { 
+          kind
+          name
+          description
+          ofType {
+            ...FullType
+          } 
+        }
+        subscriptionType { 
+          kind
+          name
+          description 
+          ofType {
+            ...FullType
+          } 
+        }
+        types {
+          ...FullType
+        }
+        directives {
+          name
+          description
+          locations
+          args {
+            ...InputValue
+          }
+        }
+      }
+    }
+
+    fragment FullType on __Type {
+      kind
+      name
+      description
+      fields(includeDeprecated: true) {
+        name
+        description
+        args {
+          ...InputValue
+        }
+        type {
+          ...TypeRef
+        }
+        isDeprecated
+        deprecationReason
+      }
+      inputFields {
+        ...InputValue
+      }
+      interfaces {
+        ...TypeRef
+      }
+      enumValues(includeDeprecated: true) {
+        name
+        description
+        isDeprecated
+        deprecationReason
+      }
+      possibleTypes {
+        ...TypeRef
+      }
+    }
+
+    fragment InputValue on __InputValue {
+      name
+      description
+      type { ...TypeRef }
+      defaultValue
+    }
+
+    fragment TypeRef on __Type {
+      kind
+      name
+      description
+      ofType {
+        kind
+        name
+        description
+        ofType {
+          kind
+          name
+          description
+          ofType {
+            kind
+            name
+            description
+          }
+        }
+      }
+    }"""
+    let result = Executor(schema).AsyncExecute(query) |> sync
+    match result with
+    | Direct (data, errors) ->
+        empty errors
+        let json = toJson data
+        let deserialized : IntrospectionData = Helpers.fromJson json
+        let expected = (schema :> ISchema).Introspected
+        deserialized.Data.__schema |> equals expected
+    | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =
@@ -83,7 +186,7 @@ let ``Introspection works with query and mutation sharing same generic param`` =
         Define.Object<User list>("Mutation", 
             [ Define.Field("addUser", User, fun _ u -> u |> List.head)])
     let schema = Schema(Query, Mutation)
-    let introResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery) |> sync
+    Executor(schema).AsyncExecute(Introspection.introspectionQuery) |> sync |> ignore
     ()
     
 [<Fact>]

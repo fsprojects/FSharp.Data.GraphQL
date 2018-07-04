@@ -2614,10 +2614,6 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
@@ -2634,10 +2630,6 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2647,7 +2639,7 @@ module SchemaDefinitions =
                      Args = [||]
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
-        
+
         /// <summary>
         /// Creates field defined inside object type.
         /// </summary>
@@ -2655,10 +2647,6 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2666,6 +2654,23 @@ module SchemaDefinitions =
                      TypeDef = typedef
                      Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
+                     DeprecationReason = None
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates field defined inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list, 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
+                     Args = args |> List.toArray
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
         
@@ -2677,10 +2682,6 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2700,10 +2701,6 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
                             deprecationReason : string) : FieldDef<'Val> = 
@@ -2721,10 +2718,6 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2742,10 +2735,6 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2764,10 +2753,6 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
@@ -2788,10 +2773,6 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
