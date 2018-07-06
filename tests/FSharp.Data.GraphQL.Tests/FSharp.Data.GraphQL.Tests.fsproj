@@ -39,6 +39,7 @@
     <Compile Include="LinqTests.fs" />
     <Compile Include="DeferredTests.fs" />
     <Compile Include="MiddlewaresTests.fs" />
+    <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.0' " />
   </ItemGroup>
   <ItemGroup>
