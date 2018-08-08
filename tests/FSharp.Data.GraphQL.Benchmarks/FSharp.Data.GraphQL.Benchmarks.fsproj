@@ -2,8 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <!-- The benchmarks we use only work on net46 -->
-    <TargetFrameworks>net461;netcoreapp2.0</TargetFrameworks>
+    <TargetFrameworks>netcoreapp2.0;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
