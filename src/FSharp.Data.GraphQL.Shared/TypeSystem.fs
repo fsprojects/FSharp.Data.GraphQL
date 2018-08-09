@@ -2654,10 +2654,6 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
@@ -2674,10 +2670,6 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2695,10 +2687,6 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2717,10 +2705,6 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2740,10 +2724,6 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
                             deprecationReason : string) : FieldDef<'Val> = 
@@ -2761,10 +2741,6 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2782,10 +2758,6 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
@@ -2804,10 +2776,6 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
@@ -2828,10 +2796,6 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value, 
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
@@ -2844,6 +2808,11 @@ module SchemaDefinitions =
                      DeprecationReason = Some deprecationReason
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a custom defined field using a custom field execution function.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="execField">Expression used to execute the field.</param>
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
@@ -2853,6 +2822,13 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             { Name = name
@@ -2865,6 +2841,14 @@ module SchemaDefinitions =
               Metadata = Metadata.Empty
             } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
 
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         description: string,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
@@ -2877,6 +2861,15 @@ module SchemaDefinitions =
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         description: string,
                                         args: InputFieldDef list,
@@ -2890,6 +2883,37 @@ module SchemaDefinitions =
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a subscription field inside object type. Field is marked as deprecated.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
+                                        deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = Some deprecationReason
+                     Args = args |> List.toArray
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
@@ -2901,6 +2925,14 @@ module SchemaDefinitions =
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              description: string,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
@@ -2913,6 +2945,15 @@ module SchemaDefinitions =
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              description: string,
                                              args: InputFieldDef list,
@@ -2922,6 +2963,30 @@ module SchemaDefinitions =
                      RootTypeDef = rootdef
                      OutputTypeDef = outputdef
                      DeprecationReason = None
+                     Args = args |> List.toArray
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value. Field is marked as deprecated.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             args: InputFieldDef list,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
+                                             deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = Some deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
