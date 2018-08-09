@@ -59,7 +59,7 @@ let private objectInfo(ctx: PlanningContext, parentDef: ObjectDef, field: Field,
           ParentDef = parentDef
           ReturnDef = 
             match parentDef with
-            | SubscriptionObject _ -> (fdef :?> SubscriptionFieldDef).InputTypeDef
+            | SubscriptionObject _ -> (fdef :?> SubscriptionFieldDef).OutputTypeDef
             | Object _ -> fdef.TypeDef
             | _ -> raise (GraphQLException (sprintf "Unexpected parentdef type!"))
           Definition = fdef

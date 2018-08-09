@@ -692,7 +692,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
     let name, info = Array.head resultSet
     let subdef = info.Definition :?> SubscriptionFieldDef
     let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
-    let returnType = subdef.InputTypeDef
+    let returnType = subdef.OutputTypeDef
     let fieldCtx = 
         { ExecutionInfo = info
           Context = ctx

@@ -1501,7 +1501,7 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
     override x.ToString() = x.Name + ": " + x.TypeDef.ToString()
 and SubscriptionFieldDef =
     interface
-        abstract InputTypeDef : OutputDef
+        abstract OutputTypeDef : OutputDef
         inherit FieldDef
     end
 and SubscriptionFieldDef<'Val> =
@@ -1509,13 +1509,17 @@ and SubscriptionFieldDef<'Val> =
         inherit SubscriptionFieldDef
         inherit FieldDef<'Val>
     end
-and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> =
+and SubscriptionFieldDef<'Root, 'Input, 'Output> =
+    interface
+        inherit SubscriptionFieldDef<'Root>
+    end
+and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 'Output> =
     {
         Name : string
         Description : string option
         DeprecationReason : string option
         // The type of the value that the subscription consumes, used to make sure that our filter function is properly typed
-        InputTypeDef : OutputDef<'Input>
+        OutputTypeDef : OutputDef<'Output>
         // The type of the root value, we need to thread this into our filter function
         RootTypeDef : OutputDef<'Root>
         Filter : Resolve
@@ -1531,10 +1535,10 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input> 
         member x.Args = x.Args
         member x.Metadata = x.Metadata
     interface SubscriptionFieldDef with
-        member x.InputTypeDef = x.InputTypeDef :> OutputDef
+        member x.OutputTypeDef = x.OutputTypeDef :> OutputDef
     interface FieldDef<'Root>
         member x.TypeDef = x.RootTypeDef
-    interface SubscriptionFieldDef<'Root>
+    interface SubscriptionFieldDef<'Root, 'Input, 'Output>
     interface IEquatable<FieldDef> with
         member x.Equals f = 
             x.Name = f.Name && 
@@ -2813,14 +2817,14 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
 
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, inputdef: #OutputDef<'Input>,
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputTypeDef: #OutputDef<'Input>,
                                         description: string,
                                         args: InputFieldDef list,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>): SubscriptionFieldDef<'Root> =
             { Name = name
               Description = Some description
               RootTypeDef = rootdef
-              InputTypeDef = inputdef
+              OutputTypeDef = outputTypeDef
               DeprecationReason = None
               Args = args |> List.toArray
               Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)

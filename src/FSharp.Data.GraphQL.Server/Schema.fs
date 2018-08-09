@@ -124,7 +124,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         { Name = subdef.Name
           Description = subdef.Description
           Args = subdef.Args |> Array.map (introspectInput namedTypes) 
-          Type = introspectTypeRef false namedTypes subdef.InputTypeDef
+          Type = introspectTypeRef false namedTypes subdef.OutputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
 
