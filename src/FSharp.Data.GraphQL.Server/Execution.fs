@@ -84,14 +84,15 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let rec stringify (sb: System.Text.StringBuilder) deep (o:obj) =
         match o with
         | :? NameValueLookup as lookup ->
-            sb.Append("{ ") |> ignore
-            lookup.Buffer
-            |> Array.iter (fun kv -> 
-                sb.Append(kv.Key).Append(": ") |> ignore
-                stringify sb (deep+1) kv.Value
-                sb.Append(",\r\n") |> ignore
-                pad sb deep)
-            sb.Remove(sb.Length - 4 - deep, 4 + deep).Append(" }") |> ignore
+            if lookup.Count > 0 then
+                sb.Append("{ ") |> ignore
+                lookup.Buffer
+                |> Array.iter (fun kv -> 
+                    sb.Append(kv.Key).Append(": ") |> ignore
+                    stringify sb (deep+1) kv.Value
+                    sb.Append(",\r\n") |> ignore
+                    pad sb deep)
+                sb.Remove(sb.Length - 4 - deep, 4 + deep).Append(" }") |> ignore
         | :? string as s ->
             sb.Append("\"").Append(s).Append("\"") |> ignore
         | :? System.Collections.IEnumerable as s -> 
@@ -495,6 +496,12 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
+let private formatErrors (errors : Error list) =
+    errors 
+    |> List.map (fun err ->
+        let (message, path) = err
+        NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultTrees =
         resultSet
@@ -609,11 +616,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             Args = args
             Variables = ctx.Variables
         }
-        let formatErrors (errors : Error list) =
-            errors 
-            |> List.map (fun err ->
-                let (message, path) = err
-                NameValueLookup.ofList ["message", upcast message; "path", upcast path])
         let nvli (path : obj list) (index : int) (err : Error list) data =
             let data' = [ data ] :> obj
             match err with
@@ -705,7 +707,10 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
     |> Observable.bind(fun v -> 
         buildResolverTree returnType fieldCtx fieldExecuteMap (Some v) 
         |> AsyncVal.map(treeToDict)
-        |> AsyncVal.map(fun data -> NameValueLookup.ofList["data", upcast data] :> Output)
+        |> AsyncVal.map(fun (data, err) -> 
+            match err with
+            | [] -> NameValueLookup.ofList["data", data.Value] :> Output
+            | _ -> NameValueLookup.ofList["data", data.Value; "errors", upcast (formatErrors err)] :> Output)
         |> AsyncVal.map(fun d -> printfn "Async dict %A" d;d)
         |> AsyncVal.toAsync
         |> Observable.ofAsync)
