@@ -286,7 +286,7 @@ type Subscription = {
     Name: string
     /// Filter function, used to determine what events we will propagate
     /// The 1st obj is the boxed root value, the second is the boxed value of the input object
-    Filter: (ResolveFieldContext -> obj -> obj -> bool)
+    Filter: (ResolveFieldContext -> obj -> obj -> obj option)
 }
 
 /// Describes the backing implementation for a subscription system
@@ -296,9 +296,9 @@ and ISubscriptionProvider =
         /// Called at schema compilation time
         abstract member Register: Subscription -> unit
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
-        abstract member Add : ResolveFieldContext -> obj -> string -> IObservable<obj>
+        abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type
-        abstract member Publish<'T> : string -> 'T -> unit
+        abstract member Publish : SubscriptionFieldDef<'Root, 'Input, 'Output> -> 'Input -> unit
     end
 
 
@@ -653,8 +653,13 @@ and Resolve =
     /// root defines the .NET type of the root object
     /// input defines the .NET type of the value being subscribed to
     /// expr is the untyped version of Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>
-    | Filter of root: Type * input:Type * expr:Expr
+    | Filter of root: Type * input:Type * output:Type * expr:Expr
 
+    /// Resolves the filter function of a subscription that has asyncronous fields.
+    /// root defines the .NET type of the root object
+    /// input defines the .NET type of the value being subscribed to
+    /// expr is the untyped version of Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>
+    | AsyncFilter of root: Type * input:Type * output:Type * expr:Expr
 
     | ResolveExpr of expr:Expr 
 
@@ -1856,6 +1861,11 @@ module Resolve =
             let d,c = FSharpType.GetFunctionElements typ
             Some(d,c)
         else None
+
+    let private (|FSharpOption|_|) (typ : Type) =
+        if typ.GetTypeInfo().IsGenericType && typ.GetGenericTypeDefinition() = typedefof<option<_>> then
+            Some(typ.GenericTypeArguments |> Array.head)
+        else None
     
     let private (|FSharpAsync|_|) (typ: Type) =
         if typ.GetTypeInfo().IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Async<_>> then
@@ -1871,10 +1881,17 @@ module Resolve =
         <@@ fun ctx (x:obj) -> async.Bind(f ctx (x :?> 'T), async.Return << box)  @@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
-    let private boxifyFilter<'Root, 'Input>(f:ResolveFieldContext -> 'Root -> 'Input -> bool): ResolveFieldContext -> obj -> obj -> bool =
-        <@@ fun ctx (r:obj) (i:obj) -> f ctx (r :?> 'Root) (i :?> 'Input)@@>
+
+    let private boxifyFilter<'Root, 'Input, 'Output>(f:ResolveFieldContext -> 'Root -> 'Input -> 'Output option): ResolveFieldContext -> obj -> obj -> obj option =
+        <@@ fun ctx (r:obj) (i:obj) -> f ctx (r :?> 'Root) (i :?> 'Input) |> Option.map(box)@@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox 
+
+    let private boxifyAsyncFilter<'Root, 'Input, 'Output>(f:ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>): ResolveFieldContext -> obj -> obj -> Async<obj option> =
+        <@@ fun ctx (r:obj) (i:obj) -> async.Bind(f ctx (r :?> 'Root) (i :?> 'Input), async.Return << Option.map(box))@@>
+        |> LeafExpressionConverter.EvaluateQuotation
+        |> unbox
+
     let private getRuntimeMethod name =
         let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods() 
         methods |> Seq.find (fun m -> m.Name.Equals name)
@@ -1882,32 +1899,47 @@ module Resolve =
     let private runtimeBoxify = getRuntimeMethod "boxify"
     
     let private runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
+
     let private runtimeBoxifyFilter = getRuntimeMethod "boxifyFilter"
+
+    let private runtimeBoxifyAsyncFilter = getRuntimeMethod "boxifyAsyncFilter"
 
     let private unwrapExpr = function
         | WithValue(resolver, _, _) -> (resolver, resolver.GetType())
         | expr -> failwithf "Could not extract resolver from Expr: '%A'" expr 
         
     let inline private resolveUntyped f d c (methodInfo:MethodInfo) = 
-        let result =  methodInfo.GetGenericMethodDefinition().MakeGenericMethod(d,c).Invoke(null, [|f|])
+        let result = methodInfo.GetGenericMethodDefinition().MakeGenericMethod(d,c).Invoke(null, [|f|])
+        result |> unbox
+
+    let inline private resolveUntypedFilter f r i o (methodInfo:MethodInfo) =
+        let result = methodInfo.GetGenericMethodDefinition().MakeGenericMethod(r, i, o).Invoke(null, [|f|])
         result |> unbox
 
     let private boxifyExpr expr : ResolveFieldContext -> obj -> obj =
         match unwrapExpr expr with
         | resolver, FSharpFunc(_,FSharpFunc(d,c)) -> 
             resolveUntyped resolver d c runtimeBoxify
-        | resolver, _ -> failwithf "Unsupported signature for Resolve %A"  (resolver.GetType())
+        | resolver, _ -> failwithf "Unsupported signature for Resolve %A" (resolver.GetType())
     
     let private boxifyExprAsync expr : ResolveFieldContext -> obj -> Async<obj> =
         match unwrapExpr expr with
         | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) -> 
             resolveUntyped resolver d c runtimeBoxifyAsync
-        | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A"  (resolver.GetType())
-    let private boxifyFilterExpr expr: ResolveFieldContext -> obj -> obj -> bool =
+        | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A" (resolver.GetType())
+
+    let private boxifyFilterExpr expr: ResolveFieldContext -> obj -> obj -> obj option =
         match unwrapExpr expr with
-        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,_))) ->
-            resolveUntyped resolver r i runtimeBoxifyFilter
-        | resolver, _ -> failwithf "Unsupported signature for Subscription Filter Resolve %A"  (resolver.GetType()) 
+        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,FSharpOption(o)))) ->
+            resolveUntypedFilter resolver r i o runtimeBoxifyFilter
+        | resolver, _ -> failwithf "Unsupported signature for Subscription Filter Resolve %A" (resolver.GetType()) 
+        
+    let private boxifyAsyncFilterExpr expr: ResolveFieldContext -> obj -> obj -> Async<obj option> =
+        match unwrapExpr expr with
+        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,FSharpAsync(FSharpOption(o))))) ->
+            resolveUntypedFilter resolver r i o runtimeBoxifyAsyncFilter
+        | resolver, _ -> failwithf "Unsupported signature for Async Subscription Filter Resolve %A" (resolver.GetType()) 
+
     let (|BoxedSync|_|) = function 
         | Sync(d,c,expr) -> Some(d,c,boxifyExpr expr)
         | _ -> None
@@ -1921,7 +1953,11 @@ module Resolve =
         | _ -> None 
 
     let (|BoxedFilterExpr|_|) = function
-        | Filter(r,i,expr) -> Some(r,i, boxifyFilterExpr expr)
+        | Filter(r,i,o,expr) -> Some(r,i,o,boxifyFilterExpr expr)
+        | _ -> None
+
+    let (|BoxedAsyncFilterExpr|_|) = function
+        | AsyncFilter(r,i,o,expr) -> Some(r,i,o,boxifyAsyncFilterExpr expr)
         | _ -> None
 
     let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
@@ -2817,19 +2853,58 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
 
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputTypeDef: #OutputDef<'Input>,
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            { Name = name
+              Description = None
+              RootTypeDef = rootdef
+              OutputTypeDef = outputdef
+              DeprecationReason = None
+              Args = [||]
+              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+              Metadata = Metadata.Empty
+            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>): SubscriptionFieldDef<'Root> =
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             { Name = name
               Description = Some description
               RootTypeDef = rootdef
-              OutputTypeDef = outputTypeDef
+              OutputTypeDef = outputdef
+              DeprecationReason = None
+              Args = [||]
+              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+              Metadata = Metadata.Empty
+            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            { Name = name
+              Description = Some description
+              RootTypeDef = rootdef
+              OutputTypeDef = outputdef
               DeprecationReason = None
               Args = args |> List.toArray
-              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, filter)
+              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
               Metadata = Metadata.Empty
-            } :> SubscriptionFieldDef<'Root>
+            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+
+        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            { Name = name
+              Description = Some description
+              RootTypeDef = rootdef
+              OutputTypeDef = outputdef
+              DeprecationReason = None
+              Args = args |> List.toArray
+              Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+              Metadata = Metadata.Empty
+            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
         
         /// <summary>
         /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,

@@ -460,7 +460,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
 
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
     match subfield.Resolve with
-    | Resolve.BoxedFilterExpr(_, _, filter) -> filter
+    | Resolve.BoxedFilterExpr(_, _, _, filter) -> filter
     | _ -> raise <| GraphQLException ("Invalid filter expression for subscription field!")
 
 let internal compileField (fieldDef: FieldDef) : ExecuteField =
@@ -701,7 +701,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables } 
-    subscriptionProvider.Add fieldCtx value name 
+    subscriptionProvider.Add fieldCtx value subdef 
     |> Observable.bind(fun v -> 
         buildResolverTree returnType fieldCtx fieldExecuteMap (Some v) 
         |> AsyncVal.map(treeToDict)
