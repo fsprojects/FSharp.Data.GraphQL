@@ -462,6 +462,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
     match subfield.Resolve with
     | Resolve.BoxedFilterExpr(_, _, _, filter) -> filter
+    | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> Async.RunSynchronously
     | _ -> raise <| GraphQLException ("Invalid filter expression for subscription field!")
 
 let internal compileField (fieldDef: FieldDef) : ExecuteField =
