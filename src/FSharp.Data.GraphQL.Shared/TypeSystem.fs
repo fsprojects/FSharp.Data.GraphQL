@@ -2868,43 +2868,63 @@ module SchemaDefinitions =
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         description: string,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            { Name = name
-              Description = Some description
-              RootTypeDef = rootdef
-              OutputTypeDef = outputdef
-              DeprecationReason = None
-              Args = [||]
-              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-              Metadata = Metadata.Empty
-            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
 
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         description: string,
                                         args: InputFieldDef list,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            { Name = name
-              Description = Some description
-              RootTypeDef = rootdef
-              OutputTypeDef = outputdef
-              DeprecationReason = None
-              Args = args |> List.toArray
-              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-              Metadata = Metadata.Empty
-            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = args |> List.toArray
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
 
         static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            { Name = name
-              Description = Some description
-              RootTypeDef = rootdef
-              OutputTypeDef = outputdef
-              DeprecationReason = None
-              Args = args |> List.toArray
-              Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-              Metadata = Metadata.Empty
-            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = None
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
+
+        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
+
+        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             args: InputFieldDef list,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = args |> List.toArray
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty }
         
         /// <summary>
         /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,
