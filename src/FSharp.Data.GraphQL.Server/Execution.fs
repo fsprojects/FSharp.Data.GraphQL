@@ -473,6 +473,12 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
+let private formatErrors (errors : Error list) =
+        errors 
+        |> List.map (fun err ->
+            let (message, path) = err
+            NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultTrees =
         resultSet
@@ -575,11 +581,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
-    let formatErrors (errors : Error list) =
-        errors 
-        |> List.map (fun err ->
-            let (message, path) = err
-            NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+
     let nvli (path : obj list) (index : int) (err : Error list) data =
         let data' = [ data ] :> obj
         match err with
@@ -721,7 +723,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables }
-    subscriptionProvider.Add fieldCtx value name
+    subscriptionProvider.Add fieldCtx value subdef
     |> Observable.bind(fun v ->
         buildResolverTree returnType fieldCtx fieldExecuteMap (Some v)
         |> AsyncVal.map(treeToDict)

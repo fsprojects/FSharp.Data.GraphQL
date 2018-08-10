@@ -721,17 +721,14 @@ and Resolve =
     /// expr is the untyped version of Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>
     | Filter of root: Type * input:Type * output:Type * expr:Expr
 
-<<<<<<< HEAD
     /// Resolves the filter function of a subscription that has asyncronous fields.
     /// root defines the .NET type of the root object
     /// input defines the .NET type of the value being subscribed to
     /// expr is the untyped version of Expr<ResolveFieldContext -> 'Root -> 'Input -> bool>
     | AsyncFilter of root: Type * input:Type * output:Type * expr:Expr
-
+    
     | ResolveExpr of expr:Expr 
-=======
-    | ResolveExpr of expr:Expr
->>>>>>> Fixing tests
+
 
     /// Returns an expression defining resolver function.
     member x.Expr =
@@ -1938,19 +1935,16 @@ module Resolve =
             Some(d,c)
         else None
 
-<<<<<<< HEAD
     let private (|FSharpOption|_|) (typ : Type) =
         if typ.GetTypeInfo().IsGenericType && typ.GetGenericTypeDefinition() = typedefof<option<_>> then
             Some(typ.GenericTypeArguments |> Array.head)
         else None
     
-=======
->>>>>>> Fixing tests
     let private (|FSharpAsync|_|) (typ: Type) =
         if typ.GetTypeInfo().IsGenericType && typ.GetGenericTypeDefinition() = typedefof<Async<_>> then
             Some(typ.GenericTypeArguments |> Array.head)
         else None
-
+        
     let private boxify<'T,'U>(f:ResolveFieldContext -> 'T -> 'U) : ResolveFieldContext -> obj -> obj =
         <@@ fun ctx (x:obj) -> f ctx (x :?> 'T)  |> box  @@>
         |> LeafExpressionConverter.EvaluateQuotation
@@ -1964,7 +1958,6 @@ module Resolve =
     let private boxifyFilter<'Root, 'Input, 'Output>(f:ResolveFieldContext -> 'Root -> 'Input -> 'Output option): ResolveFieldContext -> obj -> obj -> obj option =
         <@@ fun ctx (r:obj) (i:obj) -> f ctx (r :?> 'Root) (i :?> 'Input) |> Option.map(box)@@>
         |> LeafExpressionConverter.EvaluateQuotation
-<<<<<<< HEAD
         |> unbox 
 
     let private boxifyAsyncFilter<'Root, 'Input, 'Output>(f:ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>): ResolveFieldContext -> obj -> obj -> Async<obj option> =
@@ -1972,15 +1965,12 @@ module Resolve =
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
 
-=======
-        |> unbox
->>>>>>> Fixing tests
     let private getRuntimeMethod name =
-        let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods()
+        let methods = typeof<Marker>.DeclaringType.GetRuntimeMethods() 
         methods |> Seq.find (fun m -> m.Name.Equals name)
-
+        
     let private runtimeBoxify = getRuntimeMethod "boxify"
-
+    
     let private runtimeBoxifyAsync = getRuntimeMethod "boxifyAsync"
 
     let private runtimeBoxifyFilter = getRuntimeMethod "boxifyFilter"
@@ -1989,7 +1979,6 @@ module Resolve =
 
     let private unwrapExpr = function
         | WithValue(resolver, _, _) -> (resolver, resolver.GetType())
-<<<<<<< HEAD
         | expr -> failwithf "Could not extract resolver from Expr: '%A'" expr 
         
     let inline private resolveUntyped f d c (methodInfo:MethodInfo) = 
@@ -1998,34 +1987,22 @@ module Resolve =
 
     let inline private resolveUntypedFilter f r i o (methodInfo:MethodInfo) =
         let result = methodInfo.GetGenericMethodDefinition().MakeGenericMethod(r, i, o).Invoke(null, [|f|])
-=======
-        | expr -> failwithf "Could not extract resolver from Expr: '%A'" expr
-
-    let inline private resolveUntyped f d c (methodInfo:MethodInfo) =
-        let result =  methodInfo.GetGenericMethodDefinition().MakeGenericMethod(d,c).Invoke(null, [|f|])
->>>>>>> Fixing tests
         result |> unbox
 
     let private boxifyExpr expr : ResolveFieldContext -> obj -> obj =
         match unwrapExpr expr with
-        | resolver, FSharpFunc(_,FSharpFunc(d,c)) ->
+        | resolver, FSharpFunc(_,FSharpFunc(d,c)) -> 
             resolveUntyped resolver d c runtimeBoxify
-<<<<<<< HEAD
         | resolver, _ -> failwithf "Unsupported signature for Resolve %A" (resolver.GetType())
     
-=======
-        | resolver, _ -> failwithf "Unsupported signature for Resolve %A"  (resolver.GetType())
-
->>>>>>> Fixing tests
     let private boxifyExprAsync expr : ResolveFieldContext -> obj -> Async<obj> =
         match unwrapExpr expr with
-        | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) ->
+        | resolver, FSharpFunc(_,FSharpFunc(d,FSharpAsync(c))) -> 
             resolveUntyped resolver d c runtimeBoxifyAsync
         | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A" (resolver.GetType())
 
     let private boxifyFilterExpr expr: ResolveFieldContext -> obj -> obj -> obj option =
         match unwrapExpr expr with
-<<<<<<< HEAD
         | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,FSharpOption(o)))) ->
             resolveUntypedFilter resolver r i o runtimeBoxifyFilter
         | resolver, _ -> failwithf "Unsupported signature for Subscription Filter Resolve %A" (resolver.GetType()) 
@@ -2037,22 +2014,16 @@ module Resolve =
         | resolver, _ -> failwithf "Unsupported signature for Async Subscription Filter Resolve %A" (resolver.GetType()) 
 
     let (|BoxedSync|_|) = function 
-=======
-        | resolver, FSharpFunc(_,FSharpFunc(r,FSharpFunc(i,_))) ->
-            resolveUntyped resolver r i runtimeBoxifyFilter
-        | resolver, _ -> failwithf "Unsupported signature for Subscription Filter Resolve %A"  (resolver.GetType())
-    let (|BoxedSync|_|) = function
->>>>>>> Fixing tests
         | Sync(d,c,expr) -> Some(d,c,boxifyExpr expr)
         | _ -> None
-
+       
     let (|BoxedAsync|_|) = function
         | Async(d,c,expr) -> Some(d,c,boxifyExprAsync expr)
-        | _ -> None
+        | _ -> None 
 
     let (|BoxedExpr|_|) = function
         | ResolveExpr(e) -> Some(boxifyExpr e)
-        | _ -> None
+        | _ -> None 
 
     let (|BoxedFilterExpr|_|) = function
         | Filter(r,i,o,expr) -> Some(r,i,o,boxifyFilterExpr expr)
@@ -2062,41 +2033,41 @@ module Resolve =
         | AsyncFilter(r,i,o,expr) -> Some(r,i,o,boxifyAsyncFilterExpr expr)
         | _ -> None
 
-    let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) =
+    let private genMethodResolve<'Val, 'Res> (typeInfo: TypeInfo) (methodInfo: MethodInfo) = 
         let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod("Arg")
         let valueVar = Var("value", typeof<'Val>)
         let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let argExpr (arg : ParameterInfo) =
-            Expr.Call(Expr.Var(ctxVar), argInfo.MakeGenericMethod(arg.ParameterType), [ Expr.Value(arg.Name) ])
-        let args =
+        let argExpr (arg : ParameterInfo) = 
+            Expr.Call(Expr.Var(ctxVar), argInfo.MakeGenericMethod(arg.ParameterType), [ Expr.Value(arg.Name) ])        
+        let args = 
             methodInfo.GetParameters()
             |> Array.map argExpr
-            |> Array.toList
-        let expr =
+            |> Array.toList        
+        let expr = 
             Expr.Lambda
                 (ctxVar, Expr<'Val -> 'Res>.Lambda(valueVar, Expr.Call(Expr.Var(valueVar), methodInfo, args)))
-        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation
+        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation 
         let exprWithVal = Expr.WithValue(compiled, typeof<ResolveFieldContext -> 'Val -> 'Res>, expr)
         Sync(typeof<'Val>, typeof<'Res>, exprWithVal)
-
-    let private genPropertyResolve<'Val, 'Res> (typeInfo: TypeInfo) property =
+        
+    let private genPropertyResolve<'Val, 'Res> (typeInfo: TypeInfo) property = 
         let valueVar = Var("value", typeof<'Val>)
         let ctxVar = Var("ctx", typeof<ResolveFieldContext>)
-        let expr =
+        let expr = 
             Expr.Lambda
-                (ctxVar,
+                (ctxVar, 
                  Expr<'Val -> 'Res>.Lambda(valueVar, Expr.PropertyGet(Expr.Var(valueVar), property)))
-        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation
+        let compiled = expr |> LeafExpressionConverter.EvaluateQuotation 
         let exprWithVal = Expr.WithValue(compiled, typeof<ResolveFieldContext -> 'Val -> 'Res>, expr)
         Sync(typeof<'Val>, typeof<'Res>, exprWithVal)
-
-    let internal defaultResolve<'Val, 'Res> (fieldName : string) : Resolve =
+            
+    let internal defaultResolve<'Val, 'Res> (fieldName : string) : Resolve = 
         let typeInfo = typeof<'Val>.GetTypeInfo()
         let property = typeInfo.GetDeclaredProperty(fieldName, ignoreCase = true)
         match property with
-        | null ->
+        | null -> 
             let methodInfo = typeInfo.GetDeclaredMethod(fieldName, ignoreCase = true)
-            genMethodResolve<'Val, 'Res> typeInfo methodInfo
+            genMethodResolve<'Val, 'Res> typeInfo methodInfo      
         | p -> genPropertyResolve<'Val, 'Res> typeInfo p
 
 module Patterns =
@@ -2761,15 +2732,7 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-<<<<<<< HEAD
-        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
         static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -2785,17 +2748,8 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member Field(name : string, typedef : #OutputDef<'Res>, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member Field(name : string, typedef : #OutputDef<'Res>,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -2811,17 +2765,9 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
->>>>>>> Fixing tests
+
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2838,17 +2784,8 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2866,19 +2803,9 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-<<<<<<< HEAD
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list, 
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>, 
                             deprecationReason : string) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            deprecationReason : string) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2893,17 +2820,8 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -2919,17 +2837,8 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2946,19 +2855,9 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-<<<<<<< HEAD
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2976,21 +2875,10 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-<<<<<<< HEAD
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string, 
                                  args : InputFieldDef list, 
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>, 
-                                 deprecationReason : string) : FieldDef<'Val> = 
-=======
-        /// <param name="weight">
-        /// Field weight when calculating max degree of nested fields of a query. The higher the value,
-        /// the higher the cost of the field on a query, and less is the capability of nesting it.
-        /// </param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 args : InputFieldDef list,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
                                  deprecationReason : string) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -2999,16 +2887,12 @@ module SchemaDefinitions =
                      DeprecationReason = Some deprecationReason
                      Metadata = Metadata.Empty }
 
-<<<<<<< HEAD
         /// <summary>
         /// Creates a custom defined field using a custom field execution function.
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="execField">Expression used to execute the field.</param>
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> = 
-=======
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
->>>>>>> Fixing tests
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = Obj
@@ -3026,16 +2910,14 @@ module SchemaDefinitions =
         /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                         [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            { Name = name
-              Description = None
-              RootTypeDef = rootdef
-              OutputTypeDef = outputdef
-              DeprecationReason = None
-              Args = [||]
-              Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-              Metadata = Metadata.Empty
-<<<<<<< HEAD
-            } :> SubscriptionFieldDef<'Root, 'Input, 'Output>
+            upcast { Name = name
+                     Description = None
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty } 
 
         /// <summary>
         /// Creates a subscription field inside object type.
@@ -3187,10 +3069,7 @@ module SchemaDefinitions =
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
                      Metadata = Metadata.Empty }
         
-=======
-            } :> SubscriptionFieldDef<'Root>
 
->>>>>>> Fixing tests
         /// <summary>
         /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,
         /// and can be used to define arguments to objects and interfaces fields.
