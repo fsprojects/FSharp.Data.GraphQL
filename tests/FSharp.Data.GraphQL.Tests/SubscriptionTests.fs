@@ -67,8 +67,8 @@ let updateValue id data =
     getValue id
     |> Option.map (fun value ->
         value.Data <- data
-        schemaConfig.SubscriptionProvider.Publish SubscriptionField value
-        schemaConfig.SubscriptionProvider.Publish AsyncSubscriptionField value)
+        schemaConfig.SubscriptionProvider.Publish "watchData" value
+        schemaConfig.SubscriptionProvider.Publish "watchDataAsync" value)
     |> ignore
 
 let Subscription =
