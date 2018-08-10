@@ -294,7 +294,7 @@ and ISubscriptionProvider =
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
         abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type
-        abstract member Publish : SubscriptionFieldDef<'Root, 'Input, 'Output> -> 'Input -> unit
+        abstract member Publish<'T> : string -> 'T -> unit
     end
 
 /// Represents a subscription of a field in a live query.

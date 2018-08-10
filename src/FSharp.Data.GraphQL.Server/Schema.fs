@@ -42,8 +42,8 @@ type SchemaConfig =
                     |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
 
-            member __.Publish (def: SubscriptionFieldDef<'Root, 'Input, 'Output>) (value: 'Input) =
-                match registeredSubscriptions.TryGetValue(def.Name) with
+            member __.Publish<'T> (name: string) (value: 'T) =
+                match registeredSubscriptions.TryGetValue(name) with
                 | true, (_, channel) -> channel.OnNext(box value)
                 | false, _ -> () }
 
