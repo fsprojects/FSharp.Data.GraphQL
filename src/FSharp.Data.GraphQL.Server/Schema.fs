@@ -38,7 +38,7 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(subdef.Name) with
                 | true, (sub, channel) -> 
                     channel
-                    |> Observable.map(fun o -> sub.Filter ctx root o |> AsyncVal.get)
+                    |> Observable.mapAsync(fun o -> sub.Filter ctx root o)
                     |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
 

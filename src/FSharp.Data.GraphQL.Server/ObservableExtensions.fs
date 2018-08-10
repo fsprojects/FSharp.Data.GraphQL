@@ -26,4 +26,6 @@ module internal Observable =
     let choose (f: 'T -> 'U option) (o: IObservable<'T>): IObservable<'U> =
         o.Select(f).Where(Option.isSome).Select(Option.get)
 
-    let concat (os : IObservable<'T> seq) = Observable.Concat(os)
+    let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
+
+    let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
