@@ -27,3 +27,10 @@
 
 ### 0.0.4-beta01 - May 31 2018
 * Fix package dependency versions
+
+### 0.0.5-beta - August 10 2018
+* Upgraded dependencies on Newtonsoft.Json to the latest version.
+* Changing subscription field definitions to have a generic output type - the output is not required to be a GraphQL type anymore.
+* Implemented experimental support for @live directive, through a subscription system.
+* Fixed a bug that caused an exception when ToString function is called on an empty NameValueLookup.
+* Added support for asynchronous subscription field definitions.
