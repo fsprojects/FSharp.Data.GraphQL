@@ -5,6 +5,9 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
+open System.Threading
+open System.Threading.Tasks
+open FSharp.Data.GraphQL.Ast
 
 type Episode =
     | NewHope = 1
@@ -193,7 +196,22 @@ module Schema =
             name = "Query",
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
+                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
+                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id"))) ])
+
+    let SubscriptionField =
+        Define.SubscriptionField(
+                    "watchMoon",
+                    RootType,
+                    PlanetType,
+                    "Watches to see if a planet is a moon",
+                    [ Define.Input("id", String) ],
+                    (fun ctx _ p -> if ctx.Arg("id") = p.Id then Some p else None))
+
+    let Subscription =
+        Define.SubscriptionObject<Root>(
+            name = "Subscription",
+            fields = [ SubscriptionField ])
 
     let Mutation =
         Define.Object<Root>(
@@ -205,30 +223,20 @@ module Schema =
                     "Sets a moon status",
                     [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
                     fun ctx _ ->
-                        getPlanet(ctx.Arg("id"))
+                        getPlanet (ctx.Arg("id"))
                         |> Option.map (fun x ->
                             x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
-                            schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
+                            schemaConfig.SubscriptionProvider.Publish SubscriptionField x
+                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "ismoon" x
                             x))])
-
-    let Subscription =
-        Define.SubscriptionObject<Root>(
-            name = "Subscription",
-            fields = [
-                Define.SubscriptionField(
-                    "watchMoon",
-                    RootType,
-                    PlanetType,
-                    "Watches to see if a planet is a moon",
-                    [ Define.Input("id", String) ],
-                    (fun ctx _ p -> ctx.Arg("id") = p.Id))])
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
-          Define.ObjectListFilterMiddleware<Droid, Character option>(true) ]
+          Define.ObjectListFilterMiddleware<Droid, Character option>(true)
+          Define.LiveQueryMiddleware() ]
 
     let executor = Executor(schema, middlewares)
 

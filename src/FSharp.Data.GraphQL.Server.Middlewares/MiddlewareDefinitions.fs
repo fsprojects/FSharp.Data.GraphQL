@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
@@ -22,13 +23,13 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
                          | ResolveCollection field ->
-                            let (pass, current) = checkThreshold acc [ field ] 
+                            let (pass, current) = checkThreshold acc [ field ]
                             if pass then checkThreshold current xs else (false, current)
                          | ResolveAbstraction typeFields ->
                             let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
-                         | _ -> 
+                         | _ ->
                             checkThreshold current xs
             checkThreshold 0.0 fields
         let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
@@ -57,10 +58,10 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             object.WithFields(fields)
         let typesWithListFields =
             ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
-        if Seq.isEmpty typesWithListFields 
+        if Seq.isEmpty typesWithListFields
         then failwith <| sprintf "No lists with specified type '%A' where found on object of type '%A'." typeof<'ObjectType> typeof<'ListType>
         let modifiedTypes =
-            typesWithListFields 
+            typesWithListFields
             |> Seq.map (fun (object, fields) -> modifyFields object fields)
             |> Seq.cast<NamedDef>
         ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
@@ -83,7 +84,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 | SelectFields fields ->
                     let acc = collectArgs acc fields
                     collectArgs acc xs
-                | ResolveCollection field -> 
+                | ResolveCollection field ->
                     let acc = fieldArgs field
                     collectArgs acc xs
                 | ResolveAbstraction typeFields ->
@@ -91,7 +92,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                     let acc = collectArgs acc fields
                     collectArgs acc xs
                 | _ -> collectArgs acc xs
-        let ctx =        
+        let ctx =
             match reportToMetadata with
             | true -> { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
             | false -> ctx
@@ -100,3 +101,42 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         member __.CompileSchema = Some compileMiddleware
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = Some reportMiddleware
+
+/// A function that resolves an identity name for a schema object, based on a object definition of it.
+type IdentityNameResolver = ObjectDef -> string
+
+type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
+    let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
+        let identity (identityName : string) (x : obj) =
+            x.GetType().GetProperty(identityName).GetValue(x)
+        let makeSubscription id typeName fieldName : LiveFieldSubscription =
+            { Identity = identity id; TypeName = typeName; FieldName = fieldName }
+        let getObjDefs (def : FieldDef) =
+            let rec helper (acc : ObjectDef list) (def : TypeDef) =
+                match def with
+                | Object objdef ->
+                    if not (acc |> List.exists (fun x -> x.Name = objdef.Name))
+                    then helper (objdef :: acc) objdef
+                    else acc
+                | Nullable innerdef -> helper acc innerdef
+                | List innerdef -> helper acc innerdef
+                | Union udef -> (udef.Options |> List.ofArray) @ acc
+                | _ -> []
+            helper [] def.TypeDef
+        ctx.Schema.Query.Fields
+        |> Map.toSeq
+        |> Seq.collect (snd >> getObjDefs)
+        |> Seq.map (fun objdef -> identityNameResolver objdef, objdef)
+        |> Seq.filter (fun (id, objdef) -> not (isNull (objdef.Type.GetProperty(id))))
+        |> Seq.collect (fun (id, objdef) ->
+            objdef.Fields
+            |> Map.toSeq
+            |> Seq.map (snd >> (fun fdef -> makeSubscription id objdef.Name fdef.Name)))
+        |> Seq.iter (fun x ->
+            if not (ctx.Schema.LiveFieldSubscriptionProvider.IsRegistered x.TypeName x.FieldName)
+            then ctx.Schema.LiveFieldSubscriptionProvider.Register x)
+        next ctx
+    interface IExecutorMiddleware with
+        member __.CompileSchema = Some middleware
+        member __.PlanOperation = None
+        member __.ExecuteOperationAsync = None
