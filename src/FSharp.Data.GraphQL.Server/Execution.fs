@@ -473,11 +473,11 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
-let private formatErrors (errors : Error list) =
-        errors 
-        |> List.map (fun err ->
-            let (message, path) = err
-            NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+let formatErrors (errors : Error list) =
+    errors 
+    |> List.map (fun err ->
+        let (message, path) = err
+        NameValueLookup.ofList ["message", upcast message; "path", upcast path])
 
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
     let resultTrees =
