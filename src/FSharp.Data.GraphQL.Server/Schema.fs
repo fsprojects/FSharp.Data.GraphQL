@@ -40,8 +40,7 @@ type SchemaConfig =
                 | false, _ -> Observable.Empty()
             member __.Publish (def: SubscriptionFieldDef<'Root, 'Input, 'Output>) (value: 'Input) =
                 match registeredSubscriptions.TryGetValue(def.Name) with
-                | true, (_, channel) ->
-                    channel.OnNext(box value)
+                | true, (_, channel) -> channel.OnNext(box value)
                 | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" def.Name }
     /// Default SchemaConfig value for Schemas.
     static member Default = 
