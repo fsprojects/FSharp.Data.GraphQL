@@ -68,6 +68,55 @@ To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects 
 
 In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.
 
+## Live queries
+
+Live directive is now supported by the server component. To support live queries, each field of each type of the schema needs to be configured as a live field. This is done by using `ILiveFieldSubscription` and `ILiveQuerySubscriptionProvider`, which can be configured in the `SchemaConfig`:
+
+```fsharp
+type ILiveFieldSubscription =
+    interface
+        abstract member Identity : obj -> obj
+        abstract member TypeName : string
+        abstract member FieldName : string
+    end
+
+and ILiveFieldSubscription<'Object, 'Identity> =
+    interface
+        inherit ILiveFieldSubscription
+        abstract member Identity : 'Object -> 'Identity
+    end
+
+and ILiveFieldSubscriptionProvider =
+    interface
+        abstract member HasSubscribers : string -> string -> bool
+        abstract member IsRegistered : string -> string -> bool
+        abstract member Register : ILiveFieldSubscription -> unit
+        abstract member TryFind : string -> string -> ILiveFieldSubscription option
+        abstract member Add : obj -> string -> string -> IObservable<obj>
+        abstract member Publish<'T> : string -> string -> 'T -> unit
+    end
+```
+
+To set a field as a live field, call `Register` method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
+
+```fsharp
+let schemaConfig = SchemaConfig.Default
+let schema = Schema(root, config = schemaConfig)
+let subscription =
+    { Identity = fun (x : Human) -> x.Id
+      TypeName = "Hero"
+      FieldName = "name" }
+
+schemaConfig.LiveFieldSubscriptionProvider.Register subscription
+```
+
+With that, the field name of the hero is now able to go live, being updated to clients whenever is queried with live directive. To push updates to subscribers, just call Publish method, passing along the type name, the field name and the updated object:
+
+```fsharp
+let updatedHero = { hero with Name = "Han Solo - Test" }
+schemaConfig.LiveFieldSubscriptionProvider.Publish "Hero" "name" updatedHero
+```
+
 ## Middlewares
 
 You can create and use middlewares on top of the `Executor<'Root>` object.
@@ -224,6 +273,27 @@ Define.Field("friends", ListOf (Nullable CharacterType),
 ```
 
 By retrieving this filter on the field resolution context, it is possible to use client code to customize the query against a database, for example, and extend your GraphQL API features.
+
+### LiveQueryMiddleware
+
+This middleware can be used to quickly allow your schema fields to be able to be queried with a `live` directive, assuming that all of them have an identity property name that can be discovered by a function, `IdentityNameResolver`:
+
+```fsharp
+/// A function that resolves an identity name for a schema object, based on a object definition of it.
+type IdentityNameResolver = ObjectDef -> string
+```
+
+For example, if all of our schema objects have an identity field named `Id`, we could use our middleware like this:
+
+```fsharp
+let schema = Schema(query = queryType)
+
+let middlewares = [ Define.LiveQueryMiddleware(fun _ -> "Id") ]
+
+let executor = Executor(schema, middlewares)
+```
+
+The `IdentityNameResolver` is optional, though. If no resolver function is provided, this default implementation of is used. Also, notifications to subscribers must be done via `Publish` of `ILiveFieldSubscriptionProvider`, like explained above.
 
 ### Using extensions to build your own middlewares
 
