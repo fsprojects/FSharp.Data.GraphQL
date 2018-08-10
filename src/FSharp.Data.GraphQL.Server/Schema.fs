@@ -31,17 +31,17 @@ type SchemaConfig =
         { new ISubscriptionProvider with
             member __.Register (subscription: Subscription) =
                 registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
-            member __.Add (ctx: ResolveFieldContext) (root: obj) (name: string)  =
-                match registeredSubscriptions.TryGetValue(name) with
+            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
+                match registeredSubscriptions.TryGetValue(subdef.Name) with
                 | true, (sub, channel) -> 
                     channel
-                    |> Observable.filter(fun o -> sub.Filter ctx root o)
+                    |> Observable.map(fun o -> sub.Filter ctx root o)
+                    |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
-            member __.Publish<'T> (subIdent: string) (value: 'T) =
-                match registeredSubscriptions.TryGetValue(subIdent) with
-                | true, (_, channel) ->
-                    channel.OnNext(box value)
-                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" subIdent }
+            member __.Publish (def: SubscriptionFieldDef<'Root, 'Input, 'Output>) (value: 'Input) =
+                match registeredSubscriptions.TryGetValue(def.Name) with
+                | true, (_, channel) -> channel.OnNext(box value)
+                | false, _ -> printfn "Error: Tried to publish on non-existent channel `%s`" def.Name }
     /// Default SchemaConfig value for Schemas.
     static member Default = 
         { Types = []
@@ -124,7 +124,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         { Name = subdef.Name
           Description = subdef.Description
           Args = subdef.Args |> Array.map (introspectInput namedTypes) 
-          Type = introspectTypeRef false namedTypes subdef.InputTypeDef
+          Type = introspectTypeRef false namedTypes subdef.OutputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
 
