@@ -146,11 +146,11 @@ module Schema =
             isTypeOf = (fun o -> o :? Human),
             fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
-                Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
+                Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
+                Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
                     fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
-                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
+                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
 
@@ -161,8 +161,8 @@ module Schema =
             isTypeOf = (fun o -> o :? Droid),
             fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
-                Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
+                Define.Field("id", String, "The id of the droid.", fun _ (d : Droid) -> d.Id)
+                Define.Field("name", Nullable String, "The name of the Droid.", fun _ (d : Droid) -> d.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
                     fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)

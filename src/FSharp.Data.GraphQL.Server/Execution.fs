@@ -63,6 +63,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     let rec structEq (x: NameValueLookup) (y: NameValueLookup) =
         if Object.ReferenceEquals(x, y) then true
         elif Object.ReferenceEquals(y, null) then false
+        elif Object.ReferenceEquals(x, null) then false
         elif x.Count <> y.Count then false
         else
             x.Buffer
@@ -70,8 +71,9 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                 if a.Key <> b.Key then false
                 else
                     match a.Value, b.Value with
-                    | :? NameValueLookup, :? NameValueLookup as o -> structEq (downcast fst o) (downcast snd o)
-                    | :? seq<obj>, :? seq<obj> -> Seq.forall2 (=) (a.Value :?> seq<obj>) (b.Value :?> seq<obj>)
+                    | (:? NameValueLookup as x), (:? NameValueLookup as y) -> structEq x y
+                    | (:? seq<obj> as x), (:? seq<obj> as y) -> 
+                        if Seq.length x <> Seq.length y then false else Seq.forall2 (=) x y
                     | a1, b1 -> a1 = b1) y.Buffer
     let pad (sb: System.Text.StringBuilder) times =
         for _ in 0..times do sb.Append("\t") |> ignore
@@ -91,8 +93,8 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             sb.Append("\"").Append(s).Append("\"") |> ignore
         | :? System.Collections.IEnumerable as s ->
             sb.Append("[") |> ignore
-            for i in s do
-                stringify sb (deep+1) i
+            for i in s do 
+                stringify sb (deep + 1) i
                 sb.Append(", ") |> ignore
             sb.Append("]") |> ignore
         | other ->

@@ -2732,7 +2732,7 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> =
+        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> = 
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -2776,6 +2776,23 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Metadata = Metadata.Empty }
 
+        /// <summary>
+        /// Creates field defined inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list, 
+                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> = 
+            upcast { FieldDefinition.Name = name
+                     Description = None
+                     TypeDef = typedef
+                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
+                     Args = args |> List.toArray
+                     DeprecationReason = None
+                     Metadata = Metadata.Empty }
+        
         /// <summary>
         /// Creates field defined inside object type.
         /// </summary>
