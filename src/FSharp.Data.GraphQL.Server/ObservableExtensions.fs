@@ -20,6 +20,9 @@ module internal Observable =
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)
 
+    let choose (f: 'T -> 'U option) (o: IObservable<'T>): IObservable<'U> =
+        o.Select(f).Where(function Some x -> true | None -> false).Select(Option.get)
+
 open System.Collections.Concurrent
 
 // /// Wrapper type for IObservable that exposes event triggering

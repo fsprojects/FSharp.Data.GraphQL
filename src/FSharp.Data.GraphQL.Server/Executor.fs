@@ -150,7 +150,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 | Subscription ->
                     match schema.Subscription with
                     | Some s -> upcast s
-                    | None -> raise (GraphQLException "Operations to be executed is of type subscription, but no subscription root object was defined in the current schema") 
+                    | None -> raise (GraphQLException "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let planningCtx = 
                 { Schema = schema
                   RootDef = rootDef
