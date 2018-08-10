@@ -435,10 +435,10 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
         | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
 
-let internal compileSubscriptionField (subfield: SubscriptionFieldDef) =
+let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
     match subfield.Resolve with
-    | Resolve.BoxedFilterExpr(_, _, _, filter) -> filter
-    | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> Async.RunSynchronously
+    | Resolve.BoxedFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> AsyncVal.wrap |> AsyncVal.toAsync
+    | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> filter
     | _ -> raise <| GraphQLException ("Invalid filter expression for subscription field!")
 
 let internal compileField (fieldDef: FieldDef) : ExecuteField =

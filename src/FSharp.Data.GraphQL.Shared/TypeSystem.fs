@@ -283,7 +283,7 @@ type Subscription = {
     Name: string
     /// Filter function, used to determine what events we will propagate
     /// The 1st obj is the boxed root value, the second is the boxed value of the input object
-    Filter: (ResolveFieldContext -> obj -> obj -> obj option)
+    Filter: (ResolveFieldContext -> obj -> obj -> Async<obj option>)
 }
 
 /// Describes the backing implementation for a subscription system.
