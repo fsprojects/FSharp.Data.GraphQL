@@ -1172,6 +1172,15 @@ let ``Introspection executes an introspection query`` () =
                             upcast "FRAGMENT_DEFINITION";
                             upcast "FRAGMENT_SPREAD";
                             upcast "INLINE_FRAGMENT";]
+                        "args", upcast []]
+                    upcast NameValueLookup.ofList [
+                        "name", upcast "live"
+                        "description", upcast "Subscribes for live updates of this field or fragment"
+                        "locations", upcast [
+                            box <| "FIELD";
+                            upcast "FRAGMENT_DEFINITION";
+                            upcast "FRAGMENT_SPREAD";
+                            upcast "INLINE_FRAGMENT";]
                         "args", upcast []]]]]
     match result with
     | Direct(data, errors) ->
