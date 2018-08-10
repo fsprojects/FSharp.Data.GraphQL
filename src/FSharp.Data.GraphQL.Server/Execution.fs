@@ -712,7 +712,6 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
             match err with
             | [] -> NameValueLookup.ofList["data", data.Value] :> Output
             | _ -> NameValueLookup.ofList["data", data.Value; "errors", upcast (formatErrors err)] :> Output)
-        |> AsyncVal.map(fun d -> printfn "Async dict %A" d;d)
         |> AsyncVal.toAsync
         |> Observable.ofAsync)
 
