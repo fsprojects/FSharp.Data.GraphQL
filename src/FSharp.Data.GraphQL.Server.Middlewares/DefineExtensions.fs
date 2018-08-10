@@ -37,3 +37,15 @@ module DefineExtensions =
         static member ObjectListFilterMiddleware<'ObjectType, 'ListType>(?reportToMetadata : bool) : IExecutorMiddleware =
             let reportToMetadata = defaultArg reportToMetadata false
             upcast ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata)
+
+        /// <summary>
+        /// Creates a middleware that turns all the fields of the schema as live fields, being able to
+        /// subscribe to updates by queries using live directive on them.
+        /// </summary>
+        /// <param name="identityName">
+        /// An optional function to resolve the name of the identity field based on the object definition.
+        /// If no function is provided, it takes the default "Id" value as the identity field.
+        /// </param>
+        static member LiveQueryMiddleware(?identityName : IdentityNameResolver) : IExecutorMiddleware =
+            let identityName = defaultArg identityName (fun _ -> "Id")
+            upcast LiveQueryMiddleware(identityName)
