@@ -34,3 +34,7 @@
 * Implemented experimental support for @live directive, through a subscription system.
 * Fixed a bug that caused an exception when ToString function is called on an empty NameValueLookup.
 * Added support for asynchronous subscription field definitions.
+
+### 0.0.6-beta - August 10 2018
+* Fixes for introspection query
+* Use string identifier to publish to subscription
