@@ -53,7 +53,7 @@ let SubscriptionField =
         fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None)
 
 let AsyncSubscriptionField =
-    Define.SubscriptionAsyncField(
+    Define.AsyncSubscriptionField(
         "watchDataAsync", 
         RootType, 
         ValueType, 

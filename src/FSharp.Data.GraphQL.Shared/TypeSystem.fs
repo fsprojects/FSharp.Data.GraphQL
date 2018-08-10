@@ -2914,7 +2914,7 @@ module SchemaDefinitions =
         /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
         /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
         /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
                      Description = None
@@ -2933,7 +2933,7 @@ module SchemaDefinitions =
         /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              description: string,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
             upcast { Name = name
@@ -2954,7 +2954,7 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              description: string,
                                              args: InputFieldDef list,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
@@ -2977,7 +2977,7 @@ module SchemaDefinitions =
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        static member SubscriptionAsyncField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
                                              description: string,
                                              args: InputFieldDef list,
                                              [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
