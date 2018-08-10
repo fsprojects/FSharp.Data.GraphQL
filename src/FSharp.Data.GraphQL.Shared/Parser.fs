@@ -264,8 +264,6 @@ module internal Internal =
   //    OperationDefinition List
   let definitions =
     let operationType = 
-      // leaving out subscriptions for now.
-      // (stoken_ws "subscription" >>% Subscription) 
       (stoken_ws "query" >>% Query) <|> (stoken_ws "mutation" >>% Mutation) <|> (stoken_ws "subscription" >>% Subscription)
       
     let namedOperationDefinition = 
