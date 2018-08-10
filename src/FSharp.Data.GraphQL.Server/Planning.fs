@@ -144,15 +144,19 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
         | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
 
-let private isDeferredField (field: Field) : bool =
+let private isDeferredField (field: Field) =
     field.Directives |> List.exists(fun d -> d.Name = "defer")
 
-let private isStreamedField (field : Field) : bool =
+let private isStreamedField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "stream")
 
-let private (|Planned|Deferred|Streamed|) field =
+let private isLiveField (field : Field) =
+    field.Directives |> List.exists (fun d -> d.Name = "live")
+
+let private (|Planned|Deferred|Streamed|Live|) field =
     if isStreamedField field then Streamed
     elif isDeferredField field then Deferred
+    elif isLiveField field then Live
     else Planned
                 
 type PlanningStage = ExecutionInfo * DeferredExecutionInfo list * string list
@@ -223,9 +227,10 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                     match field with
-                    | Deferred -> (fields, { Info = { info with Kind = SelectFields [executionPlan] }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields} :: deferredFields)
-                    | Streamed -> (fields, { Info = { info with Kind = SelectFields [executionPlan] }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields} :: deferredFields)
-                    | Planned -> (fields @ [executionPlan], deferredFields') // unfortunatelly, order matters here
+                    | Deferred -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Live -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = LiveExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Streamed -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Planned -> fields @ [ executionPlan ], deferredFields' // unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
@@ -270,6 +275,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                 match field with
                 | Deferred -> fields, { Info = { innerData with Kind = ResolveAbstraction infoMap }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                | Live -> fields, { Info = { innerData with Kind = ResolveAbstraction infoMap }; Path = path'; Kind = LiveExecution; DeferredFields = addedDeferredFields } :: deferredFields
                 | Streamed -> fields, { Info = { innerData with Kind = ResolveAbstraction infoMap }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields } :: deferredFields
                 | Planned -> Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields infoMap, deferredFields'
             | FragmentSpread spread ->
