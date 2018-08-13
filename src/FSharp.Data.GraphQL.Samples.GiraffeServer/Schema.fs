@@ -5,6 +5,9 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
+open System.Threading
+open System.Threading.Tasks
+open FSharp.Data.GraphQL.Ast
 
 type Episode =
     | NewHope = 1
@@ -143,11 +146,11 @@ module Schema =
             isTypeOf = (fun o -> o :? Human),
             fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the human.", fun _ h -> h.Id)
-                Define.Field("name", Nullable String, "The name of the human.", fun _ h -> h.Name)
+                Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
+                Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
                     fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
-                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ h -> h.AppearsIn)
+                Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])
 
@@ -158,8 +161,8 @@ module Schema =
             isTypeOf = (fun o -> o :? Droid),
             fieldsFn = fun () ->
             [
-                Define.Field("id", String, "The id of the droid.", fun _ d -> d.Id)
-                Define.Field("name", Nullable String, "The name of the Droid.", fun _ d -> d.Name)
+                Define.Field("id", String, "The id of the droid.", fun _ (d : Droid) -> d.Id)
+                Define.Field("name", Nullable String, "The name of the Droid.", fun _ (d : Droid) -> d.Name)
                 Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
                     fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
@@ -193,23 +196,8 @@ module Schema =
             name = "Query",
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
-                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id"))) ])
-
-    let Mutation =
-        Define.Object<Root>(
-            name = "Mutation",
-            fields = [
-                Define.Field(
-                    "setMoon",
-                    Nullable PlanetType,
-                    "Sets a moon status",
-                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
-                    fun ctx _ ->
-                        getPlanet(ctx.Arg("id"))
-                        |> Option.map (fun x ->
-                            x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
-                            schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
-                            x))])
+                Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
+                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id"))) ])
 
     let Subscription =
         Define.SubscriptionObject<Root>(
@@ -221,14 +209,32 @@ module Schema =
                     PlanetType,
                     "Watches to see if a planet is a moon",
                     [ Define.Input("id", String) ],
-                    (fun ctx _ p -> ctx.Arg("id") = p.Id))])
+                    (fun ctx _ p -> if ctx.Arg("id") = p.Id then Some p else None)) ])
+
+    let Mutation =
+        Define.Object<Root>(
+            name = "Mutation",
+            fields = [
+                Define.Field(
+                    "setMoon",
+                    Nullable PlanetType,
+                    "Sets a moon status",
+                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
+                    fun ctx _ ->
+                        getPlanet (ctx.Arg("id"))
+                        |> Option.map (fun x ->
+                            x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
+                            schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
+                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "ismoon" x
+                            x))])
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
-          Define.ObjectListFilterMiddleware<Droid, Character option>(true) ]
+          Define.ObjectListFilterMiddleware<Droid, Character option>(true)
+          Define.LiveQueryMiddleware() ]
 
     let executor = Executor(schema, middlewares)
 

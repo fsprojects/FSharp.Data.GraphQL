@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Reactive.Linq
+open System.Linq
 
 /// Extension methods to observable, used in place of Fsharp.Control.Reactive
 module internal Observable =
@@ -9,38 +10,22 @@ module internal Observable =
 
     let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
 
-    let ofSeq<'Item>(items:'Item seq) : IObservable<'Item> = {   
+    let ofSeq<'Item> (items:'Item seq) : IObservable<'Item> = {
         new IObservable<_> with
             member __.Subscribe( observer:IObserver<_> ) =
-                for item in items do observer.OnNext item      
-                observer.OnCompleted()     
+                for item in items do observer.OnNext item
+                observer.OnCompleted()
                 {   new IDisposable with member __.Dispose() = ()   }
     }
 
+    let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
+    
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)
 
-open System.Collections.Concurrent
+    let choose (f: 'T -> 'U option) (o: IObservable<'T>): IObservable<'U> =
+        o.Select(f).Where(Option.isSome).Select(Option.get)
 
-// /// Wrapper type for IObservable that exposes event triggering
-// type ObservableSource<'T>(onDispose: unit -> unit) = 
-//     let mutable (key:uint64) = 0UL
-//     let subscriptions = new ConcurrentDictionary<uint64, IObserver<'T>>()
-//     let next o = subscriptions |> Seq.iter(fun (KeyValue(_, v)) -> v.OnNext(o))
-//     let obs = 
-//         { new IObservable<'T> with
-//             member this.Subscribe(o) =
-//                 let key' = key
-//                 key <- key + 1UL
-//                 subscriptions.AddOrUpdate(key, o, (fun _ _ -> o)) |> ignore
-//                 { new IDisposable with
-//                     member this.Dispose() =
-//                         subscriptions.TryRemove(key') |> ignore } }
-    
-//     /// Dispatches an event to all subscribers
-//     member this.Next(o) = next o
+    let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
 
-//     /// Access the underlying IObservable
-//     member this.Observable = obs
-
-    
+    let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat

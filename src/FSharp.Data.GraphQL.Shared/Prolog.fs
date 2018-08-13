@@ -15,6 +15,9 @@ type MalformedQueryException(msg) =
 
 /// General helper functions and types.
 module Helpers =
+    /// Executes a function that returns unit, and then return its parameter again.
+    let tee f x = f x; x
+
     /// Casts a System.Object to an option to a System.Object option.
     let optionCast (value: obj) =
         let optionDef = typedefof<option<_>>

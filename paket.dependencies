@@ -19,6 +19,7 @@ group Build
 
 group Test
   source https://nuget.org/api/v2
+  nuget Newtonsoft.Json
   nuget FSharp.Core 
   nuget BenchmarkDotNet
   nuget xunit 
