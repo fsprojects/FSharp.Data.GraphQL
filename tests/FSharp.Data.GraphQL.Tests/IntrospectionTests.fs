@@ -475,7 +475,7 @@ let ``Default field args type definitions are considered non-null`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Nullable Int) ], fun _ () -> null) ])
@@ -881,12 +881,9 @@ let ``Introspection executes an introspection query`` () =
                                                    "name", upcast "includeDeprecated"
                                                    "description", null
                                                    "type", upcast NameValueLookup.ofList [
-                                                           "kind", upcast "NON_NULL"
-                                                           "name", null
-                                                           "ofType", upcast NameValueLookup.ofList [
-                                                                "kind", upcast "SCALAR"
-                                                                "name", upcast "Boolean"
-                                                                "ofType", null]]
+                                                     "kind", upcast "SCALAR"
+                                                     "name", upcast "Boolean"
+                                                     "ofType", null]
                                                    "defaultValue", upcast "False"];]
                                       "type", upcast NameValueLookup.ofList [
                                               "kind", upcast "LIST"
@@ -908,12 +905,9 @@ let ``Introspection executes an introspection query`` () =
                                                    "name", upcast "includeDeprecated"
                                                    "description", null
                                                    "type", upcast NameValueLookup.ofList [
-                                                           "kind", upcast "NON_NULL"
-                                                           "name", null
-                                                           "ofType", upcast NameValueLookup.ofList [
-                                                                "kind", upcast "SCALAR"
-                                                                "name", upcast "Boolean"
-                                                                "ofType", null]]
+                                                     "kind", upcast "SCALAR"
+                                                     "name", upcast "Boolean"
+                                                     "ofType", null]
                                                    "defaultValue", upcast "False"];]
                                       "type", upcast NameValueLookup.ofList [
                                               "kind", upcast "LIST"
