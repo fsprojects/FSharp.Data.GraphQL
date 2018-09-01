@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
+open FSharp.Data.GraphQL.Helpers
 
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
@@ -144,10 +145,15 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
+        // We need this so a default value that is an option is not printed as "Some"
+        let stringify = 
+            function
+            | ObjectOption x -> string x
+            | x -> string x
         { Name = inputDef.Name
           Description = inputDef.Description
-          Type = introspectTypeRef false namedTypes inputDef.TypeDef
-          DefaultValue = inputDef.DefaultValue |> Option.map string }
+          Type = introspectTypeRef (Option.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
+          DefaultValue = inputDef.DefaultValue |> Option.map stringify }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name

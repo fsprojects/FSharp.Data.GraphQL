@@ -223,8 +223,8 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
-      Variables = ctx.Variables }
-
+      Variables = ctx.Variables }         
+                
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
     then
