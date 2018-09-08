@@ -36,6 +36,14 @@ let ``Float coerces input`` () =
     testCoercion Float 0. (BooleanValue false)
 
 [<Fact>]
+let ``Long coerces input`` () = 
+    testCoercion Long 123. (IntValue 123L)
+    testCoercion Long 123.4 (FloatValue 123.4)
+    testCoercion Long 123.4 (StringValue "123.4")
+    testCoercion Long 1. (BooleanValue true)
+    testCoercion Long 0. (BooleanValue false)
+
+[<Fact>]
 let ``Boolean coerces input`` () = 
     testCoercion Boolean true (IntValue 123L)
     testCoercion Boolean false (IntValue 0L)
