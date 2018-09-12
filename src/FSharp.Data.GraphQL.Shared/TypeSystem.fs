@@ -352,13 +352,13 @@ and ILiveFieldSubscriptionProvider =
         /// Checks if a type and a field is registered in the provider.
         abstract member IsRegistered : string -> string -> bool
         /// Registers a new live query subscription type, called at schema compilation time.
-        abstract member Register : ILiveFieldSubscription -> unit
+        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : obj -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
-        abstract member Publish<'T> : string -> string -> 'T -> unit
+        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
     end
 
 /// Interface used for receiving information about a whole
@@ -1937,10 +1937,17 @@ and TypeMap() =
 module SubscriptionExtensions =
     type ISubscriptionProvider with
         member this.Register subscription =
-            this.RegisterAsync(subscription) |> Async.RunSynchronously
+            this.RegisterAsync subscription |> Async.RunSynchronously
 
         member this.Publish<'T> name subType =
             this.PublishAsync name subType |> Async.RunSynchronously
+
+    type ILiveFieldSubscriptionProvider with
+        member this.Register subscription =
+            this.RegisterAsync subscription |> Async.RunSynchronously
+
+        member this.Publish<'T> typeName fieldName subType =
+            this.PublishAsync typeName fieldName subType |> Async.RunSynchronously
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =
