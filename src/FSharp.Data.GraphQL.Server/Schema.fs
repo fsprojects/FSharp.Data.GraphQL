@@ -32,8 +32,8 @@ type SchemaConfig =
     static member DefaultSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
         { new ISubscriptionProvider with
-            member __.Register (subscription : Subscription) =
-                registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
+            member __.RegisterAsync (subscription : Subscription) = async {
+                return registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>())) }
 
             member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
                 match registeredSubscriptions.TryGetValue(subdef.Name) with
@@ -43,10 +43,10 @@ type SchemaConfig =
                     |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
 
-            member __.Publish<'T> (name: string) (value: 'T) =
+            member __.PublishAsync<'T> (name: string) (value: 'T) = async {
                 match registeredSubscriptions.TryGetValue(name) with
                 | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> () }
+                | false, _ -> () } }
 
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
