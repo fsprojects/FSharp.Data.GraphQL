@@ -2,7 +2,7 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp2.0;net47</TargetFrameworks>
+    <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
@@ -11,7 +11,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>full</DebugType>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.0' ">
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.1' ">
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>

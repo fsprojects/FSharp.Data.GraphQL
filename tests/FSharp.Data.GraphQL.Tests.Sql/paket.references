@@ -1,3 +1,2 @@
-group Test
-FSharp.Data.TypeProviders
 FSharp.Core
+FSharp.Data.TypeProviders

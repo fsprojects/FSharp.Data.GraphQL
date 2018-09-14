@@ -1,14 +1,16 @@
 #r @"packages/build/FAKE/tools/FakeLib.dll"
+
 open Fake
 open Fake.Git
-open Fake.AssemblyInfoFile
-open Fake.ReleaseNotesHelper
-open Fake.UserInputHelper
+open Fake.DotNet.AssemblyInfoFile
+open Fake.Core.ReleaseNotes
+open Fake.Core.UserInput
 open Fake.Testing
-open Fake.MSBuildHelper
-open Fake.DotNetCli
+open Fake.DotNet.MSBuild
+open Fake.DotNet
 open System
 open System.IO
+
 #if MONO
 #else
 #load "packages/build/SourceLink.Fake/tools/Fake.fsx"
@@ -207,7 +209,7 @@ Target "Build" (fun _ ->
 Target "RunTests" (fun _ ->
     DotNetCli.Test (fun p -> { p with 
 #if MONO 
-                                    Framework = "netcoreapp2.0"
+                                    Framework = "netcoreapp2.1"
 #endif
                                     Configuration = "Release"
                                     Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" })  

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp2.0;net47</TargetFrameworks>
+    <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
@@ -9,7 +9,7 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>portable</DebugType>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.0' ">
+  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.1' ">
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
@@ -41,7 +41,7 @@
     <Compile Include="MiddlewaresTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
-    <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.0' " />
+    <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.1' " />
   </ItemGroup>
   <ItemGroup>
     <None Include="paket.references" />

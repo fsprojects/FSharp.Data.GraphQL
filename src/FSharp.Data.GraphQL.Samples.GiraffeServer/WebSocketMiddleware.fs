@@ -26,8 +26,8 @@ type GraphQLWebSocket(innerSocket : WebSocket) =
     override this.Dispose() =
         this.UnsubscribeAll()
         innerSocket.Dispose()
-    override __.ReceiveAsync(buffer, ct) = innerSocket.ReceiveAsync(buffer, ct)
-    override __.SendAsync(buffer, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
+    override __.ReceiveAsync(buffer : ArraySegment<byte>, ct) = innerSocket.ReceiveAsync(buffer, ct)
+    override __.SendAsync(buffer : ArraySegment<byte>, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
     override __.Abort() = innerSocket.Abort()
     member __.Subscribe(id : string, unsubscriber : IDisposable) =
         subscriptions.Add(id, unsubscriber)

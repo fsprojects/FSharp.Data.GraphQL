@@ -7,6 +7,13 @@ nuget System.Reactive
 nuget Newtonsoft.Json
 nuget System.Runtime
 nuget FSharp.Core
+nuget BenchmarkDotNet
+nuget xunit 
+nuget xUnit.runner.console
+nuget xunit.runner.visualstudio
+nuget System.Reflection.Metadata
+nuget FSharp.Data.TypeProviders
+nuget Microsoft.NET.Test.Sdk
 
 group Build
   source https://nuget.org/api/v2
@@ -16,15 +23,3 @@ group Build
   nuget FSharp.Formatting
 
   github fsharp/FAKE modules/Octokit/Octokit.fsx
-
-group Test
-  source https://nuget.org/api/v2
-  nuget Newtonsoft.Json
-  nuget FSharp.Core 
-  nuget BenchmarkDotNet
-  nuget xunit 
-  nuget xUnit.runner.console
-  nuget xunit.runner.visualstudio
-  nuget System.Reflection.Metadata
-  nuget FSharp.Data.TypeProviders
-  nuget Microsoft.NET.Test.Sdk

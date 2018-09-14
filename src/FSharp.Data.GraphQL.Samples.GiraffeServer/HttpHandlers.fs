@@ -38,7 +38,7 @@ module HttpHandlers =
                 JsonConvert.SerializeObject(data, jsonSettings)
             | Stream _ ->
                 "{}"
-        let tryParse fieldName data =
+        let tryParse fieldName (data : byte []) =
             let raw = Encoding.UTF8.GetString data
             if System.String.IsNullOrWhiteSpace(raw) |> not
             then
