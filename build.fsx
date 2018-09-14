@@ -1,21 +1,32 @@
-#r @"packages/build/FAKE/tools/FakeLib.dll"
+#r "paket:
+nuget Fake.Core.Target
+nuget Fake.DotNet.Cli 
+nuget Fake.Tools.Git
+nuget Fake.DotNet.AssemblyInfoFile
+nuget Fake.Core.ReleaseNotes
+nuget Fake.Core.UserInput
+nuget Fake.DotNet.MSBuild
+nuget Fake.IO.FileSystem
+nuget Fake.DotNet.Fsc
+nuget Fake.Api.GitHub
+nuget Octokit //"
 
-open Fake
-open Fake.Git
-open Fake.DotNet.AssemblyInfoFile
-open Fake.Core.ReleaseNotes
-open Fake.Core.UserInput
-open Fake.Testing
-open Fake.DotNet.MSBuild
-open Fake.DotNet
+#load ".fake/build.fsx/intellisense.fsx"
+
 open System
 open System.IO
-
-#if MONO
-#else
-#load "packages/build/SourceLink.Fake/tools/Fake.fsx"
-open SourceLink
-#endif
+open Fake
+open Fake.Tools.Git
+open Fake.DotNet
+open Fake.IO
+open Fake.IO.FileSystemOperators
+open Fake.IO.Globbing.Operators
+open Fake.Core.TargetOperators
+open Fake.Tools
+open Fake.Core
+open Fake.Api
+open Octokit
+open System.Diagnostics
 
 // --------------------------------------------------------------------------------------
 // Information about the project are used
@@ -36,8 +47,8 @@ let testAssemblies = "tests/**/bin/Release/**/*Tests*.dll"
 let gitOwner = "bazingatechnologies"
 let gitHome = "https://github.com/" + gitOwner
 let gitName = "FSharp.Data.GraphQL"
-let gitRaw = environVarOrDefault "gitRaw" "https://raw.github.com/bazingatechnologies"
-let release = LoadReleaseNotes "RELEASE_NOTES.md"
+let gitRaw = Environment.environVarOrDefault "gitRaw" "https://raw.github.com/bazingatechnologies"
+let release = ReleaseNotes.load "RELEASE_NOTES.md"
 
 module Util =
     open System.Net
@@ -47,40 +58,41 @@ module Util =
 
     let run workingDir fileName args =
         let fileName, args =
-            if EnvironmentHelper.isUnix
+            if Environment.isUnix
             then fileName, args else "cmd", ("/C " + fileName + " " + args)
         let ok =
-            execProcess (fun info ->
-                info.FileName <- fileName
-                info.WorkingDirectory <- workingDir
-                info.Arguments <- args) TimeSpan.MaxValue
+            Process.execSimple (fun info -> 
+                { info with
+                      FileName = fileName
+                      WorkingDirectory = workingDir
+                      Arguments = args }) TimeSpan.MaxValue = 0
         if not ok then failwith (sprintf "'%s> %s %s' task failed" workingDir fileName args)
 
     let runAndReturn workingDir fileName args =
         let fileName, args =
-            if EnvironmentHelper.isUnix
+            if Environment.isUnix
             then fileName, args else "cmd", ("/C " + args)
-        ExecProcessAndReturnMessages (fun info ->
-            info.FileName <- fileName
-            info.WorkingDirectory <- workingDir
-            info.Arguments <- args) TimeSpan.MaxValue
+        Process.execWithResult (fun info ->
+                { info with
+                      FileName = fileName
+                      WorkingDirectory = workingDir
+                      Arguments = args }) TimeSpan.MaxValue
         |> fun p -> p.Messages |> String.concat "\n"
 
     let rmdir dir =
-        if EnvironmentHelper.isUnix
-        then FileUtils.rm_rf dir
+        if Environment.isUnix
+        then Shell.rm_rf dir
         // Use this in Windows to prevent conflicts with paths too long
         else run "." "cmd" ("/C rmdir /s /q " + Path.GetFullPath dir)
 
     let compileScript symbols outDir fsxPath =
         let dllFile = Path.ChangeExtension(Path.GetFileName fsxPath, ".dll")
         let opts = [
-            yield FscHelper.Out (Path.Combine(outDir, dllFile))
-            yield FscHelper.Target FscHelper.TargetType.Library
-            yield! symbols |> List.map FscHelper.Define
+            yield Fsc.Out (Path.Combine(outDir, dllFile))
+            yield Fsc.Target Fsc.TargetType.Library
+            yield! symbols |> List.map Fsc.Define
         ]
-        FscHelper.compile opts [fsxPath]
-        |> function 0 -> () | _ -> failwithf "Cannot compile %s" fsxPath
+        Fsc.compile opts [fsxPath]
 
     let normalizeVersion (version: string) =
         let i = version.IndexOf("-")
@@ -89,8 +101,8 @@ module Util =
     let assemblyInfo projectDir version extra =
         let version = normalizeVersion version
         let asmInfoPath = projectDir </> "AssemblyInfo.fs"
-        (Attribute.Version version)::extra
-        |> CreateFSharpAssemblyInfo asmInfoPath
+        (AssemblyInfo.Version version) :: extra
+        |> AssemblyInfoFile.createFSharp asmInfoPath
 
 module Npm =
     let script workingDir script args =
@@ -133,23 +145,23 @@ let (|Fsproj|Csproj|Vbproj|Shproj|) (projFileName:string) =
     | _                           -> failwith (sprintf "Project file %s not supported. Unknown project type." projFileName)
 
 // Generate assembly info files with the right version & up-to-date information
-Target "AssemblyInfo" (fun _ ->
+Target.create "AssemblyInfo" (fun _ ->
     let getAssemblyInfoAttributes projectName =
-        [ Attribute.Title (projectName)
-          Attribute.Product project
-          Attribute.Description summary
-          Attribute.Version release.AssemblyVersion
-          Attribute.FileVersion release.AssemblyVersion ]
+        [ AssemblyInfo.Title projectName
+          AssemblyInfo.Product project
+          AssemblyInfo.Description summary
+          AssemblyInfo.Version release.AssemblyVersion
+          AssemblyInfo.FileVersion release.AssemblyVersion ]
           
     let internalsVisibility (fsproj: string) =
         match fsproj with
         | f when f.EndsWith "FSharp.Data.GraphQL.Shared.fsproj" -> 
-            [ Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
-              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
-              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
+            [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
+              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
+              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
         | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" -> 
-            [ Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
-              Attribute.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
+            [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
+              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
         | _ -> []
 
     let getProjectDetails projectPath =
@@ -162,114 +174,118 @@ Target "AssemblyInfo" (fun _ ->
 
     !! "src/**/*.??proj"
     |> Seq.map getProjectDetails
-    |> Seq.iter (fun (projFileName, projectName, folderName, attributes) ->
-        match projFileName with
-        | Fsproj -> CreateFSharpAssemblyInfo (folderName </> "AssemblyInfo.fs") (attributes @ internalsVisibility projFileName)
-        | Csproj -> CreateCSharpAssemblyInfo ((folderName </> "Properties") </> "AssemblyInfo.cs") attributes
-        | Vbproj -> CreateVisualBasicAssemblyInfo ((folderName </> "My Project") </> "AssemblyInfo.vb") attributes
-        | Shproj -> ()
+    |> Seq.iter (fun (projFileName, _, folderName, attributes) ->
+            match projFileName with
+            | Fsproj -> AssemblyInfoFile.createFSharp (folderName </> "AssemblyInfo.fs") (attributes @ internalsVisibility projFileName)
+            | Csproj -> AssemblyInfoFile.createCSharp ((folderName </> "Properties") </> "AssemblyInfo.cs") attributes
+            | Vbproj -> AssemblyInfoFile.createVisualBasic ((folderName </> "My Project") </> "AssemblyInfo.vb") attributes
+            | Shproj -> ()
         )
 )
 
 // Copies binaries from default VS location to expected bin folder
 // But keeps a subdirectory structure for each project in the
 // src folder to support multiple project outputs
-Target "CopyBinaries" (fun _ ->
+Target.create "CopyBinaries" (fun _ ->
     !! "src/**/*.??proj"
     -- "src/**/*.shproj"
     -- "src/netcore/**/*.??proj"
     |>  Seq.map (fun f -> ((System.IO.Path.GetDirectoryName f) </> "bin/Release", "bin" </> (System.IO.Path.GetFileNameWithoutExtension f)))
-    |>  Seq.iter (fun (fromDir, toDir) -> CopyDir toDir fromDir (fun _ -> true))
+    |>  Seq.iter (fun (fromDir, toDir) -> Shell.copyDir toDir fromDir (fun _ -> true))
 )
 
 // --------------------------------------------------------------------------------------
 // Clean build results
 
-Target "Clean" (fun _ ->
-    CleanDirs ["bin"; "temp"]
+Target.create "Clean" (fun _ ->
+    Shell.cleanDirs ["bin"; "temp"]
 )
 
-Target "CleanDocs" (fun _ ->
-    CleanDirs ["docs/output"]
+Target.create "CleanDocs" (fun _ ->
+    Shell.cleanDirs ["docs/output"]
 )
 
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-Target "Restore" (fun _ ->
-    DotNetCli.Restore (fun p -> { p with Project = "FSharp.Data.GraphQL.sln" })
-)
-
-Target "Build" (fun _ ->
-    DotNetCli.Build (fun p -> { p with 
-                                    Configuration = "Release"
-                                    Project = "FSharp.Data.GraphQL.sln" }) 
-)
-
-Target "RunTests" (fun _ ->
-    DotNetCli.Test (fun p -> { p with 
-#if MONO 
-                                    Framework = "netcoreapp2.1"
-#endif
-                                    Configuration = "Release"
-                                    Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" })  
-)
-
-
-#if MONO
-#else
-// --------------------------------------------------------------------------------------
-// SourceLink allows Source Indexing on the PDB generated by the compiler, this allows
-// the ability to step through the source code of external libraries http://ctaggart.github.io/SourceLink/
-
-Target "SourceLink" (fun _ ->
-    let baseUrl = sprintf "%s/%s/{0}/%%var2%%" gitRaw project
+Target.create "Restore" (fun _ ->
+    
     !! "src/**/*.??proj"
     -- "src/**/*.shproj"
-    |> Seq.iter (fun projFile ->
-        let proj = VsProj.LoadRelease projFile
-        SourceLink.Index proj.CompilesNotLinked proj.OutputFilePdb __SOURCE_DIRECTORY__ baseUrl
-    )
-)
+    |> Seq.iter (DotNet.restore id))
 
+Target.create "Build" (fun _ ->
+    !! "src/**/*.??proj"
+    -- "src/**/*.shproj"
+    |> Seq.iter (DotNet.build (fun options ->
+        { options with 
+            Configuration = DotNet.BuildConfiguration.Release
+            Common = { options.Common with 
+                        CustomParams = Some "--no-restore" } })))
+
+Target.create "RunTests" (fun _ ->
+    "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    |> DotNet.test (fun p ->
+            { p with
+#if MONO
+                Framework = "netcoreapp2.1"
 #endif
+                Configuration = DotNet.BuildConfiguration.Release }))
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
 
 
 let fakePath = "packages" </> "build" </> "FAKE" </> "tools" </> "FAKE.exe"
+
+/// The path to the F# Interactive tool.
+let pathToFsiExe =
+    let fsiPath = @".\tools\FSharp\;.\lib\FSharp\;[ProgramFilesX86]\Microsoft SDKs\F#\10.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\4.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\4.0\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\3.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\3.0\Framework\v4.0;[ProgramFiles]\Microsoft F#\v4.0\;[ProgramFilesX86]\Microsoft F#\v4.0\;[ProgramFiles]\FSharp-2.0.0.0\bin\;[ProgramFilesX86]\FSharp-2.0.0.0\bin\;[ProgramFiles]\FSharp-1.9.9.9\bin\;[ProgramFilesX86]\FSharp-1.9.9.9\bin\"
+    let ev = Environment.environVar "FSI"
+    if not (String.isNullOrEmpty ev) then ev else
+    if Environment.isUnix then
+        // The standard name on *nix is "fsharpi"
+        match Process.tryFindFileOnPath "fsharpi" with
+        | Some file -> file
+        | None ->
+        // The early F# 2.0 name on *nix was "fsi"
+        match Process.tryFindFileOnPath "fsi" with
+        | Some file -> file
+        | None -> "fsharpi"
+    else
+        // let dir = Path.GetDirectoryName fullAssemblyPath
+        // let fi = FileInfo.ofPath (Path.Combine(dir, "fsi.exe"))
+        // if fi.Exists then fi.FullName else
+        Process.findPath "FSIPath" fsiPath "fsi.exe"
+
 let fakeStartInfo script workingDirectory args fsiargs environmentVars =
-    (fun (info: System.Diagnostics.ProcessStartInfo) ->
-        info.FileName <- System.IO.Path.GetFullPath fakePath
-        info.Arguments <- sprintf "%s --fsiargs -d:FAKE %s \"%s\"" args fsiargs script
-        info.WorkingDirectory <- workingDirectory
-        let setVar k v =
-            info.EnvironmentVariables.[k] <- v
-        for (k, v) in environmentVars do
-            setVar k v
-        setVar "MSBuild" msBuildExe
-        setVar "GIT" Git.CommandHelper.gitPath
-        setVar "FSI" fsiPath)
+    (fun (info: ProcStartInfo) ->
+        { info with 
+            FileName = System.IO.Path.GetFullPath fakePath
+            Arguments = sprintf "%s --fsiargs -d:FAKE %s \"%s\"" args fsiargs script
+            WorkingDirectory = workingDirectory
+            Environment = 
+                Map.ofSeq environmentVars
+                |> Map.add "MSBuild" MSBuild.msBuildExe
+                |> Map.add "GIT" Git.CommandHelper.gitPath
+                |> Map.add "FSI" pathToFsiExe })
 
 /// Run the given buildscript with FAKE.exe
 let executeFAKEWithOutput workingDirectory script fsiargs envArgs =
     let exitCode =
-        ExecProcessWithLambdas
-            (fakeStartInfo script workingDirectory "" fsiargs envArgs)
-            TimeSpan.MaxValue false ignore ignore
+        Process.execSimple (fakeStartInfo script workingDirectory "" fsiargs envArgs) TimeSpan.MaxValue
     System.Threading.Thread.Sleep 1000
     exitCode
 
 // Documentation
 let buildDocumentationTarget fsiargs target =
-    trace (sprintf "Building documentation (%s), this could take some time, please wait..." target)
+    Trace.trace (sprintf "Building documentation (%s), this could take some time, please wait..." target)
     let exit = executeFAKEWithOutput "docs/tools" "generate.fsx" fsiargs ["target", target]
     if exit <> 0 then
         failwith "generating reference documentation failed"
     ()
 
-Target "GenerateReferenceDocs" (fun _ ->
+Target.create "GenerateReferenceDocs" (fun _ ->
     buildDocumentationTarget "-d:RELEASE -d:REFERENCE" "Default"
 )
 
@@ -279,51 +295,51 @@ let generateHelp' fail debug =
         else "--define:RELEASE --define:HELP"
     try
         buildDocumentationTarget args "Default"
-        traceImportant "Help generated"
+        Trace.traceImportant "Help generated"
     with
     | e when not fail ->
-        traceImportant "generating help documentation failed"
+        Trace.traceImportant "generating help documentation failed"
 
 let generateHelp fail =
     generateHelp' fail false
 
-Target "GenerateHelp" (fun _ ->
-    DeleteFile "docs/content/release-notes.md"
-    CopyFile "docs/content/" "RELEASE_NOTES.md"
-    Rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
+Target.create "GenerateHelp" (fun _ ->
+    Shell.rm "docs/content/release-notes.md"
+    Shell.cp "docs/content/" "RELEASE_NOTES.md"
+    Shell.rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
 
-    DeleteFile "docs/content/license.md"
-    CopyFile "docs/content/" "LICENSE.txt"
-    Rename "docs/content/license.md" "docs/content/LICENSE.txt"
+    Shell.rm "docs/content/license.md"
+    Shell.cp "docs/content/" "LICENSE.txt"
+    Shell.rename "docs/content/license.md" "docs/content/LICENSE.txt"
 
     generateHelp true
 )
 
-Target "GenerateHelpDebug" (fun _ ->
-    DeleteFile "docs/content/release-notes.md"
-    CopyFile "docs/content/" "RELEASE_NOTES.md"
-    Rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
+Target.create "GenerateHelpDebug" (fun _ ->
+    Shell.rm "docs/content/release-notes.md"
+    Shell.cp "docs/content/" "RELEASE_NOTES.md"
+    Shell.rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
 
-    DeleteFile "docs/content/license.md"
-    CopyFile "docs/content/" "LICENSE.txt"
-    Rename "docs/content/license.md" "docs/content/LICENSE.txt"
+    Shell.rm "docs/content/license.md"
+    Shell.cp "docs/content/" "LICENSE.txt"
+    Shell.rename "docs/content/license.md" "docs/content/LICENSE.txt"
 
     generateHelp' true true
 )
 
-Target "KeepRunning" (fun _ ->
-    use watcher = !! "docs/content/**/*.*" |> WatchChanges (fun changes ->
+Target.create "KeepRunning" (fun _ ->
+    use watcher = !! "docs/content/**/*.*" |> ChangeWatcher.run (fun changes ->
          generateHelp' true true
     )
 
-    traceImportant "Waiting for help edits. Press any key to stop."
+    Trace.traceImportant "Waiting for help edits. Press any key to stop."
 
     System.Console.ReadKey() |> ignore
 
     watcher.Dispose()
 )
 
-Target "GenerateDocs" DoNothing
+Target.create "GenerateDocs" ignore
 
 let createIndexFsx lang =
     let content = """(*** hide ***)
@@ -338,10 +354,10 @@ F# Project Scaffold ({0})
 """
     let targetDir = "docs/content" </> lang
     let targetFile = targetDir </> "index.fsx"
-    ensureDirectory targetDir
+    Directory.ensure targetDir
     System.IO.File.WriteAllText(targetFile, System.String.Format(content, lang))
 
-Target "AddLangDocs" (fun _ ->
+Target.create "AddLangDocs" (fun _ ->
     let args = System.Environment.GetCommandLineArgs()
     if args.Length < 4 then
         failwith "Language not specified."
@@ -359,8 +375,8 @@ Target "AddLangDocs" (fun _ ->
         if System.IO.File.Exists(langTemplateFileName) then
             failwithf "Documents for specified language '%s' have already been added." lang
 
-        ensureDirectory langTemplateDir
-        Copy langTemplateDir [ templateDir </> templateFileName ]
+        Directory.ensure langTemplateDir
+        Shell.copy langTemplateDir [ templateDir </> templateFileName ]
 
         createIndexFsx lang)
 )
@@ -368,56 +384,112 @@ Target "AddLangDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Release Scripts
 
-Target "ReleaseDocs" (fun _ ->
+Target.create "ReleaseDocs" (fun _ ->
     let tempDocsDir = "temp/gh-pages"
-    CleanDir tempDocsDir
+    Shell.cleanDir tempDocsDir
     Repository.cloneSingleBranch "" (gitHome + "/" + gitName + ".git") "gh-pages" tempDocsDir
 
-    CopyRecursive "docs/output" tempDocsDir true |> tracefn "%A"
-    StageAll tempDocsDir
-    Git.Commit.Commit tempDocsDir (sprintf "Update generated documentation for version %s" release.NugetVersion)
+    Shell.copyRecursive "docs/output" tempDocsDir true |> Trace.tracefn "%A"
+    Git.Staging.stageAll tempDocsDir
+    Git.Commit.exec tempDocsDir (sprintf "Update generated documentation for version %s" release.NugetVersion)
     Branches.push tempDocsDir
 )
 
-#load "paket-files/build/fsharp/FAKE/modules/Octokit/Octokit.fsx"
-open Octokit
+let captureAndReraise ex =
+    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw()
+    Unchecked.defaultof<_>
 
-Target "Release" (fun _ ->
+let rec retry count asyncF =
+    // This retry logic causes an exception on Mono:
+    // https://github.com/fsharp/fsharp/issues/440
+    if not (isNull (System.Type.GetType("Mono.Runtime"))) then
+        asyncF
+    else
+        async {
+            try
+                return! asyncF
+            with ex ->
+                return!
+                    match (ex, ex.InnerException) with
+                    | (:? AggregateException, (:? AuthorizationException as ex)) -> captureAndReraise ex
+                    | _ when count > 0 -> retry (count - 1) asyncF
+                    | (ex, _) -> captureAndReraise ex
+        }
+
+let retryWithArg count input asycnF =
+    async {
+        let! choice = input |> Async.Catch
+        match choice with
+        | Choice1Of2 input' ->
+            return! (asycnF input') |> retry count
+        | Choice2Of2 ex ->
+            return captureAndReraise ex
+    }
+
+[<NoComparison>]
+type Draft =
+    { Client : GitHubClient
+      Owner : string
+      Project : string
+      DraftRelease : Release }
+
+let makeRelease draft owner project version prerelease (notes:seq<string>) (client : Async<GitHubClient>) =
+    retryWithArg 5 client <| fun client' -> async {
+        let data = new NewRelease(version)
+        data.Name <- version
+        data.Body <- String.Join(Environment.NewLine, notes)
+        data.Draft <- draft
+        data.Prerelease <- prerelease
+        let! draft = Async.AwaitTask <| client'.Repository.Release.Create(owner, project, data)
+        let draftWord = if data.Draft then " draft" else ""
+        printfn "Created%s release id %d" draftWord draft.Id
+        return {
+            Client = client'
+            Owner = owner
+            Project = project
+            DraftRelease = draft }
+    }
+
+let createDraft owner project version prerelease notes client = makeRelease true owner project version prerelease notes client
+let releaseDraft (draft : Async<Draft>) =
+    retryWithArg 5 draft <| fun draft' -> async {
+        let update = draft'.DraftRelease.ToUpdate()
+        update.Draft <- Nullable<bool>(false)
+        let! released = Async.AwaitTask <| draft'.Client.Repository.Release.Edit(draft'.Owner, draft'.Project, draft'.DraftRelease.Id, update)
+        printfn "Released %d on github" released.Id
+    }
+
+Target.create "Release" (fun _ ->
     let user =
-        match getBuildParam "github-user" with
+        match Environment.getBuildParam "github-user" with
         | s when not (String.IsNullOrWhiteSpace s) -> s
-        | _ -> getUserInput "Username: "
+        | _ -> UserInput.getUserInput "Username: "
     let pw =
         match getBuildParam "github-pw" with
         | s when not (String.IsNullOrWhiteSpace s) -> s
-        | _ -> getUserPassword "Password: "
+        | _ -> UserInput.getUserPassword "Password: "
     let remote =
         Git.CommandHelper.getGitResult "" "remote -v"
         |> Seq.filter (fun (s: string) -> s.EndsWith("(push)"))
         |> Seq.tryFind (fun (s: string) -> s.Contains(gitOwner + "/" + gitName))
         |> function None -> gitHome + "/" + gitName | Some (s: string) -> s.Split().[0]
 
-    StageAll ""
-    Git.Commit.Commit "" (sprintf "Bump version to %s" release.NugetVersion)
-    Branches.pushBranch "" remote (Information.getBranchName "")
+    Git.Staging.stageAll ""
+    Git.Commit.exec "" (sprintf "Bump version to %s" release.NugetVersion)
+    Git.Branches.pushBranch "" remote (Information.getBranchName "")
 
-    Branches.tag "" release.NugetVersion
-    Branches.pushTag "" remote release.NugetVersion
+    Git.Branches.tag "" release.NugetVersion
+    Git.Branches.pushTag "" remote release.NugetVersion
 
-    // release on github
-    createClient user pw
+    GitHub.createClient user pw
     |> createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes
-    // TODO: |> uploadFile "PATH_TO_FILE"
     |> releaseDraft
     |> Async.RunSynchronously
 )
 
-Target "AdHocBuild" (fun _ ->
-    // !!"src/FSharp.Data.GraphQL/FSharp.Data.GraphQL.fsproj"
-    // |> MSBuildDebug "bin/FSharp.Data.GraphQL" "Build" |> Log "Output: "
-
-    !!"src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
-    |> MSBuildDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
+Target.create "AdHocBuild" (fun _ ->
+    !! "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
+    |> MSBuild.runDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
 )
 
 let pack id =
@@ -437,31 +509,31 @@ let publishPackage id =
             WorkingDir = sprintf "nuget/%s.%s" project id
             PublishUrl = "https://www.nuget.org/api/v2/package" })
     
-Target "PublishServer" (fun _ ->
+Target.create "PublishServer" (fun _ ->
     publishPackage "Server"
 )
 
-Target "PublishClient" (fun _ ->
+Target.create "PublishClient" (fun _ ->
     publishPackage "Client"
 )
 
-Target "PublishMiddlewares" (fun _ ->
+Target.create "PublishMiddlewares" (fun _ ->
     publishPackage "Server.Middlewares"
 )
 
-Target "PackServer" (fun _ ->
+Target.create "PackServer" (fun _ ->
     pack "Server"
 )
 
-Target "PackClient" (fun _ ->
+Target.create "PackClient" (fun _ ->
     pack "Client"
 )
 
-Target "PackMiddlewares" (fun _ ->
+Target.create "PackMiddlewares" (fun _ ->
     pack "Server.Middlewares"
 )
 
-Target "PublishNpm" (fun _ ->
+Target.create "PublishNpm" (fun _ ->
     let binDir, prjDir = "bin/npm", "src/FSharp.Data.GraphQL.Client"
     CleanDir binDir
 
@@ -481,7 +553,7 @@ Target "PublishNpm" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Run all targets by default. Invoke 'build <Target>' to override
 
-Target "All" DoNothing
+Target.create "All" ignore
 
 "Clean"
   ==> "Restore"
@@ -493,14 +565,6 @@ Target "All" DoNothing
   =?> ("GenerateReferenceDocs", environVar "APPVEYOR" = "True")
   =?> ("GenerateDocs", environVar "APPVEYOR" = "True")
   =?> ("ReleaseDocs",isLocalBuild)
-
-// "All"
-// #if MONO
-// #else
-//   =?> ("SourceLink", Pdbstr.tryFind().IsSome )
-// #endif
-//   ==> "NuGet"
-//   ==> "BuildPackage"
 
 "CleanDocs"
   ==> "GenerateHelp"
@@ -516,8 +580,4 @@ Target "All" DoNothing
 "ReleaseDocs"
   ==> "Release"
 
-// "BuildPackage"
-//   ==> "PublishNuget"
-//   ==> "Release"
-
-RunTargetOrDefault "All"
+Target.runOrDefault "All"

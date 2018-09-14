@@ -1,4 +1,4 @@
-source https://nuget.org/api/v2
+source https://api.nuget.org/v3/index.json
 
 nuget FParsec
 nuget Giraffe
@@ -16,10 +16,17 @@ nuget FSharp.Data.TypeProviders
 nuget Microsoft.NET.Test.Sdk
 
 group Build
-  source https://nuget.org/api/v2
-  
-  nuget SourceLink.Fake
-  nuget FAKE
-  nuget FSharp.Formatting
+  source https://api.nuget.org/v3/index.json
 
-  github fsharp/FAKE modules/Octokit/Octokit.fsx
+  nuget FAKE
+  nuget Fake.DotNet.Cli
+  nuget Fake.IO.FileSystem
+  nuget Fake.Core.Target
+  nuget Fake.Tools.Git
+  nuget Fake.DotNet.AssemblyInfoFile
+  nuget Fake.Core.ReleaseNotes
+  nuget Fake.Core.UserInput
+  nuget Fake.DotNet.MSBuild
+  nuget Fake.DotNet.Fsc
+  nuget Fake.Api.GitHub
+  nuget Octokit
