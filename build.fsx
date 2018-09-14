@@ -9,6 +9,7 @@ nuget Fake.DotNet.MSBuild
 nuget Fake.IO.FileSystem
 nuget Fake.DotNet.Fsc
 nuget Fake.Api.GitHub
+nuget Fake.DotNet.Paket
 nuget Octokit //"
 
 #load ".fake/build.fsx/intellisense.fsx"
@@ -297,7 +298,7 @@ let generateHelp' fail debug =
         buildDocumentationTarget args "Default"
         Trace.traceImportant "Help generated"
     with
-    | e when not fail ->
+    | _ when not fail ->
         Trace.traceImportant "generating help documentation failed"
 
 let generateHelp fail =
@@ -328,7 +329,7 @@ Target.create "GenerateHelpDebug" (fun _ ->
 )
 
 Target.create "KeepRunning" (fun _ ->
-    use watcher = !! "docs/content/**/*.*" |> ChangeWatcher.run (fun changes ->
+    use watcher = !! "docs/content/**/*.*" |> ChangeWatcher.run (fun _ ->
          generateHelp' true true
     )
 
@@ -460,12 +461,12 @@ let releaseDraft (draft : Async<Draft>) =
     }
 
 Target.create "Release" (fun _ ->
-    let user =
-        match Environment.getBuildParam "github-user" with
+    let user = 
+        match Environment.environVarOrDefault "github-user" System.String.Empty with
         | s when not (String.IsNullOrWhiteSpace s) -> s
         | _ -> UserInput.getUserInput "Username: "
     let pw =
-        match getBuildParam "github-pw" with
+        match Environment.environVarOrDefault "github-pw" System.String.Empty with
         | s when not (String.IsNullOrWhiteSpace s) -> s
         | _ -> UserInput.getUserPassword "Password: "
     let remote =
@@ -489,12 +490,13 @@ Target.create "Release" (fun _ ->
 
 Target.create "AdHocBuild" (fun _ ->
     !! "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
-    |> MSBuild.runDebug "bin/FSharp.Data.GraphQL.Client" "Build" |> Log "Output: "
+    |> MSBuild.runDebug id "bin/FSharp.Data.GraphQL.Client" "Build"
+    |> Trace.logItems "Output: "
 )
 
 let pack id =
-    CleanDir <| sprintf "nuget/%s.%s" project id
-    Paket.Pack(fun p ->
+    Shell.cleanDir <| sprintf "nuget/%s.%s" project id
+    Paket.pack(fun p ->
         { p with
             Version = release.NugetVersion
             OutputPath = sprintf "nuget/%s.%s" project id
@@ -504,7 +506,7 @@ let pack id =
         })
 let publishPackage id =
     pack id
-    Paket.Push(fun p ->
+    Paket.push(fun p ->
         { p with 
             WorkingDir = sprintf "nuget/%s.%s" project id
             PublishUrl = "https://www.nuget.org/api/v2/package" })
@@ -535,16 +537,15 @@ Target.create "PackMiddlewares" (fun _ ->
 
 Target.create "PublishNpm" (fun _ ->
     let binDir, prjDir = "bin/npm", "src/FSharp.Data.GraphQL.Client"
-    CleanDir binDir
+    Shell.cleanDir binDir
 
-    !!("src/FSharp.Data.GraphQL.Client" </> "*.fsproj")
-    |> MSBuild "bin/FSharp.Data.GraphQL.Client" "Build" [
-        "Configuration", "Build"; "DefineConstants", "FABLE"
-    ] |> ignore
+    !! ("src/FSharp.Data.GraphQL.Client" </> "*.fsproj")
+    |> MSBuild.run id "bin/FSharp.Data.GraphQL.Client" "Build" [ "Configuration", "Build"; "DefineConstants", "FABLE" ]
+    |> ignore
 
-    CopyDir binDir (prjDir </> "bin" </> "Release") (fun _ -> true)
-    !!(prjDir </> "npm" </> "*.*")
-    |> Seq.iter (fun path -> FileUtils.cp path binDir)
+    Shell.copyDir binDir (prjDir </> "bin" </> "Release") (fun _ -> true)
+    !! (prjDir </> "npm" </> "*.*")
+    |> Seq.iter (fun path -> Shell.cp path binDir)
 
     Npm.command binDir "version" ["0.0.3"] //[string release.SemVer]
     Npm.command binDir "publish" []
@@ -557,14 +558,14 @@ Target.create "All" ignore
 
 "Clean"
   ==> "Restore"
-  =?> ("AssemblyInfo", isLocalBuild)
+  =?> ("AssemblyInfo", BuildServer.isLocalBuild)
   ==> "Build"
   ==> "CopyBinaries"
   ==> "RunTests"
   ==> "All"
-  =?> ("GenerateReferenceDocs", environVar "APPVEYOR" = "True")
-  =?> ("GenerateDocs", environVar "APPVEYOR" = "True")
-  =?> ("ReleaseDocs",isLocalBuild)
+  =?> ("GenerateReferenceDocs", Environment.environVar "APPVEYOR" = "True")
+  =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
+  =?> ("ReleaseDocs",BuildServer.isLocalBuild)
 
 "CleanDocs"
   ==> "GenerateHelp"

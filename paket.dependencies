@@ -29,4 +29,5 @@ group Build
   nuget Fake.DotNet.MSBuild
   nuget Fake.DotNet.Fsc
   nuget Fake.Api.GitHub
+  nuget Fake.DotNet.Paket
   nuget Octokit
