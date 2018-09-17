@@ -2467,6 +2467,15 @@ module SchemaDefinitions =
           CoerceInput = coerceIntInput
           CoerceValue = coerceIntValue }
 
+    /// GraphQL type of long
+    let Long : ScalarDefinition<int64> =
+        { Name = "Long"
+          Description =
+              Some
+                  "The `Long` scalar type represents non-fractional signed whole numeric values. Long can represent values between -(2^63) and 2^63 - 1."
+          CoerceInput = coerceLongInput
+          CoerceValue = coerceLongValue }
+
     /// GraphQL type of boolean
     let Boolean : ScalarDefinition<bool> =
         { Name = "Boolean"
