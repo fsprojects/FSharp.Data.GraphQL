@@ -165,7 +165,7 @@ let ``Live Query`` () =
             live @live
         }
     }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -218,7 +218,7 @@ let ``Parallel Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -269,7 +269,7 @@ let ``Parallell Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -313,7 +313,7 @@ let ``Inner Object List Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -350,7 +350,7 @@ let ``Inner Object List Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -402,7 +402,7 @@ let ``Nested Inner Object List Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -467,7 +467,7 @@ let ``Nested Inner Object List Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -508,7 +508,7 @@ let ``Simple Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
+        let mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
@@ -558,7 +558,7 @@ let ``List Defer``() =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -610,7 +610,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
+        let mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
@@ -662,7 +662,7 @@ let ``List Fragment Defer and Stream - Common``() =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
+        let mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
@@ -718,7 +718,7 @@ let ``List Stream``() =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
@@ -770,7 +770,7 @@ let ``Union Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
+        let mre = new ManualResetEvent(false)
         let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
