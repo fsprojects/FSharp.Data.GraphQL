@@ -290,11 +290,11 @@ type Subscription = {
 and ISubscriptionProvider =
     interface
         /// Registers a new subscription type, called at schema compilation time.
-        abstract member Register: Subscription -> unit
+        abstract member RegisterAsync : Subscription -> Async<unit>
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
         abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type
-        abstract member Publish<'T> : string -> 'T -> unit
+        abstract member PublishAsync<'T> : string -> 'T -> Async<unit>
     end
 
 /// Represents a subscription of a field in a live query.
@@ -352,13 +352,13 @@ and ILiveFieldSubscriptionProvider =
         /// Checks if a type and a field is registered in the provider.
         abstract member IsRegistered : string -> string -> bool
         /// Registers a new live query subscription type, called at schema compilation time.
-        abstract member Register : ILiveFieldSubscription -> unit
+        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : obj -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
-        abstract member Publish<'T> : string -> string -> 'T -> unit
+        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
     end
 
 /// Interface used for receiving information about a whole
@@ -1572,20 +1572,24 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
         hash
 
     override x.ToString() = x.Name + ": " + x.TypeDef.ToString()
+
 and SubscriptionFieldDef =
     interface
         abstract OutputTypeDef : OutputDef
         inherit FieldDef
     end
+
 and SubscriptionFieldDef<'Val> =
     interface
         inherit SubscriptionFieldDef
         inherit FieldDef<'Val>
     end
+
 and SubscriptionFieldDef<'Root, 'Input, 'Output> =
     interface
         inherit SubscriptionFieldDef<'Root>
     end
+
 and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 'Output> =
     {
         Name : string
@@ -1633,17 +1637,20 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
         if not (Array.isEmpty x.Args)
         then x.Name + "(" + String.Join(", ", x.Args) + "): " + x.TypeDef.ToString()
         else x.Name + ": " + x.TypeDef.ToString()
+
 and SubscriptionObjectDef =
     interface
         abstract Fields : Map<string, SubscriptionFieldDef>
         inherit ObjectDef
     end
+
 and SubscriptionObjectDef<'Val> =
     interface
         inherit SubscriptionObjectDef
         abstract Fields : Map<string, SubscriptionFieldDef<'Val>>
         inherit ObjectDef<'Val>
     end
+
 and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> =
     {
         Name : string
@@ -1687,6 +1694,7 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> =
         hash
 
     override x.ToString() = x.Name + "!"
+
 /// GraphQL directive defintion.
 and DirectiveDef =
     { /// Directive's name - it's NOT '@' prefixed.
@@ -1924,6 +1932,22 @@ and TypeMap() =
         let map = TypeMap()
         defs |> Seq.iter (fun def -> map.AddType(def))
         map
+
+[<AutoOpen>]
+module SubscriptionExtensions =
+    type ISubscriptionProvider with
+        member this.Register subscription =
+            this.RegisterAsync subscription |> Async.RunSynchronously
+
+        member this.Publish<'T> name subType =
+            this.PublishAsync name subType |> Async.RunSynchronously
+
+    type ILiveFieldSubscriptionProvider with
+        member this.Register subscription =
+            this.RegisterAsync subscription |> Async.RunSynchronously
+
+        member this.Publish<'T> typeName fieldName subType =
+            this.PublishAsync typeName fieldName subType |> Async.RunSynchronously
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =

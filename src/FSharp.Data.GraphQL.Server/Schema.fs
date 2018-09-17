@@ -32,8 +32,8 @@ type SchemaConfig =
     static member DefaultSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
         { new ISubscriptionProvider with
-            member __.Register (subscription : Subscription) =
-                registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>()))
+            member __.RegisterAsync (subscription : Subscription) = async {
+                return registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>())) }
 
             member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
                 match registeredSubscriptions.TryGetValue(subdef.Name) with
@@ -43,10 +43,10 @@ type SchemaConfig =
                     |> Observable.choose(id)
                 | false, _ -> Observable.Empty()
 
-            member __.Publish<'T> (name: string) (value: 'T) =
+            member __.PublishAsync<'T> (name: string) (value: 'T) = async {
                 match registeredSubscriptions.TryGetValue(name) with
                 | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> () }
+                | false, _ -> () } }
 
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
@@ -60,10 +60,10 @@ type SchemaConfig =
             member __.IsRegistered (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 registeredSubscriptions.ContainsKey(key)
-            member __.Register (subscription : ILiveFieldSubscription) =
+            member __.RegisterAsync (subscription : ILiveFieldSubscription) = async {
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
-                registeredSubscriptions.Add(key, value)
+                registeredSubscriptions.Add(key, value) }
             member __.TryFind (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
@@ -74,11 +74,11 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (sub, channel) -> channel |> Observable.filter (fun o -> sub.Identity o = identity)
                 | false, _ -> Observable.Empty()
-            member __.Publish<'T> (typeName : string) (fieldName : string) (value : 'T) =
+            member __.PublishAsync<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> () }
+                | false, _ -> () } }
     /// Default SchemaConfig used by Schema when no config is provided.
     static member Default =
         { Types = []
