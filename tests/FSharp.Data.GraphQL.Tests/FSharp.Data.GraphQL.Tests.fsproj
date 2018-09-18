@@ -4,7 +4,6 @@
     <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateProgramFile>false</GenerateProgramFile>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
@@ -42,7 +41,6 @@
     <Compile Include="MiddlewaresTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
-    <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.1' " />
   </ItemGroup>
   <ItemGroup>
     <None Include="paket.references" />

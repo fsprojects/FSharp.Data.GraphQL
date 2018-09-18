@@ -228,9 +228,6 @@ Target.create "RunTests" (fun _ ->
     "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     |> DotNet.test (fun p ->
             { p with
-#if MONO
-                Framework = "netcoreapp2.1"
-#endif
                 Configuration = DotNet.BuildConfiguration.Release }))
 
 // --------------------------------------------------------------------------------------
