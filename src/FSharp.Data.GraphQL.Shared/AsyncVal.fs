@@ -3,6 +3,8 @@
 open System
 open System.Collections.Generic
 
+#nowarn "25"
+
 /// <summary>
 /// A struct used to operate on both synchronous values and Async computations
 /// using the same, uniform API.
@@ -130,8 +132,6 @@ module AsyncVal =
                         results.[i] <- raise f
                 return results })
         else Value (values |> Array.map (fun (Value v) -> v))
-
-            
 
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are 
