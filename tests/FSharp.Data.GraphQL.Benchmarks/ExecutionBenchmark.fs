@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Parser
 open BenchmarkDotNet.Attributes
 open FSharp.Data.GraphQL.Benchmarks
 
-[<Config(typeof<GraphQLBenchConfig>); Jobs.MonoJob; Jobs.CoreJob>]
+[<Config(typeof<GraphQLBenchConfig>); MonoJob; CoreJob>]
 type SimpleExecutionBenchmark() = 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
     let mutable schemaProcessor : Executor<unit> = Unchecked.defaultof<Executor<unit>>

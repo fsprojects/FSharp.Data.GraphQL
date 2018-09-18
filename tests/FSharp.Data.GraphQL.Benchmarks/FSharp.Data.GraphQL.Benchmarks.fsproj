@@ -4,7 +4,6 @@
     <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
-    <DisableImplicitFrameworkReferences>true</DisableImplicitFrameworkReferences>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -15,7 +14,6 @@
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Prolog.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="AsyncValBenchmark.fs" />

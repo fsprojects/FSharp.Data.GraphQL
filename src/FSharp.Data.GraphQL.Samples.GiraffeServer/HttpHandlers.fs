@@ -8,6 +8,7 @@ open FSharp.Data.GraphQL.Execution
 open System.IO
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Control.Tasks
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 

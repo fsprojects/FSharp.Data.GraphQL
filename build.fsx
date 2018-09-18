@@ -209,25 +209,28 @@ Target.create "CleanDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
+// Paket restore at solution level gives concurrency erros on packages folder when running in Unix.
+// For that reason, we restore each project individually
 Target.create "Restore" (fun _ ->
-    
     !! "src/**/*.??proj"
+    ++ "tests/**/*.??proj"
     -- "src/**/*.shproj"
+    -- "tests/FSharp.Data.GraphQL.Tests.Sql/FSharp.Data.GraphQL.Tests.Sql.fsproj"
     |> Seq.iter (DotNet.restore id))
 
 Target.create "Build" (fun _ ->
-    !! "src/**/*.??proj"
-    -- "src/**/*.shproj"
-    |> Seq.iter (DotNet.build (fun options ->
+    "FSharp.Data.GraphQL.sln"
+    |> DotNet.build (fun options ->
         { options with 
             Configuration = DotNet.BuildConfiguration.Release
             Common = { options.Common with 
-                        CustomParams = Some "--no-restore" } })))
+                        CustomParams = Some "--no-restore" } }))
 
 Target.create "RunTests" (fun _ ->
     "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     |> DotNet.test (fun p ->
             { p with
+                NoBuild = true
                 Configuration = DotNet.BuildConfiguration.Release }))
 
 // --------------------------------------------------------------------------------------
