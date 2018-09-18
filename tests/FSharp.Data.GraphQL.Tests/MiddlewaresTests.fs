@@ -193,7 +193,7 @@ let ``Deferred queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj ]
         ]
     let result = execute query
-    let mre = new ManualResetEvent(false)
+    use mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     match result with
     | Deferred(data, errors, deferred) ->
@@ -248,7 +248,7 @@ let ``Streamed queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj; 1 :> obj ]
         ]
     let result = execute query
-    let mre = new ManualResetEvent(false)
+    use mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
     match result with
     | Deferred(data, errors, deferred) ->
