@@ -1,5 +1,6 @@
-FSharp.Core
-Newtonsoft.Json
-Microsoft.NET.Test.Sdk
-xunit
-xunit.runner.visualstudio
+group Tests
+    FSharp.Core
+    Newtonsoft.Json
+    Microsoft.NET.Test.Sdk
+    xunit
+    xunit.runner.visualstudio

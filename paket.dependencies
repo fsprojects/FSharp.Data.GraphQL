@@ -7,13 +7,7 @@ nuget System.Reactive
 nuget Newtonsoft.Json
 nuget System.Runtime
 nuget FSharp.Core
-nuget xunit 
-nuget xUnit.runner.console
-nuget xunit.runner.visualstudio
 nuget System.Reflection.Metadata
-nuget FSharp.Data.TypeProviders
-nuget Microsoft.NET.Test.Sdk
-nuget BenchmarkDotNet
 
 group Build
   source https://api.nuget.org/v3/index.json
@@ -31,3 +25,15 @@ group Build
   nuget Fake.Api.GitHub
   nuget Fake.DotNet.Paket
   nuget Octokit
+
+group Tests
+  source https://api.nuget.org/v3/index.json
+  
+  nuget Newtonsoft.Json
+  nuget FSharp.Core
+  nuget Microsoft.NET.Test.Sdk
+  nuget xunit 
+  nuget xUnit.runner.console
+  nuget xunit.runner.visualstudio
+  nuget BenchmarkDotNet
+  nuget FSharp.Data.TypeProviders
