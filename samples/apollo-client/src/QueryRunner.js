@@ -57,6 +57,18 @@ query TestQuery {
     }
 }`
 
+const liveQuery = `# This is a sample query using live directive.
+# This query will subscribe to updates on the ismoon field by the mutation "setMoon".
+# Whenever the mutation is done, the new value will be sent after 5 seconds.
+
+query testQuery {
+  planet (id : 1) {
+    id
+    name
+    ismoon @live
+  }
+}`
+
 export default class QueryRunner extends React.Component {
     constructor(props) {
         super(props);
@@ -92,8 +104,11 @@ export default class QueryRunner extends React.Component {
             case "stream":
                 this.setState({ query: streamQuery });
                 break;
-            case "threshold" :
-                this.setState( {query: thresholdQuery });
+            case "threshold":
+                this.setState({ query: thresholdQuery });
+                break;
+            case "live":
+                this.setState({ query: liveQuery });
                 break;
             default:
                 break;
@@ -135,6 +150,7 @@ export default class QueryRunner extends React.Component {
                             <option value="defer">Deferred query sample</option>
                             <option value="stream">Streamed query sample</option>
                             <option value="threshold">Threshold for complex queries sample</option>
+                            <option value="live">Live query sample</option>
                         </select>
                     </p>
                 </div>

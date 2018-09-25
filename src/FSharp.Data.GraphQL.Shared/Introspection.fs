@@ -144,7 +144,7 @@ let rec __Type =
         Define.Field("kind", __TypeKind, fun _ t -> t.Kind)
         Define.Field("name", Nullable String, resolve = fun _ t -> t.Name)
         Define.Field("description", Nullable String, resolve = fun _ t -> t.Description)
-        Define.Field("fields", Nullable (ListOf __Field), description = null,
+        Define.Field("fields", Nullable (ListOf __Field),
             args = [Define.Input("includeDeprecated", Boolean, false) ],
             resolve = fun ctx t ->
                 match t.Name with
@@ -166,7 +166,7 @@ let rec __Type =
             | Some name ->
                 let found = findIntrospected ctx name
                 found.PossibleTypes |> Option.map Array.toSeq)
-        Define.Field("enumValues", Nullable (ListOf __EnumValue), description = null,
+        Define.Field("enumValues", Nullable (ListOf __EnumValue),
             args = [Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
             match t.Name with 
             | None -> None
