@@ -38,3 +38,7 @@
 ### 0.0.6-beta - August 10 2018
 * Fixes for introspection query
 * Use string identifier to publish to subscription
+
+### 0.0.7-beta - September 17 2018
+* **Breaking Change:** Async Pub/Sub methods for subscription and live directive handler interfaces
+* Add Long Scalar definition

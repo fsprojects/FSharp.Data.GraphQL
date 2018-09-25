@@ -17,6 +17,7 @@ let private testCoercion graphQLType (expected: 't) actual =
     let result = (scalar.CoerceInput actual) |> Option.map (fun x -> downcast x)
     match result with
     | Some x -> equals expected x
+    | None -> raise (Exception(sprintf "Expected %A to be able to be coerced to %A" actual expected))
     
 
 [<Fact>]
@@ -34,6 +35,14 @@ let ``Float coerces input`` () =
     testCoercion Float 123.4 (StringValue "123.4")
     testCoercion Float 1. (BooleanValue true)
     testCoercion Float 0. (BooleanValue false)
+
+[<Fact>]
+let ``Long coerces input`` () = 
+    testCoercion Long 123L (IntValue 123L)
+    testCoercion Long 123L (FloatValue 123.4)
+    testCoercion Long 123L (StringValue "123")
+    testCoercion Long 1L (BooleanValue true)
+    testCoercion Long 0L (BooleanValue false)
 
 [<Fact>]
 let ``Boolean coerces input`` () = 

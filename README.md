@@ -90,10 +90,10 @@ and ILiveFieldSubscriptionProvider =
     interface
         abstract member HasSubscribers : string -> string -> bool
         abstract member IsRegistered : string -> string -> bool
-        abstract member Register : ILiveFieldSubscription -> unit
+        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         abstract member Add : obj -> string -> string -> IObservable<obj>
-        abstract member Publish<'T> : string -> string -> 'T -> unit
+        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
     end
 ```
 
