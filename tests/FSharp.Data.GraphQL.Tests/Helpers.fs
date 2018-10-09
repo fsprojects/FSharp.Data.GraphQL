@@ -44,7 +44,6 @@ let undefined (value: 't) =
     Assert.True((value = Unchecked.defaultof<'t>), sprintf "Expected value to be undefined, but was: %A" value)
 let contains (expected : 'a) (xs : 'a seq) =
     Assert.Contains(expected, xs); xs
-
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
@@ -52,6 +51,7 @@ open Newtonsoft.Json
 open Newtonsoft.Json.Serialization
 open Microsoft.FSharp.Reflection
 open FSharp.Data.GraphQL.Parser
+open FSharp.Data.GraphQL.Server.Middlewares.AspNetCore
 
 type internal OptionConverter() =
     inherit JsonConverter()
@@ -105,3 +105,41 @@ let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
         if times = 0
         then fail errorMsg
         else waitFor condition (times - 1) errorMsg
+
+let queryEquals expected (operation : Operation) =
+    operation.Query |> equals expected; operation
+
+let containsOperation expectedQuery (operations : Operation seq) =
+    match operations |> Seq.tryFind (fun op -> op.Query = expectedQuery) with
+    | Some op -> op
+    | None -> failwithf "There is no operation having query `%s` on the operation list." expectedQuery
+
+let containsFile varName (operation : Operation) =
+    match operation.Variables |> Map.tryFind varName with
+    | Some (:? File as f) -> f
+    | _ -> failwithf "There is no file in the request using variable name `%s`." varName
+
+let containsFiles varName (operation : Operation) =
+    match operation.Variables |> Map.tryFind varName with
+    | Some (:? seq<obj> as fs) -> fs |> Seq.cast<File>
+    | _ -> failwithf "There is no file sequence in the request using variable name `%s`." varName
+
+let hasName expected (file : File) =
+    file.Name |> equals expected; file
+
+let hasContentType expected (file : File) =
+    file.ContentType |> equals expected; file
+    
+let hasContent expected (file : File) =
+    if file.Content.Position <> 0L then file.Content.Position <- 0L
+    use reader = new System.IO.StreamReader(file.Content)
+    reader.ReadToEnd() |> equals expected
+
+let hasContentTypes expected (files : File seq) =
+    files |> Seq.mapi (fun ix f -> hasContentType (expected |> Seq.item ix) f)
+
+let hasNames expected (files : File seq) =
+    files |> Seq.mapi (fun ix f -> hasName (expected |> Seq.item ix) f)
+
+let hasContents expected (files : File seq) =
+    files |> Seq.mapi (fun ix f -> hasContent (expected |> Seq.item ix) f)

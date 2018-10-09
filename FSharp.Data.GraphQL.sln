@@ -1,4 +1,4 @@
-Microsoft Visual Studio Solution File, Format Version 12.00
+﻿Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio 15
 VisualStudioVersion = 15.0.27130.2026
 MinimumVisualStudioVersion = 10.0.40219.1
@@ -10,7 +10,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj", "{474179D3-0090-49E9-88F8-2971C0966077}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{474179D3-0090-49E9-88F8-2971C0966077}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{BF60BC93-E09B-4E5F-9D85-95A519479D54}"
 	ProjectSection(SolutionItems) = preProject
@@ -36,11 +36,11 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{8E6D
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{ED8079DD-2B06-4030-9F0F-DC548F98E1C4}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Tests", "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj", "{54AAFE43-FA5F-485A-AD40-0240165FC633}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Tests", "tests\FSharp.Data.GraphQL.Tests\FSharp.Data.GraphQL.Tests.fsproj", "{54AAFE43-FA5F-485A-AD40-0240165FC633}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "samples", "samples", "{B0C25450-74BF-40C2-9E02-09AADBAE2C2F}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests/FSharp.Data.GraphQL.Benchmarks/FSharp.Data.GraphQL.Benchmarks.fsproj", "{751357AE-F2B2-4B38-956E-81E0B8606C73}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{751357AE-F2B2-4B38-956E-81E0B8606C73}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql-client", "graphiql-client", "{CAE5916B-1415-4982-B705-7318D77C029C}"
 	ProjectSection(SolutionItems) = preProject
@@ -72,14 +72,14 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF
 		samples/relay-starter-kit/build/babelRelayPlugin.js = samples/relay-starter-kit/build/babelRelayPlugin.js
 	EndProjectSection
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client", "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj", "{7C9CC625-FB4E-4215-9F7C-494AA6043821}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client", "src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj", "{7C9CC625-FB4E-4215-9F7C-494AA6043821}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
 		samples/client-provider/query.fsx = samples/client-provider/query.fsx
 	EndProjectSection
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared", "src/FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared", "src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "todo-graphql", "todo-graphql", "{766203BF-7108-418F-BE92-87E7006E5E94}"
 	ProjectSection(SolutionItems) = preProject
@@ -96,11 +96,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{D381D216-2
 		samples/todo-graphql/data/tasks.json = samples/todo-graphql/data/tasks.json
 	EndProjectSection
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.GiraffeServer", "src/FSharp.Data.GraphQL.Samples.GiraffeServer/FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj", "{C7DA852B-D30A-4209-B767-640224C7C31E}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.GiraffeServer", "src\FSharp.Data.GraphQL.Samples.GiraffeServer\FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj", "{C7DA852B-D30A-4209-B767-640224C7C31E}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BEFD8748-2467-45F9-A4AD-B450B12D5F78}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middlewares", "src/FSharp.Data.GraphQL.Server.Middlewares/FSharp.Data.GraphQL.Server.Middlewares.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middlewares", "src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server.Middlewares.AspNetCore", "src\FSharp.Data.GraphQL.Server.Middlewares.AspNetCore\FSharp.Data.GraphQL.Server.Middlewares.AspNetCore.fsproj", "{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -196,6 +198,18 @@ Global
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Release|x64.Build.0 = Release|Any CPU
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Release|x86.ActiveCfg = Release|Any CPU
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Release|x86.Build.0 = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|x64.Build.0 = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Debug|x86.Build.0 = Debug|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|Any CPU.Build.0 = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|x64.ActiveCfg = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|x64.Build.0 = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|x86.ActiveCfg = Release|Any CPU
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -217,6 +231,7 @@ Global
 		{D381D216-2464-4F84-8DFF-2CB2F2507DDE} = {766203BF-7108-418F-BE92-87E7006E5E94}
 		{C7DA852B-D30A-4209-B767-640224C7C31E} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
+		{73A3EA1A-BC76-4B96-A129-A891EB4FB9AC} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
