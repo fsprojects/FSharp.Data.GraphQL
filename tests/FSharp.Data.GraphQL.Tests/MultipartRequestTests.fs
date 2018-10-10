@@ -1,5 +1,6 @@
 module FSharp.Data.GraphQL.Tests.MultipartRequestTests
 
+open System
 open System.Text
 open System.IO
 open FSharp.Data.GraphQL.Server.Middlewares.AspNetCore
@@ -9,10 +10,12 @@ open Xunit
 let private getReader boundary stream = MultipartReader(boundary, stream)
 let private getStream (content : string) : Stream = upcast new MemoryStream(Encoding.UTF8.GetBytes(content))
 let private read reader = MultipartRequest.read reader
+// MIME text contents must always have CRLF as line breaks
+let private normalizeContent (content : string) = content.Replace("\r\n", "\n").Replace("\n", "\r\n")
 
 [<Fact>]
 let ``Should be able to read a single operation request with one file``() =
-    let content = """--------------------------cec8e8123c05ba25
+    let content = normalizeContent """--------------------------cec8e8123c05ba25
 Content-Disposition: form-data; name="operations"
 
 { "query": "mutation ($file: Upload!) { singleUpload(file: $file) { id } }", "variables": { "file": null } }
@@ -40,7 +43,7 @@ Alpha file content.
 
 [<Fact>]
 let ``Should be able to read a single operation request with multiple files``() =
-    let content = """--------------------------ec62457de6331cad
+    let content = normalizeContent """--------------------------ec62457de6331cad
 Content-Disposition: form-data; name="operations"
 
 { "query": "mutation($files: [Upload!]!) { multipleUpload(files: $files) { id } }", "variables": { "files": [null, null] } }
@@ -74,7 +77,7 @@ Charlie file content.
 
 [<Fact>]
 let ``Should be able to read a multiple operation request``() =
-    let content = """--------------------------627436eaefdbc285
+    let content = normalizeContent """--------------------------627436eaefdbc285
 Content-Disposition: form-data; name="operations"
 
 [{ "query": "mutation ($file: Upload!) { singleUpload(file: $file) { id } }", "variables": { "file": null } }, { "query": "mutation($files: [Upload!]!) { multipleUpload(files: $files) { id } }", "variables": { "files": [null, null] } }]
