@@ -8,7 +8,7 @@ open Xunit
 
 let private getReader boundary stream = MultipartReader(boundary, stream)
 let private getStream (content : string) : Stream = upcast new MemoryStream(Encoding.UTF8.GetBytes(content))
-let private read reader = MultipartRequest.read reader |> Async.RunSynchronously
+let private read reader = MultipartRequest.read reader |> Async.AwaitTask |> Async.RunSynchronously
 
 [<Fact>]
 let ``Should be able to read a single operation request with one file``() =

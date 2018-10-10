@@ -1,10 +1,11 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares.AspNetCore
 
+open System
 open System.IO
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Ast
 
-/// Represents a file in a GraphQL file upload multipart request.
+/// Represents a file in a GraphQL file upload.
 type File =
       /// Gets the name of the file.
     { Name : string
@@ -13,15 +14,31 @@ type File =
       /// Gets a stream which returns the content of the file when read.
       Content : Stream }
 
-module Patterns =
-    let private coerceUploadInput : Value -> File option = 
-        fun value -> None
+/// Contains customized schema definitions for extensibility features.
+[<AutoOpen>]
+module SchemaDefinitions =
+    let private coerceStreamInput (_ : Value) : Stream option =
+        failwith "Can not coerce stream input. The type `Stream` can only be passed as a variable through a multipart request."
+    
+    let private coerceStreamValue (value : obj) =
+        match value with
+        | :? Stream as stream -> Some stream
+        | _ -> None
 
-    let private coerceUploadValue (x : obj) : File option =
-        None
+    /// GraphQL type for binary data stream representation.
+    let Stream : ScalarDefinition<Stream> =
+        { Name = "Stream"
+          Description = Some "The `Stream` type represents a stream of binary data."
+          CoerceInput = coerceStreamInput
+          CoerceValue = coerceStreamValue }
 
-    let Upload : ScalarDefinition<File> =
+    /// GraphQL type for multipart request file uploads.
+    let Upload : InputObjectDefinition<File> =
         { Name = "Upload"
-          Description = Some "The `Upload` scalar type represents a stream which transfers a file."
-          CoerceInput = coerceUploadInput
-          CoerceValue = coerceUploadValue }
+          Description = Some "The `Upload` type is used to represent a file upload to the server."
+          FieldsFn = fun () -> 
+          [| 
+            Define.Input("name", String, description = "Gets the name of the file.")
+            Define.Input("contentType", String, description = "Gets the MIME content type of the file.")
+            Define.Input("content", Stream, description = "Gets the content of the file.")
+          |] }
