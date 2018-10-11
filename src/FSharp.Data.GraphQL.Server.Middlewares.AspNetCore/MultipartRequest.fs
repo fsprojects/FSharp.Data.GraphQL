@@ -27,15 +27,13 @@ module MultipartRequest =
             | :? JArray as ops -> ops.ToObject<Operation list>()
             | :? JObject as op -> [ op.ToObject<Operation>() ]
             | _ -> failwith "Unexpected operations value."
-        let map = 
-            map 
-            |> Seq.map (fun x -> x.Key, x.Value |> Seq.tryHead)
-            |> Seq.filter (fun (_, v) -> Option.isSome v)
-            |> Seq.map (fun (k, v) -> k, v.Value)
+        let map =
+            map
+            |> Seq.choose (fun x -> x.Value |> Seq.tryHead |> Option.map (fun v -> x.Key, v))
             |> Map.ofSeq
         let files =
             files
-            |> Seq.map (fun x -> x.Key, x.Value)
+            |> Seq.map (|KeyValue|)
             |> Map.ofSeq
         let mapOperation (operationIndex : int option) operation =
             let findFile (varName : string) (varValue : obj) =
@@ -68,32 +66,37 @@ module MultipartRequest =
 
     /// Reads a GraphQL multipart request from a MultipartReader.
     let read (reader : MultipartReader) = 
-        let getName (section : MultipartSection) =
-            match section.AsFormDataSection() with
-            | null -> section.AsFileSection().Name
-            | x -> x.Name
-        let readText (section : MultipartSection) =
-            section.AsFormDataSection().GetValueAsync()
-            |> Async.AwaitTask
-            |> Async.RunSynchronously
-        let readFile (section : MultipartSection) =
-            let section = section.AsFileSection()
-            section.Name, { Name = section.FileName; ContentType = section.Section.ContentType; Content = section.FileStream }
-        let mutable section : MultipartSection = null
-        let readNextSection () = 
-            section <- reader.ReadNextSectionAsync() |> Async.AwaitTask |> Async.RunSynchronously
-        let mutable operations : string = null
-        let mutable map : IDictionary<string, string list> = null
-        let files = Dictionary<string, File>()
-        readNextSection ()
-        while not (isNull section) do
-            match getName section with
-            | "operations" ->
-                operations <- readText section
-            | "map" ->
-                map <- JsonConvert.DeserializeObject<IDictionary<string, string list>>(readText section)
-            | _ ->
-                let key, value = readFile section
-                files.Add(key, value)
-            readNextSection ()
-        { Operations = parseOperations operations map files }
+        async {
+            let getName (section : MultipartSection) =
+                match section.AsFormDataSection() with
+                | null -> section.AsFileSection().Name
+                | x -> x.Name
+            let readText (section : MultipartSection) =
+                section.AsFormDataSection().GetValueAsync() |> Async.AwaitTask
+            let readFile (section : MultipartSection) =
+                let section = section.AsFileSection()
+                section.Name, { Name = section.FileName; ContentType = section.Section.ContentType; Content = section.FileStream }
+            let mutable section : MultipartSection = null
+            let readNextSection () =
+                async {
+                    let! next = reader.ReadNextSectionAsync() |> Async.AwaitTask
+                    section <- next
+                }
+            let mutable operations : string = null
+            let mutable map : IDictionary<string, string list> = null
+            let files = Dictionary<string, File>()
+            do! readNextSection ()
+            while not (isNull section) do
+                match getName section with
+                | "operations" ->
+                    let! value = readText section
+                    operations <- value
+                | "map" ->
+                    let! value = readText section
+                    map <- JsonConvert.DeserializeObject<IDictionary<string, string list>>(value)
+                | _ ->
+                    let key, value = readFile section
+                    files.Add(key, value)
+                do! readNextSection ()
+            return { Operations = parseOperations operations map files }
+        } |> Async.StartAsTask

@@ -63,7 +63,7 @@ module HttpHandlers =
                 | Some boundary ->
                     use ms = copyBodyToMemory(ctx.Request)
                     let reader = MultipartReader(boundary, ms)
-                    let request = MultipartRequest.read reader
+                    let request = MultipartRequest.read reader |> Async.AwaitTask |> Async.RunSynchronously
                     let results = 
                         request.Operations
                         |> Seq.map (fun op -> 

@@ -8,8 +8,11 @@ open Microsoft.AspNetCore.WebUtilities
 open Xunit
 
 let private getReader boundary stream = MultipartReader(boundary, stream)
+
 let private getStream (content : string) : Stream = upcast new MemoryStream(Encoding.UTF8.GetBytes(content))
-let private read reader = MultipartRequest.read reader
+
+let private read reader = MultipartRequest.read reader |> Async.AwaitTask |> Async.RunSynchronously
+
 // MIME text contents must always have CRLF as line breaks
 let private normalizeContent (content : string) = content.Replace("\r\n", "\n").Replace("\n", "\r\n")
 
