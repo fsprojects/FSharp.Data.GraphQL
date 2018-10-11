@@ -178,7 +178,15 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
 
     let asm = System.Reflection.Assembly.GetExecutingAssembly()
 
-    do
+    do 
+        System.AppDomain.CurrentDomain.add_AssemblyResolve(fun _ args ->
+            let name = System.Reflection.AssemblyName(args.Name)
+            let existingAssembly = 
+                System.AppDomain.CurrentDomain.GetAssemblies()
+                |> Seq.tryFind(fun a -> System.Reflection.AssemblyName.ReferenceMatchesDefinition(name, a.GetName()))
+            match existingAssembly with
+            | Some a -> a
+            | None -> null)
         let ns = "FSharp.Data.GraphQL"
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
         let handleSchema typeName serverUrl choice =
