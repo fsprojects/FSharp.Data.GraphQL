@@ -266,6 +266,6 @@ and __Schema =
         Define.Field("types", ListOf __Type, description = "A list of all types supported by this server.", resolve = fun _ schema -> schema.Types |> Array.map IntrospectionTypeRef.Named)
         Define.Field("queryType", __Type, description = "The type that query operations will be rooted at.", resolve = fun _ schema -> schema.QueryType)
         Define.Field("mutationType", Nullable __Type, description = "If this server supports mutation, the type that mutation operations will be rooted at.", resolve = fun _ schema -> schema.MutationType)
-        Define.Field("subscriptionType", Nullable __Type, description = "If this server support subscription, the type that subscription operations will be rooted at.", resolve = fun _ _ -> None)
+        Define.Field("subscriptionType", Nullable __Type, description = "If this server support subscription, the type that subscription operations will be rooted at.", resolve = fun _ schema -> schema.SubscriptionType)
         Define.Field("directives", ListOf __Directive, description = "A list of all directives supported by this server.", resolve = fun _  schema -> schema.Directives)
     ])
