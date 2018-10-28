@@ -42,3 +42,6 @@
 ### 0.0.7-beta - September 17 2018
 * **Breaking Change:** Async Pub/Sub methods for subscription and live directive handler interfaces
 * Add Long Scalar definition
+
+### 0.0.8-beta - October 27 2018
+* Add subscription field to intospection schema
