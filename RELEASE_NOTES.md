@@ -45,3 +45,9 @@
 
 ### 0.0.8-beta - October 27 2018
 * Add subscription field to intospection schema
+
+### 0.0.8-beta01 - October 28 2018
+* Add subscription field to intospection schema
+
+### 0.0.9 - November 2 2018
+* Fixed a bug where output def of a subscription field was not reachable for introspection.
