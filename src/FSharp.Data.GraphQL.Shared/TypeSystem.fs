@@ -1782,6 +1782,15 @@ and TypeMap() =
             match def with
             | :? ScalarDef as sdef -> add sdef.Name def overwrite
             | :? EnumDef as edef -> add edef.Name def overwrite
+            | :? SubscriptionObjectDef as sdef ->
+                add sdef.Name def overwrite
+                sdef.Fields
+                |> Map.toSeq
+                |> Seq.map (fun x -> snd x :?> SubscriptionFieldDef)
+                |> Seq.collect (fun x -> Array.append [| x.OutputTypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
+                |> Seq.map(fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
+                |> Seq.iter insert
             | :? ObjectDef as odef ->
                 add odef.Name def overwrite
                 odef.Fields
