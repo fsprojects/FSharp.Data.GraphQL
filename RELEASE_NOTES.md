@@ -51,3 +51,7 @@
 
 ### 0.0.9 - November 2 2018
 * Fixed a bug where output def of a subscription field was not reachable for introspection.
+
+### 0.0.10-beta - November 13 2018
+* Deferred and Streamed results now return their fields in the direct result as well. The value of those fields will be an empty list or null.
+* Live results now send the immediate result in the direct result, instead of the deferred result.
