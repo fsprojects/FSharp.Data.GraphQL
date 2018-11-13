@@ -630,9 +630,9 @@ and ExecutionInfo =
                 match info.Kind with
                 | ResolveCollection inner -> Some inner
                 | _ -> Some info
-            | head::tail ->
+            | head :: tail ->
                 match info.Kind with
-                | ResolveValue _ | ResolveNull -> None
+                | ResolveValue _ | ResolveEmpty | ResolveNull -> None
                 | ResolveCollection inner -> path inner segments
                 | SelectFields fields ->
                     fields
@@ -658,6 +658,9 @@ and ExecutionInfo =
             | ResolveValue ->
                 pad indent sb
                 sb.Append("ResolveValue: ").AppendLine(nameAs info) |> ignore
+            | ResolveEmpty ->
+                pad indent sb
+                sb.Append("ResolveEmpty: ").AppendLine(nameAs info) |> ignore
             | ResolveNull ->
                 pad indent sb
                 sb.Append("ResolveNull: ").AppendLine(nameAs info) |> ignore
@@ -698,6 +701,8 @@ and ExecutionInfoKind =
     /// field infos depending on what concrete object implementation
     /// will be found.
     | ResolveAbstraction of typeFields : Map<string, ExecutionInfo list>
+    /// Reduce the current field as an empty list.
+    | ResolveEmpty
     /// Reduce current field as a null value.
     | ResolveNull
 

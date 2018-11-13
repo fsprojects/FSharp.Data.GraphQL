@@ -325,7 +325,9 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
     let name = ctx.ExecutionInfo.Identifier
     match ctx.ExecutionInfo.Kind with
     | ResolveNull ->
-        AsyncVal.wrap (ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None })
+        asyncVal { return ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None } }
+    | ResolveEmpty ->
+        asyncVal { return ResolverListNode { Name = ctx.ExecutionInfo.Identifier; Value = Some (upcast List.empty); Children = [| |] } }
     | _ ->
         match returnDef with
         | Object objdef ->
@@ -369,7 +371,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                                     | t -> build (t::acc) xs
                                 return res
                             }
-                | [] -> asyncVal{ return ResolverListNode{ Name = name; Value = value; Children = acc |> List.rev |> List.toArray }}
+                | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
             | None -> asyncVal{ return ResolverListNode{ Name = name; Value = None; Children = [| |]; } }
@@ -662,7 +664,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let outerResult =
                 asyncVal {
                     let data, err = treeToDict tree
-                    let deferred = mapResult data err path d.Kind
+                    let deferred = 
+                        match d.Kind with
+                        | LiveExecution -> Seq.empty
+                        | _ -> mapResult data err path d.Kind
                     let live = mapLiveResult tree path d fieldCtx
                     return Seq.append deferred live
                 } |> Array.singleton |> AsyncVal.collectParallel
@@ -678,7 +683,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 if d.DeferredFields.Length > 0
                                 then errorDict tree "Maximum degree of nested deferred executions reached." path
                                 else treeToDict tree
-                            let deferred = mapResult data err path d.Kind
+                            let deferred = 
+                                match d.Kind with
+                                | LiveExecution -> Seq.empty
+                                | _ -> mapResult data err path d.Kind
                             let live = mapLiveResult tree path d fieldCtx
                             return Seq.append deferred live
                         }) >> AsyncVal.collectParallel))

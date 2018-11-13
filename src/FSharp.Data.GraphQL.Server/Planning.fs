@@ -226,15 +226,24 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let innerInfo = objectInfo(ctx, parentDef, field, includer)
                     let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
+                    let directResult =
+                        match field with
+                        | Deferred | Streamed ->
+                            match executionPlan.Kind with
+                            | ResolveCollection _ -> fields @ [ { executionPlan with Kind = ResolveEmpty } ]
+                            | _ -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ]
+                        | _ -> fields @ [ executionPlan ]
+                    let getDeferred kind =
+                        { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = kind; DeferredFields = addedDeferredFields } :: deferredFields
                     match field with
-                    | Deferred -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields } :: deferredFields
-                    | Live -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = LiveExecution; DeferredFields = addedDeferredFields } :: deferredFields
-                    | Streamed -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields } :: deferredFields
-                    | Planned -> fields @ [ executionPlan ], deferredFields' // unfortunatelly, order matters here
+                    | Deferred -> directResult, getDeferred DeferredExecution
+                    | Live -> directResult, getDeferred LiveExecution
+                    | Streamed -> directResult, getDeferred StreamedExecution
+                    | Planned -> directResult, deferredFields' // Unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
                 if !visitedFragments |> List.exists (fun name -> name = spreadName) 
-                then fields, deferredFields  // fragment already found
+                then fields, deferredFields  // Fragment already found
                 else
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with

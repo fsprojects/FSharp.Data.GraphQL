@@ -176,7 +176,7 @@ let ``Deferred queries : Should pass when below threshold``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", null
+                "subjects", upcast []
             ]
         ]
     let expectedDeferred = 
@@ -226,7 +226,7 @@ let ``Streamed queries : Should pass when below threshold``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", null
+                "subjects", upcast []
             ]
         ]
     let expectedDeferred1 = 
