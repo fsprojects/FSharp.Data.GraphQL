@@ -199,7 +199,7 @@ let rec private plan (ctx : PlanningContext) (stage : PlanningStage) : PlanningS
     | Object _ -> planSelection ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref [])
     | Nullable returnDef -> 
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)
-        { inner with IsNullable = true}, deferredFields', path'
+        { inner with IsNullable = true }, deferredFields', path'
     | List returnDef -> 
         // We dont yet know the indicies of our elements so we append a dummy value on
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; Identifier = "__index" }, deferredFields, "__index"::info.Identifier::path)
@@ -214,7 +214,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
     let plannedFields, deferredFields'=
         selectionSet
         |> List.fold(fun (fields : ExecutionInfo list, deferredFields : DeferredExecutionInfo list) selection ->
-            //FIXME: includer is not passed along from top level fragments (both inline and spreads)
+            // FIXME: includer is not passed along from top level fragments (both inline and spreads)
             let includer = getIncluder selection.Directives info.Include
             let updatedInfo = { info with Include = includer }
             match selection with
@@ -227,9 +227,9 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let executionPlan, deferredFields', path' = plan ctx (innerInfo, deferredFields, path)
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                     match field with
-                    | Deferred -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields } :: deferredFields
-                    | Live -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = LiveExecution; DeferredFields = addedDeferredFields } :: deferredFields
-                    | Streamed -> fields, { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Deferred -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = DeferredExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Live -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = LiveExecution; DeferredFields = addedDeferredFields } :: deferredFields
+                    | Streamed -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ], { Info = { info with Kind = SelectFields [ executionPlan ] }; Path = path'; Kind = StreamedExecution; DeferredFields = addedDeferredFields } :: deferredFields
                     | Planned -> fields @ [ executionPlan ], deferredFields' // unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
@@ -239,7 +239,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     visitedFragments := spreadName::!visitedFragments
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
-                        // retrieve fragment data just as it was normal selection set
+                        // Retrieve fragment data just as it was normal selection set
                         // TODO: Check if the path is correctly defined
                         let fragmentInfo, deferredFields', _ = planSelection ctx fragment.SelectionSet (updatedInfo, deferredFields, path) visitedFragments 
                         let fragmentFields = getSelectionFrag fragmentInfo.Kind
@@ -314,7 +314,7 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
             | _ -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
 
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
-    // create artificial plan info to start with
+    // Create artificial plan info to start with
     let rootInfo = { 
         Identifier = null
         Kind = Unchecked.defaultof<ExecutionInfoKind>
@@ -327,7 +327,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     let resolvedInfo, deferredFields, _ = planSelection ctx ctx.Operation.SelectionSet (rootInfo, [], []) (ref [])
     let deferredFields' = 
         deferredFields
-        |> List.map (fun d -> {d with Path = List.rev d.Path})
+        |> List.map (fun d -> { d with Path = List.rev d.Path })
     let topFields =
         match resolvedInfo.Kind with
         | SelectFields tf -> tf
