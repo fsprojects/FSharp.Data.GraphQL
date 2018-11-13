@@ -499,7 +499,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             execute fieldCtx value
             |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []}))
+            |> AsyncVal.rescue(fun e -> ResolverError { Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []}))
     let dict =
         asyncVal {
             let! trees =
@@ -513,13 +513,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     k::kvps, e@errs) ([],[])
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
-    let endsWith tail arr =
-        let skipCount = List.length arr - List.length tail
-        tail = List.skip skipCount arr
-    let fieldExists (s : Selection list) fieldName =
-        s |> List.map (fun def -> match def with Field def -> Some def | _ -> None)
-          |> List.choose id
-          |> List.exists(fun def -> def.Name = fieldName)
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
         let removeDuplicatedIndexes (path : obj list) =
             let value = Some ("__index" :> obj)
@@ -583,7 +576,6 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
-
     let nvli (path : obj list) (index : int) (err : Error list) data =
         let data' = [ data ] :> obj
         match err with
