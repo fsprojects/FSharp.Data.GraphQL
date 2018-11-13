@@ -1778,6 +1778,10 @@ and TypeMap() =
             then map.Add(name, def)
             elif overwrite
             then map.[name] <- def
+        let asNamed x = 
+            match named x with 
+            | Some n -> n
+            | _ -> failwith "Expected a Named type!"
         let rec insert (def : NamedDef) =
             match def with
             | :? ScalarDef as sdef -> add sdef.Name def overwrite
@@ -1786,9 +1790,9 @@ and TypeMap() =
                 add sdef.Name def overwrite
                 sdef.Fields
                 |> Map.toSeq
-                |> Seq.map (fun x -> snd x :?> SubscriptionFieldDef)
+                |> Seq.map snd
                 |> Seq.collect (fun x -> Array.append [| x.OutputTypeDef :> TypeDef |] (x.Args |> Array.map (fun a -> upcast a.TypeDef)))
-                |> Seq.map(fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.map asNamed
                 |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
             | :? ObjectDef as odef ->
@@ -1797,7 +1801,7 @@ and TypeMap() =
                 |> Map.toSeq
                 |> Seq.map snd
                 |> Seq.collect (fun x -> Seq.append (x.TypeDef :> TypeDef |> Seq.singleton) (x.Args |> Seq.map (fun a -> upcast a.TypeDef)))
-                |> Seq.map (fun x -> match named x with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.map asNamed
                 |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
                 odef.Implements
@@ -1805,7 +1809,7 @@ and TypeMap() =
             | :? InterfaceDef as idef ->
                 add idef.Name def overwrite
                 idef.Fields
-                |> Seq.map (fun x -> match named x.TypeDef with Some n -> n | _ -> failwith "Expected a Named type!")
+                |> Seq.map (fun x -> asNamed x.TypeDef)
                 |> Seq.filter (fun x -> not (map.ContainsKey(x.Name)))
                 |> Seq.iter insert
             | :? UnionDef as udef ->
