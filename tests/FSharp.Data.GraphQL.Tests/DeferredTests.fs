@@ -147,6 +147,7 @@ let ``Live Query`` () =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "id", upcast "1"
+                "live", upcast null
             ]
         ]
     let expectedLive2 =
@@ -173,7 +174,7 @@ let ``Live Query`` () =
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         deferred
-        |> Observable.add (fun x ->
+        |> Observable.add (fun x -> 
             actualDeferred.Add(x)
             if actualDeferred.Count = 2 then set mre)
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
@@ -191,7 +192,9 @@ let ``Parallel Defer`` () =
     let expectedDirect =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
+                "a", null
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred1 =
@@ -242,7 +245,9 @@ let ``Parallell Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
+                "a", null
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred1 =
@@ -294,6 +299,7 @@ let ``Inner Object List Defer`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred =
@@ -331,6 +337,7 @@ let ``Inner Object List Stream`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred =
@@ -368,6 +375,7 @@ let ``Nested Inner Object List Defer`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred1 =
@@ -375,6 +383,7 @@ let ``Nested Inner Object List Defer`` () =
             "data", upcast [
                 box <| NameValueLookup.ofList [
                     "a", upcast "Inner A"
+                    "innerList", null
                 ]
             ]
             "path", upcast ["testData"; "innerList"]
@@ -427,6 +436,7 @@ let ``Nested Inner Object List Stream`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
+                "innerList", null
             ]
         ]
     let expectedDeferred1 =
@@ -434,6 +444,7 @@ let ``Nested Inner Object List Stream`` () =
             "data", upcast [
                 box <| NameValueLookup.ofList [
                     "a", upcast "Inner A"
+                    "innerList", null
                 ]
             ]
             "path", upcast ["testData"; "innerList"]
@@ -492,6 +503,7 @@ let ``Simple Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
+                "a", null
                 "b", upcast "Banana"
             ]
         ]
@@ -527,6 +539,7 @@ let ``List Defer``() =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
+                "list", null
             ]
         ]
     let expectedDeferred =
@@ -681,6 +694,7 @@ let ``List Stream``() =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
+                "list", null
             ]
         ]
     let expectedDeferred1 =
@@ -745,6 +759,7 @@ let ``Union Defer and Stream`` () =
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
                 "b", upcast "Banana"
+                "union", null
             ]
         ]
     let expectedDeferred =

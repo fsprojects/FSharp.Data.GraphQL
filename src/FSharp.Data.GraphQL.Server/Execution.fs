@@ -325,7 +325,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
     let name = ctx.ExecutionInfo.Identifier
     match ctx.ExecutionInfo.Kind with
     | ResolveNull ->
-        asyncVal { return ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None } }
+        AsyncVal.wrap (ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None })
     | _ ->
         match returnDef with
         | Object objdef ->
