@@ -42,3 +42,16 @@
 ### 0.0.7-beta - September 17 2018
 * **Breaking Change:** Async Pub/Sub methods for subscription and live directive handler interfaces
 * Add Long Scalar definition
+
+### 0.0.8-beta - October 27 2018
+* Add subscription field to intospection schema
+
+### 0.0.8-beta01 - October 28 2018
+* Add subscription field to intospection schema
+
+### 0.0.9 - November 2 2018
+* Fixed a bug where output def of a subscription field was not reachable for introspection.
+
+### 0.0.10-beta - November 13 2018
+* Deferred and Streamed results now return their fields in the direct result as well. The value of those fields will be an empty list or null.
+* Live results now send the immediate result in the direct result, instead of the deferred result.

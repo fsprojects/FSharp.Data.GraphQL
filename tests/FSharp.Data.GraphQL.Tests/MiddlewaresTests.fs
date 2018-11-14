@@ -176,6 +176,7 @@ let ``Deferred queries : Should pass when below threshold``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
+                "subjects", upcast []
             ]
         ]
     let expectedDeferred = 
@@ -205,7 +206,7 @@ let ``Deferred queries : Should pass when below threshold``() =
         actualDeferred |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Streamed queries : Should pass when below threshold``() =
@@ -225,6 +226,7 @@ let ``Streamed queries : Should pass when below threshold``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
+                "subjects", upcast []
             ]
         ]
     let expectedDeferred1 = 
@@ -267,7 +269,7 @@ let ``Streamed queries : Should pass when below threshold``() =
         |> ignore
     | _ -> fail "Expected Deferred GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
 
 [<Fact>]
 let ``Deferred and Streamed queries : Should not pass when above threshold``() =
