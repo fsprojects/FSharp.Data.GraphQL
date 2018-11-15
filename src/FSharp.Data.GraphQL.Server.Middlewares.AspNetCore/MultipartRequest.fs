@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares.AspNetCore
 
+open System
 open Microsoft.AspNetCore.WebUtilities
 open Newtonsoft.Json
 open System.Collections.Generic
@@ -45,8 +46,8 @@ module MultipartRequest =
                     |> Seq.mapi (fun valueIndex value ->
                         let varName =
                             match operationIndex with
-                            | Some operationIndex -> sprintf "%i.variables.%s.%i" operationIndex varName valueIndex
-                            | None -> sprintf "variables.%s.%i" varName valueIndex
+                            | Some operationIndex -> String.Format("{0}.variables.{1}.{2}", operationIndex, varName, valueIndex)
+                            | None -> String.Format("variables.{0}.{1}", varName, valueIndex)
                         match pickFromMap varName with
                         | Some file -> box file
                         | None -> value)
@@ -54,8 +55,8 @@ module MultipartRequest =
                 | value ->
                     let varName =
                         match operationIndex with
-                        | Some operationIndex -> sprintf "%i.variables.%s" operationIndex varName
-                        | None -> sprintf "variables.%s" varName
+                        | Some operationIndex -> String.Format("{0}.variables.{1}", operationIndex, varName)
+                        | None -> String.Format("variables.{0}", varName)
                     match pickFromMap varName with
                     | Some file -> box file
                     | None -> value
