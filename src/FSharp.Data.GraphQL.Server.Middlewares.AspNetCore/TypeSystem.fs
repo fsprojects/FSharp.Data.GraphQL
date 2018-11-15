@@ -1,6 +1,5 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares.AspNetCore
 
-open System
 open System.IO
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
