@@ -329,6 +329,12 @@ let private propagateError name err = asyncVal { return ResolverError{ Name = na
 /// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
     let name = ctx.ExecutionInfo.Identifier
+    let filterDeferredTypeMap map =
+        let filter info =
+            if not ctx.ExecutionInfo.IsDeferred && info.IsDeferred
+            then info.ResolveNone ()
+            else info
+        map |> Map.map (fun _ v ->  v |> List.map filter)
     match ctx.ExecutionInfo.Kind, returnDef with
     | ResolveNull, (Scalar _ | Enum _ | Nullable _) ->
         asyncVal { return ResolverLeaf { Name = name; Value = None; DeferredValue = value } }
@@ -382,7 +388,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; DeferredValue = value; Children = acc |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
-            | None -> asyncVal{ return ResolverListNode{ Name = name; Value = None; DeferredValue = value; Children = [| |]; } }
+            | None -> asyncVal { return ResolverListNode { Name = name; Value = None; DeferredValue = value; Children = [| |]; } }
             | ObjectOption (:? System.Collections.IEnumerable as enumerable) ->
                 enumerable
                 |> Seq.cast<obj>
@@ -397,7 +403,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let resolver = resolveInterfaceType possibleTypesFn idef
             let typeMap =
                 match ctx.ExecutionInfo.Kind with
-                | ResolveAbstraction typeMap -> typeMap
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
             match value with
             | Some v ->
@@ -414,7 +420,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let resolver = resolveUnionType possibleTypesFn udef
             let typeMap =
                 match ctx.ExecutionInfo.Kind with
-                | ResolveAbstraction typeMap -> typeMap
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
             match value with
             | Some v ->
@@ -441,9 +447,9 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             let fieldCtx = createFieldContext objdef argDefs ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
-            |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
-            |> AsyncVal.bind(fun tree ->
+            |> AsyncVal.bind (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
+            |> AsyncVal.rescue (fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
+            |> AsyncVal.bind (fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
                 | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}}

@@ -9,7 +9,6 @@ open FSharp.Data.GraphQL.Execution
 open System.Threading
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Tests
 
 #nowarn "40"
 
@@ -585,6 +584,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
                 "list", upcast [
                     box <| NameValueLookup.ofList [
                         "id", upcast "2"
+                        "a", null
                     ]
                     upcast NameValueLookup.ofList [
                         "id", upcast "3"
@@ -636,6 +636,7 @@ let ``List Fragment Defer and Stream - Common``() =
                 "a", upcast "Apple"
                 "list", upcast [
                     box <| NameValueLookup.ofList [
+                        "id", null
                         "a", upcast "Union A"
                     ]
                     upcast NameValueLookup.ofList [

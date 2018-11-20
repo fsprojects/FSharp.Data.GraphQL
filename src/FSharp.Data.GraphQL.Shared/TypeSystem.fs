@@ -621,7 +621,17 @@ and ExecutionInfo =
       /// Type definition marking returned type.
       ReturnDef : OutputDef
       /// Flag determining if flag allows to have nullable output.
-      IsNullable : bool }
+      IsNullable : bool
+      /// Flag determining if the execution is deferred or streamed.
+      IsDeferred : bool }
+    member this.ResolveNone () =
+        let resolveNone (tdef : TypeDef) =
+            match tdef with
+            | :? ListOfDef -> ResolveEmpty
+            | _ -> ResolveNull
+        let kind = resolveNone this.ReturnDef
+        let isNullable = match kind with ResolveNull -> true | _ -> false
+        { this with Kind = kind; IsNullable = isNullable }
     /// Get a nested info recognized by path provided as parameter. Path may consist of fields names or aliases.
     member this.GetPath (keys: string list) : ExecutionInfo option =
         let rec path info segments =
