@@ -567,7 +567,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         let next = n.Children |> Array.tryFind(fun c' -> c'.Name = head.ToString())
                         let! res =
                             match next with
-                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') (head::pathAcc)
                             | None -> AsyncVal.empty
                         return res
                     }
@@ -659,8 +659,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Schema = ctx.Schema
               Args = args
               Variables = ctx.Variables }
-        let path = d.Path |> List.map (fun x -> x :> obj)
-        traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
+        let path = d.Path |> List.map box
+        let traversed = traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
+        traversed
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
             let outerResult =
                 asyncVal {
@@ -705,7 +706,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 ctx.ExecutionPlan.DeferredFields
                 |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
-                |> Array.map(deferredResult tree)
+                |> Array.map (deferredResult tree)
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
             |> AsyncVal.appendParallel
