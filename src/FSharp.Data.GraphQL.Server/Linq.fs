@@ -409,7 +409,7 @@ let rec private getTracks alreadyFound info =
         |> Set.map(fun track -> Direct(track, []))
         |> flip Set.difference alreadyFound
     match info.Kind with
-    | ResolveValue | ResolveEmpty -> IR(info, tracks, [])
+    | ResolveValue | ResolveEmpty | ResolveNull -> IR(info, tracks, [])
     | SelectFields fieldInfos -> IR(info, tracks, fieldInfos |> List.map (getTracks (alreadyFound + tracks)))
     | ResolveCollection inner -> IR(info, tracks, [ getTracks (alreadyFound + tracks) inner ])
     | ResolveAbstraction typeMap -> 

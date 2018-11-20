@@ -327,7 +327,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
     | ResolveNull ->
         asyncVal { return ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None } }
     | ResolveEmpty ->
-        asyncVal { return ResolverListNode { Name = ctx.ExecutionInfo.Identifier; Value = Some (upcast List.empty); Children = [| |] } }
+        asyncVal { return ResolverListNode { Name = ctx.ExecutionInfo.Identifier; Value = Some (upcast [ ]); Children = [| |] } }
     | _ ->
         match returnDef with
         | Object objdef ->
@@ -469,13 +469,6 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
     | _ ->
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
 
-let private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
-        match field.Name with
-        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
-        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
-        | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-        | fieldName -> objectType.Fields |> Map.tryFind fieldName
-
 let private (|String|Other|) (o : obj) =
     match o with
     | :? string as s -> String s
@@ -542,6 +535,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | [String p], t ->
                     asyncVal {
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                        let y = t
+                        let x = d.Info
                         match res with
                         | ResolverError _ -> return! async { return [||] }
                         | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }

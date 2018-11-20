@@ -8,6 +8,10 @@ nuget Newtonsoft.Json
 nuget System.Runtime
 nuget FSharp.Core
 
+group Samples
+  source https://nuget.org/api/v2
+  nuget Suave
+
 group Build
   source https://nuget.org/api/v2
   
