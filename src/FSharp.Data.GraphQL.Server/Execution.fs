@@ -437,8 +437,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             let argDefs = fieldExecuteMap.GetArgs(objdef.Name, info.Definition.Name)
             let fieldCtx = createFieldContext objdef argDefs ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
-            let x = resolveField execute fieldCtx value
-            x
+            resolveField execute fieldCtx value
             |> AsyncVal.bind (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
             |> AsyncVal.rescue (fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
             |> AsyncVal.bind (fun tree ->

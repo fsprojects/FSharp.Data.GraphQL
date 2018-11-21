@@ -106,8 +106,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Some c -> c
 
     let typeMap : TypeMap =
-        let m = mutation |> function Some (Named n) -> [ n ] | _ -> [ ]
-        let s = subscription |> function Some (Named n) -> [ n ] | _ -> [ ]
+        let m = mutation |> function Some (Named n) -> [n] | _ -> []
+        let s = subscription |> function Some (Named n) -> [n] | _ -> []
         initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
