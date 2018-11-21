@@ -323,33 +323,7 @@ let ``Single Root object list field - Stream`` () =
         |> ignore
     | _ -> fail "Expected Deferred GQLResponse"
 
-[<Fact>]
-let ``Interface field - Direct`` () =
-    let expected =
-        NameValueLookup.ofList [
-            "testData", upcast NameValueLookup.ofList [
-                "iface", upcast NameValueLookup.ofList [
-                    "id", upcast "1000"
-                    "value", upcast "C"
-                ]
-            ]
-        ]
-    let query = parse """{
-        testData {
-            iface {
-                id
-                value
-            }
-        }
-    }"""
-    let result = query |> executor.AsyncExecute |> sync
-    match result with
-    | Direct (data, errors) ->
-        empty errors
-        data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQLRsponse"
-
-[<Fact>]
+[<Fact(Skip = "Check if this feature is really needed, support it if needs to")>]
 let ``Interface field - Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
