@@ -257,9 +257,9 @@ type ResolverTree =
         | ResolverError _ -> None
         | ResolverObjectNode node -> node.Value
         | ResolverListNode l -> l.Value
-and ResolverLeaf = { Name: string; Value: obj option; Deferred: ExecutionInfo option }
+and ResolverLeaf = { Name: string; Value: obj option }
 and ResolverError = { Name: string; Message: string; PathToOrigin: obj list }
-and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree []; Deferred: ExecutionInfo option }
+and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree [] }
 
 module ResolverTree =
     let fold leafOp errorOp nodeOp listOp =
@@ -337,20 +337,20 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 | Some v -> buildObjectFields fields objdef ctx fieldExecuteMap name v
                 | None ->
                     if ctx.ExecutionInfo.IsNullable
-                    then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |]; Deferred = None } }
+                    then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
                     else nullResolverError name
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         | Scalar scalardef ->
             let name = ctx.ExecutionInfo.Identifier
             let (coerce: obj -> obj option) = scalardef.CoerceValue
             asyncVal {
-                return ResolverLeaf { Name = name; Value = value |> Option.bind(coerce); Deferred = None }
+                return ResolverLeaf { Name = name; Value = value |> Option.bind(coerce) }
             }
         | Enum _ ->
             let name = ctx.ExecutionInfo.Identifier
             asyncVal {
                 let value' = value |> Option.bind(fun v ->  coerceStringValue v |> Option.map(fun v' -> v' :> obj))
-                return ResolverLeaf { Name = name; Value = value'; Deferred = None }
+                return ResolverLeaf { Name = name; Value = value' }
             }
         | List (Output innerdef) ->
             let innerCtx =
@@ -371,10 +371,10 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                                     | t -> build (t::acc) xs
                                 return res
                             }
-                | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray; Deferred = None } }
+                | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
-            | None -> asyncVal { return ResolverListNode { Name = name; Value = None; Children = [| |]; Deferred = None } }
+            | None -> asyncVal { return ResolverListNode { Name = name; Value = None; Children = [| |] } }
             | ObjectOption (:? System.Collections.IEnumerable as enumerable) ->
                 enumerable
                 |> Seq.cast<obj>
@@ -399,7 +399,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)); PathToOrigin = [] } }
             | None ->
                 if ctx.ExecutionInfo.IsNullable
-                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |]; Deferred = None } }
+                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
                 else nullResolverError name
         | Union udef ->
             let possibleTypesFn = ctx.Schema.GetPossibleTypes
@@ -422,13 +422,13 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)); PathToOrigin = [] } }
             | None ->
                 if ctx.ExecutionInfo.IsNullable
-                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |]; Deferred = None } }
+                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
                 else nullResolverError name
         | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
     match ctx.ExecutionInfo.Kind, returnDef, ctx.ExecutionInfo.IsDeferred with
-    | ResolveDeferred info, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None; Deferred = Some info } }
-    | ResolveDeferred info, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |]; Deferred = Some info } }
-    | ResolveDeferred info, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |]; Deferred = Some info } }
+    | ResolveDeferred, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None } }
+    | ResolveDeferred, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+    | ResolveDeferred, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |] } }
     | _ -> resolve ctx.ExecutionInfo.Kind
 
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
@@ -446,7 +446,7 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
                 | ResolverError e when not info.IsNullable -> propagateError name e
                 | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}}
                 | t -> build (t::acc) xs)
-        | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray; Deferred = None } }
+        | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
 
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
@@ -543,7 +543,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         asyncVal {
                             let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap value
                             match res with
-                            | ResolverError _ -> return! async { return [||] }
+                            | ResolverError _ -> return! async { return [||] } // A deferred fragment that was not found, just ignore it
                             | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
                         }
                     let resolveObject n =
