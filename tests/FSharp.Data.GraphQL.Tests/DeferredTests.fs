@@ -804,57 +804,6 @@ let ``Simple Defer and Stream`` () =
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
-let ``List Fragment - Defer and Stream in one Case`` () =
-    let expectedDirect =
-        NameValueLookup.ofList [
-            "testData", upcast NameValueLookup.ofList [
-                "list", upcast [
-                    box <| NameValueLookup.ofList [
-                        "id", upcast "2"
-                        "a", upcast "Union A" 
-                    ]
-                    upcast NameValueLookup.ofList [
-                        "id", null
-                        "b", upcast 4
-                    ]
-                ]
-            ]
-        ]
-    let expectedDeferred =
-        NameValueLookup.ofList [
-            "data", upcast "3"
-            "path", upcast [ box "testData"; upcast "list"; upcast 1; upcast "id" ]
-        ]
-    let query = sprintf """{
-        testData {
-            list {
-                ... on A {
-                    id
-                    a
-                }
-                ... on B {
-                    id @%s
-                    b
-                }
-            }
-        }
-    }"""
-    asts query
-    |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
-        let result = query |> executor.AsyncExecute |> sync
-        match result with
-        | Deferred(data, errors, deferred) ->
-            empty errors
-            data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
-        | _ -> fail "Expected Deferred GQLResponse")
-
-[<Fact>]
 let ``List Defer``() =
     let expectedDirect =
         NameValueLookup.ofList [
