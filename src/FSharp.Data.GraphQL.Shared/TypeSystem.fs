@@ -666,12 +666,9 @@ and ExecutionInfo =
             | ResolveValue ->
                 pad indent sb
                 sb.Append("ResolveValue: ").AppendLine(nameAs info) |> ignore
-            | ResolveEmpty ->
+            | ResolveDeferred _ ->
                 pad indent sb
-                sb.Append("ResolveEmpty: ").AppendLine(nameAs info) |> ignore
-            | ResolveNull ->
-                pad indent sb
-                sb.Append("ResolveNull: ").AppendLine(nameAs info) |> ignore
+                sb.Append("ResolveDeferred: ").AppendLine(nameAs info) |> ignore
             | SelectFields fields ->
                 pad indent sb
                 sb.Append("SelectFields: ").AppendLine(nameAs info) |> ignore
