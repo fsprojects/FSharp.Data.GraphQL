@@ -539,22 +539,26 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | _ -> return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
                     }
                 | [String p], t ->
-                    let resolve value =
-                        asyncVal {
-                            let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap value
-                            match res with
-                            | ResolverError _ -> return! async { return [||] } // A deferred fragment that was not found, just ignore it
-                            | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
-                        }
-                    let resolveObject n =
-                        let head = d.Info.Definition.Name
-                        let next = n.Children |> Array.tryFind (fun c' -> c'.Name = head)
-                        match next with
-                        | Some next' -> traversePath d fieldCtx [ box p ] (AsyncVal.wrap next') (box head::pathAcc)
-                        | None -> resolve n.Value
-                    match t with
-                    | ResolverObjectNode n -> resolveObject n
-                    | t -> resolve t.Value
+                    asyncVal {
+                        let resolve value =
+                            asyncVal {
+                                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap value
+                                match res with
+                                | ResolverError _ -> return! async { return [||] } // A deferred fragment that was not found, just ignore it
+                                | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
+                            }
+                        let resolveObject n =
+                            asyncVal {
+                                let head = d.Info.Definition.Name
+                                let next = n.Children |> Array.tryFind (fun c' -> c'.Name = head)
+                                match next with
+                                | Some next' -> return! traversePath d fieldCtx [ box p ] (AsyncVal.wrap next') (box head::pathAcc)
+                                | None -> return! resolve n.Value
+                            }
+                        match t with
+                        | ResolverObjectNode n -> return! resolveObject n
+                        | t -> return! resolve t.Value
+                    }
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal {
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
