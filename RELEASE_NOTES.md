@@ -58,3 +58,6 @@
 
 ### 0.0.11-beta - November 21 2018
 * Deferred and Streamed results fixes for GQL interfaces.
+
+### 0.0.12-beta - November 21 2018
+* Deferred and Streamed results fixes for GQL interfaces when at the top-level of query.
