@@ -538,27 +538,23 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | SelectFields [f] -> return! async { return [|res, List.rev (f.Identifier :> obj :: pathAcc)|] }
                         | _ -> return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
                     }
-                | [String p], ResolverObjectNode n ->
-                    asyncVal {
+                | [String p], t ->
+                    let resolve value =
+                        asyncVal {
+                            let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap value
+                            match res with
+                            | ResolverError _ -> return! async { return [||] }
+                            | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
+                        }
+                    let resolveObject n =
                         let head = d.Info.Definition.Name
                         let next = n.Children |> Array.tryFind (fun c' -> c'.Name = head)
-                        let! res =
-                            match next with
-                            | Some next' -> traversePath d fieldCtx [ box p ] (AsyncVal.wrap next') (box head::pathAcc)
-                            | None -> asyncVal {
-                                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap n.Value
-                                match res with
-                                | ResolverError _ -> return! async { return [||] }
-                                | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] } }
-                        return res
-                    }
-                | [String p], t ->
-                    asyncVal {
-                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                        match res with
-                        | ResolverError _ -> return! async { return [||] }
-                        | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
-                    }
+                        match next with
+                        | Some next' -> traversePath d fieldCtx [ box p ] (AsyncVal.wrap next') (box head::pathAcc)
+                        | None -> resolve n.Value
+                    match t with
+                    | ResolverObjectNode n -> resolveObject n
+                    | t -> resolve t.Value
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal {
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
