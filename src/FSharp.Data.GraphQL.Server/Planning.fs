@@ -318,7 +318,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
         ) (Map.empty, deferredFields)
     if Map.isEmpty plannedTypeFields
-    then { info with Kind = ResolveDeferred info.Kind }, deferredFields', path
+    then info.ResolveDeferred (), deferredFields', path
     else { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 
 let private planVariables (schema: ISchema) (operation: OperationDefinition) =
