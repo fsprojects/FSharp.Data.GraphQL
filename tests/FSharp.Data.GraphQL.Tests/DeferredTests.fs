@@ -325,7 +325,6 @@ let ``Single Root object list field - Stream`` () =
         |> ignore
     | _ -> fail "Expected Deferred GQLResponse"
 
-//[<Fact(Skip = "Check if this feature is really needed, support it if needs to")>]
 [<Fact>]
 let ``Interface field - Defer and Stream`` () =
     let expectedDirect =
