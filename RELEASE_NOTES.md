@@ -55,3 +55,6 @@
 ### 0.0.10-beta - November 13 2018
 * Deferred and Streamed results now return their fields in the direct result as well. The value of those fields will be an empty list or null.
 * Live results now send the immediate result in the direct result, instead of the deferred result.
+
+### 0.0.11-beta - November 21 2018
+* Deferred and Streamed results fixes for GQL interfaces.
