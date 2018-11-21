@@ -204,7 +204,7 @@ let rec private plan (ctx : PlanningContext) (stage : PlanningStage) : PlanningS
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef }, deferredFields, path)
         { inner with IsNullable = true }, deferredFields', path'
     | List returnDef -> 
-        // We dont yet know the indicies of our elements so we append a dummy value on
+        // We dont yet know the indices of our elements so we append a dummy value on
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; Identifier = "__index" }, deferredFields, "__index"::info.Identifier::path)
         { info with Kind = ResolveCollection inner }, deferredFields', path'
     | Abstract _ -> 
@@ -231,10 +231,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                     let directResult =
                         match field with
-                        | Deferred | Streamed ->
-                            match executionPlan.Kind with
-                            | ResolveCollection _ -> fields @ [ { executionPlan with Kind = ResolveEmpty } ]
-                            | _ -> fields @ [ { executionPlan with Kind = ResolveNull; IsNullable = true } ]
+                        | Deferred | Streamed -> fields @ [ executionPlan.ResolveDeferred () ]
                         | _ -> fields @ [ executionPlan ]
                     let getDeferred kind =
                         { Info = { info with Kind = SelectFields [ executionPlan ]; IsDeferred = true }; Path = path'; Kind = kind; DeferredFields = addedDeferredFields } :: deferredFields
@@ -321,7 +318,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields fragmentFields, deferredFields'
         ) (Map.empty, deferredFields)
     if Map.isEmpty plannedTypeFields
-    then { info with Kind = ResolveNull }, deferredFields', path
+    then { info with Kind = ResolveDeferred info.Kind }, deferredFields', path
     else { info with Kind = ResolveAbstraction plannedTypeFields }, deferredFields', path
 
 let private planVariables (schema: ISchema) (operation: OperationDefinition) =
