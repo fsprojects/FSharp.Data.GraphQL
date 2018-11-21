@@ -7,7 +7,6 @@ open System.Collections.Generic
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open FSharp.Data.GraphQL.Planning
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Helpers
 
@@ -258,9 +257,9 @@ type ResolverTree =
         | ResolverError _ -> None
         | ResolverObjectNode node -> node.Value
         | ResolverListNode l -> l.Value
-and ResolverLeaf = { Name: string; Value: obj option; }
-and ResolverError = { Name: string; Message: string; PathToOrigin: obj list; }
-and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree []; }
+and ResolverLeaf = { Name: string; Value: obj option }
+and ResolverError = { Name: string; Message: string; PathToOrigin: obj list }
+and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree [] }
 
 module ResolverTree =
     let fold leafOp errorOp nodeOp listOp =
@@ -323,15 +322,16 @@ let private propagateError name err = asyncVal { return ResolverError{ Name = na
 /// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
     let name = ctx.ExecutionInfo.Identifier
-    match ctx.ExecutionInfo.Kind with
-    | ResolveNull ->
-        asyncVal { return ResolverLeaf { Name = ctx.ExecutionInfo.Identifier; Value = None } }
-    | ResolveEmpty ->
-        asyncVal { return ResolverListNode { Name = ctx.ExecutionInfo.Identifier; Value = Some (upcast List.empty); Children = [| |] } }
-    | _ ->
+    let filterDeferredTypeMap map =
+        let filter info =
+            if not ctx.ExecutionInfo.IsDeferred && info.IsDeferred
+            then info.ResolveDeferred ()
+            else info
+        map |> Map.map (fun _ v ->  v |> List.map filter)
+    let resolve kind  =
         match returnDef with
         | Object objdef ->
-            match ctx.ExecutionInfo.Kind with
+            match kind with
             | SelectFields fields ->
                 match value with
                 | Some v -> buildObjectFields fields objdef ctx fieldExecuteMap name v
@@ -354,7 +354,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             }
         | List (Output innerdef) ->
             let innerCtx =
-                match ctx.ExecutionInfo.Kind with
+                match kind with
                 | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
             let rec build acc (items: obj list) =
@@ -374,7 +374,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
-            | None -> asyncVal{ return ResolverListNode{ Name = name; Value = None; Children = [| |]; } }
+            | None -> asyncVal { return ResolverListNode { Name = name; Value = None; Children = [| |] } }
             | ObjectOption (:? System.Collections.IEnumerable as enumerable) ->
                 enumerable
                 |> Seq.cast<obj>
@@ -388,8 +388,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let possibleTypesFn = ctx.Schema.GetPossibleTypes
             let resolver = resolveInterfaceType possibleTypesFn idef
             let typeMap =
-                match ctx.ExecutionInfo.Kind with
-                | ResolveAbstraction typeMap -> typeMap
+                match kind with
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
             match value with
             | Some v ->
@@ -405,8 +405,8 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let possibleTypesFn = ctx.Schema.GetPossibleTypes
             let resolver = resolveUnionType possibleTypesFn udef
             let typeMap =
-                match ctx.ExecutionInfo.Kind with
-                | ResolveAbstraction typeMap -> typeMap
+                match kind with
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
                 | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
             match value with
             | Some v ->
@@ -425,6 +425,11 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
                 else nullResolverError name
         | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
+    match ctx.ExecutionInfo.Kind, returnDef, ctx.ExecutionInfo.IsDeferred with
+    | ResolveDeferred, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None } }
+    | ResolveDeferred, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+    | ResolveDeferred, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |] } }
+    | _ -> resolve ctx.ExecutionInfo.Kind
 
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
     let rec build (acc: ResolverTree list) = function
@@ -433,14 +438,14 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
             let fieldCtx = createFieldContext objdef argDefs ctx info
             let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
             resolveField execute fieldCtx value
-            |> AsyncVal.bind(buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
-            |> AsyncVal.rescue(fun e -> ResolverError{ Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
-            |> AsyncVal.bind(fun tree ->
+            |> AsyncVal.bind (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
+            |> AsyncVal.rescue (fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
+            |> AsyncVal.bind (fun tree ->
                 match tree with
                 | ResolverError e when not info.IsNullable -> propagateError name e
                 | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}}
                 | t -> build (t::acc) xs)
-        | [] -> asyncVal { return ResolverObjectNode{ Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
+        | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
 
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
@@ -468,13 +473,6 @@ let internal compileField (fieldDef: FieldDef) : ExecuteField =
             downcast resolve resolveFieldCtx value
     | _ ->
         fun _ _ -> raise (InvalidOperationException(sprintf "Field '%s' has been accessed, but no resolve function for that field definition was provided. Make sure, you've specified resolve function or declared field with Define.AutoField method" fieldDef.Name))
-
-let private getFieldDefinition (ctx: ExecutionContext) (objectType: ObjectDef) (field: Field) : FieldDef option =
-        match field.Name with
-        | "__schema" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast SchemaMetaFieldDef)
-        | "__type" when Object.ReferenceEquals(ctx.Schema.Query, objectType) -> Some (upcast TypeMetaFieldDef)
-        | "__typename" -> Some (upcast TypeNameMetaFieldDef)
-        | fieldName -> objectType.Fields |> Map.tryFind fieldName
 
 let private (|String|Other|) (o : obj) =
     match o with
@@ -541,10 +539,24 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     }
                 | [String p], t ->
                     asyncVal {
-                        let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
-                        match res with
-                        | ResolverError _ -> return! async { return [||] }
-                        | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
+                        let resolve value =
+                            asyncVal {
+                                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap value
+                                match res with
+                                | ResolverError _ -> return! async { return [||] } // A deferred fragment that was not found, just ignore it
+                                | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] }
+                            }
+                        let resolveObject n =
+                            asyncVal {
+                                let head = d.Info.Definition.Name
+                                let next = n.Children |> Array.tryFind (fun c' -> c'.Name = head)
+                                match next with
+                                | Some next' -> return! traversePath d fieldCtx [ box p ] (AsyncVal.wrap next') (box head::pathAcc)
+                                | None -> return! resolve n.Value
+                            }
+                        match t with
+                        | ResolverObjectNode n -> return! resolveObject n
+                        | t -> return! resolve t.Value
                     }
                 | ([p; String "__index"] | [p]), t ->
                     asyncVal {
@@ -563,10 +575,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | p, ResolverObjectNode n ->
                     asyncVal {
                         let head = p |> List.head
-                        let next = n.Children |> Array.tryFind(fun c' -> c'.Name = head.ToString())
+                        let next = n.Children |> Array.tryFind (fun c' -> c'.Name = head.ToString())
                         let! res =
                             match next with
-                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') ((List.head p)::pathAcc)
+                            | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') (head::pathAcc)
                             | None -> AsyncVal.empty
                         return res
                     }
@@ -658,8 +670,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Schema = ctx.Schema
               Args = args
               Variables = ctx.Variables }
-        let path = d.Path |> List.map (fun x -> x :> obj)
-        traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
+        let path = d.Path |> List.map box
+        let traversed = traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
+        traversed
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
             let outerResult =
                 asyncVal {
@@ -704,7 +717,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 ctx.ExecutionPlan.DeferredFields
                 |> List.filter (fun d -> (List.head d.Path) = tree.Name)
                 |> List.toArray
-                |> Array.map(deferredResult tree)
+                |> Array.map (deferredResult tree)
                 |> AsyncVal.collectParallel
                 |> AsyncVal.map (Array.fold Array.append Array.empty)))
             |> AsyncVal.appendParallel
@@ -717,7 +730,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value =
     // Subscription queries can only have one root field
-    let name, info = Array.head resultSet
+    let _, info = Array.head resultSet
     let subdef = info.Definition :?> SubscriptionFieldDef
     let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
     let returnType = subdef.OutputTypeDef

@@ -9,7 +9,6 @@ open FSharp.Data.GraphQL.Execution
 open System.Threading
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Tests
 
 #nowarn "40"
 
@@ -20,6 +19,8 @@ type TestSubject = {
     union: UnionTestSubject
     list: UnionTestSubject list
     innerList: InnerTestSubject list
+    iface : InterfaceSubject
+    ifaceList : InterfaceSubject list
     mutable live: string
 }
 
@@ -42,6 +43,23 @@ and B = {
     b: int
 }
 
+and C = 
+    { id : string
+      value : string }
+    interface InterfaceSubject with
+        member this.Id = this.id
+        member this.Value = this.value
+and D = 
+    { id : string
+      value : string }
+    interface InterfaceSubject with
+        member this.Id = this.id
+        member this.Value = this.value
+
+and InterfaceSubject =
+    abstract member Id : string
+    abstract member Value : string
+
 let AType =
     Define.Object<A>(
         "A", [
@@ -52,9 +70,30 @@ let AType =
 let BType =
     Define.Object<B>(
         "B", [
-            Define.Field("id", String, (fun _ b -> b.id))
+            Define.Field("id", String, (fun _ (b : B) -> b.id))
             Define.Field("b", Int, (fun _ b -> b.b))
         ])
+
+let InterfaceType =
+    Define.Interface(
+        "TestInterface", [
+            Define.Field("id", String, resolve = fun _ (x : InterfaceSubject) -> x.Id)
+            Define.Field("value", String, resolve = fun _ (x : InterfaceSubject) -> x.Value)
+        ])
+
+let CType =
+    Define.Object<C>(
+        name ="C",
+        fields = [ Define.Field("id", String, (fun _ (c : C) -> c.id)); Define.Field("value", String, (fun _ c -> c.value)) ],
+        interfaces = [ InterfaceType ],
+        isTypeOf = (fun o -> o :? C))
+
+let DType =
+    Define.Object<D>(
+        name ="D",
+        fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", String, (fun _ d -> d.value)) ],
+        interfaces = [ InterfaceType ],
+        isTypeOf = (fun o -> o :? D))
 
 let UnionType =
     Define.Union(
@@ -90,6 +129,8 @@ let DataType =
             Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
             Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
             Define.Field("live", String, (fun _ d -> d.live))
+            Define.Field("iface", InterfaceType, (fun _ d -> d.iface))
+            Define.Field("ifaceList", ListOf InterfaceType, (fun _ d -> d.ifaceList))
         ])
 
 let data = {
@@ -114,6 +155,10 @@ let data = {
            { a = "Inner A"; innerList = [ { a = "Inner B"; innerList = [] }; { a = "Inner C"; innerList = [] } ] }
        ]
        live = "some value"
+       iface = { C.id = "1000"; value = "C" }
+       ifaceList = [
+            { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
+       ]
    }
 
 let Query =
@@ -121,25 +166,259 @@ let Query =
         name = "Query",
         fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
 
-let config = SchemaConfig.Default
+let schemaConfig = 
+    { SchemaConfig.Default with Types = [ CType; DType ] }
+
 
 let sub =
     { FieldName = "live"
       TypeName = "Data"
       Identity = fun (x : TestSubject) -> x.id }
 
-config.LiveFieldSubscriptionProvider.Register sub
+schemaConfig.LiveFieldSubscriptionProvider.Register sub
 
-let schema = Schema(Query, config = config)
+let schema = Schema(Query, config = schemaConfig)
 
 let executor = Executor(schema)
 
 let hasSubscribers () =
-    config.LiveFieldSubscriptionProvider.HasSubscribers "Data" "live"
+    schemaConfig.LiveFieldSubscriptionProvider.HasSubscribers "Data" "live"
 
 let updateData () =
     data.live <- "another value"
-    config.LiveFieldSubscriptionProvider.Publish "Data" "live" data
+    schemaConfig.LiveFieldSubscriptionProvider.Publish "Data" "live" data
+
+[<Fact>]
+let ``Single Root object field - Defer and Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "iface", null
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast NameValueLookup.ofList [
+                "id", upcast "1000"
+                "value", upcast "C"
+            ]
+            "path", upcast [ "testData"; "iface" ]
+        ]
+    let query = sprintf """{
+        testData {
+            iface @%s {
+                id
+                value
+            }
+        }
+    }"""
+    asts query
+    |> Seq.iter (fun query ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
+
+[<Fact>]
+let ``Single Root object list field - Defer`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "ifaceList", upcast [ ]
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "id", upcast "2000"
+                    "value", upcast "D"
+                ]
+                box <| NameValueLookup.ofList [
+                    "id", upcast "3000"
+                    "value", upcast "C2"
+                ]
+            ]
+            "path", upcast [ box "testData"; upcast "ifaceList" ]
+        ]
+    let query = parse """{
+        testData {
+            ifaceList @defer {
+                id
+                value
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Single Root object list field - Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "ifaceList", upcast [ ]
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "id", upcast "2000"
+                    "value", upcast "D"
+                ]
+            ]
+            "path", upcast [ box "testData"; upcast "ifaceList"; upcast 0 ]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "id", upcast "3000"
+                    "value", upcast "C2"
+                ]
+            ]
+            "path", upcast [ box "testData"; upcast "ifaceList"; upcast 1 ]
+        ]
+    let query = parse """{
+        testData {
+            ifaceList @stream {
+                id
+                value
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Interface field - Defer and Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "iface", upcast NameValueLookup.ofList [
+                    "id", upcast "1000"
+                    "value", null
+                ]
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast "C"
+            "path", upcast [ "testData"; "iface"; "value" ]
+        ]
+    let query = sprintf """{
+        testData {
+            iface {
+                id
+                value @%s
+            }
+        }
+    }"""
+    asts query
+    |> Seq.iter (fun query ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
+            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
+            then fail "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
+
+[<Fact>]
+let ``Interface list field - Defer and Stream`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "ifaceList", upcast [
+                    box <| NameValueLookup.ofList [
+                        "id", upcast "2000"
+                        "value", null
+                    ]
+                    upcast NameValueLookup.ofList [
+                        "id", upcast "3000"
+                        "value", null
+                    ]
+                ]
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast "D"
+            "path", upcast [ box "testData"; upcast "ifaceList"; upcast 0; upcast "value" ]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast "C2"
+            "path", upcast [ box "testData"; upcast "ifaceList"; upcast 1; upcast "value" ]
+        ]
+    let query = sprintf """{
+        testData {
+            ifaceList {
+                id
+                value @%s
+            }
+        }
+    }"""
+    asts query
+    |> Seq.iter (fun query ->
+        use mre = new ManualResetEvent(false)
+        let actualDeferred = ConcurrentBag<Output>()
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) -> 
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            deferred
+            |> Observable.add (fun x -> 
+                actualDeferred.Add(x)
+                if actualDeferred.Count = 2 then set mre)
+            wait mre "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred
+            |> Seq.cast<NameValueLookup>
+            |> contains expectedDeferred1
+            |> contains expectedDeferred2
+            |> ignore
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``Live Query`` () =
@@ -585,6 +864,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
                 "list", upcast [
                     box <| NameValueLookup.ofList [
                         "id", upcast "2"
+                        "a", null
                     ]
                     upcast NameValueLookup.ofList [
                         "id", upcast "3"
@@ -636,6 +916,7 @@ let ``List Fragment Defer and Stream - Common``() =
                 "a", upcast "Apple"
                 "list", upcast [
                     box <| NameValueLookup.ofList [
+                        "id", null
                         "a", upcast "Union A"
                     ]
                     upcast NameValueLookup.ofList [

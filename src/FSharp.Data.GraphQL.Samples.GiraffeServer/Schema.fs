@@ -39,6 +39,24 @@ type Planet =
 type Root =
     { ClientId: string }
 
+type IThing =
+    abstract member Shape : string
+    abstract member Id : string
+
+type Ball() =
+    member __.Id = "1"
+    member __.Shape = "Sphere"
+    interface IThing with
+        member this.Shape = this.Shape
+        member this.Id = this.Id
+
+type Box() =
+    member __.Shape = "Cube"
+    member __.Id = "2"
+    interface IThing with
+        member this.Shape = this.Shape
+        member this.Id = this.Id
+
 type Character =
     | Human of Human
     | Droid of Droid
@@ -94,6 +112,9 @@ module Schema =
             Name = Some "Death Star"
             IsMoon = Some false}]
 
+    let things : IThing list =
+        [ Ball(); Box() ]
+
     let getHuman id =
         humans |> List.tryFind (fun h -> h.Id = id)
 
@@ -113,8 +134,41 @@ module Schema =
     let getCharacter id =
         characters |> List.tryFind (matchesId id)
 
-    let schemaConfig =
-        SchemaConfig.Default
+    let ThingType =
+        Define.Interface(
+            name = "Thing",
+            description = "Gets the shape of the thing.",
+            fieldsFn = fun () ->
+            [
+                Define.Field("format", String, "The format of the shape", fun _ (t : IThing) -> t.Shape)
+                Define.Field("id", String, "The ID of the shape", fun _ (t : IThing) -> t.Id)
+            ])
+
+    let BallType =
+        Define.Object<Ball>(
+            name = "Ball",
+            description = "A ball.",
+            interfaces = [ ThingType ],
+            isTypeOf = (fun o -> o :? Ball),
+            fieldsFn = fun () ->
+            [
+                Define.Field("format", String, "The format of the ball", fun _ (b : Ball) -> b.Shape)
+                Define.Field("id", String, "The ID of the ball", fun _ (t : Ball) -> t.Id)
+            ]
+        )
+
+    let BoxType =
+        Define.Object<Box>(
+            name = "Box",
+            description = "A box.",
+            interfaces = [ ThingType ],
+            isTypeOf = (fun o -> o :? Box),
+            fieldsFn = fun () ->
+            [
+                Define.Field("format", String, "The format of the box", fun _ (t : Box) -> t.Shape)
+                Define.Field("id", String, "The ID of the box", fun _ (t : Box) -> t.Id)
+            ]
+        )
 
     let EpisodeType =
         Define.Enum(
@@ -197,7 +251,8 @@ module Schema =
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
                 Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
-                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id"))) ])
+                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))
+                Define.Field("things", ListOf ThingType, "Gets things", fun _ _ -> things) ])
 
     let Subscription =
         Define.SubscriptionObject<Root>(
@@ -210,6 +265,9 @@ module Schema =
                     "Watches to see if a planet is a moon",
                     [ Define.Input("id", String) ],
                     (fun ctx _ p -> if ctx.Arg("id") = p.Id then Some p else None)) ])
+
+    let schemaConfig =
+        { SchemaConfig.Default with Types = [ BallType; BoxType ] }
 
     let Mutation =
         Define.Object<Root>(

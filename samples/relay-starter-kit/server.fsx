@@ -1,7 +1,7 @@
-#r "../../packages/Suave/lib/net40/Suave.dll"
-#r "../../packages/Newtonsoft.Json/lib/net40/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/FSharp.Data.GraphQL.Server.dll"
+#r "../../packages/samples/Suave/lib/net461/Suave.dll"
+#r "../../packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Server.dll"
 
 open System
 
@@ -20,9 +20,9 @@ let viewer = {
     Id = "1"
     Name = "Anonymous"
     Widgets = [
-        { Id = "1"; Name = "What's it"}
-        { Id = "2"; Name = "Who's it"}
-        { Id = "3"; Name = "How's it"} ]}
+        { Id = "1"; Name = "What's it" }
+        { Id = "2"; Name = "Who's it" }
+        { Id = "3"; Name = "How's it" } ] }
 
 let getUser id = if viewer.Id = id then Some viewer else None
 let getWidget id = viewer.Widgets |> List.tryFind (fun w -> w.Id = id)
