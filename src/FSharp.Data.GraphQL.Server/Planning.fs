@@ -208,7 +208,7 @@ let rec private plan (ctx : PlanningContext) (stage : PlanningStage) : PlanningS
         let inner, deferredFields', path' = plan ctx ({ info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; Identifier = "__index" }, deferredFields, "__index"::info.Identifier::path)
         { info with Kind = ResolveCollection inner }, deferredFields', path'
     | Abstract _ -> 
-        planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, path) (ref []) None 
+        planAbstraction ctx info.Ast.SelectionSet (info, deferredFields, info.Identifier::path) (ref []) None 
     | _ -> failwith "Invalid Return Type in Planning!"
 
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (stage: PlanningStage) visitedFragments : PlanningStage = 
