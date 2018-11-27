@@ -7,25 +7,42 @@ open FSharp.Data.GraphQL.Ast
 type DirectiveChooser = Directive -> Directive option
 
 /// Basic operations on DirectiveChoosers.
+[<RequireQualifiedAccess>]
 module DirectiveChooser =
+    /// Apply a chooser to a directive.
     let apply (directive : Directive) (chooser : DirectiveChooser) = 
         chooser directive
 
+    /// Builds a chooser that, given a Directive x, returns Some x.
     let keep : DirectiveChooser = 
         let chooser = fun directive -> Some directive
         chooser
 
+    /// Builds a chooser that, for any Directive, returns None.
     let fallback : DirectiveChooser = 
         let chooser = fun _ -> None
         chooser
 
-    let acceptWhen (condition : Directive -> bool) : DirectiveChooser = 
+    /// Builds a chooser that, when run, runs actual chooser, and if it returns Some directive x, maps
+    /// x directive using mapper function to y directive, and return Some y.
+    let map (mapper : Directive -> Directive) (actual : DirectiveChooser) : DirectiveChooser =
+        let chooser = fun directive ->
+            match actual directive with
+            | Some d -> mapper d |> keep
+            | None -> None
+        chooser
+
+    /// Builds a chooser that, given a Directive x, apply the condition filter function to x,
+    /// and if it returns true, returns Some x. Otherwise, returns None.
+    let keepWhen (condition : Directive -> bool) : DirectiveChooser = 
         let chooser = fun directive ->
             if condition directive
             then keep directive
             else fallback directive
         chooser
 
+    /// Builds a chooser that, given a Directive x, apply the condition filter function to x,
+    /// and if it returns true, returns None. Otherwise, returns Some x.
     let fallbackWhen (condition : Directive -> bool) : DirectiveChooser =
         let chooser = fun directive ->
             if condition directive
@@ -33,14 +50,25 @@ module DirectiveChooser =
             else keep directive
         chooser
 
+    /// Builds a chooser that, given a Directive x, if x.Name equals given name, returns None.
+    /// Otherwise, returns Some x.
     let fallbackByName name = fallbackWhen (fun d -> d.Name = name)
 
+    /// Builds a chooser that, given a Directive x, if x.Name is 'defer', returns None.
+    /// Otherwise, returns Some x.
     let fallbackDefer = fallbackByName "defer"
 
+    /// Builds a chooser that, given a Directive x, if x.Name is 'stream', returns None.
+    /// Otherwise, returns Some x.
     let fallbackStream = fallbackByName "stream"
 
+    /// Builds a chooser that, given a Directive x, if x.Name is 'live', returns None.
+    /// Otherwise, returns Some x.
     let fallbackLive = fallbackByName "live"
 
+    /// Builds a chooser that, when run, runs actual chooser, and if it returns Some directive x,
+    /// uses that directive to run other chooser and return its result. If actual chooser returns None,
+    /// returns None.
     let compose (other : DirectiveChooser) (actual : DirectiveChooser) : DirectiveChooser = 
         let chooser = fun directive ->
             match actual directive with
@@ -48,14 +76,16 @@ module DirectiveChooser =
             | None -> None
         chooser
 
+    /// Builds a chooser that, when run, runs actual chooser and other chooser: if any of the choosers return
+    /// None, then returns None. Otherwise, compose actual into other, run the composed chooser, and return its result.
     let merge (other : DirectiveChooser) (actual : DirectiveChooser) : DirectiveChooser =
         let chooser = fun directive -> 
-            match other directive, actual directive with
-            | d1, d2 when d1 = d2 -> d1
-            | Some d1, Some d2 when d1 <> d2 -> failwith "Can not merge DirectiveChoosers because they don't return the same directive."
+            match actual directive, other directive with
+            |Some _, Some _ -> compose other actual |> apply directive
             | _ -> None
         chooser
 
+    /// Builds a chooser based on the composal of all choosers in choosers sequence, from first to last.
     let fromSeq (choosers : DirectiveChooser seq) : DirectiveChooser = 
         let chooser = fun directive ->
             match Seq.length choosers with
