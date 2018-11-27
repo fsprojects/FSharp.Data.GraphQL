@@ -63,7 +63,7 @@ module HttpHandlers =
         let buildMetadata fallbackDirectives = 
             let chooser =
                 [ DirectiveChooser.fallbackDefer; DirectiveChooser.fallbackStream; DirectiveChooser.fallbackLive ]
-                |> DirectiveChooser.fromSeq
+                |> DirectiveChooser.composeSeq
                 |> DirectiveChooser.merge (DirectiveChooser.fallbackWhen (fun _ -> fallbackDirectives))
             Metadata.WithDirectiveChooser(chooser)
         match query, variables  with

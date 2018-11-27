@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ObjectListFilter.fs" />
+    <Compile Include="DirectiveChooser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />
