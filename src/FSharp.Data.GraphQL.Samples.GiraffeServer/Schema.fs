@@ -5,9 +5,6 @@ namespace FSharp.Data.GraphQL.Samples.GiraffeServer
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
-open System.Threading
-open System.Threading.Tasks
-open FSharp.Data.GraphQL.Ast
 
 type Episode =
     | NewHope = 1
@@ -232,7 +229,7 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
                 Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
-                Define.Field("ismoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)
+                Define.Field("isMoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)
             ])
 
     and RootType =
@@ -277,13 +274,13 @@ module Schema =
                     "setMoon",
                     Nullable PlanetType,
                     "Sets a moon status",
-                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
+                    [ Define.Input("id", String); Define.Input("isMoon", Boolean) ],
                     fun ctx _ ->
                         getPlanet (ctx.Arg("id"))
                         |> Option.map (fun x ->
-                            x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
+                            x.SetMoon(Some(ctx.Arg("isMoon"))) |> ignore
                             schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
-                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "ismoon" x
+                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                             x))])
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
@@ -292,6 +289,7 @@ module Schema =
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
           Define.ObjectListFilterMiddleware<Droid, Character option>(true)
+          Define.DirectiveFallbackMiddleware()
           Define.LiveQueryMiddleware() ]
 
     let executor = Executor(schema, middlewares)

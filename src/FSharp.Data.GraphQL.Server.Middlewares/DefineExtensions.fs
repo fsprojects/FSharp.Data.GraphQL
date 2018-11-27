@@ -49,3 +49,6 @@ module DefineExtensions =
         static member LiveQueryMiddleware(?identityName : IdentityNameResolver) : IExecutorMiddleware =
             let identityName = defaultArg identityName (fun _ -> "Id")
             upcast LiveQueryMiddleware(identityName)
+
+        static member DirectiveFallbackMiddleware() : IExecutorMiddleware =
+            upcast DirectiveFallbackMiddleware()

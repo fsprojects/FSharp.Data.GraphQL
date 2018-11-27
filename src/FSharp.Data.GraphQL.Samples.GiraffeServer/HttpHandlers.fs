@@ -8,6 +8,7 @@ open FSharp.Data.GraphQL.Execution
 open System.IO
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Server.Middlewares
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
@@ -59,18 +60,24 @@ module HttpHandlers =
         let body = readStream ctx.Request.Body
         let query = body |> tryParse "query"
         let variables = body |> tryParse "variables" |> mapString
+        let buildMetadata fallbackDirectives = 
+            let chooser =
+                [ DirectiveChooser.fallbackDefer; DirectiveChooser.fallbackStream; DirectiveChooser.fallbackLive ]
+                |> DirectiveChooser.fromSeq
+                |> DirectiveChooser.merge (DirectiveChooser.fallbackWhen (fun _ -> fallbackDirectives))
+            Metadata.WithDirectiveChooser(chooser)
         match query, variables  with
         | Some query, Some variables ->
             printfn "Received query: %s" query
             printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root, meta = buildMetadata true) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
         | Some query, None ->
             printfn "Received query: %s" query
             let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(query, meta = buildMetadata true) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
         | None, _ ->
