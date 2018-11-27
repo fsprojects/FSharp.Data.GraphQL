@@ -23,7 +23,7 @@ module DirectiveChooser =
         chooser
 
     /// Builds a chooser that, when run, runs actual chooser, and if it returns Some directive x, maps
-    /// x directive using mapper function to y directive, and return Some y.
+    /// x directive using mapper function to y directive, and return Some y. Otherwise, returns None.
     let map (mapper : Directive -> Directive) (actual : DirectiveChooser) : DirectiveChooser =
         let chooser = fun directive ->
             match actual directive with
