@@ -146,7 +146,7 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = None
 
-type internal DirectiveFallbackMiddleware() =
+type internal DirectiveChooserMiddleware() =
     let middleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
         let chooser = ctx.Metadata.TryFind<DirectiveChooser>("directiveChooser")
         let chooseDirectives (chooser : DirectiveChooser) (opdef : OperationDefinition) : OperationDefinition =
