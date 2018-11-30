@@ -51,15 +51,67 @@ and Node = Define.Node (fun () -> [ Person; Car ])
 let schema = Schema<unit>(Define.Object("Query", [ Define.NodeField(Node, resolve) ]), config = { SchemaConfig.Default with Types = [ Person; Car ] })
 
 open Xunit
+open System.Threading
+open System.Collections.Concurrent
 
-let execAndValidateNode (query: string) expected =
+let execAndValidateNode (query: string) expectedDirect expectedDeferred =
     let result = sync <| Executor(schema).AsyncExecute(query)
-    match result with
-    | Direct(data, errors) -> 
-        empty errors
-        data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expected])
-    | _ ->  fail "Expected a direct GQLResponse"
-   
+    match expectedDeferred with
+    | Some expectedDeferred ->
+        match result with
+        | Deferred(data, errors, deferred) ->
+            use mre = new ManualResetEvent(false)
+            let actualDeferred = ConcurrentBag<Output>()
+            let expectedItems = Seq.length expectedDeferred
+            empty errors
+            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+            deferred
+            |> Observable.add (fun x -> 
+                actualDeferred.Add(x)
+                if actualDeferred.Count = expectedItems then set mre)
+            wait mre "Timeout while waiting for Deferred GQLResponse"
+            actualDeferred
+            |> Seq.cast<NameValueLookup>
+            |> Seq.iter (fun ad -> expectedDeferred |> contains ad |> ignore)
+        | _ ->  fail "Expected a deferred GQLResponse"
+    | None ->
+        match result with
+        | Direct(data, errors) -> 
+            empty errors
+            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+        | _ ->  fail "Expected a direct GQLResponse"
+
+[<Fact>]
+let ``Node with global ID gets correct record - Defer`` () =
+    let query1 = """query ExampleQuery {
+        node(id: "cGVyc29uOjE=") {
+            name @defer,
+            age
+        }
+    }"""
+    let expectedDirect1 =
+      NameValueLookup.ofList [
+        "name", null
+        "age", upcast 18]
+    let expectedDeferred1 = Some [
+        NameValueLookup.ofList [
+            "data", upcast "Alice"
+            "path", upcast ["node"; "name"]]]
+    execAndValidateNode query1 expectedDirect1 expectedDeferred1
+    let query2 = """query ExampleQuery {
+        node(id: "Y2FyOjE=") {
+            model @defer
+        }
+    }"""
+    let expectedDirect2 =    
+      NameValueLookup.ofList [
+        "model", null ]
+    let expectedDeferred2 = Some [
+        NameValueLookup.ofList [
+            "data", upcast "Tesla S"
+            "path", upcast ["node"; "model"]]]
+    execAndValidateNode query2 expectedDirect2 expectedDeferred2
+
 [<Fact>]
 let ``Node with global ID gets correct record`` () =
     let query1 = """query ExampleQuery {
@@ -72,8 +124,7 @@ let ``Node with global ID gets correct record`` () =
       NameValueLookup.ofList [
         "name", upcast "Alice"
         "age", upcast 18]
-    execAndValidateNode query1 expected1
-
+    execAndValidateNode query1 expected1 None
     let query2 = """query ExampleQuery {
         node(id: "Y2FyOjE=") {
             model
@@ -82,9 +133,9 @@ let ``Node with global ID gets correct record`` () =
     let expected2 =    
       NameValueLookup.ofList [
         "model", upcast "Tesla S" ]
-    execAndValidateNode query1 expected1
+    execAndValidateNode query2 expected2 None
 
 [<Fact>]
 let ``Node with global ID gets correct type`` () =
-    execAndValidateNode """{ node(id: "cGVyc29uOjI=") { id, __typename } }""" (NameValueLookup.ofList ["id", upcast "cGVyc29uOjI="; "__typename", upcast "Person" ])
-    execAndValidateNode """{ node(id: "Y2FyOjI=") { id, __typename } }""" (NameValueLookup.ofList ["id", upcast "Y2FyOjI="; "__typename", upcast "Car" ])
+    execAndValidateNode """{ node(id: "cGVyc29uOjI=") { id, __typename } }""" (NameValueLookup.ofList ["id", upcast "cGVyc29uOjI="; "__typename", upcast "Person" ]) None
+    execAndValidateNode """{ node(id: "Y2FyOjI=") { id, __typename } }""" (NameValueLookup.ofList ["id", upcast "Y2FyOjI="; "__typename", upcast "Car" ]) None

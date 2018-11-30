@@ -9,6 +9,10 @@ nuget System.Runtime
 nuget FSharp.Core
 nuget System.Reflection.Metadata
 
+group Samples
+  source https://nuget.org/api/v2
+  nuget Suave
+
 group Build
   source https://api.nuget.org/v3/index.json
 

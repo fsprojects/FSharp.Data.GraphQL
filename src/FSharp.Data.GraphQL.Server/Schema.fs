@@ -106,8 +106,8 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Some c -> c
 
     let typeMap : TypeMap =
-        let m = mutation |> function Some(Named n) -> [n] | _ -> []
-        let s = subscription |> function Some(Named n) -> [n] | _ -> []
+        let m = mutation |> function Some (Named n) -> [n] | _ -> []
+        let s = subscription |> function Some (Named n) -> [n] | _ -> []
         initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
@@ -259,7 +259,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             |> List.toArray
         { QueryType = Map.find query.Name inamed
           MutationType = mutation |> Option.map (fun m -> Map.find m.Name inamed)
-          SubscriptionType = None
+          SubscriptionType = subscription |> Option.map(fun s -> Map.find s.Name inamed)
           Types = itypes
           Directives = idirectives }
 

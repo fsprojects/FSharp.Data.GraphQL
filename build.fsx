@@ -86,7 +86,7 @@ module Util =
         // Use this in Windows to prevent conflicts with paths too long
         else run "." "cmd" ("/C rmdir /s /q " + Path.GetFullPath dir)
 
-    let compileScript symbols outDir fsxPath =
+    let compileScript symbols outDir (fsxPath : string) =
         let dllFile = Path.ChangeExtension(Path.GetFileName fsxPath, ".dll")
         let opts = [
             yield Fsc.Out (Path.Combine(outDir, dllFile))
