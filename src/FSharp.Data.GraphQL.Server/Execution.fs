@@ -716,7 +716,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value =
     // Subscription queries can only have one root field
-    let _, info = Array.head resultSet
+    let nameOrAlias, info = Array.head resultSet
     let subdef = info.Definition :?> SubscriptionFieldDef
     let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
     let returnType = subdef.OutputTypeDef
@@ -733,9 +733,10 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
         buildResolverTree returnType fieldCtx fieldExecuteMap (Some v)
         |> AsyncVal.map(treeToDict)
         |> AsyncVal.map(fun (data, err) -> 
+            let output = NameValueLookup.ofList[nameOrAlias, data.Value]                
             match err with
-            | [] -> NameValueLookup.ofList["data", data.Value] :> Output
-            | _ -> NameValueLookup.ofList["data", data.Value; "errors", upcast (formatErrors err)] :> Output)
+            | [] -> NameValueLookup.ofList["data", box output] :> Output
+            | _ -> NameValueLookup.ofList["data", box output; "errors", upcast (formatErrors err)] :> Output)
         |> AsyncVal.toAsync
         |> Observable.ofAsync)
 
