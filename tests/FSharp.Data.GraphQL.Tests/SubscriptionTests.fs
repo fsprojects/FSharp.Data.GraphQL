@@ -84,8 +84,10 @@ let executor = Executor(schema)
 let ``Should be able to subscribe to sync field and get results``() =
     let expected = NameValueLookup.ofList [
         "data", upcast NameValueLookup.ofList [
-            "id", upcast 1
-            "data", upcast "Updated value 1"
+            "watchData", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "data", upcast "Updated value 1"
+            ]
         ]
     ]
     let query = parse """subscription Test {
@@ -112,8 +114,10 @@ let ``Should be able to subscribe to sync field and get results``() =
 let ``Should be able to subscribe to async field and get results``() =
     let expected = NameValueLookup.ofList [
         "data", upcast NameValueLookup.ofList [
-            "id", upcast 1
-            "data", upcast "Updated value 1"
+            "watchDataAsync", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "data", upcast "Updated value 1"
+            ]
         ]
     ]
     let query = parse """subscription Test {
