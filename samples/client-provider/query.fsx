@@ -1,4 +1,4 @@
-﻿#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
+﻿#r "../../bin/FSharp.Data.GraphQL.Client/net47/FSharp.Data.GraphQL.Client.dll"
 #load "literals.fsx"
 
 open System
@@ -41,23 +41,21 @@ async {
         |> Array.choose (fun x -> x.name)
         |> Array.iter (printfn "- %s")
 }
-|> Async.StartImmediate
+|> Async.RunSynchronously
 
 let freeQuery = "{ hero(id: \"1000\"){ id, name, appearsIn, friends { name } } }"
-
 let (?) (o: obj) (k: string) =
     match o with
     | :? IDictionary<string,obj> as dic -> dic.[k]
     | _ -> null
 
-let hero2 =
-    MyClient.Query(freeQuery)
-    |> Async.Catch
-    |> Async.RunSynchronously
-    |> function
-    | Choice1Of2 data ->
-        printfn "Hero's name: %A" data?hero?name
-    | Choice2Of2 err ->
-        match err with
-        | :? AggregateException as agex -> agex.InnerExceptions |> Seq.iter (fun err -> printfn "ERROR: %s" err.Message)
-        | _ -> printfn "ERROR: %s" err.Message
+MyClient.Query(freeQuery)
+|> Async.Catch
+|> Async.RunSynchronously
+|> function
+| Choice1Of2 data ->
+    printfn "Hero's name: %A" data?hero?name
+| Choice2Of2 err ->
+    match err with
+    | :? AggregateException as agex -> agex.InnerExceptions |> Seq.iter (fun err -> printfn "ERROR: %s" err.Message)
+    | _ -> printfn "ERROR: %s" err.Message

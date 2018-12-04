@@ -2,11 +2,11 @@
 #r "../../packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Server.dll"
+#nowarn "40"
 
 open System
 
 // Data
-
 type Widget = 
     { Id: string;
       Name: string }
@@ -32,24 +32,26 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Relay
 
-let rec Widget = Define.Object<Widget>(
-    name = "Widget",
-    description = "A shiny widget",
-    interfaces = [ Node ],
-    fields = [
-        Define.GlobalIdField(fun _ w -> w.Id)
-        Define.Field("name", String, fun _ w -> w.Name)])
+let rec Widget = 
+    Define.Object<Widget>(
+        name = "Widget",
+        description = "A shiny widget",
+        interfaces = [ Node ],
+        fields = [
+            Define.GlobalIdField(fun _ w -> w.Id)
+            Define.Field("name", String, fun _ w -> w.Name)])
 
-and User = Define.Object<User>(
-    name = "User",
-    description = "A person who uses our app",
-    interfaces = [ Node ],
-    fields = [
-        Define.GlobalIdField(fun _ w -> w.Id)
-        Define.Field("name", String, fun _ w -> w.Name)
-        Define.Field("widgets", ConnectionOf Widget, "A person's collection of widgets", Connection.allArgs, fun ctx user -> 
-            let widgets = user.Widgets |> List.toArray
-            Connection.ofArray widgets )])
+and User = 
+    Define.Object<User>(
+        name = "User",
+        description = "A person who uses our app",
+        interfaces = [ Node ],
+        fields = [
+            Define.GlobalIdField(fun _ w -> w.Id)
+            Define.Field("name", String, fun _ w -> w.Name)
+            Define.Field("widgets", ConnectionOf Widget, "A person's collection of widgets", Connection.allArgs, fun ctx user -> 
+                let widgets = user.Widgets |> List.toArray
+                Connection.ofArray widgets )])
 
 and Node = Define.Node<obj>(fun () -> [ User; Widget ])
 
@@ -63,11 +65,10 @@ let Query = Define.Object("Query", [
 
 let schema = Schema(query = Query, config = { SchemaConfig.Default with Types = [ User; Widget ]})
 
-// server initialization
+// Server initialization
 open Suave
 open Suave.Operators
 open Newtonsoft.Json
-open FSharp.Data.GraphQL.Execution
 
 let settings = JsonSerializerSettings()
 settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
@@ -86,7 +87,7 @@ let handle : WebPart =
         async {
             match tryParse http.request.rawForm with
             | Some query ->
-                // at the moment parser is not parsing new lines correctly, so we need to get rid of them
+                // At the moment parser is not parsing new lines correctly, so we need to get rid of them
                 let q = (query :?> string).Trim().Replace("\r\n", " ")
                 let! result = Executor(schema).AsyncExecute(q)
                 let serialized = json result
