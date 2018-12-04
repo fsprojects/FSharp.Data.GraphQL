@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
@@ -86,9 +86,8 @@ module TypeCompiler =
             | _ -> fun args ->
                 getDynamicField name args.[0]
                 |> makeOption ptype
-        let p = ProvidedProperty(ifield.Name, ptype, getterCode=getter)
+        let p = ProvidedProperty(ifield.Name, ptype, getterCode = getter)
         p.AddXmlDoc(docPrefix + (defaultArg ifield.Description ""))
-      
         p
 
 //    let genParam (ctx: ProviderSessionContext) (t: IntrospectionType) (iarg: IntrospectionInputVal) =

@@ -2,7 +2,7 @@
 namespace System
 open System.Reflection
 
-[<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Client")>]
+[<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Samples.GiraffeServer")>]
 [<assembly: AssemblyProductAttribute("FSharp.Data.GraphQL")>]
 [<assembly: AssemblyDescriptionAttribute("FSharp implementation of Facebook GraphQL query language")>]
 [<assembly: AssemblyVersionAttribute("0.0.12")>]
@@ -10,7 +10,7 @@ open System.Reflection
 do ()
 
 module internal AssemblyVersionInformation =
-    let [<Literal>] AssemblyTitle = "FSharp.Data.GraphQL.Client"
+    let [<Literal>] AssemblyTitle = "FSharp.Data.GraphQL.Samples.GiraffeServer"
     let [<Literal>] AssemblyProduct = "FSharp.Data.GraphQL"
     let [<Literal>] AssemblyDescription = "FSharp implementation of Facebook GraphQL query language"
     let [<Literal>] AssemblyVersion = "0.0.12"

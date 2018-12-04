@@ -289,10 +289,10 @@ module Schema =
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
-        [ Define.QueryWeightMiddleware(2.0, true)
+        [ (*Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
           Define.ObjectListFilterMiddleware<Droid, Character option>(true)
-          Define.LiveQueryMiddleware() ]
+          Define.LiveQueryMiddleware()*) ]
 
     let executor = Executor(schema, middlewares)
 

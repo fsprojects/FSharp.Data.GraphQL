@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Client.Serialization
@@ -32,9 +32,10 @@ type internal OptionConverter() =
         if value = null then FSharpValue.MakeUnion(cases.[0], [||])
         else FSharpValue.MakeUnion(cases.[1], [|value|])
 
-let internal settings = JsonSerializerSettings()
-settings.Converters <- [| OptionConverter() |]
-settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
+let internal settings = 
+    JsonSerializerSettings(
+        Converters = [| OptionConverter() |],
+        ContractResolver = CamelCasePropertyNamesContractResolver())
 
 /// Serializes provided object to JSON format.
 let toJson (o: 't) : string = JsonConvert.SerializeObject(o, settings)

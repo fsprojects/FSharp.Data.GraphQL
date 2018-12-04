@@ -138,53 +138,54 @@ module QuotationHelpers =
     let extractFields (projection: Expr) =
         // Accessing nullable types injects a null equality check in the generated code
         let (|NullCheck|_|) = function
-            | IfThenElse(Call(None, op_Equality, [instance2; Value(nullValue, _)]),
-                         Call(None, get_None, []),
-                         Call(None, get_Some, [Coerce(instance3, _)])) as e ->
+            | IfThenElse (Call (None, _, [_; Value(_, _)]),
+                          Call (None, _, []),
+                          Call (None, _, [Coerce(_, _)])) as e ->
                 Some e
             | _ -> None
         let (|Fields|_|) = function
-            | NewObject(cons, [NewArray(_,args)])
+            | NewObject (cons, [ NewArray (_, args) ])
                 when cons.DeclaringType.FullName = "FSharp.Data.GraphQL.Fields" ->
                 Some args
             | _ -> None
         let (|Selection|_|) = function
-            | NewObject(cons, [fieldExpr; Lambda(_,Fields argExprs)])
+            | NewObject (cons, [ fieldExpr; Lambda (_, Fields argExprs) ])
                 when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.Selection`1") ->
-                Some(fieldExpr, argExprs)
+                Some (fieldExpr, argExprs)
             | _ -> None
         let (|InlineFragment|_|) = function
-            | Let(_,Lambda(_,Fields argExprs),NewObject(cons, [Value(:? string as typeName, _); _]))
+            | Let(_, Lambda(_, Fields argExprs), NewObject(cons, [ Value (:? string as typeName, _); _ ]))
                 when cons.DeclaringType.FullName.StartsWith("FSharp.Data.GraphQL.InlineFragment") ->
-                Some(typeName, argExprs)
+                Some (typeName, argExprs)
             | _ -> None
         let rec translatePropGet = function
-            | Selection(fieldExpr, argExprs) as e ->
+            | Selection (fieldExpr, argExprs) as e ->
                 match translatePropGet fieldExpr with
-                | Field(name,_) -> Field(name,Some(List.map translatePropGet argExprs))
+                | Field (name, _) -> Field (name, Some (List.map translatePropGet argExprs))
                 | _ -> failwithf "Selection misses field name: %A" e
-            | InlineFragment(typeName, argExprs) ->
-                InlineFragment(Some typeName, List.map translatePropGet argExprs)
+            | InlineFragment (typeName, argExprs) ->
+                InlineFragment (Some typeName, List.map translatePropGet argExprs)
             // TODO HACK: It shouldn't be needed to access array elements
-            | Let(_, Call(None, meth, _), body)
+            | Let (_, Call(None, meth, _), body)
                 when meth.Name = "GetArray" ->
                 translatePropGet body
-            | Let(_, Call(Some(Coerce(Var v, dicType)), meth, [Value(propName,_)]), NullCheck _)
-            | Call (Some (Coerce (Var v, dicType)), meth, [Value(propName,_)])
+            | Let (_, Call(Some (Coerce (Var _, dicType)), meth, [ Value (propName, _) ]), NullCheck _)
+            | Call (Some (Coerce (Var _, dicType)), meth, [ Value (propName, _) ])
                 when dicType.Name = "IDictionary`2" && meth.Name = "get_Item" ->
-                Field(unbox<string> propName, None)
-            | PropertyGet(Some(Var v), prop, []) ->
-                Field(prop.Name, None)
-            | Coerce(e, _) -> translatePropGet e
+                Field (unbox<string> propName, None)
+            | PropertyGet (Some (Coerce (_, dicType)), prop, [ Value (propName, _) ])
+                when dicType.Name = "IDictionary`2" && prop.Name = "Item" ->
+                Field (unbox<string> propName, None)
+            | PropertyGet (Some (Var _), prop, []) ->
+                Field (prop.Name, None)
+            | Coerce (e, _) -> translatePropGet e
             | e -> failwithf "Unsupported field: %A" e
-        // printfn "%A" projection
         match projection with
-        | Lambda(_, Fields args)
-        | Lambda(_, Coerce(NewTuple args,_))
-        | Lambda(_, NewTuple args) ->
-            List.map translatePropGet args
-        | Lambda(var, Coerce(arg,_))
-        | Lambda(var, arg) -> [translatePropGet arg]
+        | Lambda (_, Fields args)
+        | Lambda (_, Coerce (NewTuple args, _))
+        | Lambda (_, NewTuple args) -> List.map translatePropGet args
+        | Lambda (_, Coerce (arg, _))
+        | Lambda (_, arg) -> [ translatePropGet arg ]
         | _ -> failwithf "Unsupported projection: %A" projection
         |> Seq.map string
         |> Seq.filter (String.IsNullOrWhiteSpace >> not)

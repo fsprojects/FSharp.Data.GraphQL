@@ -1,4 +1,4 @@
-﻿type project
+type project
 id FSharp.Data.GraphQL.Client
 authors Bazinga Technologies Inc
 projectUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL
@@ -11,3 +11,11 @@ summary
     FSharp implementation of Facebook GraphQL query language (Client)
 description
     FSharp implementation of Facebook GraphQL query language (Client)
+files
+    bin/Release/net47/FSharp.Data.GraphQL.Client.* ==> lib/net47
+    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.* ==> lib/netstandard2.0
+    bin/Release/net47/FSharp.Data.GraphQL.Shared.* ==> lib/net47
+    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.* ==> lib/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netcoreapp2.0/*.dll ==> typeproviders/fsharp41/netcoreapp2.0
+    bin/Release/typeproviders/fsharp41/net47/*.dll ==> typeproviders/fsharp41/net47

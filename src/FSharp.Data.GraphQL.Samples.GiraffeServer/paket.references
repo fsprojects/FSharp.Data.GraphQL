@@ -1,4 +1,5 @@
-Microsoft.AspNetCore.All
-FSharp.Core
-Giraffe
-Microsoft.AspNetCore.WebSockets
+group Samples
+    Microsoft.AspNetCore.All
+    FSharp.Core
+    Giraffe
+    Microsoft.AspNetCore.WebSockets

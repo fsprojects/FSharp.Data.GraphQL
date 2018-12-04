@@ -1,23 +1,18 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
-
 namespace FSharp.Data.GraphQL.Client
 
 open System
+open System.Reflection
 open System.IO
-open System.Net
+open FSharp.Quotations
+open FSharp.Core.CompilerServices
+open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
-open Microsoft.FSharp.Core.CompilerServices
+open System.Net
 open FSharp.Data.GraphQL.Types.Introspection
 open TypeCompiler
-open System.Collections.Generic
-open Newtonsoft.Json.Linq
 open Newtonsoft.Json
-open Microsoft.FSharp.Quotations
 open QuotationHelpers
-open System.Text.RegularExpressions
 open FSharp.Data.GraphQL
-open QuotationHelpers
 
 module Util =
 
@@ -173,13 +168,15 @@ type internal ProviderSchemaConfig =
       DefinedTypes: Map<string, ProvidedTypeDefinition option> }
 
 [<TypeProvider>]
-type GraphQlProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config)
+type GraphQLTypeProvider (config : TypeProviderConfig) as this =
+    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("FSharp.Data.GraphQL.Client.DesignTime", "FSharp.Data.GraphQL.Client")], addDefaultProbingLocation=true)
 
-    let asm = System.Reflection.Assembly.GetExecutingAssembly()
+    let ns = "FSharp.Data.GraphQL"
+    let asm = Assembly.GetExecutingAssembly()
 
     do
-        let ns = "FSharp.Data.GraphQL"
+        // Check if we contain a copy of runtime files, and are not referencing the runtime DLL
+        assert (typeof<IntrospectionResult>.Assembly.GetName().Name = asm.GetName().Name)  
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
         let handleSchema typeName serverUrl choice =
             match choice with
@@ -225,5 +222,5 @@ type GraphQlProvider (config : TypeProviderConfig) as this =
             | _ -> failwith "unexpected parameter values")
         this.AddNamespace(ns, [generator])
 
-[<assembly:TypeProviderAssembly>]
+[<TypeProviderAssembly>]
 do ()
