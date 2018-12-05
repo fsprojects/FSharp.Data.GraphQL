@@ -1,3 +1,9 @@
+.paket\paket.bootstrapper.exe
+
+if errorlevel 1 (
+  exit /b %errorlevel%
+)
+
 SET TOOL_PATH=.fake
 
 IF NOT EXIST "%TOOL_PATH%\fake.exe" (

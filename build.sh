@@ -18,7 +18,20 @@ realpath() {
 }
 
 TOOL_PATH=$(realpath .fake)
+PAKET_PATH=$(realpath .paket)
 FAKE="$TOOL_PATH"/fake
+PAKET_BOOTSTRAPPER_EXE="$PAKET_PATH"/paket.bootstrapper.exe
+
+function run() {
+  if [[ "$OS" != "Windows_NT" ]]
+  then
+    mono "$@"
+  else
+    "$@"
+  fi
+}
+
+run $PAKET_BOOTSTRAPPER_EXE
 
 if ! [ -e "$FAKE" ]
 then
