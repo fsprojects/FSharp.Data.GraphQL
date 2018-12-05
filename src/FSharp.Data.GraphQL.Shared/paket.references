@@ -1,2 +1,3 @@
-group Server
-    FParsec
+group Shared
+FSharp.Core
+FParsec

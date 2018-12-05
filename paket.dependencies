@@ -1,9 +1,19 @@
+source https://api.nuget.org/v3/index.json
+
+nuget NuGet.CommandLine
+
+group Shared
+  source https://api.nuget.org/v3/index.json
+
+  nuget FSharp.Core
+  nuget FParsec
+
 group Server
-    source https://api.nuget.org/v3/index.json
-    
-    nuget FSharp.Core
-    nuget FParsec
-    nuget System.Reactive
+  source https://api.nuget.org/v3/index.json
+  
+  nuget FSharp.Core
+  nuget FParsec
+  nuget System.Reactive
 
 group Client
   source https://api.nuget.org/v3/index.json
@@ -45,7 +55,7 @@ group Build
 
 group Tests
   source https://api.nuget.org/v3/index.json
-  
+ 
   nuget Newtonsoft.Json
   nuget FSharp.Core
   nuget Microsoft.NET.Test.Sdk

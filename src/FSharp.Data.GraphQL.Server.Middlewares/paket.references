@@ -1,2 +1,2 @@
 group Server
-    FSharp.Core
+FSharp.Core

@@ -1,4 +1,4 @@
 group Server
-    FParsec
-    System.Reactive
-    FSharp.Core
+FParsec
+System.Reactive
+FSharp.Core

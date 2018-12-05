@@ -1,6 +1,5 @@
 group Client
-    File:ProvidedTypes.fsi
-    File:ProvidedTypes.fs
-
-    FSharp.Core
-    Newtonsoft.Json
+FSharp.Core
+Newtonsoft.Json
+File:ProvidedTypes.fsi
+File:ProvidedTypes.fs
