@@ -279,22 +279,27 @@ module Introspection =
 
 /// Represents a subscription as described in the schema.
 type Subscription = {
-    /// The name of the subscription type in the schema
-    Name: string
-    /// Filter function, used to determine what events we will propagate
-    /// The 1st obj is the boxed root value, the second is the boxed value of the input object
-    Filter: (ResolveFieldContext -> obj -> obj -> Async<obj option>)
-}
+    /// The name of the subscription type in the schema.
+    Name : string
+    /// Filter function, used to determine what events we will propagate.
+    /// The first object is the boxed root value, the second is the boxed value of the input object.
+    Filter : ResolveFieldContext -> obj -> obj -> Async<obj option>
+    /// Filter chooser function to be applied when a publish operation is made
+    /// to a specific filter, that is choosen by a SubscriptionFilterIdentity.
+    FilterIdentityResolver : (ResolveFieldContext -> obj) option }
 
 /// Describes the backing implementation for a subscription system.
 and ISubscriptionProvider =
     interface
         /// Registers a new subscription type, called at schema compilation time.
         abstract member RegisterAsync : Subscription -> Async<unit>
-        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on
+        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
-        /// Publishes an event to the subscription system given the identifier of the subscription type
+        /// Publishes an event to the subscription system given the identifier of the subscription type.
         abstract member PublishAsync<'T> : string -> 'T -> Async<unit>
+        /// Publishes an event to the subscription system given the identifier of the subscription type
+        /// and a filter identity that can be used to choose which filter functions will be applied.
+        abstract member PublishToIdentityAsync<'T> : string -> obj -> 'T -> Async<unit>
     end
 
 /// Represents a subscription of a field in a live query.
@@ -1589,6 +1594,12 @@ and SubscriptionFieldDef =
         inherit FieldDef
     end
 
+and SelectableSubscriptionFieldDef =
+    interface
+        abstract FilterIdentityResolver : (ResolveFieldContext -> obj) option
+        inherit SubscriptionFieldDef
+    end
+
 and SubscriptionFieldDef<'Val> =
     interface
         inherit SubscriptionFieldDef
@@ -1612,6 +1623,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
         Filter : Resolve
         Args : InputFieldDef []
         Metadata : Metadata
+        FilterIdentityResolver : (ResolveFieldContext -> obj) option
     }
     interface FieldDef with
         member x.Name = x.Name
@@ -1623,6 +1635,8 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
         member x.Metadata = x.Metadata
     interface SubscriptionFieldDef with
         member x.OutputTypeDef = x.OutputTypeDef :> OutputDef
+    interface SelectableSubscriptionFieldDef with
+        member x.FilterIdentityResolver = x.FilterIdentityResolver
     interface FieldDef<'Root>
         member x.TypeDef = x.RootTypeDef
     interface SubscriptionFieldDef<'Root, 'Input, 'Output>
@@ -1964,6 +1978,9 @@ module SubscriptionExtensions =
 
         member this.Publish<'T> name subType =
             this.PublishAsync name subType |> Async.RunSynchronously
+
+        member this.PublishToIdentity<'T> name index subType =
+            this.PublishToIdentityAsync name index subType |> Async.RunSynchronously
 
     type ILiveFieldSubscriptionProvider with
         member this.Register subscription =
@@ -2990,7 +3007,29 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty } 
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None } 
+
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
+                                        filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = None
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver } 
 
         /// <summary>
         /// Creates a subscription field inside object type.
@@ -3010,7 +3049,31 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = [||]
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
+                                        filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver } 
 
         /// <summary>
         /// Creates a subscription field inside object type.
@@ -3032,7 +3095,33 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
+                                        filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = args |> List.toArray
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver } 
 
         /// <summary>
         /// Creates a subscription field inside object type. Field is marked as deprecated.
@@ -3056,7 +3145,35 @@ module SchemaDefinitions =
                      DeprecationReason = Some deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                        description: string,
+                                        args: InputFieldDef list,
+                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
+                                        filterIdentityResolver : ResolveFieldContext -> obj,
+                                        deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = Some deprecationReason
+                     Args = args |> List.toArray
+                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver } 
 
         /// <summary>
         /// Creates a subscription field inside object type, with asynchronously resolved value.
@@ -3074,7 +3191,29 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
+                                             filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = None
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver }
 
         /// <summary>
         /// Creates a subscription field inside object type, with asynchronously resolved value.
@@ -3094,7 +3233,31 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = [||]
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
+                                             filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = [||]
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver }
 
         /// <summary>
         /// Creates a subscription field inside object type, with asynchronously resolved value.
@@ -3116,7 +3279,33 @@ module SchemaDefinitions =
                      DeprecationReason = None
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             args: InputFieldDef list,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
+                                             filterIdentityResolver : ResolveFieldContext -> obj): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = None
+                     Args = args |> List.toArray
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver }
 
         /// <summary>
         /// Creates a subscription field inside object type, with asynchronously resolved value. Field is marked as deprecated.
@@ -3140,7 +3329,35 @@ module SchemaDefinitions =
                      DeprecationReason = Some deprecationReason
                      Args = args |> List.toArray
                      Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty }
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = None }
+
+        /// <summary>
+        /// Creates a subscription field inside object type, with asynchronously resolved value.
+        /// </summary>
+        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
+        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
+        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
+        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
+        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
+        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
+        /// <param name="filterIdentityResolver">A function that resolves a filter identity, used to choose which filter functions will be used when publishing to subscribers.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
+                                             description: string,
+                                             args: InputFieldDef list,
+                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
+                                             filterIdentityResolver : ResolveFieldContext -> obj,
+                                             deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
+            upcast { Name = name
+                     Description = Some description
+                     RootTypeDef = rootdef
+                     OutputTypeDef = outputdef
+                     DeprecationReason = Some deprecationReason
+                     Args = args |> List.toArray
+                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
+                     Metadata = Metadata.Empty
+                     FilterIdentityResolver = Some filterIdentityResolver }
         
 
         /// <summary>

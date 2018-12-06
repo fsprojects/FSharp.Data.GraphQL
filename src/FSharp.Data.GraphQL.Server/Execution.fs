@@ -761,10 +761,15 @@ let internal compileSchema (ctx : SchemaCompileContext) =
         match x with
         | SubscriptionObject subdef ->
             compileObject subdef (fun sub ->
-                // Subscription Objects only contain subscription fields, so this cast is safe
-                let subField = (sub :?> SubscriptionFieldDef)
-                let filter = compileSubscriptionField subField
-                let subscription = { Name = subField.Name ; Filter = filter }
+                let (filter, filterIdentityResolver) =
+                    match sub with
+                    | :? SelectableSubscriptionFieldDef as subField ->
+                        (compileSubscriptionField subField, subField.FilterIdentityResolver)
+                    | :? SubscriptionFieldDef as subField ->
+                        (compileSubscriptionField subField, None)
+                    | _ -> failwithf "Schema error: subscription object '%s' does have a field '%s' that is not a subscription field definition." subdef.Name sub.Name
+                let subscription =
+                    { Name = sub.Name; Filter = filter; FilterIdentityResolver = filterIdentityResolver } 
                 ctx.Schema.SubscriptionProvider.Register subscription)
         | Object objdef ->
             compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef))

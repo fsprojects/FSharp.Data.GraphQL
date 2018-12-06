@@ -12,6 +12,14 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
 
+type private FilteredValue =
+    { FilterIdentity : obj
+      Value : obj }
+    member this.Filter (subscription : Subscription) (ctx : ResolveFieldContext) =
+        match subscription.FilterIdentityResolver with
+        | Some getIdentity -> if getIdentity ctx = this.FilterIdentity then Some (this.Value) else None
+        | None -> None
+
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
     { /// List of types that couldn't be resolved from schema query root
@@ -35,17 +43,23 @@ type SchemaConfig =
             member __.RegisterAsync (subscription : Subscription) = async {
                 return registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>())) }
 
-            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
+            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
                 match registeredSubscriptions.TryGetValue(subdef.Name) with
                 | true, (sub, channel) -> 
                     channel
-                    |> Observable.mapAsync(fun o -> sub.Filter ctx root o)
-                    |> Observable.choose(id)
+                    |> Observable.choose (fun o -> match o with :? FilteredValue as value -> value.Filter sub ctx | _ -> Some o)
+                    |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
+                    |> Observable.choose id
                 | false, _ -> Observable.Empty()
 
             member __.PublishAsync<'T> (name: string) (value: 'T) = async {
                 match registeredSubscriptions.TryGetValue(name) with
                 | true, (_, channel) -> channel.OnNext(box value)
+                | false, _ -> () }
+                
+            member __.PublishToIdentityAsync<'T> (name: string) (identity : obj) (value: 'T) = async {
+                match registeredSubscriptions.TryGetValue(name) with
+                | true, (_, channel) -> channel.OnNext(box { FilterIdentity = identity; Value = value })
                 | false, _ -> () } }
 
     /// Returns the default live field Subscription Provider, backed by Observable streams.
