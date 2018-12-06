@@ -1,4 +1,4 @@
-group Samples
+group Shared
 Microsoft.AspNetCore.All
 FSharp.Core
 Giraffe

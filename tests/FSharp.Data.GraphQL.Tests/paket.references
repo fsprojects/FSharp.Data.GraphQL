@@ -1,4 +1,4 @@
-group Tests
+group Shared
 FSharp.Core
 Newtonsoft.Json
 Microsoft.NET.Test.Sdk

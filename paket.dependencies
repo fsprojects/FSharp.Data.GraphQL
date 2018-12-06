@@ -4,33 +4,25 @@ nuget NuGet.CommandLine
 
 group Shared
   source https://api.nuget.org/v3/index.json
-  frameworks: net47, netstandard2.0
+  frameworks: net47, netcoreapp2.1, netstandard2.0
 
   nuget FSharp.Core
   nuget FParsec
   nuget System.Reactive
-
-group Client
-  source https://api.nuget.org/v3/index.json
-  frameworks: net47, netcoreapp2.0, netstandard2.0
-
-  nuget FSharp.Core
-  nuget FParsec
   nuget Newtonsoft.Json
   nuget NETStandard.Library.NETFramework
+  nuget Suave
+  nuget Microsoft.AspNetCore.All 2.1.6
+  nuget Giraffe
+  nuget Microsoft.NET.Test.Sdk
+  nuget xunit 
+  nuget xunit.runner.console
+  nuget xunit.runner.visualstudio
+  nuget BenchmarkDotNet
+  nuget FSharp.Data.TypeProviders
 
   github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fsi
   github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fs
-
-group Samples
-  source https://api.nuget.org/v3/index.json
-  frameworks: net47, netcoreapp2.1
-
-  nuget Suave
-  nuget Microsoft.AspNetCore.All 2.1.6
-  nuget FSharp.Core
-  nuget Giraffe
-  nuget Microsoft.AspNetCore.WebSockets
 
 group Build
   source https://api.nuget.org/v3/index.json
@@ -48,16 +40,3 @@ group Build
   nuget Fake.Api.GitHub
   nuget Fake.DotNet.Paket
   nuget Octokit
-
-group Tests
-  source https://api.nuget.org/v3/index.json
-  frameworks: net45, net47, netcoreapp2.1
- 
-  nuget Newtonsoft.Json
-  nuget FSharp.Core
-  nuget Microsoft.NET.Test.Sdk
-  nuget xunit 
-  nuget xunit.runner.console
-  nuget xunit.runner.visualstudio
-  nuget BenchmarkDotNet
-  nuget FSharp.Data.TypeProviders

@@ -1,4 +1,4 @@
-group Client
+group Shared
 FSharp.Core
 Newtonsoft.Json
 File:ProvidedTypes.fsi
