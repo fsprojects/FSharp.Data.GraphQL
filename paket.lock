@@ -2720,7 +2720,7 @@ NUGET
       NETStandard.Library (>= 1.6.1) - restriction: || (&& (== net47) (< net45)) (== netcoreapp2.1)
       Newtonsoft.Json (>= 10.0.2)
 
-GROUP Server
+GROUP Shared
 RESTRICTION: || (== net47) (== netstandard2.0)
 NUGET
   remote: https://api.nuget.org/v3/index.json
@@ -2746,19 +2746,6 @@ NUGET
     System.Threading.Tasks.Extensions (4.5.1)
       System.Runtime.CompilerServices.Unsafe (>= 4.5)
     System.ValueTuple (4.5) - restriction: || (== net47) (&& (== netstandard2.0) (>= net46))
-
-GROUP Shared
-RESTRICTION: || (== net47) (== netstandard2.0)
-NUGET
-  remote: https://api.nuget.org/v3/index.json
-    FParsec (1.0.3)
-      FSharp.Core (>= 4.0.0.1) - restriction: || (== net47) (&& (== netstandard2.0) (>= net40))
-      FSharp.Core (>= 4.2.3) - restriction: || (&& (== net47) (< net40) (>= netstandard1.6)) (== netstandard2.0)
-      NETStandard.Library (>= 1.6.1) - restriction: || (&& (== net47) (< net40) (>= netstandard1.6)) (== netstandard2.0)
-    FSharp.Core (4.5.4)
-    Microsoft.NETCore.Platforms (2.2) - restriction: || (&& (== net47) (< net40) (>= netstandard1.6)) (&& (== net47) (< net40) (>= netstandard2.0)) (&& (== net47) (>= netcoreapp2.0)) (&& (== net47) (< netstandard1.0) (>= netstandard1.6) (>= win8)) (&& (== net47) (< netstandard1.3) (>= netstandard1.6) (>= wpa81)) (&& (== net47) (< netstandard1.5) (>= netstandard1.6) (>= uap10.0)) (&& (== net47) (>= netstandard1.6) (>= uap10.1)) (&& (== net47) (>= netstandard1.6) (>= wp8)) (== netstandard2.0)
-    NETStandard.Library (2.0.3) - restriction: || (&& (== net47) (< net40) (>= netstandard1.6)) (== netstandard2.0)
-      Microsoft.NETCore.Platforms (>= 1.1)
 
 GROUP Tests
 RESTRICTION: || (== net45) (== net47) (== netcoreapp2.1)

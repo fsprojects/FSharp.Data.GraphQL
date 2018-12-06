@@ -1,4 +1,4 @@
-group Server
+group Shared
 FParsec
 System.Reactive
 FSharp.Core
