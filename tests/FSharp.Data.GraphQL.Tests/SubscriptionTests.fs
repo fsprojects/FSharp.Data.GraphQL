@@ -52,7 +52,7 @@ let SubscriptionField =
         [ Define.Input("id", Int) ], 
         fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None)
 
-let SelectableSubscriptionField =
+let TaggedSubscriptionField =
     Define.SubscriptionField(
         "watchDataByKey",
         RootType,
@@ -60,7 +60,7 @@ let SelectableSubscriptionField =
         "Get's updated data if key is correct",
         [ Define.Input("id", Int); Define.Input("key", String) ], 
         (fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None),
-        filterIdentityResolver = (fun ctx -> upcast ctx.Arg<string>("key")))
+        tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 
 let AsyncSubscriptionField =
     Define.AsyncSubscriptionField(
@@ -71,7 +71,7 @@ let AsyncSubscriptionField =
         [ Define.Input("id", Int) ], 
         fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) })
 
-let AsyncSelectableSubscriptionField =
+let AsyncTaggedSubscriptionField =
     Define.AsyncSubscriptionField(
         "watchDataByKeyAsync",
         RootType,
@@ -79,25 +79,25 @@ let AsyncSelectableSubscriptionField =
         "Get's updated data asynchronously on the server if key is correct",
         [ Define.Input("id", Int); Define.Input("key", String) ], 
         (fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) }),
-        filterIdentityResolver = (fun ctx -> upcast ctx.Arg<string>("key")))
+        tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 
 let schemaConfig = SchemaConfig.Default
 
 let updateValue id data =
-    let filterIdentity = box "correctUserKey"
+    let tag = "tag1"
     getValue id
     |> Option.map (fun value ->
         value.Data <- data
         schemaConfig.SubscriptionProvider.Publish "watchData" value
         schemaConfig.SubscriptionProvider.Publish "watchDataAsync" value
-        schemaConfig.SubscriptionProvider.PublishToIdentity "watchDataByKey" filterIdentity value
-        schemaConfig.SubscriptionProvider.PublishToIdentity "watchDataByKeyAsync" filterIdentity value)
+        schemaConfig.SubscriptionProvider.PublishTag "watchDataByKey" tag value
+        schemaConfig.SubscriptionProvider.PublishTag "watchDataByKeyAsync" tag value)
     |> ignore
 
 let Subscription =
     Define.SubscriptionObject<Root>(
         name = "Subscription",
-        fields = [ SubscriptionField; AsyncSubscriptionField; SelectableSubscriptionField; AsyncSelectableSubscriptionField ])
+        fields = [ SubscriptionField; AsyncSubscriptionField; TaggedSubscriptionField; AsyncTaggedSubscriptionField ])
 
 let schema = Schema(Query, subscription = Subscription, config = schemaConfig)
 
@@ -134,7 +134,7 @@ let ``Should be able to subscribe to sync field and get results``() =
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to selectable sync field and get results when filter is applied``() =
+let ``Should be able to subscribe to tagged sync field and get results with expected tag``() =
     let expected = NameValueLookup.ofList [
         "data", upcast NameValueLookup.ofList [
             "watchDataByKey", upcast NameValueLookup.ofList [
@@ -144,7 +144,7 @@ let ``Should be able to subscribe to selectable sync field and get results when 
         ]
     ]
     let query = parse """subscription Test {
-        watchDataByKey(id: 1, key: "correctUserKey") {
+        watchDataByKey(id: 1, key: "tag1") {
             id
             data
         }
@@ -164,9 +164,9 @@ let ``Should be able to subscribe to selectable sync field and get results when 
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to selectable sync field and do not get results when filter is not applied``() =
+let ``Should be able to subscribe to tagged sync field and do not get results with unexpected tag``() =
     let query = parse """subscription Test {
-        watchDataByKey(id: 1, key: "wrongUserKey") {
+        watchDataByKey(id: 1, key: "tag2") {
             id
             data
         }
@@ -178,7 +178,7 @@ let ``Should be able to subscribe to selectable sync field and do not get result
     | Stream data ->
         data |> Observable.add (fun x -> actual.Add(x); set mre)
         updateValue 1 "Updated value 1"
-        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results when filter is not applied"
+        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
@@ -212,7 +212,7 @@ let ``Should be able to subscribe to async field and get results``() =
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to selectable async field and get results when filter is applied``() =
+let ``Should be able to subscribe to tagged async field and get results with expected tag``() =
     let expected = NameValueLookup.ofList [
         "data", upcast NameValueLookup.ofList [
             "watchDataByKeyAsync", upcast NameValueLookup.ofList [
@@ -222,7 +222,7 @@ let ``Should be able to subscribe to selectable async field and get results when
         ]
     ]
     let query = parse """subscription Test {
-  watchDataByKeyAsync(id: 1, key: "correctUserKey") {
+  watchDataByKeyAsync(id: 1, key: "tag1") {
     id
     data
   }
@@ -242,9 +242,9 @@ let ``Should be able to subscribe to selectable async field and get results when
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to selectable async field and do not get results when filter is not applied``() =
+let ``Should be able to subscribe to tagged async field and do not get results with unexpected tag``() =
     let query = parse """subscription Test {
-        watchDataByKeyAsync(id: 1, key: "wrongUserKey") {
+        watchDataByKeyAsync(id: 1, key: "tag2") {
             id
             data
         }
@@ -256,5 +256,5 @@ let ``Should be able to subscribe to selectable async field and do not get resul
     | Stream data ->
         data |> Observable.add (fun x -> actual.Add(x); set mre)
         updateValue 1 "Updated value 1"
-        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results when filter is not applied"
+        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
