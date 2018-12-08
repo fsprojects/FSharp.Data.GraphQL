@@ -259,23 +259,9 @@ type ResolverTree =
         | ResolverListNode l -> l.Value
 and ResolverLeaf = { Name: string; Value: obj option }
 and ResolverError = { Name: string; Message: string; PathToOrigin: obj list }
-and ResolverNode = { Name: string; Value: obj option; Children: ResolverTree [] }
+and ResolverNode = { Name: string; Value: obj option; Children: Async<ResolverTree> [] }
 
 module ResolverTree =
-    let fold leafOp errorOp nodeOp listOp =
-        let rec helper = function
-            | ResolverLeaf leaf ->
-                leafOp leaf
-            | ResolverError err ->
-                errorOp err
-            | ResolverObjectNode node ->
-                let ts = node.Children |> Array.map(helper)
-                nodeOp (node.Name, node.Value, ts)
-            | ResolverListNode node ->
-                let ts = node.Children |> Array.map(helper)
-                listOp (node.Name, node.Value, ts)
-        helper
-
     let rec pathFold leafOp errorOp nodeOp listOp =
         let rec helper path = function
             | ResolverLeaf leaf ->
@@ -286,30 +272,48 @@ module ResolverTree =
                 errorOp path' err
             | ResolverObjectNode node ->
                 let path' = if node.Name <> "__index" then (node.Name :> obj)::path else path
-                let ts = node.Children |> Array.map(helper path')
+                let mapper c = async {
+                    let! c' = c
+                    return helper path' c'
+                }
+                let ts = node.Children |> Array.map mapper
                 nodeOp path' node.Name node.Value ts
             | ResolverListNode node ->
                 let path' = (node.Name :> obj)::path
-                let ts = node.Children |> Array.mapi(fun i c -> helper ((i :> obj)::path') c)
+                let mapper i c = async {
+                    let! c' = c
+                    return helper ((box i)::path') c'
+                }
+                let ts = node.Children |> Array.mapi mapper
                 listOp path' node.Name node.Value ts
         helper []
+
+let private foldChildren (children : AsyncVal<KeyValuePair<string, obj> * Error list> []) =
+    children
+    |> Array.fold (fun (kvpsErrs : AsyncVal<KeyValuePair<string, obj> list * Error list>) child -> asyncVal {
+        let! kvps, errs = kvpsErrs
+        let! c, e = child
+        return c::kvps, e@errs
+    }) (Value ([], []))
 
 let private treeToDict =
     ResolverTree.pathFold
         (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
         (fun path error ->
             let (e:Error) = (error.Message, path |> List.rev)
-            KeyValuePair<_,_>(error.Name, null :> obj), [e])
-        (fun _ name value children ->
-            let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
+            KeyValuePair<_,_>(error.Name, box null), [e])
+        (fun _ name value children -> asyncVal {
+            let dicts = children |> List.ofArray |> List.map (AsyncVal.ofAsync >> AsyncVal.map fst)
+            let errors = children |> List.ofArray |> List.map (AsyncVal.ofAsync >> AsyncVal.map snd)
+            let! dicts, errors = children |> foldChildren
             match value with
-            | Some _ -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
-            | None -> KeyValuePair<_,_>(name, null), errors)
-        (fun _ name value children ->
-            let dicts, errors = children |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
+            | Some _ -> return KeyValuePair<_,_>(name, box NameValueLookup(dicts |> List.rev |> List.toArray)), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
+        (fun _ name value children -> asyncVal {
+            let! dicts, errors = children |> foldChildren
             match value with
-            | Some _ -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
-            | None -> KeyValuePair<_,_>(name, null), errors)
+            | Some _ -> return KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray |> box), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
 
 let private errorDict tree message path =
     let data, err = treeToDict tree
@@ -360,17 +364,17 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             let rec build acc (items: obj list) =
                 match items with
                 | value::xs ->
-                        if not innerCtx.ExecutionInfo.IsNullable && isNull value
-                        then nullResolverError innerCtx.ExecutionInfo.Identifier
-                        else
-                            asyncVal {
-                                let! tree = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
-                                let! res =
-                                    match tree with
-                                    | ResolverError e when not innerCtx.ExecutionInfo.IsNullable -> propagateError name e
-                                    | t -> build (t::acc) xs
-                                return res
-                            }
+                    if not innerCtx.ExecutionInfo.IsNullable && isNull value
+                    then nullResolverError innerCtx.ExecutionInfo.Identifier
+                    else
+                        asyncVal {
+                            let! tree = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
+                            let! res =
+                                match tree with
+                                | ResolverError e when not innerCtx.ExecutionInfo.IsNullable -> propagateError name e
+                                | t -> build (t::acc) xs
+                            return res
+                        }
                 | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
