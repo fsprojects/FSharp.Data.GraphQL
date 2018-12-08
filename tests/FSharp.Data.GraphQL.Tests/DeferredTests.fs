@@ -7,6 +7,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open System.Threading
+open System.Collections.Generic
 open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
 
@@ -22,7 +23,12 @@ type TestSubject = {
     iface : InterfaceSubject
     ifaceList : InterfaceSubject list
     mutable live: string
-    delayed : Async<string>
+    delayed : DelayedTestSubject
+    delayedList : DelayedTestSubject list
+}
+
+and DelayedTestSubject = {
+    value : Async<string>
 }
 
 and InnerTestSubject = {
@@ -118,6 +124,11 @@ let rec InnerDataType =
             Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
         ])
 
+let DelayedDataType =
+    Define.Object<DelayedTestSubject>(
+        name = "DelayedData",
+        fieldsFn = fun () -> [ Define.AsyncField("value", String, (fun _ d -> d.value)) ])
+
 let DataType =
     Define.Object<TestSubject>(
         name = "Data",
@@ -132,8 +143,14 @@ let DataType =
             Define.Field("live", String, (fun _ d -> d.live))
             Define.Field("iface", InterfaceType, (fun _ d -> d.iface))
             Define.Field("ifaceList", ListOf InterfaceType, (fun _ d -> d.ifaceList))
-            Define.AsyncField("delayed", String, (fun _ d -> d.delayed))
+            Define.Field("delayed", DelayedDataType, (fun _ d -> d.delayed))
+            Define.Field("delayedList", ListOf DelayedDataType, (fun _ d -> d.delayedList))
         ])
+
+let delay secs x = async {
+    do! Async.Sleep(secs * 1000)
+    return x
+}
 
 let data = {
        id = "1"
@@ -161,10 +178,11 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
-       delayed = async { 
-           do! Async.Sleep(5000)
-           return "Delayed value"
-       }
+       delayed = { value = delay 3 "Delayed value" }
+       delayedList = [
+           { value = async { return "Delayed value 1" } }
+           { value = delay 3 "Delayed value 2" }
+       ]
    }
 
 let Query =
@@ -1093,18 +1111,22 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
-            "data", upcast "Delayed value"
+            "data", upcast NameValueLookup.ofList [
+                "value", upcast "Delayed value"
+            ]
             "path", upcast ["testData"; "delayed"]
         ]
     let query = parse """{
         testData {
             b @defer
-            delayed @defer
+            delayed @defer {
+                value
+            }
         }
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
+    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
@@ -1114,7 +1136,66 @@ let ``Each deferred result should be sent as soon as it is computed``() =
             actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        // The second result is the delayed async field, which is set to compute the value for 5 seconds.
+        // The second result is a delayed async field, which is set to compute the value for 3 seconds.
+        // The first result should come almost instantly, as it is not a delayed computed field.
+        // Therefore, if it does not come in at least 2 seconds, we fail the test.
+        if TimeSpan.FromSeconds(float 2) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second deferred result"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
+
+[<Fact>]
+let ``Each streamed result should be sent as soon as it is computed``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "delayedList", upcast []
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Delayed value 1"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 0]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Delayed value 2"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 1]
+        ]
+    let query = parse """{
+        testData {
+            delayedList @stream {
+                value
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = List<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        // The second result is a delayed async field, which is set to compute the value for 3 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, if it does not come in at least 2 seconds, we fail the test.
         if TimeSpan.FromSeconds(float 2) |> mre1.WaitOne |> not
