@@ -6,16 +6,16 @@ open System.Linq
 
 /// Extension methods to observable, used in place of Fsharp.Control.Reactive
 module internal Observable =
-    let bind (f: 'T -> IObservable<'U>) (o: IObservable<'T>) = o.SelectMany(f)
+    let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
 
     let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
 
-    let ofSeq<'Item> (items:'Item seq) : IObservable<'Item> = {
+    let ofSeq<'Item> (items : 'Item seq) : IObservable<'Item> = {
         new IObservable<_> with
-            member __.Subscribe( observer:IObserver<_> ) =
+            member __.Subscribe(observer) =
                 for item in items do observer.OnNext item
                 observer.OnCompleted()
-                {   new IDisposable with member __.Dispose() = ()   }
+                { new IDisposable with member __.Dispose() = () }
     }
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
@@ -29,3 +29,15 @@ module internal Observable =
     let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
 
     let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
+
+    let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = {
+        new IObservable<_> with
+            member __.Subscribe(observer) =
+                let onNext item = 
+                    async {
+                        let! item' = item
+                        observer.OnNext item'
+                    } |> Async.Start
+                items |> Seq.iter onNext
+                { new IDisposable with member __.Dispose() = () }
+    }

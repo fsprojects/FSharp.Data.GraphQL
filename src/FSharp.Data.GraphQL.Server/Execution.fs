@@ -699,19 +699,32 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         then None
         else
             resultTrees
-            |> Array.map (AsyncVal.bind (fun tree ->
+            |> Seq.map (AsyncVal.map (fun tree ->
                 ctx.ExecutionPlan.DeferredFields
-                |> List.filter (fun d -> (List.head d.Path) = tree.Name)
-                |> List.toArray
-                |> Array.map (deferredResult tree)
-                |> AsyncVal.collectParallel
-                |> AsyncVal.map (Array.fold Array.append Array.empty)))
-            |> AsyncVal.appendParallel
-            |> AsyncVal.toAsync
-            |> Observable.ofAsync
+                |> Seq.filter (fun d -> (List.head d.Path) = tree.Name)
+                |> Seq.map (deferredResult tree)
+                |> Seq.map AsyncVal.toAsync
+                |> Observable.ofAsyncSeq))
+            |> Seq.map AsyncVal.toAsync
+            |> Observable.ofAsyncSeq
+            |> Observable.concat
             |> Observable.bind Observable.ofSeq
             |> Observable.bind Observable.ofSeq
             |> Some
+            //resultTrees
+            //|> Array.map (AsyncVal.bind (fun tree ->
+            //    ctx.ExecutionPlan.DeferredFields
+            //    |> List.filter (fun d -> (List.head d.Path) = tree.Name)
+            //    |> List.toArray
+            //    |> Array.map (deferredResult tree)
+            //    |> AsyncVal.collectParallel
+            //    |> AsyncVal.map (Array.fold Array.append Array.empty)))
+            //|> AsyncVal.appendParallel
+            //|> AsyncVal.toAsync
+            //|> Observable.ofAsync
+            //|> Observable.bind Observable.ofSeq
+            //|> Observable.bind Observable.ofSeq
+            //|> Some
     dict, deferredResults
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value =
