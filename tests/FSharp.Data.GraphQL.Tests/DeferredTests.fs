@@ -22,6 +22,7 @@ type TestSubject = {
     iface : InterfaceSubject
     ifaceList : InterfaceSubject list
     mutable live: string
+    delayed : Async<string>
 }
 
 and InnerTestSubject = {
@@ -90,7 +91,7 @@ let CType =
 
 let DType =
     Define.Object<D>(
-        name ="D",
+        name = "D",
         fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", String, (fun _ d -> d.value)) ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? D))
@@ -131,6 +132,7 @@ let DataType =
             Define.Field("live", String, (fun _ d -> d.live))
             Define.Field("iface", InterfaceType, (fun _ d -> d.iface))
             Define.Field("ifaceList", ListOf InterfaceType, (fun _ d -> d.ifaceList))
+            Define.AsyncField("delayed", String, (fun _ d -> d.delayed))
         ])
 
 let data = {
@@ -159,6 +161,10 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
+       delayed = async { 
+           do! Async.Sleep(5000)
+           return "Delayed value"
+       }
    }
 
 let Query =
@@ -1070,3 +1076,54 @@ let ``Union Defer and Stream`` () =
             then fail "Timeout while waiting for Deferred GQLResponse"
             actualDeferred |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLRespnse")
+
+[<Fact>]
+let ``Each deferred result should be sent as soon as it is computed``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "b", null
+                "delayed", null
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast "Banana"
+            "path", upcast ["testData"; "b"]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast "Delayed value"
+            "path", upcast ["testData"; "delayed"]
+        ]
+    let query = parse """{
+        testData {
+            b @defer
+            delayed @defer
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        // The second result is the delayed async field, which is set to compute the value for 5 seconds.
+        // The first result should come almost instantly, as it is not a delayed computed field.
+        // Therefore, if it does not come in at least 2 seconds, we fail the test.
+        if TimeSpan.FromSeconds(float 2) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second deferred result"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
