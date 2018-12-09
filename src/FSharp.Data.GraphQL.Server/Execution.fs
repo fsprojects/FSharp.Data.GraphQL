@@ -566,13 +566,14 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     }
                 | p, ResolverListNode l ->
                     asyncVal {
-                        let! res =
-                            l.Children
-                            |> Array.map AsyncVal.get
-                            |> Array.mapi(fun i c ->
-                                traversePath d fieldCtx p (AsyncVal.wrap c) (i :> obj :: pathAcc))
-                            |> AsyncVal.collectParallel
-                        return res |> Array.fold (Array.append) [||]
+                        let! res = 
+                            l.Children 
+                            |> AsyncVal.collectParallel 
+                            |> AsyncVal.map (
+                                Array.mapi (fun i c -> traversePath d fieldCtx p (AsyncVal.wrap c) ((box i)::pathAcc)) 
+                                >> AsyncVal.collectParallel
+                                >> AsyncVal.map (Array.fold (Array.append) [||]))
+                        return! res
                     }
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
