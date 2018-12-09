@@ -44,7 +44,7 @@ module internal Observable =
                         let! item' = item
                         observer.OnNext item'
                         lock lockObj checkCompleted
-                    } |> Async.Start
+                    } |> Async.StartAsTask |> ignore
                 items |> Seq.iter onNext
                 { new IDisposable with member __.Dispose() = () }
     }
