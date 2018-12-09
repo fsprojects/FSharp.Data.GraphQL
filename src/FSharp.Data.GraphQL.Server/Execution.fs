@@ -697,9 +697,13 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             |> Observable.map (fun (ix, data, err) -> mapSimple data err path ix)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
-                        | _ -> 
-                            let data, err = treeToDict tree |> AsyncVal.get
-                            mapResult data err path d.Kind
+                        | DeferredExecution -> 
+                            treeToDict tree
+                            |> AsyncVal.toAsync
+                            |> Observable.ofAsync
+                            |> Observable.map (fun (data, err) -> mapResult data err path d.Kind)
+                            |> Observable.bind Observable.ofSeq
+                            |> Observable.toSeq
                     let! live = mapLiveResult tree path d fieldCtx
                     return Seq.append deferred live
                 } |> Array.singleton |> AsyncVal.collectParallel
@@ -711,10 +715,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
                     |> AsyncVal.bind(Array.map(fun (tree, path) ->
                         asyncVal {
-                            let data, err =
+                            let! data, err =
                                 if d.DeferredFields.Length > 0
-                                then AsyncVal.get (errorDict tree "Maximum degree of nested deferred executions reached." path)
-                                else AsyncVal.get (treeToDict tree)
+                                then errorDict tree "Maximum degree of nested deferred executions reached." path
+                                else treeToDict tree
                             let deferred = 
                                 match d.Kind with
                                 | LiveExecution -> Seq.empty
