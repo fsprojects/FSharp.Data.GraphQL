@@ -660,10 +660,11 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | Some identity, Some value ->
                     return 
                         provider.Add (identity value) typeName fieldName
-                        |> Observable.map (fun v ->
+                        |> Observable.map (fun v -> asyncVal {
                             let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
                             let data, err = AsyncVal.get (treeToDict tree)
-                            mapResult data err path d.Kind)
+                            return mapResult data err path d.Kind } |> AsyncVal.toAsync |> Observable.ofAsync)
+                        |> Observable.concat
                         |> Observable.toSeq
                         |> Seq.concat
                 | _ -> return Seq.empty
