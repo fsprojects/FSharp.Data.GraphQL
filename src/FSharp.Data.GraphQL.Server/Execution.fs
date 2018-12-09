@@ -297,20 +297,6 @@ let private foldChildren (children : AsyncVal<AsyncVal<KeyValuePair<string, obj>
         return c::kvps, e@errs
     }) (Value ([], []))
 
-let private treeToDict2 (tree : ResolverTree) =
-    tree
-    |> ResolverTree.pathFold
-        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null))
-        (fun _ error -> KeyValuePair<_,_>(error.Name, null))
-        (fun _ name value children ->
-            match value with
-            | Some _ -> KeyValuePair<_,_>(name, children |> Array.rev |> box)
-            | None -> KeyValuePair<_,_>(name, null))
-        (fun _ name value children ->
-            match value with
-            | Some _ -> KeyValuePair<_,_>(name, children |> Array.map(AsyncVal.map(fun d -> d.Value)) |> Array.rev |> box)
-            | None -> KeyValuePair<_,_>(name, null))
-
 let private treeToDict =
     ResolverTree.pathFold
         (fun _ leaf -> asyncVal { return KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [] })
