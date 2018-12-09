@@ -397,7 +397,12 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                         if not innerCtx.ExecutionInfo.IsNullable && isNull value
                         then nullResolverError innerCtx.ExecutionInfo.Identifier
                         else
-                            let t = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
+                            let t = asyncVal { 
+                                let! res = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
+                                match res with
+                                | ResolverError e when not innerCtx.ExecutionInfo.IsNullable -> return! propagateError name e
+                                | _ -> return res
+                            }
                             build (t::acc) xs
                     | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.map (AsyncVal.map (fun x -> x)) |> List.rev |> List.toArray } }
             match value with
@@ -469,6 +474,11 @@ and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: Res
                 resolveField execute fieldCtx value
                 |> AsyncVal.bind (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
                 |> AsyncVal.rescue (fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
+                |> AsyncVal.bind (fun tree ->
+                    match tree with
+                    | ResolverError e when not info.IsNullable -> propagateError name e
+                    | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}}
+                    | _ -> asyncVal { return tree })
             build (t::acc) xs
         | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
     build [] fields
