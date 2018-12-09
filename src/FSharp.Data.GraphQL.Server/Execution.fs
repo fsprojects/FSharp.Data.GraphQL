@@ -668,8 +668,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 let resolver = resolveUnionType possibleTypesFn udef
                 match toOption value with
                 | Some v -> getObjectName (resolver v) value possibleTypesFn
-                | None -> failwithf "Unexpected value of returnDef: %O" returnDef
-            | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
+                | None -> failwithf "Unexpected value of returnDef: %O." returnDef
+            | _ -> failwithf "Unexpected value of returnDef: %O." returnDef
         match d.Kind with
         | LiveExecution ->
             match tree with
