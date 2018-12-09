@@ -547,7 +547,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     }
                 | [head'; String "__index"; head; String "__index"] as p, ResolverObjectNode n ->
                     asyncVal {
-                        let next = n.Children |> Array.map AsyncVal.get |> Array.tryFind(fun c' -> c'.Name = head.ToString())
+                        let! next = n.Children |> AsyncVal.collectParallel |> AsyncVal.map (Array.tryFind(fun c -> c.Name = head.ToString()))
                         let! res =
                             match next with
                             | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') (head'::pathAcc)
@@ -557,7 +557,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | p, ResolverObjectNode n ->
                     asyncVal {
                         let head = p |> List.head
-                        let next = n.Children |> Array.map AsyncVal.get |> Array.tryFind (fun c' -> c'.Name = head.ToString())
+                        let! next = n.Children |> AsyncVal.collectParallel |> AsyncVal.map (Array.tryFind (fun c -> c.Name = head.ToString()))
                         let! res =
                             match next with
                             | Some next' -> traversePath d fieldCtx p (AsyncVal.wrap next') (head::pathAcc)
