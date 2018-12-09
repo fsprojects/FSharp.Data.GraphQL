@@ -325,9 +325,9 @@ let private treeToStream =
                 list.Children
                 |> Array.map (AsyncVal.toAsync)
                 |> Observable.ofAsyncSeq
-                |> Observable.map treeToDict
+                |> Observable.mapi (fun i t -> Some i, treeToDict t)
             | other -> 
-                async { return treeToDict other } |> Observable.ofAsync)
+                async { return None, treeToDict other } |> Observable.ofAsync)
         |> Observable.concat
     | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
 
@@ -621,10 +621,11 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     | _ -> nvl path e x.Value |> Seq.singleton)
                   |> Seq.collect id
             | x, _ -> nvl path e x |> Seq.singleton
-    let mapSimple (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) =
-        match d.Value, e with
-        | null, [] -> Seq.empty
-        | x, _ -> nvl path e [x] |> Seq.singleton
+    let mapSimple (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (ix : int option) =
+        match d.Value, e, ix with
+        | null, [], _ -> Seq.empty
+        | x, _, None -> nvl path e x |> Seq.singleton
+        | x, _, Some i -> nvli path i e x |> Seq.singleton
     let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
         let getFieldName (node : ResolverNode) =
             match node.Children |> Array.tryHead with
@@ -687,8 +688,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | LiveExecution -> Seq.empty
                         | StreamedExecution ->
                             treeToStream tree
+                            |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
                             |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
-                            |> Observable.map (fun (data, err) -> mapSimple data err path)
+                            |> Observable.map (fun (ix, data, err) -> mapSimple data err path ix)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
                         | _ -> 
