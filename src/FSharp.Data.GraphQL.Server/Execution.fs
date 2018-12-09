@@ -626,13 +626,14 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         | null, [], _ -> Seq.empty
         | x, _, None -> nvl path e x |> Seq.singleton
         | x, _, Some i -> nvli path i e x |> Seq.singleton
-    let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
-        let getFieldName (node : ResolverNode) =
+    let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
+        let getFieldName (node : ResolverNode) = asyncVal {
             match node.Children |> Array.tryHead with
             | Some c -> 
-                let res = c |> AsyncVal.get
-                res.Name
+                let! res = c
+                return res.Name
             | None -> failwithf "Expected a child for the object %A, but got none." node.Value
+        }
         let rec getObjectName (returnDef : OutputDef) (value : obj) (possibleTypesFn : TypeDef -> ObjectDef []) =
             match returnDef with
             | Object objdef -> objdef.Name
@@ -652,21 +653,23 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             | ResolverObjectNode node ->
                 let value = tree.Value
                 let typeName = getObjectName d.Info.ReturnDef value ctx.Schema.GetPossibleTypes
-                let fieldName = getFieldName node
+                let! fieldName = getFieldName node
                 let provider = ctx.Schema.LiveFieldSubscriptionProvider
                 let identity = provider.TryFind typeName fieldName |> Option.map (fun x -> x.Identity)
                 match identity, toOption value with
                 | Some identity, Some value ->
-                    provider.Add (identity value) typeName fieldName
-                    |> Observable.map (fun v ->
-                        let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
-                        let data, err = AsyncVal.get (treeToDict tree)
-                        mapResult data err path d.Kind)
-                    |> Observable.toSeq
-                    |> Seq.concat
-                | _ -> Seq.empty
-            | _ -> Seq.empty
-        | _ -> Seq.empty
+                    return 
+                        provider.Add (identity value) typeName fieldName
+                        |> Observable.map (fun v ->
+                            let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
+                            let data, err = AsyncVal.get (treeToDict tree)
+                            mapResult data err path d.Kind)
+                        |> Observable.toSeq
+                        |> Seq.concat
+                | _ -> return Seq.empty
+            | _ -> return Seq.empty
+        | _ -> return Seq.empty
+    }
     let rec deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) =
         let fdef = d.Info.Definition
         let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
@@ -696,7 +699,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | _ -> 
                             let data, err = treeToDict tree |> AsyncVal.get
                             mapResult data err path d.Kind
-                    let live = mapLiveResult tree path d fieldCtx
+                    let! live = mapLiveResult tree path d fieldCtx
                     return Seq.append deferred live
                 } |> Array.singleton |> AsyncVal.collectParallel
             let innerResult =
@@ -715,7 +718,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 match d.Kind with
                                 | LiveExecution -> Seq.empty
                                 | _ -> mapResult data err path d.Kind
-                            let live = mapLiveResult tree path d fieldCtx
+                            let! live = mapLiveResult tree path d fieldCtx
                             return Seq.append deferred live
                         }) >> AsyncVal.collectParallel))
                 |> Array.ofList
