@@ -318,9 +318,17 @@ let private treeToStream =
     function
     | ResolverObjectNode node ->
         node.Children
-        |> Seq.map (AsyncVal.toAsync)
+        |> Array.map (AsyncVal.toAsync)
         |> Observable.ofAsyncSeq
-        |> Observable.map (treeToDict)
+        |> Observable.map (function 
+            | ResolverListNode list -> 
+                list.Children
+                |> Array.map (AsyncVal.toAsync)
+                |> Observable.ofAsyncSeq
+                |> Observable.map treeToDict
+            | other -> 
+                async { return treeToDict other } |> Observable.ofAsync)
+        |> Observable.concat
     | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
 
 let private errorDict tree message path = asyncVal {
