@@ -624,8 +624,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
     let mapSimple (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) =
         match d.Value, e with
         | null, [] -> Seq.empty
-        | :? IEnumerable<obj> as x, _ -> x |> Seq.mapi (fun i d -> nvli path i e d)
-        | x, _ -> nvl path e x |> Seq.singleton
+        | x, _ -> nvl path e [x] |> Seq.singleton
     let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
         let getFieldName (node : ResolverNode) =
             match node.Children |> Array.tryHead with
