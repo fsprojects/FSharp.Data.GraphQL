@@ -288,26 +288,36 @@ module ResolverTree =
                 listOp path' node.Name node.Value ts
         helper []
 
+let private foldChildren (children : AsyncVal<AsyncVal<KeyValuePair<string, obj> * Error list>> []) =
+    children
+    |> Array.fold (fun (kvpsErrs : AsyncVal<KeyValuePair<string, obj> list * Error list>) child -> asyncVal {
+        let! kvps, errs = kvpsErrs
+        let! c = child
+        let! c, e = c
+        return c::kvps, e@errs
+    }) (Value ([], []))
+
 let private treeToDict =
     ResolverTree.pathFold
-        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [])
-        (fun path error ->
+        (fun _ leaf -> asyncVal { return KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [] })
+        (fun path error -> asyncVal {
             let (e:Error) = (error.Message, path |> List.rev)
-            KeyValuePair<_,_>(error.Name, null :> obj), [e])
-        (fun _ name value children ->
-            let dicts, errors = children |> Array.map AsyncVal.get |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
+            return KeyValuePair<_,_>(error.Name, box null), [e]})
+        (fun _ name value children -> asyncVal {
+            let! dicts, errors = children |> foldChildren
             match value with
-            | Some _ -> KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) :> obj), errors
-            | None -> KeyValuePair<_,_>(name, null), errors)
-        (fun _ name value children ->
-            let dicts, errors = children |> Array.map AsyncVal.get |> Array.fold(fun (kvps, errs) (c, e) -> c::kvps, e@errs) ([], [])
+            | Some _ -> return KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) |> box), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
+        (fun _ name value children -> asyncVal {
+            let! dicts, errors = children |> foldChildren
             match value with
-            | Some _ -> KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray :> obj), errors
-            | None -> KeyValuePair<_,_>(name, null), errors)
+            | Some _ -> return KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray |> box), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
 
-let private errorDict tree message path =
-    let data, err = treeToDict tree
-    (data, (message, path) :: err)
+let private errorDict tree message path = asyncVal {
+    let! data, err = treeToDict tree
+    return (data, (message, path) :: err)
+}
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 
@@ -359,7 +369,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                         else
                             let t = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
                             build (t::acc) xs
-                    | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.rev |> List.toArray } }
+                    | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.map (AsyncVal.map (fun x -> x)) |> List.rev |> List.toArray } }
             match value with
             | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
             | None -> asyncVal { return ResolverListNode { Name = name; Value = None; Children = [| |] } }
@@ -495,11 +505,12 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 match ctx.ExecutionPlan.Strategy with
                 | ExecutionStrategy.Parallel -> resultTrees |> AsyncVal.collectParallel
                 | ExecutionStrategy.Sequential -> resultTrees |> AsyncVal.collectSequential
-            let dicts, errors =
+            let! dicts, errors =
                 trees
-                |> Array.fold(fun (kvps, errs) (tree) ->
-                    let k, e = treeToDict tree
-                    k::kvps, e@errs) ([],[])
+                |> Array.fold(fun (kvpsErrs : AsyncVal<KeyValuePair<string, obj> list * Error list>) (tree) -> asyncVal {
+                    let! k, e = treeToDict tree
+                    let! kvps, errs = kvpsErrs
+                    return k::kvps, e@errs}) (Value ([],[]))
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
@@ -626,7 +637,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     provider.Add (identity value) typeName fieldName
                     |> Observable.map (fun v ->
                         let tree = AsyncVal.get (buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v))
-                        let data, err = treeToDict tree
+                        let data, err = AsyncVal.get (treeToDict tree)
                         mapResult data err path d.Kind)
                     |> Observable.toSeq
                     |> Seq.concat
@@ -650,7 +661,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
             let outerResult =
                 asyncVal {
-                    let data, err = treeToDict tree
+                    let data, err = AsyncVal.get (treeToDict tree)
                     let deferred = 
                         match d.Kind with
                         | LiveExecution -> Seq.empty
@@ -668,8 +679,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         asyncVal {
                             let data, err =
                                 if d.DeferredFields.Length > 0
-                                then errorDict tree "Maximum degree of nested deferred executions reached." path
-                                else treeToDict tree
+                                then AsyncVal.get (errorDict tree "Maximum degree of nested deferred executions reached." path)
+                                else AsyncVal.get (treeToDict tree)
                             let deferred = 
                                 match d.Kind with
                                 | LiveExecution -> Seq.empty
@@ -716,9 +727,12 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Args = args
           Variables = ctx.Variables }
     subscriptionProvider.Add fieldCtx value subdef
-    |> Observable.bind(fun v ->
-        buildResolverTree returnType fieldCtx fieldExecuteMap (Some v)
-        |> AsyncVal.map(treeToDict)
+    |> Observable.bind(fun v -> 
+        let dict = asyncVal {
+            let! tree = buildResolverTree returnType fieldCtx fieldExecuteMap (Some v)
+            return! treeToDict tree
+        }
+        dict
         |> AsyncVal.map(fun (data, err) -> 
             let output = NameValueLookup.ofList[nameOrAlias, data.Value]                
             match err with
