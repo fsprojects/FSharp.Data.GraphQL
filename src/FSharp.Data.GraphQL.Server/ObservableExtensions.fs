@@ -33,10 +33,17 @@ module internal Observable =
     let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = {
         new IObservable<_> with
             member __.Subscribe(observer) =
+                let count = Seq.length items
+                let mutable sent = 0
+                let lockObj = obj()
+                let checkCompleted () =
+                    sent <- sent + 1
+                    if sent = count then observer.OnCompleted()
                 let onNext item = 
                     async {
                         let! item' = item
                         observer.OnNext item'
+                        lock lockObj checkCompleted
                     } |> Async.Start
                 items |> Seq.iter onNext
                 { new IDisposable with member __.Dispose() = () }

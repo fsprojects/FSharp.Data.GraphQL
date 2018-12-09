@@ -297,6 +297,20 @@ let private foldChildren (children : AsyncVal<AsyncVal<KeyValuePair<string, obj>
         return c::kvps, e@errs
     }) (Value ([], []))
 
+let private treeToDict2 (tree : ResolverTree) =
+    tree
+    |> ResolverTree.pathFold
+        (fun _ leaf -> KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null))
+        (fun _ error -> KeyValuePair<_,_>(error.Name, null))
+        (fun _ name value children ->
+            match value with
+            | Some _ -> KeyValuePair<_,_>(name, children |> Array.rev |> box)
+            | None -> KeyValuePair<_,_>(name, null))
+        (fun _ name value children ->
+            match value with
+            | Some _ -> KeyValuePair<_,_>(name, children |> Array.map(AsyncVal.map(fun d -> d.Value)) |> Array.rev |> box)
+            | None -> KeyValuePair<_,_>(name, null))
+
 let private treeToDict =
     ResolverTree.pathFold
         (fun _ leaf -> asyncVal { return KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [] })
@@ -313,6 +327,15 @@ let private treeToDict =
             match value with
             | Some _ -> return KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray |> box), errors
             | None -> return KeyValuePair<_,_>(name, null), errors})
+
+let private treeToStream =
+    function
+    | ResolverObjectNode node ->
+        node.Children
+        |> Seq.map (AsyncVal.toAsync)
+        |> Observable.ofAsyncSeq
+        |> Observable.map (treeToDict)
+    | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
 
 let private errorDict tree message path = asyncVal {
     let! data, err = treeToDict tree
@@ -604,6 +627,11 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     | _ -> nvl path e x.Value |> Seq.singleton)
                   |> Seq.collect id
             | x, _ -> nvl path e x |> Seq.singleton
+    let mapSimple (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) =
+        match d.Value, e with
+        | null, [] -> Seq.empty
+        | :? IEnumerable<obj> as x, _ -> x |> Seq.mapi (fun i d -> nvli path i e d)
+        | x, _ -> nvl path e x |> Seq.singleton
     let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) =
         let getFieldName (node : ResolverNode) =
             match node.Children |> Array.tryHead with
@@ -657,16 +685,22 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Args = args
               Variables = ctx.Variables }
         let path = d.Path |> List.map box
-        let traversed = traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
-        traversed
+        traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
             let outerResult =
                 asyncVal {
-                    let data, err = AsyncVal.get (treeToDict tree)
                     let deferred = 
                         match d.Kind with
                         | LiveExecution -> Seq.empty
-                        | _ -> mapResult data err path d.Kind
+                        | StreamedExecution ->
+                            treeToStream tree
+                            |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
+                            |> Observable.map (fun (data, err) -> mapSimple data err path)
+                            |> Observable.bind Observable.ofSeq
+                            |> Observable.toSeq
+                        | _ -> 
+                            let data, err = treeToDict tree |> AsyncVal.get
+                            mapResult data err path d.Kind
                     let live = mapLiveResult tree path d fieldCtx
                     return Seq.append deferred live
                 } |> Array.singleton |> AsyncVal.collectParallel
