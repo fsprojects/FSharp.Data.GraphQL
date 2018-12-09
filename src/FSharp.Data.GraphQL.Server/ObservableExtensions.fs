@@ -20,9 +20,6 @@ module internal Observable =
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 
-    let mapi (fn : int -> 'T -> 'U) o =
-        toSeq o |> Seq.mapi fn |> ofSeq
-    
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)
 

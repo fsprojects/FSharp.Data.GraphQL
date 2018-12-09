@@ -328,9 +328,13 @@ let private treeToStream =
         |> Observable.map (function 
             | ResolverListNode list -> 
                 list.Children
-                |> Array.map (AsyncVal.toAsync)
+                |> Array.mapi (fun i x -> 
+                    asyncVal {
+                        let! x' = x
+                        return i, x' 
+                    } |> AsyncVal.toAsync)
                 |> Observable.ofAsyncSeq
-                |> Observable.mapi (fun i t -> Some i, treeToDict t)
+                |> Observable.map (fun (i, t) -> Some i, treeToDict t)
             | other -> 
                 async { return None, treeToDict other } |> Observable.ofAsync)
         |> Observable.concat
