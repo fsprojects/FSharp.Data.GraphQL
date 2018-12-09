@@ -314,6 +314,11 @@ let private treeToDict =
             | Some _ -> return KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray |> box), errors
             | None -> return KeyValuePair<_,_>(name, null), errors})
 
+let private errorDict tree message path = asyncVal {
+    let! data, err = treeToDict tree
+    return (data, (message, path) :: err)
+}
+
 let private treeToStream =
     function
     | ResolverObjectNode node ->
@@ -331,10 +336,14 @@ let private treeToStream =
         |> Observable.concat
     | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
 
-let private errorDict tree message path = asyncVal {
-    let! data, err = treeToDict tree
-    return (data, (message, path) :: err)
-}
+let private errorStream tree message path = 
+    treeToStream tree
+    |> Observable.map (fun (ix, dict) -> 
+        let dict = asyncVal {
+            let! (data, err) = dict
+            return (data, (message, path) :: err)
+        }
+        ix, dict)
 
 let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 
@@ -713,18 +722,34 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     let fieldCtx = { fieldCtx with ExecutionInfo = d.Info }
                     let path = d.Path |> List.rev |> List.map (fun x -> x :> obj)
                     traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
-                    |> AsyncVal.bind(Array.map(fun (tree, path) ->
-                        asyncVal {
-                            let! data, err =
-                                if d.DeferredFields.Length > 0
-                                then errorDict tree "Maximum degree of nested deferred executions reached." path
-                                else treeToDict tree
-                            let deferred = 
-                                match d.Kind with
-                                | LiveExecution -> Seq.empty
-                                | _ -> mapResult data err path d.Kind
-                            let! live = mapLiveResult tree path d fieldCtx
-                            return Seq.append deferred live
+                    |> AsyncVal.bind(Array.map(fun (tree, path) -> asyncVal {
+                        let deferred =
+                            match d.Kind with
+                            | LiveExecution -> Seq.empty
+                            | StreamedExecution ->
+                                let stream =
+                                    if d.DeferredFields.Length > 0
+                                    then errorStream tree "Maximum degree of nested deferred executions reached." path
+                                    else treeToStream tree
+                                stream
+                                |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
+                                |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
+                                |> Observable.map (fun (ix, data, err) -> mapSimple data err path ix)
+                                |> Observable.bind Observable.ofSeq
+                                |> Observable.toSeq
+                            | DeferredExecution ->
+                                let dict =
+                                    if d.DeferredFields.Length > 0
+                                    then errorDict tree "Maximum degree of nested deferred executions reached." path
+                                    else treeToDict tree
+                                dict
+                                |> AsyncVal.toAsync
+                                |> Observable.ofAsync
+                                |> Observable.map (fun (data, err) -> mapResult data err path d.Kind)
+                                |> Observable.bind Observable.ofSeq
+                                |> Observable.toSeq
+                        let! live = mapLiveResult tree path d fieldCtx
+                        return Seq.append deferred live
                         }) >> AsyncVal.collectParallel))
                 |> Array.ofList
                 |> AsyncVal.appendParallel
