@@ -1095,7 +1095,7 @@ let ``Union Defer and Stream`` () =
             actualDeferred |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLRespnse")
 
-[<Fact(Skip="Needs at least two cores to work, not consistent in CI">]
+[<Fact(Skip="Needs at least two cores to work, not consistent in CI")>]
 let ``Each deferred result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [
