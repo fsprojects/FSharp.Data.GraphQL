@@ -627,7 +627,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         match err with
         | [] -> NameValueLookup.ofList ["data", data; "path", upcast path]
         | _ -> NameValueLookup.ofList ["data", data; "errors", upcast (formatErrors err); "path", upcast path]
-    let mapDefer (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (kind : DeferredExecutionInfoKind) =
+    let mapDefer (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) =
         match d.Value, e with
         | null, [] -> Seq.empty
         | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
@@ -674,7 +674,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         |> Observable.map (fun v -> asyncVal {
                             let! tree = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v)
                             let! data, err = treeToDict tree
-                            return mapDefer data err path d.Kind } |> AsyncVal.toAsync |> Observable.ofAsync)
+                            return mapDefer data err path } |> AsyncVal.toAsync |> Observable.ofAsync)
                         |> Observable.concat
                         |> Observable.toSeq
                         |> Seq.concat
@@ -712,7 +712,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             treeToDict tree
                             |> AsyncVal.toAsync
                             |> Observable.ofAsync
-                            |> Observable.map (fun (data, err) -> mapDefer data err path d.Kind)
+                            |> Observable.map (fun (data, err) -> mapDefer data err path)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
                     let! live = mapLive tree path d fieldCtx
@@ -747,7 +747,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 dict
                                 |> AsyncVal.toAsync
                                 |> Observable.ofAsync
-                                |> Observable.map (fun (data, err) -> mapDefer data err path d.Kind)
+                                |> Observable.map (fun (data, err) -> mapDefer data err path)
                                 |> Observable.bind Observable.ofSeq
                                 |> Observable.toSeq
                         let! live = mapLive tree path d fieldCtx
