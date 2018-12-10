@@ -619,7 +619,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             return res
         }
     let nvli (path : obj list) (index : int) (err : Error list) data =
-        let data' = [ data ] :> obj
+        let data' = box [data]
         match err with
         | [] -> NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
         | _ -> NameValueLookup.ofList ["data", data'; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
@@ -627,29 +627,17 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         match err with
         | [] -> NameValueLookup.ofList ["data", data; "path", upcast path]
         | _ -> NameValueLookup.ofList ["data", data; "errors", upcast (formatErrors err); "path", upcast path]
-    let mapResult (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (kind : DeferredExecutionInfoKind) =
-        match kind with
-        | DeferredExecution | LiveExecution ->
-            match d.Value, e with
-            | null, [] -> Seq.empty
-            | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
-            | x, _ -> nvl path e x |> Seq.singleton
-        | StreamedExecution ->
-            match d.Value, e with
-            | null, [] -> Seq.empty
-            | :? NameValueLookup as x, _ ->
-                x |> Seq.map (fun x ->
-                    match x.Value with
-                    | :? IEnumerable<obj> as x -> x |> Seq.mapi (fun i d -> nvli path i e d)
-                    | _ -> nvl path e x.Value |> Seq.singleton)
-                  |> Seq.collect id
-            | x, _ -> nvl path e x |> Seq.singleton
-    let mapSimple (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (ix : int option) =
+    let mapDefer (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (kind : DeferredExecutionInfoKind) =
+        match d.Value, e with
+        | null, [] -> Seq.empty
+        | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
+        | x, _ -> nvl path e x |> Seq.singleton
+    let mapStream (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (ix : int option) =
         match d.Value, e, ix with
         | null, [], _ -> Seq.empty
         | x, _, None -> nvl path e x |> Seq.singleton
         | x, _, Some i -> nvli path i e x |> Seq.singleton
-    let mapLiveResult (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
+    let mapLive (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
         let getFieldName (node : ResolverNode) = asyncVal {
             match node.Children |> Array.tryHead with
             | Some c -> 
@@ -686,7 +674,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         |> Observable.map (fun v -> asyncVal {
                             let! tree = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v)
                             let! data, err = treeToDict tree
-                            return mapResult data err path d.Kind } |> AsyncVal.toAsync |> Observable.ofAsync)
+                            return mapDefer data err path d.Kind } |> AsyncVal.toAsync |> Observable.ofAsync)
                         |> Observable.concat
                         |> Observable.toSeq
                         |> Seq.concat
@@ -717,17 +705,17 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             treeToStream tree
                             |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
                             |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
-                            |> Observable.map (fun (ix, data, err) -> mapSimple data err path ix)
+                            |> Observable.map (fun (ix, data, err) -> mapStream data err path ix)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
                         | DeferredExecution -> 
                             treeToDict tree
                             |> AsyncVal.toAsync
                             |> Observable.ofAsync
-                            |> Observable.map (fun (data, err) -> mapResult data err path d.Kind)
+                            |> Observable.map (fun (data, err) -> mapDefer data err path d.Kind)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
-                    let! live = mapLiveResult tree path d fieldCtx
+                    let! live = mapLive tree path d fieldCtx
                     return Seq.append deferred live
                 } |> Array.singleton |> AsyncVal.collectParallel
             let innerResult =
@@ -748,7 +736,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 stream
                                 |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
                                 |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
-                                |> Observable.map (fun (ix, data, err) -> mapSimple data err path ix)
+                                |> Observable.map (fun (ix, data, err) -> mapStream data err path ix)
                                 |> Observable.bind Observable.ofSeq
                                 |> Observable.toSeq
                             | DeferredExecution ->
@@ -759,10 +747,10 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                 dict
                                 |> AsyncVal.toAsync
                                 |> Observable.ofAsync
-                                |> Observable.map (fun (data, err) -> mapResult data err path d.Kind)
+                                |> Observable.map (fun (data, err) -> mapDefer data err path d.Kind)
                                 |> Observable.bind Observable.ofSeq
                                 |> Observable.toSeq
-                        let! live = mapLiveResult tree path d fieldCtx
+                        let! live = mapLive tree path d fieldCtx
                         return Seq.append deferred live
                         }) >> AsyncVal.collectParallel))
                 |> Array.ofList
