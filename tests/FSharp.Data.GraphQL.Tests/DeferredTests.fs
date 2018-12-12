@@ -316,7 +316,9 @@ let ``Resolver list error`` () =
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         deferred
-        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        |> Observable.add (fun x -> 
+            actualDeferred.Add(x)
+            if actualDeferred.Count = 2 then set mre)
         wait mre "Timeout while waiting for Deferred GQLResponse"
         actualDeferred
         |> Seq.cast<NameValueLookup>
