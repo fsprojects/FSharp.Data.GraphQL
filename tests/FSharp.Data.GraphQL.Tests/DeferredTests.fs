@@ -23,11 +23,15 @@ type TestSubject = {
     iface : InterfaceSubject
     ifaceList : InterfaceSubject list
     mutable live: string
-    delayed : DelayedTestSubject
-    delayedList : DelayedTestSubject list
+    delayed : AsyncTestSubject
+    delayedList : AsyncTestSubject list
+    resolverError : AsyncTestSubject
+    resolverListError : AsyncTestSubject list
+    nullableError : AsyncTestSubject
+    nullableListError : AsyncTestSubject list
 }
 
-and DelayedTestSubject = {
+and AsyncTestSubject = {
     value : Async<string>
 }
 
@@ -124,9 +128,9 @@ let rec InnerDataType =
             Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
         ])
 
-let DelayedDataType =
-    Define.Object<DelayedTestSubject>(
-        name = "DelayedData",
+let AsyncDataType =
+    Define.Object<AsyncTestSubject>(
+        name = "AsyncData",
         fieldsFn = fun () -> [ Define.AsyncField("value", String, (fun _ d -> d.value)) ])
 
 let DataType =
@@ -143,8 +147,12 @@ let DataType =
             Define.Field("live", String, (fun _ d -> d.live))
             Define.Field("iface", InterfaceType, (fun _ d -> d.iface))
             Define.Field("ifaceList", ListOf InterfaceType, (fun _ d -> d.ifaceList))
-            Define.Field("delayed", DelayedDataType, (fun _ d -> d.delayed))
-            Define.Field("delayedList", ListOf DelayedDataType, (fun _ d -> d.delayedList))
+            Define.Field("delayed", AsyncDataType, (fun _ d -> d.delayed))
+            Define.Field("delayedList", ListOf AsyncDataType, (fun _ d -> d.delayedList))
+            Define.Field("resolverError", AsyncDataType, (fun _ d -> d.resolverError))
+            Define.Field("nullableError", AsyncDataType, (fun _ d -> d.nullableError))
+            Define.Field("resolverListError", ListOf AsyncDataType, (fun _ d -> d.resolverListError))
+            Define.Field("nullableListError", ListOf AsyncDataType, (fun _ d -> d.nullableListError))
         ])
 
 let delay secs x = async {
@@ -183,6 +191,16 @@ let data = {
            { value = async { return "Delayed value 1" } }
            { value = delay 5 "Delayed value 2" }
        ]
+       resolverError = { value = async { return failwith "Resolver error!" } }
+       resolverListError = [ 
+           { value = async { return failwith "Resolver error!" } } 
+           { value = async { return failwith "Resolver error!" } }
+       ]
+       nullableError = { value = async { return null } }
+       nullableListError = [
+           { value = async { return null } }
+           { value = async { return null } }
+       ]
    }
 
 let Query =
@@ -211,6 +229,142 @@ let hasSubscribers () =
 let updateData () =
     data.live <- "another value"
     schemaConfig.LiveFieldSubscriptionProvider.Publish "Data" "live" data
+
+[<Fact>]
+let ``Resolver error`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "resolverError", null
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast NameValueLookup.ofList [
+                "resolverError", null
+            ]
+            "errors", upcast [
+                box <| NameValueLookup.ofList [
+                    "message", upcast "Resolver error!"
+                    "path", upcast [ "testData"; "resolverError"; "value" ]
+                ]
+            ]
+            "path", upcast [ "testData"; "resolverError" ]
+        ]
+    let query = parse """{
+        testData {
+            resolverError @defer {
+                value
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Resolver list error`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "resolverListError", upcast []
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", null
+            "errors", upcast [
+                box <| NameValueLookup.ofList [
+                    "message", upcast "Resolver error!"
+                    "path", upcast [ "testData"; "resolverListError"; "value" ]
+                ]
+            ]
+            "path", upcast [ box "testData"; upcast "resolverListError"; upcast 0 ]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", null
+            "errors", upcast [
+                box <| NameValueLookup.ofList [
+                    "message", upcast "Resolver error!"
+                    "path", upcast [ "testData"; "resolverListError"; "value" ]
+                ]
+            ]
+            "path", upcast [ box "testData"; upcast "resolverListError"; upcast 1 ]
+        ]
+    let query = parse """{
+        testData {
+            resolverListError @stream {
+                value
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> contains expectedDeferred1
+        |> contains expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Nullable error`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "nullableError", null
+            ]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast NameValueLookup.ofList [
+                "nullableError", null
+            ]
+            "errors", upcast [
+                box <| NameValueLookup.ofList [
+                    "message", upcast "Non-Null field value resolved as a null!"
+                    "path", upcast [ "testData"; "nullableError"; "value" ]
+                ]
+            ]
+            "path", upcast [ "testData"; "nullableError" ]
+        ]
+    let query = parse """{
+        testData {
+            nullableError @defer {
+                value
+            }
+        }
+    }"""
+    use mre = new ManualResetEvent(false)
+    let actualDeferred = ConcurrentBag<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        wait mre "Timeout while waiting for Deferred GQLResponse"
+        actualDeferred |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Single Root object field - Defer and Stream`` () =

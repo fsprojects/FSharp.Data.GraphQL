@@ -268,7 +268,10 @@ module ResolverTree =
                 leafOp ((leaf.Name :> obj)::path) leaf
             | ResolverError err ->
                 let origin = (err.PathToOrigin |> List.rev)
-                let path' = if err.Name <> "__index" then origin@((err.Name :> obj)::path) else origin@path
+                let toString x = x.ToString()
+                let head = List.tryHead path |> Option.map toString
+                let shouldAdd = err.Name <> "__index" && Some (err.Name) <> head
+                let path' = if shouldAdd then origin@((err.Name :> obj)::path) else origin@path
                 errorOp path' err
             | ResolverObjectNode node ->
                 let path' = if node.Name <> "__index" then (node.Name :> obj)::path else path
@@ -622,7 +625,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         let data' = box [data]
         match err with
         | [] -> NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
-        | _ -> NameValueLookup.ofList ["data", data'; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
+        | _ -> NameValueLookup.ofList ["data", null; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
     let nvl (path : obj list) (err : Error list) data =
         match err with
         | [] -> NameValueLookup.ofList ["data", data; "path", upcast path]
@@ -633,10 +636,11 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
         | x, _ -> nvl path e x |> Seq.singleton
     let mapStream (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (ix : int option) =
+        let e' = e |> List.map (fun (msg, p) -> (msg, path@p))
         match d.Value, e, ix with
         | null, [], _ -> Seq.empty
-        | x, _, None -> nvl path e x |> Seq.singleton
-        | x, _, Some i -> nvli path i e x |> Seq.singleton
+        | x, _, None -> nvl path e' x |> Seq.singleton
+        | x, _, Some i -> nvli path i e' x |> Seq.singleton
     let mapLive (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
         let getFieldName (node : ResolverNode) = asyncVal {
             match node.Children |> Array.tryHead with
