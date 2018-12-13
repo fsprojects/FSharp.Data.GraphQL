@@ -777,10 +777,17 @@ and DeferredExecutionInfo = {
     DeferredFields : DeferredExecutionInfo list
 }
 
+/// Stream buffer mode.
+and StreamBufferMode =
+    /// Items are sent one by one, as soon as they are computed.
+    | NonBuffered
+    /// Items are buffered for a time span in milliseconds, and when it completes, send buffered items to subscriber.
+    | Buffered of int
+
 /// Kind of deferred execution.
 and DeferredExecutionInfoKind =
     | DeferredExecution
-    | StreamedExecution
+    | StreamedExecution of StreamBufferMode
     | LiveExecution
 
 /// The context used to hold all the information for a schema compiling proccess.

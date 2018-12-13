@@ -322,7 +322,12 @@ let private errorDict tree message path = asyncVal {
     return (data, (message, path) :: err)
 }
 
-let private treeToStream =
+type StreamOutput =
+    | NonList of (KeyValuePair<string, obj> * Error list)
+    | NonBufferedList of int * (KeyValuePair<string, obj> * Error list)
+    | BufferedList of int list * (KeyValuePair<string, obj> * Error list) list
+
+let private treeToStream (bufferMode : StreamBufferMode) =
     function
     | ResolverObjectNode node ->
         node.Children
@@ -330,31 +335,51 @@ let private treeToStream =
         |> Observable.ofAsyncSeq
         |> Observable.map (function 
             | ResolverListNode list -> 
-                list.Children
-                |> Array.mapi (fun i x -> 
-                    asyncVal {
-                        let! x' = x
-                        return i, x' 
-                    } |> AsyncVal.toAsync)
-                |> Observable.ofAsyncSeq
-                |> Observable.map (fun (i, t) -> Some i, treeToDict t)
+                let baseStream =
+                    list.Children
+                    |> Array.mapi (fun i x -> 
+                        asyncVal {
+                            let! x' = x
+                            return i, x' 
+                        } |> AsyncVal.toAsync)
+                    |> Observable.ofAsyncSeq
+                    |> Observable.map (fun (i, t) -> 
+                        asyncVal {
+                            let! dict = treeToDict t
+                            return i, dict
+                        } |> AsyncVal.toAsync |> Observable.ofAsync)
+                    |> Observable.concat
+                match bufferMode with
+                | Buffered timeSpan -> 
+                    baseStream
+                    |> Observable.buffer (TimeSpan.FromMilliseconds(float timeSpan))
+                    |> Observable.map (fun items ->
+                        let indexes = items |> List.map fst
+                        let values = items |> List.map snd
+                        (indexes, values) |> BufferedList)
+                | NonBuffered -> baseStream |> Observable.map NonBufferedList
             | other -> 
-                async { return None, treeToDict other } |> Observable.ofAsync)
+                async {
+                    let! dict = treeToDict other
+                    return dict |> NonList
+                } |> Observable.ofAsync)
         |> Observable.concat
     | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
 
-let private errorStream tree message path = 
-    treeToStream tree
-    |> Observable.map (fun (ix, dict) -> 
-        let dict = asyncVal {
-            let! (data, err) = dict
-            return (data, (message, path) :: err)
-        }
-        ix, dict)
+let private errorStream bufferMode tree message path = 
+    treeToStream bufferMode tree
+    |> Observable.map (fun output -> 
+        let errorDict (dict : KeyValuePair<string, obj> * Error list) =
+            let (data, err) = dict
+            (data, (message, path) :: err)
+        match output with
+        | NonList x -> errorDict x |> NonList
+        | NonBufferedList (ix, x) -> (ix, errorDict x) |> NonBufferedList
+        | BufferedList (ix, x) -> (ix, x |> List.map errorDict) |> BufferedList)
 
-let private nullResolverError name = asyncVal { return ResolverError{ Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
+let private nullResolverError name = asyncVal { return ResolverError { Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 
-let private propagateError name err = asyncVal { return ResolverError{ Name = name; Message = err.Message; PathToOrigin = (err.Name :> obj)::err.PathToOrigin} }
+let private propagateError name err = asyncVal { return ResolverError { Name = name; Message = err.Message; PathToOrigin = (err.Name :> obj)::err.PathToOrigin} }
 
 /// Builds the result tree for a given query
 let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
@@ -621,10 +646,13 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
             return res
         }
-    let nvli (path : obj list) (index : int) (err : Error list) data =
-        let data' = box [data]
+    let bnvli (path : obj list) (indexes : int list) (err : Error list) (data : obj list) =
         match err with
-        | [] -> NameValueLookup.ofList ["data", data'; "path", upcast (path @ [index])]
+        | [] -> NameValueLookup.ofList [ "data", upcast data; "path", upcast (path @ [box indexes ]) ]
+        | _ -> NameValueLookup.ofList [ "data", null; "errors", upcast (formatErrors err); "path",  upcast (path @ (indexes |> List.map box)) ]
+    let nvli (path : obj list) (index : int) (err : Error list) data =
+        match err with
+        | [] -> NameValueLookup.ofList ["data", data; "path", upcast (path @ [index])]
         | _ -> NameValueLookup.ofList ["data", null; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
     let nvl (path : obj list) (err : Error list) data =
         match err with
@@ -635,12 +663,26 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         | null, [] -> Seq.empty
         | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
         | x, _ -> nvl path e x |> Seq.singleton
-    let mapStream (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) (ix : int option) =
-        let e' = e |> List.map (fun (msg, p) -> (msg, path@p))
-        match d.Value, e, ix with
-        | null, [], _ -> Seq.empty
-        | x, _, None -> nvl path e' x |> Seq.singleton
-        | x, _, Some i -> nvli path i e' x |> Seq.singleton
+    let mapStream (path : obj list) (output : StreamOutput) =
+        let errorMapper e = e |> List.map (fun (msg, p) -> (msg, path@p))
+        match output with
+        | NonList (d, e) ->
+            match d.Value, e with
+            | null, [] -> Seq.empty
+            | x, _ -> nvl path (errorMapper e) x |> Seq.singleton
+        | NonBufferedList (i, (d, e)) ->
+            match d.Value, e with
+            | null, [] -> Seq.empty
+            | x, _ -> nvli path i (errorMapper e) (box [x]) |> Seq.singleton
+        | BufferedList (ix, dx) ->
+            let dx = dx |> List.filter (fun (d, e) -> match d.Value, e with | null, [] -> false | _ -> true)
+            match dx with
+            | [] -> Seq.empty
+            | dx -> 
+                let values = dx |> List.map fst |> List.map (fun x -> x.Value) |> List.filter (fun x -> not (isNull x))
+                let err = dx |> List.map snd |> List.concat
+                bnvli path ix err values |> Seq.singleton
+
     let mapLive (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
         let getFieldName (node : ResolverNode) = asyncVal {
             match node.Children |> Array.tryHead with
@@ -705,11 +747,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     let deferred = 
                         match d.Kind with
                         | LiveExecution -> Seq.empty
-                        | StreamedExecution ->
-                            treeToStream tree
-                            |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
-                            |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
-                            |> Observable.map (fun (ix, data, err) -> mapStream data err path ix)
+                        | StreamedExecution bufferMode ->
+                            treeToStream bufferMode tree
+                            |> Observable.map (fun output -> mapStream path output)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
                         | DeferredExecution -> 
@@ -732,15 +772,13 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         let deferred =
                             match d.Kind with
                             | LiveExecution -> Seq.empty
-                            | StreamedExecution ->
+                            | StreamedExecution bufferMode ->
                                 let stream =
                                     if d.DeferredFields.Length > 0
-                                    then errorStream tree "Maximum degree of nested deferred executions reached." path
-                                    else treeToStream tree
+                                    then errorStream bufferMode tree "Maximum degree of nested deferred executions reached." path
+                                    else treeToStream bufferMode tree
                                 stream
-                                |> Observable.map (fun (i, x) -> x |> AsyncVal.map (fun (c, e) -> i, c, e))
-                                |> Observable.bind (AsyncVal.toAsync >> Observable.ofAsync)
-                                |> Observable.map (fun (ix, data, err) -> mapStream data err path ix)
+                                |> Observable.map (fun output -> mapStream path output)
                                 |> Observable.bind Observable.ofSeq
                                 |> Observable.toSeq
                             | DeferredExecution ->

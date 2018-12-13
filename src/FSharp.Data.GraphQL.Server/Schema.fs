@@ -47,7 +47,6 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(name) with
                 | true, (_, channel) -> channel.OnNext(box value)
                 | false, _ -> () } }
-
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
@@ -86,6 +85,30 @@ type SchemaConfig =
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
+    /// <summary>
+    /// Default SchemaConfig with buffered stream support.
+    /// This config modifies the stream directive to add an argument called 'timeSpan'.
+    /// This argument will allow the user to buffer streamed results in a query by the specified time span in millisseconds.
+    /// </summary>
+    /// <param name="defaultBufferMode">
+    /// Default buffer mode. When set to Bufffered with a time span, the time span will be used as a default value for the
+    /// 'timeSpan' argument of the stream directive.
+    /// </param>
+    static member DefaultWithBufferedStream(defaultBufferMode : StreamBufferMode) =
+        let timeSpan =
+            match defaultBufferMode with
+            | Buffered timeSpan -> Some timeSpan
+            | NonBuffered -> None
+        let streamDirective =
+            let arg = 
+                Define.Input(
+                    "timeSpan", 
+                    Nullable Int, 
+                    defaultValue = timeSpan,
+                    description = "An optional argument used to buffer stream results in batches for a specified time span in milliseconds.")
+            { StreamDirective with Args = [| arg |] }
+        { SchemaConfig.Default with
+            Directives = [ IncludeDirective; SkipDirective; DeferDirective; streamDirective; LiveDirective ] }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =

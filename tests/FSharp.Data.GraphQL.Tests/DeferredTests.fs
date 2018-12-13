@@ -29,6 +29,7 @@ type TestSubject = {
     resolverListError : AsyncTestSubject list
     nullableError : AsyncTestSubject
     nullableListError : AsyncTestSubject list
+    bufferedList : AsyncTestSubject list
 }
 
 and AsyncTestSubject = {
@@ -153,10 +154,11 @@ let DataType =
             Define.Field("nullableError", AsyncDataType, (fun _ d -> d.nullableError))
             Define.Field("resolverListError", ListOf AsyncDataType, (fun _ d -> d.resolverListError))
             Define.Field("nullableListError", ListOf AsyncDataType, (fun _ d -> d.nullableListError))
+            Define.Field("bufferedList", ListOf AsyncDataType, (fun _ d -> d.bufferedList))
         ])
 
-let delay secs x = async {
-    do! Async.Sleep(secs * 1000)
+let delay ms x = async {
+    do! Async.Sleep(ms)
     return x
 }
 
@@ -186,10 +188,10 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
-       delayed = { value = delay 15 "Delayed value" }
+       delayed = { value = delay 8000 "Delayed value" }
        delayedList = [
            { value = async { return "Delayed value 1" } }
-           { value = delay 5 "Delayed value 2" }
+           { value = delay 5000 "Delayed value 2" }
        ]
        resolverError = { value = async { return failwith "Resolver error!" } }
        resolverListError = [ 
@@ -201,6 +203,11 @@ let data = {
            { value = async { return null } }
            { value = async { return null } }
        ]
+       bufferedList = [
+           { value = delay 1000 "Buffered 1" }
+           { value = delay 1000 "Buffered 2" }
+           { value = delay 5000 "Buffered 3" }
+       ]
    }
 
 let Query =
@@ -209,7 +216,7 @@ let Query =
         fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
 
 let schemaConfig = 
-    { SchemaConfig.Default with Types = [ CType; DType ] }
+    { SchemaConfig.DefaultWithBufferedStream(defaultBufferMode = NonBuffered) with Types = [ CType; DType ] }
 
 
 let sub =
@@ -1205,6 +1212,66 @@ let ``List Stream``() =
         |> ignore
     | _ -> fail "Expected Deferred GQLResponse"
 
+[<Fact(Skip="Can be intermitent depending on number of free cores")>]
+let ``Should buffer stream list correctly``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "bufferedList", upcast []
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Buffered 1"
+                ]
+                upcast NameValueLookup.ofList [
+                    "value", upcast "Buffered 2"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0; 1]]
+        ]        
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Buffered 3"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2]]
+        ]   
+    let query = parse """{
+        testData {
+            bufferedList @stream(timeSpan : 3000) {
+                value
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = List<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x ->
+            if actualDeferred.Count < 2 then actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first Deferred GQLResponse"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
 [<Fact>]
 let ``Union Defer and Stream`` () =
     let expectedDirect =
@@ -1251,7 +1318,7 @@ let ``Union Defer and Stream`` () =
             actualDeferred |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLRespnse")
 
-[<Fact(Skip="Needs at least two cores to work, not consistent in CI")>]
+[<Fact(Skip="Can be intermitent depending on number of free cores")>]
 let ``Each deferred result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -1292,10 +1359,10 @@ let ``Each deferred result should be sent as soon as it is computed``() =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        // The second result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result is a delayed async field, which is set to compute the value for 8 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        if TimeSpan.FromSeconds(float 10) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"

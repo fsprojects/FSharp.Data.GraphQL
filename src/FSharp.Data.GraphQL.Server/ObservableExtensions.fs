@@ -2,9 +2,8 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Reactive.Linq
-open System.Linq
 
-/// Extension methods to observable, used in place of Fsharp.Control.Reactive
+/// Extension methods to observable, used in place of FSharp.Control.Observable
 module internal Observable =
     let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
 
@@ -20,6 +19,9 @@ module internal Observable =
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 
+    let buffer (timeSpan : TimeSpan) (o : IObservable<'T>) : IObservable<'T list> =
+        o.Buffer(timeSpan) |> Observable.map List.ofSeq
+
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)
 
@@ -30,21 +32,19 @@ module internal Observable =
 
     let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
 
-    let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = {
-        new IObservable<_> with
+    let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = 
+        { new IObservable<_> with
             member __.Subscribe(observer) =
                 let count = Seq.length items
                 let mutable sent = 0
                 let lockObj = obj()
-                let checkCompleted () =
-                    sent <- sent + 1
-                    if sent = count then observer.OnCompleted()
                 let onNext item = 
                     async {
                         let! item' = item
-                        observer.OnNext item'
-                        lock lockObj checkCompleted
+                        lock lockObj (fun () ->
+                            observer.OnNext item'
+                            sent <- sent + 1
+                            if sent = count then observer.OnCompleted())
                     } |> Async.StartAsTask |> ignore
                 items |> Seq.iter onNext
-                { new IDisposable with member __.Dispose() = () }
-    }
+                { new IDisposable with member __.Dispose() = () } }

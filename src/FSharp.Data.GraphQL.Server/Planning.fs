@@ -151,13 +151,27 @@ let private isDeferredField (field: Field) =
     field.Directives |> List.exists(fun d -> d.Name = "defer")
 
 let private isStreamedField (field : Field) =
-    field.Directives |> List.exists (fun d -> d.Name = "stream")
+    field.Directives |> List.exists(fun d -> d.Name = "stream")
+
+let private getStreamBufferMode (field : Field) =
+    let directive =
+        field.Directives
+        |> List.tryFind (fun d -> d.Name = "stream")
+    match directive with
+    | Some d ->
+        match d.Arguments |> List.tryFind (fun x -> x.Name = "timeSpan") with
+        | Some arg -> 
+            match arg.Value with
+            | IntValue timeSpan when timeSpan > 0L -> Buffered (int timeSpan)
+            | _ -> failwithf "Invalid value type for 'timeSpan' argument of @defer directive in field '%s'. Must be an integer." field.AliasOrName
+        | None -> NonBuffered
+    | None -> failwithf "Expected @stream directive on field '%s', but it does not exist." field.AliasOrName
 
 let private isLiveField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "live")
 
 let private (|Planned|Deferred|Streamed|Live|) field =
-    if isStreamedField field then Streamed
+    if isStreamedField field then Streamed (getStreamBufferMode field)
     elif isDeferredField field then Deferred
     elif isLiveField field then Live
     else Planned
@@ -231,14 +245,14 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                     let directResult =
                         match field with
-                        | Deferred | Streamed -> fields @ [ executionPlan.ResolveDeferred () ]
+                        | Deferred | Streamed _ -> fields @ [ executionPlan.ResolveDeferred () ]
                         | _ -> fields @ [ executionPlan ]
                     let getDeferred kind =
                         { Info = { info with Kind = SelectFields [ executionPlan ]; IsDeferred = true }; Path = path'; Kind = kind; DeferredFields = addedDeferredFields } :: deferredFields
                     match field with
                     | Deferred -> directResult, getDeferred DeferredExecution
                     | Live -> directResult, getDeferred LiveExecution
-                    | Streamed -> directResult, getDeferred StreamedExecution
+                    | Streamed mode -> directResult, getDeferred (StreamedExecution mode)
                     | Planned -> directResult, deferredFields' // Unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
@@ -284,7 +298,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                 let directResult =
                     match field with
-                    | Deferred | Streamed ->
+                    | Deferred | Streamed _ ->
                         let deferredInfoMap = infoMap |> Map.map (fun _ v -> v |> List.map (fun info -> { info with IsDeferred = true }))
                         Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields deferredInfoMap
                     | _ -> 
@@ -294,7 +308,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 match field with
                 | Deferred -> directResult, getDeferred DeferredExecution
                 | Live -> directResult, getDeferred LiveExecution
-                | Streamed -> directResult, getDeferred StreamedExecution
+                | Streamed mode -> directResult, getDeferred (StreamedExecution mode)
                 | Planned -> directResult, deferredFields'
             | FragmentSpread spread ->
                 let spreadName = spread.Name
