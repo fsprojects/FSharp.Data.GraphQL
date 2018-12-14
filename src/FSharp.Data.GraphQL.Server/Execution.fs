@@ -346,9 +346,9 @@ let private treeToStream (bufferMode : StreamBufferMode) tree =
                     } |> AsyncVal.toAsync |> Observable.ofAsync)
                 |> Observable.concat
             match bufferMode with
-            | Buffered timeSpan -> 
+            | Buffered interval -> 
                 baseStream
-                |> Observable.buffer (TimeSpan.FromMilliseconds(float timeSpan))
+                |> Observable.buffer interval
                 |> Observable.map (fun items ->
                     let indexes = items |> List.map fst
                     let values = items |> List.map snd

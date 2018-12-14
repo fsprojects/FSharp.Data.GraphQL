@@ -159,11 +159,11 @@ let private getStreamBufferMode (field : Field) =
         |> List.tryFind (fun d -> d.Name = "stream")
     match directive with
     | Some d ->
-        match d.Arguments |> List.tryFind (fun x -> x.Name = "timeSpan") with
+        match d.Arguments |> List.tryFind (fun x -> x.Name = "interval") with
         | Some arg -> 
             match arg.Value with
-            | IntValue timeSpan when timeSpan > 0L -> Buffered (int timeSpan)
-            | _ -> failwithf "Invalid value type for 'timeSpan' argument of @defer directive in field '%s'. Must be an integer." field.AliasOrName
+            | IntValue interval when interval > 0L -> Buffered (int interval)
+            | _ -> failwithf "Invalid value type for 'interval' argument of @defer directive in field '%s'. Must be an integer." field.AliasOrName
         | None -> NonBuffered
     | None -> failwithf "Expected @stream directive on field '%s', but it does not exist." field.AliasOrName
 

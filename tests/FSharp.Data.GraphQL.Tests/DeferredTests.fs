@@ -1305,7 +1305,7 @@ let ``Should buffer stream list correctly``() =
         ]   
     let query = parse """{
         testData {
-            bufferedList @stream(timeSpan : 3000) {
+            bufferedList @stream(interval : 3000) {
                 value
             }
         }

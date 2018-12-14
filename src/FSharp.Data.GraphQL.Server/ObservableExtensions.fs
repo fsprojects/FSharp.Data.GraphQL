@@ -19,8 +19,8 @@ module internal Observable =
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 
-    let buffer (timeSpan : TimeSpan) (o : IObservable<'T>) : IObservable<'T list> =
-        o.Buffer(timeSpan) |> Observable.map List.ofSeq
+    let buffer (interval : int) (o : IObservable<'T>) : IObservable<'T list> =
+        o.Buffer(TimeSpan.FromMilliseconds (float interval)) |> Observable.map List.ofSeq
 
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)
