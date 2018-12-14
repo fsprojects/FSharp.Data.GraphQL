@@ -327,44 +327,46 @@ type StreamOutput =
     | NonBufferedList of int * (KeyValuePair<string, obj> * Error list)
     | BufferedList of int list * (KeyValuePair<string, obj> * Error list) list
 
-let private treeToStream (bufferMode : StreamBufferMode) =
-    function
+let private treeToStream (bufferMode : StreamBufferMode) tree =
+    let streamList bufferMode =
+        function 
+        | ResolverListNode list -> 
+            let baseStream =
+                list.Children
+                |> Array.mapi (fun i x -> 
+                    asyncVal {
+                        let! x' = x
+                        return i, x' 
+                    } |> AsyncVal.toAsync)
+                |> Observable.ofAsyncSeq
+                |> Observable.map (fun (i, t) -> 
+                    asyncVal {
+                        let! dict = treeToDict t
+                        return i, dict
+                    } |> AsyncVal.toAsync |> Observable.ofAsync)
+                |> Observable.concat
+            match bufferMode with
+            | Buffered timeSpan -> 
+                baseStream
+                |> Observable.buffer (TimeSpan.FromMilliseconds(float timeSpan))
+                |> Observable.map (fun items ->
+                    let indexes = items |> List.map fst
+                    let values = items |> List.map snd
+                    (indexes, values) |> BufferedList)
+            | NonBuffered -> baseStream |> Observable.map NonBufferedList
+        | other -> 
+            async {
+                let! dict = treeToDict other
+                return dict |> NonList
+            } |> Observable.ofAsync
+    match tree with
     | ResolverObjectNode node ->
         node.Children
         |> Array.map (AsyncVal.toAsync)
         |> Observable.ofAsyncSeq
-        |> Observable.map (function 
-            | ResolverListNode list -> 
-                let baseStream =
-                    list.Children
-                    |> Array.mapi (fun i x -> 
-                        asyncVal {
-                            let! x' = x
-                            return i, x' 
-                        } |> AsyncVal.toAsync)
-                    |> Observable.ofAsyncSeq
-                    |> Observable.map (fun (i, t) -> 
-                        asyncVal {
-                            let! dict = treeToDict t
-                            return i, dict
-                        } |> AsyncVal.toAsync |> Observable.ofAsync)
-                    |> Observable.concat
-                match bufferMode with
-                | Buffered timeSpan -> 
-                    baseStream
-                    |> Observable.buffer (TimeSpan.FromMilliseconds(float timeSpan))
-                    |> Observable.map (fun items ->
-                        let indexes = items |> List.map fst
-                        let values = items |> List.map snd
-                        (indexes, values) |> BufferedList)
-                | NonBuffered -> baseStream |> Observable.map NonBufferedList
-            | other -> 
-                async {
-                    let! dict = treeToDict other
-                    return dict |> NonList
-                } |> Observable.ofAsync)
+        |> Observable.map (streamList bufferMode)
         |> Observable.concat
-    | x -> failwithf "Unexpected parent object '%s' for streaming." x.Name
+    | tree -> tree |> streamList bufferMode
 
 let private errorStream bufferMode tree message path = 
     treeToStream bufferMode tree
@@ -390,7 +392,7 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
             then info.ResolveDeferred ()
             else info
         map |> Map.map (fun _ v ->  v |> List.map filter)
-    let resolve kind  =
+    let resolveDirect kind  =
         match returnDef with
         | Object objdef ->
             match kind with
@@ -487,10 +489,10 @@ let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldConte
                 else nullResolverError name
         | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
     match ctx.ExecutionInfo.Kind, returnDef, ctx.ExecutionInfo.IsDeferred with
-    | ResolveDeferred, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None } }
-    | ResolveDeferred, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
-    | ResolveDeferred, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |] } }
-    | _ -> resolve ctx.ExecutionInfo.Kind
+    | ResolveDeferred _, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None } }
+    | ResolveDeferred _, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+    | ResolveDeferred _, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |] } }
+    | _ -> resolveDirect ctx.ExecutionInfo.Kind
 
 and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
     let rec build acc = function
@@ -549,24 +551,25 @@ let formatErrors (errors : Error list) =
         NameValueLookup.ofList ["message", upcast message; "path", upcast path])
 
 let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
+    let buildRootTree (name, info) =
+        let fdef = info.Definition
+        let argDefs = fieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
+        let fieldCtx =
+            { ExecutionInfo = info
+              Context = ctx
+              ReturnType = fdef.TypeDef
+              ParentType = objdef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables }
+        let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        execute fieldCtx value
+        |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
+        |> AsyncVal.rescue(fun e -> ResolverError { Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []})
     let resultTrees =
         resultSet
-        |> Array.map (fun (name, info) ->
-            let fdef = info.Definition
-            let argDefs = fieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-            let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
-            let fieldCtx =
-                { ExecutionInfo = info
-                  Context = ctx
-                  ReturnType = fdef.TypeDef
-                  ParentType = objdef
-                  Schema = ctx.Schema
-                  Args = args
-                  Variables = ctx.Variables }
-            let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-            execute fieldCtx value
-            |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
-            |> AsyncVal.rescue(fun e -> ResolverError { Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []}))
+        |> Array.map buildRootTree
     let dict =
         asyncVal {
             let! trees =
@@ -592,14 +595,18 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
             remove path None
         asyncVal {
             let! tree' = tree
+            let path' =
+                match removeDuplicatedIndexes path with
+                | [] -> []
+                | xs -> List.tail xs
             let! res =
-                match List.tail (removeDuplicatedIndexes path), tree' with
+                match path', tree' with
                 | [], t ->
                     asyncVal {
                         let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
                         match d.Info.Kind with
-                        | SelectFields [f] -> return! async { return [|res, List.rev (f.Identifier :> obj :: pathAcc)|] }
-                        | _ -> return! async { return [|res, List.rev ((List.head path)::pathAcc)|] }
+                        | SelectFields [f] -> return! async { return [|res, List.rev (box f.Identifier :: pathAcc)|] }
+                        | _ -> return! async { return [|res, List.rev pathAcc|] }
                     }
                 | [String p], t ->
                     asyncVal {
@@ -740,7 +747,11 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Args = args
               Variables = ctx.Variables }
         let path = d.Path |> List.map box
-        traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
+        let head =
+            match path with
+            | [] -> [box fdef.Name]
+            | xs -> [List.head xs]
+        traversePath d fieldCtx path (AsyncVal.wrap tree) head
         |> AsyncVal.bind (Array.map (fun (tree, path) ->
             let outerResult =
                 asyncVal {
@@ -805,10 +816,15 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         then None
         else
             resultTrees
-            |> Seq.map (AsyncVal.map (fun tree ->
+            |> Array.map2 (fun (name, (info : ExecutionInfo)) tree -> 
+                match info.Kind with
+                | ResolveDeferred info when info.ParentDef = upcast objdef -> Some info, (buildRootTree (name, info))
+                | _ -> None, tree) resultSet
+            |> Array.map (fun (info, tree) -> tree |> AsyncVal.map (fun t -> info, t))
+            |> Seq.map (AsyncVal.map (fun (info, tree) ->
                 ctx.ExecutionPlan.DeferredFields
                 |> Seq.filter (fun d -> (List.head d.Path) = tree.Name)
-                |> Seq.map (deferredResult tree)
+                |> Seq.map ((fun d -> match info with | Some info -> { d with Info = info; Path = []} | None -> d) >> (deferredResult tree))
                 |> Seq.map AsyncVal.toAsync
                 |> Observable.ofAsyncSeq))
             |> Seq.map AsyncVal.toAsync
