@@ -19,8 +19,22 @@ module internal Observable =
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 
-    let buffer (interval : int) (o : IObservable<'T>) : IObservable<'T list> =
-        o.Buffer(TimeSpan.FromMilliseconds (float interval)) |> Observable.map List.ofSeq
+    /// Projects each element of an observable sequence into consecutive non-overlapping buffers
+    /// which are produced based on timing information.
+    let bufferByTiming (ms : int) x =
+        let span = TimeSpan.FromMilliseconds(float ms)
+        Observable.Buffer(x, span) |> Observable.map List.ofSeq
+
+    /// Projects each element of an observable sequence into consecutive non-overlapping buffers
+    /// which are produced based on element count information.
+    let bufferByElementCount (count : int) x =
+        Observable.Buffer(x, count) |> Observable.map List.ofSeq
+
+    /// Projects each element of an observable sequence into consecutive non-overlapping buffers
+    /// which are produced based on timing and element count information.
+    let bufferByTimingAndElementCount (ms : int) (count : int) x =
+        let span = TimeSpan.FromMilliseconds(float ms)
+        Observable.Buffer(x, span, count) |> Observable.map List.ofSeq
 
     let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
         obs.Catch(fx)

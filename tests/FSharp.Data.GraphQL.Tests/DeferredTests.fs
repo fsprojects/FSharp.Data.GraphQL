@@ -220,7 +220,7 @@ let Query =
         ])
 
 let schemaConfig = 
-    { SchemaConfig.DefaultWithBufferedStream(defaultBufferMode = NonBuffered) with Types = [ CType; DType ] }
+    { SchemaConfig.DefaultWithBufferedStream(streamOptions = { Interval = None; PreferredBatchSize = None }) with Types = [ CType; DType ] }
 
 
 let sub =
@@ -1275,7 +1275,7 @@ let ``List Stream``() =
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact(Skip="Can be intermitent depending on number of free cores")>]
-let ``Should buffer stream list correctly``() =
+let ``Should buffer stream list correctly by timing information``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -1306,6 +1306,66 @@ let ``Should buffer stream list correctly``() =
     let query = parse """{
         testData {
             bufferedList @stream(interval : 3000) {
+                value
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = List<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred
+        |> Observable.add (fun x ->
+            if actualDeferred.Count < 2 then actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first Deferred GQLResponse"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second Deferred GQLResponse"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
+
+[<Fact>]
+let ``Should buffer stream list correctly by count information``() =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "bufferedList", upcast []
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Buffered 1"
+                ]
+                upcast NameValueLookup.ofList [
+                    "value", upcast "Buffered 2"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0; 1]]
+        ]        
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Buffered 3"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2]]
+        ]   
+    let query = parse """{
+        testData {
+            bufferedList @stream(preferredBatchSize : 2) {
                 value
             }
         }
@@ -1435,7 +1495,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         |> ignore
     | _ -> fail "Expected Deferred GQLRespnse"
 
-[<Fact>]
+[<Fact(Skip="Can be intermitent depending on number of free cores")>]
 let ``Each streamed result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [

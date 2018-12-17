@@ -154,18 +154,22 @@ let private isStreamedField (field : Field) =
     field.Directives |> List.exists(fun d -> d.Name = "stream")
 
 let private getStreamBufferMode (field : Field) =
+    let cast argName value =
+        match value with
+        | IntValue v -> int v
+        | _ -> raise <| GraphQLException(sprintf "Stream directive parsing error: expected an integer value in argument '%s', but could not parse it." argName)
     let directive =
         field.Directives
         |> List.tryFind (fun d -> d.Name = "stream")
+    let getArg argName (d : Directive) =
+        d.Arguments
+        |> List.tryFind (fun x -> x.Name = argName)
+        |> Option.map (fun x -> x.Value |> cast argName)
+    let interval = getArg "interval"
+    let preferredBatchSize = getArg "preferredBatchSize"
     match directive with
-    | Some d ->
-        match d.Arguments |> List.tryFind (fun x -> x.Name = "interval") with
-        | Some arg -> 
-            match arg.Value with
-            | IntValue interval when interval > 0L -> Buffered (int interval)
-            | _ -> failwithf "Invalid value type for 'interval' argument of @defer directive in field '%s'. Must be an integer." field.AliasOrName
-        | None -> NonBuffered
-    | None -> failwithf "Expected @stream directive on field '%s', but it does not exist." field.AliasOrName
+    | Some d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
+    | None -> failwithf "Expected Stream directive on field '%s', but it does not exist." field.AliasOrName
 
 let private isLiveField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "live")

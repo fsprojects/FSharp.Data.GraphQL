@@ -783,17 +783,17 @@ and DeferredExecutionInfo = {
     DeferredFields : DeferredExecutionInfo list
 }
 
-/// Stream buffer mode.
-and StreamBufferMode =
-    /// Items are sent one by one, as soon as they are computed.
-    | NonBuffered
-    /// Items are buffered for a time span in milliseconds, and when it completes, send buffered items to subscriber.
-    | Buffered of int
+/// Buffered stream options. Used to specify how the buffer will behavior in a stream.
+and BufferedStreamOptions =
+      /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
+    { Interval : int option
+      /// The maximum number of items that will be buffered before being sent to the subscriber.
+      PreferredBatchSize : int option }
 
 /// Kind of deferred execution.
 and DeferredExecutionInfoKind =
     | DeferredExecution
-    | StreamedExecution of StreamBufferMode
+    | StreamedExecution of BufferedStreamOptions
     | LiveExecution
 
 /// The context used to hold all the information for a schema compiling proccess.

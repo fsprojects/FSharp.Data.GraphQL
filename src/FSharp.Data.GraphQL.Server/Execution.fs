@@ -327,33 +327,37 @@ type StreamOutput =
     | NonBufferedList of int * (KeyValuePair<string, obj> * Error list)
     | BufferedList of int list * (KeyValuePair<string, obj> * Error list) list
 
-let private treeToStream (bufferMode : StreamBufferMode) tree =
-    let streamList bufferMode =
+let private treeToStream (streamOptions : BufferedStreamOptions) tree =
+    let buffer (options : BufferedStreamOptions) =
+        let mapBuffered =
+            Observable.map (fun items ->
+                let indexes = items |> List.map fst
+                let values = items |> List.map snd
+                (indexes, values) |> BufferedList)
+        let mapNonBuffered =
+            Observable.map NonBufferedList
+        match options.Interval, options.PreferredBatchSize with
+        | Some i, None -> Observable.bufferByTiming i >> mapBuffered
+        | None, Some c -> Observable.bufferByElementCount c >> mapBuffered
+        | Some i, Some c -> Observable.bufferByTimingAndElementCount i c >> mapBuffered
+        | None, None -> mapNonBuffered
+    let streamList =
         function 
         | ResolverListNode list -> 
-            let baseStream =
-                list.Children
-                |> Array.mapi (fun i x -> 
-                    asyncVal {
-                        let! x' = x
-                        return i, x' 
-                    } |> AsyncVal.toAsync)
-                |> Observable.ofAsyncSeq
-                |> Observable.map (fun (i, t) -> 
-                    asyncVal {
-                        let! dict = treeToDict t
-                        return i, dict
-                    } |> AsyncVal.toAsync |> Observable.ofAsync)
-                |> Observable.concat
-            match bufferMode with
-            | Buffered interval -> 
-                baseStream
-                |> Observable.buffer interval
-                |> Observable.map (fun items ->
-                    let indexes = items |> List.map fst
-                    let values = items |> List.map snd
-                    (indexes, values) |> BufferedList)
-            | NonBuffered -> baseStream |> Observable.map NonBufferedList
+            list.Children
+            |> Array.mapi (fun i x -> 
+                asyncVal {
+                    let! x' = x
+                    return i, x' 
+                } |> AsyncVal.toAsync)
+            |> Observable.ofAsyncSeq
+            |> Observable.map (fun (i, t) -> 
+                asyncVal {
+                    let! dict = treeToDict t
+                    return i, dict
+                } |> AsyncVal.toAsync |> Observable.ofAsync)
+            |> Observable.concat
+            |> buffer streamOptions
         | other -> 
             async {
                 let! dict = treeToDict other
@@ -364,9 +368,9 @@ let private treeToStream (bufferMode : StreamBufferMode) tree =
         node.Children
         |> Array.map (AsyncVal.toAsync)
         |> Observable.ofAsyncSeq
-        |> Observable.map (streamList bufferMode)
+        |> Observable.map streamList
         |> Observable.concat
-    | tree -> tree |> streamList bufferMode
+    | tree -> streamList tree
 
 let private errorStream bufferMode tree message path = 
     treeToStream bufferMode tree
@@ -758,8 +762,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     let deferred = 
                         match d.Kind with
                         | LiveExecution -> Seq.empty
-                        | StreamedExecution bufferMode ->
-                            treeToStream bufferMode tree
+                        | StreamedExecution options ->
+                            treeToStream options tree
                             |> Observable.map (fun output -> mapStream path output)
                             |> Observable.bind Observable.ofSeq
                             |> Observable.toSeq
