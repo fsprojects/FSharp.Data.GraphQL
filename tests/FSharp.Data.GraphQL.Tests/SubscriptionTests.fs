@@ -197,7 +197,7 @@ let ``Should be able to subscribe to async field and get results``() =
     data
   }
 }"""
-    use mre = new ManualResetEvent(false)
+    let mre = new ManualResetEvent(false)
     let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
