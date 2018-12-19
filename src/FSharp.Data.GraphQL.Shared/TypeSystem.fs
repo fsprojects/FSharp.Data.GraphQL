@@ -360,7 +360,7 @@ and ILiveFieldSubscriptionProvider =
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : obj -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
-        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
+        abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
 
 /// Interface used for receiving information about a whole
@@ -1986,7 +1986,7 @@ module SubscriptionExtensions =
             this.AsyncRegister subscription |> Async.RunSynchronously
 
         member this.Publish<'T> typeName fieldName subType =
-            this.PublishAsync typeName fieldName subType |> Async.RunSynchronously
+            this.AsyncPublish typeName fieldName subType |> Async.RunSynchronously
 
 [<CompilationRepresentation(CompilationRepresentationFlags.ModuleSuffix)>]
 module Resolve =

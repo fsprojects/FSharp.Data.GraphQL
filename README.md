@@ -93,7 +93,7 @@ and ILiveFieldSubscriptionProvider =
         abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         abstract member Add : obj -> string -> string -> IObservable<obj>
-        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
+        abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
 ```
 

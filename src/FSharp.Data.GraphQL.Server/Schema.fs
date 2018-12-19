@@ -114,7 +114,7 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (sub, channel) -> channel |> Observable.filter (fun o -> sub.Identity o = identity)
                 | false, _ -> Observable.Empty()
-            member __.PublishAsync<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
+            member __.AsyncPublish<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.OnNext(box value)
