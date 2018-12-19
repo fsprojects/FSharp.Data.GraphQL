@@ -97,7 +97,7 @@ and ILiveFieldSubscriptionProvider =
     end
 ```
 
-To set a field as a live field, call `Register` method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
+To set a field as a live field, call `Register` extension method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
 
 ```fsharp
 let schemaConfig = SchemaConfig.Default
