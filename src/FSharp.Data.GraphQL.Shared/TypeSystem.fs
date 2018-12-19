@@ -289,7 +289,7 @@ type Subscription = {
 and ISubscriptionProvider =
     interface
         /// Registers a new subscription type, called at schema compilation time.
-        abstract member RegisterAsync : Subscription -> Async<unit>
+        abstract member AsyncRegister : Subscription -> Async<unit>
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
         abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type.
@@ -354,7 +354,7 @@ and ILiveFieldSubscriptionProvider =
         /// Checks if a type and a field is registered in the provider.
         abstract member IsRegistered : string -> string -> bool
         /// Registers a new live query subscription type, called at schema compilation time.
-        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
+        abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
@@ -1973,7 +1973,7 @@ module Tags =
 module SubscriptionExtensions =
     type ISubscriptionProvider with
         member this.Register subscription =
-            this.RegisterAsync subscription |> Async.RunSynchronously
+            this.AsyncRegister subscription |> Async.RunSynchronously
 
         member this.Publish<'T> name subType =
             this.AsyncPublish name subType |> Async.RunSynchronously
@@ -1983,7 +1983,7 @@ module SubscriptionExtensions =
 
     type ILiveFieldSubscriptionProvider with
         member this.Register subscription =
-            this.RegisterAsync subscription |> Async.RunSynchronously
+            this.AsyncRegister subscription |> Async.RunSynchronously
 
         member this.Publish<'T> typeName fieldName subType =
             this.PublishAsync typeName fieldName subType |> Async.RunSynchronously

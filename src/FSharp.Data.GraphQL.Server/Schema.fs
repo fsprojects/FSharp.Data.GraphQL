@@ -66,7 +66,7 @@ type SchemaConfig =
     static member DefaultSubscriptionProvider() =
         let subscriptionManager = new SubscriptionManager()
         { new ISubscriptionProvider with
-            member __.RegisterAsync (subscription : Subscription) = async {
+            member __.AsyncRegister (subscription : Subscription) = async {
                 return subscriptionManager.Add(subscription) }
 
             member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
@@ -100,7 +100,7 @@ type SchemaConfig =
             member __.IsRegistered (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 registeredSubscriptions.ContainsKey(key)
-            member __.RegisterAsync (subscription : ILiveFieldSubscription) = async {
+            member __.AsyncRegister (subscription : ILiveFieldSubscription) = async {
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
                 registeredSubscriptions.Add(key, value) }
