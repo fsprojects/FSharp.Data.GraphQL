@@ -13,8 +13,8 @@ module DirectiveChooser =
         chooser directive
 
     /// Builds a chooser that, given a Directive x, returns Some x.
-    let keep : DirectiveChooser = 
-        let chooser = fun directive -> Some directive
+    let keep : DirectiveChooser =
+        let chooser = Some
         chooser
 
     /// Builds a chooser that, for any Directive, returns None.
@@ -96,7 +96,7 @@ module DirectiveChooser =
             | _ -> choosers |> reduceSeq compose |> apply directive
         chooser
 
-    /// Reduces a sequence of choosers into a single chooser, by applying thee merge function to reduce it.
+    /// Reduces a sequence of choosers into a single chooser, by applying the DirectiveChooser.merge to reduce it.
     let mergeSeq (choosers : DirectiveChooser seq) : DirectiveChooser =
         let chooser = fun directive ->
             match Seq.length choosers with
