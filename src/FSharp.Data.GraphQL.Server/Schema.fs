@@ -4,13 +4,47 @@
 namespace FSharp.Data.GraphQL
 
 open System.Collections.Generic
-open System.Reactive.Subjects
 open System.Reactive.Linq
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
+open System.Reactive.Subjects
+
+type private Channel = ISubject<obj>
+
+type private ChannelBag() =
+    let untagged = List<Channel>()
+    let tagged = Dictionary<Tag, List<Channel>>()
+    member __.AddNew(tags : Tag seq) : Channel =
+        let channel = new Subject<obj>()
+        untagged.Add(channel)
+        let adder tag =
+            match tagged.TryGetValue(tag) with
+            | true, channels -> 
+                channels.Add(channel)
+            | false, _ -> 
+                let channels = List<Channel>()
+                channels.Add(channel)
+                tagged.Add(tag, channels)
+        tags |> Seq.iter adder
+        upcast channel
+    member __.GetAll() =
+        untagged |> Seq.map id
+    member __.GetByTag(tag) =
+        match tagged.TryGetValue(tag) with
+        | false, _ -> Seq.empty
+        | true, channels -> channels |> Seq.map id
+
+type private SubscriptionManager() =
+    let subscriptions = Dictionary<string, Subscription * ChannelBag>()
+    member __.Add(subscription : Subscription) =
+        subscriptions.Add(subscription.Name, (subscription, new ChannelBag()))
+    member __.TryGet(subscriptionName) =
+        match subscriptions.TryGetValue(subscriptionName) with
+        | true, sub -> Some sub
+        | _ -> None
 
 /// A configuration object fot the GraphQL server schema.
 type SchemaConfig =
@@ -30,23 +64,30 @@ type SchemaConfig =
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() =
-        let registeredSubscriptions = new Dictionary<string, Subscription * Subject<obj>>()
+        let subscriptionManager = new SubscriptionManager()
         { new ISubscriptionProvider with
-            member __.RegisterAsync (subscription : Subscription) = async {
-                return registeredSubscriptions.Add(subscription.Name, (subscription, new Subject<obj>())) }
+            member __.AsyncRegister (subscription : Subscription) = async {
+                return subscriptionManager.Add(subscription) }
 
-            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef)  =
-                match registeredSubscriptions.TryGetValue(subdef.Name) with
-                | true, (sub, channel) -> 
-                    channel
-                    |> Observable.mapAsync(fun o -> sub.Filter ctx root o)
-                    |> Observable.choose(id)
-                | false, _ -> Observable.Empty()
+            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
+                let tags = subdef.TagsResolver ctx
+                match subscriptionManager.TryGet(subdef.Name) with
+                | Some (sub, channels) -> 
+                    channels.AddNew(tags)
+                    |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
+                    |> Observable.choose id
+                | None -> Observable.Empty()
 
-            member __.PublishAsync<'T> (name: string) (value: 'T) = async {
-                match registeredSubscriptions.TryGetValue(name) with
-                | true, (_, channel) -> channel.OnNext(box value)
-                | false, _ -> () } }
+            member __.AsyncPublish<'T> (name: string) (value: 'T) = async {
+                match subscriptionManager.TryGet(name) with
+                | Some (_, channels) -> channels.GetAll() |> Seq.iter (fun channel -> channel.OnNext(value))
+                | None -> () }
+                
+            member __.AsyncPublishTag<'T> (name: string) (tag : Tag) (value: 'T) = async {
+                match subscriptionManager.TryGet(name) with
+                | Some (_, channels) -> channels.GetByTag(tag) |> Seq.iter (fun channel -> channel.OnNext(value))
+                | None -> () } }
+
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
@@ -59,7 +100,7 @@ type SchemaConfig =
             member __.IsRegistered (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 registeredSubscriptions.ContainsKey(key)
-            member __.RegisterAsync (subscription : ILiveFieldSubscription) = async {
+            member __.AsyncRegister (subscription : ILiveFieldSubscription) = async {
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
                 registeredSubscriptions.Add(key, value) }
@@ -73,7 +114,7 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (sub, channel) -> channel |> Observable.filter (fun o -> sub.Identity o = identity)
                 | false, _ -> Observable.Empty()
-            member __.PublishAsync<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
+            member __.AsyncPublish<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.OnNext(box value)

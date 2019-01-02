@@ -110,3 +110,10 @@ let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
         if times = 0
         then fail errorMsg
         else waitFor condition (times - 1) errorMsg
+
+let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
+    Thread.Sleep(100) // Wait a bit before checking condition
+    if not (condition ())
+    then fail errorMsg
+    elif times > 0
+    then ensureThat condition (times - 1) errorMsg

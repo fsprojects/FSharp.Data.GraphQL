@@ -127,14 +127,14 @@ and ILiveFieldSubscriptionProvider =
     interface
         abstract member HasSubscribers : string -> string -> bool
         abstract member IsRegistered : string -> string -> bool
-        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
+        abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         abstract member Add : obj -> string -> string -> IObservable<obj>
-        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
+        abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
 ```
 
-To set a field as a live field, call `Register` method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
+To set a field as a live field, call `Register` extension method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
 
 ```fsharp
 let schemaConfig = SchemaConfig.Default
