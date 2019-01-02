@@ -126,6 +126,34 @@ type SchemaConfig =
           ParseError = fun e -> e.Message
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
+    /// <summary>
+    /// Default SchemaConfig with buffered stream support.
+    /// This config modifies the stream directive to have two optional arguments: 'interval' and 'preferredBatchSize'.
+    /// This argument will allow the user to buffer streamed results in a query by timing and/or batch size preferences.
+    /// </summary>
+    /// <param name="streamOptions">
+    /// The way the buffered stream will behavior by default - standard values for the 'interval' and 'preferredBatchSize' arguments.
+    /// </param>
+    static member DefaultWithBufferedStream(streamOptions : BufferedStreamOptions) =
+        let streamDirective =
+            let args = [|
+                Define.Input(
+                    "interval", 
+                    Nullable Int, 
+                    defaultValue = streamOptions.Interval,
+                    description = "An optional argument used to buffer stream results. " +
+                        "When it's value is greater than zero, stream results will be buffered for milliseconds equal to the value, then sent to the client. " +
+                        "After that, starts buffering again until all results are streamed.")
+                Define.Input(
+                    "preferredBatchSize", 
+                    Nullable Int, 
+                    defaultValue = streamOptions.PreferredBatchSize,
+                    description = "An optional argument used to buffer stream results. " +
+                        "When it's value is greater than zero, stream results will be buffered until item count reaches this value, then sent to the client. " +
+                        "After that, starts buffering again until all results are streamed.") |]
+            { StreamDirective with Args = args }
+        { SchemaConfig.Default with
+            Directives = [ IncludeDirective; SkipDirective; DeferDirective; streamDirective; LiveDirective ] }
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =

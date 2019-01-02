@@ -8,7 +8,7 @@ F# implementation of Facebook [GraphQL query language specification](https://fac
 ## Quick start
 
 ```fsharp
-type Person = 
+type Person =
     { FirstName: string
       LastName: string }
 
@@ -17,7 +17,7 @@ let PersonType = Define.Object(
     name = "Person",
     fields = [
         // Property resolver will be auto-generated
-        Define.AutoField("firstName", String)   
+        Define.AutoField("firstName", String)
         // Asynchronous explicit member resolver
         Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })
     ])
@@ -67,6 +67,43 @@ A [second sample](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tre
 To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on [http://localhost:8083/](http://localhost:8083/) .
 
 In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.
+
+## Stream features
+
+Stream directive now has additional features, like batching (buffering) by interval and/or batch size. To make it work, a custom stream directive must be placed inside the `SchemaConfig.Directives` list, this custom directive containing two optional arguments called `interval` and `preferredBatchSize`:
+
+```fsharp
+let customStreamDirective =
+    let args = [|
+        Define.Input(
+            "interval",
+            Nullable Int,
+            defaultValue = Some 2000,
+            description = "An optional argument used to buffer stream results. ")
+        Define.Input(
+            "preferredBatchSize",
+            Nullable Int,
+            defaultValue = None,
+            description = "An optional argument used to buffer stream results. ") |]
+    { StreamDirective with Args = args }
+let schemaConfig =
+    { SchemaConfig.Default with
+        Directives = [
+            IncludeDirective
+            SkipDirective
+            DeferDirective
+            customStreamDirective
+            LiveDirective ] }
+```
+
+This boilerplate code can be easily reduced with a built-in implementation:
+
+```fsharp
+let streamOptions =
+    { Interval = Some 2000; PreferredBatchSize = None }
+let schemaConfig =
+    SchemaConfig.DefaultWithBufferedStream(streamOptions)
+```
 
 ## Live queries
 
@@ -147,10 +184,10 @@ That way, in the compile schema phase, the Schema is modified and execution maps
 With that being said, a middleware can be used to intercept each of those phases, and make customizations to them, modifying operations as needed. Each middleware must be implemented as a function with specific signature, and wrapped inside an `IExecutorMiddleware` interface:
 
 ```fsharp
-type SchemaCompileMiddleware = 
+type SchemaCompileMiddleware =
     SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
-type OperationPlanningMiddleware = 
+type OperationPlanningMiddleware =
     PlanningContext -> (PlanningContext -> ExecutionPlan) -> ExecutionPlan
 
 type OperationExecutionMiddleware =
@@ -206,7 +243,7 @@ let resolveFn (h : Human) =
   h.Friends |> List.map getCharacter |> List.toSeq
 
 let field =
-  Define.Field("friends", ListOf (Nullable CharacterType), 
+  Define.Field("friends", ListOf (Nullable CharacterType),
     resolve = resolveFn).WithQueryWeight(0.5)
 ```
 
