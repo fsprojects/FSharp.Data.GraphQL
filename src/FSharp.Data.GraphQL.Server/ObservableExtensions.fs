@@ -44,21 +44,9 @@ module internal Observable =
 
     let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
 
+    let merge (sources : IObservable<IObservable<'T>>) = Observable.Merge(sources)
+
     let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
 
     let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = 
-        { new IObservable<_> with
-            member __.Subscribe(observer) =
-                let count = Seq.length items
-                let mutable sent = 0
-                let lockObj = obj()
-                let onNext item = 
-                    async {
-                        let! item' = item
-                        lock lockObj (fun () ->
-                            observer.OnNext item'
-                            sent <- sent + 1
-                            if sent = count then observer.OnCompleted())
-                    } |> Async.StartAsTask |> ignore
-                items |> Seq.iter onNext
-                { new IDisposable with member __.Dispose() = () } }
+        items |> Seq.map ofAsync |> Observable.Merge
