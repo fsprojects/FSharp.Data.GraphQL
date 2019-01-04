@@ -831,17 +831,19 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     | Some info -> { d with Info = info; Path = [] }
                     | None -> d
                     |> deferredResult tree
+                    |> AsyncVal.map (Seq.map Observable.ofSeq >> Observable.ofSeq)
+                    |> AsyncVal.toAsync
+                    |> Observable.ofAsync
+                    |> Observable.merge
+                    |> Observable.merge
                 ctx.ExecutionPlan.DeferredFields
+                |> Seq.filter (fun d -> (List.head d.Path) = tree.Name)
+                |> Seq.map buildResult
                 |> Observable.ofSeq
-                |> Observable.filter (fun d -> (List.head d.Path) = tree.Name)
-                |> Observable.map buildResult
-                |> Observable.map (AsyncVal.toAsync >> Observable.ofAsync)
                 |> Observable.merge))
             |> Seq.map AsyncVal.toAsync
             |> Observable.ofAsyncSeq
             |> Observable.merge
-            |> Observable.bind Observable.ofSeq
-            |> Observable.bind Observable.ofSeq
             |> Some
     dict, deferredResults
 
