@@ -356,7 +356,7 @@ let private treeToStream (streamOptions : BufferedStreamOptions) tree =
                     let! dict = treeToDict t
                     return i, dict
                 } |> AsyncVal.toAsync |> Observable.ofAsync)
-            |> Observable.concat
+            |> Observable.merge
             |> buffer streamOptions
         | other -> 
             async {
@@ -369,7 +369,7 @@ let private treeToStream (streamOptions : BufferedStreamOptions) tree =
         |> Array.map (AsyncVal.toAsync)
         |> Observable.ofAsyncSeq
         |> Observable.map streamList
-        |> Observable.concat
+        |> Observable.merge
     | tree -> streamList tree
 
 let private errorStream bufferMode tree message path = 
@@ -732,7 +732,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             let! tree = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v)
                             let! data, err = treeToDict tree
                             return mapDefer data err path } |> AsyncVal.toAsync |> Observable.ofAsync)
-                        |> Observable.concat
+                        |> Observable.merge
                         |> Observable.toSeq
                         |> Seq.concat
                 | _ -> return Seq.empty
@@ -826,16 +826,24 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 | _ -> None, tree) resultSet
             |> Array.map (fun (info, tree) -> tree |> AsyncVal.map (fun t -> info, t))
             |> Seq.map (AsyncVal.map (fun (info, tree) ->
+                let buildResult (d : DeferredExecutionInfo) =
+                    match info with 
+                    | Some info -> { d with Info = info; Path = [] }
+                    | None -> d
+                    |> deferredResult tree
+                    |> AsyncVal.map (Seq.map Observable.ofSeq >> Observable.ofSeq)
+                    |> AsyncVal.toAsync
+                    |> Observable.ofAsync
+                    |> Observable.merge
+                    |> Observable.merge
                 ctx.ExecutionPlan.DeferredFields
                 |> Seq.filter (fun d -> (List.head d.Path) = tree.Name)
-                |> Seq.map ((fun d -> match info with | Some info -> { d with Info = info; Path = []} | None -> d) >> (deferredResult tree))
-                |> Seq.map AsyncVal.toAsync
-                |> Observable.ofAsyncSeq))
+                |> Seq.map buildResult
+                |> Observable.ofSeq
+                |> Observable.merge))
             |> Seq.map AsyncVal.toAsync
             |> Observable.ofAsyncSeq
-            |> Observable.concat
-            |> Observable.bind Observable.ofSeq
-            |> Observable.bind Observable.ofSeq
+            |> Observable.merge
             |> Some
     dict, deferredResults
 
