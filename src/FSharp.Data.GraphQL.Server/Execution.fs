@@ -349,13 +349,13 @@ let private treeToStream (streamOptions : BufferedStreamOptions) tree =
                 asyncVal {
                     let! x' = x
                     return i, x' 
-                } |> AsyncVal.toAsync)
-            |> Observable.ofAsyncSeq
+                })
+            |> Observable.ofAsyncValSeq
             |> Observable.map (fun (i, t) -> 
                 asyncVal {
                     let! dict = treeToDict t
                     return i, dict
-                } |> AsyncVal.toAsync |> Observable.ofAsync)
+                } |> Observable.ofAsyncVal)
             |> Observable.merge
             |> buffer streamOptions
         | other -> 
@@ -366,8 +366,7 @@ let private treeToStream (streamOptions : BufferedStreamOptions) tree =
     match tree with
     | ResolverObjectNode node ->
         node.Children
-        |> Array.map (AsyncVal.toAsync)
-        |> Observable.ofAsyncSeq
+        |> Observable.ofAsyncValSeq
         |> Observable.map streamList
         |> Observable.merge
     | tree -> streamList tree
@@ -731,7 +730,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         |> Observable.map (fun v -> asyncVal {
                             let! tree = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v)
                             let! data, err = treeToDict tree
-                            return mapDefer data err path } |> AsyncVal.toAsync |> Observable.ofAsync)
+                            return mapDefer data err path } |> Observable.ofAsyncVal)
                         |> Observable.merge
                         |> Observable.toSeq
                         |> Seq.concat
@@ -765,14 +764,14 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                         | StreamedExecution options ->
                             treeToStream options tree
                             |> Observable.map (fun output -> mapStream path output)
-                            |> Observable.bind Observable.ofSeq
+                            |> Observable.concatSeq
                             |> Observable.toSeq
                         | DeferredExecution -> 
                             treeToDict tree
                             |> AsyncVal.toAsync
                             |> Observable.ofAsync
                             |> Observable.map (fun (data, err) -> mapDefer data err path)
-                            |> Observable.bind Observable.ofSeq
+                            |> Observable.concatSeq
                             |> Observable.toSeq
                     let! live = mapLive tree path d fieldCtx
                     return Seq.append deferred live
@@ -794,7 +793,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                     else treeToStream bufferMode tree
                                 stream
                                 |> Observable.map (fun output -> mapStream path output)
-                                |> Observable.bind Observable.ofSeq
+                                |> Observable.concatSeq
                                 |> Observable.toSeq
                             | DeferredExecution ->
                                 let dict =
@@ -802,10 +801,9 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                                     then errorDict tree "Maximum degree of nested deferred executions reached." path
                                     else treeToDict tree
                                 dict
-                                |> AsyncVal.toAsync
-                                |> Observable.ofAsync
+                                |> Observable.ofAsyncVal
                                 |> Observable.map (fun (data, err) -> mapDefer data err path)
-                                |> Observable.bind Observable.ofSeq
+                                |> Observable.concatSeq
                                 |> Observable.toSeq
                         let! live = mapLive tree path d fieldCtx
                         return Seq.append deferred live
@@ -832,8 +830,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     | None -> d
                     |> deferredResult tree
                     |> AsyncVal.map (Seq.map Observable.ofSeq >> Observable.ofSeq)
-                    |> AsyncVal.toAsync
-                    |> Observable.ofAsync
+                    |> Observable.ofAsyncVal
                     |> Observable.merge
                     |> Observable.merge
                 ctx.ExecutionPlan.DeferredFields
@@ -841,8 +838,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 |> Seq.map buildResult
                 |> Observable.ofSeq
                 |> Observable.merge))
-            |> Seq.map AsyncVal.toAsync
-            |> Observable.ofAsyncSeq
+            |> Observable.ofAsyncValSeq
             |> Observable.merge
             |> Some
     dict, deferredResults

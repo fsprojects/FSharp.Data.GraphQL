@@ -7,10 +7,12 @@ open System.Reactive.Linq
 module internal Observable =
     let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
 
-    let ofAsync asyncOp = Observable.FromAsync(fun token -> Async.StartAsTask(asyncOp,cancellationToken = token))
+    let ofAsync x = Observable.FromAsync(fun ct -> Async.StartAsTask(x, cancellationToken = ct))
 
-    let ofSeq<'Item> (items : 'Item seq) : IObservable<'Item> = {
-        new IObservable<_> with
+    let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
+
+    let ofSeq<'Item> (items : 'Item seq) = {
+        new IObservable<'Item> with
             member __.Subscribe(observer) =
                 for item in items do observer.OnNext item
                 observer.OnCompleted()
@@ -46,7 +48,12 @@ module internal Observable =
 
     let merge (sources : IObservable<IObservable<'T>>) = Observable.Merge(sources)
 
+    let concatSeq (source : IObservable<#seq<'T>>) = source |> bind ofSeq
+
     let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
 
-    let ofAsyncSeq (items : Async<'Item> seq) : IObservable<'Item> = 
+    let ofAsyncSeq (items : Async<'Item> seq) = 
         items |> Seq.map ofAsync |> Observable.Merge
+
+    let ofAsyncValSeq (items : AsyncVal<'Item> seq) =
+        items |> Seq.map ofAsyncVal |> Observable.Merge
