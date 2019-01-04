@@ -656,6 +656,7 @@ let ``Each live result should be sent as soon as it is computed`` () =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
         updateLiveData ()
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come as soon as the live value is updated, which sould be almost instantly.
