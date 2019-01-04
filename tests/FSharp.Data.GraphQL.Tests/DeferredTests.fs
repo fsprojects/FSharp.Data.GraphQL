@@ -1383,8 +1383,8 @@ let ``Should buffer stream list correctly by count information``() =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        //if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
-        //then fail "Timeout while waiting for first Deferred GQLResponse"
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
         actualDeferred
