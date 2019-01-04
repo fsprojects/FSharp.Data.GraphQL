@@ -768,8 +768,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                             |> Observable.toSeq
                         | DeferredExecution -> 
                             treeToDict tree
-                            |> AsyncVal.toAsync
-                            |> Observable.ofAsync
+                            |> Observable.ofAsyncVal
                             |> Observable.map (fun (data, err) -> mapDefer data err path)
                             |> Observable.concatSeq
                             |> Observable.toSeq
@@ -869,8 +868,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
             match err with
             | [] -> NameValueLookup.ofList["data", box output] :> Output
             | _ -> NameValueLookup.ofList["data", box output; "errors", upcast (formatErrors err)] :> Output)
-        |> AsyncVal.toAsync
-        |> Observable.ofAsync)
+        |> Observable.ofAsyncVal)
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
