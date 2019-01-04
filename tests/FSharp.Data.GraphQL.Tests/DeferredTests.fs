@@ -237,7 +237,10 @@ let executor = Executor(schema)
 let hasSubscribers () =
     schemaConfig.LiveFieldSubscriptionProvider.HasSubscribers "Data" "live"
 
-let updateData () =
+let resetLiveData () =
+    data.live <- "some value"
+
+let updateLiveData () =
     data.live <- "another value"
     schemaConfig.LiveFieldSubscriptionProvider.Publish "Data" "live" data
 
@@ -612,6 +615,63 @@ let ``Interface list field - Defer and Stream`` () =
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
+let ``Each live result should be sent as soon as it is computed`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "live", upcast "some value"
+                "delayed", null
+            ]
+        ]
+    let expectedLive =
+        NameValueLookup.ofList [
+            "data", upcast "another value"
+            "path", upcast ["testData"; "live"]
+        ]
+    let expectedDeferred =
+        NameValueLookup.ofList [
+            "data", upcast NameValueLookup.ofList [
+                "value", upcast "Delayed value"
+            ]
+            "path", upcast ["testData"; "delayed"]
+        ]
+    let query = parse """{
+        testData {
+            live @live
+            delayed @defer {
+                value
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = List<Output>()
+    resetLiveData ()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred |> Observable.add (fun x -> 
+            if actualDeferred.Count < 2 then actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        updateLiveData ()
+        // The second result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The first result should come as soon as the live value is updated, which sould be almost instantly.
+        // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
+        if TimeSpan.FromSeconds(float 3) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second deferred result"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedLive
+        |> itemEquals 1 expectedDeferred
+        |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
+
+[<Fact>]
 let ``Live Query`` () =
     let expectedDirect =
         NameValueLookup.ofList [
@@ -633,6 +693,7 @@ let ``Live Query`` () =
     }"""
     use mre = new ManualResetEvent(false)
     let actualDeferred = ConcurrentBag<Output>()
+    resetLiveData ()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
@@ -641,7 +702,7 @@ let ``Live Query`` () =
         deferred
         |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
-        updateData ()
+        updateLiveData ()
         wait mre "Timeout while waiting for Deferred GQLResponse"
         actualDeferred
         |> Seq.cast<NameValueLookup>
