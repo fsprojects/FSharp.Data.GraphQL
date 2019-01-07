@@ -1829,6 +1829,13 @@ GITHUB
   remote: fsharp/FAKE
     modules/Octokit/Octokit.fsx (291f58cc70aba6dd871cf18e66d2d88357e4f208)
       Octokit (>= 0.20)
+GROUP Samples
+NUGET
+  remote: https://www.nuget.org/api/v2
+    FSharp.Core (4.5.3) - restriction: || (>= net461) (>= netstandard2.0)
+    Suave (2.5.3)
+      FSharp.Core (>= 4.0 < 5.0) - restriction: || (>= net461) (>= netstandard2.0)
+
 GROUP Test
 NUGET
   remote: https://www.nuget.org/api/v2

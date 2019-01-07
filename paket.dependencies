@@ -9,6 +9,10 @@ nuget System.Runtime
 nuget FSharp.Core
 nuget Microsoft.AspNetCore.WebUtilities
 
+group Samples
+  source https://nuget.org/api/v2
+  nuget Suave
+
 group Build
   source https://nuget.org/api/v2
   

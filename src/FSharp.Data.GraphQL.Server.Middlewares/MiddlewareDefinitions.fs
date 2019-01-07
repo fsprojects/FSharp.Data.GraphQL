@@ -9,9 +9,12 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
     let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
-                match f.Definition.Metadata.TryFind<float>("queryWeight") with
-                | Some w -> w
-                | None -> 0.0
+                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef 
+                then 0.0
+                else
+                    match f.Definition.Metadata.TryFind<float>("queryWeight") with
+                    | Some w -> w
+                    | None -> 0.0
             let rec checkThreshold acc fields =
                 match fields with
                 | [] -> (true, acc)
@@ -53,7 +56,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata : bool) =
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
-            let args = [ Define.Input("filter", ObjectListFilter) ]
+            let args = [ Define.Input("filter", Nullable ObjectListFilter) ]
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =
@@ -94,7 +97,11 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 | _ -> collectArgs acc xs
         let ctx =
             match reportToMetadata with
-            | true -> { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
+            | true -> 
+                let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
+                let directFields = ctx.ExecutionPlan.Fields
+                let fields = directFields @ deferredFields
+                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] fields) }
             | false -> ctx
         next ctx
     interface IExecutorMiddleware with
