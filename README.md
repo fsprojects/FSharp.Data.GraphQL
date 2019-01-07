@@ -8,7 +8,7 @@ F# implementation of Facebook [GraphQL query language specification](https://fac
 ## Quick start
 
 ```fsharp
-type Person = 
+type Person =
     { FirstName: string
       LastName: string }
 
@@ -17,7 +17,7 @@ let PersonType = Define.Object(
     name = "Person",
     fields = [
         // Property resolver will be auto-generated
-        Define.AutoField("firstName", String)   
+        Define.AutoField("firstName", String)
         // Asynchronous explicit member resolver
         Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })
     ])
@@ -68,6 +68,43 @@ To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects 
 
 In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.
 
+## Stream features
+
+Stream directive now has additional features, like batching (buffering) by interval and/or batch size. To make it work, a custom stream directive must be placed inside the `SchemaConfig.Directives` list, this custom directive containing two optional arguments called `interval` and `preferredBatchSize`:
+
+```fsharp
+let customStreamDirective =
+    let args = [|
+        Define.Input(
+            "interval",
+            Nullable Int,
+            defaultValue = Some 2000,
+            description = "An optional argument used to buffer stream results. ")
+        Define.Input(
+            "preferredBatchSize",
+            Nullable Int,
+            defaultValue = None,
+            description = "An optional argument used to buffer stream results. ") |]
+    { StreamDirective with Args = args }
+let schemaConfig =
+    { SchemaConfig.Default with
+        Directives = [
+            IncludeDirective
+            SkipDirective
+            DeferDirective
+            customStreamDirective
+            LiveDirective ] }
+```
+
+This boilerplate code can be easily reduced with a built-in implementation:
+
+```fsharp
+let streamOptions =
+    { Interval = Some 2000; PreferredBatchSize = None }
+let schemaConfig =
+    SchemaConfig.DefaultWithBufferedStream(streamOptions)
+```
+
 ## Live queries
 
 Live directive is now supported by the server component. To support live queries, each field of each type of the schema needs to be configured as a live field. This is done by using `ILiveFieldSubscription` and `ILiveQuerySubscriptionProvider`, which can be configured in the `SchemaConfig`:
@@ -90,14 +127,14 @@ and ILiveFieldSubscriptionProvider =
     interface
         abstract member HasSubscribers : string -> string -> bool
         abstract member IsRegistered : string -> string -> bool
-        abstract member RegisterAsync : ILiveFieldSubscription -> Async<unit>
+        abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
         abstract member Add : obj -> string -> string -> IObservable<obj>
-        abstract member PublishAsync<'T> : string -> string -> 'T -> Async<unit>
+        abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
 ```
 
-To set a field as a live field, call `Register` method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
+To set a field as a live field, call `Register` extension method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
 
 ```fsharp
 let schemaConfig = SchemaConfig.Default
@@ -147,10 +184,10 @@ That way, in the compile schema phase, the Schema is modified and execution maps
 With that being said, a middleware can be used to intercept each of those phases, and make customizations to them, modifying operations as needed. Each middleware must be implemented as a function with specific signature, and wrapped inside an `IExecutorMiddleware` interface:
 
 ```fsharp
-type SchemaCompileMiddleware = 
+type SchemaCompileMiddleware =
     SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
-type OperationPlanningMiddleware = 
+type OperationPlanningMiddleware =
     PlanningContext -> (PlanningContext -> ExecutionPlan) -> ExecutionPlan
 
 type OperationExecutionMiddleware =
@@ -206,7 +243,7 @@ let resolveFn (h : Human) =
   h.Friends |> List.map getCharacter |> List.toSeq
 
 let field =
-  Define.Field("friends", ListOf (Nullable CharacterType), 
+  Define.Field("friends", ListOf (Nullable CharacterType),
     resolve = resolveFn).WithQueryWeight(0.5)
 ```
 

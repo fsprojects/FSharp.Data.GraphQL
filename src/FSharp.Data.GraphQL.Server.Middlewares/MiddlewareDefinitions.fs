@@ -9,9 +9,12 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
     let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
-                match f.Definition.Metadata.TryFind<float>("queryWeight") with
-                | Some w -> w
-                | None -> 0.0
+                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef 
+                then 0.0
+                else
+                    match f.Definition.Metadata.TryFind<float>("queryWeight") with
+                    | Some w -> w
+                    | None -> 0.0
             let rec checkThreshold acc fields =
                 match fields with
                 | [] -> (true, acc)

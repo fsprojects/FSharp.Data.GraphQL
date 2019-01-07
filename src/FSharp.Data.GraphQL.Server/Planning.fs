@@ -151,13 +151,31 @@ let private isDeferredField (field: Field) =
     field.Directives |> List.exists(fun d -> d.Name = "defer")
 
 let private isStreamedField (field : Field) =
-    field.Directives |> List.exists (fun d -> d.Name = "stream")
+    field.Directives |> List.exists(fun d -> d.Name = "stream")
+
+let private getStreamBufferMode (field : Field) =
+    let cast argName value =
+        match value with
+        | IntValue v -> int v
+        | _ -> raise <| GraphQLException(sprintf "Stream directive parsing error: expected an integer value in argument '%s', but could not parse it." argName)
+    let directive =
+        field.Directives
+        |> List.tryFind (fun d -> d.Name = "stream")
+    let getArg argName (d : Directive) =
+        d.Arguments
+        |> List.tryFind (fun x -> x.Name = argName)
+        |> Option.map (fun x -> x.Value |> cast argName)
+    let interval = getArg "interval"
+    let preferredBatchSize = getArg "preferredBatchSize"
+    match directive with
+    | Some d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
+    | None -> failwithf "Expected Stream directive on field '%s', but it does not exist." field.AliasOrName
 
 let private isLiveField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "live")
 
 let private (|Planned|Deferred|Streamed|Live|) field =
-    if isStreamedField field then Streamed
+    if isStreamedField field then Streamed (getStreamBufferMode field)
     elif isDeferredField field then Deferred
     elif isLiveField field then Live
     else Planned
@@ -231,14 +249,14 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                     let directResult =
                         match field with
-                        | Deferred | Streamed -> fields @ [ executionPlan.ResolveDeferred () ]
+                        | Deferred | Streamed _ -> fields @ [ executionPlan.ResolveDeferred () ]
                         | _ -> fields @ [ executionPlan ]
                     let getDeferred kind =
                         { Info = { info with Kind = SelectFields [ executionPlan ]; IsDeferred = true }; Path = path'; Kind = kind; DeferredFields = addedDeferredFields } :: deferredFields
                     match field with
                     | Deferred -> directResult, getDeferred DeferredExecution
                     | Live -> directResult, getDeferred LiveExecution
-                    | Streamed -> directResult, getDeferred StreamedExecution
+                    | Streamed mode -> directResult, getDeferred (StreamedExecution mode)
                     | Planned -> directResult, deferredFields' // Unfortunatelly, order matters here
             | FragmentSpread spread ->
                 let spreadName = spread.Name
@@ -284,7 +302,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 let addedDeferredFields = deferredFields' |> List.skip deferredFields.Length
                 let directResult =
                     match field with
-                    | Deferred | Streamed ->
+                    | Deferred | Streamed _ ->
                         let deferredInfoMap = infoMap |> Map.map (fun _ v -> v |> List.map (fun info -> { info with IsDeferred = true }))
                         Map.merge (fun _ oldVal newVal -> deepMerge oldVal newVal) fields deferredInfoMap
                     | _ -> 
@@ -294,7 +312,7 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 match field with
                 | Deferred -> directResult, getDeferred DeferredExecution
                 | Live -> directResult, getDeferred LiveExecution
-                | Streamed -> directResult, getDeferred StreamedExecution
+                | Streamed mode -> directResult, getDeferred (StreamedExecution mode)
                 | Planned -> directResult, deferredFields'
             | FragmentSpread spread ->
                 let spreadName = spread.Name

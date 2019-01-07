@@ -35,7 +35,7 @@ let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
 let hasError (errMsg : string) (errors: Error seq) =
     let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
-    Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
+    Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 let (<??) opt other =
     match opt with
     | None -> Some other
@@ -44,6 +44,11 @@ let undefined (value: 't) =
     Assert.True((value = Unchecked.defaultof<'t>), sprintf "Expected value to be undefined, but was: %A" value)
 let contains (expected : 'a) (xs : 'a seq) =
     Assert.Contains(expected, xs); xs
+let itemEquals (index : int) (expected : 'a) (xs : 'a seq) =
+    match xs |> Seq.tryItem index with
+    | Some item -> item |> equals expected
+    | None -> fail <| sprintf "Expected sequence to contain item at index %i, but sequence does not contain enough elements" index
+    xs
 
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
@@ -105,3 +110,15 @@ let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
         if times = 0
         then fail errorMsg
         else waitFor condition (times - 1) errorMsg
+
+let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
+    Thread.Sleep(100) // Wait a bit before checking condition
+    if not (condition ())
+    then fail errorMsg
+    elif times > 0
+    then ensureThat condition (times - 1) errorMsg
+
+[<RequireQualifiedAccess>]
+module Observable =
+    let addLocked lockObj (callback : 'T -> unit) source =
+        source |> Observable.add (fun x -> lock lockObj (fun () -> callback x))
