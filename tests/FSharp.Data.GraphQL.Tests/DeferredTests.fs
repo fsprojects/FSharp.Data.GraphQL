@@ -188,7 +188,7 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
-       delayed = { value = delay 8000 "Delayed value" }
+       delayed = { value = delay 5000 "Delayed value" }
        delayedList = [
            { value = async { return "Delayed value 1" } }
            { value = delay 5000 "Delayed value 2" }
@@ -1449,13 +1449,13 @@ let ``Each deferred result should be sent as soon as it is computed``() =
                 "delayed", null
             ]
         ]
-    let expectedDeferred1 =
-        NameValueLookup.ofList [
+    let expectedDeferred1 : Output =
+        upcast NameValueLookup.ofList [
             "data", upcast "Banana"
             "path", upcast ["testData"; "b"]
         ]
-    let expectedDeferred2 =
-        NameValueLookup.ofList [
+    let expectedDeferred2 : Output =
+        upcast NameValueLookup.ofList [
             "data", upcast NameValueLookup.ofList [
                 "value", upcast "Delayed value"
             ]
@@ -1471,28 +1471,27 @@ let ``Each deferred result should be sent as soon as it is computed``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
+    let mutable deferred1 : Output option = None
+    let mutable deferred2 : Output option = None
+    let getDeferred x =
+        if Option.isNone deferred1 then deferred1 <- Some x; mre1.Set() |> ignore
+        elif Option.isNone deferred2 then deferred2 <- Some x; mre2.Set() |> ignore
+    let lockObj = obj()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> 
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        // The second result is a delayed async field, which is set to compute the value for 8 seconds.
+        deferred |> Observable.add (fun x -> lock lockObj (fun () -> getDeferred x))
+        // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
         if TimeSpan.FromSeconds(float 3) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        actualDeferred
-        |> Seq.cast<NameValueLookup>
-        |> itemEquals 0 expectedDeferred1
-        |> itemEquals 1 expectedDeferred2
-        |> ignore
+        deferred1 |> isSome |> equals expectedDeferred1
+        deferred2 |> isSome |> equals expectedDeferred2
     | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]

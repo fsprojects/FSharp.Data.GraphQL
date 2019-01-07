@@ -118,6 +118,11 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
 
+let isSome (x : 'T option) =
+    match x with
+    | Some x -> x
+    | None -> failwith "Expected option to be Some, but found None."
+
 [<RequireQualifiedAccess>]
 module Observable =
     let addLocked lockObj (callback : 'T -> unit) source =
