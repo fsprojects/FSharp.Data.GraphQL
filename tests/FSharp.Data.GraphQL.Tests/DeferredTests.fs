@@ -188,7 +188,7 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
-       delayed = { value = delay 5000 "Delayed value" }
+       delayed = { value = delay 8000 "Delayed value" }
        delayedList = [
            { value = async { return "Delayed value 1" } }
            { value = delay 5000 "Delayed value 2" }
@@ -1481,7 +1481,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        // The second result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result is a delayed async field, which is set to compute the value for 8 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
         if TimeSpan.FromSeconds(float 3) |> mre1.WaitOne |> not
