@@ -779,7 +779,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                 d.DeferredFields
                 |> List.map (fun d ->
                     let fieldCtx = { fieldCtx with ExecutionInfo = d.Info }
-                    let path = d.Path |> List.rev |> List.map (fun x -> x :> obj)
+                    let path = d.Path |> List.rev |> List.map box
                     traversePath d fieldCtx path (AsyncVal.wrap tree) [ List.head path ]
                     |> AsyncVal.bind(Array.map(fun (tree, path) -> asyncVal {
                         let deferred =
