@@ -1238,6 +1238,61 @@ let ``Introspection executes an introspection query`` () =
                                       "name", upcast "INLINE_FRAGMENT"
                                       "description", upcast "Location adjacent to an inline fragment."
                                       "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "SCHEMA"
+                                      "description", upcast "Location adjacent to a schema IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "SCALAR"
+                                      "description", upcast "Location adjacent to a scalar IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "OBJECT"
+                                      "description", upcast "Location adjacent to an object IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "FIELD_DEFINITION"
+                                      "description", upcast "Location adjacent to a field IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "ARGUMENT_DEFINITION"
+                                      "description", upcast "Location adjacent to a field argument IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "INTERFACE"
+                                      "description", upcast "Location adjacent to an interface IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "UNION"
+                                      "description", upcast "Location adjacent to an union IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "ENUM"
+                                      "description", upcast "Location adjacent to an enum IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "ENUM_VALUE"
+                                      "description", upcast "Location adjacent to an enum value definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "INPUT_OBJECT"
+                                      "description", upcast "Location adjacent to an input object IDL definition."
+                                      "isDeprecated", upcast false
+                                      "deprecationReason", null];
+                                 upcast NameValueLookup.ofList [
+                                      "name", upcast "INPUT_FIELD_DEFINITION"
+                                      "description", upcast "Location adjacent to an input object field IDL definition."
+                                      "isDeprecated", upcast false
                                       "deprecationReason", null];]
                          "possibleTypes", null];
                     upcast NameValueLookup.ofList [
