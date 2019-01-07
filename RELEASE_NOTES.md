@@ -61,3 +61,8 @@
 
 ### 0.0.12-beta - November 21 2018
 * Deferred and Streamed results fixes for GQL interfaces when at the top-level of query.
+
+### 0.0.16-beta - January 3 2019
+* **Breaking Change** The `ISubscriptionProvider` interface now has additional methods to publish to subscriptions by tag.
+* **Breaking Change** Renamed interface methods in `ISubscriptionProvider` from XxAsync to AsyncXx to reserve the former for TPL extensions.
+* Fixes for stream and defer execution.
