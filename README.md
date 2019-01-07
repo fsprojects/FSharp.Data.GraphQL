@@ -332,6 +332,35 @@ let executor = Executor(schema, middlewares)
 
 The `IdentityNameResolver` is optional, though. If no resolver function is provided, this default implementation of is used. Also, notifications to subscribers must be done via `Publish` of `ILiveFieldSubscriptionProvider`, like explained above.
 
+### Directive chooser middleware
+
+This middleware can be used to modify directive behavior on a per request basis, by applying a directive chooser function to each directive present in the original query:
+
+```fsharp
+type DirectiveChooser = Directive -> Directive option
+```
+
+This function can be applied on the Metadata object of `AsyncExecute` calls. Let's say that we want to ignore a defer directive (and treat it as a direct result) by a `isTrustedUser` condition:
+
+```fsharp
+let schema = Schema(query = queryType)
+
+let middlewares = [ Define.DirectiveChooserMiddleware() ]
+
+let executor = Executor(schema, middlewares)
+
+let isTrustedUser = false // Or any calculated boolean value
+
+let chooser (d : Directive) = if not isTrustedUser then None else Some d
+
+let result =
+    executor.AsyncExecute(
+        query,
+        meta = Metadata.WithDirectiveChooser(chooser))
+```
+
+Altough chooser is just a simple `Directive -> Directive option` function, one may opt to use helpers to build and transform a chooser using the `DirectiveChooser` module. It does have many common chooser and transformations available, like `fallbackWhen`, `apply`, `merge` or `map`, for example.
+
 ### Using extensions to build your own middlewares
 
 You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` package to help building your own middlewares. When making a middleware, often you will need to modify schema definitions to add features to the schema defined by the user code. The `ObjectListFilter` middleware is an example, where all fields that implements lists of a certain type needs to be modified, by accepting an argument called `filter`.
