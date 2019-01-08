@@ -190,8 +190,8 @@ let data = {
        ]
        delayed = { value = delay 5000 "Delayed value" }
        delayedList = [
-           { value = async { return "Delayed value 1" } }
-           { value = delay 5000 "Delayed value 2" }
+           { value = delay 5000 "Delayed value 1" }
+           { value = async { return "Delayed value 2" } }
        ]
        resolverError = { value = async { return failwith "Resolver error!" } }
        resolverListError = [ 
@@ -204,9 +204,9 @@ let data = {
            { value = async { return null } }
        ]
        bufferedList = [
-           { value = async { return "Buffered 1" } }
-           { value = delay 1000 "Buffered 2" }
-           { value = delay 5000 "Buffered 3" }
+            { value = delay 5000 "Buffered 1" }
+            { value = delay 1000 "Buffered 2" }
+            { value = async { return "Buffered 3" } }
        ]
    }
 
@@ -1348,22 +1348,22 @@ let ``Should buffer stream list correctly by timing information``() =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Buffered 1"
+                    "value", upcast "Buffered 3"
                 ]
                 upcast NameValueLookup.ofList [
                     "value", upcast "Buffered 2"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0; 1]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2; 1]]
         ]        
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Buffered 3"
+                    "value", upcast "Buffered 1"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0]]
         ]   
     let query = parse """{
         testData {
@@ -1385,6 +1385,13 @@ let ``Should buffer stream list correctly by timing information``() =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        // The first result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result is also a delayed async field, computed for 1 second.
+        // Third result is a instant returning async field.
+        // As the buffer has a time limit of 3 seconds, the expected behavior is
+        // to buffer results 3 and 2 (in this order), as together they take less than 3 seconds to compute,
+        // and send them together on the first batch.
+        // First result should come in a second batch, as it takes 5 seconds to compute, more than the time limit of the buffer.
         if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
@@ -1408,22 +1415,22 @@ let ``Should buffer stream list correctly by count information``() =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Buffered 1"
+                    "value", upcast "Buffered 3"
                 ]
                 upcast NameValueLookup.ofList [
                     "value", upcast "Buffered 2"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0; 1]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2; 1]]
         ]        
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Buffered 3"
+                    "value", upcast "Buffered 1"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0]]
         ]   
     let query = parse """{
         testData {
@@ -1446,6 +1453,14 @@ let ``Should buffer stream list correctly by count information``() =
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
         if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        // The first result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result is also a delayed async field, computed for 1 second.
+        // Third result is a instant returning async field.
+        // As the preferred batch size is configured to have a maximum of two items, the expected behavior is
+        // to buffer results 3 and 2 (in this order), as together they take should be computed before than the fist result,
+        // and send them together on the first batch.
+        // First result should come in a second batch, as it takes 5 seconds to compute, which should be enough
+        // to put the two other results in a batch with the preferred size.
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
@@ -1569,19 +1584,19 @@ let ``Each streamed result should be sent as soon as it is computed``() =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Delayed value 1"
+                    "value", upcast "Delayed value 2"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "delayedList"; upcast 0]
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 1]
         ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Delayed value 2"
+                    "value", upcast "Delayed value 1"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "delayedList"; upcast 1]
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 0]
         ]
     let query = parse """{
         testData {
@@ -1602,8 +1617,8 @@ let ``Each streamed result should be sent as soon as it is computed``() =
             if actualDeferred.Count < 2 then actualDeferred.Add(x)
             if actualDeferred.Count = 1 then mre1.Set() |> ignore
             if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        // The second result is a delayed async field, which is set to compute the value for 5 seconds.
-        // The first result should come almost instantly, as it is not a delayed computed field.
+        // The first result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
         if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
