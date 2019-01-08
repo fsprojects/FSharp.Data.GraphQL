@@ -1573,6 +1573,64 @@ let ``Each deferred result should be sent as soon as it is computed``() =
     | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
+let ``Each deferred result of a list should be sent as soon as it is computed`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "delayedList", upcast [
+                    box <| NameValueLookup.ofList [
+                        "value", null
+                    ]
+                    upcast NameValueLookup.ofList [
+                        "value", null
+                    ]
+                ]
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast "Delayed value 2"
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 1; upcast "value"]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast "Delayed value 1"
+            "path", upcast [box "testData"; upcast "delayedList"; upcast 0; upcast "value"]
+        ]
+    let query = parse """{
+        testData {
+            delayedList {
+                value @defer
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let actualDeferred = List<Output>()
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        deferred |> Observable.add (fun x -> 
+            if actualDeferred.Count < 2 then actualDeferred.Add(x)
+            if actualDeferred.Count = 1 then mre1.Set() |> ignore
+            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        // The first result is a delayed async field, which is set to compute the value for 5 seconds.
+        // The second result should come first, almost instantly, as it is not a delayed computed field.
+        // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
+        // if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        // then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second deferred result"
+        actualDeferred
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
+
+[<Fact>]
 let ``Each streamed result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [
