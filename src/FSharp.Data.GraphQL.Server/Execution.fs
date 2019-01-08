@@ -587,6 +587,70 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                     return k::kvps, e@errs}) (Value ([],[]))
             return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
+    let rec traversePath2 (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: ResolverTree) (pathAcc: obj list) : AsyncVal<IObservable<ResolverTree * obj list>> =
+        let removeDuplicatedIndexes (path : obj list) =
+            let value = Some ("__index" :> obj)
+            let rec remove (path : obj list) last =
+                match path with
+                | [] -> []
+                | x :: xs when last = Some x && last = value -> remove xs <| Some x
+                | x :: xs -> x :: (remove xs <| Some x)
+            remove path None
+        let path' =
+            match removeDuplicatedIndexes path with
+            | [] -> []
+            | xs -> List.tail xs
+        match path', tree with
+        | [], t ->
+            asyncVal {
+                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                match d.Info.Kind with
+                | SelectFields [f] -> return! async { return [|res, List.rev (box f.Identifier :: pathAcc)|] |> Observable.ofSeq }
+                | _ -> return! async { return [|res, List.rev pathAcc|] |> Observable.ofSeq }
+            }
+        | [String p], t ->
+            asyncVal {
+                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                match res with
+                | ResolverError _ -> return! async { return [||] |> Observable.ofSeq } // A deferred fragment that was not found, just ignore it
+                | _ -> return! async { return [|res, List.rev((p :> obj)::pathAcc)|] |> Observable.ofSeq }
+            }
+        | ([p; String "__index"] | [p]), t ->
+            asyncVal {
+                let! res = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+                return! async { return [|res, List.rev(p::pathAcc)|] |> Observable.ofSeq }
+            }
+        | [head'; String "__index"; head; String "__index"] as p, ResolverObjectNode n ->
+            asyncVal {
+                let! next = n.Children |> AsyncVal.collectParallel |> AsyncVal.map (Array.tryFind(fun c -> c.Name = head.ToString()))
+                let! res =
+                    match next with
+                    | Some next' -> traversePath2 d fieldCtx p next' (head'::pathAcc)
+                    | None -> AsyncVal.empty
+                return res
+            }
+        | p, ResolverObjectNode n ->
+            asyncVal {
+                let head = p |> List.head
+                let! next = n.Children |> AsyncVal.collectParallel |> AsyncVal.map (Array.tryFind (fun c -> c.Name = head.ToString()))
+                let! res =
+                    match next with
+                    | Some next' -> traversePath2 d fieldCtx p next' (head::pathAcc)
+                    | None -> AsyncVal.empty
+                return res
+            }
+        | p, ResolverListNode l ->
+            asyncVal {
+                let res =
+                    l.Children
+                    |> Seq.mapi (fun i c -> asyncVal { 
+                        let! c' = c
+                        return! traversePath2 d fieldCtx p c' ((box i)::pathAcc) })
+                    |> Observable.ofAsyncValSeq
+                    |> Observable.merge
+                return res
+            }
+        | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
     let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: AsyncVal<ResolverTree>) (pathAcc: obj list): AsyncVal<(ResolverTree * obj list) []> =
         let removeDuplicatedIndexes (path : obj list) =
             let value = Some ("__index" :> obj)
