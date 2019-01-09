@@ -61,3 +61,5 @@ module internal Observable =
         items |> Seq.map ofAsyncVal |> Observable.Merge
 
     let empty<'T> = Seq.empty<'T> |> ofSeq
+
+    let singleton (item : 'T) = item |> Seq.singleton |> ofSeq
