@@ -1619,8 +1619,8 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        // if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
-        // then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         actualDeferred
