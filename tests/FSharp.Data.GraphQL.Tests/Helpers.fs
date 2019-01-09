@@ -117,8 +117,3 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     then fail errorMsg
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
-
-[<RequireQualifiedAccess>]
-module Observable =
-    let addLocked lockObj (callback : 'T -> unit) source =
-        source |> Observable.add (fun x -> lock lockObj (fun () -> callback x))
