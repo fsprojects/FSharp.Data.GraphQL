@@ -48,6 +48,8 @@ module internal Observable =
 
     let merge (sources : IObservable<IObservable<'T>>) = Observable.Merge(sources)
 
+    let merge2 (source1 : IObservable<'T>) (source2 : IObservable<'T>) = Observable.Merge(source1, source2)
+
     let concatSeq (source : IObservable<#seq<'T>>) = source |> bind ofSeq
 
     let mapAsync f = Observable.map (fun x -> (ofAsync (f x))) >> concat
@@ -57,3 +59,5 @@ module internal Observable =
 
     let ofAsyncValSeq (items : AsyncVal<'Item> seq) =
         items |> Seq.map ofAsyncVal |> Observable.Merge
+
+    let empty<'T> = Seq.empty<'T> |> ofSeq
