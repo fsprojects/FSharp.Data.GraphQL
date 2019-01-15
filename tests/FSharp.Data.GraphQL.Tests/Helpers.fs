@@ -4,6 +4,7 @@
 module Helpers
 
 open System
+open System.Linq
 open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
@@ -119,3 +120,36 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     then fail errorMsg
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
+
+type TestObserver<'T>(obs : IObservable<'T>) as this =
+    let received = List<'T>()
+    let mutable isCompleted = false
+    let mre = new ManualResetEvent(false)
+    let mutable subscription = Unchecked.defaultof<IDisposable>
+    let mutable onReceive : option<unit -> unit> = None
+    do subscription <- obs.Subscribe(this)
+    member __.OnReceive 
+        with get() = onReceive
+        and set(value) = onReceive <- value
+    member __.Received 
+        with get() = received.AsEnumerable()
+    member __.WaitCompleted() =
+        wait mre "Timeout waiting for OnCompleted"
+    member __.IsCompleted 
+        with get() = isCompleted
+    interface IObserver<'T> with
+        member __.OnCompleted() = 
+            isCompleted <- true
+            mre.Set() |> ignore
+        member __.OnError(error) = raise error
+        member __.OnNext(value) = 
+            received.Add(value)
+            onReceive |> Option.iter (fun x -> x())
+    interface IDisposable with
+        member __.Dispose() = 
+            subscription.Dispose()
+            mre.Dispose()
+
+[<RequireQualifiedAccess>]
+module Observer =
+    let create (sub : IObservable<'T>) = new TestObserver<'T>(sub)
