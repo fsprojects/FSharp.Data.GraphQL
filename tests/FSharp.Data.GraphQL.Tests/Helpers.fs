@@ -121,20 +121,24 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
 
-type TestObserver<'T>(obs : IObservable<'T>) as this =
+type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
     let received = List<'T>()
     let mutable isCompleted = false
     let mre = new ManualResetEvent(false)
     let mutable subscription = Unchecked.defaultof<IDisposable>
-    let mutable onReceive : option<unit -> unit> = None
     do subscription <- obs.Subscribe(this)
-    member __.OnReceive 
-        with get() = onReceive
-        and set(value) = onReceive <- value
     member __.Received 
         with get() = received.AsEnumerable()
     member __.WaitCompleted() =
         wait mre "Timeout waiting for OnCompleted"
+    member x.WaitCompleted(expectedItemCount) =
+        x.WaitCompleted()
+        if received.Count < expectedItemCount
+        then failwithf "Expected to receive %i items, but received %i" expectedItemCount received.Count
+    member __.WaitForItems(expectedItemCount) =
+        let errorMsg = sprintf "Expected to receive least %i items, but received %i" expectedItemCount received.Count
+        waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
+    member x.WaitForItem() = x.WaitForItems(1)
     member __.IsCompleted 
         with get() = isCompleted
     interface IObserver<'T> with
@@ -144,7 +148,7 @@ type TestObserver<'T>(obs : IObservable<'T>) as this =
         member __.OnError(error) = raise error
         member __.OnNext(value) = 
             received.Add(value)
-            onReceive |> Option.iter (fun x -> x())
+            onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
         member __.Dispose() = 
             subscription.Dispose()
@@ -152,4 +156,8 @@ type TestObserver<'T>(obs : IObservable<'T>) as this =
 
 [<RequireQualifiedAccess>]
 module Observer =
-    let create (sub : IObservable<'T>) = new TestObserver<'T>(sub)
+    let create (sub : IObservable<'T>) = 
+        new TestObserver<'T>(sub)
+
+    let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
+        new TestObserver<'T>(sub, onReceive)

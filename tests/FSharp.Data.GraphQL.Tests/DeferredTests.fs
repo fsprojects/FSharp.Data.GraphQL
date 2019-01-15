@@ -272,17 +272,14 @@ let ``Resolver error`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -322,19 +319,14 @@ let ``Resolver list error`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> 
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -369,17 +361,14 @@ let ``Nullable error`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -408,17 +397,14 @@ let ``Single Root object field - Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
@@ -451,17 +437,14 @@ let ``Single Root object list field - Defer`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -500,19 +483,14 @@ let ``Single Root object list field - Stream`` () =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> 
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -545,17 +523,14 @@ let ``Interface field - Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
@@ -595,19 +570,14 @@ let ``Interface list field - Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) -> 
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred
-            |> Observable.add (fun x -> 
-                actualDeferred.Add(x)
-                if actualDeferred.Count = 2 then set mre)
-            wait mre "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred
+            use sub = Observer.create deferred
+            sub.WaitCompleted(2)
+            sub.Received
             |> Seq.cast<NameValueLookup>
             |> contains expectedDeferred1
             |> contains expectedDeferred2
@@ -645,19 +615,17 @@ let ``Each live result should be sent as soon as it is computed`` () =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
-    resetLiveData ()
+    resetLiveData()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> 
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
-        updateLiveData ()
+        updateLiveData()
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come as soon as the live value is updated, which sould be almost instantly.
         // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
@@ -665,7 +633,7 @@ let ``Each live result should be sent as soon as it is computed`` () =
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        actualDeferred
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedLive
         |> itemEquals 1 expectedDeferred
@@ -692,20 +660,17 @@ let ``Live Query`` () =
             live @live
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
-    resetLiveData ()
+    resetLiveData()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
+        use sub = Observer.create deferred
         waitFor hasSubscribers 10 "Timeout while waiting for subscribers on GQLResponse"
-        updateLiveData ()
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        updateLiveData()
+        sub.WaitForItem()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedLive
         |> ignore
@@ -745,19 +710,14 @@ let ``Parallel Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> 
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -798,19 +758,14 @@ let ``Parallell Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x -> 
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -843,16 +798,14 @@ let ``Inner Object List Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -881,16 +834,14 @@ let ``Inner Object List Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> actualDeferred.Add(x); set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -935,19 +886,14 @@ let ``Nested Inner Object List Defer`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1002,19 +948,14 @@ let ``Nested Inner Object List Stream`` () =
                 }
             }
         }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 3 then set mre)
-        wait mre "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(3)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1044,17 +985,14 @@ let ``Simple Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
@@ -1095,17 +1033,14 @@ let ``List Defer``() =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-        then fail "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        use sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
@@ -1148,17 +1083,14 @@ let ``List Fragment Defer and Stream - Exclusive``() =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
@@ -1201,17 +1133,14 @@ let ``List Fragment Defer and Stream - Common``() =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
@@ -1252,20 +1181,14 @@ let ``List inside root - Stream``() =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then mre.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-        then fail "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1316,20 +1239,14 @@ let ``List Stream``() =
             }
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then mre.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-        then fail "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        use sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
@@ -1374,17 +1291,14 @@ let ``Should buffer stream list correctly by timing information``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result is also a delayed async field, computed for 1 second.
         // Third result is a instant returning async field.
@@ -1396,7 +1310,8 @@ let ``Should buffer stream list correctly by timing information``() =
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
-        actualDeferred
+        sub.WaitCompleted()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1441,18 +1356,14 @@ let ``Should buffer stream list correctly by count information``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred
-        |> Observable.add (fun x ->
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result is also a delayed async field, computed for 1 second.
         // Third result is a instant returning async field.
@@ -1461,10 +1372,12 @@ let ``Should buffer stream list correctly by count information``() =
         // and send them together on the first batch.
         // First result should come in a second batch, as it takes 5 seconds to compute, which should be enough
         // to put the two other results in a batch with the preferred size.
+        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
-        actualDeferred
+        sub.WaitCompleted()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1504,17 +1417,14 @@ let ``Union Defer and Stream`` () =
     }"""
     asts query
     |> Seq.iter (fun query ->
-        use mre = new ManualResetEvent(false)
-        let actualDeferred = ConcurrentBag<Output>()
         let result = query |> executor.AsyncExecute |> sync
         match result with
         | Deferred(data, errors, deferred) ->
             empty errors
             data.["data"] |> equals (upcast expectedDirect)
-            deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-            if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-            then fail "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred |> single |> equals (upcast expectedDeferred)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
         | _ -> fail "Expected Deferred GQLRespnse")
 
 [<Fact>]
@@ -1548,16 +1458,14 @@ let ``Each deferred result should be sent as soon as it is computed``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> 
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
@@ -1565,7 +1473,8 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        actualDeferred
+        sub.WaitCompleted()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1606,16 +1515,14 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> 
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
@@ -1623,7 +1530,8 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        actualDeferred
+        sub.WaitCompleted()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
@@ -1665,16 +1573,14 @@ let ``Each streamed result should be sent as soon as it is computed``() =
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
-    let actualDeferred = List<Output>()
     let result = query |> executor.AsyncExecute |> sync
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
-        deferred |> Observable.add (fun x -> 
-            if actualDeferred.Count < 2 then actualDeferred.Add(x)
-            if actualDeferred.Count = 1 then mre1.Set() |> ignore
-            if actualDeferred.Count = 2 then mre2.Set() |> ignore)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
@@ -1682,7 +1588,8 @@ let ``Each streamed result should be sent as soon as it is computed``() =
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        actualDeferred
+        sub.WaitCompleted()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
