@@ -37,7 +37,7 @@ module Observer =
     let create (sub : IObservable<'T>) = new TestObserver<'T>(sub)
 
 [<Fact>]
-let ``ofSeq should call OnComplete`` () =
+let ``ofSeq should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
     let obs = Observable.ofSeq source
     use sub = Observer.create obs
@@ -45,7 +45,7 @@ let ``ofSeq should call OnComplete`` () =
     sub.Received |> seqEquals source
 
 [<Fact>]
-let `` bind should call OnComplete`` () =
+let `` bind should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
     let obs = Observable.ofSeq source |> Observable.bind (fun x -> Observable.ofSeq [x; x])
     use sub = Observer.create obs
@@ -53,7 +53,7 @@ let `` bind should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 1; 2; 2; 3; 3; 4; 4; 5; 5 ]
 
 [<Fact>]
-let `` ofAsync should call OnComplete`` () =
+let `` ofAsync should call OnComplete and return items in expected order`` () =
     let source = async { return "test" }
     let obs = Observable.ofAsync source
     use sub = Observer.create obs
@@ -62,7 +62,7 @@ let `` ofAsync should call OnComplete`` () =
 
 
 [<Fact>]
-let `` ofAsyncVal should call OnComplete`` () =
+let `` ofAsyncVal should call OnComplete and return items in expected order`` () =
     let source = async { return "test" } |> AsyncVal.ofAsync
     let obs = Observable.ofAsyncVal source
     use sub = Observer.create obs
@@ -77,7 +77,7 @@ let ``toSeq on a finite sequence should generate a finite sequence`` () =
     result |> seqEquals source
 
 [<Fact>]
-let ``ofSeq on an empty sequence should call OnComplete`` () =
+let ``ofSeq on an empty sequence should call OnComplete and return items in expected order`` () =
     let source = Seq.empty<int>
     let obs = Observable.ofSeq source
     use sub = Observer.create obs
@@ -89,7 +89,7 @@ let delay ms x = async {
     return x }
 
 [<Fact>]
-let ``ofAsyncSeq should call OnComplete`` () =
+let ``ofAsyncSeq should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 300 2
         yield delay 100 1
@@ -100,7 +100,7 @@ let ``ofAsyncSeq should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 3; 2 ]
 
 [<Fact>]
-let ``ofAsyncValSeq should call OnComplete`` () =
+let ``ofAsyncValSeq should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 300 2 |> AsyncVal.ofAsync
         yield delay 100 1 |> AsyncVal.ofAsync
@@ -111,7 +111,7 @@ let ``ofAsyncValSeq should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 3; 2 ]
 
 [<Fact>]
-let ``bufferByTiming should call OnComplete`` () =
+let ``bufferByTiming should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -122,7 +122,7 @@ let ``bufferByTiming should call OnComplete`` () =
     sub.Received |> seqEquals [ [1; 3]; [2] ]
 
 [<Fact>]
-let ``bufferByElementCount should call OnComplete`` () =
+let ``bufferByElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -133,7 +133,7 @@ let ``bufferByElementCount should call OnComplete`` () =
     sub.Received |> seqEquals [ [1; 3]; [2] ]
 
 [<Fact>]
-let ``bufferByTimingAndElementCount should call OnComplete`` () =
+let ``bufferByTimingAndElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 500 2
         yield delay 50 1
@@ -149,7 +149,7 @@ type IndexException(index : int) =
     member __.Index = index
 
 [<Fact>]
-let ``catch should call OnComplete`` () =   
+let ``catch should call OnComplete and return items in expected order`` () =   
     let source : int seq = seq { for x in 1 .. 5 do yield raise <| IndexException(x) }
     let obs = 
         Observable.ofSeq source 
@@ -169,7 +169,7 @@ let ``choose should cal OnComplete`` () =
     sub.Received |> seqEquals [ 2; 4 ]
 
 [<Fact>]
-let ``concat should call OnComplete`` () =
+let ``concat should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -187,7 +187,7 @@ let ``concat should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
 
 [<Fact>]
-let ``concat2 should call OnComplete`` () =
+let ``concat2 should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -203,7 +203,7 @@ let ``concat2 should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
 
 [<Fact>]
-let ``merge should call OnComplete`` () =
+let ``merge should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -221,7 +221,7 @@ let ``merge should call OnComplete`` () =
     sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
 
 [<Fact>]
-let ``merge2 should call OnComplete`` () =
+let ``merge2 should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
         yield delay 500 2
         yield delay 100 1
@@ -235,3 +235,19 @@ let ``merge2 should call OnComplete`` () =
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
+
+[<Fact>]
+let ``concatSeq should call OnComplete and return items in expected order`` () =
+    let source = seq { for x in 1 .. 5 do yield x }
+    let obs = Observable.singleton source |> Observable.concatSeq
+    use sub = Observer.create obs
+    sub.WaitCompleted()
+    sub.Received |> seqEquals source
+
+[<Fact>]
+let ``mapAsync should call OnComplete and return items in expected order`` () =
+    let source = seq { for x in 1 .. 5 do yield x }
+    let obs = Observable.ofSeq source |> Observable.mapAsync (fun x -> async { return x })
+    use sub = Observer.create obs
+    sub.WaitCompleted()
+    sub.Received |> seqEquals source
