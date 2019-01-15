@@ -5,12 +5,6 @@ open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of FSharp.Control.Observable
 module internal Observable =
-    let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
-
-    let ofAsync x = Observable.FromAsync(fun ct -> Async.StartAsTask(x, cancellationToken = ct))
-
-    let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
-
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
             member __.Subscribe(observer) =
@@ -18,6 +12,12 @@ module internal Observable =
                 observer.OnCompleted()
                 { new IDisposable with member __.Dispose() = () }
     }
+
+    let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
+
+    let ofAsync x = Observable.FromAsync(fun ct -> Async.StartAsTask(x, cancellationToken = ct))
+
+    let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 

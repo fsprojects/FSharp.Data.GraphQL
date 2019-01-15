@@ -49,6 +49,8 @@ let itemEquals (index : int) (expected : 'a) (xs : 'a seq) =
     | Some item -> item |> equals expected
     | None -> fail <| sprintf "Expected sequence to contain item at index %i, but sequence does not contain enough elements" index
     xs
+let seqEquals (expected : 'a seq) (actual : 'a seq) =
+    Assert.Equal<'a>(expected, actual)
 
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
