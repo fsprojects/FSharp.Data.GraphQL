@@ -46,6 +46,8 @@ module internal Observable =
 
     let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
 
+    let concat2 (source1 : IObservable<'T>) (source2 : IObservable<'T>) = Observable.Concat(source1, source2)
+
     let merge (sources : IObservable<IObservable<'T>>) = Observable.Merge(sources)
 
     let merge2 (source1 : IObservable<'T>) (source2 : IObservable<'T>) = Observable.Merge(source1, source2)

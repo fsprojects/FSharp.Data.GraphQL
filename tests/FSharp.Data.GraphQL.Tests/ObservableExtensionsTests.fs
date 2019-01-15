@@ -170,11 +170,68 @@ let ``choose should cal OnComplete`` () =
 
 [<Fact>]
 let ``concat should call OnComplete`` () =
-    let source1 = seq { for x in 1 .. 5 do yield x }
-    let obs = 
-        Observable.ofSeq source1
-        |> Observable.map (fun x -> Observable.ofSeq [x; x])
+    let source1 = seq { 
+        yield delay 500 2
+        yield delay 100 1
+        yield delay 200 3 }
+    let source2 = seq {
+        yield delay 400 4
+        yield delay 300 5 }
+    let source = seq { yield Seq.empty; yield source1; yield source2 }
+    let obs =
+        Observable.ofSeq source
+        |> Observable.map Observable.ofAsyncSeq
         |> Observable.concat
     use sub = Observer.create obs
     sub.WaitCompleted()
-    sub.Received |> seqEquals [ 1; 1; 2; 2; 3; 3; 4; 4; 5; 5 ]
+    sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
+
+[<Fact>]
+let ``concat2 should call OnComplete`` () =
+    let source1 = seq { 
+        yield delay 500 2
+        yield delay 100 1
+        yield delay 200 3 }
+    let source2 = seq {
+        yield delay 400 4
+        yield delay 300 5 }
+    let obs =
+        Observable.ofAsyncSeq source2
+        |> Observable.concat2 (Observable.ofAsyncSeq source1)
+    use sub = Observer.create obs
+    sub.WaitCompleted()
+    sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
+
+[<Fact>]
+let ``merge should call OnComplete`` () =
+    let source1 = seq { 
+        yield delay 500 2
+        yield delay 100 1
+        yield delay 200 3 }
+    let source2 = seq {
+        yield delay 400 4
+        yield delay 300 5 }
+    let source = seq { yield Seq.empty; yield source1; yield source2 }
+    let obs =
+        Observable.ofSeq source
+        |> Observable.map Observable.ofAsyncSeq
+        |> Observable.merge
+    use sub = Observer.create obs
+    sub.WaitCompleted()
+    sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
+
+[<Fact>]
+let ``merge2 should call OnComplete`` () =
+    let source1 = seq { 
+        yield delay 500 2
+        yield delay 100 1
+        yield delay 200 3 }
+    let source2 = seq {
+        yield delay 400 4
+        yield delay 300 5 }
+    let obs =
+        Observable.ofAsyncSeq source2
+        |> Observable.merge2 (Observable.ofAsyncSeq source1)
+    use sub = Observer.create obs
+    sub.WaitCompleted()
+    sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
