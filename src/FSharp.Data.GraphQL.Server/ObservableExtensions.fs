@@ -38,8 +38,8 @@ module internal Observable =
         let span = TimeSpan.FromMilliseconds(float ms)
         Observable.Buffer(x, span, count) |> Observable.map List.ofSeq
 
-    let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
-        obs.Catch(fx)
+    let catch<'Item, 'Exception when 'Exception :> exn> (fx : 'Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
+        obs.Catch<'Item, 'Exception>(Func<'Exception, IObservable<'Item>>(fx))
 
     let choose (f: 'T -> 'U option) (o: IObservable<'T>): IObservable<'U> =
         o.Select(f).Where(Option.isSome).Select(Option.get)
