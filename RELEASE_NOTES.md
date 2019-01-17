@@ -70,5 +70,5 @@
 ### 0.0.17-beta - January 11 2019
 * Execute deferred results in parallel
 
-### 0.0.18-beta - January 11 2019
+### 0.0.18-beta - January 16 2019
 * Fix dispose of deferred/stream responses
