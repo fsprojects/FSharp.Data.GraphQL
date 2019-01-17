@@ -5,12 +5,6 @@ open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of FSharp.Control.Observable
 module internal Observable =
-    let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
-
-    let ofAsync x = Observable.FromAsync(fun ct -> Async.StartAsTask(x, cancellationToken = ct))
-
-    let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
-
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
             member __.Subscribe(observer) =
@@ -18,6 +12,12 @@ module internal Observable =
                 observer.OnCompleted()
                 { new IDisposable with member __.Dispose() = () }
     }
+
+    let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
+
+    let ofAsync x = Observable.FromAsync(fun ct -> Async.StartAsTask(x, cancellationToken = ct))
+
+    let ofAsyncVal x = x |> AsyncVal.toAsync |> ofAsync
 
     let toSeq (o : IObservable<'T>) : 'T seq = Observable.ToEnumerable(o)
 
@@ -38,13 +38,15 @@ module internal Observable =
         let span = TimeSpan.FromMilliseconds(float ms)
         Observable.Buffer(x, span, count) |> Observable.map List.ofSeq
 
-    let catch<'Item, 'Exception> (fx : Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
-        obs.Catch(fx)
+    let catch<'Item, 'Exception when 'Exception :> exn> (fx : 'Exception -> IObservable<'Item>) (obs : IObservable<'Item>) =
+        obs.Catch<'Item, 'Exception>(Func<'Exception, IObservable<'Item>>(fx))
 
     let choose (f: 'T -> 'U option) (o: IObservable<'T>): IObservable<'U> =
         o.Select(f).Where(Option.isSome).Select(Option.get)
 
     let concat (sources : IObservable<IObservable<'T>>) = Observable.Concat(sources)
+
+    let concat2 (source1 : IObservable<'T>) (source2 : IObservable<'T>) = Observable.Concat(source1, source2)
 
     let merge (sources : IObservable<IObservable<'T>>) = Observable.Merge(sources)
 
@@ -61,3 +63,5 @@ module internal Observable =
         items |> Seq.map ofAsyncVal |> Observable.Merge
 
     let empty<'T> = Seq.empty<'T> |> ofSeq
+
+    let singleton (value : 'T) = Seq.singleton value |> ofSeq
