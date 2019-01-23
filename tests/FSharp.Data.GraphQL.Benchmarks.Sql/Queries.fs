@@ -1,40 +1,65 @@
-﻿module FSharp.Data.GraphQL.Benchmarks.Sql.Queries
+﻿namespace FSharp.Data.GraphQL.Benchmarks.Sql
 
-let movie = """query q {
-	requestId
-  movie (movieId : 1) {
-    title
-  }
-}"""
+type DeferralType =
+    | Direct
+    | Deferred
+    | Streamed
+    override this.ToString() =
+        match this with
+        | Direct -> ""
+        | Deferred -> "@defer"
+        | Streamed -> "@stream"
 
-let movieUserRating = """query q {
-	requestId
-  movie (movieId: 1) {
-    title
-    genres
-    ratings (userId: 283199) {
-      rating
-      timestamp
-    }
-  }
-}"""
+module Queries =
+    let singleMovie = """query q {
+	    requestId
+      movie (movieId : 1) {
+        title
+      }
+    }"""
 
-let private movieRatings = sprintf """query q {
-	requestId
-  movie (movieId: 1) {
-    title
-    genres
-    tags %s {
-      name
-      userId
-      timestamp
-      relevance
-    }
-  }
-}"""
+    let singleMovieSingleUserRating = """query q {
+	    requestId
+      movie (movieId: 1) {
+        title
+        genres
+        ratings (userId: 283199) {
+          rating
+          timestamp
+        }
+      }
+    }"""
 
-let movieRatingsDirect = movieRatings ""
+    let movieTags (deferralType : DeferralType) = 
+        sprintf """query q {
+	    requestId
+      movie (movieId: 1) {
+        title
+        genres
+        tags %A {
+          name
+          userId
+          timestamp
+          relevance
+        }
+      }
+    }""" deferralType
 
-let movieRatingsStreamed = movieRatings "@stream"
-
-let movieRatingsDeferred = movieRatings "@defer"
+    let movieTagsAndLinks (tagsDeferralType : DeferralType) (linksDeferralType : DeferralType) = 
+        sprintf """query q {
+	    requestId
+      movie (movieId: 1) {
+        title
+        genres
+        tags %A {
+          name
+          userId
+          timestamp
+          relevance
+        }
+        links %A {
+          imdbId
+          tmdbId
+        }
+      }
+    }""" tagsDeferralType linksDeferralType
