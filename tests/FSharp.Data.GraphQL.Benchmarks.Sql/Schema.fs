@@ -33,15 +33,7 @@ type Tag =
       MovieId : int
       UserId : int 
       Tag : string
-      Timestamp : int }
-
-type GenomeTag =
-    { TagId : int
-      Tag : string }
-
-type GenomeScore =
-    { MovieId : int
-      TagId : int
+      Timestamp : int
       Relevance : decimal }
 
 module Dapper =
@@ -126,7 +118,11 @@ module Database =
         let! connection = openConnection connectionString
         return
             connection
-            |> Dapper.mapParamQuery<Tag> "SELECT * FROM Tags WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
+            |> Dapper.mapParamQuery<Tag> """SELECT GT.TagId, T.MovieId, T.UserId, T.Tag, T.[Timestamp], GS.Relevance
+FROM Tags T
+INNER JOIN GenomeTags GT ON T.Tag = GT.Tag
+INNER JOIN GenomeScores GS ON (GS.TagId = GT.TagId AND GS.MovieId = T.MovieId)
+WHERE T.MovieId = @MovieId""" (Map.ofSeq ["@MovieId", movieId]) }
 
     let getRatingsOfUser (userId : int) (movieId : int) = async {
         let! connection = openConnection connectionString
@@ -145,18 +141,6 @@ module Database =
         return
             connection
             |> Dapper.mapParamQuery<Link> "SELECT * FROM Links WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
-
-    let getGenomeScoresForTag (tagId : int) (movieId : int) = async {
-        let! connection = openConnection connectionString
-        return
-            connection
-            |> Dapper.mapParamQuery<GenomeScore> "SELECT * FROM GenomeScores WHERE TagId = @TagId AND MovieId = @MovieId" (Map.ofSeq ["@TagId", tagId; "@MovieId", movieId]) }
-
-    let getGenomeScores (movieId : int) = async {
-        let! connection = openConnection connectionString
-        return
-            connection
-            |> Dapper.mapParamQuery<GenomeScore> "SELECT * FROM GenomeScores WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
 
 module SchemaDefinition =
     let rec Rating =
@@ -189,27 +173,9 @@ module SchemaDefinition =
                   Define.Field("movieId", Int, resolve = fun _ (t : Tag) -> t.MovieId)
                   Define.AsyncField("movie", Movie, resolve = fun _ (t : Tag) -> Database.getMovie t.MovieId)
                   Define.Field("userId", Int, resolve = fun _ (t : Tag) -> t.UserId)
-                  Define.Field("timestamp", Int, resolve = fun _ (t : Tag) -> t.Timestamp) ])
-
-    and GenomeTag =
-        Define.Object(
-            name = "GenomeTag",
-            isTypeOf = (fun o -> o :? GenomeTag),
-            fieldsFn = fun () ->
-                [ Define.Field("tagId", Int, resolve = fun _ (gt : GenomeTag) -> gt.TagId)
-                  Define.AsyncField("tag", Tag, resolve = fun _ (gt : GenomeTag) -> Database.getTag gt.TagId)
-                  Define.Field("value", String, resolve = fun _ (gt : GenomeTag) -> gt.Tag) ])
-
-    and GenomeScore =
-        Define.Object(
-            name = "GenomeScore",
-            isTypeOf = (fun o -> o :? GenomeScore),
-            fieldsFn = fun () ->
-                [ Define.Field("movieId", Int, resolve = fun _ (gs : GenomeScore) -> gs.MovieId)
-                  Define.AsyncField("movie", Movie, resolve = fun _ (gs : GenomeScore) -> Database.getMovie gs.MovieId)
-                  Define.Field("tagId", Int, resolve = fun _ (gs : GenomeScore) -> gs.TagId)
-                  Define.AsyncField("tag", Tag, resolve = fun _ (gs : GenomeScore) -> Database.getTag gs.MovieId)
-                  Define.Field("relevance", Float, resolve = fun _ (gs : GenomeScore) -> System.Convert.ToDouble(gs.Relevance)) ])
+                  Define.Field("timestamp", Int, resolve = fun _ (t : Tag) -> t.Timestamp)
+                  Define.Field("name", String, resolve = fun _ (t : Tag) -> t.Tag)
+                  Define.Field("relevance", Float, resolve = fun _ (t : Tag) -> System.Convert.ToDouble(t.Relevance)) ])
 
     and Movie =
         Define.Object(
@@ -241,16 +207,7 @@ module SchemaDefinition =
                     resolve = fun ctx (m : Movie) -> 
                         match ctx.TryArg("userId") with
                         | Some (Some userId) -> Database.getTagsOfUser userId m.MovieId
-                        | _ -> Database.getTags m.MovieId)
-                  Define.AsyncField(
-                    "genomeScores", 
-                    ListOf GenomeScore,
-                    "Gets movie genome scores",
-                    args = [ Define.Input("tagId", Nullable Int) ],
-                    resolve = fun ctx (m : Movie) -> 
-                        match ctx.TryArg("tagId") with
-                        | Some (Some tagId) -> Database.getGenomeScoresForTag tagId m.MovieId
-                        | _ -> Database.getGenomeScores m.MovieId) ])
+                        | _ -> Database.getTags m.MovieId) ])
     let Query = 
         Define.Object<Root>(
             name = "Query",

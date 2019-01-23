@@ -1,13 +1,13 @@
 ﻿module FSharp.Data.GraphQL.Benchmarks.Sql.Queries
 
-let simple = """query simpleQuery {
+let movie = """query q {
 	requestId
   movie (movieId : 1) {
     title
   }
 }"""
 
-let flat = """query flatQuery {
+let movieUserRating = """query q {
 	requestId
   movie (movieId: 1) {
     title
@@ -19,28 +19,22 @@ let flat = """query flatQuery {
   }
 }"""
 
-let longList = """query longListQuery {
+let private movieRatings = sprintf """query q {
 	requestId
   movie (movieId: 1) {
     title
     genres
-    ratings {
+    tags %s {
+      name
       userId
-      rating
       timestamp
+      relevance
     }
   }
 }"""
 
-let longStream = """query longStreamQuery {
-	requestId
-  movie (movieId: 1) {
-    title
-    genres
-    ratings @stream {
-      userId
-      rating
-      timestamp
-    }
-  }
-}"""
+let movieRatingsDirect = movieRatings ""
+
+let movieRatingsStreamed = movieRatings "@stream"
+
+let movieRatingsDeferred = movieRatings "@defer"

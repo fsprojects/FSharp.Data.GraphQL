@@ -17,12 +17,16 @@ let private execute (executor : Executor<Root>) (query : string) =
 
 let executeDirect executor query =
     match execute executor query with
-    | Direct (_, errors) -> if not (Seq.isEmpty errors) then fail errors
+    | Direct (data, errors) -> 
+        if not (Seq.isEmpty errors) 
+        then fail errors 
+        else data
     | _ -> failwith "Expected direct result!"
 
 let executeDeferred executor query =
     match execute executor query with
-    | Deferred (_, errors, deferred) ->
-        if not (Seq.isEmpty errors) then fail errors
-        deferred |> Observable.toSeq |> Seq.iter (fun _ -> ())
+    | Deferred (data, errors, deferred) ->
+        if not (Seq.isEmpty errors) 
+        then fail errors
+        else (data, deferred |> Observable.toSeq |> Array.ofSeq)
     | _ -> failwith "Expected deferred result!"

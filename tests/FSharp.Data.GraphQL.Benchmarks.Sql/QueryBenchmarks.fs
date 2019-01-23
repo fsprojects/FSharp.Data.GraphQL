@@ -16,13 +16,16 @@ type QueryBenchmarks() =
         executor <- Executor(schema)
 
     [<Benchmark>]
-    member __.SimpleQuery() = executeDirect executor Queries.simple
+    member __.MovieQuery() = executeDirect executor Queries.movie
 
     [<Benchmark>]
-    member __.FlatQuery() = executeDirect executor Queries.flat
+    member __.MovieUserRatingQuery() = executeDirect executor Queries.movieUserRating
 
     [<Benchmark>]
-    member __.LongListQuery() = executeDirect executor Queries.longList
+    member __.MovieRatingsDirectQuery() = executeDirect executor Queries.movieRatingsDirect
 
     [<Benchmark>]
-    member __.LongStreamQuery() = executeDeferred executor Queries.longStream
+    member __.MovieRatingsStreamed() = executeDeferred executor Queries.movieRatingsStreamed
+
+    [<Benchmark>]
+    member __.MovieRatingsDeferred() = executeDeferred executor Queries.movieRatingsDeferred
