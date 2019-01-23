@@ -36,14 +36,14 @@ module Queries =
       movie (movieId: 1) {
         title
         genres
-        tags %A {
+        tags %s {
           name
           userId
           timestamp
           relevance
         }
       }
-    }""" deferralType
+    }""" (deferralType.ToString())
 
     let movieTagsAndLinks (tagsDeferralType : DeferralType) (linksDeferralType : DeferralType) = 
         sprintf """query q {
@@ -51,15 +51,15 @@ module Queries =
       movie (movieId: 1) {
         title
         genres
-        tags %A {
+        tags %s {
           name
           userId
           timestamp
           relevance
         }
-        links %A {
+        links %s {
           imdbId
           tmdbId
         }
       }
-    }""" tagsDeferralType linksDeferralType
+    }""" (tagsDeferralType.ToString()) (linksDeferralType.ToString())

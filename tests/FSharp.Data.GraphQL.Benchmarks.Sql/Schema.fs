@@ -138,9 +138,9 @@ WHERE T.MovieId = @MovieId""" (Map.ofSeq ["@MovieId", movieId]) }
 
     let getLinks (movieId : int) = async {
         let! connection = openConnection connectionString
-        return
+        return!
             connection
-            |> Dapper.mapParamQuery<Link> "SELECT * FROM Links WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
+            |> Dapper.mapParamQueryFirst<Link> "SELECT * FROM Links WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
 
 module SchemaDefinition =
     let rec Rating =
@@ -196,7 +196,7 @@ module SchemaDefinition =
                         | _ -> Database.getRatings m.MovieId)
                   Define.AsyncField(
                     "links", 
-                    ListOf Link,
+                    Link,
                     "Gets movie links",
                     resolve = fun _ (m : Movie) -> Database.getLinks m.MovieId)
                   Define.AsyncField(

@@ -23,12 +23,18 @@ Intel Core i7-7700HQ CPU 2.80GHz (Kaby Lake), 1 CPU, 8 logical and 4 physical co
 </code></pre>
 
 <table>
-<thead><tr><th>   Method</th><th>  Mean</th><th>Error</th><th>StdDev</th><th> Median</th><th>    Min</th><th>   Max</th><th>Op/s</th><th>Gen 0/1k Op</th><th>Gen 1/1k Op</th><th>Gen 2/1k Op</th><th>Allocated Memory/Op</th>
+<thead><tr><th>                     Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th> Min</th><th>Max</th><th>Op/s</th><th>Gen 0/1k Op</th><th>Gen 1/1k Op</th><th>Gen 2/1k Op</th><th>Allocated Memory/Op</th>
 </tr>
-</thead><tbody><tr><td>SimpleQuery</td><td>1.692 ms</td><td>0.5130 ms</td><td>1.5047 ms</td><td>0.8638 ms</td><td>0.5520 ms</td><td>5.489 ms</td><td>590.9996</td><td>-</td><td>-</td><td>-</td><td>22.38 KB</td>
-</tr><tr><td>FlatQuery</td><td>1.593 ms</td><td>0.1143 ms</td><td>0.3149 ms</td><td>1.5009 ms</td><td>1.1316 ms</td><td>2.582 ms</td><td>627.8552</td><td>-</td><td>-</td><td>-</td><td>38.01 KB</td>
-</tr><tr><td>LongListQuery</td><td>1,394.840 ms</td><td>27.7700 ms</td><td>70.1784 ms</td><td>1,383.1667 ms</td><td>1,296.3221 ms</td><td>1,584.532 ms</td><td>0.7169</td><td>75000.0000</td><td>19000.0000</td><td>2000.0000</td><td>39.12 KB</td>
-</tr><tr><td>LongStreamQuery</td><td>6,247.535 ms</td><td>126.1488 ms</td><td>224.2294 ms</td><td>6,217.0907 ms</td><td>5,910.6571 ms</td><td>6,733.767 ms</td><td>0.1601</td><td>142000.0000</td><td>38000.0000</td><td>3000.0000</td><td>2633.83 KB</td>
+</thead><tbody><tr><td>SingleMovie</td><td>2.046 ms</td><td>0.6497 ms</td><td>1.9157 ms</td><td>0.9003 ms</td><td>0.5736 ms</td><td>6.357 ms</td><td>488.76</td><td>-</td><td>-</td><td>-</td><td>24.11 KB</td>
+</tr><tr><td>SingleMovieSingleUserRating</td><td>1.511 ms</td><td>0.0719 ms</td><td>0.1979 ms</td><td>1.4612 ms</td><td>1.1930 ms</td><td>2.166 ms</td><td>661.78</td><td>-</td><td>-</td><td>-</td><td>41.68 KB</td>
+</tr><tr><td>MovieTagsDirect</td><td>32.058 ms</td><td>0.7612 ms</td><td>2.1346 ms</td><td>31.5728 ms</td><td>28.3333 ms</td><td>37.816 ms</td><td>31.19</td><td>1000.0000</td><td>-</td><td>-</td><td>48.18 KB</td>
+</tr><tr><td>MovieTagsStreamed</td><td>67.306 ms</td><td>1.3853 ms</td><td>4.0410 ms</td><td>66.6163 ms</td><td>59.7592 ms</td><td>76.686 ms</td><td>14.86</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>83.96 KB</td>
+</tr><tr><td>MovieTagsDeferred</td><td>44.227 ms</td><td>0.8798 ms</td><td>2.5243 ms</td><td>44.1868 ms</td><td>38.9480 ms</td><td>50.599 ms</td><td>22.61</td><td>1000.0000</td><td>-</td><td>-</td><td>59.1 KB</td>
+</tr><tr><td>MovieTagsDirectAndLinksDirect</td><td>31.890 ms</td><td>0.6293 ms</td><td>0.9798 ms</td><td>31.9148 ms</td><td>29.7126 ms</td><td>33.809 ms</td><td>31.36</td><td>1000.0000</td><td>-</td><td>-</td><td>60.31 KB</td>
+</tr><tr><td>MovieTagsStreamedAndLinksDirect</td><td>67.420 ms</td><td>1.4543 ms</td><td>2.6957 ms</td><td>66.7677 ms</td><td>63.1727 ms</td><td>74.908 ms</td><td>14.83</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>92.8 KB</td>
+</tr><tr><td>MovieTagsStreamedAndLinksStreamed</td><td>66.878 ms</td><td>1.3958 ms</td><td>2.8512 ms</td><td>66.7963 ms</td><td>61.6435 ms</td><td>74.211 ms</td><td>14.95</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>94.13 KB</td>
+</tr><tr><td>MovieTagsDeferredAndLinksDeferred</td><td>45.175 ms</td><td>0.9025 ms</td><td>2.3458 ms</td><td>45.2692 ms</td><td>40.5602 ms</td><td>51.800 ms</td><td>22.14</td><td>1000.0000</td><td>-</td><td>-</td><td>72.16 KB</td>
+</tr><tr><td>MovieTagsStreamedAndLinksDeferred</td><td>68.978 ms</td><td>1.5421 ms</td><td>4.3747 ms</td><td>67.9400 ms</td><td>62.0436 ms</td><td>80.226 ms</td><td>14.50</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>93.71 KB</td>
 </tr></tbody></table>
 </body>
 </html>
