@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.Benchmarks.Sql
+﻿namespace FSharp.Data.GraphQL.Benchmarks.Sql
 
 open System
 open System.Data.SqlClient
@@ -17,16 +17,15 @@ module internal Run =
             do! fst
             return! snd })
 
-[<AutoOpen>]
-module internal Helpers =
-    let openConnection connectionString = async {
+module internal DatabaseSetup =
+    let private openConnection connectionString = async {
         let conn = new SqlConnection(connectionString)
         do! conn.OpenAsync() |> Async.AwaitTask
         return conn }
 
-    let createCommand connection = new SqlCommand("", connection)
+    let private createCommand connection = new SqlCommand("", connection)
 
-    let setParameters (parameters : seq<string * obj>) (command : SqlCommand) =
+    let private setParameters (parameters : seq<string * obj>) (command : SqlCommand) =
         let toDbNull (value : obj) =
             value 
             |> Option.ofObj 
@@ -38,18 +37,17 @@ module internal Helpers =
         |> Seq.iter (fun (name, value) -> command.Parameters.AddWithValue(name, value) |> ignore)
         command
 
-    let executeNonQuery sql (command : SqlCommand) = async {
+    let private executeNonQuery sql (command : SqlCommand) = async {
         command.CommandText <- sql
         do! command.ExecuteNonQueryAsync() |> Async.AwaitTask |> Async.Ignore
         command.Parameters.Clear() }
     
-    let executeScalar<'T> sql (command : SqlCommand) = async {
+    let private executeScalar<'T> sql (command : SqlCommand) = async {
         command.CommandText <- sql
         let! res = command.ExecuteScalarAsync() |> Async.AwaitTask
         command.Parameters.Clear()
         return res :?> 'T }
 
-module DatabaseSetup =
     let buildIfNotExists connectionString = async {
         printfn "Checking if database exists..."
         use! connection = openConnection connectionString

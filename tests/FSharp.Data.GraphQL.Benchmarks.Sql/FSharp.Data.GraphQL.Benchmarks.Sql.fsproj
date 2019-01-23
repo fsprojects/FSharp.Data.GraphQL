@@ -8,6 +8,10 @@
   <ItemGroup>
     <Compile Include="DatabaseSetup.fs" />
     <Compile Include="Schema.fs" />
+    <Compile Include="Helpers.fs" />
+    <Compile Include="Queries.fs" />
+    <Compile Include="Config.fs" />
+    <Compile Include="QueryBenchmarks.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 

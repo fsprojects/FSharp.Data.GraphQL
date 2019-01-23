@@ -265,12 +265,3 @@ module SchemaDefinition =
                     "Gets movie by it's id",
                     args = [ Define.Input("movieId", Int) ], 
                     resolve = fun ctx _ -> Database.tryGetMovie (ctx.Arg("movieId"))) ])
-
-module Schema =
-    let config = SchemaConfig.Default
-
-    let root requestId = { RequestId = requestId }
-
-    let instance = Schema(SchemaDefinition.Query, config = config)
-
-    let executor = Executor(instance)
