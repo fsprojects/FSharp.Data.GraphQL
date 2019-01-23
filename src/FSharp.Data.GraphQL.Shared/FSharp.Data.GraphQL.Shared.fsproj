@@ -7,11 +7,12 @@
     <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="AsyncVal.fs" />
+    <Compile Include="ObservableExtensions.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Prolog.fs" />
     <Compile Include="Ast.fs" />
-    <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Validation.fs" />
     <Compile Include="Introspection.fs" />

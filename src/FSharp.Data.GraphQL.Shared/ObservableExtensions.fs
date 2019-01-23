@@ -4,7 +4,7 @@ open System
 open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of FSharp.Control.Observable
-module internal Observable =
+module Observable =
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
             member __.Subscribe(observer) =
