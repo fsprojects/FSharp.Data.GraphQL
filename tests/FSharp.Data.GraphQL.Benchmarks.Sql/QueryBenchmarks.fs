@@ -32,16 +32,16 @@ type QueryBenchmarks() =
     member __.MovieTagsDeferred() = executeDeferred (Queries.movieTags Deferred)
 
     [<Benchmark>]
-    member __.MovieTagsDirectAndLinksDirect() = executeDirect (Queries.movieTagsAndLinks Direct Direct)
+    member __.MovieTagsDirectAndRatingsDirect() = executeDirect (Queries.movieTagsAndRatings Direct Direct)
 
     [<Benchmark>]
-    member __.MovieTagsStreamedAndLinksDirect() = executeDeferred (Queries.movieTagsAndLinks Streamed Direct)
+    member __.MovieTagsStreamedAndRatingsDirect() = executeDeferred (Queries.movieTagsAndRatings Streamed Direct)
 
     [<Benchmark>]
-    member __.MovieTagsStreamedAndLinksStreamed() = executeDeferred (Queries.movieTagsAndLinks Streamed Streamed)
+    member __.MovieTagsStreamedAndRatingsStreamed() = executeDeferred (Queries.movieTagsAndRatings Streamed Streamed)
 
     [<Benchmark>]
-    member __.MovieTagsDeferredAndLinksDeferred() = executeDeferred (Queries.movieTagsAndLinks Deferred Deferred)
+    member __.MovieTagsDeferredAndRatingsDeferred() = executeDeferred (Queries.movieTagsAndRatings Deferred Deferred)
 
     [<Benchmark>]
-    member __.MovieTagsStreamedAndLinksDeferred() = executeDeferred (Queries.movieTagsAndLinks Streamed Deferred)
+    member __.MovieTagsStreamedAndRatingsDeferred() = executeDeferred (Queries.movieTagsAndRatings Streamed Deferred)

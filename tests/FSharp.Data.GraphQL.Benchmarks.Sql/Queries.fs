@@ -45,7 +45,7 @@ module Queries =
       }
     }""" (deferralType.ToString())
 
-    let movieTagsAndLinks (tagsDeferralType : DeferralType) (linksDeferralType : DeferralType) = 
+    let movieTagsAndRatings (tagsDeferralType : DeferralType) (linksDeferralType : DeferralType) = 
         sprintf """query q {
 	    requestId
       movie (movieId: 1) {
@@ -57,9 +57,10 @@ module Queries =
           timestamp
           relevance
         }
-        links %s {
-          imdbId
-          tmdbId
+        ratings %s {
+          userId
+          rating
+          timestamp
         }
       }
     }""" (tagsDeferralType.ToString()) (linksDeferralType.ToString())
