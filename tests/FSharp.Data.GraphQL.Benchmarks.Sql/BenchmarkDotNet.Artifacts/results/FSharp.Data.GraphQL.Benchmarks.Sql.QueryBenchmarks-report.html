@@ -23,18 +23,30 @@ Intel Core i7-7700HQ CPU 2.80GHz (Kaby Lake), 1 CPU, 8 logical and 4 physical co
 </code></pre>
 
 <table>
-<thead><tr><th>                     Method</th><th>Mean</th><th>Error</th><th>StdDev</th><th>Median</th><th> Min</th><th>Max</th><th>Op/s</th><th>Gen 0/1k Op</th><th>Gen 1/1k Op</th><th>Gen 2/1k Op</th><th>Allocated Memory/Op</th>
+<thead><tr><th>                        Method</th><th>    Mean</th><th>  Error</th><th>StdDev</th><th>  Median</th><th>     Min</th><th>     Max</th><th>Op/s</th><th>Gen 0/1k Op</th><th>Gen 1/1k Op</th><th>Gen 2/1k Op</th><th>Allocated Memory/Op</th>
 </tr>
-</thead><tbody><tr><td>SingleMovie</td><td>2.046 ms</td><td>0.6497 ms</td><td>1.9157 ms</td><td>0.9003 ms</td><td>0.5736 ms</td><td>6.357 ms</td><td>488.76</td><td>-</td><td>-</td><td>-</td><td>24.11 KB</td>
-</tr><tr><td>SingleMovieSingleUserRating</td><td>1.511 ms</td><td>0.0719 ms</td><td>0.1979 ms</td><td>1.4612 ms</td><td>1.1930 ms</td><td>2.166 ms</td><td>661.78</td><td>-</td><td>-</td><td>-</td><td>41.68 KB</td>
-</tr><tr><td>MovieTagsDirect</td><td>32.058 ms</td><td>0.7612 ms</td><td>2.1346 ms</td><td>31.5728 ms</td><td>28.3333 ms</td><td>37.816 ms</td><td>31.19</td><td>1000.0000</td><td>-</td><td>-</td><td>48.18 KB</td>
-</tr><tr><td>MovieTagsStreamed</td><td>67.306 ms</td><td>1.3853 ms</td><td>4.0410 ms</td><td>66.6163 ms</td><td>59.7592 ms</td><td>76.686 ms</td><td>14.86</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>83.96 KB</td>
-</tr><tr><td>MovieTagsDeferred</td><td>44.227 ms</td><td>0.8798 ms</td><td>2.5243 ms</td><td>44.1868 ms</td><td>38.9480 ms</td><td>50.599 ms</td><td>22.61</td><td>1000.0000</td><td>-</td><td>-</td><td>59.1 KB</td>
-</tr><tr><td>MovieTagsDirectAndLinksDirect</td><td>31.890 ms</td><td>0.6293 ms</td><td>0.9798 ms</td><td>31.9148 ms</td><td>29.7126 ms</td><td>33.809 ms</td><td>31.36</td><td>1000.0000</td><td>-</td><td>-</td><td>60.31 KB</td>
-</tr><tr><td>MovieTagsStreamedAndLinksDirect</td><td>67.420 ms</td><td>1.4543 ms</td><td>2.6957 ms</td><td>66.7677 ms</td><td>63.1727 ms</td><td>74.908 ms</td><td>14.83</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>92.8 KB</td>
-</tr><tr><td>MovieTagsStreamedAndLinksStreamed</td><td>66.878 ms</td><td>1.3958 ms</td><td>2.8512 ms</td><td>66.7963 ms</td><td>61.6435 ms</td><td>74.211 ms</td><td>14.95</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>94.13 KB</td>
-</tr><tr><td>MovieTagsDeferredAndLinksDeferred</td><td>45.175 ms</td><td>0.9025 ms</td><td>2.3458 ms</td><td>45.2692 ms</td><td>40.5602 ms</td><td>51.800 ms</td><td>22.14</td><td>1000.0000</td><td>-</td><td>-</td><td>72.16 KB</td>
-</tr><tr><td>MovieTagsStreamedAndLinksDeferred</td><td>68.978 ms</td><td>1.5421 ms</td><td>4.3747 ms</td><td>67.9400 ms</td><td>62.0436 ms</td><td>80.226 ms</td><td>14.50</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>93.71 KB</td>
+</thead><tbody><tr><td>SingleMovie</td><td>772.3 us</td><td>50.35 us</td><td>147.7 us</td><td>741.5 us</td><td>550.2 us</td><td>1,169.1 us</td><td>1,294.8793</td><td>-</td><td>-</td><td>-</td><td>35.95 KB</td>
+</tr><tr><td>SingleMovieSingleUserRating</td><td>1,230.1 us</td><td>83.46 us</td><td>243.4 us</td><td>1,193.2 us</td><td>828.8 us</td><td>1,979.7 us</td><td>812.9333</td><td>-</td><td>-</td><td>-</td><td>54.49 KB</td>
+</tr><tr><td>MovieTagsDirect</td><td>32,986.7 us</td><td>841.49 us</td><td>2,331.8 us</td><td>32,676.7 us</td><td>29,750.1 us</td><td>39,559.3 us</td><td>30.3152</td><td>1000.0000</td><td>-</td><td>-</td><td>61.64 KB</td>
+</tr><tr><td>MovieTagsStreamed</td><td>76,321.5 us</td><td>1,494.60 us</td><td>2,843.6 us</td><td>76,067.7 us</td><td>70,564.0 us</td><td>83,200.6 us</td><td>13.1025</td><td>2000.0000</td><td>1000.0000</td><td>-</td><td>94.38 KB</td>
+</tr><tr><td>MovieTagsDeferred</td><td>51,573.0 us</td><td>1,519.97 us</td><td>4,237.1 us</td><td>50,377.5 us</td><td>46,435.3 us</td><td>64,957.3 us</td><td>19.3900</td><td>1000.0000</td><td>-</td><td>-</td><td>72.82 KB</td>
+</tr><tr><td>MovieTagsDirectAndRatingsDirect</td><td>1,576,312.4 us</td><td>41,914.58 us</td><td>121,601.8 us</td><td>1,560,307.2 us</td><td>1,374,516.9 us</td><td>1,841,707.4 us</td><td>0.6344</td><td>76000.0000</td><td>19000.0000</td><td>2000.0000</td><td>78.51 KB</td>
+</tr><tr><td>MovieTagsStreamedAndRatingsDirect</td><td>1,456,720.1 us</td><td>30,036.33 us</td><td>63,356.8 us</td><td>1,432,611.9 us</td><td>1,392,116.0 us</td><td>1,638,847.4 us</td><td>0.6865</td><td>76000.0000</td><td>19000.0000</td><td>2000.0000</td><td>111.24 KB</td>
+</tr><tr><td>MovieTagsStreamedAndRatingsStreamed</td><td>6,256,953.5 us</td><td>127,947.49 us</td><td>170,806.2 us</td><td>6,232,070.5 us</td><td>6,034,280.9 us</td><td>6,718,892.2 us</td><td>0.1598</td><td>145000.0000</td><td>39000.0000</td><td>3000.0000</td><td>2679.67 KB</td>
+</tr><tr><td>MovieTagsDeferredAndRatingsDeferred</td><td>1,416,238.5 us</td><td>22,749.50 us</td><td>18,996.9 us</td><td>1,411,073.9 us</td><td>1,387,843.1 us</td><td>1,447,652.8 us</td><td>0.7061</td><td>76000.0000</td><td>19000.0000</td><td>2000.0000</td><td>90.63 KB</td>
+</tr><tr><td>MovieTagsStreamedAndRatingsDeferred</td><td>1,412,978.6 us</td><td>27,038.15 us</td><td>27,766.2 us</td><td>1,401,743.7 us</td><td>1,376,511.3 us</td><td>1,484,650.5 us</td><td>0.7077</td><td>77000.0000</td><td>19000.0000</td><td>2000.0000</td><td>112.19 KB</td>
+</tr><tr><td>AllMoviesDirect</td><td>1,621,179.6 us</td><td>21,242.05 us</td><td>17,738.1 us</td><td>1,625,027.2 us</td><td>1,589,157.4 us</td><td>1,646,869.5 us</td><td>0.6168</td><td>86000.0000</td><td>23000.0000</td><td>2000.0000</td><td>503833.23 KB</td>
+</tr><tr><td>AllMoviesDeferred</td><td>1,646,922.4 us</td><td>39,815.85 us</td><td>42,602.5 us</td><td>1,632,547.0 us</td><td>1,601,432.9 us</td><td>1,761,418.1 us</td><td>0.6072</td><td>86000.0000</td><td>23000.0000</td><td>2000.0000</td><td>55.5 KB</td>
+</tr><tr><td>AllMoviesStreamed</td><td>5,792,864.4 us</td><td>112,892.79 us</td><td>150,708.6 us</td><td>5,823,448.1 us</td><td>5,580,648.0 us</td><td>6,067,137.9 us</td><td>0.1726</td><td>144000.0000</td><td>38000.0000</td><td>3000.0000</td><td>1534.06 KB</td>
+</tr><tr><td>FiftyDirectMoviesWithDirectLinks</td><td>16,175.2 us</td><td>596.41 us</td><td>1,711.2 us</td><td>16,072.6 us</td><td>13,414.7 us</td><td>20,382.1 us</td><td>61.8231</td><td>-</td><td>-</td><td>-</td><td>604.24 KB</td>
+</tr><tr><td>FiftyDirectMoviesWithDeferredLinks</td><td>22,765.3 us</td><td>627.71 us</td><td>1,831.0 us</td><td>22,465.2 us</td><td>18,939.1 us</td><td>27,427.4 us</td><td>43.9266</td><td>1000.0000</td><td>-</td><td>-</td><td>616.83 KB</td>
+</tr><tr><td>FiftyDirectMoviesWithStreamedLinks</td><td>24,206.2 us</td><td>695.84 us</td><td>2,018.7 us</td><td>23,789.2 us</td><td>19,972.2 us</td><td>29,594.4 us</td><td>41.3118</td><td>1000.0000</td><td>-</td><td>-</td><td>617.24 KB</td>
+</tr><tr><td>FiftyDeferredMoviesWithDirectLinks</td><td>17,201.2 us</td><td>728.66 us</td><td>2,114.0 us</td><td>16,628.3 us</td><td>13,024.5 us</td><td>23,003.0 us</td><td>58.1356</td><td>-</td><td>-</td><td>-</td><td>71.86 KB</td>
+</tr><tr><td>FiftyStreamedMoviesWithDirectLinks</td><td>8,426.4 us</td><td>369.95 us</td><td>1,006.5 us</td><td>8,339.3 us</td><td>6,760.1 us</td><td>11,496.2 us</td><td>118.6749</td><td>-</td><td>-</td><td>-</td><td>73.69 KB</td>
+</tr><tr><td>FiftyDeferredMoviesWithDeferredLinks</td><td>21,827.3 us</td><td>1,433.23 us</td><td>3,899.2 us</td><td>21,149.5 us</td><td>16,028.2 us</td><td>33,835.5 us</td><td>45.8142</td><td>1000.0000</td><td>-</td><td>-</td><td>73.99 KB</td>
+</tr><tr><td>FiftyDeferredMoviesWithStreamedLinks</td><td>21,660.2 us</td><td>771.05 us</td><td>2,224.6 us</td><td>21,437.2 us</td><td>17,477.4 us</td><td>26,723.4 us</td><td>46.1676</td><td>1000.0000</td><td>-</td><td>-</td><td>74.41 KB</td>
+</tr><tr><td>FiftyStreamedMoviesWithDeferredLinks</td><td>18,120.6 us</td><td>530.92 us</td><td>1,497.5 us</td><td>17,916.1 us</td><td>15,735.2 us</td><td>22,165.0 us</td><td>55.1857</td><td>1000.0000</td><td>-</td><td>-</td><td>75.81 KB</td>
+</tr><tr><td>FiftyStreamedMoviesWithStreamedLinks</td><td>19,399.1 us</td><td>769.43 us</td><td>2,232.2 us</td><td>18,988.9 us</td><td>15,263.2 us</td><td>26,536.9 us</td><td>51.5487</td><td>1000.0000</td><td>-</td><td>-</td><td>76.23 KB</td>
 </tr></tbody></table>
 </body>
 </html>
