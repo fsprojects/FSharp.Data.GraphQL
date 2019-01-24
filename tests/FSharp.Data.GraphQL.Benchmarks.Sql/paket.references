@@ -1,3 +1,4 @@
+group Test
 BenchmarkDotNet
 Dapper
 FSharp.Data
