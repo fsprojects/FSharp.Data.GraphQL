@@ -23,6 +23,7 @@ group Build
 
 group Test
   source https://nuget.org/api/v2
+
   nuget Newtonsoft.Json
   nuget FSharp.Core 
   nuget BenchmarkDotNet
@@ -35,3 +36,13 @@ group Test
   nuget System.Data.SqlClient
   nuget FSharp.Data
   nuget Dapper
+
+group BenchmarksSql
+  source https://nuget.org/api/v2
+  framework: netcoreapp2.2
+
+  nuget BenchmarkDotNet
+  nuget Dapper
+  nuget FSharp.Data
+  nuget System.Data.SqlClient
+  nuget FSharp.Core

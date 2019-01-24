@@ -1,4 +1,4 @@
-group Test
+group BenchmarksSql
 BenchmarkDotNet
 Dapper
 FSharp.Data
