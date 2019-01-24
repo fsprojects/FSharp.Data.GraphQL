@@ -45,3 +45,12 @@ type QueryBenchmarks() =
 
     [<Benchmark>]
     member __.MovieTagsStreamedAndRatingsDeferred() = executeDeferred (Queries.movieTagsAndRatings Streamed Deferred)
+
+    [<Benchmark>]
+    member __.AllMoviesDirect() = executeDirect (Queries.allMovies Direct)
+
+    [<Benchmark>]
+    member __.AllMoviesDeferred() = executeDeferred (Queries.allMovies Deferred)
+
+    [<Benchmark>]
+    member __.AllMoviesStreamed() = executeDeferred (Queries.allMovies Streamed)

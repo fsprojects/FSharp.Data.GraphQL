@@ -9,7 +9,7 @@ let private fail (errs : #seq<Error>) =
     let sb = StringBuilder()
     for err in errs do
         sb.AppendLine(err.ToString()) |> ignore
-    failwithf "Query execution resulted in errors:%s%s" Environment.NewLine (sb.ToString())
+    failwithf "Query execution has errors:%s%s" Environment.NewLine (sb.ToString())
 
 let private execute (executor : Executor<Root>) (query : string) =
     let root = { RequestId = Guid.NewGuid().ToString() }

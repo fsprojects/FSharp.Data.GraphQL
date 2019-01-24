@@ -84,6 +84,12 @@ module Database =
         do! conn.OpenAsync() |> Async.AwaitTask
         return conn }
 
+    let getAllMovies () = async {
+        let! connection = openConnection connectionString
+        return
+            connection
+            |> Dapper.query<Movie> "SELECT * FROM Movies" }
+
     let getMovie (id : int) = async {
         let! connection = openConnection connectionString
         return!
@@ -141,6 +147,13 @@ WHERE T.MovieId = @MovieId""" (Map.ofSeq ["@MovieId", movieId]) }
         return!
             connection
             |> Dapper.mapParamQueryFirst<Link> "SELECT * FROM Links WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
+
+type Context =
+    { GetMovie : int -> Async<Movie>
+      Movies : Async<Movie seq> }
+    static member Instance = 
+        { Movies = Database.getAllMovies ()
+          GetMovie = Database.getMovie }
 
 module SchemaDefinition =
     let rec Rating =
@@ -208,6 +221,28 @@ module SchemaDefinition =
                         match ctx.TryArg("userId") with
                         | Some (Some userId) -> Database.getTagsOfUser userId m.MovieId
                         | _ -> Database.getTags m.MovieId) ])
+
+    let Collections =
+        Define.Object<Context>(
+            name = "Collections",
+            fields = [
+                Define.AsyncField(
+                    "movies",
+                    ListOf Movie,
+                    "Gets a list of movies",
+                    resolve = fun _ c -> c.Movies) ])
+
+    let Objects =
+        Define.Object<Context>(
+            name = "objects",
+            fields = [
+            Define.AsyncField(
+                "movie", 
+                Nullable Movie, 
+                "Gets movie by it's id",
+                args = [ Define.Input("movieId", Int) ], 
+                resolve = fun ctx _ -> Database.tryGetMovie (ctx.Arg("movieId"))) ])
+
     let Query = 
         Define.Object<Root>(
             name = "Query",
@@ -216,9 +251,13 @@ module SchemaDefinition =
                     "requestId",
                     String,
                     resolve = fun _ (r : Root) -> r.RequestId)
-                Define.AsyncField(
-                    "movie", 
-                    Nullable Movie, 
-                    "Gets movie by it's id",
-                    args = [ Define.Input("movieId", Int) ], 
-                    resolve = fun ctx _ -> Database.tryGetMovie (ctx.Arg("movieId"))) ])
+                Define.Field(
+                    "objects",
+                    Objects,
+                    "Get's objects by querying collections",
+                    resolve = fun _ _ -> Context.Instance)
+                Define.Field(
+                    "collections",
+                    Collections,
+                    "Gets collections on the server",
+                    resolve = fun _ _ -> Context.Instance) ])
