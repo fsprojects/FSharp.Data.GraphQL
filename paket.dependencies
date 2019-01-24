@@ -32,3 +32,6 @@ group Test
   nuget System.Reflection.Metadata
   nuget FSharp.Data.TypeProviders
   nuget Microsoft.NET.Test.Sdk
+  nuget System.Data.SqlClient
+  nuget FSharp.Data
+  nuget Dapper
