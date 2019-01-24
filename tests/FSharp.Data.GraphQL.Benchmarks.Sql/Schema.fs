@@ -77,21 +77,26 @@ module Dapper =
 
 module Database =
     let [<Literal>] private connectionString = 
-        "Data Source=.;Initial Catalog=MovieLens;Integrated Security=True"
+        "Data Source=.;Initial Catalog=MovieLens;Integrated Security=True;MultipleActiveResultSets=True"
 
     let openConnection connectionString = async {
         let conn = new SqlConnection(connectionString)
         do! conn.OpenAsync() |> Async.AwaitTask
         return conn }
 
+    let connection = openConnection connectionString |> Async.RunSynchronously
+
     let getAllMovies () = async {
-        let! connection = openConnection connectionString
         return
             connection
             |> Dapper.query<Movie> "SELECT * FROM Movies" }
 
+    let getTopMovies count = async {
+        return
+            connection
+            |> Dapper.mapParamQuery<Movie> "SELECT TOP (@Count) * FROM Movies" (Map.ofSeq ["@Count", count]) }
+
     let getMovie (id : int) = async {
-        let! connection = openConnection connectionString
         return!
             connection
             |> Dapper.mapParamQueryFirst<Movie> "SELECT TOP 1 * FROM Movies WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", id]) }
@@ -103,7 +108,6 @@ module Database =
         else return Some movie }
 
     let getTag (movieId : int) = async {
-        let! connection = openConnection connectionString
         return!
             connection
             |> Dapper.mapParamQueryFirst<Tag> "SELECT TOP 1 * FROM Tags WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
@@ -115,13 +119,11 @@ module Database =
         else return Some tag }
 
     let getTagsOfUser (userId : int) (movieId : int) = async {
-        let! connection = openConnection connectionString
         return
             connection
             |> Dapper.mapParamQuery<Tag> "SELECT * FROM Tags WHERE UserId = @UserId AND MovieId = @MovieId" (Map.ofSeq ["@UserId", userId; "@MovieId", movieId]) }
 
     let getTags (movieId : int) = async {
-        let! connection = openConnection connectionString
         return
             connection
             |> Dapper.mapParamQuery<Tag> """SELECT GT.TagId, T.MovieId, T.UserId, T.Tag, T.[Timestamp], GS.Relevance
@@ -131,29 +133,28 @@ INNER JOIN GenomeScores GS ON (GS.TagId = GT.TagId AND GS.MovieId = T.MovieId)
 WHERE T.MovieId = @MovieId""" (Map.ofSeq ["@MovieId", movieId]) }
 
     let getRatingsOfUser (userId : int) (movieId : int) = async {
-        let! connection = openConnection connectionString
         return
             connection
             |> Dapper.mapParamQuery<Rating> "SELECT * FROM Ratings WHERE UserId = @UserId AND MovieId = @MovieId" (Map.ofSeq ["@UserId", userId; "@MovieId", movieId]) }
 
     let getRatings (movieId : int) = async {
-        let! connection = openConnection connectionString
         return
             connection
             |> Dapper.mapParamQuery<Rating> "SELECT * FROM Ratings WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
 
     let getLinks (movieId : int) = async {
-        let! connection = openConnection connectionString
         return!
             connection
             |> Dapper.mapParamQueryFirst<Link> "SELECT * FROM Links WHERE MovieId = @MovieId" (Map.ofSeq ["@MovieId", movieId]) }
 
 type Context =
-    { GetMovie : int -> Async<Movie>
+    { Movie : int -> Async<Movie option>
+      TopMovies : int -> Async<Movie seq>
       Movies : Async<Movie seq> }
     static member Instance = 
         { Movies = Database.getAllMovies ()
-          GetMovie = Database.getMovie }
+          TopMovies = Database.getTopMovies
+          Movie = Database.tryGetMovie }
 
 module SchemaDefinition =
     let rec Rating =
@@ -230,7 +231,11 @@ module SchemaDefinition =
                     "movies",
                     ListOf Movie,
                     "Gets a list of movies",
-                    resolve = fun _ c -> c.Movies) ])
+                    args = [ Define.Input("count", Nullable Int) ],
+                    resolve = fun ctx c -> 
+                        match ctx.TryArg("count") with
+                        | Some (Some count) -> c.TopMovies count
+                        | _ -> c.Movies) ])
 
     let Objects =
         Define.Object<Context>(
@@ -241,7 +246,7 @@ module SchemaDefinition =
                 Nullable Movie, 
                 "Gets movie by it's id",
                 args = [ Define.Input("movieId", Int) ], 
-                resolve = fun ctx _ -> Database.tryGetMovie (ctx.Arg("movieId"))) ])
+                resolve = fun ctx c -> c.Movie (ctx.Arg("movieId"))) ])
 
     let Query = 
         Define.Object<Root>(
@@ -261,3 +266,12 @@ module SchemaDefinition =
                     Collections,
                     "Gets collections on the server",
                     resolve = fun _ _ -> Context.Instance) ])
+
+module Schema =
+    let config = SchemaConfig.Default
+
+    let root requestId = { RequestId = requestId }
+
+    let instance = Schema(SchemaDefinition.Query, config = config)
+
+    let executor = Executor(instance)

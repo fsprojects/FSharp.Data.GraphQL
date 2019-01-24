@@ -16,6 +16,10 @@ type QueryBenchmarks() =
         schema <- Schema(SchemaDefinition.Query, config = SchemaConfig.Default)
         executor <- Executor(schema)
 
+    [<GlobalCleanup>]
+    member __.Cleanup() =
+        Database.connection.Dispose()
+
     [<Benchmark>]
     member __.SingleMovie() = executeDirect Queries.singleMovie
 
