@@ -85,3 +85,19 @@ module Queries =
         }
         }
     }""" (deferralType.ToString())
+
+    let fiftyMoviesWithLinks (moviesDeferralType :DeferralType) (linksDeferralType : DeferralType) =
+        sprintf """query q {
+      requestId
+      collections {
+        movies (count: 50) %s {
+          movieId
+          title
+          genres
+          links %s {
+            imdbId
+            tmdbId
+          }
+        }
+      }
+    }""" (moviesDeferralType.ToString()) (linksDeferralType.ToString())
