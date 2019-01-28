@@ -17,11 +17,9 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition=" '$(OS)' == 'Windows_NT'">
-    <Exec Command="powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)\scripts\fetch-database.ps1" />
-  </Target>
-  <Target Name="PreBuild" BeforeTargets="PreBuildEvent" Condition=" '$(OS)' != 'Windows_NT'">
-    <Exec Command="./$(ProjectDir)/scripts/fetch-database.sh" />
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Condition=" '$(OS)' == 'Windows_NT'" Command="powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)\scripts\fetch-database.ps1" />
+    <Exec Condition=" '$(OS)' != 'Windows_NT'" Command="./$(ProjectDir)/scripts/fetch-database.sh" />
   </Target>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
