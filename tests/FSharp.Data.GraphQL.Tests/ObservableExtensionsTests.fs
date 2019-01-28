@@ -62,9 +62,9 @@ let delay ms x = async {
 [<Fact>]
 let ``ofAsyncSeq should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 300 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 3000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let obs = Observable.ofAsyncSeq source
     use sub = Observer.create obs
     sub.WaitCompleted()
@@ -73,9 +73,9 @@ let ``ofAsyncSeq should call OnComplete and return items in expected order`` () 
 [<Fact>]
 let ``ofAsyncValSeq should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 300 2 |> AsyncVal.ofAsync
-        yield delay 100 1 |> AsyncVal.ofAsync
-        yield delay 200 3 |> AsyncVal.ofAsync }
+        yield delay 3000 2 |> AsyncVal.ofAsync
+        yield delay 1000 1 |> AsyncVal.ofAsync
+        yield delay 2000 3 |> AsyncVal.ofAsync }
     let obs = Observable.ofAsyncValSeq source
     use sub = Observer.create obs
     sub.WaitCompleted()
@@ -84,10 +84,10 @@ let ``ofAsyncValSeq should call OnComplete and return items in expected order`` 
 [<Fact>]
 let ``bufferByTiming should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTiming 300
+        yield delay 4000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTiming 3000
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ [1; 3]; [2] ]
@@ -95,9 +95,9 @@ let ``bufferByTiming should call OnComplete and return items in expected order``
 [<Fact>]
 let ``bufferByElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 4000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let obs = Observable.ofAsyncSeq source |> Observable.bufferByElementCount 2
     use sub = Observer.create obs
     sub.WaitCompleted()
@@ -106,11 +106,11 @@ let ``bufferByElementCount should call OnComplete and return items in expected o
 [<Fact>]
 let ``bufferByTimingAndElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 500 2
-        yield delay 50 1
-        yield delay 100 3
-        yield delay 150 4 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount 300 2
+        yield delay 5000 2
+        yield delay 500 1
+        yield delay 1000 3
+        yield delay 1500 4 }
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount 3000 2
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ [1; 3]; [4]; [2] ]
@@ -142,12 +142,12 @@ let ``choose should cal OnComplete`` () =
 [<Fact>]
 let ``concat should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 5000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let source2 = seq {
-        yield delay 400 4
-        yield delay 300 5 }
+        yield delay 4000 4
+        yield delay 3000 5 }
     let source = seq { yield Seq.empty; yield source1; yield source2 }
     let obs =
         Observable.ofSeq source
@@ -160,12 +160,12 @@ let ``concat should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``concat2 should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 5000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let source2 = seq {
-        yield delay 400 4
-        yield delay 300 5 }
+        yield delay 4000 4
+        yield delay 3000 5 }
     let obs =
         Observable.ofAsyncSeq source2
         |> Observable.concat2 (Observable.ofAsyncSeq source1)
@@ -176,12 +176,12 @@ let ``concat2 should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``merge should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 5000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let source2 = seq {
-        yield delay 400 4
-        yield delay 300 5 }
+        yield delay 4000 4
+        yield delay 3000 5 }
     let source = seq { yield Seq.empty; yield source1; yield source2 }
     let obs =
         Observable.ofSeq source
@@ -194,12 +194,12 @@ let ``merge should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``merge2 should call OnComplete and return items in expected order`` () =
     let source1 = seq { 
-        yield delay 500 2
-        yield delay 100 1
-        yield delay 200 3 }
+        yield delay 5000 2
+        yield delay 1000 1
+        yield delay 2000 3 }
     let source2 = seq {
-        yield delay 400 4
-        yield delay 300 5 }
+        yield delay 4000 4
+        yield delay 3000 5 }
     let obs =
         Observable.ofAsyncSeq source2
         |> Observable.merge2 (Observable.ofAsyncSeq source1)
