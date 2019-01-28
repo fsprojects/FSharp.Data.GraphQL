@@ -39,7 +39,7 @@ group Test
 
 group BenchmarksSql
   source https://nuget.org/api/v2
-  framework: netcoreapp2.2
+  framework: netcoreapp2.1
 
   nuget BenchmarkDotNet
   nuget Dapper

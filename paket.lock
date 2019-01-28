@@ -1807,7 +1807,7 @@ NUGET
       Newtonsoft.Json (>= 10.0.2) - restriction: || (>= net45) (&& (>= netstandard1.0) (< netstandard1.3) (< win8)) (&& (< netstandard1.0) (>= win8)) (&& (>= netstandard1.3) (< win8)) (>= wp8) (>= wpa81)
 
 GROUP BenchmarksSql
-RESTRICTION: == netcoreapp2.2
+RESTRICTION: == netcoreapp2.1
 NUGET
   remote: https://www.nuget.org/api/v2
     BenchmarkDotNet (0.11.3)
