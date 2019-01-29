@@ -19,7 +19,7 @@
   </ItemGroup>
   <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
     <Exec Condition=" '$(OS)' == 'Windows_NT'" Command="powershell.exe -ExecutionPolicy Bypass -NoProfile -NonInteractive -File $(ProjectDir)\scripts\fetch-database.ps1" />
-    <Exec Condition=" '$(OS)' != 'Windows_NT'" Command="./$(ProjectDir)/scripts/fetch-database.sh" />
+    <Exec Condition=" '$(OS)' != 'Windows_NT'" Command="./$(ProjectDir)scripts/fetch-database.sh" />
   </Target>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
