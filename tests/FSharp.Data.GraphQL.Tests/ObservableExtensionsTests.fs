@@ -107,10 +107,10 @@ let ``bufferByElementCount should call OnComplete and return items in expected o
 let ``bufferByTimingAndElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
         yield delay 5000 2
-        yield delay 500 1
-        yield delay 1000 3
-        yield delay 1500 4 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount 3000 2
+        yield delay 1000 1
+        yield delay 2000 3
+        yield delay 3000 4 }
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount 4000 2
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ [1; 3]; [4]; [2] ]
