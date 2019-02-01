@@ -1549,64 +1549,6 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
     | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
-let ``Each streamed result should be sent as soon as it is computed - normal seq`` () =
-    let expectedDirect =
-        NameValueLookup.ofList [
-            "testData", upcast NameValueLookup.ofList [
-                "syncSeq", upcast []
-            ]
-        ]
-    let expectedDeferred1 =
-        NameValueLookup.ofList [
-            "data", upcast [
-                box <| NameValueLookup.ofList [
-                    "value", upcast "Sync 2"
-                ]
-            ]
-            "path", upcast [box "testData"; upcast "syncSeq"; upcast 0]
-        ]
-    let expectedDeferred2 =
-        NameValueLookup.ofList [
-            "data", upcast [
-                box <| NameValueLookup.ofList [
-                    "value", upcast "Sync 1"
-                ]
-            ]
-            "path", upcast [box "testData"; upcast "syncSeq"; upcast 1]
-        ]
-    let query = parse """{
-        testData {
-            syncSeq @stream {
-                value
-            }
-        }
-    }"""
-    use mre1 = new ManualResetEvent(false)
-    use mre2 = new ManualResetEvent(false)
-    let result = query |> executor.AsyncExecute |> sync
-    match result with
-    | Deferred(data, errors, deferred) ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
-            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
-            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
-        // The first result is a delayed async field exposed through the sequence, which is set to compute the value for 5 seconds.
-        // The second result should come first, as its computation time is set for 1 second.
-        // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
-        then fail "Timeout while waiting for first deferred result"
-        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
-        then fail "Timeout while waiting for second deferred result"
-        sub.WaitCompleted()
-        sub.Received
-        |> Seq.cast<NameValueLookup>
-        |> itemEquals 0 expectedDeferred1
-        |> itemEquals 1 expectedDeferred2
-        |> ignore
-    | _ -> fail "Expected Deferred GQLRespnse"
-
-[<Fact>]
 let ``Each streamed result should be sent as soon as it is computed - async seq``() =
     let expectedDirect =
         NameValueLookup.ofList [
