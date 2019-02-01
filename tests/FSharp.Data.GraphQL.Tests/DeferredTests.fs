@@ -13,6 +13,18 @@ open FSharp.Data.GraphQL.Types
 
 #nowarn "40"
 
+let ms x =
+    let factor =
+        match Environment.ProcessorCount with
+        | x when x >= 8 -> 1
+        | x when x >= 4 -> 4
+        | _ -> 6
+    x * factor
+
+let delay time x = async {
+    do! Async.Sleep(ms time)
+    return x }
+
 type TestSubject = {
     id: string
     a: string
@@ -156,11 +168,6 @@ let DataType =
             Define.Field("nullableListError", ListOf AsyncDataType, (fun _ d -> d.nullableListError))
             Define.Field("bufferedList", ListOf AsyncDataType, (fun _ d -> d.bufferedList))
         ])
-
-let delay ms x = async {
-    do! Async.Sleep(ms)
-    return x
-}
 
 let data = {
        id = "1"
@@ -628,10 +635,10 @@ let ``Each live result should be sent as soon as it is computed`` () =
         updateLiveData()
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come as soon as the live value is updated, which sould be almost instantly.
-        // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
+        if TimeSpan.FromSeconds(float (ms 3)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.Received
         |> Seq.cast<NameValueLookup>
@@ -1282,13 +1289,16 @@ let ``Should buffer stream list correctly by timing information``() =
             ]
             "path", upcast [box "testData"; upcast "bufferedList"; upcast [0]]
         ]   
-    let query = parse """{
-        testData {
-            bufferedList @stream(interval : 3000) {
-                value
+    let query = 
+        ms 3000
+        |> sprintf """{
+            testData {
+                bufferedList @stream(interval : %i) {
+                    value
+                }
             }
-        }
-    }"""
+        }"""
+        |> parse
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
@@ -1306,9 +1316,9 @@ let ``Should buffer stream list correctly by timing information``() =
         // to buffer results 3 and 2 (in this order), as together they take less than 3 seconds to compute,
         // and send them together on the first batch.
         // First result should come in a second batch, as it takes 5 seconds to compute, more than the time limit of the buffer.
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first Deferred GQLResponse"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
         sub.WaitCompleted()
         sub.Received
@@ -1372,9 +1382,9 @@ let ``Should buffer stream list correctly by count information``() =
         // and send them together on the first batch.
         // First result should come in a second batch, as it takes 5 seconds to compute, which should be enough
         // to put the two other results in a batch with the preferred size.
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first Deferred GQLResponse"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
         sub.WaitCompleted()
         sub.Received
@@ -1469,9 +1479,9 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         // The second result is a delayed async field, which is set to compute the value for 5 seconds.
         // The first result should come almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 3 seconds, test has failed.
-        if TimeSpan.FromSeconds(float 3) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 3)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted()
         sub.Received
@@ -1526,9 +1536,9 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted()
         sub.Received
@@ -1539,7 +1549,65 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
     | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
-let ``Each streamed result should be sent as soon as it is computed``() =
+let ``Each streamed result should be sent as soon as it is computed - normal seq`` () =
+    let expectedDirect =
+        NameValueLookup.ofList [
+            "testData", upcast NameValueLookup.ofList [
+                "syncSeq", upcast []
+            ]
+        ]
+    let expectedDeferred1 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Sync 2"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "syncSeq"; upcast 0]
+        ]
+    let expectedDeferred2 =
+        NameValueLookup.ofList [
+            "data", upcast [
+                box <| NameValueLookup.ofList [
+                    "value", upcast "Sync 1"
+                ]
+            ]
+            "path", upcast [box "testData"; upcast "syncSeq"; upcast 1]
+        ]
+    let query = parse """{
+        testData {
+            syncSeq @stream {
+                value
+            }
+        }
+    }"""
+    use mre1 = new ManualResetEvent(false)
+    use mre2 = new ManualResetEvent(false)
+    let result = query |> executor.AsyncExecute |> sync
+    match result with
+    | Deferred(data, errors, deferred) ->
+        empty errors
+        data.["data"] |> equals (upcast expectedDirect)
+        use sub = deferred |> Observer.createWithCallback (fun sub _ ->
+            if Seq.length sub.Received = 1 then mre1.Set() |> ignore
+            elif Seq.length sub.Received = 2 then mre2.Set() |> ignore)
+        // The first result is a delayed async field exposed through the sequence, which is set to compute the value for 5 seconds.
+        // The second result should come first, as its computation time is set for 1 second.
+        // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
+        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
+        then fail "Timeout while waiting for first deferred result"
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
+        then fail "Timeout while waiting for second deferred result"
+        sub.WaitCompleted()
+        sub.Received
+        |> Seq.cast<NameValueLookup>
+        |> itemEquals 0 expectedDeferred1
+        |> itemEquals 1 expectedDeferred2
+        |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
+
+[<Fact>]
+let ``Each streamed result should be sent as soon as it is computed - async seq``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -1584,9 +1652,9 @@ let ``Each streamed result should be sent as soon as it is computed``() =
         // The first result is a delayed async field, which is set to compute the value for 5 seconds.
         // The second result should come first, almost instantly, as it is not a delayed computed field.
         // Therefore, let's assume that if it does not come in at least 4 seconds, test has failed.
-        if TimeSpan.FromSeconds(float 4) |> mre1.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 4)) |> mre1.WaitOne |> not
         then fail "Timeout while waiting for first deferred result"
-        if TimeSpan.FromSeconds(float 30) |> mre2.WaitOne |> not
+        if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
         sub.WaitCompleted()
         sub.Received

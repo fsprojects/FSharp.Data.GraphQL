@@ -6,6 +6,19 @@ module FSharp.Data.GraphQL.Tests.ObservableExtensionsTests
 open Xunit
 open FSharp.Data.GraphQL
 open Helpers
+open System
+
+let ms x =
+    let factor =
+        match Environment.ProcessorCount with
+        | x when x >= 8 -> 1
+        | x when x >= 4 -> 5
+        | _ -> 20
+    x * factor
+
+let delay time x = async {
+    do! Async.Sleep(ms time)
+    return x }
 
 [<Fact>]
 let ``ofSeq should call OnComplete and return items in expected order`` () =
@@ -55,10 +68,6 @@ let ``ofSeq on an empty sequence should call OnComplete and return items in expe
     sub.WaitCompleted()
     sub.Received |> seqEquals source
 
-let delay ms x = async {
-    do! Async.Sleep(ms)
-    return x }
-
 [<Fact>]
 let ``ofAsyncSeq should call OnComplete and return items in expected order`` () =
     let source = seq { 
@@ -84,10 +93,10 @@ let ``ofAsyncValSeq should call OnComplete and return items in expected order`` 
 [<Fact>]
 let ``bufferByTiming should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 4000 2
-        yield delay 1000 1
-        yield delay 2000 3 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTiming 3000
+        yield delay 400 2
+        yield delay 100 1
+        yield delay 200 3 }
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTiming (ms 300)
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ [1; 3]; [2] ]
@@ -95,9 +104,9 @@ let ``bufferByTiming should call OnComplete and return items in expected order``
 [<Fact>]
 let ``bufferByElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 4000 2
-        yield delay 1000 1
-        yield delay 2000 3 }
+        yield delay 400 2
+        yield delay 100 1
+        yield delay 200 3 }
     let obs = Observable.ofAsyncSeq source |> Observable.bufferByElementCount 2
     use sub = Observer.create obs
     sub.WaitCompleted()
@@ -106,11 +115,11 @@ let ``bufferByElementCount should call OnComplete and return items in expected o
 [<Fact>]
 let ``bufferByTimingAndElementCount should call OnComplete and return items in expected order`` () =
     let source = seq { 
-        yield delay 6000 2
-        yield delay 1000 1
-        yield delay 2000 3
-        yield delay 3000 4 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount 3000 2
+        yield delay 500 2
+        yield delay 50 1
+        yield delay 100 3
+        yield delay 150 4 }
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount (ms 300) 2
     use sub = Observer.create obs
     sub.WaitCompleted()
     sub.Received |> seqEquals [ [1; 3]; [4]; [2] ]

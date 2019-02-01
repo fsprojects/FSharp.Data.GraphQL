@@ -205,6 +205,7 @@ Target "Build" (fun _ ->
 )
 
 Target "RunTests" (fun _ ->
+    Console.WriteLine("Number of processors: {0}", Environment.ProcessorCount)
     DotNetCli.Test (fun p -> { p with 
 #if MONO 
                                     Framework = "netcoreapp2.0"

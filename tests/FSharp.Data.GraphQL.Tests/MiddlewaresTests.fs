@@ -194,16 +194,13 @@ let ``Deferred queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj ]
         ]
     let result = execute query
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
-        deferred |> Observable.add (fun x -> actualDeferred.Add(x); mre.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-        then fail "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred |> single |> equals (upcast expectedDeferred)
+        let sub = Observer.create deferred
+        sub.WaitCompleted()
+        sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
@@ -250,19 +247,13 @@ let ``Streamed queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj; 1 :> obj ]
         ]
     let result = execute query
-    use mre = new ManualResetEvent(false)
-    let actualDeferred = ConcurrentBag<Output>()
     match result with
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
-        deferred 
-        |> Observable.add (fun x -> 
-            actualDeferred.Add(x)
-            if actualDeferred.Count = 2 then mre.Set() |> ignore)
-        if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
-        then fail "Timeout while waiting for Deferred GQLResponse"
-        actualDeferred
+        let sub = Observer.create deferred
+        sub.WaitCompleted(2)
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expectedDeferred1
         |> contains expectedDeferred2
