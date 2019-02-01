@@ -60,17 +60,12 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
     | Some expectedDeferred ->
         match result with
         | Deferred(data, errors, deferred) ->
-            use mre = new ManualResetEvent(false)
-            let actualDeferred = ConcurrentBag<Output>()
-            let expectedItems = Seq.length expectedDeferred
+            let expectedItemCount = Seq.length expectedDeferred
             empty errors
             data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
-            deferred
-            |> Observable.add (fun x -> 
-                actualDeferred.Add(x)
-                if actualDeferred.Count = expectedItems then set mre)
-            wait mre "Timeout while waiting for Deferred GQLResponse"
-            actualDeferred
+            let sub = Observer.create deferred
+            sub.WaitCompleted(expectedItemCount)
+            sub.Received
             |> Seq.cast<NameValueLookup>
             |> Seq.iter (fun ad -> expectedDeferred |> contains ad |> ignore)
         | _ ->  fail "Expected a deferred GQLResponse"
