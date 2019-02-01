@@ -7,8 +7,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open System.Threading
-open System.Collections.Generic
-open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
 
 #nowarn "40"
@@ -1320,7 +1318,7 @@ let ``Should buffer stream list correctly by timing information``() =
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
-        sub.WaitCompleted()
+        sub.WaitCompleted(timeout = ms 10)
         sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
@@ -1386,7 +1384,7 @@ let ``Should buffer stream list correctly by count information``() =
         then fail "Timeout while waiting for first Deferred GQLResponse"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second Deferred GQLResponse"
-        sub.WaitCompleted()
+        sub.WaitCompleted(timeout = ms 10)
         sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
@@ -1483,7 +1481,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        sub.WaitCompleted()
+        sub.WaitCompleted(timeout = ms 10)
         sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
@@ -1540,7 +1538,7 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        sub.WaitCompleted()
+        sub.WaitCompleted(timeout = ms 10)
         sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
@@ -1598,7 +1596,7 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         then fail "Timeout while waiting for first deferred result"
         if TimeSpan.FromSeconds(float (ms 10)) |> mre2.WaitOne |> not
         then fail "Timeout while waiting for second deferred result"
-        sub.WaitCompleted()
+        sub.WaitCompleted(timeout = ms 10)
         sub.Received
         |> Seq.cast<NameValueLookup>
         |> itemEquals 0 expectedDeferred1
