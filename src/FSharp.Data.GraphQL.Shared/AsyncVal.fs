@@ -115,6 +115,10 @@ module AsyncVal =
     /// Returned array maintain order of values.
     /// If the array contains a Failure, then the entire array will not resolve
     let collectSequential (values: AsyncVal<'T> []) : AsyncVal<'T []> =
+        let mapper =
+            function
+            | Value v -> v
+            | other -> failwithf "Expected a synchronous value, but got %O" other
         if values.Length = 0 then Value [||]
         elif values |> Array.exists isAsync then
             Async(async {
@@ -129,7 +133,7 @@ module AsyncVal =
                     | Failure f -> 
                         results.[i] <- raise f
                 return results })
-        else Value (values |> Array.map (fun (Value v) -> v))
+        else Value (values |> Array.map mapper)
 
             
 
@@ -197,12 +201,6 @@ module AsyncExtensions =
     
     /// Computation expression for working on AsyncVals.
     let asyncVal = AsyncValBuilder ()
-    
-    /// Active pattern used for checking if AsyncVal contains immediate value.
-    let (|Immediate|_|) (x: AsyncVal<'T>) = match x with | Value v -> Some v | _ -> None
-
-    /// Active patter used for checking if AsyncVal wraps an Async computation.
-    let (|Async|_|) (x: AsyncVal<'T>) = match x with | Async a -> Some a | _ -> None
 
     type Microsoft.FSharp.Control.AsyncBuilder with
 
