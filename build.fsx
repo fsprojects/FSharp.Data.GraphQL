@@ -210,6 +210,7 @@ Target "RunTests" (fun _ ->
 #if MONO 
                                     Framework = "netcoreapp2.0"
 #endif
+                                    AdditionalArgs = [ "--no-build"; "-v=normal" ]
                                     Configuration = "Release"
                                     Project = "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" })  
 )
