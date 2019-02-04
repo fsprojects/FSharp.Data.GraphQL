@@ -7,7 +7,7 @@ echo "Checking if path \"${DB_PATH}\" exists..."
 if [ ! -d "${DB_PATH}" ]
 then
     echo "Path not found. Downloading database files..."
-    wget -P "${PROJECT_PATH}" "http://files.grouplens.org/datasets/movielens/ml-latest.zip"
+    wget -q -P "${PROJECT_PATH}" "http://files.grouplens.org/datasets/movielens/ml-latest.zip"
     echo "Download finished. Unzipping database files..."
     unzip "$ZIP_FILE"
     echo "Unzipping done. Removing zip file..."
