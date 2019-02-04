@@ -228,13 +228,12 @@ Target.create "Build" (fun _ ->
 
 Target.create "RunTests" (fun _ ->
     "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    |> DotNet.test (fun p ->
-            { p with
+    |> DotNet.test (fun options ->
+            { options with
                 NoBuild = true
-                MSBuildParams =
-                    { p.MSBuildParams with
-                        Verbosity = Some Normal }
-                Configuration = DotNet.BuildConfiguration.Release }))
+                Configuration = DotNet.BuildConfiguration.Release
+                Common = { options.Common with
+                            CustomParams = Some "-v=normal" } }))
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
