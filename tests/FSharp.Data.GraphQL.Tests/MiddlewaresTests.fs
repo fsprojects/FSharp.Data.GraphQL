@@ -198,7 +198,7 @@ let ``Deferred queries : Should pass when below threshold``() =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
-        let sub = Observer.create deferred
+        use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
     | _ -> fail "Expected Deferred GQLResponse"
@@ -251,7 +251,7 @@ let ``Streamed queries : Should pass when below threshold``() =
     | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
-        let sub = Observer.create deferred
+        use sub = Observer.create deferred
         sub.WaitCompleted(2)
         sub.Received
         |> Seq.cast<NameValueLookup>
