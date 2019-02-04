@@ -63,7 +63,7 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
             let expectedItemCount = Seq.length expectedDeferred
             empty errors
             data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
-            let sub = Observer.create deferred
+            use sub = Observer.create deferred
             sub.WaitCompleted(expectedItemCount)
             sub.Received
             |> Seq.cast<NameValueLookup>

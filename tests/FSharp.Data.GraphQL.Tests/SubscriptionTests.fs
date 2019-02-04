@@ -122,7 +122,7 @@ let ``Should be able to subscribe to sync field and get results``() =
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         sub.WaitForItem()
         sub.Received
@@ -150,7 +150,7 @@ let ``Should be able to subscribe to tagged sync field and get results with expe
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         sub.WaitForItem()
         sub.Received
@@ -170,7 +170,7 @@ let ``Should be able to subscribe to tagged sync field and do not get results wi
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
@@ -194,7 +194,7 @@ let ``Should be able to subscribe to async field and get results``() =
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         sub.WaitForItem()
         sub.Received
@@ -222,7 +222,7 @@ let ``Should be able to subscribe to tagged async field and get results with exp
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         sub.WaitForItem()
         sub.Received
@@ -242,7 +242,7 @@ let ``Should be able to subscribe to tagged async field and do not get results w
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        let sub = Observer.create data
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
         ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
