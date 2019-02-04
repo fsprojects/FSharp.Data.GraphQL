@@ -4,6 +4,7 @@
 module Helpers
 
 open System
+open System.Linq
 open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
@@ -49,6 +50,8 @@ let itemEquals (index : int) (expected : 'a) (xs : 'a seq) =
     | Some item -> item |> equals expected
     | None -> fail <| sprintf "Expected sequence to contain item at index %i, but sequence does not contain enough elements" index
     xs
+let seqEquals (expected : 'a seq) (actual : 'a seq) =
+    Assert.Equal<'a>(expected, actual)
 
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
@@ -118,12 +121,43 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
 
-let isSome (x : 'T option) =
-    match x with
-    | Some x -> x
-    | None -> failwith "Expected option to be Some, but found None."
+type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
+    let received = List<'T>()
+    let mutable isCompleted = false
+    let mre = new ManualResetEvent(false)
+    let mutable subscription = Unchecked.defaultof<IDisposable>
+    do subscription <- obs.Subscribe(this)
+    member __.Received 
+        with get() = received.AsEnumerable()
+    member __.WaitCompleted() =
+        wait mre "Timeout waiting for OnCompleted"
+    member x.WaitCompleted(expectedItemCount) =
+        x.WaitCompleted()
+        if received.Count < expectedItemCount
+        then failwithf "Expected to receive %i items, but received %i" expectedItemCount received.Count
+    member __.WaitForItems(expectedItemCount) =
+        let errorMsg = sprintf "Expected to receive least %i items, but received %i" expectedItemCount received.Count
+        waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
+    member x.WaitForItem() = x.WaitForItems(1)
+    member __.IsCompleted 
+        with get() = isCompleted
+    interface IObserver<'T> with
+        member __.OnCompleted() = 
+            isCompleted <- true
+            mre.Set() |> ignore
+        member __.OnError(error) = raise error
+        member __.OnNext(value) = 
+            received.Add(value)
+            onReceived |> Option.iter (fun evt -> evt this value)
+    interface IDisposable with
+        member __.Dispose() = 
+            subscription.Dispose()
+            mre.Dispose()
 
 [<RequireQualifiedAccess>]
-module Observable =
-    let addLocked lockObj (callback : 'T -> unit) source =
-        source |> Observable.add (fun x -> lock lockObj (fun () -> callback x))
+module Observer =
+    let create (sub : IObservable<'T>) = 
+        new TestObserver<'T>(sub)
+
+    let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
+        new TestObserver<'T>(sub, onReceive)

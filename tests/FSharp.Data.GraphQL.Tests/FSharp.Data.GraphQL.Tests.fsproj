@@ -25,6 +25,7 @@
     <Compile Include="CoercionTests.fs" />
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ReflectedSchemaTests.fs" />
+    <Compile Include="ObservableExtensionsTests.fs" />
     <Compile Include="ExecutionTests.fs" />
     <Compile Include="ExecutorMiddlewareTests.fs" />
     <Compile Include="MutationTests.fs" />
