@@ -119,15 +119,13 @@ let ``Should be able to subscribe to sync field and get results``() =
             data
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        wait mre "Timeout while waiting for Stream GQLResponse"
-        actual
+        sub.WaitForItem()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expected
         |> ignore
@@ -149,15 +147,13 @@ let ``Should be able to subscribe to tagged sync field and get results with expe
             data
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        wait mre "Timeout while waiting for Stream GQLResponse"
-        actual
+        sub.WaitForItem()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expected
         |> ignore
@@ -171,14 +167,12 @@ let ``Should be able to subscribe to tagged sync field and do not get results wi
             data
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results with given tag"
+        ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
@@ -197,15 +191,13 @@ let ``Should be able to subscribe to async field and get results``() =
     data
   }
 }"""
-    let mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        wait mre "Timeout while waiting for Stream GQLResponse"
-        actual
+        sub.WaitForItem()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expected
         |> ignore
@@ -227,15 +219,13 @@ let ``Should be able to subscribe to tagged async field and get results with exp
     data
   }
 }"""
-    use mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        wait mre "Timeout while waiting for Stream GQLResponse"
-        actual
+        sub.WaitForItem()
+        sub.Received
         |> Seq.cast<NameValueLookup>
         |> contains expected
         |> ignore
@@ -249,12 +239,10 @@ let ``Should be able to subscribe to tagged async field and do not get results w
             data
         }
     }"""
-    use mre = new ManualResetEvent(false)
-    let actual = ConcurrentBag<Output>()
     let result = executor.AsyncExecute(query) |> sync
     match result with
     | Stream data ->
-        data |> Observable.add (fun x -> actual.Add(x); set mre)
+        use sub = Observer.create data
         updateValue 1 "Updated value 1"
-        ensureThat (fun () -> actual.IsEmpty) 10 "Should not get results with given tag"
+        ensureThat (fun () -> Seq.isEmpty sub.Received) 50 "Should not get results with given tag"
     | _ -> failwith "Expected Stream GQLResponse"

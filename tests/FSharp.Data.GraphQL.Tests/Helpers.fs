@@ -129,12 +129,15 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     do subscription <- obs.Subscribe(this)
     member __.Received 
         with get() = received.AsEnumerable()
-    member __.WaitCompleted() =
-        wait mre "Timeout waiting for OnCompleted"
-    member x.WaitCompleted(expectedItemCount) =
-        x.WaitCompleted()
-        if received.Count < expectedItemCount
-        then failwithf "Expected to receive %i items, but received %i" expectedItemCount received.Count
+    member __.WaitCompleted(?expectedItemCount, ?timeout) =
+        let ms = defaultArg timeout 30
+        if TimeSpan.FromSeconds(float ms) |> mre.WaitOne |> not
+        then fail "Timeout waiting for OnCompleted"
+        match expectedItemCount with
+        | Some x -> 
+            if received.Count < x
+            then failwithf "Expected to receive %i items, but received %i" x received.Count
+        | None -> ()
     member __.WaitForItems(expectedItemCount) =
         let errorMsg = sprintf "Expected to receive least %i items, but received %i" expectedItemCount received.Count
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg

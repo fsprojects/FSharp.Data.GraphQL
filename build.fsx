@@ -231,6 +231,9 @@ Target.create "RunTests" (fun _ ->
     |> DotNet.test (fun p ->
             { p with
                 NoBuild = true
+                MSBuildParams =
+                    { p.MSBuildParams with
+                        Verbosity = Some Normal }
                 Configuration = DotNet.BuildConfiguration.Release }))
 
 // --------------------------------------------------------------------------------------
