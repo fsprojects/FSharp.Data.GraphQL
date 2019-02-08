@@ -84,11 +84,15 @@ let executor =
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<A, Subject option>(true)
-          Define.ObjectListFilterMiddleware<B, Subject option>(true) ]
+          Define.ObjectListFilterMiddleware<B, Subject option>(true)
+          Define.DirectiveChooserMiddleware() ]
     Executor(schema, middlewares)
 
 let execute (query : Document) =
     executor.AsyncExecute(query) |> sync
+
+let executeWithMetadata (meta : Metadata) (query : Document) =
+    executor.AsyncExecute(query, meta = meta) |> sync
 
 let expectedErrors : Error list =
     [ "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", [] ]
@@ -409,3 +413,42 @@ let ``Object list filter: should return filter information in Metadata``() =
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
     result.Metadata.TryFind<(string * ObjectListFilter) list>("filters") |> equals (Some [ expectedFilter ])
+
+[<Fact>]
+let ``Should obey directive chooser condition`` () =
+    let query = 
+        parse """query testQuery {
+            A (id : 1) {
+                id
+                value
+                subjects @defer {
+                    id
+                    value
+                }                
+            }
+        }"""
+    let expected = 
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+                "subjects", upcast [
+                    NameValueLookup.ofList [
+                        "id", upcast 2
+                        "value", upcast "A2"                    
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast 6
+                        "value", upcast 3000
+                    ]
+                ]
+            ]
+        ]
+    let result = query |> executeWithMetadata (Metadata.WithDirectiveChooser(DirectiveChooser.fallbackDefer))
+    match result with
+    | Direct(data, errors) ->
+        empty errors
+        data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQLResponse"
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)

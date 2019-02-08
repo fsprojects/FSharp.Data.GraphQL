@@ -1,7 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middlewares
 
 open FSharp.Data.GraphQL.Types
-
+        
 /// Contains extensions for the type system.
 [<AutoOpen>]
 module TypeSystemExtensions =
@@ -24,3 +24,20 @@ module TypeSystemExtensions =
             match this.Args.TryFind("filter") with
             | Some (:? ObjectListFilter as f) -> Some f
             | _ -> None
+
+    type Metadata with
+        /// <summary>
+        /// Creates a new instance of the current Metadata, adding a directive chooser function to it.
+        /// Directive chooser will be used by a DirectiveFallbackMiddleware if configured in the Executor.
+        /// </summary>
+        /// <param name="chooser">The directive chooser to be added in the Metadata object.</param>
+        member this.WithDirectiveChooser(chooser : DirectiveChooser) =
+            this.Add("directiveChooser", chooser)
+
+        /// <summary>
+        /// Creates a new instance of Metadata, adding a directive chooser function to it.
+        /// Directive chooser will be used by a DirectiveFallbackMiddleware if configured in the Executor.
+        /// </summary>
+        /// <param name="chooser">The directive chooser to be added in the Metadata object.</param>
+        static member WithDirectiveChooser(chooser : DirectiveChooser) =
+            Metadata.Empty.WithDirectiveChooser(chooser)

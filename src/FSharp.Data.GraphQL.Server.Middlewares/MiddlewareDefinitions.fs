@@ -4,6 +4,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Ast
 
 type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) =
     let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
@@ -146,4 +147,24 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
     interface IExecutorMiddleware with
         member __.CompileSchema = Some middleware
         member __.PlanOperation = None
+        member __.ExecuteOperationAsync = None
+
+type internal DirectiveChooserMiddleware() =
+    let middleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
+        let chooser = ctx.Metadata.TryFind<DirectiveChooser>("directiveChooser")
+        let chooseDirectives (chooser : DirectiveChooser) (opdef : OperationDefinition) : OperationDefinition =
+            let rec selMapper (selectionSet : Selection list) : Selection list =
+                selectionSet
+                |> List.map (fun sel -> 
+                    match sel with
+                    | Field f -> Field { f with Directives = f.Directives |> List.choose chooser; SelectionSet = selMapper f.SelectionSet }
+                    | FragmentSpread fs -> FragmentSpread { fs  with Directives = fs.Directives |> List.choose chooser }
+                    | InlineFragment fd -> InlineFragment { fd  with Directives = fd.Directives |> List.choose chooser; SelectionSet = selMapper fd.SelectionSet })
+            { opdef with SelectionSet = selMapper opdef.SelectionSet }
+        match chooser with
+        | Some chooser -> next { ctx with Operation = chooseDirectives chooser ctx.Operation }
+        | None -> next ctx
+    interface IExecutorMiddleware with
+        member __.CompileSchema = None
+        member __.PlanOperation = Some middleware
         member __.ExecuteOperationAsync = None

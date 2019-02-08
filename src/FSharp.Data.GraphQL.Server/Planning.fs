@@ -126,7 +126,7 @@ let private directiveIncluder (directive: Directive) : Includer =
             | None -> raise (GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
 
 let private incl: Includer = fun _ -> true
-let private excl: Includer = fun _ -> false
+
 let private getIncluder (directives: Directive list) parentIncluder : Includer =
     directives
     |> List.fold (fun acc directive ->

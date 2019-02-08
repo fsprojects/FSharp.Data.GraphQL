@@ -49,3 +49,15 @@ module DefineExtensions =
         static member LiveQueryMiddleware(?identityName : IdentityNameResolver) : IExecutorMiddleware =
             let identityName = defaultArg identityName (fun _ -> "Id")
             upcast LiveQueryMiddleware(identityName)
+
+        /// <summary>
+        /// Creates a middleware that can be used to apply a choose function to every Directive of the query.
+        /// Choose function must be provided in the Metadata object of the execution.
+        /// </summary>
+        /// <remarks>
+        /// When defined, this middleware looks for a DirectiveChooser in the Metadata provider to the executor,
+        /// and apply it to every directive inside the operation. Chooser can transform or even remove directives,
+        /// making them loose their effect on the query.
+        /// </remarks>
+        static member DirectiveChooserMiddleware() : IExecutorMiddleware =
+            upcast DirectiveChooserMiddleware()
