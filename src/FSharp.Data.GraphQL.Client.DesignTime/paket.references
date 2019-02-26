@@ -1,9 +1,0 @@
-group Shared
-FSharp.Core
-Newtonsoft.Json
-File:ProvidedTypes.fsi
-File:ProvidedTypes.fs
-File:JsonValue.fs
-File:TextConversions.fs
-File:IO.fs
-File:Http.fs

@@ -169,7 +169,7 @@ type internal ProviderSchemaConfig =
 
 [<TypeProvider>]
 type GraphQLTypeProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, assemblyReplacementMap=[("FSharp.Data.GraphQL.Client.DesignTime", "FSharp.Data.GraphQL.Client")], addDefaultProbingLocation=true)
+    inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()

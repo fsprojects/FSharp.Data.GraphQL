@@ -106,8 +106,6 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client.DesignTime", "src\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj", "{20405832-4592-4729-BDFE-C8803E6D78EB}"
-EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -235,7 +233,6 @@ Global
 		{C7DA852B-D30A-4209-B767-640224C7C31E} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
-		{20405832-4592-4729-BDFE-C8803E6D78EB} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}

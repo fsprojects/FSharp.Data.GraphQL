@@ -4,7 +4,8 @@
   <Import Project="..\..\netfx.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
   </PropertyGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
@@ -38,31 +39,23 @@
     <Compile Include="QuotationHelpers.fs" />
     <Compile Include="IntrospectionParser.fs" />
     <Compile Include="Serialization.fs" />
-    <Compile Include="Runtime.fs" />
+    <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />
+    <!-- These files are the facades necessary to run .NET Standard 2.0 components on .NET Framework 4.6.1 (.NET Framework 4.7 will -->
+    <!-- come with these facades included). Because the type provider is a .NET Standard 2.0 component, the deployment of the type -->
+    <!--  provider must include these facade DLLs if it is to run hosted inside an F# compiler executing using  .NET Framework 4.6.1 or Mono 5.0. -->
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Reflection.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Runtime.dll">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
-  <Target Name="BeforeBuild">
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Restore" />
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp2.1" />
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=net47" />
-  </Target>
-  <Target Name="AfterBuild">
-    <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netcoreapp2.1\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netcoreapp2.1\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp2.1" />
-    <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\net47\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\net47\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries2" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/net47" />
-    <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries3)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netstandard2.0" />
-  </Target>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
