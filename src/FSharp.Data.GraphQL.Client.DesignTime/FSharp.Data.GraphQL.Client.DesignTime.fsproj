@@ -11,6 +11,22 @@
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\TextConversions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/TextConversions.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\IO.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/IO.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Net\Http.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Http.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonValue.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonValue.fs</Link>
+    </Compile>
     <Compile Include="..\..\paket-files\shared\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fsi</Link>
