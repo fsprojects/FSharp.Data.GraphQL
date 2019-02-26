@@ -27,6 +27,7 @@ open System.Collections.Generic
 open Microsoft.FSharp.Reflection
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Quotations.Patterns
+open FSharp.Data
 
 module QuotationHelpers =
     let makeExprArray (exprs: Expr list) =
@@ -110,8 +111,6 @@ module QuotationHelpers =
         failwith "JS only"
     #else
     open System.Net
-    open Newtonsoft.Json
-    open Newtonsoft.Json.Linq
 
     type private Selection =
         | Field of name: string * selectionSet: (Selection list) option
@@ -210,34 +209,23 @@ module QuotationHelpers =
                 Expr.NewUnionCase(cases.["None"], []),
                 Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, optArg)])))
 
-    let rec jsonToObject (token: JToken) =
-        match token.Type with
-        | JTokenType.Object ->
-            token.Children<JProperty>()
-            |> Seq.map (fun prop -> prop.Name, jsonToObject prop.Value)
-            |> dict :> obj
-        | JTokenType.Array ->
-            token |> Seq.map jsonToObject |> Seq.toArray :> obj
-        | _ ->
-            (token :?> JValue).Value
-
     let launchRequest (serverUrl: string) (opName: string) (opField: string) (cont: obj->'T) (reqBody: string) =
         async {
             use client = new WebClient()
             client.Headers.Set("content-type", "application/json")
+            let opName = if not (isNull opName) then opName else "query"
             let queryJson =
                 // Options are problematic within quotations so we just use null here
-                if opName <> null
+                if not (isNull opName)
                 then opName + reqBody
                 else reqBody
             let queryJson =
-                dict [
-                    "operationName", if opName <> null then opName else "query"
-                    "query", queryJson
-                    "variable", "null"
-                ] |> JsonConvert.SerializeObject
-            let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson) |> Async.AwaitTask
-            let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
+                [| "operationName", JsonValue.String opName
+                   "query", JsonValue.Parse(queryJson)
+                   "variable", JsonValue.Null |] 
+                |> JsonValue.Record
+            let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson.ToString()) |> Async.AwaitTask
+            let res = Serialization.deserializeDict json
             if res.ContainsKey("errors") then
                 res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith
             let data =
@@ -262,7 +250,7 @@ module QuotationHelpers =
                 i <- i + 1
             resFields.Substring(0, i), resFields.Substring(i)
         Seq.zip argNames argValues
-        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (JsonConvert.SerializeObject v))
+        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (Serialization.serialize v))
         |> String.concat ", "
         |> fun args -> sprintf "{ %s(%s) %s }%s" queryName args queryFields queryFragments
     #endif

@@ -5,12 +5,10 @@ open System.Reflection
 open System.IO
 open FSharp.Quotations
 open FSharp.Core.CompilerServices
-open ProviderImplementation
 open ProviderImplementation.ProvidedTypes
 open System.Net
 open FSharp.Data.GraphQL.Types.Introspection
 open TypeCompiler
-open Newtonsoft.Json
 open QuotationHelpers
 open FSharp.Data.GraphQL
 
@@ -38,7 +36,7 @@ module Util =
         else str
 
     let deserializeSchema (json : string) =
-        let result = Serialization.fromJson json
+        let result = Serialization.deserializeRecord json
         match result.Errors with
         | None ->
             let introspectionSchema = result.Data.__schema

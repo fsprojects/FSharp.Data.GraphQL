@@ -1,12 +1,14 @@
 /// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
-module FSharp.Data.GraphQL.Client.Serialization
+module internal FSharp.Data.GraphQL.Client.Serialization
 
 open System
 open FSharp.Data
 open Microsoft.FSharp.Reflection
 open System.Reflection
+open System.Collections
+open System.Collections.Generic
 
 let private isOption (t : Type) = 
     t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
@@ -110,7 +112,7 @@ let private getArrayValue (t : Type) (converter : Type -> JsonValue -> 'TItem) (
     | Seq titem -> items |> Array.map (converter titem) |> Seq.ofArray |> downcastType t
     | _ -> failwithf "Error parsing JSON value: %O is not an array type." t
 
-let fromJson<'T> (json : string) : 'T =
+let deserializeRecord<'T> (json : string) : 'T =
     let t = typeof<'T>
     let rec convert t parsed : 'T =
         match parsed with
@@ -124,3 +126,47 @@ let fromJson<'T> (json : string) : 'T =
         | JsonValue.Array items -> items |> getArrayValue t convert
         | JsonValue.Boolean b -> downcastBoolean t b
     JsonValue.Parse(json) |> convert t
+
+let deserializeDict (json : string) : IDictionary<string, obj> =
+    let rec convert parsed : obj =
+        match parsed with
+        | JsonValue.Null -> null
+        | JsonValue.String s -> upcast s
+        | JsonValue.Number n -> upcast n
+        | JsonValue.Float n -> upcast n
+        | JsonValue.Record props -> upcast (props |> Array.map (fun (n, v) -> (n, (convert v))) |> dict)
+        | JsonValue.Array items -> upcast (items |> Array.map convert)
+        | JsonValue.Boolean b -> upcast b
+    match JsonValue.Parse(json) with
+    | JsonValue.Record props -> props |> Array.map (fun (n, v) -> (n, (convert v))) |> dict
+    | _ -> failwith "The input JSON could not be deserialized to a record type."
+
+let serialize (x : obj) =
+    let rec helper (x : obj) : JsonValue =
+        match x with
+        | :? byte as x -> JsonValue.Number (decimal x)
+        | :? sbyte as x -> JsonValue.Number (decimal x)
+        | :? uint16 as x -> JsonValue.Number (decimal x)
+        | :? int16 as x -> JsonValue.Number (decimal x)
+        | :? int as x -> JsonValue.Number (decimal x)
+        | :? uint32 as x -> JsonValue.Number (decimal x)
+        | :? int64 as x -> JsonValue.Number (decimal x)
+        | :? uint64 as x -> JsonValue.Number (decimal x)
+        | :? single as x -> JsonValue.Float (float x)
+        | :? double as x -> JsonValue.Float x
+        | :? decimal as x -> JsonValue.Float (float x)
+        | :? string as x -> JsonValue.String x
+        | :? IEnumerable as x -> 
+            Seq.cast<obj> x 
+            |> Array.ofSeq 
+            |> Array.map helper
+            |> JsonValue.Array
+        | :? bool as x -> JsonValue.Boolean x
+        | null -> JsonValue.Null
+        | _ ->
+            let xtype = x.GetType()
+            let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+            let items = xprops |> Array.map (fun p -> (p.Name, p.GetValue(x) |> helper))
+            JsonValue.Record items
+    let value = helper x
+    value.ToString()

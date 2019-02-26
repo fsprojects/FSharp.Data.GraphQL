@@ -36,9 +36,9 @@
     </Compile>
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Serialization.fs" />
     <Compile Include="QuotationHelpers.fs" />
     <Compile Include="IntrospectionParser.fs" />
-    <Compile Include="Serialization.fs" />
     <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />
     <!-- These files are the facades necessary to run .NET Standard 2.0 components on .NET Framework 4.6.1 (.NET Framework 4.7 will -->
