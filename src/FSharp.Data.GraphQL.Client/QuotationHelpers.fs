@@ -39,7 +39,7 @@ module QuotationHelpers =
     open Fable.AST
     open Fable.AST.Fable.Util
 
-    type GraphQlFableEmitter() =
+    type GraphQLFableEmitter() =
         member __.BuildQuery (com: ICompiler) (info: Fable.ApplyInfo) =
             ImportCall (Naming.fableInjectFile, "graphqlBuildQuery", None, false, info.args)
             |> makeCall com info.range info.returnType
@@ -48,7 +48,7 @@ module QuotationHelpers =
             ImportCall (Naming.fableInjectFile, "graphqlLaunchQuery", None, false, info.args)
             |> makeCall com info.range info.returnType
 
-    type GraphQlFablePlugin() =
+    type GraphQLFablePlugin() =
         // Ignore cont (arg2) for now
         let getLaunchQueryBody com args =
             """fetch($0, {
@@ -99,12 +99,12 @@ module QuotationHelpers =
     let makeOption (optType: Type) (expr: Expr) =
         expr
 
-    [<Emit(typeof<GraphQlFableEmitter>, "LaunchQuery")>]
+    [<Emit(typeof<GraphQLFableEmitter>, "LaunchQuery")>]
     let launchQuery (serverUrl: string) (queryName: string) (cont: obj->'T) (query: string)
                     : Async<'T> =
         failwith "JS only"
 
-    [<Emit(typeof<GraphQlFableEmitter>, "BuildQuery")>]
+    [<Emit(typeof<GraphQLFableEmitter>, "BuildQuery")>]
     let buildQuery (queryName: string) (queryFields: string)
                    (argNames: string[]) (argValues: obj[]): string =
         failwith "JS only"
@@ -230,7 +230,6 @@ module QuotationHelpers =
                 if opName <> null
                 then opName + reqBody
                 else reqBody
-//            printfn "%s" queryJson
             let queryJson =
                 dict [
                     "operationName", if opName <> null then opName else "query"
@@ -238,7 +237,6 @@ module QuotationHelpers =
                     "variable", "null"
                 ] |> JsonConvert.SerializeObject
             let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson) |> Async.AwaitTask
-//            printfn "%s" json
             let res = JToken.Parse json |> jsonToObject :?> IDictionary<string,obj>
             if res.ContainsKey("errors") then
                 res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith

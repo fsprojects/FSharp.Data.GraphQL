@@ -3,8 +3,6 @@
 
 namespace FSharp.Data.GraphQL.Client
 
-//TODO: intermediate representation of object returned from graphql endpoint using introspectionQuery
-
 open System
 open System.Reflection
 open System.Collections.Generic
@@ -28,8 +26,6 @@ type IntrospectionResult = {
 }
 
 module TypeCompiler =
-    open System.Collections.Generic
-
     let private optionType = typedefof<option<obj>>
 
     type TypeReference =

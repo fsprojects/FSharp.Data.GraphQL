@@ -209,14 +209,11 @@ Target.create "CleanDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-// Paket restore at solution level gives concurrency erros on packages folder when running in Unix.
-// For that reason, we restore each project individually
+// We need to disable parallel restoring of projects to because running paket in parallel from Mono
+// is giving errors in Unix based operating systems.
 Target.create "Restore" (fun _ ->
-    !! "src/**/*.??proj"
-    ++ "tests/**/*.??proj"
-    -- "src/**/*.shproj"
-    -- "tests/FSharp.Data.GraphQL.Tests.Sql/FSharp.Data.GraphQL.Tests.Sql.fsproj"
-    |> Seq.iter (DotNet.restore id))
+    "FSharp.Data.GraphQL.sln"
+    |> DotNet.restore (fun p -> { p with DisableParallel = true }))
 
 Target.create "Build" (fun _ ->
     "FSharp.Data.GraphQL.sln"
