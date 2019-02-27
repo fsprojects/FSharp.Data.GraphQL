@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project>
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\netfx.props" />
   <PropertyGroup>
     <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
@@ -39,6 +40,7 @@
     <Compile Include="MiddlewaresTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
+    <Compile Include="SerializationTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="paket.references" />
