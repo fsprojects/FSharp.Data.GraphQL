@@ -158,6 +158,8 @@ let serialize (x : obj) =
         | :? decimal as x -> JsonValue.Float (float x)
         | :? string as x -> JsonValue.String x
         | :? Guid as x -> JsonValue.String (x.ToString())
+        | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString("yyyy-MM-dd"))
+        | :? DateTime as x -> JsonValue.String (x.ToString("O"))
         | :? IEnumerable as x -> 
             Seq.cast<obj> x 
             |> Array.ofSeq 

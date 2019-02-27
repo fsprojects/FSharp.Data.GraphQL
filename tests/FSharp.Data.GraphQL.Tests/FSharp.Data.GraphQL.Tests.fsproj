@@ -47,7 +47,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj">
+      <Project>{7C9CC625-FB4E-4215-9F7C-494AA6043821}</Project>
+      <Private>true</Private>
+    </ProjectReference>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
   </ItemGroup>
   <ItemGroup Condition="$(OS) == Unix">
