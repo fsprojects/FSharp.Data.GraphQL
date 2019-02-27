@@ -4,6 +4,7 @@
 
 module FSharp.Data.GraphQL.Tests.SerializationTests
 
+open Xunit
 open System
 open FSharp.Data
 open FSharp.Data.GraphQL.Client
@@ -11,6 +12,9 @@ open FSharp.Data.GraphQL.Client
 type TestRecord =
     { Prop1 : string
       Prop2 : int }
+
+let private normalize (json : string) =
+  json.Replace("\r\n", "\n")
 
 [<Fact>]
 let ``serialize should correctly serialize basic types`` () =
@@ -30,8 +34,25 @@ let ``serialize should correctly serialize basic types`` () =
         upcast Guid.Parse("e433c15b-f435-4574-bcbf-a1e35b73fff7")
         null
         upcast { Prop1 = "test"; Prop2 = 1 } |]
-    let actual = Serialization.serialize input
-    let expected =
-        JsonValue.Array [|
-            JsonValue.Number 1m |]
-    actual |> seqEquals expected
+    let actual = Serialization.serialize input |> normalize
+    let expected = normalize """[
+  1,
+  2,
+  3,
+  4,
+  5,
+  6,
+  7,
+  8,
+  9,
+  10,
+  11,
+  "test",
+  "e433c15b-f435-4574-bcbf-a1e35b73fff7",
+  null,
+  {
+    "Prop1": "test",
+    "Prop2": 1
+  }
+]"""
+    actual |> equals expected

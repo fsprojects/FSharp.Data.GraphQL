@@ -1,7 +1,7 @@
 /// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
-module internal FSharp.Data.GraphQL.Client.Serialization
+module FSharp.Data.GraphQL.Client.Serialization
 
 open System
 open FSharp.Data
@@ -157,7 +157,7 @@ let serialize (x : obj) =
         | :? double as x -> JsonValue.Float x
         | :? decimal as x -> JsonValue.Float (float x)
         | :? string as x -> JsonValue.String x
-        | :? Guid as x -> JsonValue.Parse (x.ToString())
+        | :? Guid as x -> JsonValue.String (x.ToString())
         | :? IEnumerable as x -> 
             Seq.cast<obj> x 
             |> Array.ofSeq 
