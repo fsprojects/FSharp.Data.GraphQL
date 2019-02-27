@@ -32,6 +32,7 @@ let ``serialize should correctly serialize basic types`` () =
         upcast 11.0m
         upcast DateTime(2016, 1, 1)
         upcast DateTime(2016, 1, 1, 10, 50, 25, 326)
+        upcast DateTimeOffset(DateTime(2016, 1, 1, 10, 50, 25, 326))
         upcast "test"
         upcast Guid.Parse("e433c15b-f435-4574-bcbf-a1e35b73fff7")
         null
@@ -51,6 +52,7 @@ let ``serialize should correctly serialize basic types`` () =
   11,
   "2016-01-01",
   "2016-01-01T10:50:25.3260000",
+  "2016-01-01T10:50:25.3260000-02:00",
   "test",
   "e433c15b-f435-4574-bcbf-a1e35b73fff7",
   null,
