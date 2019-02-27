@@ -27,6 +27,8 @@ group Shared
   github fsharp/FSharp.Data src/CommonRuntime/TextConversions.fs
   github fsharp/FSharp.Data src/CommonRuntime/IO.fs
   github fsharp/FSharp.Data src/Net/Http.fs
+  github fsharp/FSharp.Data src/Json/JsonConversions.fs
+  github fsharp/FSharp.Data src/Json/JsonExtensions.fs
 
 group Build
   source https://api.nuget.org/v3/index.json

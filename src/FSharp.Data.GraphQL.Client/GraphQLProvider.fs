@@ -12,8 +12,7 @@ open TypeCompiler
 open QuotationHelpers
 open FSharp.Data.GraphQL
 
-module Util =
-
+module internal Util =
     let tryLoadSchema basePath relativePath =
         try
             Path.Combine(basePath, relativePath)
@@ -161,20 +160,14 @@ module Util =
                     tdef.AddMember wrapper)
         | _ -> ()
 
-type internal ProviderSchemaConfig =
-    { Namespace: string 
-      DefinedTypes: Map<string, ProvidedTypeDefinition option> }
-
 [<TypeProvider>]
 type GraphQLTypeProvider (config : TypeProviderConfig) as this =
-    inherit TypeProviderForNamespaces (config, addDefaultProbingLocation=true)
+    inherit TypeProviderForNamespaces (config)
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
 
     do
-        // Check if we contain a copy of runtime files, and are not referencing the runtime DLL
-        assert (typeof<IntrospectionResult>.Assembly.GetName().Name = asm.GetName().Name)  
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
         let handleSchema typeName serverUrl choice =
             match choice with
@@ -220,5 +213,5 @@ type GraphQLTypeProvider (config : TypeProviderConfig) as this =
             | _ -> failwith "unexpected parameter values")
         this.AddNamespace(ns, [generator])
 
-[<TypeProviderAssembly>]
+[<assembly:TypeProviderAssembly>]
 do ()

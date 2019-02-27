@@ -6,3 +6,5 @@ File:Http.fs
 File:IO.fs
 File:TextConversions.fs
 File:JsonValue.fs
+File:JsonConversions.fs
+File:JsonExtensions.fs

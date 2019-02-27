@@ -5,6 +5,7 @@ module internal FSharp.Data.GraphQL.Client.Serialization
 
 open System
 open FSharp.Data
+open FSharp.Data.JsonExtensions
 open Microsoft.FSharp.Reflection
 open System.Reflection
 open System.Collections
@@ -156,6 +157,7 @@ let serialize (x : obj) =
         | :? double as x -> JsonValue.Float x
         | :? decimal as x -> JsonValue.Float (float x)
         | :? string as x -> JsonValue.String x
+        | :? Guid as x -> JsonValue.Parse (x.ToString())
         | :? IEnumerable as x -> 
             Seq.cast<obj> x 
             |> Array.ofSeq 

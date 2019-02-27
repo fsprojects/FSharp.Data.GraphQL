@@ -2866,5 +2866,7 @@ GITHUB
   remote: fsharp/FSharp.Data
     src/CommonRuntime/IO.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
     src/CommonRuntime/TextConversions.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
+    src/Json/JsonConversions.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
+    src/Json/JsonExtensions.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
     src/Json/JsonValue.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
     src/Net/Http.fs (33e6e825bc2978eb9ce6dd880f31d9e60d452699)
