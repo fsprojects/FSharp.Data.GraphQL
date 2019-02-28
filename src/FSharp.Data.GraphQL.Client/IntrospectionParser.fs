@@ -16,15 +16,6 @@ open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
 open QuotationHelpers
 
-type GraphQLReply<'t> = {
-    Data: 't
-    Errors: string [] option
-}
-
-type IntrospectionResult = {
-    __schema: IntrospectionSchema
-}
-
 module TypeCompiler =
     let private optionType = typedefof<option<obj>>
 

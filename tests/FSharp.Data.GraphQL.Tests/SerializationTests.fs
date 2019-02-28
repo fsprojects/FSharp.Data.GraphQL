@@ -12,6 +12,9 @@ open FSharp.Data.GraphQL.Client
 let private normalize (json : string) =
   json.Replace("\r\n", "\n")
 
+type TestEnum =
+    | Choice = 1
+
 type TestRecord1 =
   { Prop1 : sbyte
     Prop2 : byte
@@ -32,7 +35,8 @@ type TestRecord1 =
     Prop17 : string option
     Prop18 : int []
     Prop19 : int list
-    Prop20 : seq<int> }
+    Prop20 : seq<int>
+    Prop21 : TestEnum }
 
 type TestRecord2 =
   { Prop1 : sbyte option
@@ -54,7 +58,8 @@ type TestRecord2 =
     Prop17 : string option
     Prop18 : int [] option
     Prop19 : int list option
-    Prop20 : seq<int> option }
+    Prop20 : seq<int> option
+    Prop21 : TestEnum option }
 
 let subject1 =
     { TestRecord1.Prop1 = 1y
@@ -76,7 +81,8 @@ let subject1 =
       Prop17 = None
       Prop18 = [| 1; 2; 3 |]
       Prop19 = [ 1; 2; 3 ]
-      Prop20 = [| 1; 2; 3 |] }
+      Prop20 = [| 1; 2; 3 |]
+      Prop21 = TestEnum.Choice }
 
 let subject2 =
     { Prop1 = Some 1y
@@ -98,7 +104,8 @@ let subject2 =
       Prop17 = None
       Prop18 = Some [| 1; 2; 3 |]
       Prop19 = Some [ 1; 2; 3 ]
-      Prop20 = Some (upcast [| 1; 2; 3 |]) }
+      Prop20 = Some (upcast [| 1; 2; 3 |])
+      Prop21 = Some (TestEnum.Choice) }
 
 let subject3 =
     { Prop1 = None
@@ -120,7 +127,8 @@ let subject3 =
       Prop17 = None
       Prop18 = None
       Prop19 = None
-      Prop20 = None }
+      Prop20 = None
+      Prop21 = None }
 
 let json = normalize """{
   "Prop1": 1,
@@ -154,7 +162,8 @@ let json = normalize """{
     1,
     2,
     3
-  ]
+  ],
+  "Prop21": "Choice"
 }"""
 
 let nullJson = normalize """{
@@ -177,8 +186,71 @@ let nullJson = normalize """{
   "Prop17": null,
   "Prop18": null,
   "Prop19": null,
-  "Prop20": null
+  "Prop20": null,
+  "Prop21": null
 }"""
+
+let outOfOrderJson = normalize """{
+  "Prop2": 2,
+  "Prop3": 3,
+  "Prop4": 4,
+  "Prop1": 1,
+  "Prop5": 5,
+  "Prop6": 6,
+  "Prop7": 7,
+  "Prop14": "2016-01-01T10:50:25.3260000-02:00",
+  "Prop8": 8,
+  "Prop9": 9,
+  "Prop10": 10,
+  "Prop11": 11,
+  "Prop12": "2016-01-01",
+  "Prop13": "2016-01-01T10:50:25.3260000",
+  "Prop15": "test",
+  "Prop16": "e433c15b-f435-4574-bcbf-a1e35b73fff7",
+  "Prop17": null,
+  "Prop19": [
+    1,
+    2,
+    3
+  ],
+  "Prop21": "Choice",
+  "Prop18": [
+    1,
+    2,
+    3
+  ],
+  "Prop20": [
+    1,
+    2,
+    3
+  ]
+}"""
+
+let outOfOrderNullJson = normalize """{
+  "Prop20": null,
+  "Prop2": null,
+  "Prop3": null,
+  "Prop4": null,
+  "Prop5": null,
+  "Prop1": null,
+  "Prop6": null,
+  "Prop7": null,
+  "Prop9": null,
+  "Prop10": null,
+  "Prop11": null,
+  "Prop17": null,
+  "Prop12": null,
+  "Prop13": null,
+  "Prop14": null,
+  "Prop15": null,
+  "Prop21": null,
+  "Prop16": null,
+  "Prop18": null,
+  "Prop8": null,
+  "Prop19": null
+}"""
+
+
 
 [<Fact>]
 let ``deserializeRecord should correctly deserialize basic types`` () =
@@ -186,10 +258,22 @@ let ``deserializeRecord should correctly deserialize basic types`` () =
   actual |> equals subject1
 
 [<Fact>]
+let ``deserializeRecord should correctly deserialize basic types with out of order properties`` () =
+  let actual = Serialization.deserializeRecord<TestRecord1> outOfOrderJson
+  actual |> equals subject1
+
+[<Fact>]
 let ``deserializeRecord should correctly deserialize option types`` () =
   let actual = [|
     Serialization.deserializeRecord<TestRecord2> json
     Serialization.deserializeRecord<TestRecord2> nullJson |]
+  actual |> seqEquals [|subject2; subject3|]
+
+[<Fact>]
+let ``deserializeRecord should correctly deserialize option types with out of order properties`` () =
+  let actual = [|
+    Serialization.deserializeRecord<TestRecord2> outOfOrderJson
+    Serialization.deserializeRecord<TestRecord2> outOfOrderNullJson |]
   actual |> seqEquals [|subject2; subject3|]
 
 [<Fact>]

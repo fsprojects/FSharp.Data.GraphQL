@@ -8,7 +8,6 @@ open FSharp.Data
 open Microsoft.FSharp.Reflection
 open System.Reflection
 open System.Collections
-open System.Collections.Generic
 open System.Globalization
 
 let private isoDateFormat = "yyyy-MM-dd" 
@@ -43,6 +42,11 @@ let private (|Seq|_|) (t : Type) =
         then Some (Seq (t.GetGenericArguments().[0]))
         else None
     else None
+
+let private (|Enum|_|) (t : Type) =
+    match t with
+    | (Option t | t) when t.IsEnum -> Some (Enum t)
+    | _ -> None
 
 let private makeOption t (value : obj) =
     let otype = typedefof<_ option>
@@ -106,16 +110,15 @@ let private downcastString (t : Type) (s : string) =
         match Guid.TryParse(s) with
         | (true, g) -> downcastType t g
         | _ -> failwithf "Error parsing JSON value: %O is a Guid type, but parsing of value \"%s\" failed." t s
+    | Enum et ->
+        try Enum.Parse(et, s) |> downcastType t
+        with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
     | _ -> failwithf "Error parsing JSON value: %O is not a string type." t
 
 let private downcastBoolean (t : Type) b =
     match t with
     | t when isBooleanType t -> downcastType t b
     | _ -> failwithf "Error parsing JSON value: %O is not a boolean type." t
-
-let private getPropertyValue (t : Type) (converter : Type -> JsonValue -> 'T) (propName, propValue) =
-    let propType = t.GetProperty(propName, BindingFlags.Public ||| BindingFlags.Instance).PropertyType
-    converter propType propValue
 
 let rec private getArrayValue (t : Type) (converter : Type -> JsonValue -> obj) (items : JsonValue []) =
     let castArray itemType (items : obj []) : obj =
@@ -148,9 +151,24 @@ let rec private convert t parsed : obj =
     | JsonValue.String s -> downcastString t s
     | JsonValue.Number n -> downcastNumber t n
     | JsonValue.Float n -> downcastNumber t n
-    | JsonValue.Record props -> 
-        let vals = props |> Array.map (getPropertyValue t convert >> box)
-        Activator.CreateInstance(t, vals) |> downcastType t
+    | JsonValue.Record jprops ->
+        let jprops = 
+            jprops 
+            |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v) 
+            |> Map.ofSeq
+        let tprops t =
+            FSharpType.GetRecordFields(t, true)
+            |> Array.map (fun p -> p.Name.ToLowerInvariant(), p.PropertyType)
+        let vals t = 
+            tprops t
+            |> Array.map (fun (n, t) ->
+                match Map.tryFind n jprops with
+                | Some p -> convert t p
+                | None -> makeOption t null)
+        let rcrd =
+            let t = match t with Option t -> t | _ -> t
+            FSharpValue.MakeRecord(t, vals t, true)
+        downcastType t rcrd
     | JsonValue.Array items -> items |> getArrayValue t convert
     | JsonValue.Boolean b -> downcastBoolean t b
 
@@ -170,6 +188,12 @@ let (|OptionValue|_|) (x : obj) =
         match FSharpValue.GetUnionFields(x, xtype) with
         | (_, [|value|]) -> Some (OptionValue Some value)
         | _ -> Some (OptionValue None)
+    else None
+
+let (|EnumValue|_|) (x : obj) =
+    let xtype = x.GetType()
+    if xtype.IsEnum
+    then Some (x.ToString())
     else None
 
 let serialize (x : obj) =
@@ -196,6 +220,7 @@ let serialize (x : obj) =
         | null -> JsonValue.Null
         | OptionValue None -> JsonValue.Null
         | OptionValue (Some x) -> helper x
+        | EnumValue x -> JsonValue.String x
         | _ ->
             let xtype = x.GetType()
             let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
@@ -204,16 +229,8 @@ let serialize (x : obj) =
     let value = helper x
     value.ToString()
 
-let deserializeDict (json : string) : IDictionary<string, obj> =
-    let rec convert parsed : obj =
-        match parsed with
-        | JsonValue.Null -> null
-        | JsonValue.String s -> upcast s
-        | JsonValue.Number n -> upcast n
-        | JsonValue.Float n -> upcast n
-        | JsonValue.Record props -> upcast (props |> Array.map (fun (n, v) -> (n, (convert v))) |> dict)
-        | JsonValue.Array items -> upcast (items |> Array.map convert)
-        | JsonValue.Boolean b -> upcast b
-    match JsonValue.Parse(json) with
-    | JsonValue.Record props -> props |> Array.map (fun (n, v) -> (n, (convert v))) |> dict
-    | _ -> failwith "The input JSON could not be deserialized to a record type."
+let deserializeSchema (json : string) =
+    let result = deserializeRecord<GraphQLReply<IntrospectionResult>> json
+    match result.Errors with
+    | None -> result.Data.__schema
+    | Some errors -> String.concat "\n" errors |> failwithf "%s"

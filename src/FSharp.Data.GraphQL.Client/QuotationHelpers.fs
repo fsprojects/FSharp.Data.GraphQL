@@ -209,31 +209,31 @@ module QuotationHelpers =
                 Expr.NewUnionCase(cases.["None"], []),
                 Expr.NewUnionCase(cases.["Some"], [Expr.Coerce(Expr.Var var, optArg)])))
 
-    let launchRequest (serverUrl: string) (opName: string) (opField: string) (cont: obj->'T) (reqBody: string) =
-        async {
-            use client = new WebClient()
-            client.Headers.Set("content-type", "application/json")
-            let opName = if not (isNull opName) then opName else "query"
-            let queryJson =
-                // Options are problematic within quotations so we just use null here
-                if not (isNull opName)
-                then opName + reqBody
-                else reqBody
-            let queryJson =
-                [| "operationName", JsonValue.String opName
-                   "query", JsonValue.Parse(queryJson)
-                   "variable", JsonValue.Null |] 
-                |> JsonValue.Record
-            let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson.ToString()) |> Async.AwaitTask
-            let res = Serialization.deserializeDict json
-            if res.ContainsKey("errors") then
-                res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith
-            let data =
-                if opField <> null
-                then (res.["data"] :?> IDictionary<string,obj>).[opField]
-                else res.["data"]
-            return cont(data)
-        }
+    // let launchRequest (serverUrl: string) (opName: string) (opField: string) (cont: obj->'T) (reqBody: string) =
+    //     async {
+    //         use client = new WebClient()
+    //         client.Headers.Set("content-type", "application/json")
+    //         let opName = if not (isNull opName) then opName else "query"
+    //         let queryJson =
+    //             // Options are problematic within quotations so we just use null here
+    //             if not (isNull opName)
+    //             then opName + reqBody
+    //             else reqBody
+    //         let queryJson =
+    //             [| "operationName", JsonValue.String opName
+    //                "query", JsonValue.Parse(queryJson)
+    //                "variable", JsonValue.Null |] 
+    //             |> JsonValue.Record
+    //         let! json = client.UploadStringTaskAsync(Uri(serverUrl), queryJson.ToString()) |> Async.AwaitTask
+    //         let res = Serialization.deserializeDict json
+    //         if res.ContainsKey("errors") then
+    //             res.["errors"] :?> obj[] |> Seq.map string |> String.concat "\n" |> failwith
+    //         let data =
+    //             if opField <> null
+    //             then (res.["data"] :?> IDictionary<string,obj>).[opField]
+    //             else res.["data"]
+    //         return cont(data)
+    //     }
 
     let buildQuery (queryName: string) (resFields: string)
                    (argNames: string[]) (argValues: obj[]) =
