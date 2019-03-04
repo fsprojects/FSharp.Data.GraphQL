@@ -6,7 +6,6 @@ module FSharp.Data.GraphQL.Tests.SerializationTests
 
 open Xunit
 open System
-open FSharp.Data
 open FSharp.Data.GraphQL.Client
 
 let private normalize (json : string) =
@@ -277,13 +276,13 @@ let ``deserializeRecord should correctly deserialize option types with out of or
   actual |> seqEquals [|subject2; subject3|]
 
 [<Fact>]
-let ``serialize should correctly serialize basic types`` () =
-    let actual = Serialization.serialize subject1 |> normalize
+let ``serializeRecord should correctly serialize basic types`` () =
+    let actual = Serialization.serializeRecord subject1 |> normalize
     actual |> equals json
 
 [<Fact>]
-let ``serialize should correctly serialize option types`` () =
+let ``serializeRecord should correctly serialize option types`` () =
     let actual = [|
-      Serialization.serialize subject2 |> normalize
-      Serialization.serialize subject3 |> normalize |]
+      Serialization.serializeRecord subject2 |> normalize
+      Serialization.serializeRecord subject3 |> normalize |]
     actual |> seqEquals [|json; nullJson|]

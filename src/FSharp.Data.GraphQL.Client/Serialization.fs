@@ -8,6 +8,7 @@ open FSharp.Data
 open Microsoft.FSharp.Reflection
 open System.Reflection
 open System.Collections
+open System.Collections.Generic
 open System.Globalization
 
 let private isoDateFormat = "yyyy-MM-dd" 
@@ -196,37 +197,46 @@ let (|EnumValue|_|) (x : obj) =
     then Some (x.ToString())
     else None
 
-let serialize (x : obj) =
-    let rec helper (x : obj) : JsonValue =
-        match x with
-        | :? byte as x -> JsonValue.Number (decimal x)
-        | :? sbyte as x -> JsonValue.Number (decimal x)
-        | :? uint16 as x -> JsonValue.Number (decimal x)
-        | :? int16 as x -> JsonValue.Number (decimal x)
-        | :? int as x -> JsonValue.Number (decimal x)
-        | :? uint32 as x -> JsonValue.Number (decimal x)
-        | :? int64 as x -> JsonValue.Number (decimal x)
-        | :? uint64 as x -> JsonValue.Number (decimal x)
-        | :? single as x -> JsonValue.Float (float x)
-        | :? double as x -> JsonValue.Float x
-        | :? decimal as x -> JsonValue.Float (float x)
-        | :? string as x -> JsonValue.String x
-        | :? Guid as x -> JsonValue.String (x.ToString())
-        | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
-        | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-        | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-        | :? bool as x -> JsonValue.Boolean x
-        | EnumerableValue items -> items |> Array.map helper |> JsonValue.Array
-        | null -> JsonValue.Null
-        | OptionValue None -> JsonValue.Null
-        | OptionValue (Some x) -> helper x
-        | EnumValue x -> JsonValue.String x
-        | _ ->
-            let xtype = x.GetType()
-            let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-            let items = xprops |> Array.map (fun p -> (p.Name, p.GetValue(x) |> helper))
-            JsonValue.Record items
-    let value = helper x
+let rec toJsonValue (x : obj) : JsonValue =
+    match x with
+    | null -> JsonValue.Null
+    | OptionValue None -> JsonValue.Null
+    | :? byte as x -> JsonValue.Number (decimal x)
+    | :? sbyte as x -> JsonValue.Number (decimal x)
+    | :? uint16 as x -> JsonValue.Number (decimal x)
+    | :? int16 as x -> JsonValue.Number (decimal x)
+    | :? int as x -> JsonValue.Number (decimal x)
+    | :? uint32 as x -> JsonValue.Number (decimal x)
+    | :? int64 as x -> JsonValue.Number (decimal x)
+    | :? uint64 as x -> JsonValue.Number (decimal x)
+    | :? single as x -> JsonValue.Float (float x)
+    | :? double as x -> JsonValue.Float x
+    | :? decimal as x -> JsonValue.Float (float x)
+    | :? string as x -> JsonValue.String x
+    | :? Guid as x -> JsonValue.String (x.ToString())
+    | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
+    | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+    | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+    | :? bool as x -> JsonValue.Boolean x
+    | :? IDictionary<string, obj> as items ->
+        items
+        |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
+        |> Seq.toArray
+        |> JsonValue.Record
+    | EnumerableValue items -> 
+        items
+        |> Array.map toJsonValue
+        |> JsonValue.Array
+    | OptionValue (Some x) -> toJsonValue x
+    | EnumValue x -> JsonValue.String x
+    | _ ->
+        let xtype = x.GetType()
+        let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+        let items = xprops |> Array.map (fun p -> (p.Name, p.GetValue(x) |> toJsonValue))
+        JsonValue.Record items
+
+let serializeRecord (x : obj) =
+    let value = toJsonValue x
     value.ToString()
 
 let deserializeSchema (json : string) =

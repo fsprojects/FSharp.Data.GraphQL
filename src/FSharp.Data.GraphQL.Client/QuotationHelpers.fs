@@ -250,7 +250,7 @@ module QuotationHelpers =
                 i <- i + 1
             resFields.Substring(0, i), resFields.Substring(i)
         Seq.zip argNames argValues
-        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (Serialization.serialize v))
+        |> Seq.map (fun (k,v) -> sprintf "%s: %s" k (Serialization.serializeRecord v))
         |> String.concat ", "
         |> fun args -> sprintf "{ %s(%s) %s }%s" queryName args queryFields queryFragments
     #endif

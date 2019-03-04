@@ -45,7 +45,7 @@ module HttpHandlers =
             then
                 let map = JsonConvert.DeserializeObject<Map<string,string>>(raw)
                 match Map.tryFind fieldName map with
-                | Some "" -> None
+                | Some s when System.String.IsNullOrWhiteSpace(s) -> None
                 | s -> s
             else None
         let mapString =

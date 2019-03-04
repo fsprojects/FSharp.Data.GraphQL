@@ -19,10 +19,18 @@ type GraphQLTypeProvider(config) as this =
         let tdef = ProvidedTypeDefinition(asm, ns, "GraphQLContext", Some typeof<GraphQLContextBase>)
         let mdef =
             let sprm = [ProvidedStaticParameter("query", typeof<string>)]
-            let smdef = ProvidedMethod("Query", [], typeof<string>)
+            let smdef = ProvidedMethod("Query", [], typeof<Async<string>>)
             let genfn (mname : string) (args : obj []) =
                 let query = args.[0] :?> string
-                let mdef = ProvidedMethod(mname, [], typeof<string>, fun _ -> <@@ query @@>)
+                let prm = 
+                    [ ProvidedParameter("headers", typeof<(string * string) seq>, optionalValue = None)
+                      ProvidedParameter("variables", typeof<(string * obj) seq>, optionalValue = None) ]
+                let invoker (args : Expr list) =
+                    <@@ let this = %%args.[0] : GraphQLContextBase
+                        let headers = Option.ofObj (%%args.[1] : (string * string) seq)
+                        let variables = Option.ofObj (%%args.[2] : (string * obj) seq)
+                        GraphQLServer.makeRequest this.ServerUrl headers query variables @@>
+                let mdef = ProvidedMethod(mname, prm, typeof<Async<string>>, invoker)
                 tdef.AddMember(mdef); mdef
             smdef.DefineStaticParameters(sprm, genfn); smdef
         let members : MemberInfo list = [mdef]

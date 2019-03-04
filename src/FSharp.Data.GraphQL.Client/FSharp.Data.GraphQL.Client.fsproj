@@ -48,6 +48,7 @@
     <Compile Include="Serialization.fs" />
     <Compile Include="QuotationHelpers.fs" />
     <Compile Include="IO.fs" />
+    <Compile Include="Web.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />
