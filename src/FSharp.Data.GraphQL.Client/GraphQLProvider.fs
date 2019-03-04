@@ -2,15 +2,11 @@ namespace FSharp.Data.GraphQL.Client
 
 open System
 open System.Reflection
-open System.IO
 open FSharp.Quotations
 open FSharp.Core.CompilerServices
 open ProviderImplementation.ProvidedTypes
-open System.Net
-open FSharp.Data.GraphQL.Types.Introspection
-open TypeCompiler
-open QuotationHelpers
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types.Introspection
 
 [<TypeProvider>]
 type GraphQLTypeProvider(config) as this =
@@ -19,51 +15,42 @@ type GraphQLTypeProvider(config) as this =
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
 
-    let compileTypesFromSchema asm ns (schema: IntrospectionSchema) = 
-        let underlyingType (t: TypeReference) =
-            t.UnderlyingType
-        let ctx = {
-            Assembly = asm
-            Namespace = ns
-            KnownTypes = ProviderSessionContext.CoreTypes }
-        let typeDefinitions =
-            (ctx.KnownTypes, schema.Types)
-            ||> Array.fold (fun acc t ->
-                if acc.ContainsKey t.Name
-                then acc
-                else Map.add t.Name (ProvidedType (initType ctx t, t)) acc) 
-        let defctx = { ctx with KnownTypes = typeDefinitions }
-        typeDefinitions
-        |> Seq.iter (fun kv ->
-            match kv.Value with
-            | NativeType _ -> ()
-            | ProvidedType (t, itype) -> genType defctx itype t)
-        typeDefinitions
+    let context = 
+        let tdef = ProvidedTypeDefinition(asm, ns, "GraphQLContext", Some typeof<GraphQLContextBase>)
+        let mdef =
+            let sprm = [ProvidedStaticParameter("query", typeof<string>)]
+            let smdef = ProvidedMethod("Query", [], typeof<string>)
+            let genfn (mname : string) (args : obj []) =
+                let query = args.[0] :?> string
+                let mdef = ProvidedMethod(mname, [], typeof<string>, fun _ -> <@@ query @@>)
+                tdef.AddMember(mdef); mdef
+            smdef.DefineStaticParameters(sprm, genfn); smdef
+        let members : MemberInfo list = [mdef]
+        tdef.AddMembers(members); tdef
 
-    let generate typeName schema =
-        let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
-        let schemaTypes = compileTypesFromSchema asm "GraphQLTypes" schema
-        let typesWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>)
-        schemaTypes
-        |> Seq.choose (fun kv ->
-            match kv.Value with
-            | ProvidedType (t, _) -> Some t
-            | NativeType _ -> None)
-        |> Seq.toList
-        |> typesWrapper.AddMembers
-        tdef.AddMember typesWrapper; tdef
-
-    let generator = 
-        let gen = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
+    let provider = 
+        let generateStatic typeName (schema : Expr) =
+            let tdef = ProvidedTypeDefinition(asm, ns, typeName, Some typeof<obj>)
+            let mdef = 
+                let prm = [ProvidedParameter("serverUrl", typeof<string>)]
+                let invoker (args : Expr list) =
+                    let serverUrl = args.[0]
+                    let ctor = typeof<GraphQLContextBase>.GetConstructors().[0]
+                    Expr.NewObject(ctor, [serverUrl; schema])
+                ProvidedMethod("GetContext", prm, context, invoker, true)
+            let pdef = ProvidedProperty("Schema", typeof<IntrospectionSchema>, (fun _ -> schema), isStatic = true)
+            let members : MemberInfo list = [mdef; pdef]
+            tdef.AddMembers(members); tdef
+        let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", Some typeof<obj>)
         let prm = [ProvidedStaticParameter("introspectionFile", typeof<string>)]
-        let genfn (tname : string) (pvalues : obj []) =
-            let introspectionFile = pvalues.[0] :?> string
+        let genfn (tname : string) (args : obj []) =
+            let introspectionFile = args.[0] :?> string
             let introspectionJson = IO.readTextFile config.ResolutionFolder introspectionFile
-            let schema = Serialization.deserializeSchema introspectionJson
-            generate tname schema
-        gen.DefineStaticParameters(prm, genfn); gen
+            let schema = <@@ Serialization.deserializeSchema introspectionJson @@>
+            generateStatic tname schema
+        generator.DefineStaticParameters(prm, genfn); generator
 
-    do this.AddNamespace(ns, [generator])
+    do this.AddNamespace(ns, [context; provider])
 
 [<assembly:TypeProviderAssembly>] 
 do()
