@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="Literals.fs" />
     <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AsyncValTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />

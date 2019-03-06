@@ -7,6 +7,7 @@ module FSharp.Data.GraphQL.Tests.SerializationTests
 open Xunit
 open System
 open FSharp.Data.GraphQL.Client
+open FSharp.Data.GraphQL.Tests
 
 let private normalize (json : string) =
   json.Replace("\r\n", "\n")
@@ -286,3 +287,9 @@ let ``serializeRecord should correctly serialize option types`` () =
       Serialization.serializeRecord subject2 |> normalize
       Serialization.serializeRecord subject3 |> normalize |]
     actual |> seqEquals [|json; nullJson|]
+
+[<Fact>]
+let ``getTypeMap should correctly map introspection types`` () =
+  let schema = Serialization.deserializeSchema Literals.IntrospectionSchemaJson
+  let actual = Serialization.getTypeMap schema.Types
+  ()

@@ -191,4 +191,4 @@ module TypeCompiler =
         | TypeKind.UNION -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.ENUM -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
         | TypeKind.INTERFACE -> ProvidedTypeDefinition(itype.Name, Some typeof<obj>)
-        | _ -> failwithf "Illegal type kind %s" (itype.Kind.ToString())
+        | _ -> failwithf "Unsupported type kind %s" (itype.Kind.ToString())

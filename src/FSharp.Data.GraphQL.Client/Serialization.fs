@@ -10,6 +10,8 @@ open System.Reflection
 open System.Collections
 open System.Collections.Generic
 open System.Globalization
+open FSharp.Data.GraphQL.Types.Introspection
+open ProviderImplementation.ProvidedTypes
 
 let private isoDateFormat = "yyyy-MM-dd" 
 let private isoDateTimeFormat = "O"
@@ -244,3 +246,57 @@ let deserializeSchema (json : string) =
     match result.Errors with
     | None -> result.Data.__schema
     | Some errors -> String.concat "\n" errors |> failwithf "%s"
+
+let getTypeMap (schemaTypes : IntrospectionType []) =
+    let typeMap = schemaTypes |> Array.map (fun t -> t.Name, t) |> Map.ofArray
+    let isIntrospectionType name =
+        [| "__TypeKind"
+           "__DirectiveLocation"
+           "__Type"
+           "__InputValue"
+           "__Field"
+           "__EnumValue"
+           "__Directive"
+           "__Schema" |]
+        |> Array.contains name
+    let optionOf (t : Type) = typedefof<_ option>.MakeGenericType(t)
+    let listOf (t : Type) = typedefof<_ []>.MakeGenericType(t)
+    let getScalarType (name : string) (isNullable : bool) =
+        let t = 
+            match name.ToLowerInvariant() with
+            | "int" -> typeof<int>
+            | "string" | "id" -> typeof<string>
+            | "boolean" -> typeof<bool>
+            | "float" -> typeof<float>
+            | "date" -> typeof<DateTime>
+            | "uri" -> typeof<Uri>
+            | _ -> failwithf "Unsupported scalar type \"%s\"." name
+        if isNullable then optionOf t else t
+    let getUnionType (name : string) (isNullable : bool) =
+        let t : Type = upcast ProvidedTypeDefinition(name, None, isInterface = true)
+        if isNullable then optionOf t else t
+    let getInterfaceType (name : string) (fields : IntrospectionField [] option) (isNullable : bool) =
+        let t : Type = upcast ProvidedTypeDefinition(name, None, isInterface = true)
+        if isNullable then optionOf t else t
+    let rec getType (t : IntrospectionType) (isNullable : bool) =
+        match t.Kind with
+        | TypeKind.SCALAR when not (isIntrospectionType t.Name)-> getScalarType t.Name isNullable
+        | TypeKind.NON_NULL -> getType (typeMap |> Map.find t.OfType.Value.Name.Value) isNullable
+        | TypeKind.LIST -> getType (typeMap |> Map.find t.OfType.Value.Name.Value) isNullable |> listOf
+        | TypeKind.UNION -> getUnionType t.Name isNullable
+        | TypeKind.INTERFACE -> getInterfaceType t.Name t.Fields isNullable
+        | k -> failwithf "Unsupported type kind \"%A\"." k
+    let mapTypes (types : IntrospectionType []) =
+        let rec helper (acc : (string * Type) list) (types : IntrospectionType list) =
+            match types with
+            | [] -> acc
+            | t :: tail ->
+                let isNullable = t.Kind <> TypeKind.NON_NULL
+                let t = t.Name, (getType t isNullable)
+                helper (t :: acc) tail
+        helper [] (List.ofArray types) |> Map.ofList
+    mapTypes schemaTypes
+
+let deserializeQueryResponse (schemaTypes : IntrospectionType []) (json : string) =
+    let json = JsonValue.Parse(json)
+    ()

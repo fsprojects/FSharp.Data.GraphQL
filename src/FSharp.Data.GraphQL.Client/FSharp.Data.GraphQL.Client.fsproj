@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
@@ -6,49 +7,49 @@
     <DefineConstants>$(DefineConstants);NO_GENERATIVE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
-  </ItemGroup>
-  <ItemGroup>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/Net/Http.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/Http.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/CommonRuntime/IO.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/IO.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/CommonRuntime/TextConversions.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/TextConversions.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/Json/JsonValue.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/JsonValue.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/Json/JsonConversions.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/JsonConversions.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsharp/FSharp.Data/src/Json/JsonExtensions.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/JsonExtensions.fs</Link>
-    </Compile>
-    <Compile Include="../../paket-files/shared/fsprojects/FSharp.TypeProviders.SDK/src/ProvidedTypes.fsi">
+    <Compile Include="..\..\paket-files\shared\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fsi</Link>
     </Compile>
-    <Compile Include="../../paket-files/shared/fsprojects/FSharp.TypeProviders.SDK/src/ProvidedTypes.fs">
+    <Compile Include="..\..\paket-files\shared\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Net\Http.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Http.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\IO.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/IO.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\TextConversions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/TextConversions.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonValue.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonValue.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonConversions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonConversions.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonExtensions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonExtensions.fs</Link>
+    </Compile>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+  </ItemGroup>
+  <ItemGroup>
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <Compile Include="Extensions.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="Serialization.fs" />
-    <Compile Include="QuotationHelpers.fs" />
     <Compile Include="IO.fs" />
-    <Compile Include="Web.fs" />
+    <Compile Include="Parser.fs" />
+    <Compile Include="GraphQLClient.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />
