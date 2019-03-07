@@ -1,7 +1,6 @@
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
@@ -14,9 +13,8 @@
     <Compile Include="Introspection.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="paket.references" />
+    <Compile Include="DocumentExtensions.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
