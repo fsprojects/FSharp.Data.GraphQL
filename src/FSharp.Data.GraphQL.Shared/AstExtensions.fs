@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Ast.DocumentExtensions
+module FSharp.Data.GraphQL.Ast.Extensions
 
 open System
 open System.Text
@@ -14,10 +14,9 @@ type internal AppendBehavior =
 type internal PaddedStringBuilder() =
     let sb = StringBuilder()
     let mutable padCount = 0
-    let pad count =
-        padCount <- padCount + count
-        "".PadLeft(padCount, '\t')
-    member __.AppendLine() = sb.AppendLine() |> ignore
+    member __.Pad() = padCount <- padCount + 2
+    member __.Unpad() = padCount <- padCount - 2
+    member __.AppendLine() = sb.AppendLine().Append("".PadLeft(padCount, ' ')) |> ignore
     member __.Append(str : string, ?behavior : AppendBehavior) = 
         let behavior = defaultArg behavior AppendBehavior.None
         if behavior.HasFlag(AppendBehavior.AddSpaceBefore) then sb.Append(" ") |> ignore
@@ -25,8 +24,6 @@ type internal PaddedStringBuilder() =
         if behavior.HasFlag(AppendBehavior.AddSpaceAfter) then sb.Append(" ") |> ignore
     member x.AppendWithSpaceAfter(str) = x.Append(str, AppendBehavior.AddSpaceAfter)
     member x.AppendWithSpaceBefore(str) = x.Append(str, AppendBehavior.AddSpaceBefore)
-    member __.AppendLineAndPad() = sb.AppendLine().Append(pad 1) |> ignore
-    member __.AppendLineAndUnpad() = sb.AppendLine().Append(pad -1) |> ignore
     override __.ToString() = sb.ToString()
 
 type Document with
@@ -35,7 +32,7 @@ type Document with
         let withQuotes (s : string) = "\"" + s + "\""
         let rec printValue x =
             let printObjectValue (name, value) =
-                sb.AppendWithSpaceAfter(withQuotes name)
+                sb.Append(withQuotes name)
                 sb.Append(": ")
                 printValue value
             match x with
@@ -60,7 +57,7 @@ type Document with
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
                 sb.Append("$")
-                sb.AppendWithSpaceAfter(vdef.VariableName)
+                sb.Append(vdef.VariableName)
                 sb.Append(": ")
                 sb.Append(vdef.Type.ToString())
             if vdefs.Length > 0 then sb.Append("(")
@@ -78,13 +75,12 @@ type Document with
             let rec helper args =
                 match args with
                 | [] -> ()
-                | [arg] -> printArgument arg; sb.Append(") ")
+                | [arg] -> printArgument arg; sb.Append(")")
                 | arg :: tail -> printArgument arg; sb.Append(", "); helper tail
             helper arguments
         let printDirectives (directives : Directive list) =
             let printDirective (directive : Directive) =
                 sb.Append("@" + directive.Name)
-                if directive.Arguments.Length = 0 then sb.Append(" ")
                 printArguments directive.Arguments
             let rec helper directives =
                 match directives with
@@ -96,11 +92,11 @@ type Document with
             let printSelection = function
                 | Field field ->
                     field.Alias |> Option.iter (fun alias -> sb.Append(alias + ": "))
-                    if field.Arguments.Length = 0
-                    then sb.AppendWithSpaceAfter(field.Name)
-                    else sb.Append(field.Name)
+                    sb.Append(field.Name)
                     printArguments field.Arguments
+                    if field.Directives.Length > 0 then sb.Append(" ")
                     printDirectives field.Directives
+                    if field.SelectionSet.Length > 0 then sb.Append(" ")
                     printSelectionSet field.SelectionSet
                 | FragmentSpread frag ->
                     sb.Append("..." + frag.Name)
@@ -112,12 +108,12 @@ type Document with
                     printDirectives frag.Directives
                     sb.Append(" ")
                     printSelectionSet frag.SelectionSet
-            if selectionSet.Length > 0 then sb.Append("{"); sb.AppendLineAndPad()
+            if selectionSet.Length > 0 then sb.Append("{"); sb.Pad()
             let rec helper selectionSet =
                 match selectionSet with
-                | [] -> failwith "Failure generating query string: no selection was present in selection set."
-                | [selection] -> printSelection selection; sb.AppendLineAndUnpad(); sb.Append("}"); sb.AppendLine();
-                | selection :: tail -> printSelection selection; helper tail
+                | [] -> ()
+                | [selection] -> sb.AppendLine(); printSelection selection; sb.Unpad(); sb.AppendLine(); sb.Append("}")
+                | selection :: tail -> sb.AppendLine(); printSelection selection; helper tail
             helper selectionSet
         let printOperations = function
             | OperationDefinition odef ->

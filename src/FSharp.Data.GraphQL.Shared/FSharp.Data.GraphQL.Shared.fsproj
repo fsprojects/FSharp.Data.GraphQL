@@ -14,7 +14,7 @@
     <Compile Include="Parser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <None Include="paket.references" />
-    <Compile Include="DocumentExtensions.fs" />
+    <Compile Include="AstExtensions.fs" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
