@@ -10,11 +10,13 @@ open FSharp.Data.GraphQL.Ast.Extensions
 // TODO: By GraphQL language spec, query operations don't need to have "query" token or a query name.
 // at the moment, parser is requiring both.
 
+/// Converts line breaks to a single standard to avoid different SO line break termination issues.
+let normalize (str : string) = str.Replace("\r\n", "\n")
+
 /// Generates an Ast.Document from a query string, prints it to another
 /// query string and expects it to be equal. Input query must be formatted (with line breaks and identation).
 /// Identation unit is two empty spaces.
 let private printAndAssert (query : string) =
-    let normalize (str : string) = str.Replace("\r\n", "\n")
     let document = parse query
     let expected = normalize query
     let actual = normalize <| document.ToQueryString()
@@ -199,3 +201,45 @@ let ``Should be able to print a subscription`` () =
     content
   }
 }"""
+
+[<Fact>]
+let ``Should be able to print type name meta field`` () =
+    let expected = normalize """query q {
+  hero(id: "1000") {
+    name
+    friends {
+      ... on Human {
+        id
+        homePlanet
+        __typename
+      }
+      ... on Droid {
+        id
+        primaryFunction
+        __typename
+      }
+      __typename
+    }
+    __typename
+  }
+  __typename
+}"""
+    let query = """query q {
+  hero(id: "1000") {
+    name
+    friends {
+      ... on Human {
+        id
+        homePlanet
+      }
+      ... on Droid {
+        id
+        primaryFunction
+      }
+    }
+  }
+}
+"""
+    let document = parse query
+    let actual = normalize <| document.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
+    actual |> equals expected

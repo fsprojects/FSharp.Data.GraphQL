@@ -1,5 +1,7 @@
+/// Extensions for Ast.Document.
 module FSharp.Data.GraphQL.Ast.Extensions
 
+open System
 open System.Text
 open FSharp.Data.GraphQL.Ast
 open System.Globalization
@@ -13,8 +15,21 @@ type internal PaddedStringBuilder() =
     member __.Append(str : string) = sb.Append(str) |> ignore
     override __.ToString() = sb.ToString()
 
+/// Specify options when printing an Ast.Document to a query string.
+[<Flags>]
+type QueryStringPrintingOptions =
+    /// No specific printing option.
+    | None = 0
+    /// Includes type names on selections by adding "__typename" meta field to them.
+    | IncludeTypeNames = 1
+
 type Document with
-    member this.ToQueryString() =
+    /// <summary>
+    /// Generates a GraphQL query string from this document.
+    /// </summary>
+    /// <param name="options">Specify custom printing options for the query string.</param>
+    member this.ToQueryString(?options : QueryStringPrintingOptions) =
+        let options = defaultArg options QueryStringPrintingOptions.None
         let sb = PaddedStringBuilder()
         let withQuotes (s : string) = "\"" + s + "\""
         let rec printValue x =
@@ -76,6 +91,18 @@ type Document with
                 | [directive] -> printDirective directive
                 | directive :: tail -> printDirective directive; sb.Append(" "); helper tail
             helper directives
+        let setSelectionSetOptions (selectionSet : Selection list) =
+            let typeNameMetaField =
+                { Alias = None
+                  Name = "__typename"
+                  Arguments = []
+                  Directives = []
+                  SelectionSet = [] }
+            let shouldIncludeTypeName = options.HasFlag(QueryStringPrintingOptions.IncludeTypeNames)
+            let hasTypeName = selectionSet |> List.exists (function Field f -> f.Name = "__typename" | _ -> false)
+            if selectionSet.Length > 0 && shouldIncludeTypeName && not (hasTypeName)
+            then selectionSet @ [Field typeNameMetaField]
+            else selectionSet
         let rec printSelectionSet (selectionSet : Selection list) =
             let printSelection = function
                 | Field field ->
@@ -85,7 +112,7 @@ type Document with
                     if field.Directives.Length > 0 then sb.Append(" ")
                     printDirectives field.Directives
                     if field.SelectionSet.Length > 0 then sb.Append(" ")
-                    printSelectionSet field.SelectionSet
+                    printSelectionSet (setSelectionSetOptions field.SelectionSet)
                 | FragmentSpread frag ->
                     sb.Append("..." + frag.Name)
                     if frag.Directives.Length > 0 then sb.Append(" ")
@@ -95,7 +122,7 @@ type Document with
                     frag.TypeCondition |> Option.iter (fun t -> sb.Append("on " + t))
                     printDirectives frag.Directives
                     sb.Append(" ")
-                    printSelectionSet frag.SelectionSet
+                    printSelectionSet (setSelectionSetOptions frag.SelectionSet)
             if selectionSet.Length > 0 then sb.Append("{"); sb.Pad()
             let rec helper selectionSet =
                 match selectionSet with
@@ -117,7 +144,7 @@ type Document with
                         else sb.Append(name))
                     printVariables odef.VariableDefinitions
                     printDirectives odef.Directives
-                    printSelectionSet odef.SelectionSet
+                    printSelectionSet (setSelectionSetOptions odef.SelectionSet)
                 | FragmentDefinition fdef ->
                     // TODO: Fragment Definitions must have a name! Fix it on Ast.Document.
                     sb.Append("fragment " + fdef.Name.Value + " ")
@@ -125,7 +152,7 @@ type Document with
                     sb.Append("on " + fdef.TypeCondition.Value + " ")
                     printDirectives fdef.Directives
                     if fdef.Directives.Length > 0 then sb.Append(" ")
-                    printSelectionSet fdef.SelectionSet
+                    printSelectionSet (setSelectionSetOptions fdef.SelectionSet)
             match definitions with
                 | [] -> ()
                 | [def] -> printDefinition def
