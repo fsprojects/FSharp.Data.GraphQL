@@ -8,11 +8,11 @@ open System.Collections
 open System.Collections.Generic
 open System.Globalization
 open FSharp.Data.GraphQL.Types.Introspection
-open ProviderImplementation.ProvidedTypes
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Ast.Extensions
 
 module Serialization =
-    open FSharp.Data.GraphQL
-
     let private isoDateFormat = "yyyy-MM-dd" 
     let private isoDateTimeFormat = "O"
     let private isoFormats = [|isoDateTimeFormat; isoDateFormat|]
@@ -247,87 +247,48 @@ module Serialization =
         | None -> result.Data.__schema
         | Some errors -> String.concat "\n" errors |> failwithf "%s"
 
-    let getTypeMap asm ns (schema : IntrospectionSchema) =
-        let isIntrospectionType (name : string) =
-            let operationTypes =
-                [| schema.QueryType.Name
-                   schema.MutationType |> Option.bind (fun t -> t.Name)
-                   schema.SubscriptionType |> Option.bind (fun t -> t.Name) |]
-                |> Array.choose id
-                |> Array.map (fun name -> name.ToLowerInvariant())
-            [| "__typekind"
-               "__directivelocation"
-               "__type"
-               "__inputvalue"
-               "__field"
-               "__enumvalue"
-               "__directive"
-               "__schema" |]
-            |> Array.append operationTypes
-            |> Array.contains (name.ToLowerInvariant())
-        let optionOf (t : Type) = typedefof<_ option>.MakeGenericType(t)
-        let listOf (t : Type) = typedefof<_ []>.MakeGenericType(t)
-        let build (inputMap : Map<string, IntrospectionType>) =
-            let unexpectedType tk = failwithf "Unexpected type kind \"%O\"." tk
-            let outputMap = Dictionary<string, Type>()
-            let getScalar (name : string) = typeof<string>
-            let rec getInput (t : IntrospectionTypeRef) =
-                match t.Kind with
-                | TypeKind.LIST | TypeKind.NON_NULL -> getInput t.OfType.Value
-                | _ -> inputMap.[t.Name.Value]
-            let rec getOutput (t : IntrospectionTypeRef) =
-                match t.Kind with
-                | TypeKind.LIST -> getOutput t.OfType.Value |> listOf
-                | TypeKind.NON_NULL -> getOutput t.OfType.Value
-                | TypeKind.UNION | TypeKind.OBJECT | TypeKind.ENUM | TypeKind.INTERFACE -> outputMap.[t.Name.Value] |> optionOf
-                | TypeKind.SCALAR -> getScalar t.Name.Value |> optionOf
-                | tk -> unexpectedType tk
-            let rec hasOutput (t : IntrospectionTypeRef) =
-                match t.Kind with
-                | TypeKind.LIST | TypeKind.NON_NULL -> hasOutput t.OfType.Value
-                | _ -> outputMap.ContainsKey(t.Name.Value)
-            let builder (t : IntrospectionType) =
-                let rec build (t : IntrospectionType) : Type =
-                    let getTypes (inputTypes : IntrospectionTypeRef []) = 
-                        let getOrBuild (t : IntrospectionTypeRef) =
-                            if hasOutput t then getOutput t 
-                            else
-                                let outputType = build (getInput t)
-                                outputMap.Add(outputType.Name, outputType)
-                                match t.Kind with
-                                | TypeKind.NON_NULL -> outputType
-                                | TypeKind.LIST -> listOf outputType
-                                | _ -> optionOf outputType
-                        inputTypes
-                        |> Array.map getOrBuild
-                        |> Seq.filter (fun t -> t = typeof<ProvidedTypeDefinition>)
-                        |> Seq.cast<ProvidedTypeDefinition>
-                    match t.Kind with
-                    | TypeKind.UNION ->
-                        let tdef = ProvidedTypeDefinition(t.Name, None, isInterface = true)
-                        let possibleTypes = getTypes t.PossibleTypes.Value
-                        for ptdef in possibleTypes do ptdef.AddInterfaceImplementation(tdef)
-                        upcast tdef
-                    | TypeKind.INTERFACE ->
-                        let tdef = ProvidedTypeDefinition(t.Name, None, isInterface = true)
-                        // TODO: implement interface fields
-                        let possibleTypes = getTypes t.PossibleTypes.Value
-                        for ptdef in possibleTypes do ptdef.AddInterfaceImplementation(tdef)
-                        upcast tdef
-                    | TypeKind.OBJECT ->
-                        let tdef = ProvidedTypeDefinition(t.Name, None)
-                        // TODO : implement object fields
-                        upcast tdef
-                    | tk -> unexpectedType tk
-                let outputType = build t
-                outputMap.Add(outputType.Name, outputType)
-            inputMap |> Map.iter (fun _ v -> builder v)
-            outputMap
-        schema.Types
-        |> Array.filter (fun t -> not (isIntrospectionType t.Name))
-        |> Array.map (fun t -> t.Name, t)
-        |> Map.ofArray
-        |> build
-    let deserializeQueryResponse (schemaTypes : IntrospectionType []) (json : string) =
-        let json = JsonValue.Parse(json)
-        () // TODO: convert to provided types
+    let deserializeQueryResponse asm ns (schema: IntrospectionSchema) (operationName : string option) (queryAst : Document) (responseJson : string) =
+        let schemaTypes =
+            let isIntrospectionType (name : string) =
+                [| "__typekind"
+                   "__directivelocation"
+                   "__type"
+                   "__inputvalue"
+                   "__field"
+                   "__enumvalue"
+                   "__directive"
+                   "__schema" |]
+                |> Array.contains (name.ToLowerInvariant())
+            schema.Types
+            |> Array.filter (fun t -> not (isIntrospectionType t.Name))
+            |> Array.map (fun t -> t.Name, t)
+            |> Map.ofArray
+        let astInfo = queryAst.GetInfoMap() |> Map.find operationName
+        let responseJson = JsonValue.Parse responseJson
+        let compileData (fields : (string * JsonValue) []) =
+            let typeName = 
+                fields
+                |> Array.tryFind (fun (name, _) -> name.ToLowerInvariant() = "__typename")
+                |> Option.map (fun (_, value) ->
+                    match value with
+                    | JsonValue.String x -> x
+                    | _ -> failwithf "Failure deserializing query response. Expected \"__typename\" field to be a string field, but it was %A." value)
+            let rec helper (path : string list) (fields : (string * JsonValue) []) =
+                match typeName with
+                | Some typeName ->
+                    // TODO : Get types based on schema
+                    ()
+                | None -> failwith "Failure deserializing query response. Expected type to have a \"__typename\" field, but it was not found."
+            helper [] fields
+        match responseJson with
+        | JsonValue.Record fields ->
+            let dataField = fields |> Array.tryFind (fun (name, _) -> name.ToLowerInvariant() = "data")
+            match dataField with
+            | Some (_, data) ->
+                match data with
+                | JsonValue.Record fields -> compileData fields
+                | _ -> failwithf "Failure deserializing query response. Expected data field of root type to be a Record type, but type is %A." data
+            | None -> failwith "Failure deserializing query response. Expected root type to have a \"data\" field, but it was not found."
+        | _ -> failwithf "Failure deserializing query response. Expected root type to be a Record type, but type is %A." responseJson
+
+        

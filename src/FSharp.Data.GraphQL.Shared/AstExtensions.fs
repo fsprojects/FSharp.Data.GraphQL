@@ -6,6 +6,19 @@ open System.Text
 open FSharp.Data.GraphQL.Ast
 open System.Globalization
 
+type internal AstSelectionInfo =
+    { TypeCondition : string option
+      Path : string list
+      Name : string }
+
+type AstFieldInfo =
+    | TypeField of name : string
+    | FragmentField of typeCondition : string * name : string
+    static member Of(name : string, typeCondition : string option) =
+        match typeCondition with
+        | Some tc -> FragmentField (tc, name)
+        | None -> TypeField name
+
 type internal PaddedStringBuilder() =
     let sb = StringBuilder()
     let mutable padCount = 0
@@ -146,9 +159,7 @@ type Document with
                     printDirectives odef.Directives
                     printSelectionSet (setSelectionSetOptions odef.SelectionSet)
                 | FragmentDefinition fdef ->
-                    // TODO: Fragment Definitions must have a name! Fix it on Ast.Document.
                     sb.Append("fragment " + fdef.Name.Value + " ")
-                    // TODO: Fragment Definitions must have a type condition! Fix it on Ast.Document.
                     sb.Append("on " + fdef.TypeCondition.Value + " ")
                     printDirectives fdef.Directives
                     if fdef.Directives.Length > 0 then sb.Append(" ")
@@ -159,3 +170,46 @@ type Document with
                 | def :: tail -> printDefinition def; sb.AppendLine(); sb.AppendLine(); printDefinitions tail
         printDefinitions this.Definitions
         sb.ToString()
+    
+    /// <summary>
+    /// Gets a map containing general information for this Document.
+    /// </summary>
+    member this.GetInfoMap() =
+        let fragments = 
+            this.Definitions
+            |> List.choose (function | OperationDefinition _ -> None | FragmentDefinition def -> Some def)
+            |> List.map (fun def -> def.Name.Value, def)
+            |> Map.ofList
+        let findFragment name =
+            match Map.tryFind name fragments with
+            | Some fdef -> fdef
+            | None -> failwithf "Can not get information about fragment \"%s\". Fragment spread definition was not found in the query." name
+        let operations =
+            this.Definitions
+            |> List.choose (function | FragmentDefinition _ -> None | OperationDefinition def -> Some def)
+            |> List.map (fun operation -> operation.Name, operation)
+        let mapper (selectionSet : Selection list) =
+            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : string list) (selectionSet : Selection list) =
+                match selectionSet with
+                | [] -> acc
+                | selection :: tail ->
+                    let acc = 
+                        match selection with
+                        | Field f -> 
+                            let acc = { TypeCondition = typeCondition; Path = path; Name = f.AliasOrName } :: acc
+                            helper acc None (f.AliasOrName :: path) f.SelectionSet
+                        | FragmentSpread f ->
+                            let fdef = findFragment f.Name
+                            helper acc fdef.TypeCondition path fdef.SelectionSet
+                        | InlineFragment fdef -> 
+                            helper acc fdef.TypeCondition path fdef.SelectionSet
+                    helper acc typeCondition path tail
+            helper [] None [] selectionSet
+            |> List.groupBy (fun info -> info.Path)
+            |> List.map (fun (path, infos) -> 
+                let infos = infos |> List.map (fun info -> AstFieldInfo.Of(info.Name, info.TypeCondition))
+                path, infos)
+            |> Map.ofList
+        operations
+        |> List.map (fun (k, o) -> k, mapper o.SelectionSet)
+        |> Map.ofList

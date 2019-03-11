@@ -6,6 +6,7 @@ module FSharp.Data.GraphQL.Tests.AstExtensionsTests
 open Xunit
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
+open FSharp.Data.GraphQL.Execution
 
 // TODO: By GraphQL language spec, query operations don't need to have "query" token or a query name.
 // at the moment, parser is requiring both.
@@ -242,4 +243,36 @@ let ``Should be able to print type name meta field`` () =
 """
     let document = parse query
     let actual = normalize <| document.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
+    actual |> equals expected
+
+[<Fact>]
+let ``Should generate information map correctly`` () =
+    let query = """query q {
+  hero(id: "1000") {
+    name
+    friends {
+      ... on Human {
+        id
+        homePlanet
+      }
+      ... on Droid {
+        id
+        primaryFunction
+      }
+    }
+  }
+}
+"""
+    let document = parse query
+    let actual = document.GetInfoMap() |> Map.toList |> List.map (fun (k, v) -> k, v |> Map.toList)
+    let expected = [ (Named "q", [
+        [], [TypeField "hero"]
+        ["friends"; "hero"], [
+            FragmentField ("Droid","primaryFunction")
+            FragmentField ("Droid","id")
+            FragmentField ("Human","homePlanet")
+            FragmentField ("Human","id") ]
+        ["hero"], [
+            TypeField "friends"
+            TypeField "name"] ]) ]
     actual |> equals expected
