@@ -265,7 +265,7 @@ let ``Should generate information map correctly`` () =
 """
     let document = parse query
     let actual = document.GetInfoMap() |> Map.toList |> List.map (fun (k, v) -> k, v |> Map.toList)
-    let expected = [ (Named "q", [
+    let expected = [ (Some "q", [
         [], [TypeField "hero"]
         ["friends"; "hero"], [
             FragmentField ("Droid","primaryFunction")
