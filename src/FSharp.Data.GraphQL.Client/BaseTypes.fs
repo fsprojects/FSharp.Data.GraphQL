@@ -78,10 +78,10 @@ type RecordBase (properties : (string * obj) list) =
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
 
-type QueryResultBase () =
-    static member BuildResponseTypes(asm, ns, schema : IntrospectionSchema, operationName : string option, queryAst : Document, responseJson : string) =
+module ResponseTypeBuilder =
+    let buildTypes asm ns (schema : IntrospectionSchema) (operationName : string option) (queryAst : Document) (responseJson : string) =
         let outputTypes = Dictionary<string list * string, ProvidedTypeDefinition>()
-
+    
         let scalarTypes =
             [| "Int", typeof<int>
                "Boolean", typeof<bool>
@@ -91,10 +91,10 @@ type QueryResultBase () =
                "String", typeof<string>
                "URI", typeof<Uri> |]
             |> Map.ofArray
-
+    
         let isScalarType (name : string) =
             scalarTypes |> Map.containsKey name
-
+    
         let isIntrospectionType (name : string) =
             [| "__TypeKind"
                "__DirectiveLocation"
@@ -105,16 +105,16 @@ type QueryResultBase () =
                "__Directive"
                "__Schema" |]
             |> Array.contains name
-
+    
         let fail (format : Printf.StringFormat<'T>) =
             failwithf "Failure deserializing query response. %A" (sprintf format)
-
+    
         let schemaTypes =
             schema.Types
             |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
             |> Array.map (fun t -> t.Name, t)
             |> Map.ofArray
-
+    
         let enumTypes =
             let createType (t : IntrospectionType) =
                 match t.EnumValues with
@@ -123,7 +123,7 @@ type QueryResultBase () =
             schemaTypes
             |> Map.filter (fun _ t -> t.Kind = TypeKind.ENUM)
             |> Map.map (fun _ t -> createType t)
-
+    
         let astInfoMap = 
             match queryAst.GetInfoMap() |> Map.tryFind operationName with
             | Some info -> info
@@ -131,7 +131,7 @@ type QueryResultBase () =
                 match operationName with
                 | Some name -> fail "Operation \"%s\" was not found in query document." name
                 | None -> fail "No unamed operation was found in query document."
-
+    
         let getAstInfo (path : string list) =
             match astInfoMap |> Map.tryFind path with
             | Some ast -> 
@@ -146,18 +146,18 @@ type QueryResultBase () =
                     |> Map.ofList
                 typeFields, fragmentFields
             | None -> fail "Property \"%s\" is a union or interface type, but no inheritance information could be determined from the input query." path.Head
-
+    
         let getFragmentFields (typeName : string) (path : string list) (fields : (string * JsonValue) []) =
-             match getAstInfo path |> snd |> Map.tryFind typeName with
-             | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
-             | None -> fail "Property \%s\" is a union or interface type, but type %s does not inherit it." path.Head typeName
-
+                match getAstInfo path |> snd |> Map.tryFind typeName with
+                | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
+                | None -> fail "Property \%s\" is a union or interface type, but type %s does not inherit it." path.Head typeName
+    
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
             let typeFields = getAstInfo path |> fst
             fields |> Array.filter (fun (name, _) -> List.contains name typeFields || name = "__typename")
-
+    
         let responseJson = JsonValue.Parse responseJson
-
+    
         let buildOutputTypes (fields : (string * JsonValue) []) =
             let getTypeName (fields : (string * JsonValue) []) =
                 fields
@@ -166,17 +166,17 @@ type QueryResultBase () =
                     match value with
                     | JsonValue.String x -> x
                     | _ -> fail "Expected \"__typename\" field to be a string field, but it was %A." value)
-    
+        
             let getScalarType (typeName : string) =
                 match scalarTypes |> Map.tryFind typeName with
                 | Some t -> t
                 | None -> fail "Scalar type %s is not supported." typeName
-
+    
             let getEnumType (typeName : string) =
                 match enumTypes |> Map.tryFind typeName with
                 | Some t -> outputTypes.Add(([], typeName), t); t
                 | None -> fail "Enum type %s was not found in the schema." typeName
-
+    
             let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (interfaces : Type list) (fields : (string * JsonValue) []) =
                 let rec helper (ns : string) (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                     let ns =
@@ -214,7 +214,7 @@ type QueryResultBase () =
                     | Some schemaType -> helper ns path typeName fields schemaType
                     | None -> fail "Expected to find a type \"%s\" on schema, but it was not found." typeName
                 | None -> fail "Expected type to have a \"__typename\" field, but it was not found."
-    
+        
             and getProperties (path : string list) (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                 let getFieldType (name : string) =
                     match schemaType.Fields with
@@ -281,7 +281,7 @@ type QueryResultBase () =
                 |> Array.map ((fun (name, value) -> name, value, getFieldType name) >> getProperty)
                 |> List.ofArray
             getRecordOrInterfaceType [] None [] fields |> ignore
-
+    
         match responseJson with
         | JsonValue.Record fields ->
             let dataField = fields |> Array.tryFind (fun (name, _) -> name = "data")
@@ -292,13 +292,13 @@ type QueryResultBase () =
                 | _ -> fail "Expected data field of root type to be a Record type, but type is %A." data
             | None -> fail "Expected root type to have a \"data\" field, but it was not found."
         | _ -> fail "Expected root type to be a Record type, but type is %A." responseJson
-
+    
         outputTypes
 
 type GraphQLContextBase (serverUrl : string, schema : IntrospectionSchema) =
     member __.ServerUrl = serverUrl
     member __.Schema = schema
-    static member internal MakeProvidedType(asm, ns) =
+    static member internal MakeProvidedType(asm, ns, schema : IntrospectionSchema, serverUrl : string, customHeaders : seq<string * string>) =
         let tdef = ProvidedTypeDefinition(asm, ns, "GraphQLContext", Some typeof<GraphQLContextBase>)
         let mdef : MemberInfo =
             let sprm = [ProvidedStaticParameter("query", typeof<string>)]
