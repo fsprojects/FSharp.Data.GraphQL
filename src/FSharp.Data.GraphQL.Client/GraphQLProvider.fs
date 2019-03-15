@@ -1,6 +1,5 @@
 namespace FSharp.Data.GraphQL.Client
 
-open System
 open System.Reflection
 open FSharp.Quotations
 open FSharp.Core.CompilerServices
@@ -33,12 +32,12 @@ type GraphQLTypeProvider (config) as this =
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             let schemaVal = Serialization.deserializeSchema introspectionJson
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
-            let ctxdef = GraphQLContextBase.MakeProvidedType(asm, ns, schemaVal, serverUrl, customHeaders)
+            let ctxdef = ContextBase.MakeProvidedType(schemaVal, serverUrl, customHeaders)
             let ctxmdef =
                 let prm = [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
                 let invoker (args : Expr list) =
                     let serverUrl = args.[0]
-                    Expr.NewObject(GraphQLContextBase.Constructor, [serverUrl; schemaExpr])
+                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr])
                 ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
             let schemapdef = ProvidedProperty("Schema", typeof<IntrospectionSchema>, (fun _ -> schemaExpr), isStatic = true)
             let members : MemberInfo list = [ctxdef; ctxmdef; schemapdef]
