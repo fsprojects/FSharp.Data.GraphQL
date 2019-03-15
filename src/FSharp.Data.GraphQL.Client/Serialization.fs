@@ -7,10 +7,7 @@ open System.Reflection
 open System.Collections
 open System.Collections.Generic
 open System.Globalization
-open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Ast.Extensions
 
 module Serialization =
     let private isoDateFormat = "yyyy-MM-dd" 
@@ -246,58 +243,3 @@ module Serialization =
         match result.Errors with
         | None -> result.Data.__schema
         | Some errors -> String.concat "\n" errors |> failwithf "%s"
-
-    let deserializeQueryResponse asm ns (schema: IntrospectionSchema) (operationName : string option) (queryAst : Document) (responseJson : string) =
-        let schemaTypes =
-            let isIntrospectionType (name : string) =
-                let coreTypes =
-                    [| "int"; "boolean"; "date"; "float"; "id"; "string"; "uri" |]
-                let introspectionTypes =
-                    [| "__typekind"
-                       "__directivelocation"
-                       "__type"
-                       "__inputvalue"
-                       "__field"
-                       "__enumvalue"
-                       "__directive"
-                       "__schema" |]
-                Array.append coreTypes introspectionTypes
-                |> Array.contains (name.ToLowerInvariant())
-            schema.Types
-            |> Array.filter (fun t -> not (isIntrospectionType t.Name))
-            |> Array.map (fun t -> t.Name, t)
-            |> Map.ofArray
-        let astInfo = 
-            match queryAst.GetInfoMap() |> Map.tryFind operationName with
-            | Some info -> info
-            | None ->
-                match operationName with
-                | Some name -> failwithf "Failure deserializing query response. Operation \"%s\" was not found in query document." name
-                | None -> failwith "Failure deserializing query response. No unamed operation wasa found in query document."
-        let responseJson = JsonValue.Parse responseJson
-        let compileData (fields : (string * JsonValue) []) =
-            let typeName = 
-                fields
-                |> Array.tryFind (fun (name, _) -> name.ToLowerInvariant() = "__typename")
-                |> Option.map (fun (_, value) ->
-                    match value with
-                    | JsonValue.String x -> x
-                    | _ -> failwithf "Failure deserializing query response. Expected \"__typename\" field to be a string field, but it was %A." value)
-            let rec helper (path : string list) (fields : (string * JsonValue) []) =
-                match typeName with
-                | Some typeName ->
-                    ()
-                | None -> failwith "Failure deserializing query response. Expected type to have a \"__typename\" field, but it was not found."
-            helper [] fields
-        match responseJson with
-        | JsonValue.Record fields ->
-            let dataField = fields |> Array.tryFind (fun (name, _) -> name.ToLowerInvariant() = "data")
-            match dataField with
-            | Some (_, data) ->
-                match data with
-                | JsonValue.Record fields -> compileData fields
-                | _ -> failwithf "Failure deserializing query response. Expected data field of root type to be a Record type, but type is %A." data
-            | None -> failwith "Failure deserializing query response. Expected root type to have a \"data\" field, but it was not found."
-        | _ -> failwithf "Failure deserializing query response. Expected root type to be a Record type, but type is %A." responseJson
-
-        

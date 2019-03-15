@@ -19,7 +19,7 @@ type QueryDefinitions =
       OperationNames : string [] }
 
 module GraphQLClient =
-    let sendRequest (request : GraphQLRequest) =
+    let sendRequestAsync (request : GraphQLRequest) =
         async {
             use client = new WebClient()
             client.Headers.Set("content-type", "application/json")
@@ -41,3 +41,4 @@ module GraphQLClient =
                 client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString())
                 |> Async.AwaitTask
         }
+    let sendRequest = sendRequestAsync >> Async.RunSynchronously

@@ -15,28 +15,29 @@ type GraphQLTypeProvider (config) as this =
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
 
-    let context = GraphQLContextBase.MakeProvidedType(asm, ns)
+    let context = 
+        let tdef = GraphQLContextBase.MakeProvidedType(asm, ns)
+        tdef
 
     let provider = 
-        let generateStatic typeName (schema : Expr) =
-            let tdef = ProvidedTypeDefinition(asm, ns, typeName, None)
-            let mdef = 
+        let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
+        let prm = [ProvidedStaticParameter("introspectionFile", typeof<string>)]
+        generator.DefineStaticParameters(prm, fun tname args ->
+            let introspectionFile = args.[0] :?> string
+            let introspectionJson = IO.readTextFile config.ResolutionFolder introspectionFile
+            let schema = <@@ Serialization.deserializeSchema introspectionJson @@>
+            let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
+            let ctxmdef =
                 let prm = [ProvidedParameter("serverUrl", typeof<string>)]
                 let invoker (args : Expr list) =
                     let serverUrl = args.[0]
                     Expr.NewObject(GraphQLContextBase.Constructor, [serverUrl; schema])
                 ProvidedMethod("GetContext", prm, context, invoker, true)
-            let pdef = ProvidedProperty("Schema", typeof<IntrospectionSchema>, (fun _ -> schema), isStatic = true)
-            let members : MemberInfo list = [mdef; pdef]
-            tdef.AddMembers(members); tdef
-        let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
-        let prm = [ProvidedStaticParameter("introspectionFile", typeof<string>)]
-        let genfn (tname : string) (args : obj []) =
-            let introspectionFile = args.[0] :?> string
-            let introspectionJson = IO.readTextFile config.ResolutionFolder introspectionFile
-            let schema = <@@ Serialization.deserializeSchema introspectionJson @@>
-            generateStatic tname schema
-        generator.DefineStaticParameters(prm, genfn); generator
+            let schemapdef = ProvidedProperty("Schema", typeof<IntrospectionSchema>, (fun _ -> schema), isStatic = true)
+            let members : MemberInfo list = [ctxmdef; schemapdef]
+            tdef.AddMembers(members)
+            tdef)
+        generator
 
     do this.AddNamespace(ns, [context; provider])
 

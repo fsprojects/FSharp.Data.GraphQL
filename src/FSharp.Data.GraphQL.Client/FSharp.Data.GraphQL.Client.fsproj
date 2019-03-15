@@ -48,7 +48,6 @@
     <Compile Include="Schema.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="IO.fs" />
-    <Compile Include="Parser.fs" />
     <Compile Include="GraphQLClient.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.fs" />
