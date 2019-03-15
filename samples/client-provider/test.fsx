@@ -8,9 +8,9 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"introspection.json">
+type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let ctx = MyProvider.GetContext("http://localhost:8084")
+let ctx = MyProvider.GetContext()
 
 let res = 
     ctx.Query<"""query q {
@@ -31,5 +31,3 @@ let res =
         }
       }
     }""">()
-
-printfn "Output: %s" res
