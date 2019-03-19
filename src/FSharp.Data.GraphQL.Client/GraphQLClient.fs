@@ -5,18 +5,13 @@ namespace FSharp.Data.GraphQL.Client
 
 open System.Net
 open FSharp.Data
-open System
 
 type GraphQLRequest  =
     { ServerUrl : string
-      CustomHeaders: (string * string) seq option
+      CustomHeaders: (string * string) [] option
       OperationName : string option
       Query : string
-      Variables : (string * obj) seq option }
-
-type QueryDefinitions =
-    { Variables : (string * Type) []
-      OperationNames : string [] }
+      Variables : (string * obj) [] option }
 
 module GraphQLClient =
     let sendRequestAsync (request : GraphQLRequest) =

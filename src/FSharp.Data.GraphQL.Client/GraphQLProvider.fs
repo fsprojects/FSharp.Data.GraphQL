@@ -16,15 +16,12 @@ type GraphQLTypeProvider (config) as this =
 
     let provider = 
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
-        let prm = 
-            [ ProvidedStaticParameter("serverUrl", typeof<string>)
-              ProvidedStaticParameter("customHeaders", typeof<seq<string * string>>, Seq.empty<string * string>) ]
+        let prm = [ProvidedStaticParameter("serverUrl", typeof<string>)]
         generator.DefineStaticParameters(prm, fun tname args ->
             let serverUrl = args.[0] :?> string
-            let customHeaders = args.[1] :?> seq<string * string>
             let introspectionRequest =
                 { ServerUrl = serverUrl
-                  CustomHeaders = Some customHeaders
+                  CustomHeaders = None
                   OperationName = None
                   Query = Introspection.introspectionQuery
                   Variables = None }
@@ -32,7 +29,7 @@ type GraphQLTypeProvider (config) as this =
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             let schemaVal = Serialization.deserializeSchema introspectionJson
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
-            let ctxdef = ContextBase.MakeProvidedType(schemaVal, serverUrl, customHeaders)
+            let ctxdef = ContextBase.MakeProvidedType(schemaVal, serverUrl)
             let ctxmdef =
                 let prm = [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
                 let invoker (args : Expr list) =

@@ -1,6 +1,7 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
+open System.Security.Cryptography
 open FSharp.Core
 open FSharp.Data
 open FSharp.Data.GraphQL
@@ -14,6 +15,63 @@ open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open System.Reflection
 open System.Text
+open Microsoft.FSharp.Reflection
+open System.Collections
+
+module QuotationHelpers = 
+    let rec coerceValues fieldTypeLookup fields = 
+        let arrayExpr (arrayType : Type) (v : obj) =
+            let typ = arrayType.GetElementType()
+            let instance =
+                match v with
+                | :? IEnumerable as x -> Seq.cast<obj> x |> Array.ofSeq
+                | _ -> failwith "Unexpected array value."
+            let exprs = coerceValues (fun _ -> typ) instance
+            Expr.NewArray(typ, exprs)
+        Array.mapi (fun i v ->
+                let expr = 
+                    if v = null then simpleTypeExpr v
+                    else
+                        let tpy = v.GetType()
+                        if tpy.IsArray then arrayExpr tpy v
+                        elif FSharpType.IsUnion tpy then unionExpr v |> snd
+                        elif FSharpType.IsRecord tpy then recordExpr v |> snd
+                        else simpleTypeExpr v
+                Expr.Coerce(expr, fieldTypeLookup i)
+        ) fields |> List.ofArray
+    
+    and simpleTypeExpr instance = Expr.Value(instance)
+
+    and unionExpr instance = 
+        let caseInfo, fields = FSharpValue.GetUnionFields(instance, instance.GetType())    
+        let fieldInfo = caseInfo.GetFields()
+        let fieldTypeLookup indx = fieldInfo.[indx].PropertyType
+        caseInfo.DeclaringType, Expr.NewUnionCase(caseInfo, coerceValues fieldTypeLookup fields)
+
+    and recordExpr instance = 
+        let tpy = instance.GetType()
+        let fields = FSharpValue.GetRecordFields(instance)
+        let fieldInfo = FSharpType.GetRecordFields(tpy)
+        let fieldTypeLookup indx = fieldInfo.[indx].PropertyType
+        tpy, Expr.NewRecord(instance.GetType(), coerceValues fieldTypeLookup fields)
+
+    and arrayExpr (instance : 'a array) =
+        let typ = typeof<'a>
+        let arrayType = instance.GetType()
+        let exprs = coerceValues (fun _ -> typ) (instance |> Array.map box)
+        arrayType, Expr.NewArray(typ, exprs)
+
+    let createLetExpr varType instance body args = 
+        let var = Var("instance", varType)  
+        Expr.Let(var, instance, body args (Expr.Var(var)))
+
+    let quoteUnion instance = unionExpr instance ||> createLetExpr
+    let quoteRecord instance = recordExpr instance ||> createLetExpr
+    let quoteArray instance = arrayExpr instance ||> createLetExpr
+
+[<AutoOpen>]
+module internal ErrorHelper =
+    let fail : string -> 'T = fun msg -> failwith ("Failure deserializing query response. " + msg)
 
 type EnumBase (name : string, value : string) =
     member __.Name = name
@@ -48,12 +106,15 @@ type RecordBase (properties : (string * obj) list) =
     static member internal MakeProvidedType((name : string), properties : (string * Type) list) =
         let tdef = ProvidedTypeDefinition(name.FirstCharUpper(), Some typeof<RecordBase>, nonNullable = true, isSealed = true)
         let propertyMapper (pname : string, ptype : Type) : MemberInfo =
+            let pname = pname.FirstCharUpper()
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
                     let propdef = typeof<RecordBase>.GetProperty("Properties", BindingFlags.NonPublic ||| BindingFlags.Instance)
                     let props = propdef.GetValue(this) :?> (string * obj) list
-                    props |> List.find (fun (name, _) -> name = pname) |> snd @@>
-            upcast ProvidedProperty(pname.FirstCharUpper(), ptype, getterCode)
+                    match props |> List.tryFind (fun (name, _) -> name = pname) with
+                    | Some (_, value) -> value
+                    | None -> failwithf "Expected to find property \"%s\" under properties %A, but was not found." pname (List.map snd props) @@>
+            upcast ProvidedProperty(pname, ptype, getterCode)
         let pdefs = properties |> List.map propertyMapper
         tdef.AddMembers(pdefs)
         tdef
@@ -89,21 +150,127 @@ type RecordBase (properties : (string * obj) list) =
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
 
+module JsonValueHelper =
+    let getResponseFields (responseJson : JsonValue) =
+        match responseJson with
+        | JsonValue.Record fields -> fields
+        | _ -> fail (sprintf "Expected root type to be a Record type, but type is %A." responseJson)
+
+    let getResponseDataFields (responseJson : JsonValue) =
+        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "data") with
+        | Some (_, data) -> 
+            match data with
+            | JsonValue.Record fields -> fields
+            | _ -> fail (sprintf "Expected data field of root type to be a Record type, but type is %A." data)
+        | None -> fail "Expected root type to have a \"data\" field, but it was not found."
+
+    let getResponseCustomFields (responseJson : JsonValue) =
+        getResponseFields responseJson
+        |> Array.filter (fun (name, _) -> name <> "data")
+
+    let private removeTypeNameField (fields : (string * JsonValue) list) =
+        fields |> List.filter (fun (name, _) -> name <> "__typename")
+
+    let rec getFieldValue (schemaType : IntrospectionType) (fieldName : string, fieldValue : JsonValue) =
+        let rec helper (path : string list) (fieldValue : JsonValue) : obj =
+            match fieldValue with
+            | JsonValue.Array items -> box (items |> Array.map (helper path))
+            | JsonValue.Record props -> 
+                props
+                |> List.ofArray
+                |> removeTypeNameField
+                |> List.map ((fun (name, value) -> name.FirstCharUpper(), value) >> (fun (name, value) -> name, (helper (name::path) value)))
+                |> RecordBase
+                |> box
+            | JsonValue.Boolean b -> box b
+            | JsonValue.Float f -> box f
+            | JsonValue.Null -> null
+            | JsonValue.Number n -> box (float n)
+            | JsonValue.String s -> box s
+        fieldName, (helper [fieldName] fieldValue)
+
+    and getFieldValues (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
+        removeTypeNameField fields |> List.map ((fun (name, value) -> name.FirstCharUpper(), value) >> getFieldValue schemaType)
+
+type ProvidedTypeKind =
+    | EnumType of name : string
+    | OutputType of path : string list * name : string
+
+type OperationResultBase (responseJson : string) =
+    member __.ResponseJson = JsonValue.Parse responseJson
+
+    member this.DataFields = JsonValueHelper.getResponseDataFields this.ResponseJson |> List.ofArray
+    
+    member this.CustomFields = JsonValueHelper.getResponseCustomFields this.ResponseJson |> List.ofArray
+
+    static member internal MakeProvidedType(outputQueryType : ProvidedTypeDefinition, schemaQueryType : IntrospectionType) =
+        let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
+        let qpdef = 
+            let getterCode =
+                QuotationHelpers.quoteRecord schemaQueryType (fun (args : Expr list) schemaQueryType ->
+                    <@@ let this = %%args.[0] : OperationResultBase
+                        let fieldValues = JsonValueHelper.getFieldValues %%schemaQueryType this.DataFields
+                        RecordBase(fieldValues) @@>)
+            ProvidedProperty("Data", outputQueryType, getterCode)
+        tdef.AddMember(qpdef)
+        tdef
+
+type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option, operationName : string option) =
+    member __.ServerURl = serverUrl
+
+    member __.CustomHttpHeaders = customHttpHeaders
+
+    member __.OperationName = operationName
+
+    static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : Map<string, IntrospectionType>, outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
+        let hashString = 
+            let md5 = MD5.Create()
+            let bytes = md5.ComputeHash(requestHashCode.ToString() |> Encoding.UTF8.GetBytes)
+            let sb = StringBuilder()
+            for b in bytes do sb.Append(b.ToString("x2")) |> ignore
+            sb.ToString()
+        let className = sprintf "Operation_%s" hashString
+        let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
+        // We need to convert the operation name to a nullable string instead of an option here,
+        // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
+        let operationName = Option.toObj operationName
+        let outputQueryType =
+            match outputTypes.TryGetValue(OutputType ([], queryTypeName)) with
+            | (true, tdef) -> tdef
+            | _ -> fail (sprintf "Query type %s could not be found on the provided types. This could be a internal bug. Please report the author." queryTypeName)
+        let schemaQueryType =
+            match schemaTypes.TryGetValue(queryTypeName) with
+            | (true, def) -> def
+            | _ -> fail (sprintf "Query type %s could not be found on the schema types. This could be a internal bug. Please report the author." queryTypeName)
+        let rtdef = OperationResultBase.MakeProvidedType(outputQueryType, schemaQueryType)
+        // TODO : Parse query parameters in the method args
+        let invoker (args : Expr list) =
+            <@@ let request =
+                    { ServerUrl = serverUrl
+                      CustomHeaders = None
+                      OperationName = Option.ofObj operationName
+                      Query = query
+                      Variables = None }
+                let responseJson = GraphQLClient.sendRequest request
+                OperationResultBase(responseJson) @@>
+        let mdef = ProvidedMethod("Run", [], rtdef, invoker)
+        let members : MemberInfo list = [rtdef; mdef]
+        tdef.AddMembers(members)
+        tdef
+
 type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
-    static member private BuildOutputTypes(schema : IntrospectionSchema, operationName : string option, queryAst : Document, responseJson : string) =
-        let fail : string -> 'T = fun msg -> failwith ("Failure deserializing query response. " + msg)
-        let outputTypes = Dictionary<string list * string, ProvidedTypeDefinition>()
-        let scalarTypes =
-            [| "Int", typeof<int>
-               "Boolean", typeof<bool>
-               "Date", typeof<DateTime>
-               "Float", typeof<float>
-               "ID", typeof<string>
-               "String", typeof<string>
-               "URI", typeof<Uri> |]
-            |> Map.ofArray
+    static member private ScalarTypes =
+        [| "Int", typeof<int>
+           "Boolean", typeof<bool>
+           "Date", typeof<DateTime>
+           "Float", typeof<float>
+           "ID", typeof<string>
+           "String", typeof<string>
+           "URI", typeof<Uri> |]
+        |> Map.ofArray
+    static member private GetSchemaTypes (schema : IntrospectionSchema) =
         let isScalarType (name : string) =
-            scalarTypes |> Map.containsKey name
+            ContextBase.ScalarTypes |> Map.containsKey name
         let isIntrospectionType (name : string) =
             [| "__TypeKind"
                "__DirectiveLocation"
@@ -114,19 +281,22 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                "__Directive"
                "__Schema" |]
             |> Array.contains name
-        let schemaTypes =
-            schema.Types
-            |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
-            |> Array.map (fun t -> t.Name, t)
-            |> Map.ofArray
-        let enumTypes =
-            let createType (t : IntrospectionType) =
-                match t.EnumValues with
-                | Some enumValues -> EnumBase.MakeProvidedType(t.Name, enumValues |> Array.map (fun x -> x.Name))
-                | None -> fail (sprintf "Type %s is a enum type, but no enum values were found for this type." t.Name)
-            schemaTypes
-            |> Map.filter (fun _ t -> t.Kind = TypeKind.ENUM)
-            |> Map.map (fun _ t -> createType t)
+        schema.Types
+        |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
+        |> Array.map (fun t -> t.Name, t)
+        |> Map.ofArray
+    static member private BuildOutputTypes(schemaTypes : Map<string, IntrospectionType>, operationName : string option, queryAst : Document, responseJson : string) =
+        let responseJson = JsonValue.Parse responseJson
+        let providedTypes = Dictionary<ProvidedTypeKind, ProvidedTypeDefinition>()
+        let createEnumType (t : IntrospectionType) =
+            match t.EnumValues with
+            | Some enumValues -> 
+                let edef = EnumBase.MakeProvidedType(t.Name, enumValues |> Array.map (fun x -> x.Name))
+                providedTypes.Add(EnumType t.Name, edef)
+            | None -> fail (sprintf "Type %s is a enum type, but no enum values were found for this type." t.Name)
+        schemaTypes
+        |> Map.filter (fun _ t -> t.Kind = TypeKind.ENUM)
+        |> Map.iter (fun _ t -> createEnumType t)
         let astInfoMap = 
             match queryAst.GetInfoMap() |> Map.tryFind operationName with
             | Some info -> info
@@ -155,7 +325,6 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
             let typeFields = getAstInfo path |> fst
             fields |> Array.filter (fun (name, _) -> List.contains name typeFields || name = "__typename")
-        let responseJson = JsonValue.Parse responseJson
         let buildOutputTypes (fields : (string * JsonValue) []) =
             let getTypeName (fields : (string * JsonValue) []) =
                 fields
@@ -165,17 +334,19 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | JsonValue.String x -> x
                     | _ -> fail (sprintf "Expected \"__typename\" field to be a string field, but it was %A." value))
             let getScalarType (typeName : string) =
-                match scalarTypes |> Map.tryFind typeName with
+                match ContextBase.ScalarTypes |> Map.tryFind typeName with
                 | Some t -> t
                 | None -> fail (sprintf "Scalar type %s is not supported." typeName)
             let getEnumType (typeName : string) =
-                match enumTypes |> Map.tryFind typeName with
-                | Some t -> outputTypes.Add(([], typeName), t); t
-                | None -> fail (sprintf "Enum type %s was not found in the schema." typeName)
+                let key = EnumType typeName
+                if providedTypes.ContainsKey(key)
+                then providedTypes.[key]
+                else fail (sprintf "Enum type %s was not found in the schema." typeName)
             let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (interfaces : Type list) (fields : (string * JsonValue) []) =
                 let rec helper (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
-                    if outputTypes.ContainsKey(path, typeName)
-                    then outputTypes.[path, typeName]
+                    let key = OutputType (path, typeName)
+                    if providedTypes.ContainsKey(key)
+                    then providedTypes.[key]
                     else
                         let properties =
                             let fields =
@@ -195,7 +366,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             | TypeKind.INTERFACE | TypeKind.UNION -> InterfaceBase.MakeProvidedType(typeName, properties)
                             | _ -> fail (sprintf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name)
                         interfaces |> List.iter outputType.AddInterfaceImplementation
-                        outputTypes.Add((path, typeName), outputType)
+                        providedTypes.Add(key, outputType)
                         outputType
                 match typeName |> Option.orElse (getTypeName fields) with
                 | Some typeName ->
@@ -274,30 +445,20 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 |> Array.map ((fun (name, value) -> name, value, getFieldType name) >> getProperty)
                 |> List.ofArray
             getRecordOrInterfaceType [] None [] fields |> ignore
-        match responseJson with
-        | JsonValue.Record fields ->
-            let dataField = fields |> Array.tryFind (fun (name, _) -> name = "data")
-            match dataField with
-            | Some (_, data) ->
-                match data with
-                | JsonValue.Record fields -> buildOutputTypes fields
-                | _ -> fail (sprintf "Expected data field of root type to be a Record type, but type is %A." data)
-            | None -> fail "Expected root type to have a \"data\" field, but it was not found."
-        | _ -> fail (sprintf "Expected root type to be a Record type, but type is %A." responseJson)
-        outputTypes
+        JsonValueHelper.getResponseDataFields responseJson |> buildOutputTypes
+        providedTypes |> Seq.map (|KeyValue|) |> Map.ofSeq
 
     member __.ServerUrl = serverUrl
 
     member __.Schema = schema
 
-    static member internal MakeProvidedType(schema : IntrospectionSchema, serverUrl : string, customHeaders : seq<string * string>) =
+    static member internal MakeProvidedType(schema : IntrospectionSchema, serverUrl : string) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
         let mdef =
             let sprm = 
-                [ ProvidedStaticParameter("query", typeof<string>)
-                  ProvidedStaticParameter("operationName", typeof<string>, "")
-                  ProvidedStaticParameter("variables", typeof<seq<string * obj>>, Seq.empty<string * obj>) ]
-            let smdef = ProvidedMethod("Query", [], typeof<obj>)
+                [ ProvidedStaticParameter("queryString", typeof<string>)
+                  ProvidedStaticParameter("operationName", typeof<string>, "") ]
+            let smdef = ProvidedMethod("Query", [], typeof<OperationBase>)
             let genfn (mname : string) (args : obj []) =
                 let originalQuery = args.[0] :?> string
                 let queryAst = parse originalQuery
@@ -306,32 +467,33 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     match args.[1] :?> string with
                     | "" -> 
                         match queryAst.Definitions with
-                        | [] -> failwith "Error parsing query. No definition exists in the document."
+                        | [] -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
                         | _ -> queryAst.Definitions.Head.Name
                     | x -> Some x
-                let variables = 
-                    let vars = args.[2] :?> seq<string * obj>
-                    if Seq.length vars = 0 then None else Some vars
                 let request =
                     { ServerUrl = serverUrl
-                      CustomHeaders = Some customHeaders
+                      CustomHeaders = None
                       OperationName = operationName
                       Query = query
-                      Variables = variables }
-                // TODO: Confirm if this is the best query type name generation strategy
-                let className = sprintf "Query<%i>" (request.GetHashCode())
-                let qdef = ProvidedTypeDefinition(className, None)
-                let outputTypes =
-                    let responseJson = GraphQLClient.sendRequest request
-                    ContextBase.BuildOutputTypes(schema, operationName, queryAst, responseJson)
+                      Variables = None }
+                let responseJson = GraphQLClient.sendRequest request
+                let schemaTypes = ContextBase.GetSchemaTypes(schema)
+                let outputTypes = ContextBase.BuildOutputTypes(schemaTypes, operationName, queryAst, responseJson)
+                let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
+                let contextWrapper = generateWrapper "Types"
+                outputTypes
+                |> Seq.map (|KeyValue|)
+                |> Seq.choose (fun (kind, tdef) -> match kind with | EnumType _ -> Some tdef | _ -> None)
+                |> Seq.iter (contextWrapper.AddMember)
+                tdef.AddMember(contextWrapper)
                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-                let rootWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
+                let rootWrapper = generateWrapper "Types"
                 wrappersByPath.Add([], rootWrapper)
                 let rec getWrapper (path : string list) =
                     if wrappersByPath.ContainsKey path
                     then wrappersByPath.[path]
                     else
-                        let wrapper = ProvidedTypeDefinition(path.Head.FirstCharUpper(), None, isSealed = true)
+                        let wrapper = generateWrapper (path.Head.FirstCharUpper())
                         let upperWrapper =
                             let path = path.Tail
                             if wrappersByPath.ContainsKey(path)
@@ -345,29 +507,22 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     wrapper.AddMember(t)
                 outputTypes
                 |> Seq.map (|KeyValue|)
-                |> Seq.iter (fun ((path, _), t) -> includeType path t)
-                qdef.AddMember(rootWrapper)
+                |> Seq.choose (fun (kind, t) -> match kind with | OutputType (path, _) -> Some (path, t) | _ -> None)
+                |> Seq.iter (fun (path, t) -> includeType path t)
+                let queryTypeName =
+                    match schema.QueryType.Name with
+                    | Some name -> name
+                    | None -> fail "Query type does not have a name in the introspection."
+                let odef = OperationBase.MakeProvidedType(request.GetHashCode(), serverUrl, operationName, query, queryTypeName, schemaTypes, outputTypes)
+                odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
-                    <@@ let queryAst = parse query
-                        let operationName =
-                            match queryAst.Definitions with
-                            | [] -> failwith "Error parsing query. No definition exists in the document."
-                            | _ -> queryAst.Definitions.Head.Name
-                        let this = %%args.[0] : ContextBase
-                        let request =
-                            { ServerUrl = this.ServerUrl
-                              CustomHeaders = Option.ofObj %%args.[1]
-                              OperationName = Option.ofObj %%args.[2] |> Option.orElse operationName
-                              Query = query
-                              Variables = Option.ofObj %%args.[3] }
-                        let responseJson = GraphQLClient.sendRequest request
-                        obj() @@>
-                let prm = 
-                    [ ProvidedParameter("customHeaders", typeof<seq<string * string>>, optionalValue = None)
-                      ProvidedParameter("operationName", typeof<string>, optionalValue = None)
-                      ProvidedParameter("variables", typeof<seq<string * obj>>, optionalValue = None) ]
-                let mdef = ProvidedMethod(mname, prm, qdef, invoker)
-                let members : MemberInfo list = [qdef; mdef]
+                    let operationName = Option.toObj operationName
+                    <@@ let this = %%args.[0] : ContextBase
+                        let customHttpHeaders = (%%args.[1] : seq<string * string>) |> Option.ofObj
+                        OperationBase(this.ServerUrl, customHttpHeaders, Option.ofObj operationName) @@>
+                let prm = [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+                let mdef = ProvidedMethod(mname, prm, odef, invoker)
+                let members : MemberInfo list = [odef; mdef]
                 tdef.AddMembers(members)
                 mdef
             smdef.DefineStaticParameters(sprm, genfn)

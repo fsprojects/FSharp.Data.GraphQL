@@ -31,3 +31,17 @@ let res =
         }
       }
     }""">()
+  
+printfn "Operation name: %A" res.OperationName
+printfn "Headers: %A" res.CustomHttpHeaders
+printfn "Server: %s" res.ServerURl
+
+let result = res.Run()
+
+let data = result.Data
+
+printfn "Data: %A" data
+
+let hero = data.Hero.Value
+
+printfn "Hero name: %s" hero.Name.Value
