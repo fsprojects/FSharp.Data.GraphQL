@@ -196,24 +196,35 @@ module JsonValueHelper =
             let otype = typedefof<_ option>.MakeGenericType(itype)
             let some = FSharpType.GetUnionCases(otype) |> Seq.find (fun c -> c.Name = "Some")
             FSharpValue.MakeUnion(some, [|value|])
-        let rec helper (fieldType : IntrospectionTypeRef) (path : string list) (fieldValue : JsonValue) : obj =
+        let makeOptionArray (items : obj []) =
+            match items with
+            | [||] -> box [||]
+            | _ ->
+                let itype = items.[0].GetType()
+                if Array.forall (fun i -> isNull i || i.GetType() = itype) items
+                then
+                    let otype = typeof<obj option>
+                    let some = FSharpType.GetUnionCases(otype) |> Seq.find (fun c -> c.Name = "Some")
+                    let arr = Array.CreateInstance(otype, items.Length)
+                    items |> Array.iteri (fun i x -> arr.SetValue(FSharpValue.MakeUnion(some, [|x|]), i))
+                    box arr
+                else box items
+        let rec helper (useOption : bool) (fieldType : IntrospectionTypeRef) (fieldValue : JsonValue) : obj =
             let forceNullableIfNeeded value =
                 match fieldType.Kind with
                 | TypeKind.NON_NULL | TypeKind.LIST -> value
-                | _ -> makeSome value
+                | _ when useOption -> makeSome value
+                | _ -> value
             match fieldValue with
             | JsonValue.Array items ->
                 let itemType =
                     match fieldType.OfType with
                     | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
                     | _ -> failwithf "Expected field to be a list type, but it is %A." fieldType.OfType
-                let items = items |> Array.map (helper itemType path)
+                let items = items |> Array.map (helper false itemType)
                 match itemType.Kind with
                 | TypeKind.NON_NULL -> forceNullableIfNeeded items
-                | _ -> 
-                    let casted = Array.CreateInstance(typeof<obj option>, items.Length)
-                    items |> Array.iteri (fun i x -> casted.SetValue(x, i))
-                    forceNullableIfNeeded casted
+                | _ -> makeOptionArray items |> forceNullableIfNeeded
             | JsonValue.Record props -> 
                 let typeName =
                     match getTypeName props with
@@ -226,7 +237,7 @@ module JsonValueHelper =
                 let fields = getFields schemaType
                 let mapper (name : string, value : JsonValue) =
                     match fields.TryFind(name) with
-                    | Some fieldType -> name, (helper fieldType (name::path) value)
+                    | Some fieldType -> name, (helper true fieldType value)
                     | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
                 props
                 |> List.ofArray
@@ -236,10 +247,10 @@ module JsonValueHelper =
                 |> forceNullableIfNeeded
             | JsonValue.Boolean b -> forceNullableIfNeeded b
             | JsonValue.Float f -> forceNullableIfNeeded f
-            | JsonValue.Null -> box None
+            | JsonValue.Null -> if useOption then null else box None
             | JsonValue.Number n -> forceNullableIfNeeded (float n)
             | JsonValue.String s -> forceNullableIfNeeded s
-        fieldName, (helper fieldType [fieldName] fieldValue)
+        fieldName, (helper true fieldType fieldValue)
 
     let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
         let mapper (name : string, value : JsonValue) =
@@ -285,20 +296,14 @@ type OperationResultBase (responseJson : string) =
         tdef
 
 type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option, operationName : string option) =
-    member __.ServerURl = serverUrl
+    member __.ServerUrl = serverUrl
 
     member __.CustomHttpHeaders = customHttpHeaders
 
     member __.OperationName = operationName
 
     static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
-        let hashString = 
-            let md5 = MD5.Create()
-            let bytes = md5.ComputeHash(requestHashCode.ToString() |> Encoding.UTF8.GetBytes)
-            let sb = StringBuilder()
-            for b in bytes do sb.Append(b.ToString("x2")) |> ignore
-            sb.ToString()
-        let className = sprintf "Operation_%s" hashString
+        let className = sprintf "Operation_%s" (requestHashCode.ToString("x2"))
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         // We need to convert the operation name to a nullable string instead of an option here,
         // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
@@ -478,7 +483,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         match tref.Name with
                         | Some typeName -> (name, getEnumType typeName) |> makeOption |> makeArray
                         | None -> failwith "Expected enum type to have a name, but it does not have one."
-                    | kind -> failwithf "Unsupported type kind \"%O\"." kind
+                    | kind -> failwithf "Unsupported type kind \"%A\"." kind
                 let rec getProperty (name : string, value : JsonValue, tref : IntrospectionTypeRef) =
                     match tref.Kind with
                     | TypeKind.NON_NULL ->
@@ -501,7 +506,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         match tref.Name with
                         | Some typeName -> (name, getEnumType typeName) |> makeOption
                         | None -> failwith "Expected enum type to have a name, but it does not have one."
-                    | kind -> failwithf "Unsupported type kind \"%O\"." kind
+                    | kind -> failwithf "Unsupported type kind \"%A\"." kind
                 fields
                 |> Array.filter (fun (name, _) -> name <> "__typename")
                 |> Array.map ((fun (name, value) -> name, value, getFieldType name) >> getProperty)

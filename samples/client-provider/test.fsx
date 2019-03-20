@@ -46,4 +46,8 @@ let hero = data.Hero.Value
 
 printfn "Hero name: %s" hero.Name.Value
 
-printfn "Hero friends : %A" hero.Friends
+let friends = hero.Friends |> Array.choose id
+
+printfn "Hero friends : %A" friends
+
+printfn "Hero friends type: %A" (friends.GetType())
