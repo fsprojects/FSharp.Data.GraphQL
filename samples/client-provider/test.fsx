@@ -45,3 +45,5 @@ printfn "Data: %A" data
 let hero = data.Hero.Value
 
 printfn "Hero name: %s" hero.Name.Value
+
+printfn "Hero friends : %A" hero.Friends

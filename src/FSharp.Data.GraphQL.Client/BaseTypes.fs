@@ -28,12 +28,19 @@ module QuotationHelpers =
                 | _ -> failwith "Unexpected array value."
             let exprs = coerceValues (fun _ -> typ) instance
             Expr.NewArray(typ, exprs)
+        let tupleExpr (tupleType : Type) (v : obj) =
+            let typ = FSharpType.GetTupleElements tupleType |> Array.mapi (fun i t -> i, t) |> Map.ofArray
+            let fieldTypeLookup i = typ.[i]
+            let fields = FSharpValue.GetTupleFields v
+            let exprs = coerceValues fieldTypeLookup fields
+            Expr.NewTuple(exprs)
         Array.mapi (fun i v ->
                 let expr = 
                     if v = null then simpleTypeExpr v
                     else
                         let tpy = v.GetType()
                         if tpy.IsArray then arrayExpr tpy v
+                        elif FSharpType.IsTuple tpy then tupleExpr tpy v
                         elif FSharpType.IsUnion tpy then unionExpr v |> snd
                         elif FSharpType.IsRecord tpy then recordExpr v |> snd
                         else simpleTypeExpr v
@@ -68,10 +75,6 @@ module QuotationHelpers =
     let quoteUnion instance = unionExpr instance ||> createLetExpr
     let quoteRecord instance = recordExpr instance ||> createLetExpr
     let quoteArray instance = arrayExpr instance ||> createLetExpr
-
-[<AutoOpen>]
-module internal ErrorHelper =
-    let fail : string -> 'T = fun msg -> failwith ("Failure deserializing query response. " + msg)
 
 type EnumBase (name : string, value : string) =
     member __.Name = name
@@ -132,8 +135,8 @@ type RecordBase (properties : (string * obj) list) =
         let rec printProperties (properties : (string * obj) list) =
             match properties with
             | [] -> ()
-            | [name, value] -> sb.Append(sprintf "%s = %O;" name value) |> ignore
-            | (name, value) :: tail -> sb.AppendLine(sprintf "%s = %O;" name value) |> ignore; printProperties tail
+            | [name, value] -> sb.Append(sprintf "%s = %A;" name value) |> ignore
+            | (name, value) :: tail -> sb.AppendLine(sprintf "%s = %A;" name value) |> ignore; printProperties tail
         printProperties x.Properties
         sb.Append("}") |> ignore
         sb.ToString()
@@ -154,15 +157,15 @@ module JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
         match responseJson with
         | JsonValue.Record fields -> fields
-        | _ -> fail (sprintf "Expected root type to be a Record type, but type is %A." responseJson)
+        | _ -> failwithf "Expected root type to be a Record type, but type is %A." responseJson
 
     let getResponseDataFields (responseJson : JsonValue) =
         match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "data") with
         | Some (_, data) -> 
             match data with
             | JsonValue.Record fields -> fields
-            | _ -> fail (sprintf "Expected data field of root type to be a Record type, but type is %A." data)
-        | None -> fail "Expected root type to have a \"data\" field, but it was not found."
+            | _ -> failwithf "Expected data field of root type to be a Record type, but type is %A." data
+        | None -> failwith "Expected root type to have a \"data\" field, but it was not found."
 
     let getResponseCustomFields (responseJson : JsonValue) =
         getResponseFields responseJson
@@ -171,30 +174,90 @@ module JsonValueHelper =
     let private removeTypeNameField (fields : (string * JsonValue) list) =
         fields |> List.filter (fun (name, _) -> name <> "__typename")
 
-    let rec getFieldValue (schemaType : IntrospectionType) (fieldName : string, fieldValue : JsonValue) =
-        let rec helper (path : string list) (fieldValue : JsonValue) : obj =
+    let firstUpper (name : string, value) =
+        name.FirstCharUpper(), value
+
+    let getFields (schemaType : IntrospectionType) =
+        match schemaType.Fields with
+        | None -> Map.empty
+        | Some fields -> fields |> Array.map (fun field -> field.Name.FirstCharUpper(), field.Type) |> Map.ofSeq
+
+    let getTypeName (fields : (string * JsonValue) seq) =
+        fields
+        |> Seq.tryFind (fun (name, _) -> name = "__typename")
+        |> Option.map (fun (_, value) ->
+            match value with
+            | JsonValue.String x -> x
+            | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
+
+    let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (fieldName : string, fieldValue : JsonValue) =
+        let makeSome (value : obj) =
+            let itype = value.GetType()
+            let otype = typedefof<_ option>.MakeGenericType(itype)
+            let some = FSharpType.GetUnionCases(otype) |> Seq.find (fun c -> c.Name = "Some")
+            FSharpValue.MakeUnion(some, [|value|])
+        let rec helper (fieldType : IntrospectionTypeRef) (path : string list) (fieldValue : JsonValue) : obj =
+            let forceNullableIfNeeded value =
+                match fieldType.Kind with
+                | TypeKind.NON_NULL | TypeKind.LIST -> value
+                | _ -> makeSome value
             match fieldValue with
-            | JsonValue.Array items -> box (items |> Array.map (helper path))
+            | JsonValue.Array items ->
+                let itemType =
+                    match fieldType.OfType with
+                    | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
+                    | _ -> failwithf "Expected field to be a list type, but it is %A." fieldType.OfType
+                let items = items |> Array.map (helper itemType path)
+                match itemType.Kind with
+                | TypeKind.NON_NULL -> forceNullableIfNeeded items
+                | _ -> 
+                    let casted = Array.CreateInstance(typeof<obj option>, items.Length)
+                    items |> Array.iteri (fun i x -> casted.SetValue(x, i))
+                    forceNullableIfNeeded casted
             | JsonValue.Record props -> 
+                let typeName =
+                    match getTypeName props with
+                    | Some typeName -> typeName
+                    | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                let schemaType =
+                    match schemaTypes.TryFind(typeName) with
+                    | Some tref -> tref
+                    | None -> failwithf "Expected to find a type \"%s\" in the schema types, but it was not found." typeName
+                let fields = getFields schemaType
+                let mapper (name : string, value : JsonValue) =
+                    match fields.TryFind(name) with
+                    | Some fieldType -> name, (helper fieldType (name::path) value)
+                    | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
                 props
                 |> List.ofArray
                 |> removeTypeNameField
-                |> List.map ((fun (name, value) -> name.FirstCharUpper(), value) >> (fun (name, value) -> name, (helper (name::path) value)))
+                |> List.map (firstUpper >> mapper)
                 |> RecordBase
-                |> box
-            | JsonValue.Boolean b -> box b
-            | JsonValue.Float f -> box f
-            | JsonValue.Null -> null
-            | JsonValue.Number n -> box (float n)
-            | JsonValue.String s -> box s
-        fieldName, (helper [fieldName] fieldValue)
+                |> forceNullableIfNeeded
+            | JsonValue.Boolean b -> forceNullableIfNeeded b
+            | JsonValue.Float f -> forceNullableIfNeeded f
+            | JsonValue.Null -> box None
+            | JsonValue.Number n -> forceNullableIfNeeded (float n)
+            | JsonValue.String s -> forceNullableIfNeeded s
+        fieldName, (helper fieldType [fieldName] fieldValue)
 
-    and getFieldValues (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
-        removeTypeNameField fields |> List.map ((fun (name, value) -> name.FirstCharUpper(), value) >> getFieldValue schemaType)
+    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
+        let mapper (name : string, value : JsonValue) =
+            let fields = getFields schemaType
+            match fields.TryFind(name) with
+            | Some fieldType -> getFieldValue schemaTypes fieldType (name, value)
+            | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
+        removeTypeNameField fields
+        |> List.map (firstUpper >> mapper)
 
 type ProvidedTypeKind =
     | EnumType of name : string
     | OutputType of path : string list * name : string
+
+type OperationResultProvidingInformation =
+    { SchemaTypeNames : string []
+      SchemaTypes : IntrospectionType []
+      QueryTypeName : string }
 
 type OperationResultBase (responseJson : string) =
     member __.ResponseJson = JsonValue.Parse responseJson
@@ -203,13 +266,19 @@ type OperationResultBase (responseJson : string) =
     
     member this.CustomFields = JsonValueHelper.getResponseCustomFields this.ResponseJson |> List.ofArray
 
-    static member internal MakeProvidedType(outputQueryType : ProvidedTypeDefinition, schemaQueryType : IntrospectionType) =
+    static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, outputQueryType : ProvidedTypeDefinition) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
         let qpdef = 
             let getterCode =
-                QuotationHelpers.quoteRecord schemaQueryType (fun (args : Expr list) schemaQueryType ->
+                QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) var ->
                     <@@ let this = %%args.[0] : OperationResultBase
-                        let fieldValues = JsonValueHelper.getFieldValues %%schemaQueryType this.DataFields
+                        let info = %%var : OperationResultProvidingInformation
+                        let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
+                        let queryType =
+                            match schemaTypes.TryFind(info.QueryTypeName) with
+                            | Some def -> def
+                            | _ -> failwithf "Query type %s could not be found on the schema types. This could be a internal bug. Please report the author." info.QueryTypeName
+                        let fieldValues = JsonValueHelper.getFieldValues schemaTypes queryType this.DataFields
                         RecordBase(fieldValues) @@>)
             ProvidedProperty("Data", outputQueryType, getterCode)
         tdef.AddMember(qpdef)
@@ -222,7 +291,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
 
     member __.OperationName = operationName
 
-    static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : Map<string, IntrospectionType>, outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
+    static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
         let hashString = 
             let md5 = MD5.Create()
             let bytes = md5.ComputeHash(requestHashCode.ToString() |> Encoding.UTF8.GetBytes)
@@ -235,14 +304,14 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
         // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
         let operationName = Option.toObj operationName
         let outputQueryType =
-            match outputTypes.TryGetValue(OutputType ([], queryTypeName)) with
-            | (true, tdef) -> tdef
-            | _ -> fail (sprintf "Query type %s could not be found on the provided types. This could be a internal bug. Please report the author." queryTypeName)
-        let schemaQueryType =
-            match schemaTypes.TryGetValue(queryTypeName) with
-            | (true, def) -> def
-            | _ -> fail (sprintf "Query type %s could not be found on the schema types. This could be a internal bug. Please report the author." queryTypeName)
-        let rtdef = OperationResultBase.MakeProvidedType(outputQueryType, schemaQueryType)
+            match outputTypes.TryFind(OutputType ([], queryTypeName)) with
+            | Some tdef -> tdef
+            | _ -> failwithf "Query type %s could not be found on the provided types. This could be a internal bug. Please report the author." queryTypeName
+        let info = 
+            { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
+              SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
+              QueryTypeName = queryTypeName }
+        let rtdef = OperationResultBase.MakeProvidedType(info, outputQueryType)
         // TODO : Parse query parameters in the method args
         let invoker (args : Expr list) =
             <@@ let request =
@@ -284,16 +353,16 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
         schema.Types
         |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
         |> Array.map (fun t -> t.Name, t)
-        |> Map.ofArray
-    static member private BuildOutputTypes(schemaTypes : Map<string, IntrospectionType>, operationName : string option, queryAst : Document, responseJson : string) =
+    static member private BuildOutputTypes(schemaTypes : (string * IntrospectionType) [], operationName : string option, queryAst : Document, responseJson : string) =
         let responseJson = JsonValue.Parse responseJson
+        let schemaTypes = Map.ofArray schemaTypes
         let providedTypes = Dictionary<ProvidedTypeKind, ProvidedTypeDefinition>()
         let createEnumType (t : IntrospectionType) =
             match t.EnumValues with
             | Some enumValues -> 
                 let edef = EnumBase.MakeProvidedType(t.Name, enumValues |> Array.map (fun x -> x.Name))
                 providedTypes.Add(EnumType t.Name, edef)
-            | None -> fail (sprintf "Type %s is a enum type, but no enum values were found for this type." t.Name)
+            | None -> failwithf "Type %s is a enum type, but no enum values were found for this type." t.Name
         schemaTypes
         |> Map.filter (fun _ t -> t.Kind = TypeKind.ENUM)
         |> Map.iter (fun _ t -> createEnumType t)
@@ -302,8 +371,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
             | Some info -> info
             | None ->
                 match operationName with
-                | Some name -> fail (sprintf "Operation \"%s\" was not found in query document." name)
-                | None -> fail "No unamed operation was found in query document."
+                | Some name -> failwithf "Operation \"%s\" was not found in query document." name
+                | None -> failwith "No unamed operation was found in query document."
         let getAstInfo (path : string list) =
             match astInfoMap |> Map.tryFind path with
             | Some ast -> 
@@ -317,31 +386,24 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     |> List.map (fun (key, items) -> key, (items |> List.map snd |> List.rev))
                     |> Map.ofList
                 typeFields, fragmentFields
-            | None -> fail (sprintf "Property \"%s\" is a union or interface type, but no inheritance information could be determined from the input query." path.Head)
+            | None -> failwithf "Property \"%s\" is a union or interface type, but no inheritance information could be determined from the input query." path.Head
         let getFragmentFields (typeName : string) (path : string list) (fields : (string * JsonValue) []) =
                 match getAstInfo path |> snd |> Map.tryFind typeName with
                 | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
-                | None -> fail (sprintf "Property \%s\" is a union or interface type, but type %s does not inherit it." path.Head typeName)
+                | None -> failwithf "Property \%s\" is a union or interface type, but type %s does not inherit it." path.Head typeName
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
             let typeFields = getAstInfo path |> fst
             fields |> Array.filter (fun (name, _) -> List.contains name typeFields || name = "__typename")
         let buildOutputTypes (fields : (string * JsonValue) []) =
-            let getTypeName (fields : (string * JsonValue) []) =
-                fields
-                |> Array.tryFind (fun (name, _) -> name = "__typename")
-                |> Option.map (fun (_, value) ->
-                    match value with
-                    | JsonValue.String x -> x
-                    | _ -> fail (sprintf "Expected \"__typename\" field to be a string field, but it was %A." value))
             let getScalarType (typeName : string) =
                 match ContextBase.ScalarTypes |> Map.tryFind typeName with
                 | Some t -> t
-                | None -> fail (sprintf "Scalar type %s is not supported." typeName)
+                | None -> failwithf "Scalar type %s is not supported." typeName
             let getEnumType (typeName : string) =
                 let key = EnumType typeName
                 if providedTypes.ContainsKey(key)
                 then providedTypes.[key]
-                else fail (sprintf "Enum type %s was not found in the schema." typeName)
+                else failwithf "Enum type %s was not found in the schema." typeName
             let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (interfaces : Type list) (fields : (string * JsonValue) []) =
                 let rec helper (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                     let key = OutputType (path, typeName)
@@ -356,7 +418,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                                     then getFragmentFields typeName path fields
                                     else getTypeFields path fields
                                 | TypeKind.INTERFACE | TypeKind.UNION -> getTypeFields path fields
-                                | _ -> fail (sprintf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name)
+                                | _ -> failwithf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name
                             match fields with
                             | [||] -> []
                             | _ -> getProperties path fields schemaType
@@ -364,40 +426,40 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             match schemaType.Kind with
                             | TypeKind.OBJECT -> RecordBase.MakeProvidedType(typeName, properties)
                             | TypeKind.INTERFACE | TypeKind.UNION -> InterfaceBase.MakeProvidedType(typeName, properties)
-                            | _ -> fail (sprintf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name)
+                            | _ -> failwithf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name
                         interfaces |> List.iter outputType.AddInterfaceImplementation
                         providedTypes.Add(key, outputType)
                         outputType
-                match typeName |> Option.orElse (getTypeName fields) with
+                match typeName |> Option.orElse (JsonValueHelper.getTypeName fields) with
                 | Some typeName ->
                     match schemaTypes |> Map.tryFind typeName with
                     | Some schemaType -> helper path typeName fields schemaType
-                    | None -> fail (sprintf "Expected to find a type \"%s\" on schema, but it was not found." typeName)
-                | None -> fail "Expected type to have a \"__typename\" field, but it was not found."
+                    | None -> failwithf "Expected to find a type \"%s\" on schema, but it was not found." typeName
+                | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
             and getProperties (path : string list) (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                 let getFieldType (name : string) =
                     match schemaType.Fields with
                     | Some fields ->
                         match fields |> Array.tryFind (fun f -> f.Name = name) with
                         | Some field -> field.Type
-                        | None -> fail (sprintf "Expected type \"%s\" to have a field \"%s\", but it was not found in schema." schemaType.Name name)
-                    | None -> fail (sprintf "Expected type \"%s\" to have fields, but it does not have any field." schemaType.Name)
+                        | None -> failwithf "Expected type \"%s\" to have a field \"%s\", but it was not found in schema." schemaType.Name name
+                    | None -> failwithf "Expected type \"%s\" to have fields, but it does not have any field." schemaType.Name
                 let makeOption (name : string, t : Type) = name, typedefof<_ option>.MakeGenericType(t)
                 let makeArray (name : string, t : Type) = name, t.MakeArrayType()
                 let unwrapOption (name: string, t : Type) = 
                     if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
                     then name, t.GetGenericArguments().[0]
-                    else fail (sprintf "Expected native type of property \"%s\" to be an option type, but it is %s." name t.Name)
+                    else failwithf "Expected native type of property \"%s\" to be an option type, but it is %s." name t.Name
                 let unwrapOptionArray (name : string, t : Type) =
                     if t.IsArray
                     then (name, t.GetElementType()) |> unwrapOption |> makeArray
-                    else fail (sprintf "Expected type of property \"%s\" to be an array, but it is %s" name t.Name)
+                    else failwithf "Expected type of property \"%s\" to be an array, but it is %s" name t.Name
                 let rec getListProperty (name : string, items : JsonValue [], tref : IntrospectionTypeRef) =
                     match tref.Kind with
                     | TypeKind.NON_NULL ->
                         match tref.OfType with
                         | Some tref when tref.Kind <> TypeKind.NON_NULL -> getListProperty (name, items, tref) |> unwrapOptionArray
-                        | _ -> fail (sprintf "Property \"%s\" is a list of a non-null type, but it does not have an underlying type, or its underlying type is no supported." name)
+                        | _ -> failwithf "Property \"%s\" is a list of a non-null type, but it does not have an underlying type, or its underlying type is no supported." name
                     | TypeKind.UNION | TypeKind.INTERFACE ->
                         if tref.Name.IsSome
                         then
@@ -405,41 +467,41 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             let btype = getRecordOrInterfaceType path tref.Name [] fields
                             let itemMapper = function
                                 | JsonValue.Record fields ->
-                                    match getTypeName fields with
+                                    match JsonValueHelper.getTypeName fields with
                                     | Some typeName -> getRecordOrInterfaceType path (Some typeName) [btype] fields |> ignore
-                                    | None -> fail "Expected type to have a \"__typename\" field, but it was not found."
-                                | other -> fail (sprintf "Expected property \"%s\" to be a Record type, but it is %A." name other)
+                                    | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                                | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
                             items |> Array.iter itemMapper
                             (name, btype) |> makeOption |> makeArray
-                        else fail (sprintf "Property \"%s\" is an union or interface type, but it does not have a type name, or its base type does not have a name." name)
+                        else failwithf "Property \"%s\" is an union or interface type, but it does not have a type name, or its base type does not have a name." name
                     | TypeKind.ENUM ->
                         match tref.Name with
                         | Some typeName -> (name, getEnumType typeName) |> makeOption |> makeArray
-                        | None -> fail "Expected enum type to have a name, but it does not have one."
-                    | kind -> fail (sprintf "Unsupported type kind \"%O\"." kind)
+                        | None -> failwith "Expected enum type to have a name, but it does not have one."
+                    | kind -> failwithf "Unsupported type kind \"%O\"." kind
                 let rec getProperty (name : string, value : JsonValue, tref : IntrospectionTypeRef) =
                     match tref.Kind with
                     | TypeKind.NON_NULL ->
                         match tref.OfType with
                         | Some tref when tref.Kind <> TypeKind.NON_NULL -> getProperty (name, value, tref) |> unwrapOption
-                        | _ -> fail (sprintf "Property \"%s\" is a non-null type, but it does not have an underlying type, or its underlying type is no supported." name)
+                        | _ -> failwithf "Property \"%s\" is a non-null type, but it does not have an underlying type, or its underlying type is no supported." name
                     | TypeKind.LIST ->
                         match tref.OfType, value with
                         | Some tref, JsonValue.Array items -> getListProperty (name, items, tref) |> makeOption
-                        | _ -> fail (sprintf "Property \"%s\" is a list type, but it does not have an underlying type, or its combination of type and the response value is not supported." name)
+                        | _ -> failwithf "Property \"%s\" is a list type, but it does not have an underlying type, or its combination of type and the response value is not supported." name
                     | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
                         match value with
                         | JsonValue.Record fields -> (name, getRecordOrInterfaceType (name :: path) None [] fields) |> makeOption
-                        | _ -> fail (sprintf "Expected property \"%s\" to be a Record type, but it is %A." name value)
+                        | _ -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name value
                     | TypeKind.SCALAR -> 
                         match tref.Name with
                         | Some typeName -> (name, getScalarType typeName) |> makeOption
-                        | None -> fail "Expected scalar type to have a name, but it does not have one."
+                        | None -> failwith "Expected scalar type to have a name, but it does not have one."
                     | TypeKind.ENUM ->
                         match tref.Name with
                         | Some typeName -> (name, getEnumType typeName) |> makeOption
-                        | None -> fail "Expected enum type to have a name, but it does not have one."
-                    | kind -> fail (sprintf "Unsupported type kind \"%O\"." kind)
+                        | None -> failwith "Expected enum type to have a name, but it does not have one."
+                    | kind -> failwithf "Unsupported type kind \"%O\"." kind
                 fields
                 |> Array.filter (fun (name, _) -> name <> "__typename")
                 |> Array.map ((fun (name, value) -> name, value, getFieldType name) >> getProperty)
@@ -512,7 +574,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 let queryTypeName =
                     match schema.QueryType.Name with
                     | Some name -> name
-                    | None -> fail "Query type does not have a name in the introspection."
+                    | None -> failwith "Query type does not have a name in the introspection."
                 let odef = OperationBase.MakeProvidedType(request.GetHashCode(), serverUrl, operationName, query, queryTypeName, schemaTypes, outputTypes)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
