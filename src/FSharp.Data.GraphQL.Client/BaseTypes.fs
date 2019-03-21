@@ -459,7 +459,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
         //    | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
         //    | None -> [||]
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
-            let typeFields = getAstInfo path |> fst
+            let astInfo = getAstInfo path
+            let typeFields = fst astInfo
             fields |> Array.filter (fun (name, _) -> List.contains name typeFields || name = "__typename")
         let buildOutputTypes (fields : (string * JsonValue) []) =
             let getScalarType (typeName : string) =
@@ -472,7 +473,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 then providedTypes.[key]
                 else failwithf "Enum type %s was not found in the schema." typeName
             let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (baseType : Type option) (fields : (string * JsonValue) []) =
-                let rec helper (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
+                let helper (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                     let key = OutputType (path, typeName)
                     if providedTypes.ContainsKey(key)
                     then providedTypes.[key]
@@ -518,6 +519,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     then (name, t.GetElementType()) |> unwrapOption |> makeArray
                     else failwithf "Expected type of property \"%s\" to be an array, but it is %s" name t.Name
                 let rec getListProperty (name : string, items : JsonValue [], tref : IntrospectionTypeRef) =
+                    let path = name :: path
                     match tref.Kind with
                     | TypeKind.NON_NULL ->
                         match tref.OfType with
@@ -526,17 +528,21 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | TypeKind.UNION | TypeKind.INTERFACE ->
                         if tref.Name.IsSome
                         then
-                            let path = name :: path
-                            let btype : Type = upcast (getRecordOrInterfaceType path tref.Name None fields)
-                            let itemMapper = function
-                                | JsonValue.Record fields ->
-                                    match JsonValueHelper.getTypeName fields with
-                                    | Some typeName -> getRecordOrInterfaceType path (Some typeName) (Some btype) fields |> ignore
-                                    | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                            let itemTypeMapper = function
+                                | JsonValue.Record fields -> getRecordOrInterfaceType path tref.Name None fields
                                 | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
-                            items |> Array.iter itemMapper
-                            (name, btype) |> makeOption |> makeArray
+                            let baseType : Type = upcast (Array.head items |> itemTypeMapper)
+                            (name, baseType) |> makeOption |> makeArray
                         else failwithf "Property \"%s\" is an union or interface type, but it does not have a type name, or its base type does not have a name." name
+                    | TypeKind.OBJECT ->
+                        let itemTypeMapper = function
+                            | JsonValue.Record fields ->
+                                match JsonValueHelper.getTypeName fields with
+                                | Some typeName -> getRecordOrInterfaceType path (Some typeName) None fields
+                                | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                            | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
+                        let itemType : Type = upcast (Array.head items |> itemTypeMapper)
+                        (name, itemType) |> makeOption |> makeArray
                     | TypeKind.ENUM ->
                         match tref.Name with
                         | Some typeName -> (name, getEnumType typeName) |> makeOption |> makeArray

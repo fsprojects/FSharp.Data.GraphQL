@@ -24,4 +24,6 @@ let result = res.Run()
 
 let things = result.Data.Things
 
-printfn "%A" things
+printfn "%A" (things |> Array.map (fun thing -> thing.Id, thing.Format))
+
+printfn "%A" (things.[0].GetType())
