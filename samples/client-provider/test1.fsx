@@ -33,20 +33,32 @@ let res =
   
 printfn "Operation name: %A" res.OperationName
 printfn "Headers: %A" res.CustomHttpHeaders
-printfn "Server: %s" res.ServerUrl
+printfn "Server: %s\n\n" res.ServerUrl
 
 let result = res.Run()
 
 let data = result.Data
 
-printfn "Data: %A" data
+//printfn "Data: %A" data
 
 let hero = data.Hero.Value
 
-printfn "Hero name: %s" hero.Name.Value
+//printfn "Hero name: %s" hero.Name.Value
 
 let friends = hero.Friends |> Array.choose id
 
-printfn "Hero friends : %A" friends
+//let thisWillGetAnError = friends |> Array.map (fun x -> x.AsDroid())
 
-printfn "Hero friends type: %A" (friends.GetType())
+let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman())
+
+let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid())
+
+let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 else 0) |> Array.reduce (+)
+
+let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 else 0) |> Array.reduce (+)
+
+printfn "Hero friends (%i): %A\n\n" friends.Length friends
+
+printfn "Hero human friends (%i): %A\n\n" humanFriendsCount humanFriends
+
+printfn "Hero droid friends (%i): %A\n\n" droidFriendsCount droidFriends

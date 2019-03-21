@@ -100,12 +100,15 @@ type EnumBase (name : string, value : string) =
 
     override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Value.GetHashCode()
 
-type RecordBase (properties : (string * obj) list) =
+type RecordBase (name : string, properties : (string * obj) list) =
+    member internal __.Name = name
+
     member internal __.Properties = properties
 
     static member internal MakeProvidedType(name : string, properties : (string * Type) list, baseType : Type option) =
         let baseType = Option.defaultValue typeof<RecordBase> baseType
-        let tdef = ProvidedTypeDefinition(name.FirstCharUpper(), Some baseType, nonNullable = true, isSealed = true)
+        let name = name.FirstCharUpper()
+        let tdef = ProvidedTypeDefinition(name, Some baseType, nonNullable = true, isSealed = true)
         let propertyMapper (pname : string, ptype : Type) : MemberInfo =
             let pname = pname.FirstCharUpper()
             let getterCode (args : Expr list) =
@@ -114,10 +117,38 @@ type RecordBase (properties : (string * obj) list) =
                     let props = propdef.GetValue(this) :?> (string * obj) list
                     match props |> List.tryFind (fun (name, _) -> name = pname) with
                     | Some (_, value) -> value
-                    | None -> failwithf "Expected to find property \"%s\" under properties %A, but was not found." pname (List.map snd props) @@>
+                    | None -> failwithf "Expected to find property \"%s\" under properties %A, but the property was not found." pname (List.map snd props) @@>
             upcast ProvidedProperty(pname, ptype, getterCode)
         let pdefs = properties |> List.map propertyMapper
         tdef.AddMembers(pdefs)
+        match baseType with
+        | :? ProvidedTypeDefinition as bdef ->
+            let asType = 
+                let invoker (args : Expr list) =
+                    <@@ let this = %%args.[0] : RecordBase
+                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let baseName = propdef.GetValue(this) :?> string
+                        if baseName = name then this
+                        else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s()\" before calling \"As%s()\"." name baseName name name @@>
+                ProvidedMethod("As" + name, [], tdef, invoker)
+            let tryAsType =
+                let invoker (args : Expr list) =
+                    <@@ let this = %%args.[0] : RecordBase
+                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let baseName = propdef.GetValue(this) :?> string
+                        if baseName = name then Some this
+                        else None @@>
+                ProvidedMethod("TryAs" + name, [], typedefof<_ option>.MakeGenericType(tdef), invoker)
+            let isType =
+                let invoker (args : Expr list) =
+                    <@@ let this = %%args.[0] : RecordBase
+                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let baseName = propdef.GetValue(this) :?> string
+                        baseName = name @@>
+                ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
+            let members : MemberInfo list = [asType; tryAsType; isType]
+            bdef.AddMembers(members)
+        | _ -> ()
         tdef
 
     static member internal Constructor = typeof<RecordBase>.GetConstructors().[0]
@@ -294,12 +325,12 @@ module JsonValueHelper =
                     match fields.TryFind(name) with
                     | Some fieldType -> name, (helper true fieldType value)
                     | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
-                props
-                |> List.ofArray
-                |> removeTypeNameField
-                |> List.map (firstUpper >> mapper)
-                |> RecordBase
-                |> makeSomeIfNeeded
+                let props =
+                    props
+                    |> List.ofArray
+                    |> removeTypeNameField
+                    |> List.map (firstUpper >> mapper)
+                RecordBase(typeName, props) |> makeSomeIfNeeded
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
             | JsonValue.Null ->
@@ -369,7 +400,7 @@ type OperationResultBase (responseJson : string) =
                             | Some def -> def
                             | _ -> failwithf "Query type %s could not be found on the schema types." info.QueryTypeName
                         let fieldValues = JsonValueHelper.getFieldValues schemaTypes queryType this.DataFields
-                        RecordBase(fieldValues) @@>)
+                        RecordBase(queryType.Name, fieldValues) @@>)
             ProvidedProperty("Data", outputQueryType, getterCode)
         tdef.AddMember(qpdef)
         tdef
@@ -528,20 +559,21 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | TypeKind.UNION | TypeKind.INTERFACE ->
                         if tref.Name.IsSome
                         then
-                            let itemTypeMapper = function
-                                | JsonValue.Record fields -> getRecordOrInterfaceType path tref.Name None fields
-                                | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
-                            let baseType : Type = upcast (Array.head items |> itemTypeMapper)
+                            let itemTypeMapper (baseType : Type) = function
+                                | JsonValue.Record fields -> 
+                                    match JsonValueHelper.getTypeName fields with
+                                    | Some typeName -> getRecordOrInterfaceType path (Some typeName) (Some baseType) fields |> ignore
+                                    | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
+                                | other -> failwithf "Expected property \"%s\" to be a Union or Interface type, but it is %A." name other
+                            let baseType : Type = upcast getRecordOrInterfaceType path tref.Name None fields
+                            items |> Array.iter (itemTypeMapper baseType)
                             (name, baseType) |> makeOption |> makeArray
                         else failwithf "Property \"%s\" is an union or interface type, but it does not have a type name, or its base type does not have a name." name
                     | TypeKind.OBJECT ->
-                        let itemTypeMapper = function
-                            | JsonValue.Record fields ->
-                                match JsonValueHelper.getTypeName fields with
-                                | Some typeName -> getRecordOrInterfaceType path (Some typeName) None fields
-                                | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
-                            | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
-                        let itemType : Type = upcast (Array.head items |> itemTypeMapper)
+                        let itemType : Type =
+                            match JsonValueHelper.getTypeName fields with
+                            | Some typeName -> upcast (getRecordOrInterfaceType path (Some typeName) None fields)
+                            | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                         (name, itemType) |> makeOption |> makeArray
                     | TypeKind.ENUM ->
                         match tref.Name with
