@@ -36,7 +36,7 @@ module QuotationHelpers =
             Expr.NewTuple(exprs)
         Array.mapi (fun i v ->
                 let expr = 
-                    if v = null then simpleTypeExpr v
+                    if isNull v then simpleTypeExpr v
                     else
                         let tpy = v.GetType()
                         if tpy.IsArray then arrayExpr tpy v
@@ -130,7 +130,7 @@ type RecordBase (name : string, properties : (string * obj) list) =
                         let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
                         let baseName = propdef.GetValue(this) :?> string
                         if baseName = name then this
-                        else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s()\" before calling \"As%s()\"." name baseName name name @@>
+                        else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name baseName name name @@>
                 ProvidedMethod("As" + name, [], tdef, invoker)
             let tryAsType =
                 let invoker (args : Expr list) =
@@ -395,9 +395,9 @@ type OperationResultProvidingInformation =
 type OperationResultBase (responseJson : string) =
     member __.ResponseJson = JsonValue.Parse responseJson
 
-    member this.DataFields = JsonValueHelper.getResponseDataFields this.ResponseJson |> List.ofArray
+    member x.DataFields = JsonValueHelper.getResponseDataFields x.ResponseJson |> List.ofArray
     
-    member this.CustomFields = JsonValueHelper.getResponseCustomFields this.ResponseJson |> List.ofArray
+    member x.CustomFields = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
 
     static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, outputQueryType : ProvidedTypeDefinition) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
@@ -571,20 +571,23 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | TypeKind.UNION | TypeKind.INTERFACE ->
                         if tref.Name.IsSome
                         then
-                            let itemTypeMapper (baseType : Type) = function
+                            let baseType : Type =
+                                match items |> Array.tryHead with
+                                | Some (JsonValue.Record fields) -> upcast getRecordOrInterfaceType path tref.Name None fields
+                                | _ -> upcast getRecordOrInterfaceType path tref.Name None [||]
+                            let itemTypeMapper = function
                                 | JsonValue.Record fields -> 
                                     match JsonValueHelper.getTypeName fields with
                                     | Some typeName -> getRecordOrInterfaceType path (Some typeName) (Some baseType) fields |> ignore
                                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                                 | other -> failwithf "Expected property \"%s\" to be a Union or Interface type, but it is %A." name other
-                            let baseType : Type = upcast getRecordOrInterfaceType path tref.Name None fields
-                            items |> Array.iter (itemTypeMapper baseType)
+                            items |> Array.iter itemTypeMapper
                             (name, baseType) |> makeOption |> makeArray
                         else failwithf "Property \"%s\" is an union or interface type, but it does not have a type name, or its base type does not have a name." name
                     | TypeKind.OBJECT ->
                         let itemType : Type =
                             match JsonValueHelper.getTypeName fields with
-                            | Some typeName -> upcast (getRecordOrInterfaceType path (Some typeName) None fields)
+                            | Some typeName -> upcast getRecordOrInterfaceType path (Some typeName) None fields
                             | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                         (name, itemType) |> makeOption |> makeArray
                     | TypeKind.ENUM ->

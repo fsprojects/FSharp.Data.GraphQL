@@ -45,7 +45,6 @@ let data = result.Data
 
 // let hero = data.Hero.Value
 
-// //printfn "Hero name: %s" hero.Name.Value
 // if hero.AppearsIn |> Array.exists (fun x -> x = MyProvider.Context.Types.Episode.Empire)
 // then printfn "Hero appears in Empire episode!"
 // else printfn "Hero does not appear in Empire episode!"

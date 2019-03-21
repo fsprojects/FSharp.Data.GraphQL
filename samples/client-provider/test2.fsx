@@ -22,8 +22,14 @@ let res =
 
 let result = res.Run()
 
-let things = result.Data.Things
+// let things = result.Data.Things
 
-printfn "%A" (things |> Array.map (fun thing -> thing.Id, thing.Format))
+// let balls = result.Data.Things |> Array.choose (fun x -> x.TryAsBall())
 
-printfn "%A" (things.[0].GetType())
+// let boxes = result.Data.Things |> Array.choose (fun x -> x.TryAsBox())
+
+// printfn "Things: %A\n\n" (things |> Array.map (fun thing -> thing.Id, thing.Format))
+
+// printfn "Balls: %A\n\n" balls
+
+// printfn "Boxes: %A\n\n" boxes
