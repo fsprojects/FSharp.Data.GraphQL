@@ -18,7 +18,6 @@ let res =
         name
         appearsIn
         homePlanet
-        appearsIn
         friends {
           ... on Human {
             name
@@ -34,7 +33,7 @@ let res =
   
 printfn "Operation name: %A" res.OperationName
 printfn "Headers: %A" res.CustomHttpHeaders
-printfn "Server: %s" res.ServerURl
+printfn "Server: %s" res.ServerUrl
 
 let result = res.Run()
 

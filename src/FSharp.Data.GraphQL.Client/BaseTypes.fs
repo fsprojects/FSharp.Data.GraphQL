@@ -1,7 +1,6 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
-open System.Security.Cryptography
 open FSharp.Core
 open FSharp.Data
 open FSharp.Data.GraphQL
@@ -94,20 +93,19 @@ type EnumBase (name : string, value : string) =
 
     override x.ToString() = x.Value
 
-type InterfaceBase private () =
-    static member internal MakeProvidedType((name : string), properties : (string * Type) list) =
-        let tdef = ProvidedTypeDefinition("I" + name.FirstCharUpper(), None, nonNullable = true, isInterface = true)
-        let propertyMapper (pname : string, ptype : Type) : MemberInfo =
-            upcast ProvidedProperty(pname, ptype)
-        let pdefs = properties |> List.map propertyMapper
-        tdef.AddMembers(pdefs)
-        tdef
+    override x.Equals(other : obj) =
+        match other with
+        | :? EnumBase as other -> x.Name = other.Name && x.Value = other.Value
+        | _ -> false
+
+    override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Value.GetHashCode()
 
 type RecordBase (properties : (string * obj) list) =
     member internal __.Properties = properties
 
-    static member internal MakeProvidedType((name : string), properties : (string * Type) list) =
-        let tdef = ProvidedTypeDefinition(name.FirstCharUpper(), Some typeof<RecordBase>, nonNullable = true, isSealed = true)
+    static member internal MakeProvidedType(name : string, properties : (string * Type) list, baseType : Type option) =
+        let baseType = Option.defaultValue typeof<RecordBase> baseType
+        let tdef = ProvidedTypeDefinition(name.FirstCharUpper(), Some baseType, nonNullable = true, isSealed = true)
         let propertyMapper (pname : string, ptype : Type) : MemberInfo =
             let pname = pname.FirstCharUpper()
             let getterCode (args : Expr list) =
@@ -148,10 +146,32 @@ type RecordBase (properties : (string * obj) list) =
         match other with
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
+
     override x.GetHashCode() = x.Properties.GetHashCode()
 
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
+
+module Types =
+    let scalar =
+        [| "Int", typeof<int>
+           "Boolean", typeof<bool>
+           "Date", typeof<DateTime>
+           "Float", typeof<float>
+           "ID", typeof<string>
+           "String", typeof<string>
+           "URI", typeof<Uri> |]
+        |> Map.ofArray
+
+    let schema =
+        [| "__TypeKind"
+           "__DirectiveLocation"
+           "__Type"
+           "__InputValue"
+           "__Field"
+           "__EnumValue"
+           "__Directive"
+           "__Schema" |]
 
 module JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
@@ -191,40 +211,75 @@ module JsonValueHelper =
             | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
 
     let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (fieldName : string, fieldValue : JsonValue) =
+        let getOptionCases (t: Type) =
+            let otype = typedefof<_ option>.MakeGenericType(t)
+            let cases = FSharpType.GetUnionCases(otype)
+            let some = cases |> Array.find (fun c -> c.Name = "Some")
+            let none = cases |> Array.find (fun c -> c.Name = "None")
+            (some, none, otype)
         let makeSome (value : obj) =
-            let itype = value.GetType()
-            let otype = typedefof<_ option>.MakeGenericType(itype)
-            let some = FSharpType.GetUnionCases(otype) |> Seq.find (fun c -> c.Name = "Some")
+            let (some, _, _) = getOptionCases (value.GetType())
             FSharpValue.MakeUnion(some, [|value|])
-        let makeOptionArray (items : obj []) =
-            match items with
-            | [||] -> box [||]
-            | _ ->
-                let itype = items.[0].GetType()
-                if Array.forall (fun i -> isNull i || i.GetType() = itype) items
-                then
-                    let otype = typeof<obj option>
-                    let some = FSharpType.GetUnionCases(otype) |> Seq.find (fun c -> c.Name = "Some")
-                    let arr = Array.CreateInstance(otype, items.Length)
-                    items |> Array.iteri (fun i x -> arr.SetValue(FSharpValue.MakeUnion(some, [|x|]), i))
-                    box arr
-                else box items
+        let makeNone (t : Type) =
+            let (_, none, _) = getOptionCases t
+            FSharpValue.MakeUnion(none, [||])
+        let makeArray (itype : Type) (items : obj []) =
+            if Array.exists (fun x -> isNull x) items
+            then failwith "Array is an array of non null items, but a null item was found."
+            else
+                let arr = Array.CreateInstance(itype, items.Length)
+                items |> Array.iteri (fun i x -> arr.SetValue(x, i))
+                box arr
+        let makeOptionArray (itype : Type) (items : obj []) =
+            let (some, none, otype) = getOptionCases(itype)
+            let arr = Array.CreateInstance(otype, items.Length)
+            let mapper (i : int) (x : obj) =
+                if isNull x
+                then arr.SetValue(FSharpValue.MakeUnion(none, [||]), i)
+                else arr.SetValue(FSharpValue.MakeUnion(some, [|x|]), i)
+            items |> Array.iteri mapper
+            box arr
+        let getScalarType (typeRef : IntrospectionTypeRef) =
+            let getType (typeName : string) =
+                match Map.tryFind typeName Types.scalar with
+                | Some t -> t
+                | None -> failwithf "Unsupported scalar type \"%s\"." typeName
+            match typeRef.Name with
+            | Some name -> getType name
+            | None -> failwith "Expected scalar type to have a name, but it does not have one."
         let rec helper (useOption : bool) (fieldType : IntrospectionTypeRef) (fieldValue : JsonValue) : obj =
-            let forceNullableIfNeeded value =
+            let makeSomeIfNeeded value =
                 match fieldType.Kind with
                 | TypeKind.NON_NULL | TypeKind.LIST -> value
                 | _ when useOption -> makeSome value
                 | _ -> value
+            let makeNoneIfNeeded (t : Type) =
+                match fieldType.Kind with
+                | TypeKind.NON_NULL | TypeKind.LIST -> null
+                | _ when useOption -> makeNone t
+                | _ -> null
             match fieldValue with
             | JsonValue.Array items ->
                 let itemType =
                     match fieldType.OfType with
                     | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
-                    | _ -> failwithf "Expected field to be a list type, but it is %A." fieldType.OfType
+                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." fieldType.OfType
                 let items = items |> Array.map (helper false itemType)
                 match itemType.Kind with
-                | TypeKind.NON_NULL -> forceNullableIfNeeded items
-                | _ -> makeOptionArray items |> forceNullableIfNeeded
+                | TypeKind.NON_NULL -> 
+                    match itemType.OfType with
+                    | Some itemType ->
+                        match itemType.Kind with
+                        | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
+                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeArray typeof<RecordBase> items
+                        | TypeKind.ENUM -> makeArray typeof<EnumBase> items
+                        | TypeKind.SCALAR -> makeArray (getScalarType itemType) items
+                        | kind -> failwithf "Unsupported type kind \"%A\"." kind
+                    | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
+                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items |> makeSomeIfNeeded
+                | TypeKind.ENUM -> makeOptionArray typeof<EnumBase> items |> makeSomeIfNeeded
+                | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items |> makeSomeIfNeeded
+                | kind -> failwithf "Unsupported type kind \"%A\"." kind
             | JsonValue.Record props -> 
                 let typeName =
                     match getTypeName props with
@@ -244,12 +299,36 @@ module JsonValueHelper =
                 |> removeTypeNameField
                 |> List.map (firstUpper >> mapper)
                 |> RecordBase
-                |> forceNullableIfNeeded
-            | JsonValue.Boolean b -> forceNullableIfNeeded b
-            | JsonValue.Float f -> forceNullableIfNeeded f
-            | JsonValue.Null -> if useOption then null else box None
-            | JsonValue.Number n -> forceNullableIfNeeded (float n)
-            | JsonValue.String s -> forceNullableIfNeeded s
+                |> makeSomeIfNeeded
+            | JsonValue.Boolean b -> makeSomeIfNeeded b
+            | JsonValue.Float f -> makeSomeIfNeeded f
+            | JsonValue.Null ->
+                match fieldType.Kind with
+                | TypeKind.NON_NULL -> failwith "Expected a non null item from the schema definition, but a null item was found in the response."
+                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeNoneIfNeeded typeof<RecordBase>
+                | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
+                | TypeKind.SCALAR -> getScalarType fieldType |> makeNoneIfNeeded
+                | kind -> failwithf "Unsupported type kind \"%A\"." kind
+            | JsonValue.Number n -> makeSomeIfNeeded (float n)
+            | JsonValue.String s -> 
+                match fieldType.Kind with
+                | TypeKind.NON_NULL ->
+                    match fieldType.OfType with
+                    | Some itemType ->
+                        match itemType.Kind with
+                        | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
+                        | TypeKind.SCALAR -> 
+                            match itemType.Name with
+                            | Some "String" -> box s
+                            | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
+                        | TypeKind.ENUM when itemType.Name.IsSome -> EnumBase(itemType.Name.Value, s) |> box
+                        | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
+                    | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
+                | TypeKind.SCALAR ->
+                    match fieldType.Name with
+                    | Some "String" -> makeSomeIfNeeded s
+                    | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
+                | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
         fieldName, (helper true fieldType fieldValue)
 
     let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
@@ -288,7 +367,7 @@ type OperationResultBase (responseJson : string) =
                         let queryType =
                             match schemaTypes.TryFind(info.QueryTypeName) with
                             | Some def -> def
-                            | _ -> failwithf "Query type %s could not be found on the schema types. This could be a internal bug. Please report the author." info.QueryTypeName
+                            | _ -> failwithf "Query type %s could not be found on the schema types." info.QueryTypeName
                         let fieldValues = JsonValueHelper.getFieldValues schemaTypes queryType this.DataFields
                         RecordBase(fieldValues) @@>)
             ProvidedProperty("Data", outputQueryType, getterCode)
@@ -303,7 +382,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
     member __.OperationName = operationName
 
     static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
-        let className = sprintf "Operation_%s" (requestHashCode.ToString("x2"))
+        let className = sprintf "Operation%s" (requestHashCode.ToString("x2"))
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         // We need to convert the operation name to a nullable string instead of an option here,
         // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
@@ -333,28 +412,11 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
         tdef
 
 type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
-    static member private ScalarTypes =
-        [| "Int", typeof<int>
-           "Boolean", typeof<bool>
-           "Date", typeof<DateTime>
-           "Float", typeof<float>
-           "ID", typeof<string>
-           "String", typeof<string>
-           "URI", typeof<Uri> |]
-        |> Map.ofArray
     static member private GetSchemaTypes (schema : IntrospectionSchema) =
         let isScalarType (name : string) =
-            ContextBase.ScalarTypes |> Map.containsKey name
+            Types.scalar |> Map.containsKey name
         let isIntrospectionType (name : string) =
-            [| "__TypeKind"
-               "__DirectiveLocation"
-               "__Type"
-               "__InputValue"
-               "__Field"
-               "__EnumValue"
-               "__Directive"
-               "__Schema" |]
-            |> Array.contains name
+            Types.schema |> Array.contains name
         schema.Types
         |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
         |> Array.map (fun t -> t.Name, t)
@@ -392,16 +454,16 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     |> Map.ofList
                 typeFields, fragmentFields
             | None -> failwithf "Property \"%s\" is a union or interface type, but no inheritance information could be determined from the input query." path.Head
-        let getFragmentFields (typeName : string) (path : string list) (fields : (string * JsonValue) []) =
-                match getAstInfo path |> snd |> Map.tryFind typeName with
-                | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
-                | None -> failwithf "Property \%s\" is a union or interface type, but type %s does not inherit it." path.Head typeName
+        //let getFragmentFields (typeName : string) (path : string list) (fields : (string * JsonValue) []) =
+        //    match getAstInfo path |> snd |> Map.tryFind typeName with
+        //    | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
+        //    | None -> [||]
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
             let typeFields = getAstInfo path |> fst
             fields |> Array.filter (fun (name, _) -> List.contains name typeFields || name = "__typename")
         let buildOutputTypes (fields : (string * JsonValue) []) =
             let getScalarType (typeName : string) =
-                match ContextBase.ScalarTypes |> Map.tryFind typeName with
+                match Types.scalar |> Map.tryFind typeName with
                 | Some t -> t
                 | None -> failwithf "Scalar type %s is not supported." typeName
             let getEnumType (typeName : string) =
@@ -409,7 +471,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 if providedTypes.ContainsKey(key)
                 then providedTypes.[key]
                 else failwithf "Enum type %s was not found in the schema." typeName
-            let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (interfaces : Type list) (fields : (string * JsonValue) []) =
+            let rec getRecordOrInterfaceType (path : string list) (typeName : string option) (baseType : Type option) (fields : (string * JsonValue) []) =
                 let rec helper (path : string list) typeName (fields : (string * JsonValue) []) (schemaType : IntrospectionType) =
                     let key = OutputType (path, typeName)
                     if providedTypes.ContainsKey(key)
@@ -418,10 +480,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         let properties =
                             let fields =
                                 match schemaType.Kind with
-                                | TypeKind.OBJECT -> 
-                                    if interfaces.Length > 0
-                                    then getFragmentFields typeName path fields
-                                    else getTypeFields path fields
+                                | TypeKind.OBJECT -> fields
                                 | TypeKind.INTERFACE | TypeKind.UNION -> getTypeFields path fields
                                 | _ -> failwithf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name
                             match fields with
@@ -429,10 +488,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             | _ -> getProperties path fields schemaType
                         let outputType =
                             match schemaType.Kind with
-                            | TypeKind.OBJECT -> RecordBase.MakeProvidedType(typeName, properties)
-                            | TypeKind.INTERFACE | TypeKind.UNION -> InterfaceBase.MakeProvidedType(typeName, properties)
+                            | TypeKind.OBJECT -> RecordBase.MakeProvidedType(typeName, properties, baseType)
+                            | TypeKind.INTERFACE | TypeKind.UNION -> RecordBase.MakeProvidedType(typeName, properties, None)
                             | _ -> failwithf "Type \"%s\" is not a Record, Union or Interface type." schemaType.Name
-                        interfaces |> List.iter outputType.AddInterfaceImplementation
                         providedTypes.Add(key, outputType)
                         outputType
                 match typeName |> Option.orElse (JsonValueHelper.getTypeName fields) with
@@ -469,11 +527,11 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         if tref.Name.IsSome
                         then
                             let path = name :: path
-                            let btype = getRecordOrInterfaceType path tref.Name [] fields
+                            let btype : Type = upcast (getRecordOrInterfaceType path tref.Name None fields)
                             let itemMapper = function
                                 | JsonValue.Record fields ->
                                     match JsonValueHelper.getTypeName fields with
-                                    | Some typeName -> getRecordOrInterfaceType path (Some typeName) [btype] fields |> ignore
+                                    | Some typeName -> getRecordOrInterfaceType path (Some typeName) (Some btype) fields |> ignore
                                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
                                 | other -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name other
                             items |> Array.iter itemMapper
@@ -496,7 +554,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         | _ -> failwithf "Property \"%s\" is a list type, but it does not have an underlying type, or its combination of type and the response value is not supported." name
                     | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
                         match value with
-                        | JsonValue.Record fields -> (name, getRecordOrInterfaceType (name :: path) None [] fields) |> makeOption
+                        | JsonValue.Record fields -> (name, getRecordOrInterfaceType (name :: path) None None fields) |> makeOption
                         | _ -> failwithf "Expected property \"%s\" to be a Record type, but it is %A." name value
                     | TypeKind.SCALAR -> 
                         match tref.Name with
@@ -511,7 +569,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 |> Array.filter (fun (name, _) -> name <> "__typename")
                 |> Array.map ((fun (name, value) -> name, value, getFieldType name) >> getProperty)
                 |> List.ofArray
-            getRecordOrInterfaceType [] None [] fields |> ignore
+            getRecordOrInterfaceType [] None None fields |> ignore
         JsonValueHelper.getResponseDataFields responseJson |> buildOutputTypes
         providedTypes |> Seq.map (|KeyValue|) |> Map.ofSeq
 
