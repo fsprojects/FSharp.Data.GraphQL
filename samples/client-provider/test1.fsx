@@ -10,7 +10,9 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let ctx = MyProvider.GetContext()
+let runtimeUrl = "http://localhost:8084"
+
+let ctx = MyProvider.GetContext(runtimeUrl)
 
 let res = 
     ctx.Query<"""query q {
@@ -39,26 +41,29 @@ let result = res.Run()
 
 let data = result.Data
 
-//printfn "Data: %A" data
+// printfn "Data: %A" data
 
-let hero = data.Hero.Value
+// let hero = data.Hero.Value
 
-//printfn "Hero name: %s" hero.Name.Value
+// //printfn "Hero name: %s" hero.Name.Value
+// if hero.AppearsIn |> Array.exists (fun x -> x = MyProvider.Context.Types.Episode.Empire)
+// then printfn "Hero appears in Empire episode!"
+// else printfn "Hero does not appear in Empire episode!"
 
-let friends = hero.Friends |> Array.choose id
+// let friends = hero.Friends |> Array.choose id
 
-//let thisWillGetAnError = friends |> Array.map (fun x -> x.AsDroid())
+// let thisWillGetAnError = friends |> Array.map (fun x -> x.AsDroid())
 
-let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman())
+// let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman())
 
-let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid())
+// let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid())
 
-let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 else 0) |> Array.reduce (+)
+// let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 else 0) |> Array.reduce (+)
 
-let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 else 0) |> Array.reduce (+)
+// let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 else 0) |> Array.reduce (+)
 
-printfn "Hero friends (%i): %A\n\n" friends.Length friends
+// printfn "Hero friends (%i): %A\n\n" friends.Length friends
 
-printfn "Hero human friends (%i): %A\n\n" humanFriendsCount humanFriends
+// printfn "Hero human friends (%i): %A\n\n" humanFriendsCount humanFriends
 
-printfn "Hero droid friends (%i): %A\n\n" droidFriendsCount droidFriends
+// printfn "Hero droid friends (%i): %A\n\n" droidFriendsCount droidFriends

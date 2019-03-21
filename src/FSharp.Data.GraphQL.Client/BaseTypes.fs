@@ -16,6 +16,7 @@ open System.Reflection
 open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
+open System.Globalization
 
 module QuotationHelpers = 
     let rec coerceValues fieldTypeLookup fields = 
@@ -350,7 +351,12 @@ module JsonValueHelper =
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
                         | TypeKind.SCALAR -> 
                             match itemType.Name with
-                            | Some "String" -> box s
+                            | Some "String" | Some "ID" -> box s
+                            | Some "URI" -> Uri(s) |> box
+                            | Some "Date" -> 
+                                match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                                | (true, d) -> box d
+                                | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                             | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
                         | TypeKind.ENUM when itemType.Name.IsSome -> EnumBase(itemType.Name.Value, s) |> box
                         | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
@@ -358,7 +364,13 @@ module JsonValueHelper =
                 | TypeKind.SCALAR ->
                     match fieldType.Name with
                     | Some "String" -> makeSomeIfNeeded s
+                    | Some "URI" -> Uri(s) |> makeSomeIfNeeded
+                    | Some "Date" -> 
+                        match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                        | (true, d) -> makeSomeIfNeeded d
+                        | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
+                | TypeKind.ENUM when fieldType.Name.IsSome -> EnumBase(fieldType.Name.Value, s) |> makeSomeIfNeeded
                 | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
         fieldName, (helper true fieldType fieldValue)
 

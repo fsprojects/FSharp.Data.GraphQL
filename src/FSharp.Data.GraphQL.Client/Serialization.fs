@@ -12,7 +12,7 @@ open FSharp.Data.GraphQL
 module Serialization =
     let private isoDateFormat = "yyyy-MM-dd" 
     let private isoDateTimeFormat = "O"
-    let private isoFormats = [|isoDateTimeFormat; isoDateFormat|]
+    let isoDateTimeFormats = [|isoDateTimeFormat; isoDateFormat|]
 
     let private isOption (t : Type) = 
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
@@ -99,11 +99,11 @@ module Serialization =
         match t with
         | t when isStringType t -> downcastType t s
         | t when isDateTimeType t ->
-            match DateTime.TryParseExact(s, isoFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTime.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeOffsetType t ->
-            match DateTimeOffset.TryParseExact(s, isoFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTimeOffset.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date time offset type, but parsing of value \"%s\" failed." t s
         | t when isGuidType t ->
