@@ -425,7 +425,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
     member __.OperationName = operationName
 
     static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
-        let className = sprintf "Operation%s" (requestHashCode.ToString("x2"))
+        let className = "Operation%s" + requestHashCode.ToString("x2")
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         // We need to convert the operation name to a nullable string instead of an option here,
         // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
