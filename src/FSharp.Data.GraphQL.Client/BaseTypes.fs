@@ -94,12 +94,18 @@ type EnumBase (name : string, value : string) =
 
     override x.ToString() = x.Value
 
+    member x.Equals(other : EnumBase) =
+        x.Name = other.Name && x.Value = other.Value
+
     override x.Equals(other : obj) =
         match other with
-        | :? EnumBase as other -> x.Name = other.Name && x.Value = other.Value
+        | :? EnumBase as other -> x.Equals(other)
         | _ -> false
 
     override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Value.GetHashCode()
+
+    interface IEquatable<EnumBase> with
+        member x.Equals(other) = x.Equals(other)
 
 type RecordBase (name : string, properties : (string * obj) list) =
     member internal __.Name = name
@@ -171,15 +177,14 @@ type RecordBase (name : string, properties : (string * obj) list) =
         sb.Append("}") |> ignore
         sb.ToString()
 
-    member x.Equals(other : RecordBase) =
-        x.Properties = other.Properties
+    member x.Equals(other : RecordBase) = x.Name = other.Name && x.Properties = other.Properties
 
     override x.Equals(other : obj) =
         match other with
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.Properties.GetHashCode()
+    override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Properties.GetHashCode()
 
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
@@ -390,7 +395,7 @@ type ProvidedTypeKind =
 type OperationResultProvidingInformation =
     { SchemaTypeNames : string []
       SchemaTypes : IntrospectionType []
-      QueryTypeName : string }
+      OperationTypeName : string }
 
 type OperationResultBase (responseJson : string) =
     member __.ResponseJson = JsonValue.Parse responseJson
@@ -399,7 +404,7 @@ type OperationResultBase (responseJson : string) =
     
     member x.CustomFields = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
 
-    static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, outputQueryType : ProvidedTypeDefinition) =
+    static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationOutputType : ProvidedTypeDefinition) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
         let qpdef = 
             let getterCode =
@@ -407,43 +412,40 @@ type OperationResultBase (responseJson : string) =
                     <@@ let this = %%args.[0] : OperationResultBase
                         let info = %%var : OperationResultProvidingInformation
                         let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
-                        let queryType =
-                            match schemaTypes.TryFind(info.QueryTypeName) with
+                        let operationType =
+                            match schemaTypes.TryFind(info.OperationTypeName) with
                             | Some def -> def
-                            | _ -> failwithf "Query type %s could not be found on the schema types." info.QueryTypeName
-                        let fieldValues = JsonValueHelper.getFieldValues schemaTypes queryType this.DataFields
-                        RecordBase(queryType.Name, fieldValues) @@>)
-            ProvidedProperty("Data", outputQueryType, getterCode)
+                            | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
+                        let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType this.DataFields
+                        RecordBase(operationType.Name, fieldValues) @@>)
+            ProvidedProperty("Data", operationOutputType, getterCode)
         tdef.AddMember(qpdef)
         tdef
 
-type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option, operationName : string option) =
+type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option) =
     member __.ServerUrl = serverUrl
 
-    member __.CustomHttpHeaders = customHttpHeaders
+    member __.CustomHttpHeaders = customHttpHeaders |> Option.map Array.ofSeq
 
-    member __.OperationName = operationName
-
-    static member internal MakeProvidedType(requestHashCode : int, serverUrl, operationName, query, queryTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
+    static member internal MakeProvidedType(requestHashCode : int, query, operationName : string option, operationTypeName : string, schemaTypes : (string * IntrospectionType) [], outputTypes : Map<ProvidedTypeKind, ProvidedTypeDefinition>) =
         let className = "Operation" + requestHashCode.ToString("x2")
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
-        // We need to convert the operation name to a nullable string instead of an option here,
-        // because we are going to use it inside a quotation, and quotations have issues with options as constant values.
-        let operationName = Option.toObj operationName
-        let outputQueryType =
-            match outputTypes.TryFind(OutputType ([], queryTypeName)) with
+        let operationOutputType =
+            match outputTypes.TryFind(OutputType ([], operationTypeName)) with
             | Some tdef -> tdef
-            | _ -> failwithf "Query type %s could not be found on the provided types. This could be a internal bug. Please report the author." queryTypeName
+            | _ -> failwithf "Operation type \"%s\" could not be found on the provided types." operationTypeName
         let info = 
             { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
               SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
-              QueryTypeName = queryTypeName }
-        let rtdef = OperationResultBase.MakeProvidedType(info, outputQueryType)
-        // TODO : Parse query parameters in the method args
+              OperationTypeName = operationTypeName }
+        let rtdef = OperationResultBase.MakeProvidedType(info, operationOutputType)
+        // TODO : Parse query variables in the method parameters.
         let invoker (args : Expr list) =
-            <@@ let request =
-                    { ServerUrl = serverUrl
-                      CustomHeaders = None
+            let operationName = Option.toObj operationName
+            <@@ let this = %%args.[0] : OperationBase
+                let request =
+                    { ServerUrl = this.ServerUrl
+                      CustomHeaders = this.CustomHttpHeaders
                       OperationName = Option.ofObj operationName
                       Query = query
                       Variables = None }
@@ -636,7 +638,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
             let sprm = 
                 [ ProvidedStaticParameter("queryString", typeof<string>)
                   ProvidedStaticParameter("operationName", typeof<string>, "") ]
-            let smdef = ProvidedMethod("Query", [], typeof<OperationBase>)
+            let smdef = ProvidedMethod("Operation", [], typeof<OperationBase>)
             let genfn (mname : string) (args : obj []) =
                 let originalQuery = args.[0] :?> string
                 let queryAst = parse originalQuery
@@ -687,17 +689,30 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 |> Seq.map (|KeyValue|)
                 |> Seq.choose (fun (kind, t) -> match kind with | OutputType (path, _) -> Some (path, t) | _ -> None)
                 |> Seq.iter (fun (path, t) -> includeType path t)
-                let queryTypeName =
-                    match schema.QueryType.Name with
-                    | Some name -> name
-                    | None -> failwith "Query type does not have a name in the introspection."
-                let odef = OperationBase.MakeProvidedType(request.GetHashCode(), serverUrl, operationName, query, queryTypeName, schemaTypes, outputTypes)
+                let operationTypeName =
+                    let odef = 
+                        queryAst.Definitions
+                        |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
+                        |> List.find (fun d -> d.Name = operationName)
+                    match odef.OperationType with
+                    | Query -> 
+                        match schema.QueryType.Name with
+                        | Some name -> name
+                        | None -> failwith "Query type does not have a name in the introspection schema."
+                    | Mutation ->
+                        match schema.MutationType with
+                        | Some m when m.Name.IsSome -> m.Name.Value
+                        | _ -> failwith "Mutation type does not have a name in the introspection schema, or the schema does not provide a mutation type."
+                    | Subscription ->
+                        match schema.SubscriptionType with
+                        | Some s when s.Name.IsSome -> s.Name.Value
+                        | _ -> failwith "Subscription type does not have a name in the introspection schema, or the schema does not provide a subscription type."
+                let odef = OperationBase.MakeProvidedType(request.GetHashCode(), query, operationName, operationTypeName, schemaTypes, outputTypes)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationName
                     <@@ let this = %%args.[0] : ContextBase
                         let customHttpHeaders = (%%args.[1] : seq<string * string>) |> Option.ofObj
-                        OperationBase(this.ServerUrl, customHttpHeaders, Option.ofObj operationName) @@>
+                        OperationBase(this.ServerUrl, customHttpHeaders) @@>
                 let prm = [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
                 let mdef = ProvidedMethod(mname, prm, odef, invoker)
                 let members : MemberInfo list = [odef; mdef]

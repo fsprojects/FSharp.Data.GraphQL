@@ -17,6 +17,9 @@ module Serialization =
     let private isOption (t : Type) = 
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
+    let private isMap (t : Type) =
+       t = typeof<Map<string, obj>>
+
     let private (|Option|_|) t =
         if isOption t then Some (Option (t.GetGenericArguments().[0]))
         else None
@@ -163,11 +166,14 @@ module Serialization =
                 tprops t
                 |> Array.map (fun (n, t) ->
                     match Map.tryFind n jprops with
-                    | Some p -> convert t p
-                    | None -> makeOption t null)
+                    | Some p -> n, convert t p
+                    | None -> n, makeOption t null)
             let rcrd =
                 let t = match t with Option t -> t | _ -> t
-                FSharpValue.MakeRecord(t, vals t, true)
+                let vals = vals t
+                if isMap t
+                then Map.ofArray vals |> box
+                else FSharpValue.MakeRecord(t, Array.map snd vals, true)
             downcastType t rcrd
         | JsonValue.Array items -> items |> getArrayValue t convert
         | JsonValue.Boolean b -> downcastBoolean t b

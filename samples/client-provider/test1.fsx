@@ -16,7 +16,7 @@ let ctx = MyProvider.GetContext(runtimeUrl)
 
 // Change method name to Operation
 let res = 
-    ctx.Query<"""query q {
+    ctx.Operation<"""query q {
       hero (id: "1000") {
         name
         appearsIn
@@ -34,7 +34,6 @@ let res =
       }
     }""">()
   
-printfn "Operation name: %A" res.OperationName
 printfn "Headers: %A" res.CustomHttpHeaders
 printfn "Server: %s\n\n" res.ServerUrl
 
