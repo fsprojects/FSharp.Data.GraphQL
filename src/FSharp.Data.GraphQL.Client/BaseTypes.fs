@@ -406,7 +406,7 @@ type OperationResultBase (responseJson : string) =
 
     static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationOutputType : ProvidedTypeDefinition) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
-        let qpdef = 
+        let ddef = 
             let getterCode =
                 QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) var ->
                     <@@ let this = %%args.[0] : OperationResultBase
@@ -419,7 +419,9 @@ type OperationResultBase (responseJson : string) =
                         let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType this.DataFields
                         RecordBase(operationType.Name, fieldValues) @@>)
             ProvidedProperty("Data", operationOutputType, getterCode)
-        tdef.AddMember(qpdef)
+        
+        let members : MemberInfo list = [ddef]
+        tdef.AddMembers(members)
         tdef
 
 type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option) =
@@ -499,10 +501,6 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     |> Map.ofList
                 typeFields, fragmentFields
             | None -> failwithf "Property \"%s\" is a union or interface type, but no inheritance information could be determined from the input query." path.Head
-        //let getFragmentFields (typeName : string) (path : string list) (fields : (string * JsonValue) []) =
-        //    match getAstInfo path |> snd |> Map.tryFind typeName with
-        //    | Some fragmentFields -> fields |> Array.filter (fun (name, _) -> List.contains name fragmentFields || name = "__typename")
-        //    | None -> [||]
         let getTypeFields (path : string list) (fields : (string * JsonValue) []) =
             let astInfo = getAstInfo path
             let typeFields = fst astInfo

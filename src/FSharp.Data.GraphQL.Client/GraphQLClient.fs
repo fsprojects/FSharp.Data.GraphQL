@@ -5,6 +5,8 @@ namespace FSharp.Data.GraphQL.Client
 
 open System.Net
 open FSharp.Data
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types
 
 type GraphQLRequest  =
     { ServerUrl : string
@@ -14,7 +16,7 @@ type GraphQLRequest  =
       Variables : (string * obj) [] option }
 
 module GraphQLClient =
-    let sendRequestAsync (request : GraphQLRequest) =
+    let private send (method : string) (request : GraphQLRequest) =
         async {
             use client = new WebClient()
             client.Headers.Set("content-type", "application/json")
@@ -33,7 +35,24 @@ module GraphQLClient =
                    "variables", variables |]
                 |> JsonValue.Record
             return!
-                client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString())
+                client.UploadStringTaskAsync(request.ServerUrl, method, requestJson.ToString())
                 |> Async.AwaitTask
         }
+       
+    let sendIntrospectionRequestAsync serverUrl =
+        let request =
+            { ServerUrl = serverUrl
+              CustomHeaders = None
+              OperationName = None
+              Query = Introspection.introspectionQuery
+              Variables = None }
+        async {
+            try return! send "GET" request
+            with _ -> return! send "POST" request
+        }
+
+    let sendIntrospectionRequest = sendIntrospectionRequestAsync >> Async.RunSynchronously
+    
+    let sendRequestAsync = send "POST"
+
     let sendRequest = sendRequestAsync >> Async.RunSynchronously

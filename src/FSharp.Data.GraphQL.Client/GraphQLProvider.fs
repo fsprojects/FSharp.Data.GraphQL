@@ -19,13 +19,7 @@ type GraphQLTypeProvider (config) as this =
         let prm = [ProvidedStaticParameter("serverUrl", typeof<string>)]
         generator.DefineStaticParameters(prm, fun tname args ->
             let serverUrl = args.[0] :?> string
-            let introspectionRequest =
-                { ServerUrl = serverUrl
-                  CustomHeaders = None
-                  OperationName = None
-                  Query = Introspection.introspectionQuery
-                  Variables = None }
-            let introspectionJson = GraphQLClient.sendRequest introspectionRequest
+            let introspectionJson = GraphQLClient.sendIntrospectionRequest serverUrl
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             let schemaVal = Serialization.deserializeSchema introspectionJson
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
