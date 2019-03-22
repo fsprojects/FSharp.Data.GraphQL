@@ -13,23 +13,14 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 let ctx = MyProvider.GetContext()
 
 let res = 
-    ctx.Operation<"""query testQuery {
-      things {
+    ctx.Operation<"""mutation m {
+      setMoon (id: "1", ismoon : true) {
         id
-        format
+        name
+        ismoon
       }
     }""">()
 
 let result = res.Run()
 
-let things = result.Data.Things
-
-let balls = result.Data.Things |> Array.choose (fun x -> x.TryAsBall())
-
-let boxes = result.Data.Things |> Array.choose (fun x -> x.TryAsBox())
-
-printfn "Things: %A\n\n" (things |> Array.map (fun thing -> thing.Id, thing.Format))
-
-printfn "Balls: %A\n\n" balls
-
-printfn "Boxes: %A\n\n" boxes
+printfn "Mutation result: %A" result.Data
