@@ -10,6 +10,10 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
+let x = MyProvider.Types.Ball("Circular", "Ball")
+
+printfn "%A\n" x
+
 let runtimeUrl = "http://localhost:8084"
 
 let ctx = MyProvider.GetContext(runtimeUrl)

@@ -111,10 +111,10 @@ type InterfaceBase private () =
     static member internal MakeProvidedType(name : string) =
         ProvidedTypeDefinition("I" + name, None, nonNullable = true, isInterface = true)
 
-type RecordBase (name : string, properties : (string * obj) list) =
+type RecordBase (name : string, properties : (string * obj) seq) =
     member private __.Name = name
 
-    member private __.Properties = properties
+    member private __.Properties = List.ofSeq properties
 
     static member internal MakeProvidedType(name : string, properties : (string * Type) list, baseType : Type option) =
         let baseType = Option.defaultValue typeof<RecordBase> baseType
@@ -159,7 +159,18 @@ type RecordBase (name : string, properties : (string * obj) list) =
                 ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
             let members : MemberInfo list = [asType; tryAsType; isType]
             bdef.AddMembers(members)
-        | _ -> ()
+        | _ ->
+            let ctdef =
+                let prm = properties |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let invoker (args : Expr list) = 
+                    let fields =
+                        let args = 
+                            let names = properties |> List.map (fst >> (fun name -> name.FirstCharUpper()))
+                            List.zip names args |> List.map (fun (name, arg) -> Expr.NewTuple([Expr.Value(name); Expr.Coerce(arg, typeof<obj>)]))
+                        Expr.NewArray(typeof<string * obj>, args)
+                    Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); fields])
+                ProvidedConstructor(prm, invoker)
+            tdef.AddMember(ctdef)
         tdef
 
     static member internal Constructor = typeof<RecordBase>.GetConstructors().[0]
