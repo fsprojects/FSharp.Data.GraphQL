@@ -35,13 +35,13 @@ let res =
     }""">()
   
 printfn "Headers: %A" res.CustomHttpHeaders
-printfn "Server: %s\n\n" res.ServerUrl
+printfn "Server: %s\n" res.ServerUrl
 
 let result = res.Run()
 
 let data = result.Data
 
-printfn "Data: %A" data
+printfn "Data: %A\n" data
 
 let hero = data.Hero.Value
 
@@ -51,9 +51,9 @@ let hero = data.Hero.Value
 // Make deprecated fields
 // Make enum values literals
 // Make run async methods
-if hero.AppearsIn |> Array.exists (fun x -> x = MyProvider.Context.Types.Episode.Empire)
-then printfn "Hero appears in Empire episode!"
-else printfn "Hero does not appear in Empire episode!"
+if hero.AppearsIn |> Array.exists (fun x -> x = MyProvider.Types.Episode.Empire)
+then printfn "Hero appears in Empire episode!\n"
+else printfn "Hero does not appear in Empire episode!\n"
 
 let friends = hero.Friends |> Array.choose id
 
@@ -67,8 +67,8 @@ let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 els
 
 let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 else 0) |> Array.reduce (+)
 
-printfn "Hero friends (%i): %A\n\n" friends.Length friends
+printfn "Hero friends (%i): %A\n" friends.Length friends
 
-printfn "Hero human friends (%i): %A\n\n" humanFriendsCount humanFriends
+printfn "Hero human friends (%i): %A\n" humanFriendsCount humanFriends
 
-printfn "Hero droid friends (%i): %A\n\n" droidFriendsCount droidFriends
+printfn "Hero droid friends (%i): %A\n" droidFriendsCount droidFriends
