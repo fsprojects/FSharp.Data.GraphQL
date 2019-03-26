@@ -473,18 +473,21 @@ type OperationResultBase (responseJson : string) =
 
     override x.GetHashCode() = x.ResponseJson.GetHashCode()
 
-type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string> option) =
+type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>, variables : seq<string * obj>) =
     member __.ServerUrl = serverUrl
 
-    member __.CustomHttpHeaders = customHttpHeaders |> Option.map Array.ofSeq
+    member __.CustomHttpHeaders = Array.ofSeq customHttpHeaders
 
-    static member internal MakeProvidedType(requestHashCode : int, query, operationName : string option, operationTypeName : string, schemaTypes : Map<string, IntrospectionType>, outputTypes : Map<string list * string, ProvidedTypeDefinition>) =
+    member __.Variables = Array.ofSeq variables
+
+    static member internal MakeProvidedType(requestHashCode : int, 
+                                            query,
+                                            operationName : string option, 
+                                            operationTypeName : string, 
+                                            schemaTypes : Map<string, IntrospectionType>, 
+                                            operationOutputType : ProvidedTypeDefinition) =
         let className = "Operation" + requestHashCode.ToString("x2")
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
-        let operationOutputType =
-            match outputTypes.TryFind([], operationTypeName) with
-            | Some tdef -> tdef
-            | _ -> failwithf "Operation type \"%s\" could not be found on the provided types." operationTypeName
         let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
         let info = 
             { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
@@ -500,7 +503,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
                       CustomHeaders = this.CustomHttpHeaders
                       OperationName = Option.ofObj operationName
                       Query = query
-                      Variables = None }
+                      Variables = this.Variables }
                 let responseJson = GraphQLClient.sendRequest request
                 OperationResultBase(responseJson) @@>
         let mdef = ProvidedMethod("Run", [], rtdef, invoker)
@@ -509,7 +512,11 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
         tdef
 
 type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
-    static member private BuildOutputTypes(schemaTypes : Map<string, IntrospectionType>, enumProvidedTypes : Map<string, ProvidedTypeDefinition>, operationName : string option, queryAst : Document, responseJson : string) =
+    static member private BuildOutputTypes(schemaTypes : Map<string, IntrospectionType>,
+                                           enumProvidedTypes : Map<string, ProvidedTypeDefinition>,
+                                           operationName : string option,
+                                           queryAst : Document,
+                                           responseJson : string) =
         let responseJson = JsonValue.Parse responseJson
         let providedTypes = Dictionary<string list * string, ProvidedTypeDefinition>()
         let astInfoMap = 
@@ -647,7 +654,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
 
     member __.Schema = schema
 
-    static member internal MakeProvidedType(schema : IntrospectionSchema, enumProvidedTypes : Map<string, ProvidedTypeDefinition>, serverUrl : string) =
+    static member internal MakeProvidedType(schema : IntrospectionSchema,
+                                            schemaOutputTypes : Map<string, ProvidedTypeDefinition>,
+                                            serverUrl : string) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
         let mdef =
             let sprm = 
@@ -667,13 +676,13 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | x -> Some x
                 let request =
                     { ServerUrl = serverUrl
-                      CustomHeaders = None
+                      CustomHeaders = [||]
                       OperationName = operationName
                       Query = query
-                      Variables = None }
+                      Variables = [||] }
                 let responseJson = GraphQLClient.sendRequest request
                 let schemaTypes = Types.getSchemaTypes(schema)
-                let outputTypes = ContextBase.BuildOutputTypes(schemaTypes, enumProvidedTypes, operationName, queryAst, responseJson)
+                let operationOutputTypes = ContextBase.BuildOutputTypes(schemaTypes, schemaOutputTypes, operationName, queryAst, responseJson)
                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                 let rootWrapper = generateWrapper "Types"
@@ -694,15 +703,15 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 let includeType (path : string list) (t : ProvidedTypeDefinition) =
                     let wrapper = getWrapper path
                     wrapper.AddMember(t)
-                outputTypes
+                operationOutputTypes
                 |> Seq.map ((|KeyValue|) >> (fun ((path, _), t) -> path, t))
                 |> Seq.iter (fun (path, t) -> includeType path t)
+                let operation =
+                    queryAst.Definitions
+                    |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
+                    |> List.find (fun d -> d.Name = operationName)
                 let operationTypeName =
-                    let odef = 
-                        queryAst.Definitions
-                        |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
-                        |> List.find (fun d -> d.Name = operationName)
-                    match odef.OperationType with
+                    match operation.OperationType with
                     | Query -> 
                         match schema.QueryType.Name with
                         | Some name -> name
@@ -715,13 +724,32 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         match schema.SubscriptionType with
                         | Some s when s.Name.IsSome -> s.Name.Value
                         | _ -> failwith "Subscription type does not have a name in the introspection schema, or the schema does not provide a subscription type."
-                let odef = OperationBase.MakeProvidedType(request.GetHashCode(), query, operationName, operationTypeName, schemaTypes, outputTypes)
+                let operationOutputType =
+                    match operationOutputTypes.TryFind([], operationTypeName) with
+                    | Some tdef -> tdef
+                    | _ -> failwithf "Operation type \"%s\" could not be found on the provided types." operationTypeName
+                let odef = OperationBase.MakeProvidedType(request.GetHashCode(), query, operationName, operationTypeName, schemaTypes, operationOutputType)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
                         let customHttpHeaders = (%%args.[1] : seq<string * string>) |> Option.ofObj
                         OperationBase(this.ServerUrl, customHttpHeaders) @@>
-                let prm = [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+                let varprm =
+                    let rec mapVariable (vartype : InputType) =
+                        match vartype with
+                        | NamedType name ->
+                            match Types.scalar.TryFind(name) with
+                            | Some t -> (name, t) |> Types.makeOption
+                            | None ->
+                                match schemaOutputTypes.TryFind(name) with
+                                | Some t -> (name, (t :> Type)) |> Types.makeOption
+                                | None -> failwithf "Unable to find variable type %s on the schema definition." name
+                        | ListType itype -> mapVariable itype |> Types.makeArray |> Types.makeOption
+                        | NonNullType itype -> mapVariable itype |> Types.unwrapOption
+                    operation.VariableDefinitions
+                    |> List.map (fun vdef -> mapVariable vdef.Type)
+                    |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let prm = ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None) :: varprm
                 let mdef = ProvidedMethod(mname, prm, odef, invoker)
                 let members : MemberInfo list = [odef; mdef]
                 tdef.AddMembers(members)

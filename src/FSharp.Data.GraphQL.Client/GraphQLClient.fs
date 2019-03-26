@@ -10,21 +10,20 @@ open FSharp.Data.GraphQL.Types
 
 type GraphQLRequest  =
     { ServerUrl : string
-      CustomHeaders: (string * string) [] option
+      CustomHeaders: (string * string) []
       OperationName : string option
       Query : string
-      Variables : (string * obj) [] option }
+      Variables : (string * obj) [] }
 
 module GraphQLClient =
     let private send (method : string) (request : GraphQLRequest) =
         async {
             use client = new WebClient()
             client.Headers.Set("content-type", "application/json")
-            request.CustomHeaders |> Option.iter (Seq.iter (fun (n, v) -> client.Headers.Set(n, v)))
-            let variables =
-                match request.Variables with
-                | Some x -> Map.ofSeq x |> Serialization.toJsonValue
-                | None -> JsonValue.Null
+            request.CustomHeaders |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
+            let variables = 
+                Map.ofSeq request.Variables
+                |> Serialization.toJsonValue
             let operationName =
                 match request.OperationName with
                 | Some x -> JsonValue.String x
@@ -42,10 +41,10 @@ module GraphQLClient =
     let sendIntrospectionRequestAsync serverUrl =
         let request =
             { ServerUrl = serverUrl
-              CustomHeaders = None
+              CustomHeaders = [||]
               OperationName = None
               Query = Introspection.introspectionQuery
-              Variables = None }
+              Variables = [||] }
         async {
             try return! send "GET" request
             with _ -> return! send "POST" request
