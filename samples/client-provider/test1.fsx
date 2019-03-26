@@ -37,7 +37,7 @@ let customHttpHeaders : (string * string) seq = upcast [||]
 // does not work with web sockets - only the immediate response will be known.
 let operation = 
     ctx.Operation<"""query q {
-      hero (id: "1000") {
+      hero (id: "1001") {
         name
         appearsIn
         homePlanet

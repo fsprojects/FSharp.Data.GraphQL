@@ -476,9 +476,15 @@ type OperationResultBase (responseJson : string) =
 type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>, variables : seq<string * obj>) =
     member __.ServerUrl = serverUrl
 
-    member __.CustomHttpHeaders = Array.ofSeq customHttpHeaders
+    member __.CustomHttpHeaders = 
+        match customHttpHeaders with
+        | null -> [||]
+        | _ -> Array.ofSeq customHttpHeaders
 
-    member __.Variables = Array.ofSeq variables
+    member __.Variables = 
+        match variables with
+        | null -> [||]
+        | _ -> Array.ofSeq variables
 
     static member internal MakeProvidedType(requestHashCode : int, 
                                             query,
@@ -494,7 +500,6 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
               SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
               OperationTypeName = operationTypeName }
         let rtdef = OperationResultBase.MakeProvidedType(info, operationOutputType)
-        // TODO : Parse query variables in the method parameters.
         let invoker (args : Expr list) =
             let operationName = Option.toObj operationName
             <@@ let this = %%args.[0] : OperationBase
@@ -531,10 +536,10 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
             | Some ast -> 
                 let typeFields = 
                     ast
-                    |> List.choose (function | TypeField name -> Some name | _ -> None)
+                    |> List.choose (function | TypeField info -> Some info.AliasOrName | _ -> None)
                 let fragmentFields = 
                     ast
-                    |> List.choose (function | TypeField _ -> None | FragmentField (tc, name) -> Some (tc, name))
+                    |> List.choose (function | TypeField _ -> None | FragmentField info -> Some (info.TypeCondition, info.AliasOrName))
                     |> List.groupBy fst
                     |> List.map (fun (key, items) -> key, (items |> List.map snd |> List.rev))
                     |> Map.ofList
@@ -732,8 +737,10 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
-                        let customHttpHeaders = (%%args.[1] : seq<string * string>) |> Option.ofObj
-                        OperationBase(this.ServerUrl, customHttpHeaders) @@>
+                        let customHttpHeaders = (%%args.[1] : seq<string * string>)
+                        // TODO : map variables from parameters
+                        let variables : seq<string * obj> = Seq.empty
+                        OperationBase(this.ServerUrl, customHttpHeaders, variables) @@>
                 let varprm =
                     let rec mapVariable (vartype : InputType) =
                         match vartype with

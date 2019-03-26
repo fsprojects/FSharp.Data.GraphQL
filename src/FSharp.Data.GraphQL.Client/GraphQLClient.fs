@@ -1,6 +1,5 @@
 /// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
-
 namespace FSharp.Data.GraphQL.Client
 
 open System.Net
@@ -16,14 +15,16 @@ type GraphQLRequest  =
       Variables : (string * obj) [] }
 
 module GraphQLClient =
-    let private send (method : string) (request : GraphQLRequest) =
+    let sendRequestAsync (request : GraphQLRequest) =
         async {
             use client = new WebClient()
             client.Headers.Set("content-type", "application/json")
-            request.CustomHeaders |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
+            if not (isNull request.CustomHeaders)
+            then request.CustomHeaders |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
             let variables = 
-                Map.ofSeq request.Variables
-                |> Serialization.toJsonValue
+                match request.Variables with
+                | null | [||] -> JsonValue.Null
+                | _ -> Map.ofSeq request.Variables |> Serialization.toJsonValue
             let operationName =
                 match request.OperationName with
                 | Some x -> JsonValue.String x
@@ -34,7 +35,7 @@ module GraphQLClient =
                    "variables", variables |]
                 |> JsonValue.Record
             return!
-                client.UploadStringTaskAsync(request.ServerUrl, method, requestJson.ToString())
+                client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString())
                 |> Async.AwaitTask
         }
        
@@ -45,13 +46,8 @@ module GraphQLClient =
               OperationName = None
               Query = Introspection.introspectionQuery
               Variables = [||] }
-        async {
-            try return! send "GET" request
-            with _ -> return! send "POST" request
-        }
+        sendRequestAsync request
 
     let sendIntrospectionRequest = sendIntrospectionRequestAsync >> Async.RunSynchronously
-    
-    let sendRequestAsync = send "POST"
 
     let sendRequest = sendRequestAsync >> Async.RunSynchronously

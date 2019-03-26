@@ -6,18 +6,52 @@ open System.Text
 open FSharp.Data.GraphQL.Ast
 open System.Globalization
 
-type internal AstSelectionInfo =
+type Path = string list
+type OperationName = string
+
+type AstTypeFieldInfo =
+    { Name : string
+      Alias : string option
+      Path : Path }
+    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+
+type AstFragmentFieldInfo =
+    { Name : string
+      Alias : string option 
+      TypeCondition : string
+      Path : Path }
+    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+
+type AstSelectionInfo =
     { TypeCondition : string option
-      Path : string list
-      Name : string }
+      Path : Path
+      Name : string
+      Alias : string option }
+    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
 type AstFieldInfo =
-    | TypeField of name : string
-    | FragmentField of typeCondition : string * name : string
-    static member Of(name : string, typeCondition : string option) =
-        match typeCondition with
-        | Some tc -> FragmentField (tc, name)
-        | None -> TypeField name
+    | TypeField of AstTypeFieldInfo
+    | FragmentField of AstFragmentFieldInfo
+    static member Create(info : AstSelectionInfo) =
+        match info.TypeCondition with
+        | Some typeCondition -> FragmentField { Name = info.Name; Alias = info.Alias; Path = info.Path; TypeCondition = typeCondition }
+        | None -> TypeField { Name = info.Name; Alias = info.Alias; Path = info.Path }
+    member x.Name =
+        match x with
+        | TypeField info -> info.Name
+        | FragmentField info -> info.Name
+    member x.Alias =
+        match x with
+        | TypeField info -> info.Alias
+        | FragmentField info -> info.Alias
+    member x.AliasOrName =
+        match x with
+        | TypeField info -> info.Alias |> Option.defaultValue info.Name
+        | FragmentField info -> info.Alias |> Option.defaultValue info.Name
+    member x.Path =
+        match x with
+        | TypeField info -> info.Path
+        | FragmentField info -> info.Path
 
 type internal PaddedStringBuilder() =
     let sb = StringBuilder()
@@ -174,7 +208,7 @@ type Document with
     /// <summary>
     /// Gets a map containing general information for this Document.
     /// </summary>
-    member this.GetInfoMap() =
+    member this.GetInfoMap() : Map<OperationName option, Map<Path, AstFieldInfo list>> =
         let fragments = 
             this.Definitions
             |> List.choose (function | OperationDefinition _ -> None | FragmentDefinition def -> Some def)
@@ -196,7 +230,7 @@ type Document with
                     let acc = 
                         match selection with
                         | Field f -> 
-                            let acc = { TypeCondition = typeCondition; Path = path; Name = f.AliasOrName } :: acc
+                            let acc = { TypeCondition = typeCondition; Path = path; Alias = f.Alias; Name = f.Name } :: acc
                             helper acc None (f.AliasOrName :: path) f.SelectionSet
                         | FragmentSpread f ->
                             let fdef = findFragment f.Name
@@ -206,9 +240,7 @@ type Document with
                     helper acc typeCondition path tail
             helper [] None [] selectionSet
             |> List.groupBy (fun info -> info.Path)
-            |> List.map (fun (path, infos) -> 
-                let infos = infos |> List.map (fun info -> AstFieldInfo.Of(info.Name, info.TypeCondition))
-                path, infos)
+            |> List.map (fun (path, infos) -> path, List.map AstFieldInfo.Create infos)
             |> Map.ofList
         operations
         |> List.map (fun (k, o) -> k, mapper o.SelectionSet)
