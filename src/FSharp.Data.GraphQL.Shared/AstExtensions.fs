@@ -12,30 +12,42 @@ type OperationName = string
 type AstTypeFieldInfo =
     { Name : string
       Alias : string option
-      Path : Path }
+      Fields : AstFieldInfo list }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
-type AstFragmentFieldInfo =
+and AstFragmentFieldInfo =
     { Name : string
       Alias : string option 
       TypeCondition : string
-      Path : Path }
+      Fields : AstFieldInfo list }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
-type AstSelectionInfo =
+and internal AstSelectionInfo =
     { TypeCondition : string option
-      Path : Path
       Name : string
-      Alias : string option }
+      Alias : string option
+      Path : Path
+      mutable Fields : AstSelectionInfo list }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+    static member Create(typeCondition : string option, path : Path, name : string, alias : string option, ?fields : AstSelectionInfo list) =
+        { TypeCondition = typeCondition
+          Name = name
+          Alias = alias
+          Path = path
+          Fields = fields |> Option.defaultValue [] }
+    member x.SetFields(fields : AstSelectionInfo list) =
+        x.Fields <- fields
+    member x.AppendField(field : AstSelectionInfo) =
+        x.Fields <- field :: x.Fields
 
-type AstFieldInfo =
+and AstFieldInfo =
     | TypeField of AstTypeFieldInfo
     | FragmentField of AstFragmentFieldInfo
-    static member Create(info : AstSelectionInfo) =
+    static member internal Create(info : AstSelectionInfo) =
+        let fields = info.Fields |> List.map AstFieldInfo.Create
         match info.TypeCondition with
-        | Some typeCondition -> FragmentField { Name = info.Name; Alias = info.Alias; Path = info.Path; TypeCondition = typeCondition }
-        | None -> TypeField { Name = info.Name; Alias = info.Alias; Path = info.Path }
+        | Some typeCondition -> FragmentField { Name = info.Name; Alias = info.Alias; TypeCondition = typeCondition; Fields = fields }
+        | None -> TypeField { Name = info.Name; Alias = info.Alias; Fields = fields }
     member x.Name =
         match x with
         | TypeField info -> info.Name
@@ -48,10 +60,10 @@ type AstFieldInfo =
         match x with
         | TypeField info -> info.Alias |> Option.defaultValue info.Name
         | FragmentField info -> info.Alias |> Option.defaultValue info.Name
-    member x.Path =
+    member x.Fields =
         match x with
-        | TypeField info -> info.Path
-        | FragmentField info -> info.Path
+        | TypeField info -> info.Fields
+        | FragmentField info -> info.Fields
 
 type internal PaddedStringBuilder() =
     let sb = StringBuilder()
@@ -75,7 +87,7 @@ type Document with
     /// Generates a GraphQL query string from this document.
     /// </summary>
     /// <param name="options">Specify custom printing options for the query string.</param>
-    member this.ToQueryString(?options : QueryStringPrintingOptions) =
+    member x.ToQueryString(?options : QueryStringPrintingOptions) =
         let options = defaultArg options QueryStringPrintingOptions.None
         let sb = PaddedStringBuilder()
         let withQuotes (s : string) = "\"" + s + "\""
@@ -202,7 +214,7 @@ type Document with
                 | [] -> ()
                 | [def] -> printDefinition def
                 | def :: tail -> printDefinition def; sb.AppendLine(); sb.AppendLine(); printDefinitions tail
-        printDefinitions this.Definitions
+        printDefinitions x.Definitions
         sb.ToString()
     
     /// <summary>
@@ -230,8 +242,9 @@ type Document with
                     let acc = 
                         match selection with
                         | Field f -> 
-                            let acc = { TypeCondition = typeCondition; Path = path; Alias = f.Alias; Name = f.Name } :: acc
-                            helper acc None (f.AliasOrName :: path) f.SelectionSet
+                            let finfo = AstSelectionInfo.Create(typeCondition, path, f.Name, f.Alias)
+                            let fields = helper (finfo :: acc) None (f.AliasOrName :: path) f.SelectionSet
+                            finfo.SetFields(fields); fields
                         | FragmentSpread f ->
                             let fdef = findFragment f.Name
                             helper acc fdef.TypeCondition path fdef.SelectionSet
