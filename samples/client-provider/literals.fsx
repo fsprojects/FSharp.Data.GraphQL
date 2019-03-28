@@ -2,16 +2,19 @@ module Literals
 
 [<Literal>]
 let introspection = """{
-  "documentId": 869718943,
+  "documentId": 1746310730,
   "data": {
     "__schema": {
       "queryType": {
+        "kind": "OBJECT",
         "name": "Query"
       },
       "mutationType": {
+        "kind": "OBJECT",
         "name": "Mutation"
       },
       "subscriptionType": {
+        "kind": "OBJECT",
         "name": "Subscription"
       },
       "types": [
