@@ -15,9 +15,12 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its
 // properties into the constructor.
-//let customBall = MyProvider.Types.Ball("Circular", "Ball")
+let ball = MyProvider.Types.Ball(format = "Spheric", id = "1")
+let box = MyProvider.Types.Box(format = "Cubic", id = "2")
 
-//printfn "%A\n" customBall
+let things : MyProvider.Types.IThing list = [ball; box]
+
+printfn "Things: %A\n" things
 
 // Once created the provider and the schema is successfully mapped,
 // We can start doing queries. You can optionally specify an runtime URL for the server.

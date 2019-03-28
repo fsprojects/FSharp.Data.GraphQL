@@ -137,11 +137,11 @@ module Schema =
     let ThingType =
         Define.Interface(
             name = "Thing",
-            description = "Gets the shape of the thing.",
+            description = "A thing.",
             fieldsFn = fun () ->
             [
-                Define.Field("format", String, "The format of the shape", fun _ (t : IThing) -> t.Shape)
-                Define.Field("id", String, "The ID of the shape", fun _ (t : IThing) -> t.Id)
+                Define.Field("format", String, "The format of the shape.", fun _ (t : IThing) -> t.Shape)
+                Define.Field("id", String, "The ID of the shape.", fun _ (t : IThing) -> t.Id)
             ])
 
     let BallType =
@@ -152,8 +152,8 @@ module Schema =
             isTypeOf = (fun o -> o :? Ball),
             fieldsFn = fun () ->
             [
-                Define.Field("format", String, "The format of the ball", fun _ (b : Ball) -> b.Shape)
-                Define.Field("id", String, "The ID of the ball", fun _ (t : Ball) -> t.Id)
+                Define.Field("format", String, "The format of the ball.", fun _ (b : Ball) -> b.Shape)
+                Define.Field("id", String, "The ID of the ball.", fun _ (t : Ball) -> t.Id)
             ]
         )
 
@@ -165,15 +165,15 @@ module Schema =
             isTypeOf = (fun o -> o :? Box),
             fieldsFn = fun () ->
             [
-                Define.Field("format", String, "The format of the box", fun _ (t : Box) -> t.Shape)
-                Define.Field("id", String, "The ID of the box", fun _ (t : Box) -> t.Id)
+                Define.Field("format", String, "The format of the box.", fun _ (t : Box) -> t.Shape)
+                Define.Field("id", String, "The ID of the box.", fun _ (t : Box) -> t.Id)
             ]
         )
 
     let EpisodeType =
         Define.Enum(
             name = "Episode",
-            description = "One of the films in the Star Wars Trilogy",
+            description = "One of the films in the Star Wars Trilogy.",
             options = [
                 Define.EnumValue("NewHope", Episode.NewHope, "Released in 1977.")
                 Define.EnumValue("Empire", Episode.Empire, "Released in 1980.")
@@ -182,7 +182,7 @@ module Schema =
     let rec CharacterType =
         Define.Union(
             name = "Character",
-            description = "A character in the Star Wars Trilogy",
+            description = "A character in the Star Wars Trilogy.",
             options = [ HumanType; DroidType ],
             resolveValue = (fun o ->
                 match o with

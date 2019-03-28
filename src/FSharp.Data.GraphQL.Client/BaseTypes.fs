@@ -184,12 +184,15 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let ctdef =
                 let prm = properties |> List.map (fun prop -> ProvidedParameter(prop.Name, prop.Type))
                 let invoker (args : Expr list) = 
-                    let fields =
+                    let properties =
                         let args = 
                             let names = properties |> List.map (fun prop -> prop.Name.FirstCharUpper())
-                            List.zip names args |> List.map (fun (name, arg) -> Expr.NewTuple([Expr.Value(name); Expr.Coerce(arg, typeof<obj>)]))
-                        Expr.NewArray(typeof<string * obj>, args)
-                    Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); fields])
+                            let mapper (name : string, value : Expr) =
+                                let value = Expr.Coerce(value, typeof<obj>)
+                                <@@ { Name = name; Value = %%value } @@>
+                            List.zip names args |> List.map mapper
+                        Expr.NewArray(typeof<RecordProperty>, args)
+                    Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
                 ProvidedConstructor(prm, invoker)
             tdef.AddMember(ctdef)
         tdef
@@ -274,13 +277,14 @@ module JsonValueHelper =
         match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "data") with
         | Some (_, data) -> 
             match data with
-            | JsonValue.Record fields -> fields
+            | JsonValue.Record fields -> Some fields
+            | JsonValue.Null -> None
             | _ -> failwithf "Expected data field of root type to be a Record type, but type is %A." data
-        | None -> failwith "Expected root type to have a \"data\" field, but it was not found."
+        | None -> None
 
     let getResponseCustomFields (responseJson : JsonValue) =
         getResponseFields responseJson
-        |> Array.filter (fun (name, _) -> name <> "data")
+        |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
 
     let private removeTypeNameField (fields : (string * JsonValue) list) =
         fields |> List.filter (fun (name, _) -> name <> "__typename")
@@ -452,7 +456,7 @@ type OperationResultProvidingInformation =
 type OperationResultBase (responseJson : string) =
     member private __.ResponseJson = JsonValue.Parse responseJson
 
-    member private x._DataFields = JsonValueHelper.getResponseDataFields x.ResponseJson |> List.ofArray
+    member private x._DataFields = JsonValueHelper.getResponseDataFields x.ResponseJson |> Option.map List.ofArray
     
     member private x._CustomFields = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
 
@@ -469,10 +473,13 @@ type OperationResultBase (responseJson : string) =
                             | Some def -> def
                             | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
                         let dfdef = typeof<OperationResultBase>.GetProperty("_DataFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                        let dataFields = dfdef.GetValue(this) :?> (string * JsonValue) list
-                        let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-                        let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
-                        RecordBase(operationType.Name, props) @@>)
+                        let dataFields = dfdef.GetValue(this) :?> (string * JsonValue) list option
+                        match dataFields with
+                        | Some [] | None -> None
+                        | Some dataFields ->
+                            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+                            let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
+                            Some (RecordBase(operationType.Name, props)) @@>)
             ProvidedProperty("Data", operationType, getterCode)
         
         let members : MemberInfo list = [ddef]
@@ -691,8 +698,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             let (name, t) = mapVariable itype
                             (name, Types.unwrapOption t)
                     operationDefinition.VariableDefinitions
-                    |> List.map (fun vdef -> mapVariable vdef.Type)
-                    |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                    |> List.map ((fun vdef -> mapVariable vdef.Type) >> (fun (name, t) -> ProvidedParameter(name, t)))
                 let prm = ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None) :: varprm
                 let mdef = ProvidedMethod(mname, prm, odef, invoker)
                 let members : MemberInfo list = [odef; mdef]
@@ -730,7 +736,7 @@ type ProviderBase private () =
                     if Types.scalar.ContainsKey(field.Type.Name.Value)
                     then Types.scalar.[field.Type.Name.Value]
                     else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." field.Type.Name.Value
-                { Name = field.Type.Name.Value
+                { Name = field.Name
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -738,7 +744,7 @@ type ProviderBase private () =
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
                 let itype = getSchemaType field.Type
                 let providedType = getProvidedType itype
-                { Name = field.Type.Name.Value
+                { Name = field.Name
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
