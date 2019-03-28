@@ -1,6 +1,6 @@
 // Uncomment those to use build script client assembly
-//#r "../../bin/FSharp.Data.GraphQL.Client/ne47/FSharp.Data.GraphQL.Client.dll"
-//#r "../../bin/FSharp.Data.GraphQL.Shared/ne47/FSharp.Data.GraphQL.Shared.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/net47/FSharp.Data.GraphQL.Client.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Shared/net47/FSharp.Data.GraphQL.Shared.dll"
 
 // Uncomment those to use dotnet build command for the client assembly
 #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
@@ -15,9 +15,9 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its
 // properties into the constructor.
-let customBall = MyProvider.Types.Ball("Circular", "Ball")
+//let customBall = MyProvider.Types.Ball("Circular", "Ball")
 
-printfn "%A\n" customBall
+//printfn "%A\n" customBall
 
 // Once created the provider and the schema is successfully mapped,
 // We can start doing queries. You can optionally specify an runtime URL for the server.
@@ -66,7 +66,7 @@ let data = result.Data
 // Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" data
 
-let hero = data.Hero.Value
+let hero = data.Value.Hero.Value
 
 // GraphQL enum types are essentially strings, and here they are mapped to
 // custom objects with string values inside. Each enum value does have an static

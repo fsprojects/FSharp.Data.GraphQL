@@ -264,62 +264,6 @@ module Types =
         then t.GetGenericArguments().[0]
         else failwithf "Expected type to be an Option type, but it is %s." t.Name
 
-    let getOperationTypes schema operationAstFields operationTypeRef =
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
-        let schemaTypes = getSchemaTypes(schema)
-        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
-            match tref.Kind with
-            | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> unwrapOption
-            | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> makeArray |> makeOption
-            | TypeKind.SCALAR when tref.Name.IsSome ->
-                if scalar.ContainsKey(tref.Name.Value)
-                then scalar.[tref.Name.Value]
-                else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." tref.Name.Value
-            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.ENUM) when tref.Name.IsSome ->
-                if providedTypes.ContainsKey(path, tref.Name.Value)
-                then upcast providedTypes.[path, tref.Name.Value]
-                else
-                    let ifields =
-                        if schemaTypes.ContainsKey(tref.Name.Value)
-                        then schemaTypes.[tref.Name.Value].Fields |> Option.defaultValue [||]
-                        else failwithf "Could not find a schema type based on a type reference. The reference is a \"%s\" type with kind \"%A\", but that type was not found in the schema types." tref.Name.Value tref.Kind
-                    let getPropertyMetadata (info : AstFieldInfo) : RecordPropertyMetadata =
-                        let ifield =
-                            match ifields |> Array.tryFind(fun f -> f.Name = info.Name) with
-                            | Some ifield -> ifield
-                            | None -> failwithf "Could not find field \"%s\" of type \"%s\". The schema type does not a field with the specified name." info.Name tref.Name.Value
-                        let path = info.AliasOrName :: path
-                        let astFields = info.Fields
-                        let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
-                        { Name = info.Name; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
-                    let baseType =
-                        let properties =
-                            astFields
-                            |> List.filter (function | TypeField _ -> true | _ -> false)
-                            |> List.map getPropertyMetadata
-                        let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
-                        RecordBase.MakeProvidedType(metadata, properties, None)
-                    providedTypes.Add((path, baseType.Name), baseType)
-                    let fragmentProperties =
-                        astFields
-                        |> List.choose (function FragmentField f -> Some f | _ -> None)
-                        |> List.groupBy (fun field -> field.TypeCondition)
-                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map getPropertyMetadata (List.map FragmentField fields))
-                    let fragmentTypes =
-                        let createFragmentType (typeName, properties) =
-                            let itype =
-                                if schemaTypes.ContainsKey(typeName)
-                                then schemaTypes.[typeName]
-                                else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
-                            let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
-                            RecordBase.MakeProvidedType(metadata, properties, Some (upcast baseType))
-                        fragmentProperties
-                        |> List.map createFragmentType
-                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes.Add((path, fragmentType.Name), fragmentType))
-                    makeOption baseType
-            | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), providedTypes
-
 module JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
         match responseJson with
@@ -558,11 +502,14 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
         | null -> [||]
         | _ -> Array.ofSeq variables
 
-    static member internal MakeProvidedType(query,
+    static member internal MakeProvidedType(userQuery,
                                             operationName : string option, 
                                             operationTypeName : string, 
                                             schemaTypes : Map<string, IntrospectionType>, 
                                             operationType : Type) =
+        let query = 
+            let ast = Parser.parse userQuery
+            ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
         let className = "Operation" + query.GetHashCode().ToString("x2")
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
@@ -592,9 +539,67 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
 
     member __.Schema = schema
 
-    static member internal MakeProvidedType(schema : IntrospectionSchema,
-                                            schemaOutputTypes : Map<string, ProvidedTypeDefinition>,
-                                            serverUrl : string) =
+    static member private GetOperationProvidedTypes(schema, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
+        let schemaTypes = Types.getSchemaTypes(schema)
+        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
+            match tref.Kind with
+            | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
+            | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
+            | TypeKind.SCALAR when tref.Name.IsSome ->
+                if Types.scalar.ContainsKey(tref.Name.Value)
+                then Types.scalar.[tref.Name.Value]
+                else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." tref.Name.Value
+            | TypeKind.ENUM when tref.Name.IsSome ->
+                match enumProvidedTypes.TryFind(tref.Name.Value) with
+                | Some providedEnum -> Types.makeOption providedEnum
+                | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
+            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
+                if providedTypes.ContainsKey(path, tref.Name.Value)
+                then upcast providedTypes.[path, tref.Name.Value]
+                else
+                    let ifields typeName =
+                        if schemaTypes.ContainsKey(typeName)
+                        then schemaTypes.[typeName].Fields |> Option.defaultValue [||]
+                        else failwithf "Could not find a schema type based on a type reference. The reference is to a \"%s\" type, but that type was not found in the schema types." typeName
+                    let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
+                        let ifield =
+                            match ifields typeName |> Array.tryFind(fun f -> f.Name = info.Name) with
+                            | Some ifield -> ifield
+                            | None -> failwithf "Could not find field \"%s\" of type \"%s\". The schema type does not have a field with the specified name." info.Name tref.Name.Value
+                        let path = info.AliasOrName :: path
+                        let astFields = info.Fields
+                        let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
+                        { Name = info.Name; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
+                    let baseType =
+                        let properties =
+                            astFields
+                            |> List.filter (function | TypeField _ -> true | _ -> false)
+                            |> List.map (getPropertyMetadata tref.Name.Value)
+                        let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
+                        RecordBase.MakeProvidedType(metadata, properties, None)
+                    providedTypes.Add((path, baseType.Name), baseType)
+                    let fragmentProperties =
+                        astFields
+                        |> List.choose (function FragmentField f -> Some f | _ -> None)
+                        |> List.groupBy (fun field -> field.TypeCondition)
+                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
+                    let fragmentTypes =
+                        let createFragmentType (typeName, properties) =
+                            let itype =
+                                if schemaTypes.ContainsKey(typeName)
+                                then schemaTypes.[typeName]
+                                else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
+                            let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
+                            RecordBase.MakeProvidedType(metadata, properties, Some (upcast baseType))
+                        fragmentProperties
+                        |> List.map createFragmentType
+                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes.Add((path, fragmentType.Name), fragmentType))
+                    Types.makeOption baseType
+            | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
+        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), (providedTypes |> Seq.map (|KeyValue|) |> Map.ofSeq)
+
+    static member internal MakeProvidedType(schema : IntrospectionSchema, schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
         let mdef =
             let sprm = 
@@ -617,13 +622,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     |> List.find (fun d -> d.Name = operationName)
                 let operationAstFields =
                     let infoMap = queryAst.GetInfoMap()
-                    let throw = failwith "Error parsing query. Could not find field information for requested operation."
                     match infoMap.TryFind(operationName) with
-                    | Some operationMap ->
-                        match operationMap.TryFind([]) with
-                        | Some fields -> fields
-                        | None -> throw
-                    | None -> throw
+                    | Some fields -> fields
+                    | None -> failwith "Error parsing query. Could not find field information for requested operation."
                 let operationTypeRef =
                     match operationDefinition.OperationType with
                     | Query -> schema.QueryType
@@ -636,7 +637,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                         | Some tref -> tref
                         | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
                 let schemaTypes = Types.getSchemaTypes(schema)
-                let (operationType, operationTypes) = Types.getOperationTypes schema operationAstFields operationTypeRef
+                let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
+                let (operationType, operationTypes) = ContextBase.GetOperationProvidedTypes(schema, enumProvidedTypes, operationAstFields, operationTypeRef)
                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                 let rootWrapper = generateWrapper "Types"
@@ -679,7 +681,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                             match Types.scalar.TryFind(name) with
                             | Some t -> (name, Types.makeOption t)
                             | None ->
-                                match schemaOutputTypes.TryFind(name) with
+                                match schemaProvidedTypes.TryFind(name) with
                                 | Some t -> (name, Types.makeOption t)
                                 | None -> failwithf "Unable to find variable type %s on the schema definition." name
                         | ListType itype -> 
@@ -704,8 +706,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
     static member internal Constructor = typeof<ContextBase>.GetConstructors().[0]
 
 type ProviderBase private () =
-    static member private BuildOutputTypes(schema : IntrospectionSchema) =
-        let providedTypes = Dictionary<string, ProvidedTypeDefinition>()
+    static member private GetSchemaProvidedTypes(schema : IntrospectionSchema) =
+        let providedTypes = Dictionary<TypeName, ProvidedTypeDefinition>()
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
@@ -794,14 +796,13 @@ type ProviderBase private () =
             let introspectionJson = GraphQLClient.sendIntrospectionRequest serverUrl
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             let schema = Serialization.deserializeSchema introspectionJson
-            let outputTypes = ProviderBase.BuildOutputTypes(schema)
+            let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
             let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
-            outputTypes
+            schemaProvidedTypes
             |> Seq.map (fun kvp -> kvp.Value)
             |> Seq.iter typeWrapper.AddMember
             tdef.AddMember(typeWrapper)
-            let enumOutputTypes = outputTypes |> Map.filter (fun _ ptype -> ptype.BaseType = typeof<EnumBase>)
-            let ctxdef = ContextBase.MakeProvidedType(schema, enumOutputTypes, serverUrl)
+            let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes)
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
             let ctxmdef =
                 let prm = [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]

@@ -37,14 +37,12 @@ and internal AstSelectionInfo =
           Fields = fields |> Option.defaultValue [] }
     member x.SetFields(fields : AstSelectionInfo list) =
         x.Fields <- fields
-    member x.AppendField(field : AstSelectionInfo) =
-        x.Fields <- field :: x.Fields
 
 and AstFieldInfo =
     | TypeField of AstTypeFieldInfo
     | FragmentField of AstFragmentFieldInfo
     static member internal Create(info : AstSelectionInfo) =
-        let fields = info.Fields |> List.map AstFieldInfo.Create
+        let fields = List.map AstFieldInfo.Create info.Fields
         match info.TypeCondition with
         | Some typeCondition -> FragmentField { Name = info.Name; Alias = info.Alias; TypeCondition = typeCondition; Fields = fields }
         | None -> TypeField { Name = info.Name; Alias = info.Alias; Fields = fields }
@@ -220,7 +218,7 @@ type Document with
     /// <summary>
     /// Gets a map containing general information for this Document.
     /// </summary>
-    member this.GetInfoMap() : Map<OperationName option, Map<Path, AstFieldInfo list>> =
+    member this.GetInfoMap() : Map<OperationName option, AstFieldInfo list> =
         let fragments = 
             this.Definitions
             |> List.choose (function | OperationDefinition _ -> None | FragmentDefinition def -> Some def)
@@ -243,8 +241,9 @@ type Document with
                         match selection with
                         | Field f -> 
                             let finfo = AstSelectionInfo.Create(typeCondition, path, f.Name, f.Alias)
-                            let fields = helper (finfo :: acc) None (f.AliasOrName :: path) f.SelectionSet
-                            finfo.SetFields(fields); fields
+                            let fields = helper [] None (f.AliasOrName :: path) f.SelectionSet
+                            finfo.SetFields(fields)
+                            finfo :: acc
                         | FragmentSpread f ->
                             let fdef = findFragment f.Name
                             helper acc fdef.TypeCondition path fdef.SelectionSet
@@ -252,9 +251,7 @@ type Document with
                             helper acc fdef.TypeCondition path fdef.SelectionSet
                     helper acc typeCondition path tail
             helper [] None [] selectionSet
-            |> List.groupBy (fun info -> info.Path)
-            |> List.map (fun (path, infos) -> path, List.map AstFieldInfo.Create infos)
-            |> Map.ofList
+            |> List.map AstFieldInfo.Create
         operations
-        |> List.map (fun (k, o) -> k, mapper o.SelectionSet)
+        |> List.map (fun (n, o) -> n, mapper o.SelectionSet)
         |> Map.ofList

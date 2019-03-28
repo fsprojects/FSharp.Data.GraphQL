@@ -15,66 +15,77 @@ let internal getFieldValue name o =
 
 /// Common GraphQL query that may be used to retrieve overall data 
 /// about schema type system itself.
-let introspectionQuery = """query IntrospectionQuery {
-    __schema {
-      queryType { name }
-      mutationType { name }
-      subscriptionType { name }
-      types {
-        ...FullType
-      }
-      directives {
-        name
-        description
-        locations
-        args {
-          ...InputValue
-        }
-      }
+let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
+  __schema {
+    queryType {
+      ...OperationTypeRef
     }
-  }
-
-  fragment FullType on __Type {
-    kind
-    name
-    description
-    fields(includeDeprecated: true) {
+    mutationType {
+      ...OperationTypeRef
+    }
+    subscriptionType {
+      ...OperationTypeRef
+    }
+    types {
+      ...FullType
+    }
+    directives {
       name
       description
+      locations
       args {
         ...InputValue
       }
-      type {
-        ...TypeRef
-      }
-      isDeprecated
-      deprecationReason
-    }
-    inputFields {
-      ...InputValue
-    }
-    interfaces {
-      ...TypeRef
-    }
-    enumValues(includeDeprecated: true) {
-      name
-      description
-      isDeprecated
-      deprecationReason
-    }
-    possibleTypes {
-      ...TypeRef
     }
   }
+}
 
-  fragment InputValue on __InputValue {
+fragment FullType on __Type {
+  kind
+  name
+  description
+  fields(includeDeprecated: true) {
     name
     description
-    type { ...TypeRef }
-    defaultValue
+    args {
+      ...InputValue
+    }
+    type {
+      ...TypeRef
+    }
+    isDeprecated
+    deprecationReason
   }
+  inputFields {
+    ...InputValue
+  }
+  interfaces {
+    ...TypeRef
+  }
+  enumValues(includeDeprecated: true) {
+    name
+    description
+    isDeprecated
+    deprecationReason
+  }
+  possibleTypes {
+    ...TypeRef
+  }
+}
 
-  fragment TypeRef on __Type {
+fragment InputValue on __InputValue {
+  name
+  description
+  type {
+    ...TypeRef
+  }
+  defaultValue
+}
+
+fragment TypeRef on __Type {
+  kind
+  name
+  ofType {
     kind
     name
     ofType {
@@ -83,13 +94,15 @@ let introspectionQuery = """query IntrospectionQuery {
       ofType {
         kind
         name
-        ofType {
-          kind
-          name
-        }
       }
     }
-  }"""
+  }
+}
+
+fragment OperationTypeRef on __Type {
+  kind
+  name
+}"""
     
 /// GraphQL enum describing kind of the GraphQL type definition.
 /// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,

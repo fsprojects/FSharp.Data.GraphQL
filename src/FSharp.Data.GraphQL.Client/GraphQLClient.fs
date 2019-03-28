@@ -44,7 +44,7 @@ module GraphQLClient =
             { ServerUrl = serverUrl
               CustomHeaders = [||]
               OperationName = None
-              Query = Introspection.introspectionQuery
+              Query = Introspection.IntrospectionQuery
               Variables = [||] }
         sendRequestAsync request
 
