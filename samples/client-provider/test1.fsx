@@ -60,8 +60,9 @@ let operation =
 printfn "Headers: %A" operation.CustomHttpHeaders
 printfn "Server: %s\n" operation.ServerUrl
 
-// To run an operation, you just need to call the Run method.
-let result = operation.Run()
+// To run an operation, you just need to call the Run or AsyncRun method.
+//let result = operation.Run()
+let result = operation.AsyncRun() |> Async.RunSynchronously
 
 // If the operation were successfull, result data will be on the Data property.
 let data = result.Data

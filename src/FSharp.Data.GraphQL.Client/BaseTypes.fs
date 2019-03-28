@@ -267,6 +267,8 @@ module Types =
         then t.GetGenericArguments().[0]
         else failwithf "Expected type to be an Option type, but it is %s." t.Name
 
+    let makeAsync (t : Type) = typedefof<Async<_>>.MakeGenericType(t)
+
 module JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
         match responseJson with
@@ -525,19 +527,35 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
               SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
               OperationTypeName = operationTypeName }
         let rtdef = OperationResultBase.MakeProvidedType(info, operationType)
-        let invoker (args : Expr list) =
-            let operationName = Option.toObj operationName
-            <@@ let this = %%args.[0] : OperationBase
-                let request =
-                    { ServerUrl = this.ServerUrl
-                      CustomHeaders = this.CustomHttpHeaders
-                      OperationName = Option.ofObj operationName
-                      Query = query
-                      Variables = this.Variables }
-                let responseJson = GraphQLClient.sendRequest request
-                OperationResultBase(responseJson) @@>
-        let mdef = ProvidedMethod("Run", [], rtdef, invoker)
-        let members : MemberInfo list = [rtdef; mdef]
+        let rundef = 
+            let invoker (args : Expr list) =
+                let operationName = Option.toObj operationName
+                <@@ let this = %%args.[0] : OperationBase
+                    let request =
+                        { ServerUrl = this.ServerUrl
+                          CustomHeaders = this.CustomHttpHeaders
+                          OperationName = Option.ofObj operationName
+                          Query = query
+                          Variables = this.Variables }
+                    let responseJson = GraphQLClient.sendRequest request
+                    OperationResultBase(responseJson) @@>
+            ProvidedMethod("Run", [], rtdef, invoker)
+        let arundef =
+            let invoker (args : Expr list) =
+                let operationName = Option.toObj operationName
+                <@@ let this = %%args.[0] : OperationBase
+                    let request =
+                        { ServerUrl = this.ServerUrl
+                          CustomHeaders = this.CustomHttpHeaders
+                          OperationName = Option.ofObj operationName
+                          Query = query
+                          Variables = this.Variables }
+                    async {
+                        let! responseJson = GraphQLClient.sendRequestAsync request
+                        return OperationResultBase(responseJson)
+                    } @@>
+            ProvidedMethod("AsyncRun", [], Types.makeAsync rtdef, invoker)
+        let members : MemberInfo list = [rtdef; rundef; arundef]
         tdef.AddMembers(members)
         tdef
 
