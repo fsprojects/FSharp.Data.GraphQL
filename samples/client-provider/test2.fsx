@@ -12,7 +12,7 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 let ctx = MyProvider.GetContext()
 
-let res = 
+let operation = 
     ctx.Operation<"""query testQuery {
       things {
         id
@@ -26,7 +26,7 @@ let res =
       }
     }""">()
 
-let result = res.Run()
+let result = operation.Run()
 let things = result.Data.Value.Things
 
 // Interfaces can be casted to the implementations the same way done with

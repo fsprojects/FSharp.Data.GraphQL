@@ -12,15 +12,16 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 let ctx = MyProvider.GetContext()
 
-let res = 
+let operation = 
     ctx.Operation<"""mutation m {
-      setMoon (id: "1", ismoon : true) {
+      setMoon (id: "1", isMoon: true) {
         id
         name
-        ismoon
+        isMoon
       }
     }""">()
 
-let result = res.Run()
+let result = operation.Run()
 
+// Mutations are also supported.
 printfn "Mutation result: %A" result.Data

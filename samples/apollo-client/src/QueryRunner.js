@@ -58,14 +58,14 @@ query TestQuery {
 }`
 
 const liveQuery = `# This is a sample query using live directive.
-# This query will subscribe to updates on the ismoon field by the mutation "setMoon".
+# This query will subscribe to updates on the isMoon field by the mutation "setMoon".
 # Whenever the mutation is done, the new value will be sent after 5 seconds.
 
 query testQuery {
   planet (id : 1) {
     id
     name
-    ismoon @live
+    isMoon @live
   }
 }`
 

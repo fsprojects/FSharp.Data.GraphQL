@@ -1230,7 +1230,7 @@ let introspection = """{
               "deprecationReason": null
             },
             {
-              "name": "ismoon",
+              "name": "isMoon",
               "description": "Is that a moon?",
               "args": [],
               "type": {
@@ -1379,7 +1379,7 @@ let introspection = """{
                   "defaultValue": null
                 },
                 {
-                  "name": "ismoon",
+                  "name": "isMoon",
                   "description": null,
                   "type": {
                     "kind": "NON_NULL",

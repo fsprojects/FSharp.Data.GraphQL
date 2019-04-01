@@ -232,7 +232,7 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the planet", fun _ p -> p.Id)
                 Define.Field("name", Nullable String, "The name of the planet.", fun _ p -> p.Name)
-                Define.Field("ismoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)
+                Define.Field("isMoon", Nullable Boolean, "Is that a moon?", fun _ p -> p.IsMoon)
             ])
 
     and RootType =
@@ -277,13 +277,13 @@ module Schema =
                     "setMoon",
                     Nullable PlanetType,
                     "Sets a moon status",
-                    [ Define.Input("id", String); Define.Input("ismoon", Boolean) ],
+                    [ Define.Input("id", String); Define.Input("isMoon", Boolean) ],
                     fun ctx _ ->
                         getPlanet (ctx.Arg("id"))
                         |> Option.map (fun x ->
-                            x.SetMoon(Some(ctx.Arg("ismoon"))) |> ignore
+                            x.SetMoon(Some(ctx.Arg("isMoon"))) |> ignore
                             schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
-                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "ismoon" x
+                            schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                             x))])
 
     let schema = Schema(Query, Mutation, Subscription, schemaConfig)
