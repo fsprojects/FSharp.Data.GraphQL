@@ -24,4 +24,6 @@ let operation =
 let result = operation.Run()
 
 // Mutations are also supported.
+// Subscriptions are not fully supported at the moment.
+// Only direct responses will be received - we don't have a socket base connection implemented.
 printfn "Mutation result: %A" result.Data

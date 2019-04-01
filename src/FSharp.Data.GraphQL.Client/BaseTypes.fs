@@ -512,7 +512,9 @@ type OperationResultBase (responseJson : string) =
                             let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
                             let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
                             Some (RecordBase(operationType.Name, props)) @@>)
-            ProvidedProperty("Data", operationType, getterCode)
+            let prop = ProvidedProperty("Data", operationType, getterCode)
+            prop.AddXmlDoc("Contains the data returned by the operation on the server.")
+            prop
         let edef =
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : OperationResultBase
@@ -521,7 +523,9 @@ type OperationResultBase (responseJson : string) =
                     match errors with
                     | Some [] | None -> None
                     | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
-            ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
+            let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
+            prop.AddXmlDoc("Contains erros returned by the operation on the server.")
+            prop
         let members : MemberInfo list = [ddef; edef]
         tdef.AddMembers(members)
         tdef
@@ -559,6 +563,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
         let className = "Operation" + query.GetHashCode().ToString("x2")
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
+        tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
         let info = 
             { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
@@ -577,7 +582,9 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
                           Variables = this.Variables }
                     let responseJson = GraphQLClient.sendRequest request
                     OperationResultBase(responseJson) @@>
-            ProvidedMethod("Run", [], rtdef, invoker)
+            let mdef = ProvidedMethod("Run", [], rtdef, invoker)
+            mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
+            mdef
         let arundef =
             let invoker (args : Expr list) =
                 let operationName = Option.toObj operationName
@@ -664,6 +671,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
 
     static member internal MakeProvidedType(schema : IntrospectionSchema, schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
+        tdef.AddXmlDoc("Represents a connection to a GraphQL server. A context groups all operations and their types from a specific server connection.")
         let mdef =
             let sprm = 
                 [ ProvidedStaticParameter("queryString", typeof<string>)
@@ -757,6 +765,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     |> List.map ((fun vdef -> mapVariable vdef.Type) >> (fun (name, t) -> ProvidedParameter(name, t)))
                 let prm = ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None) :: varprm
                 let mdef = ProvidedMethod(mname, prm, odef, invoker)
+                mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
                 let members : MemberInfo list = [odef; mdef]
                 tdef.AddMembers(members)
                 mdef
@@ -857,6 +866,7 @@ type ProviderBase private () =
             let serverUrl = args.[0] :?> string
             let introspectionJson = GraphQLClient.sendIntrospectionRequest serverUrl
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
+            tdef.AddXmlDoc("A type provider for GraphQL operations.")
             let schema = Serialization.deserializeSchema introspectionJson
             let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
             let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
@@ -871,7 +881,9 @@ type ProviderBase private () =
                 let invoker (args : Expr list) =
                     let serverUrl = args.[0]
                     Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr])
-                ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
+                let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
+                mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
+                mdef
             let schemapdef = 
                 let getterCode (_ : Expr list) = schemaExpr
                 ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
