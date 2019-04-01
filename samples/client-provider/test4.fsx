@@ -5,41 +5,14 @@
 // Uncomment those to use dotnet build command for the client assembly
 #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net47/FSharp.Data.GraphQL.Client.dll"
+#r "../../packages/Shared/System.Runtime/lib/net462/System.Runtime.dll"
+#r "../../packages/Shared/System.Reflection/lib/net462/System.Reflection.dll"
 
 open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 let ctx = MyProvider.GetContext()
-
-
-
-
-//// Variables are automatically parsed into the Run parameters.
-//// The last parameter is optional and is always the custom HTTP Headers.
-// let headers : (string * string) seq = upcast [||]
-// let operation = 
-//     ctx.Operation<"""query q($id: String!, $thing : Thing!) {
-//       hero(id: $id) {
-//         name
-//         friends {
-//           ... on Human {
-//             id
-//             homePlanet
-//           }
-//           ... on Droid {
-//             id
-//             primaryFunction
-//           }
-//         }
-//       }
-//     }""">()
-//
-//let ball = MyProvider.Types.Ball(form = "Spheric", format = "Spheric", id = "1")
-//let result = operation.Run(customHttpHeaders = headers, id = "1000", thing = ball)
-
-
-
 
 let operation = 
     ctx.Operation<"""query q($id: String!) {
@@ -58,7 +31,9 @@ let operation =
       }
     }""">()
 
-let result = operation.Run(id = "1000")
+let headers = ["AuthToken", System.Guid.NewGuid().ToString()]
+
+let result = operation.Run(id = "1000", customHttpHeaders = headers)
 
 printfn "Result: %A" result.Data
 printfn "Errors: %A" result.Errors
