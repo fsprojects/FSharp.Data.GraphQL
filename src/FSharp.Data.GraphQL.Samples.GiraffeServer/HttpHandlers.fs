@@ -75,7 +75,7 @@ module HttpHandlers =
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
         | None, _ ->
-            let result = Schema.executor.AsyncExecute(Introspection.introspectionQuery) |> Async.RunSynchronously
+            let result = Schema.executor.AsyncExecute(Introspection.IntrospectionQuery) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
     }

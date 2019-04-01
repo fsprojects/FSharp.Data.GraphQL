@@ -11,7 +11,7 @@ open System.Reflection
 
 let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
-    if property = null then null else property.GetValue(o, null)
+    if isNull property then null else property.GetValue(o, null)
 
 /// Common GraphQL query that may be used to retrieve overall data 
 /// about schema type system itself.
@@ -95,6 +95,10 @@ fragment TypeRef on __Type {
         kind
         name
       }
+      ofType{
+        kind
+        name
+      }
     }
   }
 }
@@ -165,8 +169,8 @@ let rec __Type =
                 | Some name ->
                     let found = findIntrospected ctx name
                     match ctx.TryArg "includeDeprecated" with
-                    | None | Some false -> found.Fields |> Option.map Array.toSeq
-                    | Some true -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
+                    | Some true ->  found.Fields |> Option.map Array.toSeq
+                    | _ -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
         Define.Field("interfaces", Nullable (ListOf __Type), resolve = fun ctx t -> 
             match t.Name with 
             | None -> None

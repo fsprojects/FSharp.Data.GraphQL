@@ -19,6 +19,10 @@ open System.Collections
 
 type TypeName = string
 
+type OperationError =
+    { Message : string
+      Path : obj [] }
+
 module QuotationHelpers = 
     let rec coerceValues fieldTypeLookup fields = 
         let arrayExpr (arrayType : Type) (v : obj) =
@@ -284,6 +288,15 @@ module JsonValueHelper =
             | _ -> failwithf "Expected data field of root type to be a Record type, but type is %A." data
         | None -> None
 
+    let getResponseErrors (responseJson : JsonValue) =
+        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "errors") with
+        | Some (_, errors) ->
+            match errors with
+            | JsonValue.Array [||] | JsonValue.Null -> None
+            | JsonValue.Array items -> Some items
+            | _ -> failwithf "Expected error field of root type to be an Array type, but type is %A." errors
+        | None -> None
+
     let getResponseCustomFields (responseJson : JsonValue) =
         getResponseFields responseJson
         |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
@@ -450,6 +463,21 @@ module JsonValueHelper =
         removeTypeNameField fields
         |> List.map (firstUpper >> mapper)
 
+    let getErrors (errors : JsonValue list) =
+        let errorMapper = function
+            | JsonValue.Record fields ->
+                match fields |> Array.tryFind (fun (name, _) -> name = "message"), fields |> Array.tryFind (fun (name, _) -> name = "path") with
+                | Some (_, JsonValue.String message), Some (_, JsonValue.Array path) ->
+                    let pathMapper = function
+                        | JsonValue.String x -> box x
+                        | JsonValue.Float x -> box (int x)
+                        | JsonValue.Number x -> box (int x)
+                        | _ -> failwith "Error parsing response errors. A item in the path is neither a String or a Number."
+                    { Message = message; Path = Array.map pathMapper path }
+                | _ -> failwith "Error parsing response errors. Unsupported errors field format."
+            | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
+        List.map errorMapper errors
+
 type OperationResultProvidingInformation =
     { SchemaTypeNames : string []
       SchemaTypes : IntrospectionType []
@@ -459,6 +487,8 @@ type OperationResultBase (responseJson : string) =
     member private __.ResponseJson = JsonValue.Parse responseJson
 
     member private x._DataFields = JsonValueHelper.getResponseDataFields x.ResponseJson |> Option.map List.ofArray
+
+    member private x._Errors = JsonValueHelper.getResponseErrors x.ResponseJson |> Option.map List.ofArray
     
     member private x._CustomFields = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
 
@@ -483,8 +513,16 @@ type OperationResultBase (responseJson : string) =
                             let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
                             Some (RecordBase(operationType.Name, props)) @@>)
             ProvidedProperty("Data", operationType, getterCode)
-        
-        let members : MemberInfo list = [ddef]
+        let edef =
+            let getterCode (args : Expr list) =
+                <@@ let this = %%args.[0] : OperationResultBase
+                    let efdef = typeof<OperationResultBase>.GetProperty("_Errors", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                    let errors = efdef.GetValue(this) :?> JsonValue list option
+                    match errors with
+                    | Some [] | None -> None
+                    | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
+            ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
+        let members : MemberInfo list = [ddef; edef]
         tdef.AddMembers(members)
         tdef
 
@@ -573,7 +611,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
             | TypeKind.SCALAR when tref.Name.IsSome ->
                 if Types.scalar.ContainsKey(tref.Name.Value)
-                then Types.scalar.[tref.Name.Value]
+                then Types.scalar.[tref.Name.Value] |> Types.makeOption
                 else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." tref.Name.Value
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with

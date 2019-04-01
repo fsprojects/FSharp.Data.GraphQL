@@ -93,7 +93,7 @@ let handle : WebPart =
                 let serialized = json result
                 return! http |> Successful.OK serialized
             | None ->
-                let! schemaResult = Executor(schema).AsyncExecute(Introspection.introspectionQuery)
+                let! schemaResult = Executor(schema).AsyncExecute(Introspection.IntrospectionQuery)
                 return! http |> Successful.OK (json schemaResult)
         }
 

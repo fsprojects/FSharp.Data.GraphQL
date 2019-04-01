@@ -64,11 +64,16 @@ printfn "Server: %s\n" operation.ServerUrl
 //let result = operation.Run()
 let result = operation.AsyncRun() |> Async.RunSynchronously
 
-// If the operation were successfull, result data will be on the Data property.
+// If the operation runs without any error, result data will be on the Data property.
 let data = result.Data
+
+// If the operation does not have a Data (None), it could be failed on the server and the errors are mapped
+// to the Error property.
+let errors = result.Errors
 
 // Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" data
+printfn "Errors: %A\n" errors
 
 let hero = data.Value.Hero.Value
 
