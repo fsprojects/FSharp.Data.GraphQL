@@ -24,7 +24,9 @@ module GraphQLClient =
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
-                | _ -> Map.ofSeq request.Variables |> Serialization.toJsonValue
+                | _ -> 
+                    let json = Map.ofSeq request.Variables |> Serialization.toJsonValue
+                    json.ToString() |> JsonValue.String
             let operationName =
                 match request.OperationName with
                 | Some x -> JsonValue.String x

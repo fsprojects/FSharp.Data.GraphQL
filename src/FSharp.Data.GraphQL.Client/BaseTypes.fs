@@ -540,23 +540,14 @@ type OperationResultBase (responseJson : string) =
 
     override x.GetHashCode() = x.ResponseJson.GetHashCode()
 
-type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>, variables : seq<string * obj>) =
+type OperationBase (serverUrl : string) =
     member __.ServerUrl = serverUrl
 
-    member __.CustomHttpHeaders = 
-        match customHttpHeaders with
-        | null -> [||]
-        | _ -> Array.ofSeq customHttpHeaders
-
-    member __.Variables = 
-        match variables with
-        | null -> [||]
-        | _ -> Array.ofSeq variables
-
     static member internal MakeProvidedType(userQuery,
-                                            operationName : string option, 
+                                            operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
-                                            schemaTypes : Map<string, IntrospectionType>, 
+                                            schemaTypes : Map<string, IntrospectionType>,
+                                            schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                                             operationType : Type) =
         let query = 
             let ast = Parser.parse userQuery
@@ -570,36 +561,101 @@ type OperationBase (serverUrl : string, customHttpHeaders : seq<string * string>
               SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
               OperationTypeName = operationTypeName }
         let rtdef = OperationResultBase.MakeProvidedType(info, operationType)
+        let variables =
+            let rec mapVariable (variableName : string) (vartype : InputType) =
+                match vartype with
+                | NamedType typeName ->
+                    match Types.scalar.TryFind(typeName) with
+                    | Some t -> (variableName, Types.makeOption t)
+                    | None ->
+                        match schemaProvidedTypes.TryFind(typeName) with
+                        | Some t -> (variableName, Types.makeOption t)
+                        | None -> failwithf "Unable to find variable type \"%s\" on the schema definition." typeName
+                | ListType itype -> 
+                    let (name, t) = mapVariable variableName itype
+                    (name, t |> Types.makeArray |> Types.makeOption)
+                | NonNullType itype -> 
+                    let (name, t) = mapVariable variableName itype
+                    (name, Types.unwrapOption t)
+            operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
         let rundef = 
             let invoker (args : Expr list) =
-                let operationName = Option.toObj operationName
+                let operationName = Option.toObj operationDefinition.Name
+                let variables = 
+                    let args =
+                        let names = variables |> List.map fst
+                        let args = 
+                            match args with
+                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                            | _ -> []
+                        let mapper (name : string, value : Expr) =
+                            let value = Expr.Coerce(value, typeof<obj>)
+                            <@@ (name, %%value) @@>
+                        List.zip names args |> List.map mapper
+                    Expr.NewArray(typeof<string * obj>, args)
+                let customHttpHeaders =
+                    match args with
+                    | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
+                    | _ -> <@@ null @@>
                 <@@ let this = %%args.[0] : OperationBase
+                    let customHttpHeaders = 
+                        let headers = %%customHttpHeaders : seq<string * string>
+                        match headers with
+                        | null -> [||]
+                        | _ -> Array.ofSeq headers
                     let request =
                         { ServerUrl = this.ServerUrl
-                          CustomHeaders = this.CustomHttpHeaders
+                          CustomHeaders = customHttpHeaders
                           OperationName = Option.ofObj operationName
                           Query = query
-                          Variables = this.Variables }
+                          Variables = %%variables }
                     let responseJson = GraphQLClient.sendRequest request
                     OperationResultBase(responseJson) @@>
-            let mdef = ProvidedMethod("Run", [], rtdef, invoker)
+            let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+            let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
             mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
             mdef
-        let arundef =
+        let arundef = 
             let invoker (args : Expr list) =
-                let operationName = Option.toObj operationName
+                let operationName = Option.toObj operationDefinition.Name
+                let variables = 
+                    let args =
+                        let names = variables |> List.map fst
+                        let args = 
+                            match args with
+                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                            | _ -> []
+                        let mapper (name : string, value : Expr) =
+                            let value = Expr.Coerce(value, typeof<obj>)
+                            <@@ (name, %%value) @@>
+                        List.zip names args |> List.map mapper
+                    Expr.NewArray(typeof<string * obj>, args)
+                let customHttpHeaders =
+                    match args with
+                    | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
+                    | _ -> <@@ null @@>
                 <@@ let this = %%args.[0] : OperationBase
+                    let customHttpHeaders = 
+                        let headers = %%customHttpHeaders : seq<string * string>
+                        match headers with
+                        | null -> [||]
+                        | _ -> Array.ofSeq headers
                     let request =
                         { ServerUrl = this.ServerUrl
-                          CustomHeaders = this.CustomHttpHeaders
+                          CustomHeaders = customHttpHeaders
                           OperationName = Option.ofObj operationName
                           Query = query
-                          Variables = this.Variables }
+                          Variables = %%variables }
                     async {
                         let! responseJson = GraphQLClient.sendRequestAsync request
                         return OperationResultBase(responseJson)
                     } @@>
-            ProvidedMethod("AsyncRun", [], Types.makeAsync rtdef, invoker)
+            let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+            let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
+            mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
+            mdef
         let members : MemberInfo list = [rtdef; rundef; arundef]
         tdef.AddMembers(members)
         tdef
@@ -737,34 +793,12 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     match operationTypeRef.Name with
                     | Some name -> name
                     | None -> failwith "Error parsing query. Operation type does not have a name."
-                let odef = OperationBase.MakeProvidedType(query, operationName, operationTypeName, schemaTypes, operationType)
+                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
-                        let customHttpHeaders = (%%args.[1] : seq<string * string>)
-                        // TODO : map variables from parameters
-                        let variables : seq<string * obj> = Seq.empty
-                        OperationBase(this.ServerUrl, customHttpHeaders, variables) @@>
-                let varprm =
-                    let rec mapVariable (vartype : InputType) =
-                        match vartype with
-                        | NamedType name ->
-                            match Types.scalar.TryFind(name) with
-                            | Some t -> (name, Types.makeOption t)
-                            | None ->
-                                match schemaProvidedTypes.TryFind(name) with
-                                | Some t -> (name, Types.makeOption t)
-                                | None -> failwithf "Unable to find variable type %s on the schema definition." name
-                        | ListType itype -> 
-                            let (name, t) = mapVariable itype
-                            (name, t |> Types.makeArray |> Types.makeOption)
-                        | NonNullType itype -> 
-                            let (name, t) = mapVariable itype
-                            (name, Types.unwrapOption t)
-                    operationDefinition.VariableDefinitions
-                    |> List.map ((fun vdef -> mapVariable vdef.Type) >> (fun (name, t) -> ProvidedParameter(name, t)))
-                let prm = ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None) :: varprm
-                let mdef = ProvidedMethod(mname, prm, odef, invoker)
+                        OperationBase(this.ServerUrl) @@>
+                let mdef = ProvidedMethod(mname, [], odef, invoker)
                 mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
                 let members : MemberInfo list = [odef; mdef]
                 tdef.AddMembers(members)

@@ -31,10 +31,6 @@ let runtimeUrl = "http://localhost:8084"
 // provider definition.
 let ctx = MyProvider.GetContext(runtimeUrl)
 
-// If your server requires custom HTTP headers (for example, authentication headers),
-// you can specify them as a (string * string) seq.
-let customHttpHeaders : (string * string) seq = upcast [||]
-
 // The operation method can be used to make queries, mutations, and subscriptions.
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
@@ -55,14 +51,17 @@ let operation =
           }
         }
       }
-    }""">(customHttpHeaders)
+    }""">()
 
-printfn "Headers: %A" operation.CustomHttpHeaders
 printfn "Server: %s\n" operation.ServerUrl
 
+// If your server requires custom HTTP headers (for example, authentication headers),
+// you can specify them as a (string * string) seq.
+let customHttpHeaders : (string * string) seq = upcast [||]
+
 // To run an operation, you just need to call the Run or AsyncRun method.
-//let result = operation.Run()
-let result = operation.AsyncRun() |> Async.RunSynchronously
+//let result = operation.Run(customHttpHeaders)
+let result = operation.AsyncRun(customHttpHeaders) |> Async.RunSynchronously
 
 // If the operation runs without any error, result data will be on the Data property.
 let data = result.Data
