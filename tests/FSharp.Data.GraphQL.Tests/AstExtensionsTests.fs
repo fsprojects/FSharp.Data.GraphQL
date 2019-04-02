@@ -6,7 +6,6 @@ module FSharp.Data.GraphQL.Tests.AstExtensionsTests
 open Xunit
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
-open FSharp.Data.GraphQL.Execution
 
 // TODO: By GraphQL language spec, query operations don't need to have "query" token or a query name.
 // at the moment, parser is requiring both.
@@ -264,15 +263,31 @@ let ``Should generate information map correctly`` () =
 }
 """
     let document = parse query
-    let actual = document.GetInfoMap() |> Map.toList |> List.map (fun (k, v) -> k, v |> Map.toList)
-    let expected = [ (Some "q", [
-        [], [TypeField "hero"]
-        ["friends"; "hero"], [
-            FragmentField ("Droid","primaryFunction")
-            FragmentField ("Droid","id")
-            FragmentField ("Human","homePlanet")
-            FragmentField ("Human","id") ]
-        ["hero"], [
-            TypeField "friends"
-            TypeField "name"] ]) ]
+    let actual = document.GetInfoMap() |> Map.toList
+    let expected = [(Some "q", [TypeField
+     {Name = "hero";
+      Alias = None;
+      Fields =
+       [TypeField
+          {Name = "friends";
+           Alias = None;
+           Fields =
+            [FragmentField {Name = "primaryFunction";
+                            Alias = None;
+                            TypeCondition = "Droid";
+                            Fields = [];};
+             FragmentField {Name = "id";
+                            Alias = None;
+                            TypeCondition = "Droid";
+                            Fields = [];};
+             FragmentField {Name = "homePlanet";
+                            Alias = None;
+                            TypeCondition = "Human";
+                            Fields = [];};
+             FragmentField {Name = "id";
+                            Alias = None;
+                            TypeCondition = "Human";
+                            Fields = [];}];}; TypeField {Name = "name";
+                                                         Alias = None;
+                                                         Fields = [];}];}])]
     actual |> equals expected
