@@ -918,7 +918,10 @@ type ProviderBase private () =
                     providedTypes.Add(itype.Name, tdef)
                     tdef
                 | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
-        schemaTypes |> Map.iter (fun _ itype -> getProvidedType itype |> ignore)
+        let ignoredKinds = [TypeKind.SCALAR; TypeKind.LIST; TypeKind.NON_NULL]
+        schemaTypes
+        |> Map.filter (fun _ itype -> not (List.contains itype.Kind ignoredKinds))
+        |> Map.iter (fun _ itype -> getProvidedType itype |> ignore)
         let possibleTypes (itype : IntrospectionType) =
             match itype.PossibleTypes with
             | Some trefs -> trefs |> Array.map (getSchemaType >> getProvidedType)
