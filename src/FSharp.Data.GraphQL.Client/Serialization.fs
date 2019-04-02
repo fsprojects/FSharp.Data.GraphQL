@@ -237,7 +237,7 @@ module Serialization =
         | _ ->
             let xtype = x.GetType()
             let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-            let items = xprops |> Array.map (fun p -> (p.Name, p.GetValue(x) |> toJsonValue))
+            let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
             JsonValue.Record items
 
     let serializeRecord (x : obj) =

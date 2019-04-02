@@ -12,26 +12,19 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 let ctx = MyProvider.GetContext()
 
+let filter = MyProvider.Types.ThingFilter(format = "Cubic")
+
 let operation = 
-    ctx.Operation<"""query q($id: String!) {
-      hero(id: $id) {
-        name
-        friends {
-          ... on Human {
-            id
-            homePlanet
-          }
-          ... on Droid {
-            id
-            primaryFunction
-          }
-        }
-      }
-    }""">()
+    ctx.Operation<"""query q($filter: ThingFilter!) {
+    things(filter: $filter) {
+      id
+      format
+    }
+  }""">()
 
 let headers = ["AuthToken", System.Guid.NewGuid().ToString()]
 
-let result = operation.Run(id = "1000", customHttpHeaders = headers)
+let result = operation.Run(filter = filter, customHttpHeaders = headers)
 
 printfn "Result: %A" result.Data
 printfn "Errors: %A" result.Errors

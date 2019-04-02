@@ -136,7 +136,7 @@ module internal ReflectionHelper =
                     let valueType = value.GetType().GetTypeInfo()
                     if valueType = optionType
                     then value
-                    elif t .GetTypeInfo().IsAssignableFrom(valueType)
+                    elif t.GetTypeInfo().IsAssignableFrom(valueType)
                     then createSome.Invoke(null, [| value |])
                     else null
                 else none

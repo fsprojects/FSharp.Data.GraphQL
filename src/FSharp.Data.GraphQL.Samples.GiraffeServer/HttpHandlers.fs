@@ -4,6 +4,7 @@ open System.Text
 open Giraffe
 open Microsoft.AspNetCore.Http
 open Newtonsoft.Json
+open Newtonsoft.Json.Linq
 open FSharp.Data.GraphQL.Execution
 open System.IO
 open FSharp.Data.GraphQL
@@ -25,6 +26,10 @@ module HttpHandlers =
         setHttpHeader "Content-Type" "application/json"
 
     let private graphiQL (next : HttpFunc) (ctx : HttpContext) = task {
+        printfn "Request headers:"
+        ctx.Request.Headers
+        |> Seq.map (|KeyValue|)
+        |> Seq.iter (fun (name, value) -> value.ToArray() |> Array.iter (fun value -> printfn "%s: %s" name value))
         let jsonSettings =
             JsonSerializerSettings()
             |> tee (fun s ->
@@ -48,9 +53,13 @@ module HttpHandlers =
                 | Some s when System.String.IsNullOrWhiteSpace(s) -> None
                 | s -> s
             else None
-        let mapString =
-            JsonConvert.DeserializeObject<Map<string, obj>>
-            |> Option.map
+        let mapString (s : string option) =
+            let mapper (v : obj) =
+                match v with
+                | null -> null
+                | :? JObject as jobj -> box (jobj.ToObject<ThingFilter>())
+                | _ -> v
+            Option.map (JsonConvert.DeserializeObject<Map<string, obj>> >> (Map.map (fun _ v -> mapper v))) s
         let removeSpacesAndNewLines (str : string) = 
             str.Trim().Replace("\r\n", " ")
         let readStream (s : Stream) =

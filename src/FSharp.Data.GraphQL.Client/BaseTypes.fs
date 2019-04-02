@@ -133,9 +133,25 @@ type RecordProperty =
       Value : obj }
 
 type RecordBase (name : string, properties : RecordProperty seq) =
+    do
+        if not (isNull properties)
+        then
+            let distinctCount = properties |> Seq.map (fun p -> p.Name) |> Seq.distinct |> Seq.length
+            if distinctCount <> Seq.length properties
+            then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
+
     member private __.Name = name
 
     member private __.Properties = List.ofSeq properties
+    
+    member x.ToDictionary() =
+        let mapper (v : obj) =
+            match v with
+            | :? RecordBase as v -> box (v.ToDictionary())
+            | _ -> v
+        x.Properties
+        |> Seq.map (fun p -> p.Name, mapper p.Value)
+        |> dict
 
     static member internal MakeProvidedType(metadata : ProvidedTypeMetadata, properties : RecordPropertyMetadata list, baseType : Type option) =
         let baseType = Option.defaultValue typeof<RecordBase> baseType
@@ -578,25 +594,31 @@ type OperationBase (serverUrl : string) =
                     let (name, t) = mapVariable variableName itype
                     (name, Types.unwrapOption t)
             operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
+        let varExprMapper (variables : (string * Type) list) (args : Expr list) =
+            let exprMapper (name : string, value : Expr) =
+                let value = Expr.Coerce(value, typeof<obj>)
+                <@@ let value = 
+                        match (%%value : obj) with
+                        | :? RecordBase as v -> box (v.ToDictionary())
+                        | v -> v
+                    (name, value) @@>
+            let args =
+                let names = variables |> List.map fst
+                let args = 
+                    match args with
+                    | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                    | _ -> []
+                List.zip names args |> List.map exprMapper
+            Expr.NewArray(typeof<string * obj>, args)
+        let customHttpHeadersExprMapper (args : Expr list) =
+            match args with
+            | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
+            | _ -> <@@ null @@>
         let rundef = 
             let invoker (args : Expr list) =
                 let operationName = Option.toObj operationDefinition.Name
-                let variables = 
-                    let args =
-                        let names = variables |> List.map fst
-                        let args = 
-                            match args with
-                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
-                            | _ -> []
-                        let mapper (name : string, value : Expr) =
-                            let value = Expr.Coerce(value, typeof<obj>)
-                            <@@ (name, %%value) @@>
-                        List.zip names args |> List.map mapper
-                    Expr.NewArray(typeof<string * obj>, args)
-                let customHttpHeaders =
-                    match args with
-                    | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
-                    | _ -> <@@ null @@>
+                let variables = varExprMapper variables args
+                let customHttpHeaders = customHttpHeadersExprMapper args
                 <@@ let this = %%args.[0] : OperationBase
                     let customHttpHeaders = 
                         let headers = %%customHttpHeaders : seq<string * string>
@@ -619,22 +641,8 @@ type OperationBase (serverUrl : string) =
         let arundef = 
             let invoker (args : Expr list) =
                 let operationName = Option.toObj operationDefinition.Name
-                let variables = 
-                    let args =
-                        let names = variables |> List.map fst
-                        let args = 
-                            match args with
-                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
-                            | _ -> []
-                        let mapper (name : string, value : Expr) =
-                            let value = Expr.Coerce(value, typeof<obj>)
-                            <@@ (name, %%value) @@>
-                        List.zip names args |> List.map mapper
-                    Expr.NewArray(typeof<string * obj>, args)
-                let customHttpHeaders =
-                    match args with
-                    | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
-                    | _ -> <@@ null @@>
+                let variables = varExprMapper variables args
+                let customHttpHeaders = customHttpHeadersExprMapper args
                 <@@ let this = %%args.[0] : OperationBase
                     let customHttpHeaders = 
                         let headers = %%customHttpHeaders : seq<string * string>
@@ -825,11 +833,12 @@ type ProviderBase private () =
         let makeOption = typeModifier Types.makeOption
         let makeArrayOption = typeModifier (Types.makeArray >> Types.makeOption)
         let unwrapOption = typeModifier Types.unwrapOption
-        let ofType (field : IntrospectionField) = { field with Type = field.Type.OfType.Value }
-        let rec getPropertyMetadata (field : IntrospectionField) : RecordPropertyMetadata =
+        let ofFieldType (field : IntrospectionField) = { field with Type = field.Type.OfType.Value }
+        let ofInputFieldType (field : IntrospectionInputVal) = { field with Type = field.Type.OfType.Value }
+        let rec getFieldMetadata (field : IntrospectionField) : RecordPropertyMetadata =
             match field.Type.Kind with
-            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofType field |> getPropertyMetadata |> unwrapOption
-            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofType field |> getPropertyMetadata |> makeArrayOption
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> getFieldMetadata |> unwrapOption
+            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> getFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
                     if Types.scalar.ContainsKey(field.Type.Name.Value)
@@ -840,12 +849,35 @@ type ProviderBase private () =
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
                 |> makeOption
-            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
+            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
                 let itype = getSchemaType field.Type
                 let providedType = getProvidedType itype
                 { Name = field.Name
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
+                  Type = providedType }
+                |> makeOption
+            | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
+        and getInputFieldMetadata (field : IntrospectionInputVal) : RecordPropertyMetadata =
+            match field.Type.Kind with
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofInputFieldType field |> getInputFieldMetadata |> unwrapOption
+            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofInputFieldType field |> getInputFieldMetadata |> makeArrayOption
+            | TypeKind.SCALAR when field.Type.Name.IsSome ->
+                let providedType =
+                    if Types.scalar.ContainsKey(field.Type.Name.Value)
+                    then Types.scalar.[field.Type.Name.Value]
+                    else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." field.Type.Name.Value
+                { Name = field.Name
+                  Description = field.Description
+                  DeprecationReason = None
+                  Type = providedType }
+                |> makeOption
+            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
+                let itype = getSchemaType field.Type
+                let providedType = getProvidedType itype
+                { Name = field.Name
+                  Description = field.Description
+                  DeprecationReason = None
                   Type = providedType }
                 |> makeOption
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
@@ -859,7 +891,16 @@ type ProviderBase private () =
                     let properties = 
                         itype.Fields
                         |> Option.defaultValue [||]
-                        |> Array.map getPropertyMetadata
+                        |> Array.map getFieldMetadata
+                        |> List.ofArray
+                    let tdef = RecordBase.MakeProvidedType(metadata, properties, None)
+                    providedTypes.Add(itype.Name, tdef)
+                    tdef
+                | TypeKind.INPUT_OBJECT ->
+                    let properties = 
+                        itype.InputFields
+                        |> Option.defaultValue [||]
+                        |> Array.map getInputFieldMetadata
                         |> List.ofArray
                     let tdef = RecordBase.MakeProvidedType(metadata, properties, None)
                     providedTypes.Add(itype.Name, tdef)
@@ -876,7 +917,7 @@ type ProviderBase private () =
                     let tdef = EnumBase.MakeProvidedType(itype.Name, items)
                     providedTypes.Add(itype.Name, tdef)
                     tdef
-                | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum or Interface type." itype.Name
+                | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
         schemaTypes |> Map.iter (fun _ itype -> getProvidedType itype |> ignore)
         let possibleTypes (itype : IntrospectionType) =
             match itype.PossibleTypes with

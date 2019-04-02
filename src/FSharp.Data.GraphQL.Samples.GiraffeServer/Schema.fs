@@ -33,6 +33,9 @@ type Planet =
         x.IsMoon <- b
         x
 
+type ThingFilter =
+    { Format : string }
+
 type Root =
     { ClientId: string }
 
@@ -121,6 +124,11 @@ module Schema =
     let getPlanet id =
         planets |> List.tryFind (fun p -> p.Id = id)
 
+    let getThings (filter : ThingFilter option) =
+        match filter with
+        | Some filter -> things |> List.filter (fun t -> t.Shape = filter.Format)
+        | None -> things
+
     let characters =
         (humans |> List.map Human) @ (droids |> List.map Droid)
 
@@ -130,6 +138,12 @@ module Schema =
 
     let getCharacter id =
         characters |> List.tryFind (matchesId id)
+
+    let ThingFilterType =
+        Define.InputObject<ThingFilter>(
+            name = "ThingFilter",
+            fields = [ Define.Input("format", String, description = "The format of  the shape to be filtered.") ],
+            description = "A filter used to select a thing.")
 
     let ThingType =
         Define.Interface(
@@ -252,7 +266,7 @@ module Schema =
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
                 Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
                 Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))
-                Define.Field("things", ListOf ThingType, "Gets things", fun _ _ -> things).WithQueryWeight(1.0) ])
+                Define.Field("things", ListOf ThingType, "Gets things", [ Define.Input("filter", Nullable ThingFilterType) ], fun ctx _ -> getThings (ctx.TryArg("filter") |> Option.flatten)).WithQueryWeight(1.0) ])
 
     let Subscription =
         Define.SubscriptionObject<Root>(
