@@ -70,9 +70,13 @@ let data = result.Data
 // to the Error property.
 let errors = result.Errors
 
+// Custom fields are returned here (for example, documentId on our sample Giraffe Server.)
+let customData = result.CustomData
+
 // Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" data
 printfn "Errors: %A\n" errors
+printfn "Custom data: %A\n" customData
 
 let hero = data.Value.Hero.Value
 

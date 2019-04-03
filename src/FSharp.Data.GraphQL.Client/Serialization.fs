@@ -182,6 +182,23 @@ module Serialization =
         let t = typeof<'T>
         downcast (JsonValue.Parse(json) |> convert t)
 
+    let deserializeMap values =
+        let rec helper (acc : (string *obj) list) (values : (string * JsonValue) list) =
+            match List.rev values with
+            | [] -> acc
+            | (name, value) :: tail ->
+                let value = 
+                    match value with
+                    | JsonValue.Record fields -> name, (List.ofArray fields |> helper [] |> Map.ofList |> box)
+                    | JsonValue.Null -> name, null
+                    | JsonValue.String s -> name, box s
+                    | JsonValue.Number n -> name, box (int n)
+                    | JsonValue.Float f -> name, box f
+                    | JsonValue.Array items -> name, (List.ofArray items |> List.map (fun item -> null, item) |> helper [] |> List.map snd |> box)
+                    | JsonValue.Boolean b -> name, box b
+                helper (value :: acc) tail
+        helper [] values |> Map.ofList
+
     let (|EnumerableValue|_|) (x : obj) =
         match x with
         | :? IEnumerable as x -> Some (EnumerableValue (Seq.cast<obj> x |> Array.ofSeq))

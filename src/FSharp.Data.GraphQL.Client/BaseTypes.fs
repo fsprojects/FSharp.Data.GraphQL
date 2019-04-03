@@ -140,16 +140,17 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             if distinctCount <> Seq.length properties
             then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
 
-    member private __.Name = name
+    member private __._Name = name
 
-    member private __.Properties = List.ofSeq properties
+    member private __._Properties = List.ofSeq properties
+    
     
     member x.ToDictionary() =
         let mapper (v : obj) =
             match v with
             | :? RecordBase as v -> box (v.ToDictionary())
             | _ -> v
-        x.Properties
+        x._Properties
         |> Seq.map (fun p -> p.Name, mapper p.Value)
         |> dict
 
@@ -162,7 +163,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let pname = metadata.Name.FirstCharUpper()
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
-                    let propdef = typeof<RecordBase>.GetProperty("Properties", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                    let propdef = typeof<RecordBase>.GetProperty("_Properties", BindingFlags.NonPublic ||| BindingFlags.Instance)
                     let props = propdef.GetValue(this) :?> RecordProperty list
                     match props |> List.tryFind (fun prop -> prop.Name = pname) with
                     | Some prop -> prop.Value
@@ -178,7 +179,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let asType = 
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
                         let baseName = propdef.GetValue(this) :?> string
                         if baseName = name then this
                         else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name baseName name name @@>
@@ -186,7 +187,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let tryAsType =
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
                         let baseName = propdef.GetValue(this) :?> string
                         if baseName = name then Some this
                         else None @@>
@@ -194,7 +195,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let isType =
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
                         let baseName = propdef.GetValue(this) :?> string
                         baseName = name @@>
                 ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
@@ -232,18 +233,18 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | [] -> ()
             | [prop] -> sb.Append(sprintf "%s = %A;" prop.Name prop.Value) |> ignore
             | prop :: tail -> sb.AppendLine(sprintf "%s = %A;" prop.Name prop.Value) |> ignore; printProperties tail
-        printProperties x.Properties
+        printProperties x._Properties
         sb.Append("}") |> ignore
         sb.ToString()
 
-    member x.Equals(other : RecordBase) = x.Name = other.Name && x.Properties = other.Properties
+    member x.Equals(other : RecordBase) = x._Name = other._Name && x._Properties = other._Properties
 
     override x.Equals(other : obj) =
         match other with
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Properties.GetHashCode()
+    override x.GetHashCode() = x._Name.GetHashCode() ^^^ x._Properties.GetHashCode()
 
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
@@ -500,13 +501,13 @@ type OperationResultProvidingInformation =
       OperationTypeName : string }
 
 type OperationResultBase (responseJson : string) =
-    member private __.ResponseJson = JsonValue.Parse responseJson
+    member private __._ResponseJson = JsonValue.Parse responseJson
 
-    member private x._DataFields = JsonValueHelper.getResponseDataFields x.ResponseJson |> Option.map List.ofArray
+    member private x._DataFields = JsonValueHelper.getResponseDataFields x._ResponseJson |> Option.map List.ofArray
 
-    member private x._Errors = JsonValueHelper.getResponseErrors x.ResponseJson |> Option.map List.ofArray
+    member private x._Errors = JsonValueHelper.getResponseErrors x._ResponseJson |> Option.map List.ofArray
     
-    member private x._CustomFields = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
+    member private x._CustomFields = JsonValueHelper.getResponseCustomFields x._ResponseJson |> List.ofArray
 
     static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
@@ -542,19 +543,28 @@ type OperationResultBase (responseJson : string) =
             let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
             prop.AddXmlDoc("Contains erros returned by the operation on the server.")
             prop
-        let members : MemberInfo list = [ddef; edef]
+        let cdef =
+            let getterCode (args : Expr list) =
+                <@@ let this = %%args.[0] : OperationResultBase
+                    let cfdef = typeof<OperationResultBase>.GetProperty("_CustomFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                    let customFields = cfdef.GetValue(this) :?> (string * JsonValue) list
+                    Serialization.deserializeMap customFields @@>
+            let prop = ProvidedProperty("CustomData", typeof<Map<string, obj>>, getterCode)
+            prop.AddXmlDoc("Contains custom fields that came in the response of the server (fields except data and errors).")
+            prop
+        let members : MemberInfo list = [ddef; edef; cdef]
         tdef.AddMembers(members)
         tdef
 
     member x.Equals(other : OperationResultBase) =
-        x.ResponseJson = other.ResponseJson
+        x._ResponseJson = other._ResponseJson
 
     override x.Equals(other : obj) =
         match other with
         | :? OperationResultBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.ResponseJson.GetHashCode()
+    override x.GetHashCode() = x._ResponseJson.GetHashCode()
 
 type OperationBase (serverUrl : string) =
     member __.ServerUrl = serverUrl
