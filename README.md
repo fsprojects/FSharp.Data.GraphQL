@@ -154,6 +154,74 @@ let updatedHero = { hero with Name = "Han Solo - Test" }
 schemaConfig.LiveFieldSubscriptionProvider.Publish "Hero" "name" updatedHero
 ```
 
+## Client Provider
+
+Our client library now has a completely redesigned type provider. To start using it, you will first need access to the introspection schema for the server you are trying to connect. This can be done with the provider in one of two ways:
+
+1. Provide an URL to the desired GraphQL server (without any custom HTTP headers required). The provider will access the server, send an Introspection Query, and use the schema to provide the types used to make queries.
+
+```fsharp
+type MyProvider = GraphQLProvider<"http://some.graphqlserver.org">
+```
+
+2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/files/introspection_query.txt) on the desired server and saving it into a file on the same path as the project using the provider:
+
+```fsharp
+type MyProvider = GraphQLProvider<"introspection.json">
+```
+
+From now on, you can start running queries and mutations:
+
+```fsharp
+let ctx = MyProvider.GetContext(runtimeUrl)
+
+let operation = 
+    ctx.Operation<"""query q {
+      hero (id: "1001") {
+        name
+        appearsIn
+        homePlanet
+        friends {
+          ... on Human {
+            name
+            homePlanet
+          }
+          ... on Droid {
+            name
+            primaryFunction
+          }
+        }
+      }
+    }""">()
+
+// If your server requires custom HTTP headers (for example, authentication headers),
+// you can specify them as a (string * string) seq.
+let customHttpHeaders : (string * string) seq = upcast [||]
+
+// Custom HTTP header parameter is optional.
+let result = operation.Run(customHttpHeaders)
+
+// Query result objects have pretty-printing and structural equality.
+printfn "Data: %A\n" result.Data
+printfn "Errors: %A\n" result.Errors
+printfn "Custom data: %A\n" result.CustomData
+
+// Response from the server:
+// Data: Some
+//   {Hero = Some
+//   {Name = Some "Darth Vader";
+// AppearsIn = [|NewHope; Empire; Jedi|];
+// HomePlanet = Some "Tatooine";
+// Friends = [|Some {Name = Some "Wilhuff Tarkin";
+// HomePlanet = <null>;}|];};}
+
+// Errors: <null>
+
+// Custom data: map [("documentId", 1221427401)]
+```
+
+For more information about how to use the client provider, see the [examples folder](samples/client-provider).
+
 ## Middlewares
 
 You can create and use middlewares on top of the `Executor<'Root>` object.
