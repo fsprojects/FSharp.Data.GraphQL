@@ -45,8 +45,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql-client", "graphiql
 		samples\graphiql-client\.babelrc = samples\graphiql-client\.babelrc
 		samples\graphiql-client\index.html = samples\graphiql-client\index.html
 		samples\graphiql-client\index.jsx = samples\graphiql-client\index.jsx
+		samples\graphiql-client\package-lock.json = samples\graphiql-client\package-lock.json
 		samples\graphiql-client\package.json = samples\graphiql-client\package.json
-		samples\graphiql-client\server.fsx = samples\graphiql-client\server.fsx
 		samples\graphiql-client\webpack.config.js = samples\graphiql-client\webpack.config.js
 	EndProjectSection
 EndProject
@@ -74,11 +74,12 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
-		samples\client-provider\fableconfig.json = samples\client-provider\fableconfig.json
 		samples\client-provider\introspection.json = samples\client-provider\introspection.json
-		samples\client-provider\literals.fsx = samples\client-provider\literals.fsx
-		samples\client-provider\package.json = samples\client-provider\package.json
-		samples\client-provider\query.fsx = samples\client-provider\query.fsx
+		samples\client-provider\test1.fsx = samples\client-provider\test1.fsx
+		samples\client-provider\test2.fsx = samples\client-provider\test2.fsx
+		samples\client-provider\test3.fsx = samples\client-provider\test3.fsx
+		samples\client-provider\test4.fsx = samples\client-provider\test4.fsx
+		samples\client-provider\test5.fsx = samples\client-provider\test5.fsx
 	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared", "src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"
@@ -98,13 +99,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{D381D216-2
 		samples\todo-graphql\data\tasks.json = samples\todo-graphql\data\tasks.json
 	EndProjectSection
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.GiraffeServer", "src\FSharp.Data.GraphQL.Samples.GiraffeServer\FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj", "{C7DA852B-D30A-4209-B767-640224C7C31E}"
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BEFD8748-2467-45F9-A4AD-B450B12D5F78}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middlewares", "src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.GiraffeServer", "samples\FSharp.Data.GraphQL.Samples.GiraffeServer\FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj", "{4A99FD16-4CAA-4AA3-9C94-239E24C37330}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -164,18 +165,6 @@ Global
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|x64.Build.0 = Release|Any CPU
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|x86.ActiveCfg = Release|Any CPU
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}.Release|x86.Build.0 = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|Any CPU.Build.0 = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x64.ActiveCfg = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x64.Build.0 = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x86.ActiveCfg = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Debug|x86.Build.0 = Debug|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|Any CPU.ActiveCfg = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|Any CPU.Build.0 = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x64.ActiveCfg = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x64.Build.0 = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x86.ActiveCfg = Release|Any CPU
-		{C7DA852B-D30A-4209-B767-640224C7C31E}.Release|x86.Build.0 = Release|Any CPU
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}.Debug|x64.ActiveCfg = Debug|Any CPU
@@ -200,6 +189,18 @@ Global
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}.Release|x64.Build.0 = Release|Any CPU
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}.Release|x86.ActiveCfg = Release|Any CPU
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}.Release|x86.Build.0 = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|x64.Build.0 = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Debug|x86.Build.0 = Debug|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|Any CPU.Build.0 = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|x64.ActiveCfg = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|x64.Build.0 = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|x86.ActiveCfg = Release|Any CPU
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -218,9 +219,9 @@ Global
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{766203BF-7108-418F-BE92-87E7006E5E94} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 		{D381D216-2464-4F84-8DFF-2CB2F2507DDE} = {766203BF-7108-418F-BE92-87E7006E5E94}
-		{C7DA852B-D30A-4209-B767-640224C7C31E} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
+		{4A99FD16-4CAA-4AA3-9C94-239E24C37330} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
