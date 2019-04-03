@@ -1,5 +1,5 @@
 {
-  "documentId": 1746310730,
+  "documentId": -240132443,
   "data": {
     "__schema": {
       "queryType": {
@@ -941,7 +941,18 @@
             {
               "name": "things",
               "description": "Gets things",
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "INPUT_OBJECT",
+                    "name": "ThingFilter",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -998,7 +1009,18 @@
             {
               "name": "friends",
               "description": "The friends of the Droid, or an empty list if they have none.",
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "ObjectListFilter",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1064,7 +1086,7 @@
         {
           "kind": "ENUM",
           "name": "Episode",
-          "description": "One of the films in the Star Wars Trilogy",
+          "description": "One of the films in the Star Wars Trilogy.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -1093,7 +1115,7 @@
         {
           "kind": "UNION",
           "name": "Character",
-          "description": "A character in the Star Wars Trilogy",
+          "description": "A character in the Star Wars Trilogy.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -1142,7 +1164,18 @@
             {
               "name": "friends",
               "description": "The friends of the human, or an empty list if they have none.",
-              "args": [],
+              "args": [
+                {
+                  "name": "filter",
+                  "description": null,
+                  "type": {
+                    "kind": "SCALAR",
+                    "name": "ObjectListFilter",
+                    "ofType": null
+                  },
+                  "defaultValue": null
+                }
+              ],
               "type": {
                 "kind": "NON_NULL",
                 "name": null,
@@ -1259,11 +1292,11 @@
         {
           "kind": "INTERFACE",
           "name": "Thing",
-          "description": "Gets the shape of the thing.",
+          "description": "A thing.",
           "fields": [
             {
               "name": "format",
-              "description": "The format of the shape",
+              "description": "The format of the shape.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1279,7 +1312,7 @@
             },
             {
               "name": "id",
-              "description": "The ID of the shape",
+              "description": "The ID of the shape.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1292,6 +1325,22 @@
               },
               "isDeprecated": false,
               "deprecationReason": null
+            },
+            {
+              "name": "form",
+              "description": "The format of the shape.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": true,
+              "deprecationReason": "Use format field instead."
             }
           ],
           "inputFields": null,
@@ -1309,6 +1358,31 @@
               "ofType": null
             }
           ]
+        },
+        {
+          "kind": "INPUT_OBJECT",
+          "name": "ThingFilter",
+          "description": "A filter used to select a thing.",
+          "fields": null,
+          "inputFields": [
+            {
+              "name": "format",
+              "description": "The format of  the shape to be filtered.",
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "defaultValue": null
+            }
+          ],
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
         },
         {
           "kind": "OBJECT",
@@ -1410,8 +1484,24 @@
           "description": "A ball.",
           "fields": [
             {
+              "name": "form",
+              "description": "The format of the shape.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": true,
+              "deprecationReason": "Use format field instead."
+            },
+            {
               "name": "format",
-              "description": "The format of the ball",
+              "description": "The format of the ball.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1427,7 +1517,7 @@
             },
             {
               "name": "id",
-              "description": "The ID of the ball",
+              "description": "The ID of the ball.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1459,8 +1549,24 @@
           "description": "A box.",
           "fields": [
             {
+              "name": "form",
+              "description": "The format of the shape.",
+              "args": [],
+              "type": {
+                "kind": "NON_NULL",
+                "name": null,
+                "ofType": {
+                  "kind": "SCALAR",
+                  "name": "String",
+                  "ofType": null
+                }
+              },
+              "isDeprecated": true,
+              "deprecationReason": "Use format field instead."
+            },
+            {
               "name": "format",
-              "description": "The format of the box",
+              "description": "The format of the box.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1476,7 +1582,7 @@
             },
             {
               "name": "id",
-              "description": "The ID of the box",
+              "description": "The ID of the box.",
               "args": [],
               "type": {
                 "kind": "NON_NULL",
@@ -1499,6 +1605,16 @@
               "ofType": null
             }
           ],
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "SCALAR",
+          "name": "ObjectListFilter",
+          "description": "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
           "enumValues": null,
           "possibleTypes": null
         }

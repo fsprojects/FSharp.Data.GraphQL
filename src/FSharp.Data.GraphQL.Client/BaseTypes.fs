@@ -17,6 +17,18 @@ open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
 
+type IntrospectionLocation =
+    | Uri of address : string
+    | File of path : string
+    static member internal Create(value : string, resolutionFolder : string) =
+        let file = System.IO.Path.Combine(resolutionFolder, value)
+        if System.IO.File.Exists(file)
+        then File file
+        else 
+            match Uri.TryCreate(value, UriKind.Absolute) with
+            | (true, _) -> Uri value
+            | _ -> failwithf "Could not determine location of introspection. The introspection should be a valid GraphQL server URL, or a introspection JSON file on the path of the project or script."
+
 type TypeName = string
 
 type OperationError =
@@ -947,14 +959,19 @@ type ProviderBase private () =
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         providedTypes |> Seq.map(|KeyValue|) |> Map.ofSeq
 
-    static member internal MakeProvidedType(asm : Assembly, ns : string) =
+    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
-        let prm = [ProvidedStaticParameter("serverUrl", typeof<string>)]
+        let prm = [ProvidedStaticParameter("introspection", typeof<string>)]
         generator.DefineStaticParameters(prm, fun tname args ->
-            let serverUrl = args.[0] :?> string
-            let introspectionJson = GraphQLClient.sendIntrospectionRequest serverUrl
+            let introspectionLocation = 
+                let value = args.[0] :?> string
+                IntrospectionLocation.Create(value, resolutionFolder)
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             tdef.AddXmlDoc("A type provider for GraphQL operations.")
+            let introspectionJson =
+                match introspectionLocation with
+                | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest serverUrl
+                | File path -> System.IO.File.ReadAllText path
             let schema = Serialization.deserializeSchema introspectionJson
             let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
             let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
@@ -965,7 +982,10 @@ type ProviderBase private () =
             let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes)
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
             let ctxmdef =
-                let prm = [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
+                let prm = 
+                    match introspectionLocation with
+                    | Uri serverUrl -> [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
+                    | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
                 let invoker (args : Expr list) =
                     let serverUrl = args.[0]
                     Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr])

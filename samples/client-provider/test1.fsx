@@ -10,7 +10,14 @@ open FSharp.Data.GraphQL
 
 // The URL here is for design time purposes.
 // It connects to the server to be able to map its schema.
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+//type MyProvider = GraphQLProvider<"http://localhost:8084">
+
+// You can also provide the introspection schema yourself if you can't access the server
+// at design time. Just provide a file in the path of the project or a literal containing
+// the introspection query result.
+// WARNING: the introspection query result must contain all fields requested by the
+// standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
+type MyProvider = GraphQLProvider<"introspection.json">
 
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its
@@ -24,6 +31,7 @@ printfn "Things: %A\n" things
 
 // Once created the provider and the schema is successfully mapped,
 // We can start doing queries. You can optionally specify an runtime URL for the server.
+// NOTE: if you use a local introspection json file, the runtime URL is required.
 let runtimeUrl = "http://localhost:8084"
 
 // A context exists for reusing the same schema against different servers by filling an
