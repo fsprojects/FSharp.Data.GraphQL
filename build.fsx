@@ -213,13 +213,11 @@ Target.create "CleanDocs" (fun _ ->
 // is giving errors in Unix based operating systems.
 Target.create "Restore" (fun _ ->
     !! "src/**/*.??proj"
-    !! "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     -- "src/**/*.shproj"
     |> Seq.iter (DotNet.restore id))
 
 Target.create "Build" (fun _ ->
     !! "src/**/*.??proj"
-    !! "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     -- "src/**/*.shproj"
     |> Seq.iter (DotNet.build (fun options ->
         { options with 
@@ -231,7 +229,6 @@ Target.create "RunTests" (fun _ ->
     "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     |> DotNet.test (fun options ->
             { options with
-                NoBuild = true
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "-v=normal" } }))
