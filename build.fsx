@@ -212,8 +212,11 @@ Target.create "CleanDocs" (fun _ ->
 // We need to disable parallel restoring of projects to because running paket in parallel from Mono
 // is giving errors in Unix based operating systems.
 Target.create "Restore" (fun _ ->
-    "FSharp.Data.GraphQL.sln"
-    |> DotNet.restore (fun p -> { p with DisableParallel = true }))
+    !! "src/**/*.??proj"
+    !! "tests/**/*.??proj"
+    -- "src/**/*.shproj"
+    -- "tests/FSharp.Data.GraphQL.Tests.Sql/FSharp.Data.GraphQL.Tests.Sql.fsproj"
+    |> Seq.iter (DotNet.restore id))
 
 Target.create "Build" (fun _ ->
     "FSharp.Data.GraphQL.sln"
