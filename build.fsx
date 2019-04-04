@@ -213,9 +213,8 @@ Target.create "CleanDocs" (fun _ ->
 // is giving errors in Unix based operating systems.
 Target.create "Restore" (fun _ ->
     !! "src/**/*.??proj"
-    !! "tests/**/*.??proj"
+    !! "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     -- "src/**/*.shproj"
-    -- "tests/FSharp.Data.GraphQL.Tests.Sql/FSharp.Data.GraphQL.Tests.Sql.fsproj"
     |> Seq.iter (DotNet.restore id))
 
 Target.create "Build" (fun _ ->
