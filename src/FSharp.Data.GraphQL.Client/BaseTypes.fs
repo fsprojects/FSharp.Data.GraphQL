@@ -250,7 +250,10 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         sb.Append("}") |> ignore
         sb.ToString()
 
-    member x.Equals(other : RecordBase) = x._Name = other._Name && x._Properties = other._Properties
+    member x.Equals(other : RecordBase) = 
+        let xprops = x._Properties |> List.sortBy (fun x -> x.Name)
+        let yprops = other._Properties |> List.sortBy (fun x -> x.Name)
+        x._Name = other._Name && xprops = yprops
 
     override x.Equals(other : obj) =
         match other with
