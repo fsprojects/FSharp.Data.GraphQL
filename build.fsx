@@ -14,8 +14,14 @@ nuget Octokit //"
 
 #load ".fake/build.fsx/intellisense.fsx"
 
+#if !FAKE
+  #r "netstandard"
+  #r "Facades/netstandard"
+#endif
+
 open System
 open System.IO
+open System.Collections.Generic
 open Fake
 open Fake.Tools.Git
 open Fake.DotNet
@@ -27,7 +33,6 @@ open Fake.Tools
 open Fake.Core
 open Fake.Api
 open Octokit
-open System.Diagnostics
 
 // --------------------------------------------------------------------------------------
 // Information about the project are used
@@ -39,46 +44,31 @@ open System.Diagnostics
 
 let project = "FSharp.Data.GraphQL"
 let summary = "FSharp implementation of Facebook GraphQL query language"
-let description = "FSharp implementation of Facebook GraphQL query language"
-let authors = [ "Bazinga Technologies Inc" ]
-let copyright = "Copyright (c) 2016 Bazinga Technologies Inc"
-let tags = "FSharp GraphQL Relay React"
-let solutionFile  = "FSharp.Data.GraphQL.sln"
-let testAssemblies = "tests/**/bin/Release/**/*Tests*.dll"
 let gitOwner = "bazingatechnologies"
 let gitHome = "https://github.com/" + gitOwner
 let gitName = "FSharp.Data.GraphQL"
-let gitRaw = Environment.environVarOrDefault "gitRaw" "https://raw.github.com/bazingatechnologies"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
 
 module Util =
-    open System.Net
-    
     let join pathParts =
         Path.Combine(Array.ofSeq pathParts)
 
-    let run workingDir fileName args =
-        let fileName, args =
-            if Environment.isUnix
-            then fileName, args else "cmd", ("/C " + fileName + " " + args)
-        let ok =
-            Process.execSimple (fun info -> 
-                { info with
-                      FileName = fileName
-                      WorkingDirectory = workingDir
-                      Arguments = args }) TimeSpan.MaxValue = 0
-        if not ok then failwith (sprintf "'%s> %s %s' task failed" workingDir fileName args)
+    let run workingDir fileName (args : string) =
+        CreateProcess.fromRawCommand fileName (args.Split([|' '|]))
+        |> CreateProcess.withWorkingDirectory workingDir
+        |> CreateProcess.ensureExitCode
+        |> Proc.run
+        |> ignore
 
-    let runAndReturn workingDir fileName args =
-        let fileName, args =
-            if Environment.isUnix
-            then fileName, args else "cmd", ("/C " + args)
-        Process.execWithResult (fun info ->
-                { info with
-                      FileName = fileName
-                      WorkingDirectory = workingDir
-                      Arguments = args }) TimeSpan.MaxValue
-        |> fun p -> p.Messages |> String.concat "\n"
+    let runAndReturn workingDir fileName (args : string) =
+        let messages = List<string>()
+        CreateProcess.fromRawCommand fileName (args.Split([|' '|]))
+        |> CreateProcess.withWorkingDirectory workingDir
+        |> CreateProcess.withOutputEvents messages.Add messages.Add
+        |> CreateProcess.ensureExitCode
+        |> Proc.run
+        |> ignore
+        messages |> Seq.reduce (fun x y -> x + Environment.NewLine + y)
 
     let rmdir dir =
         if Environment.isUnix
@@ -226,57 +216,77 @@ Target.create "Build" (fun _ ->
                         CustomParams = Some "--no-restore" } })))
 
 Target.create "RunTests" (fun _ ->
-    "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    |> DotNet.test (fun options ->
+    let runTests =
+        DotNet.test (fun options ->
             { options with
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
-                            CustomParams = Some "-v=normal" } }))
+                            CustomParams = Some "-v=normal" } })
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    CreateProcess.fromRawCommand "dotnet run" [| "-c Release" |]
+    |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+    |> Proc.startAndAwait
+    |> ignore
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
-
 
 let fakePath = "packages" </> "build" </> "FAKE" </> "tools" </> "FAKE.exe"
 
 /// The path to the F# Interactive tool.
 let pathToFsiExe =
-    let fsiPath = @".\tools\FSharp\;.\lib\FSharp\;[ProgramFilesX86]\Microsoft SDKs\F#\10.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\4.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\4.0\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\3.1\Framework\v4.0;[ProgramFilesX86]\Microsoft SDKs\F#\3.0\Framework\v4.0;[ProgramFiles]\Microsoft F#\v4.0\;[ProgramFilesX86]\Microsoft F#\v4.0\;[ProgramFiles]\FSharp-2.0.0.0\bin\;[ProgramFilesX86]\FSharp-2.0.0.0\bin\;[ProgramFiles]\FSharp-1.9.9.9\bin\;[ProgramFilesX86]\FSharp-1.9.9.9\bin\"
+    let fsiPaths =
+        [| @"[ProgramFilesX86]\Microsoft Visual Studio\2017\Community\Common7\IDE\CommonExtensions\Microsoft\FSharp\"
+           @".\tools\FSharp\"
+           @".\lib\FSharp\"
+           @"[ProgramFilesX86]\Microsoft SDKs\F#\10.1\Framework\v4.0"
+           @"[ProgramFilesX86]\Microsoft SDKs\F#\4.1\Framework\v4.0"
+           @"[ProgramFilesX86]\Microsoft SDKs\F#\4.0\Framework\v4.0"
+           @"[ProgramFilesX86]\Microsoft SDKs\F#\3.1\Framework\v4.0"
+           @"[ProgramFilesX86]\Microsoft SDKs\F#\3.0\Framework\v4.0"
+           @"[ProgramFiles]\Microsoft F#\v4.0\"
+           @"[ProgramFilesX86]\Microsoft F#\v4.0\"
+           @"[ProgramFiles]\FSharp-2.0.0.0\bin\"
+           @"[ProgramFilesX86]\FSharp-2.0.0.0\bin\"
+           @"[ProgramFiles]\FSharp-1.9.9.9\bin\"
+           @"[ProgramFilesX86]\FSharp-1.9.9.9\bin\" |]
     let ev = Environment.environVar "FSI"
     if not (String.isNullOrEmpty ev) then ev else
     if Environment.isUnix then
         // The standard name on *nix is "fsharpi"
-        match Process.tryFindFileOnPath "fsharpi" with
+        match ProcessUtils.tryFindFileOnPath "fsharpi" with
         | Some file -> file
         | None ->
-        // The early F# 2.0 name on *nix was "fsi"
-        match Process.tryFindFileOnPath "fsi" with
-        | Some file -> file
-        | None -> "fsharpi"
+            // The early F# 2.0 name on *nix was "fsi"
+            match ProcessUtils.tryFindFileOnPath "fsi" with
+            | Some file -> file
+            | None -> "fsharpi"
     else
-        // let dir = Path.GetDirectoryName fullAssemblyPath
-        // let fi = FileInfo.ofPath (Path.Combine(dir, "fsi.exe"))
-        // if fi.Exists then fi.FullName else
-        Process.findPath "FSIPath" fsiPath "fsi.exe"
+        ProcessUtils.findPath fsiPaths "fsi.exe"
 
-let fakeStartInfo script workingDirectory args fsiargs environmentVars =
-    (fun (info: ProcStartInfo) ->
-        { info with 
-            FileName = System.IO.Path.GetFullPath fakePath
-            Arguments = sprintf "%s --fsiargs -d:FAKE %s \"%s\"" args fsiargs script
-            WorkingDirectory = workingDirectory
-            Environment = 
-                Map.ofSeq environmentVars
-                |> Map.add "MSBuild" MSBuild.msBuildExe
-                |> Map.add "GIT" Git.CommandHelper.gitPath
-                |> Map.add "FSI" pathToFsiExe })
+/// The path to the MSBuild tool executable.
+let pathToMSBuildExe = MSBuild.msBuildExe
+
+/// The path to the git command line executable.
+let pathtoGitExe = Git.CommandHelper.gitPath
 
 /// Run the given buildscript with FAKE.exe
 let executeFAKEWithOutput workingDirectory script fsiargs envArgs =
-    let exitCode =
-        Process.execSimple (fakeStartInfo script workingDirectory "" fsiargs envArgs) TimeSpan.MaxValue
+    let args = ["--fsiargs"; "-d:FAKE"] @ (String.split ' ' fsiargs) @ [sprintf "\"%s\"" script]
+    let envMap =
+        [| "MSBuild", pathToMSBuildExe
+           "GIT", pathtoGitExe
+           "FSI", pathToFsiExe |]
+        |> Seq.append envArgs
+        |> EnvMap.ofSeq
+    let result =
+        CreateProcess.fromRawCommand (System.IO.Path.GetFullPath fakePath) args
+        |> CreateProcess.withWorkingDirectory workingDirectory
+        |> CreateProcess.withEnvironmentMap envMap
+        |> Proc.run
     System.Threading.Thread.Sleep 1000
-    exitCode
+    result.ExitCode
 
 // Documentation
 let buildDocumentationTarget fsiargs target =
@@ -436,7 +446,7 @@ type Draft =
 
 let makeRelease draft owner project version prerelease (notes:seq<string>) (client : Async<GitHubClient>) =
     retryWithArg 5 client <| fun client' -> async {
-        let data = new NewRelease(version)
+        let data = NewRelease(version)
         data.Name <- version
         data.Body <- String.Join(Environment.NewLine, notes)
         data.Draft <- draft
@@ -547,7 +557,7 @@ Target.create "PublishNpm" (fun _ ->
     !! (prjDir </> "npm" </> "*.*")
     |> Seq.iter (fun path -> Shell.cp path binDir)
 
-    Npm.command binDir "version" ["0.0.3"] //[string release.SemVer]
+    Npm.command binDir "version" ["0.0.3"]
     Npm.command binDir "publish" []
 )
 

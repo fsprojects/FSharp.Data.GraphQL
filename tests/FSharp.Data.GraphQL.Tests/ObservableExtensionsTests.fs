@@ -46,7 +46,7 @@ let `` ofAsync should call OnComplete and return items in expected order`` () =
 
 
 [<Fact>]
-let `` ofAsyncVal should call OnComplete and return items in expected order`` () =
+let ``ofAsyncVal should call OnComplete and return items in expected order`` () =
     let source = async { return "test" } |> AsyncVal.ofAsync
     let obs = Observable.ofAsyncVal source
     use sub = Observer.create obs
