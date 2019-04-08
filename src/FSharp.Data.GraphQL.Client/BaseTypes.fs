@@ -1,6 +1,7 @@
 ﻿namespace FSharp.Data.GraphQL
 
 open System
+open System.Security.Cryptography
 open System.Globalization
 open FSharp.Data
 open FSharp.Core
@@ -213,21 +214,21 @@ type RecordBase (name : string, properties : RecordProperty seq) =
                 ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
             let members : MemberInfo list = [asType; tryAsType; isType]
             bdef.AddMembers(members)
-        | _ ->
-            let ctdef =
-                let prm = properties |> List.map (fun prop -> ProvidedParameter(prop.Name, prop.Type))
-                let invoker (args : Expr list) = 
-                    let properties =
-                        let args = 
-                            let names = properties |> List.map (fun prop -> prop.Name.FirstCharUpper())
-                            let mapper (name : string, value : Expr) =
-                                let value = Expr.Coerce(value, typeof<obj>)
-                                <@@ { Name = name; Value = %%value } @@>
-                            List.zip names args |> List.map mapper
-                        Expr.NewArray(typeof<RecordProperty>, args)
-                    Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
-                ProvidedConstructor(prm, invoker)
-            tdef.AddMember(ctdef)
+        | _ -> ()
+        let ctdef =
+            let prm = properties |> List.map (fun prop -> ProvidedParameter(prop.Name, prop.Type))
+            let invoker (args : Expr list) = 
+                let properties =
+                    let args = 
+                        let names = properties |> List.map (fun prop -> prop.Name.FirstCharUpper())
+                        let mapper (name : string, value : Expr) =
+                            let value = Expr.Coerce(value, typeof<obj>)
+                            <@@ { Name = name; Value = %%value } @@>
+                        List.zip names args |> List.map mapper
+                    Expr.NewArray(typeof<RecordProperty>, args)
+                Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
+            ProvidedConstructor(prm, invoker)
+        tdef.AddMember(ctdef)
         tdef
 
     static member internal Constructor = typeof<RecordBase>.GetConstructors().[0]
@@ -590,7 +591,13 @@ type OperationBase (serverUrl : string) =
         let query = 
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
-        let className = "Operation" + query.GetHashCode().ToString("x2")
+        let className = 
+            let hash = 
+                Encoding.UTF8.GetBytes(query)
+                |> MD5.Create().ComputeHash
+                |> Array.map (fun x -> x.ToString("x2"))
+                |> Array.reduce (+)
+            "Operation" + hash
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
