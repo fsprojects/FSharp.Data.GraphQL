@@ -18,54 +18,55 @@ let things : Provider.Types.IThing list = [ball; box]
 let context = Provider.GetContext("http://localhost:8084")
 
 module SimpleOperation =
-  // Sample operations to be used for testing
-  let operation = 
-    context.Operation<"""query q {
-        hero (id: "1000") {
-          name
-          appearsIn
-          homePlanet
-          friends {
-            ... on Human {
+    let operation = 
+        context.Operation<"""query q {
+            hero (id: "1000") {
               name
+              appearsIn
               homePlanet
+              friends {
+                ... on Human {
+                  name
+                  homePlanet
+                }
+                ... on Droid {
+                  name
+                  primaryFunction
+                }
+              }
             }
-            ... on Droid {
-              name
-              primaryFunction
-            }
-          }
-        }
-      }""">()
-  type Operation = Provider.Context.Operationd550cd8e988f8683eefaadf91ed4cd15
-  let validate (result : Operation.OperationResult) =
-      result.CustomData.ContainsKey("documentId") |> equals true
-      result.Errors |> equals None
-      result.Data.IsSome |> equals true
-      result.Data.Value.Hero.IsSome |> equals true
-      result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-      let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-        [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
-           Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
-           Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
-           Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
-      result.Data.Value.Hero.Value.Friends |> equals expectedFriends
-      result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
-      let actual = normalize <| sprintf "%A" result.Data
-      let expected = normalize <| """Some
-{Hero = Some
-{Name = Some "Luke Skywalker";
-AppearsIn = [|NewHope; Empire; Jedi|];
-HomePlanet = Some "Tatooine";
-Friends = [|Some {Name = Some "Han Solo";
-HomePlanet = None;};
-Some {Name = Some "Leia Organa";
-HomePlanet = Some "Alderaan";};
-Some {Name = Some "C-3PO";
-PrimaryFunction = Some "Protocol";};
-Some {Name = Some "R2-D2";
-PrimaryFunction = Some "Astromech";}|];};}"""
-      actual |> equals expected
+          }""">()
+
+    type Operation = Provider.Context.Operationd550cd8e988f8683eefaadf91ed4cd15
+
+    let validateResult (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("documentId") |> equals true
+        result.Errors |> equals None
+        result.Data.IsSome |> equals true
+        result.Data.Value.Hero.IsSome |> equals true
+        result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
+        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
+          [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
+             Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
+        result.Data.Value.Hero.Value.Friends |> equals expectedFriends
+        result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
+        let actual = normalize <| sprintf "%A" result.Data
+        let expected = normalize <| """Some
+  {Hero = Some
+  {Name = Some "Luke Skywalker";
+  AppearsIn = [|NewHope; Empire; Jedi|];
+  HomePlanet = Some "Tatooine";
+  Friends = [|Some {Name = Some "Han Solo";
+  HomePlanet = None;};
+  Some {Name = Some "Leia Organa";
+  HomePlanet = Some "Alderaan";};
+  Some {Name = Some "C-3PO";
+  PrimaryFunction = Some "Protocol";};
+  Some {Name = Some "R2-D2";
+  PrimaryFunction = Some "Astromech";}|];};}"""
+        actual |> equals expected
 
 [<Fact>]
 let ``Should be able to pretty print schema types`` () =
@@ -81,19 +82,19 @@ let ``Should be able to pretty print schema types`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously`` () =
     SimpleOperation.operation.Run()
-    |> SimpleOperation.validate
+    |> SimpleOperation.validateResult
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously`` () =
     SimpleOperation.operation.AsyncRun()
     |> Async.RunSynchronously
-    |> SimpleOperation.validate
+    |> SimpleOperation.validateResult
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
     let result = SimpleOperation.operation.Run([|"UserData", userData|])
-    SimpleOperation.validate result
+    SimpleOperation.validateResult result
     result.CustomData.ContainsKey("userData") |> equals true
     result.CustomData.["userData"] |> equals (upcast userData)
 
@@ -101,6 +102,44 @@ let ``Should be able to start a simple query operation synchronously with custom
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
     let result = SimpleOperation.operation.AsyncRun([|"UserData", userData|]) |> Async.RunSynchronously
-    SimpleOperation.validate result
+    SimpleOperation.validateResult result
     result.CustomData.ContainsKey("userData") |> equals true
     result.CustomData.["userData"] |> equals (upcast userData)
+
+[<Fact>]
+let ``Should be able to use pattern matching methods`` () =
+    let result = SimpleOperation.operation.Run()
+    result.Data.IsSome |> equals true
+    result.Data.Value.Hero.IsSome |> equals true
+    let friends = result.Data.Value.Hero.Value.Friends |> Array.choose id
+    friends 
+    |> Array.choose (fun x -> x.TryAsHuman()) 
+    |> equals [|
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None)
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan") |]
+    friends
+    |> Array.choose (fun x -> x.TryAsDroid())
+    |> equals [|
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol")
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech") |]
+    try
+      friends |> Array.map (fun x -> x.AsDroid()) |> ignore
+      failwith "Expected exception when trying to get all friends as droids!"
+    with _ -> ()
+    try
+      friends |> Array.map (fun x -> x.AsHuman()) |> ignore
+      failwith "Expected exception when trying to get all friends as humans!"
+    with _ -> ()
+    friends
+    |> Array.filter (fun x -> x.IsHuman())
+    |> Array.map (fun x -> x.AsHuman())
+    |> equals [|
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None)
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan") |]
+    friends
+    |> Array.filter (fun x -> x.IsDroid())
+    |> Array.map (fun x -> x.AsDroid())
+    |> equals [|
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol")
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech") |]
+  
