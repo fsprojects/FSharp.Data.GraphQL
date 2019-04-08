@@ -146,17 +146,17 @@ let ``Should be able to use pattern matching methods on an union type`` () =
 module InterfaceOperation =
     let operation =
         context.Operation<"""query testQuery {
-          things {
-            id
-            format
-            ...on Ball {
-              form
+            things {
+              id
+              format
+              ...on Ball {
+                form
+              }
+              ...on Box {
+                form
+              }
             }
-            ...on Box {
-              form
-            }
-          }
-        }""">()
+          }""">()
     
     type Operation = Provider.Context.Operation8406a400ed81bb586423c4b5e46564f6
 
@@ -214,3 +214,35 @@ let ``Should be able to use pattern matching methods on an interface type`` () =
     |> Array.filter (fun x -> x.IsBox())
     |> Array.map (fun x -> x.AsBox())
     |> equals [| InterfaceOperation.Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
+
+module MutationOperation =
+    let operation =
+        context.Operation<"""mutation m {
+            setMoon (id: "1", isMoon: true) {
+                id
+                name
+                isMoon
+              }
+            }""">()
+
+    type Operation = Provider.Context.Operation6c75b7c03a7152a78b2a281ab499a43b
+
+    let validateResult (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("documentId") |> equals true
+        result.Errors |> equals None
+        result.Data.IsSome |> equals true
+        result.Data.Value.SetMoon.IsSome |> equals true
+        result.Data.Value.SetMoon.Value.Id |> equals "1"
+        result.Data.Value.SetMoon.Value.Name |> equals (Some "Tatooine")
+        result.Data.Value.SetMoon.Value.IsMoon |> equals (Some true)
+
+[<Fact>]
+let ``Should be able to run a mutation synchronously`` () =
+    MutationOperation.operation.Run()
+    |> MutationOperation.validateResult
+
+[<Fact>]
+let ``Should be able to run a mutation asynchronously`` () =
+    MutationOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> MutationOperation.validateResult
