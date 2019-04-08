@@ -21,7 +21,7 @@ module SimpleOperation =
   // Sample operations to be used for testing
   let operation = 
     context.Operation<"""query q {
-        hero (id: "1001") {
+        hero (id: "1000") {
           name
           appearsIn
           homePlanet
@@ -37,24 +37,34 @@ module SimpleOperation =
           }
         }
       }""">()
-  let validate (result : Provider.Context.Operation214c5a8ac156977d19d6049385aa20bf.OperationResult) =
+  type Operation = Provider.Context.Operationd550cd8e988f8683eefaadf91ed4cd15
+  let validate (result : Operation.OperationResult) =
       result.CustomData.ContainsKey("documentId") |> equals true
       result.Errors |> equals None
       result.Data.IsSome |> equals true
       result.Data.Value.Hero.IsSome |> equals true
       result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-      let expectedFriend : Provider.Context.Operation214c5a8ac156977d19d6049385aa20bf.Types.Hero.Friends.Character = 
-        upcast Provider.Context.Operation214c5a8ac156977d19d6049385aa20bf.Types.Hero.Friends.Human(name = Some "Wilhuff Tarkin", homePlanet = None)
-      result.Data.Value.Hero.Value.Friends |> equals [| Some expectedFriend |]
+      let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
+        [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
+           Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
+           Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
+           Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
+      result.Data.Value.Hero.Value.Friends |> equals expectedFriends
       result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
       let actual = normalize <| sprintf "%A" result.Data
       let expected = normalize <| """Some
-          {Hero = Some
-          {Name = Some "Darth Vader";
-          AppearsIn = [|NewHope; Empire; Jedi|];
-          HomePlanet = Some "Tatooine";
-          Friends = [|Some {Name = Some "Wilhuff Tarkin";
-          HomePlanet = <null>;}|];};}"""
+{Hero = Some
+{Name = Some "Luke Skywalker";
+AppearsIn = [|NewHope; Empire; Jedi|];
+HomePlanet = Some "Tatooine";
+Friends = [|Some {Name = Some "Han Solo";
+HomePlanet = <null>;};
+Some {Name = Some "Leia Organa";
+HomePlanet = Some "Alderaan";};
+Some {Name = Some "C-3PO";
+PrimaryFunction = Some "Protocol";};
+Some {Name = Some "R2-D2";
+PrimaryFunction = Some "Astromech";}|];};}"""
       actual |> equals expected
 
 [<Fact>]

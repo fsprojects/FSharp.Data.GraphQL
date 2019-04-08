@@ -54,7 +54,7 @@ let ctx = MyProvider.GetContext(runtimeUrl)
 // does not work with web sockets - only the immediate response will be known.
 let operation = 
     ctx.Operation<"""query q {
-      hero (id: "1001") {
+      hero (id: "1000") {
         name
         appearsIn
         homePlanet
