@@ -246,3 +246,34 @@ let ``Should be able to run a mutation asynchronously`` () =
     MutationOperation.operation.AsyncRun()
     |> Async.RunSynchronously
     |> MutationOperation.validateResult
+
+module VariablesOperation =
+    let operation =
+        context.Operation<"""query q($filter: ThingFilter!) {
+            things(filter: $filter) {
+              id
+              format
+            }
+          }""">()
+
+    type Operation = Provider.Context.Operationaa6c42b2797a37ff529a0eec082c23ee
+
+    let validateResult (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("documentId") |> equals true
+        result.Errors |> equals None
+        result.Data.IsSome |> equals true
+        hasItems result.Data.Value.Things
+        result.Data.Value.Things |> Array.forall (fun x -> x.Format = filter.Format) |> equals true
+
+[<Fact>]
+let ``Should be able to run a query with variables syncrhonously`` () =
+    let filter = Provider.Types.ThingFilter(format = "Cubic")
+    VariablesOperation.operation.Run(filter)
+    |> VariablesOperation.validateResult filter
+
+[<Fact>]
+let ``Should be able to run a query with variables asyncrhonously`` () =
+    let filter = Provider.Types.ThingFilter(format = "Cubic")
+    VariablesOperation.operation.AsyncRun(filter)
+    |> Async.RunSynchronously
+    |> VariablesOperation.validateResult filter

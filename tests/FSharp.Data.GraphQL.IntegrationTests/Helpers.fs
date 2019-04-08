@@ -9,3 +9,6 @@ let normalize (x : string) =
 
 let equals (expected : 'T) (actual : 'T) =
     Assert.Equal<'T>(expected, actual)
+
+let hasItems (seq : seq<'T>) =
+    Assert.True(Seq.length seq > 0)
