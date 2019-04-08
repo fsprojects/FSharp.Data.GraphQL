@@ -461,7 +461,9 @@ let makeRelease draft owner project version prerelease (notes:seq<string>) (clie
             DraftRelease = draft }
     }
 
-let createDraft owner project version prerelease notes client = makeRelease true owner project version prerelease notes client
+let createDraft owner project version prerelease notes client = 
+    makeRelease true owner project version prerelease notes client
+    
 let releaseDraft (draft : Async<Draft>) =
     retryWithArg 5 draft <| fun draft' -> async {
         let update = draft'.DraftRelease.ToUpdate()
