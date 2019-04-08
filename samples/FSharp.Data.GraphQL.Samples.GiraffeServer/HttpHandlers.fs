@@ -26,22 +26,32 @@ module HttpHandlers =
         setHttpHeader "Content-Type" "application/json"
 
     let private graphiQL (next : HttpFunc) (ctx : HttpContext) = task {
-        printfn "Request headers:"
-        ctx.Request.Headers
-        |> Seq.map (|KeyValue|)
-        |> Seq.iter (fun (name, value) -> value.ToArray() |> Array.iter (fun value -> printfn "%s: %s" name value))
+        let userData =
+            ctx.Request.Headers
+            |> Seq.map (|KeyValue|)
+            |> Seq.tryFind (fun (name, _) -> name = "UserData")
+            |> Option.map (snd >> (fun x -> x.ToString()))
+        userData |> Option.iter (printfn "User data: %s")
         let jsonSettings =
             JsonSerializerSettings()
             |> tee (fun s ->
                 s.Converters <- [| OptionConverter() :> JsonConverter |]
                 s.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver())
+        let formatData (data : Output) : Output =
+            match userData with
+            | Some userData ->
+                data 
+                |> Seq.map (|KeyValue|) 
+                |> Seq.append (Seq.singleton ("UserData", box userData))
+                |> dict
+            | None -> data
         let json =
             function
             | Direct (data, _) ->
-                JsonConvert.SerializeObject(data, jsonSettings)
+                JsonConvert.SerializeObject(formatData data, jsonSettings)
             | Deferred (data, _, deferred) ->
                 deferred |> Observable.add(fun d -> printfn "Deferred: %s" (JsonConvert.SerializeObject(d, jsonSettings)))
-                JsonConvert.SerializeObject(data, jsonSettings)
+                JsonConvert.SerializeObject(formatData data, jsonSettings)
             | Stream _ ->
                 "{}"
         let tryParse fieldName (data : byte []) =

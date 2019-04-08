@@ -1,5 +1,6 @@
 ﻿module FSharp.Data.GraphQL.IntegrationTests.LocalProviderTests
 
+open System
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
@@ -71,3 +72,25 @@ let ``Should be able to pretty print schema types`` () =
 let ``Should be able to start a simple query operation synchronously`` () =
     SimpleOperation.operation.Run()
     |> SimpleOperation.validate
+
+[<Fact>]
+let ``Should be able to start a simple query operation asynchronously`` () =
+    SimpleOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> SimpleOperation.validate
+
+[<Fact>]
+let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
+    let userData = Guid.NewGuid().ToString()
+    let result = SimpleOperation.operation.Run([|"UserData", userData|])
+    SimpleOperation.validate result
+    result.CustomData.ContainsKey("userData") |> equals true
+    result.CustomData.["userData"] |> equals (upcast userData)
+
+[<Fact>]
+let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
+    let userData = Guid.NewGuid().ToString()
+    let result = SimpleOperation.operation.AsyncRun([|"UserData", userData|]) |> Async.RunSynchronously
+    SimpleOperation.validate result
+    result.CustomData.ContainsKey("userData") |> equals true
+    result.CustomData.["userData"] |> equals (upcast userData)
