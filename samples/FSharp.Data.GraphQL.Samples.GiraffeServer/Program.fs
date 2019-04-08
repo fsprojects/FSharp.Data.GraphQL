@@ -6,14 +6,15 @@ open Microsoft.AspNetCore.Hosting
 module Program =
     let exitCode = 0
 
-    let BuildWebHost args =
+    let [<Literal>] BaseAddress = "localhost:8084"
+
+    let buildWebHost args =
         WebHost
             .CreateDefaultBuilder(args)
             .UseStartup<Startup>()
-            .UseUrls("http://localhost:8084")
-            .Build()
+            .UseUrls(sprintf "http://%s" BaseAddress)
 
     [<EntryPoint>]
     let main args =
-        BuildWebHost(args).Run()
+        buildWebHost(args).Build().Run()
         exitCode

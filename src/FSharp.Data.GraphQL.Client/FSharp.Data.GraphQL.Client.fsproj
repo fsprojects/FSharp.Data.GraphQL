@@ -42,6 +42,23 @@
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Reflection.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Runtime.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Condition=" '$(TargetFramework)' == 'netstandard2.0' " Include="..\..\packages\shared\FParsec\lib\netstandard1.6\FParsec.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Condition=" '$(TargetFramework)' == 'netstandard2.0' " Include="..\..\packages\shared\FParsec\lib\netstandard1.6\FParsecCS.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <Compile Include="Extensions.fs" />
     <Compile Include="AssemblyInfo.fs" />
