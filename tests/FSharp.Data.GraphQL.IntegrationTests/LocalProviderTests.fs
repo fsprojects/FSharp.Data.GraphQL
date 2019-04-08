@@ -107,7 +107,7 @@ let ``Should be able to start a simple query operation asynchronously with custo
     result.CustomData.["userData"] |> equals (upcast userData)
 
 [<Fact>]
-let ``Should be able to use pattern matching methods`` () =
+let ``Should be able to use pattern matching methods on an union type`` () =
     let result = SimpleOperation.operation.Run()
     result.Data.IsSome |> equals true
     result.Data.Value.Hero.IsSome |> equals true
@@ -143,3 +143,74 @@ let ``Should be able to use pattern matching methods`` () =
         SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol")
         SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech") |]
   
+module InterfaceOperation =
+    let operation =
+        context.Operation<"""query testQuery {
+          things {
+            id
+            format
+            ...on Ball {
+              form
+            }
+            ...on Box {
+              form
+            }
+          }
+        }""">()
+    
+    type Operation = Provider.Context.Operation8406a400ed81bb586423c4b5e46564f6
+
+    let validateResult (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("documentId") |> equals true
+        result.Errors |> equals None
+        result.Data.IsSome |> equals true
+        let expectedThings : Operation.Types.Things.Thing [] =
+          [| Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric")
+             Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
+        result.Data.Value.Things |> equals expectedThings
+        let actual = normalize <| sprintf "%A" result.Data
+        let expected = normalize <| """Some
+{Things = [|{Id = "1";
+Format = "Spheric";
+Form = "Spheric";};
+{Id = "2";
+Format = "Cubic";
+Form = "Cubic";}|];}"""
+        actual |> equals expected
+
+[<Fact>]
+let ``Should be able to run a query with interface types synchronously`` () =
+    InterfaceOperation.operation.Run()
+    |> InterfaceOperation.validateResult
+
+[<Fact>]
+let ``Should be able to run a query with interface types asynchronously`` () =
+    InterfaceOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> InterfaceOperation.validateResult
+
+[<Fact>]
+let ``Should be able to use pattern matching methods on an interface type`` () =
+    let result = InterfaceOperation.operation.Run()
+    result.Data.IsSome |> equals true
+    let things = result.Data.Value.Things
+    let balls = things |> Array.choose (fun x -> x.TryAsBall())
+    balls |> equals [| InterfaceOperation.Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric") |]
+    let boxes = things |> Array.choose (fun x -> x.TryAsBox())
+    boxes |> equals [| InterfaceOperation.Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
+    try
+      things |> Array.map (fun x -> x.AsBall()) |> ignore
+      failwith "Expected exception when trying to get all things as balls!"
+    with _ -> ()
+    try
+      things |> Array.map (fun x -> x.AsBox()) |> ignore
+      failwith "Expected exception when trying to get all things as boxes!"
+    with _ -> ()
+    things
+    |> Array.filter (fun x -> x.IsBall())
+    |> Array.map (fun x -> x.AsBall())
+    |> equals [| InterfaceOperation.Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric") |]
+    things
+    |> Array.filter (fun x -> x.IsBox())
+    |> Array.map (fun x -> x.AsBox())
+    |> equals [| InterfaceOperation.Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]

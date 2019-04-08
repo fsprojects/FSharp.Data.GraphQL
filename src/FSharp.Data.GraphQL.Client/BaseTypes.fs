@@ -187,6 +187,21 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             upcast pdef
         let pdefs = properties |> List.map propertyMapper
         tdef.AddMembers(pdefs)
+        let buildConstructor (properties : (string * Type) list) =
+            let ctdef =
+                let prm = properties |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let invoker (args : Expr list) = 
+                    let properties =
+                        let args = 
+                            let names = properties |> List.map (fun (name, _) -> name.FirstCharUpper())
+                            let mapper (name : string, value : Expr) =
+                                let value = Expr.Coerce(value, typeof<obj>)
+                                <@@ { Name = name; Value = %%value } @@>
+                            List.zip names args |> List.map mapper
+                        Expr.NewArray(typeof<RecordProperty>, args)
+                    Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
+                ProvidedConstructor(prm, invoker)
+            tdef.AddMember(ctdef)
         match baseType with
         | :? ProvidedTypeDefinition as bdef ->
             let asType = 
@@ -213,22 +228,11 @@ type RecordBase (name : string, properties : RecordProperty seq) =
                         baseName = name @@>
                 ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
             let members : MemberInfo list = [asType; tryAsType; isType]
+            let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, p.ParameterType) |> List.ofArray
+            let props = properties |> List.map (fun p -> p.Name, p.Type)
+            buildConstructor (bprops @ props)
             bdef.AddMembers(members)
-        | _ -> ()
-        let ctdef =
-            let prm = properties |> List.map (fun prop -> ProvidedParameter(prop.Name, prop.Type))
-            let invoker (args : Expr list) = 
-                let properties =
-                    let args = 
-                        let names = properties |> List.map (fun prop -> prop.Name.FirstCharUpper())
-                        let mapper (name : string, value : Expr) =
-                            let value = Expr.Coerce(value, typeof<obj>)
-                            <@@ { Name = name; Value = %%value } @@>
-                        List.zip names args |> List.map mapper
-                    Expr.NewArray(typeof<RecordProperty>, args)
-                Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
-            ProvidedConstructor(prm, invoker)
-        tdef.AddMember(ctdef)
+        | _ -> properties |> List.map (fun p -> p.Name, p.Type) |> buildConstructor
         tdef
 
     static member internal Constructor = typeof<RecordBase>.GetConstructors().[0]
