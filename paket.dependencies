@@ -6,7 +6,7 @@ group Shared
   source https://api.nuget.org/v3/index.json
   frameworks: net47, netcoreapp2.1, netstandard2.0
 
-  nuget FSharp.Core
+  nuget FSharp.Core 4.3.4 #https://fsharp.github.io/2015/04/18/fsharp-core-notes.html#fsharpcore-entries-in-project-files
   nuget FParsec
   nuget System.Reactive
   nuget Newtonsoft.Json
