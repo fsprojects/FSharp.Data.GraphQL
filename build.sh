@@ -33,10 +33,10 @@ function run() {
   fi
 }
 
-run $PAKET_BOOTSTRAPPER_EXE
+run "$PAKET_BOOTSTRAPPER_EXE 5.201.1"
 
 if ! [ -e "$FAKE" ]
 then
-  dotnet tool install fake-cli --tool-path "$TOOL_PATH" --version 5.201.1
+  dotnet tool install fake-cli --tool-path "$TOOL_PATH"
 fi
 "$FAKE" run build.fsx 

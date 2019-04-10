@@ -1,4 +1,4 @@
-.paket\paket.bootstrapper.exe
+.paket\paket.bootstrapper.exe 5.201.1
 
 if errorlevel 1 (
   exit /b %errorlevel%
@@ -7,7 +7,7 @@ if errorlevel 1 (
 SET TOOL_PATH=.fake
 
 IF NOT EXIST "%TOOL_PATH%\fake.exe" (
-  dotnet tool install fake-cli --tool-path ./%TOOL_PATH% --version 5.201.1
+  dotnet tool install fake-cli --tool-path ./%TOOL_PATH%
 )
 
 "%TOOL_PATH%/fake.exe" run build.fsx %*
