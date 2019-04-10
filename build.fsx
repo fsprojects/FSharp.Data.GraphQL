@@ -1,3 +1,4 @@
+open System.Threading
 #r "paket:
 nuget Fake.Core.Target
 nuget Fake.DotNet.Cli 
@@ -215,6 +216,9 @@ Target.create "Build" (fun _ ->
             Common = { options.Common with 
                         CustomParams = Some "--no-restore" } })))
 
+/// The path to the .NET CLI executable.
+let dotNetCliExe = DotNet.Options.Create().DotNetCliPath
+
 Target.create "RunTests" (fun _ ->
     let runTests =
         DotNet.test (fun options ->
@@ -223,10 +227,23 @@ Target.create "RunTests" (fun _ ->
                 Common = { options.Common with
                             CustomParams = Some "-v=normal" } })
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    CreateProcess.fromRawCommand "dotnet run" [| "-c Release" |]
-    |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
-    |> Proc.startAndAwait
+    use waiter = new ManualResetEvent(false)
+    let stdHandler (msg : string) =
+        let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
+        if msg.ToLowerInvariant().Contains(expectedMessage)
+        then waiter.Set() |> ignore
+    let errHandler (msg : string) =
+        failwithf "Error while starting Giraffe server. %s" msg
+    System.Threading.Tasks.Task.Factory.StartNew(fun _ ->
+        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
+        |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+        |> CreateProcess.redirectOutput
+        |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
+        |> Proc.run
+        |> ignore)
     |> ignore
+    if not (waiter.WaitOne(TimeSpan.FromMinutes(float 1)))
+    then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
 // --------------------------------------------------------------------------------------
