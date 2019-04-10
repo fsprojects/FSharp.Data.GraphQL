@@ -229,7 +229,7 @@ Target.create "RunTests" (fun _ ->
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "-v=normal" } })
-    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     use waiter = new ManualResetEvent(false)
     let stdHandler (msg : string) =
         let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
@@ -245,7 +245,10 @@ Target.create "RunTests" (fun _ ->
     |> ignore
     if not (waiter.WaitOne(TimeSpan.FromMinutes(float 1)))
     then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+    // The "dotnet run" command spawns additional dotnet processes.
+    // If we don't kill them all, AppVeyor CI will hang waiting for them to finish.
+    Process.killAllByName "dotnet")
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
