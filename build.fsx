@@ -1,4 +1,3 @@
-open System.Threading
 #r "paket:
 nuget Fake.Core.Target
 nuget Fake.DotNet.Cli 
@@ -23,6 +22,9 @@ nuget Octokit //"
 open System
 open System.IO
 open System.Collections.Generic
+open System.Threading
+open System.Diagnostics
+open System.Threading.Tasks
 open Fake
 open Fake.Tools.Git
 open Fake.DotNet
@@ -65,6 +67,7 @@ module Util =
         let messages = List<string>()
         CreateProcess.fromRawCommand fileName (args.Split([|' '|]))
         |> CreateProcess.withWorkingDirectory workingDir
+        |> CreateProcess.redirectOutput
         |> CreateProcess.withOutputEvents messages.Add messages.Add
         |> CreateProcess.ensureExitCode
         |> Proc.run
@@ -226,7 +229,7 @@ Target.create "RunTests" (fun _ ->
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "-v=normal" } })
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     use waiter = new ManualResetEvent(false)
     let stdHandler (msg : string) =
         let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
@@ -234,13 +237,11 @@ Target.create "RunTests" (fun _ ->
         then waiter.Set() |> ignore
     let errHandler (msg : string) =
         failwithf "Error while starting Giraffe server. %s" msg
-    System.Threading.Tasks.Task.Factory.StartNew(fun _ ->
-        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
-        |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
-        |> CreateProcess.redirectOutput
-        |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
-        |> Proc.run
-        |> ignore)
+    CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
+    |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+    |> CreateProcess.redirectOutput
+    |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
+    |> Proc.start
     |> ignore
     if not (waiter.WaitOne(TimeSpan.FromMinutes(float 1)))
     then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."

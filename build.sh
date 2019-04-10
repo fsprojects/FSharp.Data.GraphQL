@@ -24,16 +24,12 @@ PAKET_BOOTSTRAPPER_EXE="$PAKET_PATH"/paket.bootstrapper.exe
 
 OS=${OS:-"unknown"}
 
-function run() {
-  if [[ "$OS" != "Windows_NT" ]]
-  then
-    mono "$@"
-  else
-    "$@"
-  fi
-}
-
-run "$PAKET_BOOTSTRAPPER_EXE 5.201.1"
+if [[ "$OS" != "Windows_NT" ]]
+then
+  mono "$PAKET_BOOTSTRAPPER_EXE" "5.201.1"
+else
+  "$PAKET_BOOTSTRAPPER_EXE" 5.201.1
+fi
 
 if ! [ -e "$FAKE" ]
 then
