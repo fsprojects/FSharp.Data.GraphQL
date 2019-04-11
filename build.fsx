@@ -223,12 +223,22 @@ Target.create "Build" (fun _ ->
 let dotNetCliExe = DotNet.Options.Create().DotNetCliPath
 
 Target.create "RunTests" (fun _ ->
-    let runTests =
+    let restore =
+        DotNet.restore id
+    let build =
+        DotNet.build (fun options ->
+        { options with 
+            Configuration = DotNet.BuildConfiguration.Release
+            Common = { options.Common with 
+                        CustomParams = Some "--no-restore" } })
+    let runTests (project : string) =
+        restore project
+        build project
         DotNet.test (fun options ->
             { options with
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
-                            CustomParams = Some "-v=normal" } })
+                            CustomParams = Some "--no-build -v=normal" } }) project
     let startTestServer () =
         use waiter = new ManualResetEvent(false)
         let stdHandler (msg : string) =
@@ -237,8 +247,12 @@ Target.create "RunTests" (fun _ ->
             then waiter.Set() |> ignore
         let errHandler (msg : string) =
             failwithf "Error while starting Giraffe server. %s" msg
-        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
-        |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+        let serverProjectDir = "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+        let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj"
+        restore serverProject
+        build serverProject
+        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release"; "--no-build" |]
+        |> CreateProcess.withWorkingDirectory serverProjectDir
         |> CreateProcess.redirectOutput
         |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
         |> Proc.start
@@ -248,10 +262,11 @@ Target.create "RunTests" (fun _ ->
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     try
         startTestServer ()
+        runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+    finally
         // The "dotnet run" command spawns additional dotnet processes.
         // If we don't kill them all, AppVeyor CI will hang waiting for them to finish.
-        runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
-    finally Process.killAllByName "dotnet")
+        Process.killAllByName "dotnet")
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
@@ -290,7 +305,7 @@ let pathToFsiExe =
         ProcessUtils.findPath fsiPaths "fsi.exe"
 
 /// The path to the MSBuild tool executable.
-let pathToMSBuildExe = MSBuild.msBuildExe
+let pathToMSBuildExe = MSBuildParams.Create().ToolPath
 
 /// The path to the git command line executable.
 let pathtoGitExe = Git.CommandHelper.gitPath
