@@ -37,7 +37,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.Context.Operationd550cd8e988f8683eefaadf91ed4cd15
+    type Operation = Provider.Context.Operationff1a972bcced9a18c49e4d2648ce0a50
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true
@@ -158,7 +158,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.Context.Operation8406a400ed81bb586423c4b5e46564f6
+    type Operation = Provider.Context.Operationfd48bf01957afc98699dcf542e099b28
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true
@@ -225,7 +225,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.Context.Operation6c75b7c03a7152a78b2a281ab499a43b
+    type Operation = Provider.Context.Operation4b47d31cd6380f05ea35981f05930b16
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true
@@ -256,7 +256,7 @@ module VariablesOperation =
             }
           }""">()
 
-    type Operation = Provider.Context.Operationaa6c42b2797a37ff529a0eec082c23ee
+    type Operation = Provider.Context.Operatione05eb1fa8361713b898bc94fd5c29ee0
 
     let validateResult (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true

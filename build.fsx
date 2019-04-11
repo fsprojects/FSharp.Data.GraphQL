@@ -229,26 +229,29 @@ Target.create "RunTests" (fun _ ->
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "-v=normal" } })
+    let startTestServer () =
+        use waiter = new ManualResetEvent(false)
+        let stdHandler (msg : string) =
+            let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
+            if msg.ToLowerInvariant().Contains(expectedMessage)
+            then waiter.Set() |> ignore
+        let errHandler (msg : string) =
+            failwithf "Error while starting Giraffe server. %s" msg
+        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
+        |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+        |> CreateProcess.redirectOutput
+        |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
+        |> Proc.start
+        |> ignore
+        if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
+        then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    use waiter = new ManualResetEvent(false)
-    let stdHandler (msg : string) =
-        let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
-        if msg.ToLowerInvariant().Contains(expectedMessage)
-        then waiter.Set() |> ignore
-    let errHandler (msg : string) =
-        failwithf "Error while starting Giraffe server. %s" msg
-    CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release" |]
-    |> CreateProcess.withWorkingDirectory "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
-    |> CreateProcess.redirectOutput
-    |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
-    |> Proc.start
-    |> ignore
-    if not (waiter.WaitOne(TimeSpan.FromMinutes(float 1)))
-    then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
-    // The "dotnet run" command spawns additional dotnet processes.
-    // If we don't kill them all, AppVeyor CI will hang waiting for them to finish.
-    Process.killAllByName "dotnet")
+    try
+        startTestServer ()
+        // The "dotnet run" command spawns additional dotnet processes.
+        // If we don't kill them all, AppVeyor CI will hang waiting for them to finish.
+        runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+    finally Process.killAllByName "dotnet")
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation

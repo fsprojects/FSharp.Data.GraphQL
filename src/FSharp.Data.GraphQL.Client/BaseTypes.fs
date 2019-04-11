@@ -601,7 +601,7 @@ type OperationBase (serverUrl : string) =
                                             operationType : Type) =
         let query = 
             let ast = Parser.parse userQuery
-            ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
+            ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
         let className = 
             let hash = 
                 Encoding.UTF8.GetBytes(query)
