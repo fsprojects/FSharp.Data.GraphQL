@@ -7,9 +7,20 @@
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
   <ItemGroup>
+    <EmbeddedResource Remove=".paket\**" />
+  </ItemGroup>
+  <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="RemoteProviderTests.fs" />
+  </ItemGroup>
+  <ItemGroup>
+    <Content Include="introspection.json" />
+    <Content Include="xunit.runner.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="operation.gql" />
+    <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />

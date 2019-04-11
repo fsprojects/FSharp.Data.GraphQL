@@ -277,3 +277,8 @@ let ``Should be able to run a query with variables asyncrhonously`` () =
     VariablesOperation.operation.AsyncRun(filter)
     |> Async.RunSynchronously
     |> VariablesOperation.validateResult filter
+
+[<Fact>]
+let ``Should be able to run a query from a query file`` () =
+    context.Operation<"operation.gql">().Run()
+    |> SimpleOperation.validateResult

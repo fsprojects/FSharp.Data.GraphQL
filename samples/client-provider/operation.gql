@@ -1,0 +1,17 @@
+query q {
+  hero(id: "1000") {
+    name
+    appearsIn
+    homePlanet
+    friends {
+      ... on Human {
+        name
+        homePlanet
+      }
+      ... on Droid {
+        name
+        primaryFunction
+      }
+    }
+  }
+}
