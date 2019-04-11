@@ -7,8 +7,8 @@ group Shared
   frameworks: net47, netcoreapp2.1, netstandard2.0
 
   nuget FSharp.Core 4.3.4 #https://fsharp.github.io/2015/04/18/fsharp-core-notes.html#fsharpcore-entries-in-project-files
-  nuget FParsec
-  nuget System.Reactive
+  nuget FParsec >= 1.0.3
+  nuget System.Reactive >= 4.1.5
   nuget Newtonsoft.Json
   nuget NETStandard.Library.NETFramework
   nuget Suave

@@ -11,3 +11,17 @@ summary
     FSharp implementation of Facebook GraphQL query language (Client)
 description
     FSharp implementation of Facebook GraphQL query language (Client)
+dependencies
+    FSharp.Core >= LOCKEDVERSION-Shared
+    FParsec >= LOCKEDVERSION-Shared
+files
+    bin/Release/net47/FParsec.dll ==> lib/net47
+    bin/Release/net47/FParsecCS.dll ==> lib/net47
+    bin/Release/netstandard2.0/FParsec.dll ==> lib/netstandard2.0
+    bin/Release/netstandard2.0/FParsecCS.dll ==> lib/netstandard2.0
+    bin/Release/net47/netstandard.dll ==> lib/net47
+    bin/Release/net47/System.Reflection.dll ==> lib/net47
+    bin/Release/net47/System.Runtime.dll ==> lib/net47
+    bin/Release/netstandard2.0/netstandard.dll ==> lib/netstandard2.0
+    bin/Release/netstandard2.0/System.Reflection.dll ==> lib/netstandard2.0
+    bin/Release/netstandard2.0/System.Runtime.dll ==> lib/netstandard2.0
