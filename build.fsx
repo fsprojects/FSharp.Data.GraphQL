@@ -247,26 +247,22 @@ Target.create "RunTests" (fun _ ->
             then waiter.Set() |> ignore
         let errHandler (msg : string) =
             failwithf "Error while starting Giraffe server. %s" msg
-        let serverProjectDir = "samples/FSharp.Data.GraphQL.Samples.GiraffeServer"
+        let serverProjectDir = "samples" </> "FSharp.Data.GraphQL.Samples.GiraffeServer"
         let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj"
+        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> "FSharp.Data.GraphQL.Samples.GiraffeServer.dll"
         restore serverProject
         build serverProject
-        CreateProcess.fromRawCommand dotNetCliExe [| "run"; "-c"; "Release"; "--no-build" |]
+        CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]
         |> CreateProcess.withWorkingDirectory serverProjectDir
         |> CreateProcess.redirectOutput
         |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
         |> Proc.start
-        |> ignore
+        |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
         if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
-        then failwith "Timeout while waiting for Giraffe server run. Can not run integration tests."
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    try
-        startTestServer ()
-        runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
-    finally
-        // The "dotnet run" command spawns additional dotnet processes.
-        // If we don't kill them all, AppVeyor CI will hang waiting for them to finish.
-        Process.killAllByName "dotnet")
+        then failwith "Timeout while waiting for Giraffe server to run. Can not run integration tests."
+    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    startTestServer ()
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
