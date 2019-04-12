@@ -532,7 +532,6 @@ let ``Introspection executes an introspection query`` () =
       NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [
             "queryType", upcast NameValueLookup.ofList [
-                    "kind", upcast "OBJECT"
                     "name", upcast "QueryRoot"]
             "mutationType", null
             "subscriptionType", null
@@ -628,6 +627,7 @@ let ``Introspection executes an introspection query`` () =
                                                               "ofType", upcast NameValueLookup.ofList [
                                                                       "kind", upcast "OBJECT"
                                                                       "name", upcast "__Directive"
+                                                                      "ofType", null
                                                               ]
                                                       ]
                                               ]
@@ -690,7 +690,8 @@ let ``Introspection executes an introspection query`` () =
                                                               "name", null
                                                               "ofType", upcast NameValueLookup.ofList [
                                                                       "kind", upcast "OBJECT"
-                                                                      "name", upcast "__Type"]]]]
+                                                                      "name", upcast "__Type"
+                                                                      "ofType", null]]]]
                                       "isDeprecated", upcast false
                                       "deprecationReason", null];]
                          "inputFields", null
@@ -717,7 +718,8 @@ let ``Introspection executes an introspection query`` () =
                                                             "name", null
                                                             "ofType", upcast NameValueLookup.ofList [
                                                                 "kind", upcast "OBJECT"
-                                                                "name", upcast "__InputValue"]]]]
+                                                                "name", upcast "__InputValue"
+                                                                "ofType", null]]]]
                                       "isDeprecated", upcast false
                                       "deprecationReason", null];
                                  upcast NameValueLookup.ofList [
@@ -745,7 +747,8 @@ let ``Introspection executes an introspection query`` () =
                                                               "name", null
                                                               "ofType", upcast NameValueLookup.ofList [
                                                                       "kind", upcast "ENUM"
-                                                                      "name", upcast "__DirectiveLocation"]]]]
+                                                                      "name", upcast "__DirectiveLocation"
+                                                                      "ofType", null]]]]
                                       "isDeprecated", upcast false
                                       "deprecationReason", null];
                                  upcast NameValueLookup.ofList [
@@ -1082,7 +1085,8 @@ let ``Introspection executes an introspection query`` () =
                                                               "name", null
                                                               "ofType", upcast NameValueLookup.ofList [
                                                                       "kind", upcast "OBJECT"
-                                                                      "name", upcast "__InputValue"]]]]
+                                                                      "name", upcast "__InputValue"
+                                                                      "ofType", upcast null]]]]
                                       "isDeprecated", upcast false
                                       "deprecationReason", null];
                                  upcast NameValueLookup.ofList [

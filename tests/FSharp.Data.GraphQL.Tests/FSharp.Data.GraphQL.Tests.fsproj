@@ -43,6 +43,10 @@
     <Compile Include="AstExtensionsTests.fs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="xunit.runner.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
