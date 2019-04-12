@@ -2,6 +2,7 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 namespace FSharp.Data.GraphQL.Client
 
+open System
 open System.Net
 open FSharp.Data
 open FSharp.Data.GraphQL
@@ -15,12 +16,16 @@ type GraphQLRequest  =
       Variables : (string * obj) [] }
 
 module GraphQLClient =
+    let private buildClient (headers : (string * string) []) =
+        let client = new WebClient()
+        client.Headers.Set("content-type", "application/json")
+        if not (isNull headers)
+        then headers |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
+        client
+
     let sendRequestAsync (request : GraphQLRequest) =
         async {
-            use client = new WebClient()
-            client.Headers.Set("content-type", "application/json")
-            if not (isNull request.CustomHeaders)
-            then request.CustomHeaders |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
+            use client = buildClient request.CustomHeaders
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
@@ -41,14 +46,26 @@ module GraphQLClient =
                 |> Async.AwaitTask
         }
        
-    let sendIntrospectionRequestAsync serverUrl customHeaders =
-        let request =
-            { ServerUrl = serverUrl
-              CustomHeaders = customHeaders
-              OperationName = None
-              Query = Introspection.IntrospectionQuery
-              Variables = [||] }
-        sendRequestAsync request
+    let sendIntrospectionRequestAsync (serverUrl : string) customHeaders =
+        let sendGet () =
+            async {
+                use client = buildClient customHeaders
+                return!
+                    client.DownloadStringTaskAsync(serverUrl)
+                    |> Async.AwaitTask
+            }
+        async {
+            try return! sendGet ()
+            with getex ->
+                let request =
+                    { ServerUrl = serverUrl
+                      CustomHeaders = customHeaders
+                      OperationName = None
+                      Query = Introspection.IntrospectionQuery
+                      Variables = [||] }
+                try return! sendRequestAsync request
+                with postex -> return (raise (AggregateException("Failure requesting server schema via both GET and POST methods.", [|getex; postex|])))
+        }
 
     let sendIntrospectionRequest serverUrl customHeaders = 
         sendIntrospectionRequestAsync serverUrl customHeaders
