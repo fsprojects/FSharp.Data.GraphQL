@@ -23,7 +23,7 @@ open FSharp.Data.GraphQL
 // The format is similar to how headers are encoded in an HTTP request (one header per line, names and values separated by a comma).
 // Those headers will go on to the query run methods as well. Unless you provide different headers when acutally calling Operation.Run.
 // Other headers can be provided in the same format as here.
-type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers.headerfile">
+type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers1.headerfile">
 //type MyProvider = GraphQLProvider<"http://localhost:8084", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
 
 let ctx = MyProvider.GetContext()
@@ -47,9 +47,13 @@ let operation =
       }
     }""">()
 
+// If you need different user data from the introspection, you can provide here on the run method.
 let result = operation.Run()
+//let result = operation.Run("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb")
+//let result = operation.Run("http_headers2.headerfile")
+//let result = operation.AsyncRun("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb") |> Async.RunSynchronously
+//let result = operation.AsyncRun("http_headers2.headerfile") |> Async.RunSynchronously
 
-// Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData

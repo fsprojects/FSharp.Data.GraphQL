@@ -32,9 +32,7 @@ let operation =
     }
   }""">()
 
-let headers = [|"UserData", System.Guid.NewGuid().ToString()|]
-
-let result = operation.Run(filter = filter, customHttpHeaders = headers)
+let result = operation.Run(filter = filter)
 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors

@@ -108,6 +108,25 @@ module QuotationHelpers =
     let quoteRecord instance = recordExpr instance ||> createLetExpr
     let quoteArray instance = arrayExpr instance ||> createLetExpr
 
+module HttpHeaders =
+    let map (resolutionFolder : string) (value : string) =
+        let httpHeadersLocation = TextLocation.Create(value, resolutionFolder)
+        let headersString =
+            match httpHeadersLocation with
+            | String headers -> headers
+            | File path -> System.IO.File.ReadAllText path
+        if headersString = "" then [||]
+        else
+            headersString.Replace("\r\n", "\n").Split('\n')
+            |> Array.map (fun header -> 
+                let separatorIndex = header.IndexOf(':')
+                if separatorIndex = -1
+                then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
+                else
+                    let name = header.Substring(0, separatorIndex).Trim()
+                    let value = header.Substring(separatorIndex + 1).Trim()
+                    (name, value))
+
 type EnumBase (name : string, value : string) =
     member __.Name = name
 
@@ -604,15 +623,18 @@ type OperationResultBase (responseJson : string) =
 
     override x.GetHashCode() = x._ResponseJson.GetHashCode()
 
-type OperationBase (serverUrl : string) =
+type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []) =
     member __.ServerUrl = serverUrl
+
+    member __.CustomHttpHeaders = customHttpHeaders
 
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
                                             schemaTypes : Map<string, IntrospectionType>,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
-                                            operationType : Type) =
+                                            operationType : Type,
+                                            resolutionFolder : string) =
         let query = 
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
@@ -664,21 +686,15 @@ type OperationBase (serverUrl : string) =
                     | _ -> []
                 List.zip names args |> List.map exprMapper
             Expr.NewArray(typeof<string * obj>, args)
-        let customHttpHeadersExprMapper (args : Expr list) =
-            match args with
-            | _ :: tail when tail.Length > 0 -> tail.[tail.Length - 1]
-            | _ -> <@@ null @@>
         let rundef = 
             let invoker (args : Expr list) =
                 let operationName = Option.toObj operationDefinition.Name
                 let variables = varExprMapper variables args
-                let customHttpHeaders = customHttpHeadersExprMapper args
                 <@@ let this = %%args.[0] : OperationBase
                     let customHttpHeaders = 
-                        let headers = %%customHttpHeaders : seq<string * string>
-                        match headers with
-                        | null -> [||]
-                        | _ -> Array.ofSeq headers
+                        match %%args.[args.Length - 1] : string with
+                        | "" -> this.CustomHttpHeaders
+                        | other -> HttpHeaders.map resolutionFolder other
                     let request =
                         { ServerUrl = this.ServerUrl
                           CustomHeaders = customHttpHeaders
@@ -688,7 +704,7 @@ type OperationBase (serverUrl : string) =
                     let responseJson = GraphQLClient.sendRequest request
                     OperationResultBase(responseJson) @@>
             let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
             let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
             mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
             mdef
@@ -696,13 +712,11 @@ type OperationBase (serverUrl : string) =
             let invoker (args : Expr list) =
                 let operationName = Option.toObj operationDefinition.Name
                 let variables = varExprMapper variables args
-                let customHttpHeaders = customHttpHeadersExprMapper args
                 <@@ let this = %%args.[0] : OperationBase
                     let customHttpHeaders = 
-                        let headers = %%customHttpHeaders : seq<string * string>
-                        match headers with
-                        | null -> [||]
-                        | _ -> Array.ofSeq headers
+                        match %%args.[args.Length - 1] : string with
+                        | "" -> this.CustomHttpHeaders
+                        | other -> HttpHeaders.map resolutionFolder other
                     let request =
                         { ServerUrl = this.ServerUrl
                           CustomHeaders = customHttpHeaders
@@ -714,7 +728,7 @@ type OperationBase (serverUrl : string) =
                         return OperationResultBase(responseJson)
                     } @@>
             let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = None)]
+            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
             let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
             mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
             mdef
@@ -722,10 +736,12 @@ type OperationBase (serverUrl : string) =
         tdef.AddMembers(members)
         tdef
 
-type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
+type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHeaders : (string * string) []) =
     member __.ServerUrl = serverUrl
 
     member __.Schema = schema
+
+    member __.CustomHttpHeaders = customHttpHeaders
 
     static member private GetOperationProvidedTypes(schema, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
@@ -787,7 +803,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), (providedTypes |> Seq.map (|KeyValue|) |> Map.ofSeq)
 
-    static member internal MakeProvidedType(schema : IntrospectionSchema, schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, resolutionFolder : string) =
+    static member internal MakeProvidedType(schema : IntrospectionSchema,
+                                            schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>,
+                                            resolutionFolder : string) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
         tdef.AddXmlDoc("Represents a connection to a GraphQL server. A context groups all operations and their types from a specific server connection.")
         let mdef =
@@ -868,11 +886,11 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     match operationTypeRef.Name with
                     | Some name -> name
                     | None -> failwith "Error parsing query. Operation type does not have a name."
-                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType)
+                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, resolutionFolder)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
-                        OperationBase(this.ServerUrl) @@>
+                        OperationBase(this.ServerUrl, this.CustomHttpHeaders) @@>
                 let mdef = ProvidedMethod(mname, [], odef, invoker)
                 mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
                 let members : MemberInfo list = [odef; mdef]
@@ -1014,23 +1032,7 @@ type ProviderBase private () =
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             tdef.AddXmlDoc("A type provider for GraphQL operations.")
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
-            let customHttpHeaders =
-                let httpHeadersLocation = TextLocation.Create(downcast args.[1], downcast args.[2])
-                let headersString =
-                    match httpHeadersLocation with
-                    | String headers -> headers
-                    | File path -> System.IO.File.ReadAllText path
-                if headersString = "" then [||]
-                else
-                    headersString.Replace("\r\n", "\n").Split('\n')
-                    |> Array.map (fun header -> 
-                        let separatorIndex = header.IndexOf(':')
-                        if separatorIndex = -1
-                        then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
-                        else
-                            let name = header.Substring(0, separatorIndex).Trim()
-                            let value = header.Substring(separatorIndex + 1).Trim()
-                            (name, value))
+            let customHttpHeaders = HttpHeaders.map resolutionFolder (downcast args.[1])
             let introspectionJson =
                 match introspectionLocation with
                 | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest serverUrl customHttpHeaders
@@ -1044,6 +1046,10 @@ type ProviderBase private () =
             tdef.AddMember(typeWrapper)
             let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes, resolutionFolder)
             let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
+            let customHttpHeadersExpr = 
+                let names = customHttpHeaders |> Array.map fst
+                let values = customHttpHeaders |> Array.map snd
+                <@@ Array.zip names values @@>
             let ctxmdef =
                 let prm = 
                     match introspectionLocation with
@@ -1051,7 +1057,7 @@ type ProviderBase private () =
                     | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
                 let invoker (args : Expr list) =
                     let serverUrl = args.[0]
-                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr])
+                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr; customHttpHeadersExpr])
                 let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
                 mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
                 mdef

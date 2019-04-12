@@ -73,13 +73,9 @@ let operation =
 
 printfn "Server: %s\n" operation.ServerUrl
 
-// If your server requires custom HTTP headers (for example, authentication headers),
-// you can specify them as a (string * string) seq.
-let customHttpHeaders : (string * string) seq = upcast [|"UserData", System.Guid.NewGuid().ToString()|]
-
 // To run an operation, you just need to call the Run or AsyncRun method.
-//let result = operation.Run(customHttpHeaders)
-let result = operation.AsyncRun(customHttpHeaders) |> Async.RunSynchronously
+let result = operation.Run()
+//let result = operation.AsyncRun() |> Async.RunSynchronously
 
 // If the operation runs without any error, result data will be on the Data property.
 let data = result.Data
