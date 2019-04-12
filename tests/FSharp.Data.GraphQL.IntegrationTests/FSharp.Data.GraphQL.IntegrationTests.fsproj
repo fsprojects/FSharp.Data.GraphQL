@@ -12,6 +12,8 @@
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
+    <Compile Include="CustomHttpHeaderFileTests.fs" />
+    <Compile Include="CustomHttpHeadersTests.fs" />
     <Compile Include="RemoteProviderTests.fs" />
   </ItemGroup>
   <ItemGroup>

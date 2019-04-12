@@ -93,7 +93,7 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let result = SimpleOperation.operation.Run([|"UserData", userData|])
+    let result = SimpleOperation.operation.Run(sprintf "UserData: %s" userData)
     SimpleOperation.validateResult result
     result.CustomData.ContainsKey("userData") |> equals true
     result.CustomData.["userData"] |> equals (upcast userData)
@@ -101,7 +101,7 @@ let ``Should be able to start a simple query operation synchronously with custom
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let result = SimpleOperation.operation.AsyncRun([|"UserData", userData|]) |> Async.RunSynchronously
+    let result = SimpleOperation.operation.AsyncRun(sprintf "UserData: %s" userData) |> Async.RunSynchronously
     SimpleOperation.validateResult result
     result.CustomData.ContainsKey("userData") |> equals true
     result.CustomData.["userData"] |> equals (upcast userData)
@@ -280,5 +280,5 @@ let ``Should be able to run a query with variables asyncrhonously`` () =
 
 [<Fact>]
 let ``Should be able to run a query from a query file`` () =
-    context.Operation<"operation.gql">().Run()
+    context.Operation<"operation.graphql">().Run()
     |> SimpleOperation.validateResult
