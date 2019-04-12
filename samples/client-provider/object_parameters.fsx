@@ -32,9 +32,10 @@ let operation =
     }
   }""">()
 
-let headers = ["AuthToken", System.Guid.NewGuid().ToString()]
+let headers = [|"UserData", System.Guid.NewGuid().ToString()|]
 
 let result = operation.Run(filter = filter, customHttpHeaders = headers)
 
-printfn "Result: %A" result.Data
-printfn "Errors: %A" result.Errors
+printfn "Data: %A\n" result.Data
+printfn "Errors: %A\n" result.Errors
+printfn "Custom data: %A\n" result.CustomData

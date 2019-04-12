@@ -33,16 +33,16 @@ type IntrospectionLocation =
             else tryUri value
         with _ -> tryUri value
 
-type QueryLocation =
-    | Literal of query : string
-    | QueryFile of path : string
+type TextLocation =
+    | String of query : string
+    | File of path : string
     static member internal Create(value : string, resolutionFolder : string) =
         try
             let file = System.IO.Path.Combine(resolutionFolder, value)
             if System.IO.File.Exists(file)
-            then QueryFile file
-            else Literal value
-        with _ -> Literal value
+            then File file
+            else String value
+        with _ -> String value
 
 type TypeName = string
 
@@ -797,11 +797,11 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                   ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "") ]
             let smdef = ProvidedMethod("Operation", [], typeof<OperationBase>)
             let genfn (mname : string) (args : obj []) =
-                let queryLocation = QueryLocation.Create(downcast args.[0], downcast args.[1])
+                let queryLocation = TextLocation.Create(downcast args.[0], downcast args.[1])
                 let query = 
                     match queryLocation with
-                    | Literal query -> query
-                    | QueryFile path -> System.IO.File.ReadAllText(path)
+                    | String query -> query
+                    | File path -> System.IO.File.ReadAllText(path)
                 let queryAst = Parser.parse query
                 let operationName : OperationName option = 
                     match args.[2] :?> string with
@@ -820,16 +820,24 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema) =
                     | Some fields -> fields
                     | None -> failwith "Error parsing query. Could not find field information for requested operation."
                 let operationTypeRef =
-                    match operationDefinition.OperationType with
-                    | Query -> schema.QueryType
-                    | Mutation -> 
-                        match schema.MutationType with
-                        | Some tref -> tref
-                        | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-                    | Subscription -> 
-                        match schema.SubscriptionType with
-                        | Some tref -> tref
-                        | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+                    let tref =
+                        match operationDefinition.OperationType with
+                        | Query -> schema.QueryType
+                        | Mutation -> 
+                            match schema.MutationType with
+                            | Some tref -> tref
+                            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+                        | Subscription -> 
+                            match schema.SubscriptionType with
+                            | Some tref -> tref
+                            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+                    let tinst =
+                        match tref.Name with
+                        | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
+                        | None -> None
+                    match tinst with
+                    | Some t -> { tref with Kind = t.Kind }
+                    | None -> failwith "The operation was found in the schema, but it does not have a name."
                 let schemaTypes = Types.getSchemaTypes(schema)
                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
                 let (operationType, operationTypes) = ContextBase.GetOperationProvidedTypes(schema, enumProvidedTypes, operationAstFields, operationTypeRef)
@@ -1000,14 +1008,32 @@ type ProviderBase private () =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
+              ProvidedStaticParameter("customHttpHeaders", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
-            let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[1])
             let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
             tdef.AddXmlDoc("A type provider for GraphQL operations.")
+            let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
+            let customHttpHeaders =
+                let httpHeadersLocation = TextLocation.Create(downcast args.[1], downcast args.[2])
+                let headersString =
+                    match httpHeadersLocation with
+                    | String headers -> headers
+                    | File path -> System.IO.File.ReadAllText path
+                if headersString = "" then [||]
+                else
+                    headersString.Replace("\r\n", "\n").Split('\n')
+                    |> Array.map (fun header -> 
+                        let separatorIndex = header.IndexOf(':')
+                        if separatorIndex = -1
+                        then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
+                        else
+                            let name = header.Substring(0, separatorIndex).Trim()
+                            let value = header.Substring(separatorIndex + 1).Trim()
+                            (name, value))
             let introspectionJson =
                 match introspectionLocation with
-                | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest serverUrl
+                | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest serverUrl customHttpHeaders
                 | IntrospectionFile path -> System.IO.File.ReadAllText path
             let schema = Serialization.deserializeSchema introspectionJson
             let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)

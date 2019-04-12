@@ -41,15 +41,17 @@ module GraphQLClient =
                 |> Async.AwaitTask
         }
        
-    let sendIntrospectionRequestAsync serverUrl =
+    let sendIntrospectionRequestAsync serverUrl customHeaders =
         let request =
             { ServerUrl = serverUrl
-              CustomHeaders = [||]
+              CustomHeaders = customHeaders
               OperationName = None
               Query = Introspection.IntrospectionQuery
               Variables = [||] }
         sendRequestAsync request
 
-    let sendIntrospectionRequest = sendIntrospectionRequestAsync >> Async.RunSynchronously
+    let sendIntrospectionRequest serverUrl customHeaders = 
+        sendIntrospectionRequestAsync serverUrl customHeaders
+        |> Async.RunSynchronously
 
     let sendRequest = sendRequestAsync >> Async.RunSynchronously

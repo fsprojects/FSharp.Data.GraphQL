@@ -18,15 +18,38 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+// If your server needs custom headers for the introspection query,
+// you can provider it as an HTTP header file, or an HTTP header string.
+// The format is similar to how headers are encoded in an HTTP request (one header per line, names and values separated by a comma).
+// Those headers will go on to the query run methods as well. Unless you provide different headers when acutally calling Operation.Run.
+// Other headers can be provided in the same format as here.
+type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers.headerfile">
+//type MyProvider = GraphQLProvider<"http://localhost:8084", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
 
 let ctx = MyProvider.GetContext()
 
-// If you pass a query file, it will load the query from it.
-let operation = ctx.Operation<"operation.graphql">()
+let operation = 
+    ctx.Operation<"""query q {
+      hero (id: "1000") {
+        name
+        appearsIn
+        homePlanet
+        friends {
+          ... on Human {
+            name
+            homePlanet
+          }
+          ... on Droid {
+            name
+            primaryFunction
+          }
+        }
+      }
+    }""">()
 
 let result = operation.Run()
 
+// Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData

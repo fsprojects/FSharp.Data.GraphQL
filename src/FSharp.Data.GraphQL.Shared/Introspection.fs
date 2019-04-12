@@ -16,73 +16,76 @@ let internal getFieldValue name o =
 /// Common GraphQL query that may be used to retrieve overall data 
 /// about schema type system itself.
 let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
-  __schema {
-    queryType {
-      ...OperationTypeRef
-    }
-    mutationType {
-      ...OperationTypeRef
-    }
-    subscriptionType {
-      ...OperationTypeRef
-    }
-    types {
-      ...FullType
-    }
-    directives {
-      name
-      description
-      locations
-      args {
-        ...InputValue
-      }
-    }
+__schema {
+  queryType {
+    name
   }
-}
-
-fragment FullType on __Type {
-  kind
-  name
-  description
-  fields(includeDeprecated: true) {
+  mutationType {
+    name
+  }
+  subscriptionType {
+    name
+  }
+  types {
+    ...FullType
+  }
+  directives {
     name
     description
+    locations
     args {
       ...InputValue
     }
-    type {
-      ...TypeRef
-    }
-    isDeprecated
-    deprecationReason
-  }
-  inputFields {
-    ...InputValue
-  }
-  interfaces {
-    ...TypeRef
-  }
-  enumValues(includeDeprecated: true) {
-    name
-    description
-    isDeprecated
-    deprecationReason
-  }
-  possibleTypes {
-    ...TypeRef
   }
 }
+}
 
-fragment InputValue on __InputValue {
+fragment FullType on __Type {
+kind
+name
+description
+fields(includeDeprecated: true) {
   name
   description
+  args {
+    ...InputValue
+  }
   type {
     ...TypeRef
   }
-  defaultValue
+  isDeprecated
+  deprecationReason
+}
+inputFields {
+  ...InputValue
+}
+interfaces {
+  ...TypeRef
+}
+enumValues(includeDeprecated: true) {
+  name
+  description
+  isDeprecated
+  deprecationReason
+}
+possibleTypes {
+  ...TypeRef
+}
+}
+
+fragment InputValue on __InputValue {
+name
+description
+type {
+  ...TypeRef
+}
+defaultValue
 }
 
 fragment TypeRef on __Type {
+kind
+name
+ofType {
   kind
   name
   ofType {
@@ -94,18 +97,22 @@ fragment TypeRef on __Type {
       ofType {
         kind
         name
-      }
-      ofType{
-        kind
-        name
+        ofType {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+            }
+          }
+        }
       }
     }
   }
 }
-
-fragment OperationTypeRef on __Type {
-  kind
-  name
 }"""
     
 /// GraphQL enum describing kind of the GraphQL type definition.
