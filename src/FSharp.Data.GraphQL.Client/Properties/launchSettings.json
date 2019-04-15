@@ -1,0 +1,9 @@
+{
+  "profiles": {
+    "FSharp.Data.GraphQL.Client": {
+      "commandName": "Executable",
+      "executablePath": "C:\\Program Files (x86)\\Microsoft Visual Studio\\2017\\Community\\Common7\\IDE\\devenv.exe",
+      "commandLineArgs": "H:\\Repos\\FSharp.Data.GraphQL\\FSharp.Data.GraphQL.Integration.sln"
+    }
+  }
+}

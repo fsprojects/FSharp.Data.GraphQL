@@ -1,8 +1,8 @@
 /// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
+
 namespace FSharp.Data.GraphQL.Client
 
-open System
 open System.Net
 open FSharp.Data
 open FSharp.Data.GraphQL
@@ -41,9 +41,8 @@ module GraphQLClient =
                    "query", JsonValue.String request.Query
                    "variables", variables |]
                 |> JsonValue.Record
-            return!
-                client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString())
-                |> Async.AwaitTask
+            try return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
+            with _ -> return failwith "Could not connect to the server."
         }
        
     let sendIntrospectionRequestAsync (serverUrl : string) customHeaders =
@@ -56,7 +55,7 @@ module GraphQLClient =
             }
         async {
             try return! sendGet ()
-            with getex ->
+            with _ ->
                 let request =
                     { ServerUrl = serverUrl
                       CustomHeaders = customHeaders
@@ -64,7 +63,7 @@ module GraphQLClient =
                       Query = Introspection.IntrospectionQuery
                       Variables = [||] }
                 try return! sendRequestAsync request
-                with postex -> return (raise (AggregateException("Failure requesting server schema via both GET and POST methods.", [|getex; postex|])))
+                with _ -> return failwith "Could not connect to the server to get the introspection schema."
         }
 
     let sendIntrospectionRequest serverUrl customHeaders = 

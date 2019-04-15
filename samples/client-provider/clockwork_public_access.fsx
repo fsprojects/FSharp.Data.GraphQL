@@ -18,11 +18,11 @@
 
 open FSharp.Data.GraphQL
 
-// The URL here is for design time purposes.
-// It connects to the server to be able to map its schema.
-//type MyProvider = GraphQLProvider<"http://localhost:8084">
-
 // Some GraphQL API's gives access to their schema via GET method, whithout need to anthenticate via headers.
 // The provider automatically tries to get the schema via GET method first. If it does not work,
 // The classical way via POST is done.
 type MyProvider = GraphQLProvider<"https://api.clockworkgo.com/">
+
+type QueryType = MyProvider.Types.Query
+
+let context = MyProvider.GetContext()

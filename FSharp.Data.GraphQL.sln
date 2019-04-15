@@ -74,6 +74,9 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
+		samples\client-provider\clockwork_public_access.fsx = samples\client-provider\clockwork_public_access.fsx
+		samples\client-provider\http_headers1.headerfile = samples\client-provider\http_headers1.headerfile
+		samples\client-provider\http_headers2.headerfile = samples\client-provider\http_headers2.headerfile
 		samples\client-provider\http_headers_introspection.fsx = samples\client-provider\http_headers_introspection.fsx
 		samples\client-provider\interfaces.fsx = samples\client-provider\interfaces.fsx
 		samples\client-provider\introspection.json = samples\client-provider\introspection.json
@@ -81,8 +84,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-p
 		samples\client-provider\object_parameters.fsx = samples\client-provider\object_parameters.fsx
 		samples\client-provider\operation.graphql = samples\client-provider\operation.graphql
 		samples\client-provider\scalar_parameters.fsx = samples\client-provider\scalar_parameters.fsx
+		samples\client-provider\standard_features.fsx = samples\client-provider\standard_features.fsx
 		samples\client-provider\using_query_file.fsx = samples\client-provider\using_query_file.fsx
-		samples\client-provider\using_query_string.fsx = samples\client-provider\using_query_string.fsx
 	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared", "src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"

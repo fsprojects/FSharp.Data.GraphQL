@@ -1,4 +1,7 @@
-﻿namespace FSharp.Data.GraphQL
+﻿/// The MIT License (MIT)
+/// Copyright (c) 2016 Bazinga Technologies Inc
+
+namespace FSharp.Data.GraphQL
 
 open System
 open System.Security.Cryptography
@@ -200,11 +203,8 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         |> Seq.map (fun p -> p.Name, mapper p.Value)
         |> dict
 
-    static member internal MakeProvidedType(metadata : ProvidedTypeMetadata, properties : RecordPropertyMetadata list, baseType : Type option) =
-        let baseType = Option.defaultValue typeof<RecordBase> baseType
-        let name = metadata.Name.FirstCharUpper()
-        let tdef = ProvidedTypeDefinition(name, Some baseType, nonNullable = true, isSealed = true)
-        metadata.Description |> Option.iter tdef.AddXmlDoc
+    static member internal MakeProvidedType(tdef : ProvidedTypeDefinition, properties : RecordPropertyMetadata list) =
+        let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
             let pname = metadata.Name.FirstCharUpper()
             let getterCode (args : Expr list) =
@@ -235,7 +235,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
                     Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
                 ProvidedConstructor(prm, invoker)
             tdef.AddMember(ctdef)
-        match baseType with
+        match tdef.BaseType with
         | :? ProvidedTypeDefinition as bdef ->
             let asType = 
                 let invoker (args : Expr list) =
@@ -266,6 +266,12 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             buildConstructor (bprops @ props)
             bdef.AddMembers(members)
         | _ -> properties |> List.map (fun p -> p.Name, p.Type) |> buildConstructor
+        tdef
+
+    static member internal PreBuildProvidedType(metadata : ProvidedTypeMetadata, baseType : Type option) =
+        let baseType = Option.defaultValue typeof<RecordBase> baseType
+        let name = metadata.Name.FirstCharUpper()
+        let tdef = ProvidedTypeDefinition(name, Some baseType, nonNullable = true, isSealed = true)
         tdef
 
     static member internal Constructor = typeof<RecordBase>.GetConstructors().[0]
@@ -776,13 +782,14 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
                         { Name = info.Name; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
                     let baseType =
+                        let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
+                        let tdef = RecordBase.PreBuildProvidedType(metadata, None)
+                        providedTypes.Add((path, tref.Name.Value), tdef)
                         let properties =
                             astFields
                             |> List.filter (function | TypeField _ -> true | _ -> false)
                             |> List.map (getPropertyMetadata tref.Name.Value)
-                        let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
-                        RecordBase.MakeProvidedType(metadata, properties, None)
-                    providedTypes.Add((path, baseType.Name), baseType)
+                        RecordBase.MakeProvidedType(tdef, properties)
                     let fragmentProperties =
                         astFields
                         |> List.choose (function FragmentField f -> Some f | _ -> None)
@@ -795,7 +802,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                                 then schemaTypes.[typeName]
                                 else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
                             let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
-                            RecordBase.MakeProvidedType(metadata, properties, Some (upcast baseType))
+                            let tdef = RecordBase.PreBuildProvidedType(metadata, Some (upcast baseType))
+                            RecordBase.MakeProvidedType(tdef, properties)
                         fragmentProperties
                         |> List.map createFragmentType
                     fragmentTypes |> List.iter (fun fragmentType -> providedTypes.Add((path, fragmentType.Name), fragmentType))
@@ -904,7 +912,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
     static member internal Constructor = typeof<ContextBase>.GetConstructors().[0]
 
 type ProviderBase private () =
-    static member private GetSchemaProvidedTypes(schema : IntrospectionSchema) =
+    static member GetSchemaProvidedTypes(schema : IntrospectionSchema) =
         let providedTypes = Dictionary<TypeName, ProvidedTypeDefinition>()
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
@@ -928,7 +936,7 @@ type ProviderBase private () =
                 let providedType =
                     if Types.scalar.ContainsKey(field.Type.Name.Value)
                     then Types.scalar.[field.Type.Name.Value]
-                    else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." field.Type.Name.Value
+                    else typeof<string> // Unknown types will be just mapped to a string type.
                 { Name = field.Name
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
@@ -973,23 +981,23 @@ type ProviderBase private () =
                 let metadata = { Name = itype.Name; Description = itype.Description }
                 match itype.Kind with
                 | TypeKind.OBJECT ->
+                    let tdef = RecordBase.PreBuildProvidedType(metadata, None)
+                    providedTypes.Add(itype.Name, tdef)
                     let properties = 
                         itype.Fields
                         |> Option.defaultValue [||]
                         |> Array.map getFieldMetadata
                         |> List.ofArray
-                    let tdef = RecordBase.MakeProvidedType(metadata, properties, None)
-                    providedTypes.Add(itype.Name, tdef)
-                    tdef
+                    RecordBase.MakeProvidedType(tdef, properties)
                 | TypeKind.INPUT_OBJECT ->
+                    let tdef = RecordBase.PreBuildProvidedType(metadata, None)
+                    providedTypes.Add(itype.Name, tdef)
                     let properties = 
                         itype.InputFields
                         |> Option.defaultValue [||]
                         |> Array.map getInputFieldMetadata
                         |> List.ofArray
-                    let tdef = RecordBase.MakeProvidedType(metadata, properties, None)
-                    providedTypes.Add(itype.Name, tdef)
-                    tdef
+                    RecordBase.MakeProvidedType(tdef, properties)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = InterfaceBase.MakeProvidedType(metadata)
                     providedTypes.Add(itype.Name, bdef)
