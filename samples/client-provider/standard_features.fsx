@@ -27,7 +27,7 @@ open FSharp.Data.GraphQL
 // the introspection query result.
 // WARNING: the introspection query result must contain all fields requested by the
 // standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
-type MyProvider = GraphQLProvider<"introspection.json">
+type MyProvider = GraphQLProvider<"sample_schema.json">
 
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its

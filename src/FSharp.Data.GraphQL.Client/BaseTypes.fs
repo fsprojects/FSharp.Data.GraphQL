@@ -759,7 +759,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
             | TypeKind.SCALAR when tref.Name.IsSome ->
                 if Types.scalar.ContainsKey(tref.Name.Value)
                 then Types.scalar.[tref.Name.Value] |> Types.makeOption
-                else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." tref.Name.Value
+                else Types.makeOption typeof<string>
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> Types.makeOption providedEnum
@@ -959,7 +959,7 @@ type ProviderBase private () =
                 let providedType =
                     if Types.scalar.ContainsKey(field.Type.Name.Value)
                     then Types.scalar.[field.Type.Name.Value]
-                    else failwithf "Could not find a schema type based on a type reference. The reference is a scalar type \"%s\", but that type is not supported by the client provider." field.Type.Name.Value
+                    else Types.makeOption typeof<string>
                 { Name = field.Name
                   Description = field.Description
                   DeprecationReason = None

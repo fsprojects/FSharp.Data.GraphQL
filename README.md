@@ -167,7 +167,7 @@ type MyProvider = GraphQLProvider<"http://some.graphqlserver.org">
 2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/files/introspection_query.graphql) on the desired server and saving it into a file on the same path as the project using the provider:
 
 ```fsharp
-type MyProvider = GraphQLProvider<"introspection.json">
+type MyProvider = GraphQLProvider<"sample_schema.json">
 ```
 
 From now on, you can start running queries and mutations:
