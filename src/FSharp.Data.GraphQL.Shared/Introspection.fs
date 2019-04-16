@@ -112,6 +112,10 @@ let __TypeKind =
 /// GraphQL enum describing kind of location for a particular directive
 /// to be used in. Can be one of: QUERY, MUTATION, SUBSCRIPTION, FIELD,
 /// FRAGMENT_DEFINITION, FRAGMENT_SPREAD or INLINE_FRAGMENT.
+/// FRAGMENT_DEFINITION, FRAGMENT_SPREAD, INLINE_FRAGMENT, SCHEMA,
+/// SCALAR, OBJECT, FIELD_DEFINITION, ARGUMENT_DEFINITION,
+/// INTERFACE, UNION, ENUM, ENUM_VALUE, INPUT_OBJECT or
+/// INPUT_FIELD_DEFINITION.
 let __DirectiveLocation =
   Define.Enum(
     name = "__DirectiveLocation",
@@ -124,6 +128,17 @@ let __DirectiveLocation =
         Define.EnumValue("FRAGMENT_DEFINITION", DirectiveLocation.FRAGMENT_DEFINITION, "Location adjacent to a fragment definition.")
         Define.EnumValue("FRAGMENT_SPREAD", DirectiveLocation.FRAGMENT_SPREAD, "Location adjacent to a fragment spread.")
         Define.EnumValue("INLINE_FRAGMENT", DirectiveLocation.INLINE_FRAGMENT, "Location adjacent to an inline fragment.")
+        Define.EnumValue("SCHEMA", DirectiveLocation.SCHEMA, "Location adjacent to a schema IDL definition.")
+        Define.EnumValue("SCALAR", DirectiveLocation.SCALAR, "Location adjacent to a scalar IDL definition.")
+        Define.EnumValue("OBJECT", DirectiveLocation.OBJECT, "Location adjacent to an object IDL definition.")
+        Define.EnumValue("FIELD_DEFINITION", DirectiveLocation.FIELD_DEFINITION, "Location adjacent to a field IDL definition.")
+        Define.EnumValue("ARGUMENT_DEFINITION", DirectiveLocation.ARGUMENT_DEFINITION, "Location adjacent to a field argument IDL definition.")
+        Define.EnumValue("INTERFACE", DirectiveLocation.INTERFACE, "Location adjacent to an interface IDL definition.")
+        Define.EnumValue("UNION", DirectiveLocation.UNION, "Location adjacent to an union IDL definition.")
+        Define.EnumValue("ENUM", DirectiveLocation.ENUM, "Location adjacent to an enum IDL definition.")
+        Define.EnumValue("ENUM_VALUE", DirectiveLocation.ENUM_VALUE, "Location adjacent to an enum value definition.")
+        Define.EnumValue("INPUT_OBJECT", DirectiveLocation.INPUT_OBJECT, "Location adjacent to an input object IDL definition.")
+        Define.EnumValue("INPUT_FIELD_DEFINITION", DirectiveLocation.INPUT_FIELD_DEFINITION, "Location adjacent to an input object field IDL definition.")
     ])
     
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
