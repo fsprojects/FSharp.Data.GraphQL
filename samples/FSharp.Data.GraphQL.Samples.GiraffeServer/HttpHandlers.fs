@@ -10,10 +10,13 @@ open System.IO
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Control.Tasks
+open System.Diagnostics
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+    let sw = Stopwatch()
+
     let internalServerError : HttpHandler = setStatusCode 500
 
     let okWithStr str : HttpHandler = setStatusCode 200 >=> text str
@@ -24,6 +27,14 @@ module HttpHandlers =
 
     let setContentTypeAsJson : HttpHandler =
         setHttpHeader "Content-Type" "application/json"
+
+    let private startMeasure () =
+        sw.Restart()
+
+    let private endMeasure message =
+        sw.Stop()
+        let ts = sw.Elapsed
+        printfn "%s: %A" message (System.String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10))
 
     let private graphiQL (next : HttpFunc) (ctx : HttpContext) = task {
         let userData =
@@ -76,29 +87,37 @@ module HttpHandlers =
             use ms = new MemoryStream(4096)
             s.CopyTo(ms)
             ms.ToArray()
+        startMeasure ()
         let body = readStream ctx.Request.Body
+        endMeasure "Read input stream"
         let query = body |> tryParse "query"
         let variables = body |> tryParse "variables" |> mapString
         match query, variables  with
         | Some query, Some variables ->
+            startMeasure ()
             printfn "Received query: %s" query
             printfn "Received variables: %A" variables
             let query = query |> removeSpacesAndNewLines
             let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             printfn "User data: %A" userData
+            endMeasure "Processing time"
             return! okWithStr (json result) next ctx
         | Some query, None ->
+            startMeasure ()
             printfn "Received query: %s" query
             let query = query |> removeSpacesAndNewLines
             let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             printfn "User data: %A" userData
+            endMeasure "Processing time"
             return! okWithStr (json result) next ctx
         | None, _ ->
+            startMeasure ()
             let result = Schema.executor.AsyncExecute(Introspection.IntrospectionQuery) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             printfn "User data: %A" userData
+            endMeasure "Processing time"
             return! okWithStr (json result) next ctx
     }
 

@@ -17,6 +17,7 @@
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
+open System.Diagnostics
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
@@ -25,8 +26,13 @@ let ctx = MyProvider.GetContext()
 // If you pass a query file, it will load the query from it.
 let operation = ctx.Operation<"operation.graphql">()
 
+let sw = Stopwatch()
+sw.Start()
 let result = operation.Run()
+sw.Stop()
+let ts = sw.Elapsed
 
+printfn "Request time: %s" (System.String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10))
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData
