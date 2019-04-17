@@ -24,49 +24,7 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 let ctx = MyProvider.GetContext()
 
 // If you pass a query file, it will load the query from it.
-let operation = 
-    ctx.Operation<"""query q {
-      hero(id: "1000") {
-        name
-        appearsIn
-        homePlanet
-        friends {
-          ...FullFriends
-        }
-      }
-    }
-
-    fragment Friends on Character {
-      ... on Human {
-        name
-        appearsIn
-        homePlanet
-      }
-      ... on Droid {
-        name
-        appearsIn
-        primaryFunction
-      }
-    }
-
-    fragment FullFriends on Character {
-      ... on Human {
-        name
-        appearsIn
-        homePlanet
-        friends {
-          ...Friends
-        }
-      }
-      ... on Droid {
-        name
-        appearsIn
-        primaryFunction
-        friends {
-          ...Friends
-        }
-      }
-    }""">()
+let operation = ctx.Operation<"operation.graphql">()
 
 let sw = Stopwatch()
 sw.Start()
