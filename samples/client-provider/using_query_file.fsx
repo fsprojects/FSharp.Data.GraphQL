@@ -78,3 +78,6 @@ printfn "Request time: %s" (System.String.Format("{0:00}:{1:00}:{2:00}.{3:00}", 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData
+
+// Operations are disposable objects. Be sure to dispose their resources after using them.
+operation.Dispose()

@@ -124,3 +124,5 @@ let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 els
 printfn "Hero friends (%i): %A\n" friends.Length friends
 printfn "Hero human friends (%i): %A\n" humanFriendsCount humanFriends
 printfn "Hero droid friends (%i): %A\n" droidFriendsCount droidFriends
+
+operation.Dispose()

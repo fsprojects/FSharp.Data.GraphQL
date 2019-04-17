@@ -20,6 +20,7 @@ open System.Reflection
 open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
+open System.Net
 
 type IntrospectionLocation =
     | Uri of address : string
@@ -578,9 +579,9 @@ type OperationResultBase (responseJson : string) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
         let ddef = 
             let getterCode =
-                QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) var ->
+                QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) providingInformation ->
                     <@@ let this = %%args.[0] : OperationResultBase
-                        let info = %%var : OperationResultProvidingInformation
+                        let info = %%providingInformation : OperationResultProvidingInformation
                         let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
                         let operationType =
                             match schemaTypes.TryFind(info.OperationTypeName) with
@@ -632,6 +633,10 @@ type OperationResultBase (responseJson : string) =
     override x.GetHashCode() = x._ResponseJson.GetHashCode()
 
 type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []) =
+    member private __._Client = new WebClient()
+
+    member this.Dispose() = this._Client.Dispose()
+
     member __.ServerUrl = serverUrl
 
     member __.CustomHttpHeaders = customHttpHeaders
@@ -699,6 +704,8 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                 let operationName = Option.toObj operationDefinition.Name
                 let variables = varExprMapper variables args
                 <@@ let this = %%args.[0] : OperationBase
+                    let client : WebClient = 
+                        downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
                     let customHttpHeaders = 
                         match %%args.[args.Length - 1] : string with
                         | "" -> this.CustomHttpHeaders
@@ -709,7 +716,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                           OperationName = Option.ofObj operationName
                           Query = query
                           Variables = %%variables }
-                    let responseJson = GraphQLClient.sendRequest request
+                    let responseJson = GraphQLClient.sendRequest client request
                     OperationResultBase(responseJson) @@>
             let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
             let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
@@ -721,6 +728,8 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                 let operationName = Option.toObj operationDefinition.Name
                 let variables = varExprMapper variables args
                 <@@ let this = %%args.[0] : OperationBase
+                    let client : WebClient = 
+                        downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
                     let customHttpHeaders = 
                         match %%args.[args.Length - 1] : string with
                         | "" -> this.CustomHttpHeaders
@@ -732,7 +741,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                           Query = query
                           Variables = %%variables }
                     async {
-                        let! responseJson = GraphQLClient.sendRequestAsync request
+                        let! responseJson = GraphQLClient.sendRequestAsync client request
                         return OperationResultBase(responseJson)
                     } @@>
             let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
@@ -743,6 +752,9 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
         let members : MemberInfo list = [rtdef; rundef; arundef]
         tdef.AddMembers(members)
         tdef
+    
+    interface IDisposable with
+        member this.Dispose() = this.Dispose()
 
 type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHeaders : (string * string) []) =
     member __.ServerUrl = serverUrl
@@ -900,7 +912,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
-                        OperationBase(this.ServerUrl, this.CustomHttpHeaders) @@>
+                        new OperationBase(this.ServerUrl, this.CustomHttpHeaders) @@>
                 let mdef = ProvidedMethod(mname, [], odef, invoker)
                 mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
                 let members : MemberInfo list = [odef; mdef]
@@ -1032,7 +1044,7 @@ type ProviderBase private () =
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         providedTypes |> Seq.map(|KeyValue|) |> Map.ofSeq
 
-    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
+    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string, schemaCache : SchemaCache) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
@@ -1043,11 +1055,10 @@ type ProviderBase private () =
             tdef.AddXmlDoc("A type provider for GraphQL operations.")
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let customHttpHeaders = HttpHeaders.map resolutionFolder (downcast args.[1])
-            let introspectionJson =
+            let schema =
                 match introspectionLocation with
-                | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest serverUrl customHttpHeaders
-                | IntrospectionFile path -> System.IO.File.ReadAllText path
-            let schema = Serialization.deserializeSchema introspectionJson
+                | Uri serverUrl -> schemaCache.Get(serverUrl, customHttpHeaders)
+                | IntrospectionFile path -> System.IO.File.ReadAllText path |> Serialization.deserializeSchema
             let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
             let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
             schemaProvidedTypes
@@ -1055,7 +1066,6 @@ type ProviderBase private () =
             |> Seq.iter typeWrapper.AddMember
             tdef.AddMember(typeWrapper)
             let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes, resolutionFolder)
-            let schemaExpr = <@@ Serialization.deserializeSchema introspectionJson @@>
             let customHttpHeadersExpr = 
                 let names = customHttpHeaders |> Array.map fst
                 let values = customHttpHeaders |> Array.map snd
@@ -1065,14 +1075,15 @@ type ProviderBase private () =
                     match introspectionLocation with
                     | Uri serverUrl -> [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
                     | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
-                let invoker (args : Expr list) =
-                    let serverUrl = args.[0]
-                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schemaExpr; customHttpHeadersExpr])
+                let invoker =
+                    QuotationHelpers.quoteRecord schema (fun (args : Expr list) schema ->
+                        let serverUrl = args.[0]
+                        Expr.NewObject(ContextBase.Constructor, [serverUrl; schema; customHttpHeadersExpr]))
                 let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
                 mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
                 mdef
             let schemapdef = 
-                let getterCode (_ : Expr list) = schemaExpr
+                let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                 ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
             let members : MemberInfo list = [ctxdef; ctxmdef; schemapdef]
             tdef.AddMembers(members)

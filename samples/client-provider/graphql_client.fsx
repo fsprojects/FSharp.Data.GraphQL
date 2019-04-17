@@ -18,6 +18,9 @@
 
 open FSharp.Data.GraphQL.Client
 open System.Diagnostics
+open System.Net
+
+let client = new WebClient()
 
 let request : GraphQLRequest =
     { Query = """query q { viewer { login } }"""
@@ -30,15 +33,17 @@ let request : GraphQLRequest =
 
 let sw = Stopwatch()
 sw.Start()
-let response = GraphQLClient.sendRequest request
+let response = GraphQLClient.sendRequest client request
 sw.Stop()
 
 printfn "Elapsed 1: %ims" sw.ElapsedMilliseconds
 printfn "%s" response
 
 sw.Restart()
-let response2 = GraphQLClient.sendRequest request
+let response2 = GraphQLClient.sendRequest client request
 sw.Stop()
 
 printfn "Elapsed 2: %ims" sw.ElapsedMilliseconds
 printfn "%s" response2
+
+client.Dispose()

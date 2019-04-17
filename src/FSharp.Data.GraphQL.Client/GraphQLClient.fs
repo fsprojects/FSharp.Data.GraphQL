@@ -28,16 +28,14 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
-    let private buildClient (headers : (string * string) []) =
-        let client = new WebClient()
+    let private configureWebClient (headers : (string * string) []) (client : WebClient)=
         client.Headers.Set("content-type", "application/json")
         if not (isNull headers)
         then headers |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
-        client
 
-    let sendRequestAsync (request : GraphQLRequest) =
+    let sendRequestAsync (client : WebClient) (request : GraphQLRequest) =
         async {
-            use client = buildClient request.CustomHeaders
+            configureWebClient request.CustomHeaders client
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
@@ -57,10 +55,10 @@ module GraphQLClient =
             with ex -> return rethrow [ex]
         }
        
-    let sendIntrospectionRequestAsync (serverUrl : string) customHeaders =
+    let sendIntrospectionRequestAsync (client : WebClient) (serverUrl : string) customHeaders =
         let sendGet () =
             async {
-                use client = buildClient customHeaders
+                configureWebClient customHeaders client
                 return!
                     client.DownloadStringTaskAsync(serverUrl)
                     |> Async.AwaitTask
@@ -74,12 +72,14 @@ module GraphQLClient =
                       OperationName = None
                       Query = Introspection.IntrospectionQuery
                       Variables = [||] }
-                try return! sendRequestAsync request
+                try return! sendRequestAsync client request
                 with postex -> return rethrow [getex; postex]
         }
 
-    let sendIntrospectionRequest serverUrl customHeaders = 
-        sendIntrospectionRequestAsync serverUrl customHeaders
+    let sendIntrospectionRequest client serverUrl customHeaders = 
+        sendIntrospectionRequestAsync client serverUrl customHeaders
         |> Async.RunSynchronously
 
-    let sendRequest = sendRequestAsync >> Async.RunSynchronously
+    let sendRequest client request =
+        sendRequestAsync client request
+        |> Async.RunSynchronously

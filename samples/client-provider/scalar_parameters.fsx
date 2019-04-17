@@ -43,3 +43,5 @@ let result = operation.Run(id = "1000")
 
 printfn "Result: %A" result.Data
 printfn "Errors: %A" result.Errors
+
+operation.Dispose()

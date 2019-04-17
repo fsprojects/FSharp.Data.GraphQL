@@ -56,3 +56,5 @@ printfn "Balls: %A\n" balls
 
 // Form is a deprecated field in the server schema. It is also marked as deprecated on the provided property.
 printfn "Boxes: %A\n" (boxes |> Array.map (fun box -> box.Id, box.Form))
+
+operation.Dispose()

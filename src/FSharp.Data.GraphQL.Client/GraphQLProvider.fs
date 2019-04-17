@@ -7,6 +7,7 @@ open System.Reflection
 open FSharp.Core.CompilerServices
 open ProviderImplementation.ProvidedTypes
 open FSharp.Data.GraphQL
+open System
 
 [<TypeProvider>]
 type GraphQLTypeProvider (config) as this =
@@ -14,8 +15,14 @@ type GraphQLTypeProvider (config) as this =
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
+    let cache = new SchemaCache()
 
-    do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder)])
+    do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder, cache)])
+
+    member __.Dispose() = cache.Dispose()
+
+    interface IDisposable with
+        member this.Dispose() = this.Dispose()
 
 [<assembly:TypeProviderAssembly>] 
 do()
