@@ -16,65 +16,29 @@
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/netstandard.dll"
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
-open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Client
 open System.Diagnostics
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
-
-let ctx = MyProvider.GetContext()
-
-// If you pass a query file, it will load the query from it.
-let operation = 
-    ctx.Operation<"""query q {
-      hero(id: "1000") {
-        name
-        appearsIn
-        homePlanet
-        friends {
-          ...FullFriends
-        }
-      }
-    }
-
-    fragment Friends on Character {
-      ... on Human {
-        name
-        appearsIn
-        homePlanet
-      }
-      ... on Droid {
-        name
-        appearsIn
-        primaryFunction
-      }
-    }
-
-    fragment FullFriends on Character {
-      ... on Human {
-        name
-        appearsIn
-        homePlanet
-        friends {
-          ...Friends
-        }
-      }
-      ... on Droid {
-        name
-        appearsIn
-        primaryFunction
-        friends {
-          ...Friends
-        }
-      }
-    }""">()
+let request : GraphQLRequest =
+    { Query = """query q { viewer { login } }"""
+      Variables = [||]
+      ServerUrl = "https://api.github.com/graphql"
+      CustomHeaders = 
+            [| "Authorization", "bearer b473fe0ddc77cf55df7065ec9c0b51cdc4861bfa"
+               "User-Agent", "ivelten" |]
+      OperationName = Some "q" }
 
 let sw = Stopwatch()
 sw.Start()
-let result = operation.Run()
+let response = GraphQLClient.sendRequest request
 sw.Stop()
-let ts = sw.Elapsed
 
-printfn "Request time: %s" (System.String.Format("{0:00}:{1:00}:{2:00}.{3:00}", ts.Hours, ts.Minutes, ts.Seconds, ts.Milliseconds / 10))
-printfn "Data: %A\n" result.Data
-printfn "Errors: %A\n" result.Errors
-printfn "Custom data: %A\n" result.CustomData
+printfn "Elapsed 1: %ims" sw.ElapsedMilliseconds
+printfn "%s" response
+
+sw.Restart()
+let response2 = GraphQLClient.sendRequest request
+sw.Stop()
+
+printfn "Elapsed 2: %ims" sw.ElapsedMilliseconds
+printfn "%s" response2

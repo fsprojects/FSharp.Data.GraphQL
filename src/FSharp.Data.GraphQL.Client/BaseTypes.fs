@@ -130,6 +130,8 @@ module HttpHeaders =
                     let value = header.Substring(separatorIndex + 1).Trim()
                     (name, value))
 
+[<Measure>] type x
+
 type EnumBase (name : string, value : string) =
     member __.Name = name
 

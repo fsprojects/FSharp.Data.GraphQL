@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL.Client
 
+open System
 open System.Net
 open FSharp.Data
 open FSharp.Data.GraphQL
@@ -16,6 +17,17 @@ type GraphQLRequest  =
       Variables : (string * obj) [] }
 
 module GraphQLClient =
+    let private rethrow (exns : exn list) =
+        let rec mapper (acc : string) (exns : exn list) =
+            let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)
+            match exns with
+            | [] -> acc
+            | ex :: tail ->
+                match ex with
+                | :? AggregateException as ex -> aggregateMapper ex
+                | ex -> mapper (acc + " " + ex.Message) tail
+        failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
+
     let private buildClient (headers : (string * string) []) =
         let client = new WebClient()
         client.Headers.Set("content-type", "application/json")
@@ -42,7 +54,7 @@ module GraphQLClient =
                    "variables", variables |]
                 |> JsonValue.Record
             try return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
-            with _ -> return failwith "Could not connect to the server."
+            with ex -> return rethrow [ex]
         }
        
     let sendIntrospectionRequestAsync (serverUrl : string) customHeaders =
@@ -55,7 +67,7 @@ module GraphQLClient =
             }
         async {
             try return! sendGet ()
-            with _ ->
+            with getex ->
                 let request =
                     { ServerUrl = serverUrl
                       CustomHeaders = customHeaders
@@ -63,7 +75,7 @@ module GraphQLClient =
                       Query = Introspection.IntrospectionQuery
                       Variables = [||] }
                 try return! sendRequestAsync request
-                with _ -> return failwith "Could not connect to the server to get the introspection schema."
+                with postex -> return rethrow [getex; postex]
         }
 
     let sendIntrospectionRequest serverUrl customHeaders = 
