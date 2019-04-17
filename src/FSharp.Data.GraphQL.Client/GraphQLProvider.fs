@@ -15,7 +15,7 @@ type GraphQLTypeProvider (config) as this =
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
-    let cache = new SchemaCache()
+    let cache = new SchemaCache(TimeSpan.FromMinutes(float 1))
 
     do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder, cache)])
 
