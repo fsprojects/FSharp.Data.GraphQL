@@ -1,2 +1,2 @@
-Authorization: [your github authorization token here]
+Authorization: bearer [your github bearer token here]
 User-Agent: [your github username here]

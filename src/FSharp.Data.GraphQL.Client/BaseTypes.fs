@@ -390,7 +390,7 @@ module JsonValueHelper =
     let getFields (schemaType : IntrospectionType) =
         match schemaType.Fields with
         | None -> Map.empty
-        | Some fields -> fields |> Array.map (fun field -> field.Name.FirstCharUpper(), field.Type) |> Map.ofSeq
+        | Some fields -> fields |> Array.map (fun field -> field.Name.FirstCharUpper(), field.Type) |> Map.ofArray
 
     let getTypeName (fields : (string * JsonValue) seq) =
         fields
@@ -761,9 +761,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
     member __.CustomHttpHeaders = customHttpHeaders
 
     static member private GetOperationProvidedTypes(schema, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
+        let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes(schema)
-        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
+        let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
@@ -776,8 +776,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                 | Some providedEnum -> Types.makeOption providedEnum
                 | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
-                if providedTypes.ContainsKey(path, tref.Name.Value)
-                then upcast providedTypes.[path, tref.Name.Value]
+                if (!providedTypes).ContainsKey(path, tref.Name.Value)
+                then upcast (!providedTypes).[path, tref.Name.Value]
                 else
                     let ifields typeName =
                         if schemaTypes.ContainsKey(typeName)
@@ -795,7 +795,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = RecordBase.PreBuildProvidedType(metadata, None)
-                        providedTypes.Add((path, tref.Name.Value), tdef)
+                        providedTypes := (!providedTypes).Add((path, tref.Name.Value), tdef)
                         let properties =
                             astFields
                             |> List.filter (function | TypeField _ -> true | _ -> false)
@@ -817,10 +817,10 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                             RecordBase.MakeProvidedType(tdef, properties)
                         fragmentProperties
                         |> List.map createFragmentType
-                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes.Add((path, fragmentType.Name), fragmentType))
+                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes := (!providedTypes).Add((path, fragmentType.Name), fragmentType))
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), (providedTypes |> Seq.map (|KeyValue|) |> Map.ofSeq)
+        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
 
     static member internal MakeProvidedType(schema : IntrospectionSchema,
                                             schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>,
@@ -924,7 +924,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
 
 type ProviderBase private () =
     static member GetSchemaProvidedTypes(schema : IntrospectionSchema) =
-        let providedTypes = Dictionary<TypeName, ProvidedTypeDefinition>()
+        let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
@@ -945,9 +945,10 @@ type ProviderBase private () =
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> getFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
+                    // Unknown types will be mapped to a string type.
                     if Types.scalar.ContainsKey(field.Type.Name.Value)
                     then Types.scalar.[field.Type.Name.Value]
-                    else typeof<string> // Unknown types will be just mapped to a string type.
+                    else typeof<string>
                 { Name = field.Name
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
@@ -986,14 +987,14 @@ type ProviderBase private () =
                 |> makeOption
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         and getProvidedType (itype : IntrospectionType) : ProvidedTypeDefinition =
-            if providedTypes.ContainsKey(itype.Name)
-            then providedTypes.[itype.Name]
+            if (!providedTypes).ContainsKey(itype.Name)
+            then (!providedTypes).[itype.Name]
             else
                 let metadata = { Name = itype.Name; Description = itype.Description }
                 match itype.Kind with
                 | TypeKind.OBJECT ->
                     let tdef = RecordBase.PreBuildProvidedType(metadata, None)
-                    providedTypes.Add(itype.Name, tdef)
+                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
                     let properties = 
                         itype.Fields
                         |> Option.defaultValue [||]
@@ -1002,7 +1003,7 @@ type ProviderBase private () =
                     RecordBase.MakeProvidedType(tdef, properties)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = RecordBase.PreBuildProvidedType(metadata, None)
-                    providedTypes.Add(itype.Name, tdef)
+                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
                     let properties = 
                         itype.InputFields
                         |> Option.defaultValue [||]
@@ -1011,7 +1012,7 @@ type ProviderBase private () =
                     RecordBase.MakeProvidedType(tdef, properties)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = InterfaceBase.MakeProvidedType(metadata)
-                    providedTypes.Add(itype.Name, bdef)
+                    providedTypes := (!providedTypes).Add(itype.Name, bdef)
                     bdef
                 | TypeKind.ENUM ->
                     let items =
@@ -1019,7 +1020,7 @@ type ProviderBase private () =
                         | Some values -> values |> Array.map (fun value -> value.Name)
                         | None -> [||]
                     let tdef = EnumBase.MakeProvidedType(itype.Name, items)
-                    providedTypes.Add(itype.Name, tdef)
+                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
                     tdef
                 | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
         let ignoredKinds = [TypeKind.SCALAR; TypeKind.LIST; TypeKind.NON_NULL]
@@ -1031,15 +1032,15 @@ type ProviderBase private () =
             | Some trefs -> trefs |> Array.map (getSchemaType >> getProvidedType)
             | None -> [||]
         let getProvidedType typeName =
-            match providedTypes.TryGetValue(typeName) with
-            | (true, ptype) -> ptype
-            | _ -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
+            match (!providedTypes).TryFind(typeName) with
+            | Some ptype -> ptype
+            | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
         schemaTypes
         |> Seq.map (fun kvp -> kvp.Value)
         |> Seq.filter (fun itype -> itype.Kind = TypeKind.INTERFACE || itype.Kind = TypeKind.UNION)
         |> Seq.map (fun itype -> getProvidedType itype.Name, (possibleTypes itype))
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
-        providedTypes |> Seq.map(|KeyValue|) |> Map.ofSeq
+        !providedTypes
 
     static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string, schemaCache : SchemaCache) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
