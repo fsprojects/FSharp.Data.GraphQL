@@ -285,10 +285,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         Expr.NewObject(RecordBase.Constructor, [ <@@ List.zip names values @@> ])
 
     override x.ToString() =
-        let getPropValue (prop : RecordProperty) =
-            match prop.Value with
-            | null -> "None"
-            | _ -> sprintf "%A" prop.Value
+        let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
         let sb = StringBuilder()
         sb.Append("{") |> ignore
         let rec printProperties (properties : RecordProperty list) =
