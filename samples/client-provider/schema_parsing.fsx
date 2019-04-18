@@ -23,8 +23,7 @@ open FSharp.Data.GraphQL.Client
 let sw = Stopwatch()
 sw.Start()
 let json = File.ReadAllText("github_schema.json")
-let schema = Serialization.deserializeSchema json
+Serialization.deserializeSchema json |> ignore
 sw.Stop()
 
-printfn "Json: %s" json
 printfn "Elapsed: %ims" sw.ElapsedMilliseconds

@@ -65,7 +65,8 @@
     <Compile Include="Schema.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="GraphQLClient.fs" />
-    <Compile Include="SchemaCache.fs" />
+    <Compile Include="Locations.fs" />
+    <Compile Include="DesignTimeCache.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />

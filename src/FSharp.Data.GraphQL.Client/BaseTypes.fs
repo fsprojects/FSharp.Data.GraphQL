@@ -22,32 +22,6 @@ open Microsoft.FSharp.Reflection
 open System.Collections
 open System.Net
 
-type IntrospectionLocation =
-    | Uri of address : string
-    | IntrospectionFile of path : string
-    static member internal Create(value : string, resolutionFolder : string) =
-        let tryUri address =
-            match Uri.TryCreate(address, UriKind.Absolute) with
-            | (true, _) -> Uri value
-            | _ -> failwithf "Could not determine location of introspection. The introspection should be a valid GraphQL server URL, or a introspection JSON file on the path of the project or script."
-        try
-            let file = System.IO.Path.Combine(resolutionFolder, value)
-            if System.IO.File.Exists(file)
-            then IntrospectionFile file
-            else tryUri value
-        with _ -> tryUri value
-
-type TextLocation =
-    | String of query : string
-    | File of path : string
-    static member internal Create(value : string, resolutionFolder : string) =
-        try
-            let file = System.IO.Path.Combine(resolutionFolder, value)
-            if System.IO.File.Exists(file)
-            then File file
-            else String value
-        with _ -> String value
-
 type TypeName = string
 
 type OperationError =
@@ -140,11 +114,14 @@ type EnumBase (name : string, value : string) =
 
     static member internal MakeProvidedType(name, items : string seq) =
         let tdef = ProvidedTypeDefinition(name, Some typeof<EnumBase>, nonNullable = true, isSealed = true)
-        for item in items do
-            let getterCode (_ : Expr list) =
-                Expr.NewObject(EnumBase.Constructor, [ <@@ name @@>; <@@ item @@> ])
-            let idef = ProvidedProperty(item, tdef, getterCode, isStatic = true)
-            tdef.AddMember(idef)
+        tdef.AddMembersDelayed(fun _ ->
+            items
+            |> Seq.map (fun item ->
+                let getterCode (_ : Expr list) =
+                    Expr.NewObject(EnumBase.Constructor, [ <@@ name @@>; <@@ item @@> ])
+                ProvidedProperty(item, tdef, getterCode, isStatic = true))
+            |> Seq.cast<MemberInfo>
+            |> List.ofSeq)
         tdef
 
     static member internal Constructor = typeof<EnumBase>.GetConstructors().[0]
@@ -221,10 +198,10 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             metadata.Description |> Option.iter pdef.AddXmlDoc
             metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
             upcast pdef
-        let pdefs = properties |> List.map propertyMapper
-        tdef.AddMembers(pdefs)
-        let buildConstructor (properties : (string * Type) list) =
-            let ctdef =
+        tdef.AddMembersDelayed(fun _ -> List.map propertyMapper properties)
+        let addConstructorDelayed (propertiesGetter : unit -> (string * Type) list) =
+            tdef.AddMemberDelayed(fun _ ->
+                let properties = propertiesGetter ()
                 let prm = properties |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let invoker (args : Expr list) = 
                     let properties =
@@ -236,39 +213,43 @@ type RecordBase (name : string, properties : RecordProperty seq) =
                             List.zip names args |> List.map mapper
                         Expr.NewArray(typeof<RecordProperty>, args)
                     Expr.NewObject(RecordBase.Constructor, [Expr.Value(name); properties])
-                ProvidedConstructor(prm, invoker)
-            tdef.AddMember(ctdef)
+                ProvidedConstructor(prm, invoker))
         match tdef.BaseType with
         | :? ProvidedTypeDefinition as bdef ->
-            let asType = 
-                let invoker (args : Expr list) =
-                    <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                        let baseName = propdef.GetValue(this) :?> string
-                        if baseName = name then this
-                        else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name baseName name name @@>
-                ProvidedMethod("As" + name, [], tdef, invoker)
-            let tryAsType =
-                let invoker (args : Expr list) =
-                    <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                        let baseName = propdef.GetValue(this) :?> string
-                        if baseName = name then Some this
-                        else None @@>
-                ProvidedMethod("TryAs" + name, [], typedefof<_ option>.MakeGenericType(tdef), invoker)
-            let isType =
-                let invoker (args : Expr list) =
-                    <@@ let this = %%args.[0] : RecordBase
-                        let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                        let baseName = propdef.GetValue(this) :?> string
-                        baseName = name @@>
-                ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
-            let members : MemberInfo list = [asType; tryAsType; isType]
-            let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, p.ParameterType) |> List.ofArray
-            let props = properties |> List.map (fun p -> p.Name, p.Type)
-            buildConstructor (bprops @ props)
-            bdef.AddMembers(members)
-        | _ -> properties |> List.map (fun p -> p.Name, p.Type) |> buildConstructor
+            bdef.AddMembersDelayed(fun _ ->
+                let asType = 
+                    let invoker (args : Expr list) =
+                        <@@ let this = %%args.[0] : RecordBase
+                            let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                            let baseName = propdef.GetValue(this) :?> string
+                            if baseName = name then this
+                            else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name baseName name name @@>
+                    ProvidedMethod("As" + name, [], tdef, invoker)
+                let tryAsType =
+                    let invoker (args : Expr list) =
+                        <@@ let this = %%args.[0] : RecordBase
+                            let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                            let baseName = propdef.GetValue(this) :?> string
+                            if baseName = name then Some this
+                            else None @@>
+                    ProvidedMethod("TryAs" + name, [], typedefof<_ option>.MakeGenericType(tdef), invoker)
+                let isType =
+                    let invoker (args : Expr list) =
+                        <@@ let this = %%args.[0] : RecordBase
+                            let propdef = typeof<RecordBase>.GetProperty("_Name", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                            let baseName = propdef.GetValue(this) :?> string
+                            baseName = name @@>
+                    ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
+                let members : MemberInfo list = [asType; tryAsType; isType]
+                members)
+            let propertiesGetter() =
+                let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, p.ParameterType) |> List.ofArray
+                let props = properties |> List.map (fun p -> p.Name, p.Type)
+                bprops @ props
+            addConstructorDelayed propertiesGetter
+        | _ -> 
+            let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Type)
+            addConstructorDelayed propertiesGetter
         tdef
 
     static member internal PreBuildProvidedType(metadata : ProvidedTypeMetadata, baseType : Type option) =
@@ -574,49 +555,50 @@ type OperationResultBase (responseJson : string) =
 
     static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
-        let ddef = 
-            let getterCode =
-                QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) providingInformation ->
+        tdef.AddMembersDelayed(fun _ ->
+            let ddef = 
+                let getterCode =
+                    QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) providingInformation ->
+                        <@@ let this = %%args.[0] : OperationResultBase
+                            let info = %%providingInformation : OperationResultProvidingInformation
+                            let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
+                            let operationType =
+                                match schemaTypes.TryFind(info.OperationTypeName) with
+                                | Some def -> def
+                                | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
+                            let dfdef = typeof<OperationResultBase>.GetProperty("_DataFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                            let dataFields = dfdef.GetValue(this) :?> (string * JsonValue) list option
+                            match dataFields with
+                            | Some [] | None -> None
+                            | Some dataFields ->
+                                let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+                                let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
+                                Some (RecordBase(operationType.Name, props)) @@>)
+                let prop = ProvidedProperty("Data", operationType, getterCode)
+                prop.AddXmlDoc("Contains the data returned by the operation on the server.")
+                prop
+            let edef =
+                let getterCode (args : Expr list) =
                     <@@ let this = %%args.[0] : OperationResultBase
-                        let info = %%providingInformation : OperationResultProvidingInformation
-                        let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
-                        let operationType =
-                            match schemaTypes.TryFind(info.OperationTypeName) with
-                            | Some def -> def
-                            | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
-                        let dfdef = typeof<OperationResultBase>.GetProperty("_DataFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                        let dataFields = dfdef.GetValue(this) :?> (string * JsonValue) list option
-                        match dataFields with
+                        let efdef = typeof<OperationResultBase>.GetProperty("_Errors", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let errors = efdef.GetValue(this) :?> JsonValue list option
+                        match errors with
                         | Some [] | None -> None
-                        | Some dataFields ->
-                            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-                            let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
-                            Some (RecordBase(operationType.Name, props)) @@>)
-            let prop = ProvidedProperty("Data", operationType, getterCode)
-            prop.AddXmlDoc("Contains the data returned by the operation on the server.")
-            prop
-        let edef =
-            let getterCode (args : Expr list) =
-                <@@ let this = %%args.[0] : OperationResultBase
-                    let efdef = typeof<OperationResultBase>.GetProperty("_Errors", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                    let errors = efdef.GetValue(this) :?> JsonValue list option
-                    match errors with
-                    | Some [] | None -> None
-                    | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
-            let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
-            prop.AddXmlDoc("Contains erros returned by the operation on the server.")
-            prop
-        let cdef =
-            let getterCode (args : Expr list) =
-                <@@ let this = %%args.[0] : OperationResultBase
-                    let cfdef = typeof<OperationResultBase>.GetProperty("_CustomFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
-                    let customFields = cfdef.GetValue(this) :?> (string * JsonValue) list
-                    Serialization.deserializeMap customFields @@>
-            let prop = ProvidedProperty("CustomData", typeof<Map<string, obj>>, getterCode)
-            prop.AddXmlDoc("Contains custom fields that came in the response of the server (fields except data and errors).")
-            prop
-        let members : MemberInfo list = [ddef; edef; cdef]
-        tdef.AddMembers(members)
+                        | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
+                let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
+                prop.AddXmlDoc("Contains erros returned by the operation on the server.")
+                prop
+            let cdef =
+                let getterCode (args : Expr list) =
+                    <@@ let this = %%args.[0] : OperationResultBase
+                        let cfdef = typeof<OperationResultBase>.GetProperty("_CustomFields", BindingFlags.NonPublic ||| BindingFlags.Instance)
+                        let customFields = cfdef.GetValue(this) :?> (string * JsonValue) list
+                        Serialization.deserializeMap customFields @@>
+                let prop = ProvidedProperty("CustomData", typeof<Map<string, obj>>, getterCode)
+                prop.AddXmlDoc("Contains custom fields that came in the response of the server (fields except data and errors).")
+                prop
+            let members : MemberInfo list = [ddef; edef; cdef]
+            members)
         tdef
 
     member x.Equals(other : OperationResultBase) =
@@ -657,97 +639,98 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
             "Operation" + hash
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
-        let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
-        let info = 
-            { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
-              SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
-              OperationTypeName = operationTypeName }
-        let rtdef = OperationResultBase.MakeProvidedType(info, operationType)
-        let variables =
-            let rec mapVariable (variableName : string) (vartype : InputType) =
-                match vartype with
-                | NamedType typeName ->
-                    match Types.scalar.TryFind(typeName) with
-                    | Some t -> (variableName, Types.makeOption t)
-                    | None ->
-                        match schemaProvidedTypes.TryFind(typeName) with
+        tdef.AddMembersDelayed(fun _ ->
+            let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
+            let info = 
+                { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
+                  SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
+                  OperationTypeName = operationTypeName }
+            let rtdef = OperationResultBase.MakeProvidedType(info, operationType)
+            let variables =
+                let rec mapVariable (variableName : string) (vartype : InputType) =
+                    match vartype with
+                    | NamedType typeName ->
+                        match Types.scalar.TryFind(typeName) with
                         | Some t -> (variableName, Types.makeOption t)
-                        | None -> failwithf "Unable to find variable type \"%s\" on the schema definition." typeName
-                | ListType itype -> 
-                    let (name, t) = mapVariable variableName itype
-                    (name, t |> Types.makeArray |> Types.makeOption)
-                | NonNullType itype -> 
-                    let (name, t) = mapVariable variableName itype
-                    (name, Types.unwrapOption t)
-            operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-        let varExprMapper (variables : (string * Type) list) (args : Expr list) =
-            let exprMapper (name : string, value : Expr) =
-                let value = Expr.Coerce(value, typeof<obj>)
-                <@@ let value = 
-                        match (%%value : obj) with
-                        | :? RecordBase as v -> box (v.ToDictionary())
-                        | v -> v
-                    (name, value) @@>
-            let args =
-                let names = variables |> List.map fst
-                let args = 
-                    match args with
-                    | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
-                    | _ -> []
-                List.zip names args |> List.map exprMapper
-            Expr.NewArray(typeof<string * obj>, args)
-        let rundef = 
-            let invoker (args : Expr list) =
-                let operationName = Option.toObj operationDefinition.Name
-                let variables = varExprMapper variables args
-                <@@ let this = %%args.[0] : OperationBase
-                    let client : WebClient = 
-                        downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
-                    let customHttpHeaders = 
-                        match %%args.[args.Length - 1] : string with
-                        | "" -> this.CustomHttpHeaders
-                        | other -> HttpHeaders.map resolutionFolder other
-                    let request =
-                        { ServerUrl = this.ServerUrl
-                          CustomHeaders = customHttpHeaders
-                          OperationName = Option.ofObj operationName
-                          Query = query
-                          Variables = %%variables }
-                    let responseJson = GraphQLClient.sendRequest client request
-                    OperationResultBase(responseJson) @@>
-            let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
-            let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
-            mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
-            mdef
-        let arundef = 
-            let invoker (args : Expr list) =
-                let operationName = Option.toObj operationDefinition.Name
-                let variables = varExprMapper variables args
-                <@@ let this = %%args.[0] : OperationBase
-                    let client : WebClient = 
-                        downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
-                    let customHttpHeaders = 
-                        match %%args.[args.Length - 1] : string with
-                        | "" -> this.CustomHttpHeaders
-                        | other -> HttpHeaders.map resolutionFolder other
-                    let request =
-                        { ServerUrl = this.ServerUrl
-                          CustomHeaders = customHttpHeaders
-                          OperationName = Option.ofObj operationName
-                          Query = query
-                          Variables = %%variables }
-                    async {
-                        let! responseJson = GraphQLClient.sendRequestAsync client request
-                        return OperationResultBase(responseJson)
-                    } @@>
-            let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-            let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
-            let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
-            mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
-            mdef
-        let members : MemberInfo list = [rtdef; rundef; arundef]
-        tdef.AddMembers(members)
+                        | None ->
+                            match schemaProvidedTypes.TryFind(typeName) with
+                            | Some t -> (variableName, Types.makeOption t)
+                            | None -> failwithf "Unable to find variable type \"%s\" on the schema definition." typeName
+                    | ListType itype -> 
+                        let (name, t) = mapVariable variableName itype
+                        (name, t |> Types.makeArray |> Types.makeOption)
+                    | NonNullType itype -> 
+                        let (name, t) = mapVariable variableName itype
+                        (name, Types.unwrapOption t)
+                operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
+            let varExprMapper (variables : (string * Type) list) (args : Expr list) =
+                let exprMapper (name : string, value : Expr) =
+                    let value = Expr.Coerce(value, typeof<obj>)
+                    <@@ let value = 
+                            match (%%value : obj) with
+                            | :? RecordBase as v -> box (v.ToDictionary())
+                            | v -> v
+                        (name, value) @@>
+                let args =
+                    let names = variables |> List.map fst
+                    let args = 
+                        match args with
+                        | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                        | _ -> []
+                    List.zip names args |> List.map exprMapper
+                Expr.NewArray(typeof<string * obj>, args)
+            let rundef = 
+                let invoker (args : Expr list) =
+                    let operationName = Option.toObj operationDefinition.Name
+                    let variables = varExprMapper variables args
+                    <@@ let this = %%args.[0] : OperationBase
+                        let client : WebClient = 
+                            downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
+                        let customHttpHeaders = 
+                            match %%args.[args.Length - 1] : string with
+                            | "" -> this.CustomHttpHeaders
+                            | other -> HttpHeaders.map resolutionFolder other
+                        let request =
+                            { ServerUrl = this.ServerUrl
+                              CustomHeaders = customHttpHeaders
+                              OperationName = Option.ofObj operationName
+                              Query = query
+                              Variables = %%variables }
+                        let responseJson = GraphQLClient.sendRequest client request
+                        OperationResultBase(responseJson) @@>
+                let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
+                let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
+                mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
+                mdef
+            let arundef = 
+                let invoker (args : Expr list) =
+                    let operationName = Option.toObj operationDefinition.Name
+                    let variables = varExprMapper variables args
+                    <@@ let this = %%args.[0] : OperationBase
+                        let client : WebClient = 
+                            downcast (typeof<OperationBase>.GetProperty("_Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
+                        let customHttpHeaders = 
+                            match %%args.[args.Length - 1] : string with
+                            | "" -> this.CustomHttpHeaders
+                            | other -> HttpHeaders.map resolutionFolder other
+                        let request =
+                            { ServerUrl = this.ServerUrl
+                              CustomHeaders = customHttpHeaders
+                              OperationName = Option.ofObj operationName
+                              Query = query
+                              Variables = %%variables }
+                        async {
+                            let! responseJson = GraphQLClient.sendRequestAsync client request
+                            return OperationResultBase(responseJson)
+                        } @@>
+                let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
+                let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
+                mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
+                mdef
+            let members : MemberInfo list = [rtdef; rundef; arundef]
+            members)
         tdef
     
     interface IDisposable with
@@ -827,7 +810,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                                             resolutionFolder : string) =
         let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
         tdef.AddXmlDoc("Represents a connection to a GraphQL server. A context groups all operations and their types from a specific server connection.")
-        let mdef =
+        tdef.AddMemberDelayed(fun _ ->
             let sprm = 
                 [ ProvidedStaticParameter("query", typeof<string>)
                   ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
@@ -916,8 +899,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                 tdef.AddMembers(members)
                 mdef
             smdef.DefineStaticParameters(sprm, genfn)
-            smdef
-        tdef.AddMember(mdef)
+            smdef)
         tdef
 
     static member internal Constructor = typeof<ContextBase>.GetConstructors().[0]
@@ -1042,48 +1024,50 @@ type ProviderBase private () =
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         !providedTypes
 
-    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string, schemaCache : SchemaCache) =
+    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string, webClient : WebClient) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
               ProvidedStaticParameter("customHttpHeaders", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
-            let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
-            tdef.AddXmlDoc("A type provider for GraphQL operations.")
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
-            let customHttpHeaders = HttpHeaders.map resolutionFolder (downcast args.[1])
-            let schema =
-                match introspectionLocation with
-                | Uri serverUrl -> schemaCache.Get(serverUrl, customHttpHeaders)
-                | IntrospectionFile path -> System.IO.File.ReadAllText path |> Serialization.deserializeSchema
-            let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
-            let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
-            schemaProvidedTypes
-            |> Seq.map (fun kvp -> kvp.Value)
-            |> Seq.iter typeWrapper.AddMember
-            tdef.AddMember(typeWrapper)
-            let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes, resolutionFolder)
-            let customHttpHeadersExpr = 
-                let names = customHttpHeaders |> Array.map fst
-                let values = customHttpHeaders |> Array.map snd
-                <@@ Array.zip names values @@>
-            let ctxmdef =
-                let prm = 
-                    match introspectionLocation with
-                    | Uri serverUrl -> [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
-                    | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
-                let invoker =
-                    QuotationHelpers.quoteRecord schema (fun (args : Expr list) schema ->
-                        let serverUrl = args.[0]
-                        Expr.NewObject(ContextBase.Constructor, [serverUrl; schema; customHttpHeadersExpr]))
-                let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
-                mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
-                mdef
-            let schemapdef = 
-                let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
-                ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
-            let members : MemberInfo list = [ctxdef; ctxmdef; schemapdef]
-            tdef.AddMembers(members)
-            tdef)
+            let maker =
+                lazy
+                    let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
+                    tdef.AddXmlDoc("A type provider for GraphQL operations.")
+                    tdef.AddMembersDelayed (fun _ ->
+                        let customHttpHeaders = HttpHeaders.map resolutionFolder (downcast args.[1])
+                        let schemaJson =
+                            match introspectionLocation with
+                            | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest webClient serverUrl customHttpHeaders
+                            | IntrospectionFile path -> System.IO.File.ReadAllText path
+                        let schema = Serialization.deserializeSchema schemaJson
+                        let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
+                        let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
+                        typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+                        let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes, resolutionFolder)
+                        let customHttpHeadersExpr = 
+                            let names = customHttpHeaders |> Array.map fst
+                            let values = customHttpHeaders |> Array.map snd
+                            <@@ Array.zip names values @@>
+                        let ctxmdef =
+                            let prm = 
+                                match introspectionLocation with
+                                | Uri serverUrl -> [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
+                                | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
+                            let invoker =
+                                QuotationHelpers.quoteRecord schema (fun (args : Expr list) schema ->
+                                    let serverUrl = args.[0]
+                                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schema; customHttpHeadersExpr]))
+                            let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
+                            mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
+                            mdef
+                        let schemapdef = 
+                            let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
+                            ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
+                        let members : MemberInfo list = [typeWrapper; ctxdef; ctxmdef; schemapdef]
+                        members)
+                    tdef
+            DesignTimeCache.getOrAdd introspectionLocation maker.Force)
         generator

@@ -75,7 +75,7 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
 		samples\client-provider\clockwork_public_access.fsx = samples\client-provider\clockwork_public_access.fsx
-		samples\client-provider\github_public_access.fsx = samples\client-provider\github_public_access.fsx
+		samples\client-provider\github_access.fsx = samples\client-provider\github_access.fsx
 		samples\client-provider\http_headers1.headerfile = samples\client-provider\http_headers1.headerfile
 		samples\client-provider\http_headers2.headerfile = samples\client-provider\http_headers2.headerfile
 		samples\client-provider\http_headers_introspection.fsx = samples\client-provider\http_headers_introspection.fsx
