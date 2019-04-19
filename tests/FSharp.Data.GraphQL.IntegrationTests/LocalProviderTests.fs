@@ -59,7 +59,7 @@ module SimpleOperation =
   AppearsIn = [|NewHope; Empire; Jedi|];
   HomePlanet = Some "Tatooine";
   Friends = [|Some {Name = Some "Han Solo";
-  HomePlanet = None;};
+  HomePlanet = <null>;};
   Some {Name = Some "Leia Organa";
   HomePlanet = Some "Alderaan";};
   Some {Name = Some "C-3PO";

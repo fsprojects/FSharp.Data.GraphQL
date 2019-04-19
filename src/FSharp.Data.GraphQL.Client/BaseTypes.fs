@@ -87,10 +87,9 @@ module QuotationHelpers =
     let quoteArray instance = arrayExpr instance ||> createLetExpr
 
 module HttpHeaders =
-    let map (resolutionFolder : string) (value : string) =
-        let httpHeadersLocation = TextLocation.Create(value, resolutionFolder)
+    let map (location : TextLocation) =
         let headersString =
-            match httpHeadersLocation with
+            match location with
             | String headers -> headers
             | File path -> System.IO.File.ReadAllText path
         if headersString = "" then [||]
@@ -689,7 +688,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                         let customHttpHeaders = 
                             match %%args.[args.Length - 1] : string with
                             | "" -> this.CustomHttpHeaders
-                            | other -> HttpHeaders.map resolutionFolder other
+                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
                         let request =
                             { ServerUrl = this.ServerUrl
                               CustomHeaders = customHttpHeaders
@@ -713,7 +712,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                         let customHttpHeaders = 
                             match %%args.[args.Length - 1] : string with
                             | "" -> this.CustomHttpHeaders
-                            | other -> HttpHeaders.map resolutionFolder other
+                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
                         let request =
                             { ServerUrl = this.ServerUrl
                               CustomHeaders = customHttpHeaders
@@ -1032,12 +1031,13 @@ type ProviderBase private () =
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
+            let httpHeadersLocation = TextLocation.Create(downcast args.[1], resolutionFolder)
             let maker =
                 lazy
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
                     tdef.AddXmlDoc("A type provider for GraphQL operations.")
                     tdef.AddMembersDelayed (fun _ ->
-                        let customHttpHeaders = HttpHeaders.map resolutionFolder (downcast args.[1])
+                        let customHttpHeaders = HttpHeaders.map httpHeadersLocation
                         let schemaJson =
                             match introspectionLocation with
                             | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest webClient serverUrl customHttpHeaders
@@ -1069,5 +1069,6 @@ type ProviderBase private () =
                         let members : MemberInfo list = [typeWrapper; ctxdef; ctxmdef; schemapdef]
                         members)
                     tdef
-            DesignTimeCache.getOrAdd introspectionLocation maker.Force)
+            let providerKey = { IntrospectionLocation = introspectionLocation; CustomHttpHeadersLocation = httpHeadersLocation }
+            DesignTimeCache.getOrAdd providerKey maker.Force)
         generator

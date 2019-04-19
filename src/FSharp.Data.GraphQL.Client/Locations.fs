@@ -8,7 +8,7 @@ open System
 type TextLocation =
     | String of query : string
     | File of path : string
-    static member internal Create(value : string, resolutionFolder : string) =
+    static member Create(value : string, resolutionFolder : string) =
         try
             let file = System.IO.Path.Combine(resolutionFolder, value)
             if System.IO.File.Exists(file)
@@ -19,7 +19,7 @@ type TextLocation =
 type IntrospectionLocation =
     | Uri of address : string
     | IntrospectionFile of path : string
-    static member internal Create(value : string, resolutionFolder : string) =
+    static member Create(value : string, resolutionFolder : string) =
         let tryUri address =
             match Uri.TryCreate(address, UriKind.Absolute) with
             | (true, _) -> Uri value

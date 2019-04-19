@@ -6,7 +6,11 @@ namespace FSharp.Data.GraphQL
 open System.Collections.Concurrent
 open ProviderImplementation.ProvidedTypes
 
-type internal CacheInvalidator (location : IntrospectionLocation, invalidateFn : IntrospectionLocation -> unit) =
+type internal ProviderKey =
+    { IntrospectionLocation : IntrospectionLocation
+      CustomHttpHeadersLocation : TextLocation }
+
+type internal CacheInvalidator (key : ProviderKey, invalidateFn : ProviderKey -> unit) =
     let lockObj = obj()
     let mutable remainingTime = 30000
     do
@@ -14,22 +18,22 @@ type internal CacheInvalidator (location : IntrospectionLocation, invalidateFn :
             while remainingTime > 0 do
                 do! Async.Sleep(1000)
                 lock lockObj (fun _ -> remainingTime <- remainingTime - 1000)
-            invalidateFn location
+            invalidateFn key
         } |> Async.Start
     member __.Reset() = lock lockObj (fun _ -> remainingTime <- 30000)
 
 module internal DesignTimeCache =
-    let private cache = ConcurrentDictionary<IntrospectionLocation, CacheInvalidator * ProvidedTypeDefinition>()
+    let private cache = ConcurrentDictionary<ProviderKey, CacheInvalidator * ProvidedTypeDefinition>()
  
-    let getOrAdd (location : IntrospectionLocation) (defMaker : unit -> ProvidedTypeDefinition) =
-        if not (cache.ContainsKey(location))
+    let getOrAdd (key : ProviderKey) (defMaker : unit -> ProvidedTypeDefinition) =
+        if not (cache.ContainsKey(key))
         then
             let def = defMaker()
             let invalidateFn location = cache.TryRemove(location) |> ignore
-            let invalidator = CacheInvalidator(location, invalidateFn)
-            cache.TryAdd(location, (invalidator, def)) |> ignore
+            let invalidator = CacheInvalidator(key, invalidateFn)
+            cache.TryAdd(key, (invalidator, def)) |> ignore
             def
         else 
-            let invalidator, def = cache.[location]
+            let invalidator, def = cache.[key]
             invalidator.Reset()
             def
