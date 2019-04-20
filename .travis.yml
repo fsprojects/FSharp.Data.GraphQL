@@ -1,9 +1,10 @@
 language: csharp
 
 sudo: required 
-dotnet: 2.1.4
+dotnet: 2.1.401
 before_install:
   - chmod +x build.sh
+  - chmod +x tests/FSharp.Data.GraphQL.Benchmarks.Sql/scripts/fetch-database.sh
  
 script: 
   - export FrameworkPathOverride=/usr/lib/mono/4.6.1-api/ && ./build.sh All

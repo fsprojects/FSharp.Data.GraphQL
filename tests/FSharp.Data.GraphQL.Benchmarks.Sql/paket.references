@@ -1,0 +1,6 @@
+group BenchmarksSql
+BenchmarkDotNet
+Dapper
+FSharp.Data
+System.Data.SqlClient
+FSharp.Core
