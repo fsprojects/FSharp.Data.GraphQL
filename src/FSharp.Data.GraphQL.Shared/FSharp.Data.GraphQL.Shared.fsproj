@@ -13,8 +13,8 @@
     <Compile Include="Introspection.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
-    <None Include="paket.references" />
     <Compile Include="AstExtensions.fs" />
+    <None Include="paket.references" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
