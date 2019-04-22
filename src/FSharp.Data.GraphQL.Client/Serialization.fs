@@ -145,45 +145,62 @@ module Serialization =
                 | [x] -> Activator.CreateInstance(tlist, [|x; empty|])
                 | x :: xs -> Activator.CreateInstance(tlist, [|x; helper xs|])
             helper items
-        match t with
-        | Option t -> getArrayValue t converter items |> makeOption t
-        | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
-        | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
-        | _ -> failwithf "Error parsing JSON value: %O is not an array type." t
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result =
+            match t with
+            | Option t -> getArrayValue t converter items |> makeOption t
+            | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
+            | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
+            | _ -> failwithf "Error parsing JSON value: %O is not an array type." t
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Array value converted in %ims." sw.ElapsedMilliseconds
+        result
 
     let rec private convert t parsed : obj =
-        match parsed with
-        | JsonValue.Null -> downcastNone t
-        | JsonValue.String s -> downcastString t s
-        | JsonValue.Number n -> downcastNumber t n
-        | JsonValue.Float n -> downcastNumber t n
-        | JsonValue.Record jprops ->
-            let jprops = 
-                jprops 
-                |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v) 
-                |> Map.ofSeq
-            let tprops t =
-                FSharpType.GetRecordFields(t, true)
-                |> Array.map (fun p -> p.Name.ToLowerInvariant(), p.PropertyType)
-            let vals t = 
-                tprops t
-                |> Array.map (fun (n, t) ->
-                    match Map.tryFind n jprops with
-                    | Some p -> n, convert t p
-                    | None -> n, makeOption t null)
-            let rcrd =
-                let t = match t with Option t -> t | _ -> t
-                let vals = vals t
-                if isMap t
-                then Map.ofArray vals |> box
-                else FSharpValue.MakeRecord(t, Array.map snd vals, true)
-            downcastType t rcrd
-        | JsonValue.Array items -> items |> getArrayValue t convert
-        | JsonValue.Boolean b -> downcastBoolean t b
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result =
+            match parsed with
+            | JsonValue.Null -> downcastNone t
+            | JsonValue.String s -> downcastString t s
+            | JsonValue.Number n -> downcastNumber t n
+            | JsonValue.Float n -> downcastNumber t n
+            | JsonValue.Record jprops ->
+                let jprops = 
+                    jprops 
+                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v) 
+                    |> Map.ofSeq
+                let tprops t =
+                    FSharpType.GetRecordFields(t, true)
+                    |> Array.map (fun p -> p.Name.ToLowerInvariant(), p.PropertyType)
+                let vals t = 
+                    tprops t
+                    |> Array.map (fun (n, t) ->
+                        match Map.tryFind n jprops with
+                        | Some p -> n, convert t p
+                        | None -> n, makeOption t null)
+                let rcrd =
+                    let t = match t with Option t -> t | _ -> t
+                    let vals = vals t
+                    if isMap t
+                    then Map.ofArray vals |> box
+                    else FSharpValue.MakeRecord(t, Array.map snd vals, true)
+                downcastType t rcrd
+            | JsonValue.Array items -> items |> getArrayValue t convert
+            | JsonValue.Boolean b -> downcastBoolean t b
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Converted value to CLR type %A in %ims." t sw.ElapsedMilliseconds
+        result
 
     let deserializeRecord<'T> (json : string) : 'T =
         let t = typeof<'T>
-        downcast (JsonValue.Parse(json) |> convert t)
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result = JsonValue.Parse(json) |> convert t
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Record deserialized to type %A in %ims." t sw.ElapsedMilliseconds
+        downcast result
 
     let deserializeMap values =
         let rec helper (values : (string * JsonValue) []) =
@@ -197,8 +214,13 @@ module Serialization =
                 | JsonValue.Float f -> name, box f
                 | JsonValue.Array items -> name, (items |> Array.map (fun item -> null, item) |> helper |> Array.map snd |> box)
                 | JsonValue.Boolean b -> name, box b)
-        helper values |> Map.ofArray
-
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result = helper values |> Map.ofArray
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Map deserialized in %ims." sw.ElapsedMilliseconds
+        result
+        
     let (|EnumerableValue|_|) (x : obj) =
         match x with
         | :? IEnumerable as x -> Some (EnumerableValue (Seq.cast<obj> x |> Array.ofSeq))
@@ -220,49 +242,66 @@ module Serialization =
         else None
 
     let rec toJsonValue (x : obj) : JsonValue =
-        match x with
-        | null -> JsonValue.Null
-        | OptionValue None -> JsonValue.Null
-        | :? byte as x -> JsonValue.Number (decimal x)
-        | :? sbyte as x -> JsonValue.Number (decimal x)
-        | :? uint16 as x -> JsonValue.Number (decimal x)
-        | :? int16 as x -> JsonValue.Number (decimal x)
-        | :? int as x -> JsonValue.Number (decimal x)
-        | :? uint32 as x -> JsonValue.Number (decimal x)
-        | :? int64 as x -> JsonValue.Number (decimal x)
-        | :? uint64 as x -> JsonValue.Number (decimal x)
-        | :? single as x -> JsonValue.Float (float x)
-        | :? double as x -> JsonValue.Float x
-        | :? decimal as x -> JsonValue.Float (float x)
-        | :? string as x -> JsonValue.String x
-        | :? Guid as x -> JsonValue.String (x.ToString())
-        | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
-        | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-        | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-        | :? bool as x -> JsonValue.Boolean x
-        | :? IDictionary<string, obj> as items ->
-            items
-            |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
-            |> Seq.toArray
-            |> JsonValue.Record
-        | EnumerableValue items -> 
-            items
-            |> Array.map toJsonValue
-            |> JsonValue.Array
-        | OptionValue (Some x) -> toJsonValue x
-        | EnumValue x -> JsonValue.String x
-        | _ ->
-            let xtype = x.GetType()
-            let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-            let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
-            JsonValue.Record items
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result =
+            match x with
+            | null -> JsonValue.Null
+            | OptionValue None -> JsonValue.Null
+            | :? byte as x -> JsonValue.Number (decimal x)
+            | :? sbyte as x -> JsonValue.Number (decimal x)
+            | :? uint16 as x -> JsonValue.Number (decimal x)
+            | :? int16 as x -> JsonValue.Number (decimal x)
+            | :? int as x -> JsonValue.Number (decimal x)
+            | :? uint32 as x -> JsonValue.Number (decimal x)
+            | :? int64 as x -> JsonValue.Number (decimal x)
+            | :? uint64 as x -> JsonValue.Number (decimal x)
+            | :? single as x -> JsonValue.Float (float x)
+            | :? double as x -> JsonValue.Float x
+            | :? decimal as x -> JsonValue.Float (float x)
+            | :? string as x -> JsonValue.String x
+            | :? Guid as x -> JsonValue.String (x.ToString())
+            | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
+            | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+            | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+            | :? bool as x -> JsonValue.Boolean x
+            | :? IDictionary<string, obj> as items ->
+                items
+                |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
+                |> Seq.toArray
+                |> JsonValue.Record
+            | EnumerableValue items -> 
+                items
+                |> Array.map toJsonValue
+                |> JsonValue.Array
+            | OptionValue (Some x) -> toJsonValue x
+            | EnumValue x -> JsonValue.String x
+            | _ ->
+                let xtype = x.GetType()
+                let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+                let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
+                JsonValue.Record items
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Object of type %A converted to JsonValue %ims." (x.GetType()) sw.ElapsedMilliseconds
+        result
 
     let serializeRecord (x : obj) =
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
         let value = toJsonValue x
-        value.ToString()
+        let result = value.ToString()
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Record serialized in %ims." sw.ElapsedMilliseconds
+        result
 
     let deserializeSchema (json : string) =
-        let result = deserializeRecord<GraphQLReply<IntrospectionResult>> json
-        match result.Errors with
-        | None -> result.Data.__schema
-        | Some errors -> String.concat "\n" errors |> failwithf "%s"
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result =
+            let result = deserializeRecord<GraphQLReply<IntrospectionResult>> json
+            match result.Errors with
+            | None -> result.Data.__schema
+            | Some errors -> String.concat "\n" errors |> failwithf "%s"
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Schema deserialized in %ims." sw.ElapsedMilliseconds
+        result
