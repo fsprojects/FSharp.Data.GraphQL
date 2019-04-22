@@ -353,8 +353,8 @@ module JsonValueHelper =
         getResponseFields responseJson
         |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
 
-    let private removeTypeNameField (fields : (string * JsonValue) list) =
-        fields |> List.filter (fun (name, _) -> name <> "__typename")
+    let private removeTypeNameField (fields : (string * JsonValue) []) =
+        fields |> Array.filter (fun (name, _) -> name <> "__typename")
 
     let firstUpper (name : string, value) =
         name.FirstCharUpper(), value
@@ -460,9 +460,8 @@ module JsonValueHelper =
                     | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
                 let props =
                     props
-                    |> List.ofArray
                     |> removeTypeNameField
-                    |> List.map (firstUpper >> mapper)
+                    |> Array.map (firstUpper >> mapper)
                 RecordBase(typeName, props) |> makeSomeIfNeeded
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
@@ -506,16 +505,16 @@ module JsonValueHelper =
                 | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
         fieldName, (helper true fieldType fieldValue)
 
-    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) list) =
+    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) []) =
         let fieldMap = getFields schemaType
         let mapper (name : string, value : JsonValue) =
             match fieldMap.TryFind(name) with
             | Some fieldType -> getFieldValue schemaTypes fieldType (name, value)
             | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
         removeTypeNameField fields
-        |> List.map (firstUpper >> mapper)
+        |> Array.map (firstUpper >> mapper)
 
-    let getErrors (errors : JsonValue list) =
+    let getErrors (errors : JsonValue []) =
         let errorMapper = function
             | JsonValue.Record fields ->
                 match fields |> Array.tryFind (fun (name, _) -> name = "message"), fields |> Array.tryFind (fun (name, _) -> name = "path") with
@@ -528,7 +527,7 @@ module JsonValueHelper =
                     { Message = message; Path = Array.map pathMapper path }
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
-        List.map errorMapper errors
+        Array.map errorMapper errors
 
 type OperationResultProvidingInformation =
     { SchemaTypeNames : string []
@@ -538,11 +537,11 @@ type OperationResultProvidingInformation =
 type OperationResultBase (responseJson : JsonValue) =
     member private __.ResponseJson = responseJson
 
-    member x.Data = JsonValueHelper.getResponseDataFields x.ResponseJson |> Option.map List.ofArray
+    member x.Data = JsonValueHelper.getResponseDataFields x.ResponseJson
 
-    member x.Errors = JsonValueHelper.getResponseErrors x.ResponseJson |> Option.map List.ofArray
+    member x.Errors = JsonValueHelper.getResponseErrors x.ResponseJson
     
-    member x.CustomData = JsonValueHelper.getResponseCustomFields x.ResponseJson |> List.ofArray
+    member x.CustomData = JsonValueHelper.getResponseCustomFields x.ResponseJson
 
     static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
@@ -558,10 +557,11 @@ type OperationResultBase (responseJson : JsonValue) =
                                 | Some def -> def
                                 | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
                             match this.Data with
-                            | Some [] | None -> None
+                            | None -> None
+                            | Some dataFields when dataFields.Length = 0 -> None
                             | Some dataFields ->
                                 let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-                                let props = fieldValues |> List.map (fun (name, value) -> { Name = name; Value = value })
+                                let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
                                 Some (RecordBase(operationType.Name, props)) @@>)
                 let prop = ProvidedProperty("Data", operationType, getterCode)
                 prop.AddXmlDoc("Contains the data returned by the operation on the server.")
@@ -570,7 +570,8 @@ type OperationResultBase (responseJson : JsonValue) =
                 let getterCode (args : Expr list) =
                     <@@ let this = %%args.[0] : OperationResultBase
                         match this.Errors with
-                        | Some [] | None -> None
+                        | None -> None
+                        | Some errors when errors.Length = 0 -> None
                         | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
                 let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
                 prop.AddXmlDoc("Contains erros returned by the operation on the server.")

@@ -186,21 +186,18 @@ module Serialization =
         downcast (JsonValue.Parse(json) |> convert t)
 
     let deserializeMap values =
-        let rec helper (acc : (string *obj) list) (values : (string * JsonValue) list) =
-            match List.rev values with
-            | [] -> acc
-            | (name, value) :: tail ->
-                let value = 
-                    match value with
-                    | JsonValue.Record fields -> name, (List.ofArray fields |> helper [] |> Map.ofList |> box)
-                    | JsonValue.Null -> name, null
-                    | JsonValue.String s -> name, box s
-                    | JsonValue.Number n -> name, box (int n)
-                    | JsonValue.Float f -> name, box f
-                    | JsonValue.Array items -> name, (List.ofArray items |> List.map (fun item -> null, item) |> helper [] |> List.map snd |> box)
-                    | JsonValue.Boolean b -> name, box b
-                helper (value :: acc) tail
-        helper [] values |> Map.ofList
+        let rec helper (values : (string * JsonValue) []) =
+            values
+            |> Array.map (fun (name, value) ->
+                match value with
+                | JsonValue.Record fields -> name, (fields |> helper |> Map.ofArray |> box)
+                | JsonValue.Null -> name, null
+                | JsonValue.String s -> name, box s
+                | JsonValue.Number n -> name, box (int n)
+                | JsonValue.Float f -> name, box f
+                | JsonValue.Array items -> name, (items |> Array.map (fun item -> null, item) |> helper |> Array.map snd |> box)
+                | JsonValue.Boolean b -> name, box b)
+        helper values |> Map.ofArray
 
     let (|EnumerableValue|_|) (x : obj) =
         match x with
