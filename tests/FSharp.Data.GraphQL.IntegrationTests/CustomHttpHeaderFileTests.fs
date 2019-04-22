@@ -40,11 +40,12 @@ module SimpleOperation =
     type Operation = Provider.Context.Operationff1a972bcced9a18c49e4d2648ce0a50
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.CustomData.ContainsKey("userData") |> equals true
+        result.CustomData.IsSome |> equals true
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.Value.ContainsKey("userData") |> equals true
         match userData with
-        | Some userData -> result.CustomData.["userData"] |> equals (upcast userData)
-        | None -> result.CustomData.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
+        | Some userData -> result.CustomData.Value.["userData"] |> equals (upcast userData)
+        | None -> result.CustomData.Value.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
         result.Errors |> equals None
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
@@ -99,16 +100,18 @@ let ``Should be able to start a simple query operation synchronously with custom
     let result = SimpleOperation.operation.Run("http_headers2.headerfile")
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
-    result.CustomData.ContainsKey("userData") |> equals true
-    result.CustomData.["userData"] |> equals (upcast userData)
+    result.CustomData.IsSome |> equals true
+    result.CustomData.Value.ContainsKey("userData") |> equals true
+    result.CustomData.Value.["userData"] |> equals (upcast userData)
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let result = SimpleOperation.operation.AsyncRun("http_headers2.headerfile") |> Async.RunSynchronously
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
-    result.CustomData.ContainsKey("userData") |> equals true
-    result.CustomData.["userData"] |> equals (upcast userData)
+    result.CustomData.IsSome |> equals true
+    result.CustomData.Value.ContainsKey("userData") |> equals true
+    result.CustomData.Value.["userData"] |> equals (upcast userData)
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an union type`` () =
@@ -165,12 +168,13 @@ module InterfaceOperation =
     type Operation = Provider.Context.Operationfd48bf01957afc98699dcf542e099b28
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.CustomData.ContainsKey("userData") |> equals true
+        result.CustomData.IsSome |> equals true
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.Value.ContainsKey("userData") |> equals true
         match userData with
-        | Some userData -> result.CustomData.["userData"] |> equals (upcast userData)
-        | None -> result.CustomData.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
-        result.CustomData.ContainsKey("documentId") |> equals true
+        | Some userData -> result.CustomData.Value.["userData"] |> equals (upcast userData)
+        | None -> result.CustomData.Value.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
         result.Errors |> equals None
         result.Data.IsSome |> equals true
         let expectedThings : Operation.Types.Things.Thing [] =
@@ -237,12 +241,13 @@ module MutationOperation =
     type Operation = Provider.Context.Operation4b47d31cd6380f05ea35981f05930b16
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.CustomData.ContainsKey("userData") |> equals true
+        result.CustomData.IsSome |> equals true
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.Value.ContainsKey("userData") |> equals true
         match userData with
-        | Some userData -> result.CustomData.["userData"] |> equals (upcast userData)
-        | None -> result.CustomData.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
-        result.CustomData.ContainsKey("documentId") |> equals true
+        | Some userData -> result.CustomData.Value.["userData"] |> equals (upcast userData)
+        | None -> result.CustomData.Value.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
         result.Errors |> equals None
         result.Data.IsSome |> equals true
         result.Data.Value.SetMoon.IsSome |> equals true
@@ -273,12 +278,13 @@ module VariablesOperation =
     type Operation = Provider.Context.Operatione05eb1fa8361713b898bc94fd5c29ee0
 
     let validateResult (userData : string option) (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.CustomData.ContainsKey("userData") |> equals true
+        result.CustomData.IsSome |> equals true
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.Value.ContainsKey("userData") |> equals true
         match userData with
-        | Some userData -> result.CustomData.["userData"] |> equals (upcast userData)
-        | None -> result.CustomData.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
-        result.CustomData.ContainsKey("documentId") |> equals true
+        | Some userData -> result.CustomData.Value.["userData"] |> equals (upcast userData)
+        | None -> result.CustomData.Value.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
         result.Errors |> equals None
         result.Data.IsSome |> equals true
         hasItems result.Data.Value.Things

@@ -529,62 +529,49 @@ module JsonValueHelper =
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
 
-type OperationResultProvidingInformation =
-    { SchemaTypeNames : string []
-      SchemaTypes : IntrospectionType []
-      OperationTypeName : string }
+type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
+    let data = 
+        let data = JsonValueHelper.getResponseDataFields responseJson
+        let operationType =
+            match schemaTypes.TryFind(operationTypeName) with
+            | Some def -> def
+            | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
+        match data with
+        | Some [||] | None -> None
+        | Some dataFields ->
+            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+            let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
+            Some (RecordBase(operationType.Name, props))
 
-type OperationResultBase (responseJson : JsonValue) =
+    let errors =
+        let errors = JsonValueHelper.getResponseErrors responseJson
+        match errors with
+        | Some [||] | None -> None
+        | Some errors -> Some (JsonValueHelper.getErrors errors)
+
+    let customData = 
+        let customData = JsonValueHelper.getResponseCustomFields responseJson
+        match customData with
+        | [||] -> None
+        | customData -> Some (Serialization.deserializeMap customData)
+
     member private __.ResponseJson = responseJson
 
-    member x.Data = JsonValueHelper.getResponseDataFields x.ResponseJson
+    member __.Data = data
 
-    member x.Errors = JsonValueHelper.getResponseErrors x.ResponseJson
+    member __.Errors = errors
     
-    member x.CustomData = JsonValueHelper.getResponseCustomFields x.ResponseJson
+    member __.CustomData = customData
 
-    static member internal MakeProvidedType(providingInformation : OperationResultProvidingInformation, operationType : Type) =
+    static member internal MakeProvidedType(operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
-        tdef.AddMembersDelayed(fun _ ->
-            let ddef = 
-                let getterCode =
-                    QuotationHelpers.quoteRecord providingInformation (fun (args : Expr list) providingInformation ->
-                        <@@ let this = %%args.[0] : OperationResultBase
-                            let info = %%providingInformation : OperationResultProvidingInformation
-                            let schemaTypes = Map.ofArray (Array.zip info.SchemaTypeNames info.SchemaTypes)
-                            let operationType =
-                                match schemaTypes.TryFind(info.OperationTypeName) with
-                                | Some def -> def
-                                | _ -> failwithf "Operation type %s could not be found on the schema types." info.OperationTypeName
-                            match this.Data with
-                            | None -> None
-                            | Some dataFields when dataFields.Length = 0 -> None
-                            | Some dataFields ->
-                                let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-                                let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
-                                Some (RecordBase(operationType.Name, props)) @@>)
-                let prop = ProvidedProperty("Data", operationType, getterCode)
-                prop.AddXmlDoc("Contains the data returned by the operation on the server.")
-                prop
-            let edef =
-                let getterCode (args : Expr list) =
-                    <@@ let this = %%args.[0] : OperationResultBase
-                        match this.Errors with
-                        | None -> None
-                        | Some errors when errors.Length = 0 -> None
-                        | Some errors -> Some (JsonValueHelper.getErrors errors) @@>
-                let prop = ProvidedProperty("Errors", typeof<OperationError list option>, getterCode)
-                prop.AddXmlDoc("Contains erros returned by the operation on the server.")
-                prop
-            let cdef =
-                let getterCode (args : Expr list) =
-                    <@@ let this = %%args.[0] : OperationResultBase
-                        Serialization.deserializeMap this.CustomData @@>
-                let prop = ProvidedProperty("CustomData", typeof<Map<string, obj>>, getterCode)
-                prop.AddXmlDoc("Contains custom fields that came in the response of the server (fields except data and errors).")
-                prop
-            let members : MemberInfo list = [ddef; edef; cdef]
-            members)
+        tdef.AddMemberDelayed(fun _ ->
+            let getterCode (args : Expr list) =
+                <@@ let this = %%args.[0] : OperationResultBase
+                    this.Data @@>
+            let prop = ProvidedProperty("Data", operationType, getterCode)
+            prop.AddXmlDoc("Contains the data returned by the operation on the server.")
+            prop)
         tdef
 
     member x.Equals(other : OperationResultBase) =
@@ -606,6 +593,10 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
 
     member __.CustomHttpHeaders = customHttpHeaders
 
+    static member private ClientProperty = typeof<OperationBase>.GetProperty("Client", BindingFlags.NonPublic ||| BindingFlags.Instance)
+
+    static member GetClientInstance(operation : OperationBase) : WebClient = downcast OperationBase.ClientProperty.GetValue(operation)
+
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
@@ -625,13 +616,11 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
             "Operation" + hash
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
+        // We need to reconstruct the map inside quotations, so we split it again into arrays here
+        let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
+        let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq
         tdef.AddMembersDelayed(fun _ ->
-            let schemaTypes = schemaTypes |> Seq.map (|KeyValue|)
-            let info = 
-                { SchemaTypeNames = schemaTypes |> Seq.map (fst >> (fun name -> name.FirstCharUpper())) |> Array.ofSeq
-                  SchemaTypes = schemaTypes |> Seq.map snd |> Array.ofSeq
-                  OperationTypeName = operationTypeName }
-            let rtdef = OperationResultBase.MakeProvidedType(info, operationType)
+            let rtdef = OperationResultBase.MakeProvidedType(operationType)
             let variables =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
@@ -666,36 +655,38 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let rundef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables args
-                    <@@ let this = %%args.[0] : OperationBase
-                        let client : WebClient = 
-                            downcast (typeof<OperationBase>.GetProperty("Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
-                        let customHttpHeaders = 
-                            match %%args.[args.Length - 1] : string with
-                            | "" -> this.CustomHttpHeaders
-                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
-                        let request =
-                            { ServerUrl = this.ServerUrl
-                              CustomHeaders = customHttpHeaders
-                              OperationName = Option.ofObj operationName
-                              Query = query
-                              Variables = %%variables }
-                        let responseJson = GraphQLClient.sendRequest client request |> JsonValue.Parse
-                        OperationResultBase(responseJson) @@>
+                let invoker =
+                    QuotationHelpers.quoteArray schemaTypes (fun (args : Expr list) schemaTypes ->
+                        let operationName = Option.toObj operationDefinition.Name
+                        let variables = varExprMapper variables args
+                        <@@ let this = %%args.[0] : OperationBase
+                            let schemaTypes = Array.zip schemaTypeNames %%schemaTypes |> Map.ofArray
+                            let client = OperationBase.GetClientInstance(this)
+                            let customHttpHeaders = 
+                                match %%args.[args.Length - 1] : string with
+                                | "" -> this.CustomHttpHeaders
+                                | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
+                            let request =
+                                { ServerUrl = this.ServerUrl
+                                  CustomHeaders = customHttpHeaders
+                                  OperationName = Option.ofObj operationName
+                                  Query = query
+                                  Variables = %%variables }
+                            let responseJson = GraphQLClient.sendRequest client request |> JsonValue.Parse
+                            OperationResultBase(responseJson, schemaTypes, operationTypeName) @@>)
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
                 let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
             let arundef = 
-                let invoker (args : Expr list) =
+                let invoker =
+                    QuotationHelpers.quoteArray schemaTypes (fun (args : Expr list) schemaTypes ->
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
                     <@@ let this = %%args.[0] : OperationBase
-                        let client : WebClient = 
-                            downcast (typeof<OperationBase>.GetProperty("Client", BindingFlags.NonPublic ||| BindingFlags.Instance).GetValue(this))
+                        let schemaTypes = Array.zip schemaTypeNames %%schemaTypes |> Map.ofArray
+                        let client = OperationBase.GetClientInstance(this)
                         let customHttpHeaders = 
                             match %%args.[args.Length - 1] : string with
                             | "" -> this.CustomHttpHeaders
@@ -707,9 +698,10 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                               Query = query
                               Variables = %%variables }
                         async {
-                            let! responseJson = GraphQLClient.sendRequestAsync client request
-                            return responseJson |> JsonValue.Parse |> OperationResultBase
-                        } @@>
+                            let! response = GraphQLClient.sendRequestAsync client request
+                            let responseJson = JsonValue.Parse response
+                            return OperationResultBase(responseJson, schemaTypes, operationTypeName)
+                        } @@>)
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
                 let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
@@ -729,9 +721,8 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
 
     member __.CustomHttpHeaders = customHttpHeaders
 
-    static member private GetOperationProvidedTypes(schema, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    static member private GetOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
-        let schemaTypes = Types.getSchemaTypes(schema)
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
@@ -846,7 +837,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                     | None -> failwith "The operation was found in the schema, but it does not have a name."
                 let schemaTypes = Types.getSchemaTypes(schema)
                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
-                let (operationType, operationTypes) = ContextBase.GetOperationProvidedTypes(schema, enumProvidedTypes, operationAstFields, operationTypeRef)
+                let (operationType, operationTypes) = ContextBase.GetOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                 let rootWrapper = generateWrapper "Types"
