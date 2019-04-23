@@ -82,9 +82,32 @@ module QuotationHelpers =
         let var = Var("instance", varType)  
         Expr.Let(var, instance, body args (Expr.Var(var)))
 
-    let quoteUnion instance = unionExpr instance ||> createLetExpr
-    let quoteRecord instance = recordExpr instance ||> createLetExpr
-    let quoteArray instance = arrayExpr instance ||> createLetExpr
+    let quoteUnion instance = 
+        let func instance = unionExpr instance ||> createLetExpr
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result = func instance
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an union in %ims." sw.ElapsedMilliseconds
+        result
+
+    let quoteRecord instance = 
+        let func instance = recordExpr instance ||> createLetExpr
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result = func instance
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an record in %ims." sw.ElapsedMilliseconds
+        result
+
+    let quoteArray instance = 
+        let func instance = arrayExpr instance ||> createLetExpr
+        let sw = System.Diagnostics.Stopwatch()
+        sw.Start()
+        let result = func instance
+        sw.Stop()
+        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an array in %ims." sw.ElapsedMilliseconds
+        result
 
 module HttpHeaders =
     let map (location : TextLocation) =
@@ -616,9 +639,12 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
             "Operation" + hash
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
-        // We need to reconstruct the map inside quotations, so we split it again into arrays here
-        let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-        let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq
+        // Every time we run the query, we will need the schema type map as an expression.
+        // To avoid creating the type map expression every time we call Run method, we cache it here.
+        let schemaTypes =
+            let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
+            let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
+            <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
         tdef.AddMembersDelayed(fun _ ->
             let rtdef = OperationResultBase.MakeProvidedType(operationType)
             let variables =
@@ -655,37 +681,41 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let rundef = 
-                let invoker =
-                    QuotationHelpers.quoteArray schemaTypes (fun (args : Expr list) schemaTypes ->
-                        let operationName = Option.toObj operationDefinition.Name
-                        let variables = varExprMapper variables args
-                        <@@ let this = %%args.[0] : OperationBase
-                            let schemaTypes = Array.zip schemaTypeNames %%schemaTypes |> Map.ofArray
-                            let client = OperationBase.GetClientInstance(this)
-                            let customHttpHeaders = 
-                                match %%args.[args.Length - 1] : string with
-                                | "" -> this.CustomHttpHeaders
-                                | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
-                            let request =
-                                { ServerUrl = this.ServerUrl
-                                  CustomHeaders = customHttpHeaders
-                                  OperationName = Option.ofObj operationName
-                                  Query = query
-                                  Variables = %%variables }
-                            let responseJson = GraphQLClient.sendRequest client request |> JsonValue.Parse
-                            OperationResultBase(responseJson, schemaTypes, operationTypeName) @@>)
+                let invoker (args : Expr list) =
+                    let operationName = Option.toObj operationDefinition.Name
+                    let variables = varExprMapper variables args
+                    <@@ let this = %%args.[0] : OperationBase
+                        let client = OperationBase.GetClientInstance(this)
+                        let customHttpHeaders = 
+                            match %%args.[args.Length - 1] : string with
+                            | "" -> this.CustomHttpHeaders
+                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
+                        let request =
+                            { ServerUrl = this.ServerUrl
+                              CustomHeaders = customHttpHeaders
+                              OperationName = Option.ofObj operationName
+                              Query = query
+                              Variables = %%variables }
+                        let sw = System.Diagnostics.Stopwatch()
+                        sw.Start()
+                        let response = GraphQLClient.sendRequest client request
+                        sw.Stop()
+                        printfn "Ran operation in %ims." sw.ElapsedMilliseconds
+                        sw.Restart()
+                        let responseJson = JsonValue.Parse response
+                        sw.Stop()
+                        if sw.ElapsedMilliseconds > 0L then printfn "Converted query string response to JsonValue in %ims." sw.ElapsedMilliseconds
+                        OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
                 let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
             let arundef = 
-                let invoker =
-                    QuotationHelpers.quoteArray schemaTypes (fun (args : Expr list) schemaTypes ->
+                let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
                     <@@ let this = %%args.[0] : OperationBase
-                        let schemaTypes = Array.zip schemaTypeNames %%schemaTypes |> Map.ofArray
                         let client = OperationBase.GetClientInstance(this)
                         let customHttpHeaders = 
                             match %%args.[args.Length - 1] : string with
@@ -698,10 +728,17 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                               Query = query
                               Variables = %%variables }
                         async {
+                            let sw = System.Diagnostics.Stopwatch()
+                            sw.Start()
                             let! response = GraphQLClient.sendRequestAsync client request
+                            sw.Stop()
+                            printfn "Ran operation in %ims." sw.ElapsedMilliseconds
+                            sw.Restart()
                             let responseJson = JsonValue.Parse response
-                            return OperationResultBase(responseJson, schemaTypes, operationTypeName)
-                        } @@>)
+                            sw.Stop()
+                            printfn "Converted query string response to JsonValue in %ims." sw.ElapsedMilliseconds
+                            return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
+                        } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
                 let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
