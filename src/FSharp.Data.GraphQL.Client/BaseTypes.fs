@@ -84,30 +84,15 @@ module QuotationHelpers =
 
     let quoteUnion instance = 
         let func instance = unionExpr instance ||> createLetExpr
-        let sw = System.Diagnostics.Stopwatch()
-        sw.Start()
-        let result = func instance
-        sw.Stop()
-        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an union in %ims." sw.ElapsedMilliseconds
-        result
+        Tracer.runAndMeasureExecutionTime "Quoted union type" (fun _ -> func instance)
 
     let quoteRecord instance = 
         let func instance = recordExpr instance ||> createLetExpr
-        let sw = System.Diagnostics.Stopwatch()
-        sw.Start()
-        let result = func instance
-        sw.Stop()
-        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an record in %ims." sw.ElapsedMilliseconds
-        result
+        Tracer.runAndMeasureExecutionTime "Quoted record type" (fun _ -> func instance)
 
     let quoteArray instance = 
         let func instance = arrayExpr instance ||> createLetExpr
-        let sw = System.Diagnostics.Stopwatch()
-        sw.Start()
-        let result = func instance
-        sw.Stop()
-        if sw.ElapsedMilliseconds > 0L then printfn "Quoted an array in %ims." sw.ElapsedMilliseconds
-        result
+        Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
 
 module HttpHeaders =
     let map (location : TextLocation) =
@@ -126,8 +111,6 @@ module HttpHeaders =
                     let name = header.Substring(0, separatorIndex).Trim()
                     let value = header.Substring(separatorIndex + 1).Trim()
                     (name, value))
-
-[<Measure>] type x
 
 type EnumBase (name : string, value : string) =
     member __.Name = name
@@ -690,15 +673,8 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                               OperationName = Option.ofObj operationName
                               Query = query
                               Variables = %%variables }
-                        let sw = System.Diagnostics.Stopwatch()
-                        sw.Start()
-                        let response = GraphQLClient.sendRequest client request
-                        sw.Stop()
-                        printfn "Ran operation in %ims." sw.ElapsedMilliseconds
-                        sw.Restart()
-                        let responseJson = JsonValue.Parse response
-                        sw.Stop()
-                        if sw.ElapsedMilliseconds > 0L then printfn "Converted query string response to JsonValue in %ims." sw.ElapsedMilliseconds
+                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest client request)
+                        let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
@@ -722,15 +698,8 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                               Query = query
                               Variables = %%variables }
                         async {
-                            let sw = System.Diagnostics.Stopwatch()
-                            sw.Start()
-                            let! response = GraphQLClient.sendRequestAsync client request
-                            sw.Stop()
-                            printfn "Ran operation in %ims." sw.ElapsedMilliseconds
-                            sw.Restart()
-                            let responseJson = JsonValue.Parse response
-                            sw.Stop()
-                            printfn "Converted query string response to JsonValue in %ims." sw.ElapsedMilliseconds
+                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL asynchronously" (fun _ -> GraphQLClient.sendRequestAsync client request)
+                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
                         } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))

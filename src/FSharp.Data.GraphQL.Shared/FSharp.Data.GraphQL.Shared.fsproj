@@ -4,6 +4,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Diagnostics.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Prolog.fs" />
     <Compile Include="Ast.fs" />
