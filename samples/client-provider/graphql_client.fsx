@@ -17,7 +17,6 @@
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL.Client
-open System.Diagnostics
 open System.Net
 
 let client = new WebClient()
@@ -27,23 +26,12 @@ let request : GraphQLRequest =
       Variables = [||]
       ServerUrl = "https://api.github.com/graphql"
       CustomHeaders = 
-            [| "Authorization", "bearer b473fe0ddc77cf55df7065ec9c0b51cdc4861bfa"
-               "User-Agent", "ivelten" |]
+            [| "Authorization", "bearer [your bearer token here]"
+               "User-Agent", "[your github username here]" |]
       OperationName = Some "q" }
 
-let sw = Stopwatch()
-sw.Start()
 let response = GraphQLClient.sendRequest client request
-sw.Stop()
 
-printfn "Elapsed 1: %ims" sw.ElapsedMilliseconds
 printfn "%s" response
-
-sw.Restart()
-let response2 = GraphQLClient.sendRequest client request
-sw.Stop()
-
-printfn "Elapsed 2: %ims" sw.ElapsedMilliseconds
-printfn "%s" response2
 
 client.Dispose()

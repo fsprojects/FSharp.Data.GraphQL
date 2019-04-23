@@ -8,7 +8,7 @@ open ProviderImplementation.ProvidedTypes
 
 type internal ProviderKey =
     { IntrospectionLocation : IntrospectionLocation
-      CustomHttpHeadersLocation : TextLocation }
+      CustomHttpHeadersLocation : StringLocation }
 
 type internal CacheInvalidator (key : ProviderKey, invalidateFn : ProviderKey -> unit) =
     let lockObj = obj()

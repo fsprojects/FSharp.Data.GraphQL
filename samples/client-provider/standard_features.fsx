@@ -32,7 +32,6 @@ type MyProvider = GraphQLProvider<"sample_schema.json">
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its
 // properties into the constructor.
-
 let ball = MyProvider.Types.Ball(form = "Spheric", format = "Spheric", id = "1")
 let box = MyProvider.Types.Box(form = "Cubic", format = "Cubic", id = "2")
 

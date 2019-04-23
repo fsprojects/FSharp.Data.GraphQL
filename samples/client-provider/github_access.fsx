@@ -17,7 +17,6 @@
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
-open System.Diagnostics
 
 // Some GraphQL API's gives access to their schema via GET method, whithout need to anthenticate via headers.
 // The provider automatically tries to get the schema via GET method first. If it does not work,
@@ -26,17 +25,12 @@ type MyProvider = GraphQLProvider<"github_schema.json">
 
 let context = MyProvider.GetContext("https://api.github.com/graphql")
 
-let operation =
-    context.Operation<"""query q { viewer { login } }""">()
+let operation = context.Operation<"""query q { viewer { login } }""">()
 
-let run () =
-    let sw = Stopwatch()
-    sw.Start()
-    // You need to edit the headers file before making this call at runtime.
-    // Be sure to check out how to generate GitHub access tokens first.
-    let result = operation.Run("github_authorization_headers.headerfile")
-    sw.Stop()
-    printfn "Elapsed: %ims" sw.ElapsedMilliseconds
-    printfn "Data: %A\n" result.Data
+let headers = HttpHeaders.load (File "github_authorization_headers.headerfile")
 
-run()
+// You need to edit the headers file before making this call at runtime.
+// Be sure to check out how to generate GitHub access tokens first.
+let result = operation.Run(headers)
+
+printfn "Data: %A\n" result.Data

@@ -95,7 +95,7 @@ module QuotationHelpers =
         Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
 
 module HttpHeaders =
-    let map (location : TextLocation) =
+    let load (location : StringLocation) =
         let headersString =
             match location with
             | String headers -> headers
@@ -657,16 +657,22 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                         | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
+            let customHttpHeadersExprMapper (args : Expr list) =
+                let headers = Expr.Coerce(args.[args.Length - 1], typeof<seq<string * string>>)
+                <@@ let headers = %%headers : seq<string * string>
+                    if isNull headers
+                    then [||]
+                    else Array.ofSeq headers @@>
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
+                    let customHttpHeaders = customHttpHeadersExprMapper args
                     <@@ let this = %%args.[0] : OperationBase
                         let client = OperationBase.GetClientInstance(this)
                         let customHttpHeaders = 
-                            match %%args.[args.Length - 1] : string with
-                            | "" -> this.CustomHttpHeaders
-                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
+                            let headers = %%customHttpHeaders : (string * string) []
+                            if headers.Length = 0 then this.CustomHttpHeaders else headers
                         let request =
                             { ServerUrl = this.ServerUrl
                               CustomHeaders = customHttpHeaders
@@ -677,7 +683,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
+                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = null)]
                 let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
@@ -685,12 +691,12 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
+                    let customHttpHeaders = customHttpHeadersExprMapper args
                     <@@ let this = %%args.[0] : OperationBase
                         let client = OperationBase.GetClientInstance(this)
                         let customHttpHeaders = 
-                            match %%args.[args.Length - 1] : string with
-                            | "" -> this.CustomHttpHeaders
-                            | other -> HttpHeaders.map (TextLocation.Create(other, resolutionFolder))
+                            let headers = %%customHttpHeaders : (string * string) []
+                            if headers.Length = 0 then this.CustomHttpHeaders else headers
                         let request =
                             { ServerUrl = this.ServerUrl
                               CustomHeaders = customHttpHeaders
@@ -794,7 +800,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                   ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "") ]
             let smdef = ProvidedMethod("Operation", [], typeof<OperationBase>)
             let genfn (mname : string) (args : obj []) =
-                let queryLocation = TextLocation.Create(downcast args.[0], downcast args.[1])
+                let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
                 let query = 
                     match queryLocation with
                     | String query -> query
@@ -1011,13 +1017,13 @@ type ProviderBase private () =
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
-            let httpHeadersLocation = TextLocation.Create(downcast args.[1], resolutionFolder)
+            let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
             let maker =
                 lazy
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
                     tdef.AddXmlDoc("A type provider for GraphQL operations.")
                     tdef.AddMembersDelayed (fun _ ->
-                        let customHttpHeaders = HttpHeaders.map httpHeadersLocation
+                        let customHttpHeaders = HttpHeaders.load httpHeadersLocation
                         let schemaJson =
                             match introspectionLocation with
                             | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest webClient serverUrl customHttpHeaders

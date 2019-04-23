@@ -48,11 +48,13 @@ let operation =
     }""">()
 
 // If you need different user data from the introspection, you can provide here on the run method.
-let result = operation.Run()
-//let result = operation.Run("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb")
-//let result = operation.Run("http_headers2.headerfile")
-//let result = operation.AsyncRun("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb") |> Async.RunSynchronously
-//let result = operation.AsyncRun("http_headers2.headerfile") |> Async.RunSynchronously
+//let result = operation.Run()
+
+let userData = [|"UserData", "45e7ca6f-4384-4da7-ad97-963133e6f0fb"|]
+//let userData = HttpHeaders.load (File "http_headers2.headerfile")
+
+let result = operation.Run(userData)
+//let result = operation.AsyncRun(userData) |> Async.RunSynchronously
 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
