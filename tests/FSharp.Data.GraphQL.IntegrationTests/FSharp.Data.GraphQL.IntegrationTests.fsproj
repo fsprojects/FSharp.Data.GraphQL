@@ -21,8 +21,16 @@
     <Content Include="xunit.runner.json" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="operation.gql" />
     <None Include="paket.references" />
+    <None Include="http_headers1.headerfile">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="http_headers2.headerfile">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="operation.graphql">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
