@@ -97,8 +97,8 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
-    let result = SimpleOperation.operation.Run("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb")
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
+    let result = SimpleOperation.operation.Run([| "UserData", userData |])
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true
@@ -106,8 +106,8 @@ let ``Should be able to start a simple query operation synchronously with custom
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
-    let result = SimpleOperation.operation.AsyncRun("UserData: 45e7ca6f-4384-4da7-ad97-963133e6f0fb") |> Async.RunSynchronously
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
+    let result = SimpleOperation.operation.AsyncRun([| "UserData", userData |]) |> Async.RunSynchronously
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true

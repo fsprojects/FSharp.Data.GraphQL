@@ -94,7 +94,7 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let result = SimpleOperation.operation.Run(sprintf "UserData: %s" userData)
+    let result = SimpleOperation.operation.Run([| "UserData", userData |])
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true
@@ -103,7 +103,7 @@ let ``Should be able to start a simple query operation synchronously with custom
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let result = SimpleOperation.operation.AsyncRun(sprintf "UserData: %s" userData) |> Async.RunSynchronously
+    let result = SimpleOperation.operation.AsyncRun([| "UserData", userData |]) |> Async.RunSynchronously
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true

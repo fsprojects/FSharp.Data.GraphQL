@@ -709,7 +709,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                             return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
                         } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<string>, optionalValue = "")]
+                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = null)]
                 let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                 mdef

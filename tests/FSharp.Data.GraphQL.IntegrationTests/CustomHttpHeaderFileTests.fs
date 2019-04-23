@@ -97,7 +97,8 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
-    let result = SimpleOperation.operation.Run("http_headers2.headerfile")
+    let headers = HttpHeaders.load (File "http_headers2.headerfile")
+    let result = SimpleOperation.operation.Run(headers)
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
@@ -106,7 +107,8 @@ let ``Should be able to start a simple query operation synchronously with custom
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
-    let result = SimpleOperation.operation.AsyncRun("http_headers2.headerfile") |> Async.RunSynchronously
+    let headers = HttpHeaders.load (File "http_headers2.headerfile")
+    let result = SimpleOperation.operation.AsyncRun(headers) |> Async.RunSynchronously
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
