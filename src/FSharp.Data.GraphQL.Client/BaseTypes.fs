@@ -623,7 +623,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
-                                            schemaTypes : Map<string, IntrospectionType>,
+                                            schemaTypes : Expr,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                                             operationType : Type,
                                             resolutionFolder : string) =
@@ -639,12 +639,6 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
             "Operation" + hash
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
-        // Every time we run the query, we will need the schema type map as an expression.
-        // To avoid creating the type map expression every time we call Run method, we cache it here.
-        let schemaTypes =
-            let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-            let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
-            <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
         tdef.AddMembersDelayed(fun _ ->
             let rtdef = OperationResultBase.MakeProvidedType(operationType)
             let variables =
@@ -900,6 +894,12 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                     match operationTypeRef.Name with
                     | Some name -> name
                     | None -> failwith "Error parsing query. Operation type does not have a name."
+                // Every time we run the query, we will need the schema type map as an expression.
+                // To avoid creating the type map expression every time we call Run method, we cache it here.
+                let schemaTypes =
+                    let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
+                    let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
+                    <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
                 let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, resolutionFolder)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
