@@ -51,8 +51,7 @@ module GraphQLClient =
                    "query", JsonValue.String request.Query
                    "variables", variables |]
                 |> JsonValue.Record
-            try return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
-            with ex -> return rethrow [ex]
+            return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
         }
        
     let sendIntrospectionRequestAsync (client : WebClient) (serverUrl : string) customHeaders =
