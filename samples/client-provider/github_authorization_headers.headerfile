@@ -1,2 +1,2 @@
-Authorization: bearer 505f573a649c525bb2cb26acb7c74c06271e836b
-User-Agent: ivelten
+Authorization: bearer [your bearer token here]
+User-Agent: [your github username here]
