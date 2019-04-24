@@ -22,13 +22,17 @@ open Microsoft.FSharp.Reflection
 open System.Collections
 open System.Net
 
+/// A type alias to represent a Type name.
 type TypeName = string
 
+/// Contains data about a GQL operation error.
 type OperationError =
+      /// The description of the error that happened in the operation.
     { Message : string
+      /// The path to the field that produced the error while resolving its value.
       Path : obj [] }
 
-module QuotationHelpers = 
+module internal QuotationHelpers = 
     let rec coerceValues fieldTypeLookup fields = 
         let arrayExpr (arrayType : Type) (v : obj) =
             let typ = arrayType.GetElementType()
@@ -94,7 +98,10 @@ module QuotationHelpers =
         let func instance = arrayExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
 
+/// Contains helpers to build HTTP headers to be used in GraphQLProvider Run methods.
 module HttpHeaders =
+    /// Loads HTTP headers from a StringLocation.
+    /// Http headers are provided as strings in the same way they are encoded in an HTTP request (name and value, separated by a comma).
     let load (location : StringLocation) =
         let headersString =
             match location with
@@ -112,10 +119,13 @@ module HttpHeaders =
                     let value = header.Substring(separatorIndex + 1).Trim()
                     (name, value))
 
+/// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
-    member __.Name = name
+    /// Gets the name of the provided enum type.
+    member __.GetName() = name
 
-    member __.Value = value
+    /// Gets the value of the provided enum type.
+    member __.GetValue() = value
 
     static member internal MakeProvidedType(name, items : string seq) =
         let tdef = ProvidedTypeDefinition(name, Some typeof<EnumBase>, nonNullable = true, isSealed = true)
@@ -131,41 +141,46 @@ type EnumBase (name : string, value : string) =
 
     static member internal Constructor = typeof<EnumBase>.GetConstructors().[0]
 
-    override x.ToString() = x.Value
+    override x.ToString() = x.GetValue()
 
     member x.Equals(other : EnumBase) =
-        x.Name = other.Name && x.Value = other.Value
+        x.GetName() = other.GetName() && x.GetValue() = other.GetValue()
 
     override x.Equals(other : obj) =
         match other with
         | :? EnumBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Value.GetHashCode()
+    override x.GetHashCode() = x.GetName().GetHashCode() ^^^ x.GetValue().GetHashCode()
 
     interface IEquatable<EnumBase> with
         member x.Equals(other) = x.Equals(other)
 
-type ProvidedTypeMetadata =
+type internal ProvidedTypeMetadata =
     { Name : string
       Description : string option }
 
+/// The base type for all GraphQLProvider provided interface types.
 type InterfaceBase private () =
     static member internal MakeProvidedType(metadata : ProvidedTypeMetadata) =
         let tdef = ProvidedTypeDefinition("I" + metadata.Name.FirstCharUpper(), None, nonNullable = true, isInterface = true)
         metadata.Description |> Option.iter tdef.AddXmlDoc
         tdef
 
-type RecordPropertyMetadata =
+type internal RecordPropertyMetadata =
     { Name : string
       Description : string option
       DeprecationReason : string option
       Type : Type }
 
+/// Contains information about a GraphQLProvider record property.
 type RecordProperty =
+      /// Gets the name of the record property.
     { Name : string
+      /// Gets the value of the record property.
       Value : obj }
 
+/// The base type for all GraphQLProvider provided record types.
 type RecordBase (name : string, properties : RecordProperty seq) =
     do
         if not (isNull properties)
@@ -174,17 +189,19 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             if distinctCount <> Seq.length properties
             then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
 
-    member __.Name = name
+    /// Gets the name of this provided record type.
+    member __.GetName() = name
 
-    member __.Properties = List.ofSeq properties
+    /// Gets a list of this provided record properties.
+    member __.GetProperties() = List.ofSeq properties
     
-    
+    /// Produces a dictionary containing all the properties and names of this provided record type.
     member x.ToDictionary() =
         let mapper (v : obj) =
             match v with
             | :? RecordBase as v -> box (v.ToDictionary())
             | _ -> v
-        x.Properties
+        x.GetProperties()
         |> Seq.map (fun p -> p.Name, mapper p.Value)
         |> dict
 
@@ -194,7 +211,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             let pname = metadata.Name.FirstCharUpper()
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
-                    match this.Properties |> List.tryFind (fun prop -> prop.Name = pname) with
+                    match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
                     | Some prop -> prop.Value
                     | None -> failwithf "Expected to find property \"%s\", but the property was not found." pname @@>
             let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
@@ -223,19 +240,19 @@ type RecordBase (name : string, properties : RecordProperty seq) =
                 let asType = 
                     let invoker (args : Expr list) =
                         <@@ let this = %%args.[0] : RecordBase
-                            if this.Name = name then this
-                            else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name this.Name name name @@>
+                            if this.GetName() = name then this
+                            else failwithf "Expected type to be \"%s\", but it is \"%s\". Make sure to check the type by calling \"Is%s\" method before calling \"As%s\" method." name (this.GetName()) name name @@>
                     ProvidedMethod("As" + name, [], tdef, invoker)
                 let tryAsType =
                     let invoker (args : Expr list) =
                         <@@ let this = %%args.[0] : RecordBase
-                            if this.Name = name then Some this
+                            if this.GetName() = name then Some this
                             else None @@>
                     ProvidedMethod("TryAs" + name, [], typedefof<_ option>.MakeGenericType(tdef), invoker)
                 let isType =
                     let invoker (args : Expr list) =
                         <@@ let this = %%args.[0] : RecordBase
-                            this.Name = name @@>
+                            this.GetName() = name @@>
                     ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
                 let members : MemberInfo list = [asType; tryAsType; isType]
                 members)
@@ -271,26 +288,27 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | [] -> ()
             | [prop] -> sb.Append(sprintf "%s = %s;" prop.Name (getPropValue prop)) |> ignore
             | prop :: tail -> sb.AppendLine(sprintf "%s = %s;" prop.Name (getPropValue prop)) |> ignore; printProperties tail
-        printProperties x.Properties
+        printProperties (x.GetProperties())
         sb.Append("}") |> ignore
         sb.ToString()
 
     member x.Equals(other : RecordBase) = 
-        let xprops = x.Properties |> List.sortBy (fun x -> x.Name)
-        let yprops = other.Properties |> List.sortBy (fun x -> x.Name)
-        x.Name = other.Name && xprops = yprops
+        let xprops = x.GetProperties() |> List.sortBy (fun x -> x.Name)
+        let yprops = other.GetProperties() |> List.sortBy (fun x -> x.Name)
+        x.GetName() = other.GetName() && xprops = yprops
+
 
     override x.Equals(other : obj) =
         match other with
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.Name.GetHashCode() ^^^ x.Properties.GetHashCode()
+    override x.GetHashCode() = x.GetName().GetHashCode() ^^^ x.GetProperties().GetHashCode()
 
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
 
-module Types =
+module internal Types =
     let scalar =
         [| "Int", typeof<int>
            "Boolean", typeof<bool>
@@ -331,7 +349,7 @@ module Types =
 
     let makeAsync (t : Type) = typedefof<Async<_>>.MakeGenericType(t)
 
-module JsonValueHelper =
+module internal JsonValueHelper =
     let getResponseFields (responseJson : JsonValue) =
         match responseJson with
         | JsonValue.Record fields -> fields
@@ -535,6 +553,7 @@ module JsonValueHelper =
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
 
+/// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
     let data = 
         let data = JsonValueHelper.getResponseDataFields responseJson
@@ -563,10 +582,13 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
 
     member private __.ResponseJson = responseJson
 
+    /// Gets the data returned by the operation on the server.
     member __.Data = data
 
+    /// Gets all the errors returned by the operation on the server.
     member __.Errors = errors
     
+    /// Gets all the custom data returned by the operation on server as a map of names and values.
     member __.CustomData = customData
 
     static member internal MakeProvidedType(operationType : Type) =
@@ -590,17 +612,21 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
 
     override x.GetHashCode() = x.ResponseJson.GetHashCode()
 
+/// The base type for al GraphQLProvider operation provided types.
 type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []) =
     member private __.Client = new WebClient()
 
     member this.Dispose() = this.Client.Dispose()
 
+    /// Gets the GraphQL server URL that this operation is associated to.
     member __.ServerUrl = serverUrl
 
+    /// Gets custom HTTP Headers used to make requests to the GraphQL server which this operation is associated to.
     member __.CustomHttpHeaders = customHttpHeaders
 
     static member private ClientProperty = typeof<OperationBase>.GetProperty("Client", BindingFlags.NonPublic ||| BindingFlags.Instance)
 
+    /// Gets an instance of the WebClient used by an instance of an OperationBase type.
     static member GetClientInstance(operation : OperationBase) : WebClient = downcast OperationBase.ClientProperty.GetValue(operation)
 
     static member internal MakeProvidedType(userQuery,
@@ -608,8 +634,7 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                                             operationTypeName : string, 
                                             schemaTypes : Expr,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
-                                            operationType : Type,
-                                            resolutionFolder : string) =
+                                            operationType : Type) =
         let query = 
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
@@ -720,11 +745,15 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
     interface IDisposable with
         member this.Dispose() = this.Dispose()
 
+/// The base type for all GraphQlProvider context provided types.
 type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHeaders : (string * string) []) =
+    /// Gets the server URL that this countext is bounded to.
     member __.ServerUrl = serverUrl
 
+    /// Gets the introspection schema that this context is using to provide types.
     member __.Schema = schema
 
+    /// Gets the custom HTTP headers that are used by default on each server call for this context.
     member __.CustomHttpHeaders = customHttpHeaders
 
     static member private GetOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
@@ -875,7 +904,7 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
                     let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
                     let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
                     <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
-                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, resolutionFolder)
+                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType)
                 odef.AddMember(rootWrapper)
                 let invoker (args : Expr list) =
                     <@@ let this = %%args.[0] : ContextBase
@@ -891,8 +920,9 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
 
     static member internal Constructor = typeof<ContextBase>.GetConstructors().[0]
 
+/// The base type for the GraphQLProvider.
 type ProviderBase private () =
-    static member GetSchemaProvidedTypes(schema : IntrospectionSchema) =
+    static member internal GetSchemaProvidedTypes(schema : IntrospectionSchema) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
