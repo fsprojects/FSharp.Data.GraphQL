@@ -32,12 +32,52 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj" />
-  </ItemGroup>
   <ItemGroup Condition="$(OS) == Unix">
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.1' ">
+    <Reference Include="FParsec">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FParsec.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FParsec.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FParsec.dll</HintPath>
+    </Reference>
+    <Reference Include="FParsecCS">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FParsecCS.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FParsecCS.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FParsecCS.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Data.GraphQL.Client">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Data.GraphQL.Shared">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  <ItemGroup Condition=" '$(TargetFramework)' == 'net47' ">
+    <Reference Include="FParsec">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net47\FParsec.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net47\FParsec.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\net47\FParsec.dll</HintPath>
+    </Reference>
+    <Reference Include="FParsecCS">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net47\FParsecCS.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net47\FParsecCS.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\net47\FParsecCS.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Data.GraphQL.Client">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net47\FSharp.Data.GraphQL.Client.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net47\FSharp.Data.GraphQL.Client.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\net47\FSharp.Data.GraphQL.Client.dll</HintPath>
+    </Reference>
+    <Reference Include="FSharp.Data.GraphQL.Shared">
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net47\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath>..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net47\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath>..\..\bin\FSharp.Data.GraphQL.Client\net47\FSharp.Data.GraphQL.Shared.dll</HintPath>
+    </Reference>
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
