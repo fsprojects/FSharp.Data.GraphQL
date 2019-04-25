@@ -20,12 +20,10 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let ctx = MyProvider.GetContext()
-
 let filter = MyProvider.Types.ThingFilter(format = "Cubic")
 
 let operation = 
-    ctx.Operation<"""query q($filter: ThingFilter!) {
+    MyProvider.Operation<"""query q($filter: ThingFilter!) {
     things(filter: $filter) {
       id
       format

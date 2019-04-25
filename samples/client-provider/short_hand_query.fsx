@@ -20,18 +20,16 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"sample_schema.json">
 
-let ctx = MyProvider.GetContext("http://localhost:8084")
-
 let operation = 
-    ctx.Operation<"""{
+    MyProvider.Operation<"""{
       hero(id: "1000") {
         name
       }
     }""">()
 
-printfn "Server: %s\n" operation.ServerUrl
+let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = None }
 
-let result = operation.Run()
+let result = operation.Run(runtimeContext)
 
 // Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" result.Data

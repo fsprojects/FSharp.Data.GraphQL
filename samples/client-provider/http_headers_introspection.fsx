@@ -23,13 +23,11 @@ open FSharp.Data.GraphQL
 // The format is similar to how headers are encoded in an HTTP request (one header per line, names and values separated by a comma).
 // Those headers will go on to the query run methods as well. Unless you provide different headers when acutally calling Operation.Run.
 // Other headers can be provided in the same format as here.
-type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers1.headerfile">
-//type MyProvider = GraphQLProvider<"http://localhost:8084", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
-
-let ctx = MyProvider.GetContext()
+//type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers1.headerfile">
+type MyProvider = GraphQLProvider<"http://localhost:8084", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
 
 let operation = 
-    ctx.Operation<"""query q {
+    MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
         appearsIn
@@ -48,13 +46,15 @@ let operation =
     }""">()
 
 // If you need different user data from the introspection, you can provide here on the run method.
-//let result = operation.Run()
+let result = operation.Run()
 
-let userData = [|"UserData", "45e7ca6f-4384-4da7-ad97-963133e6f0fb"|]
-//let userData = HttpHeaders.load (File "http_headers2.headerfile")
+//let userData = Seq.ofArray [|"UserData", "45e7ca6f-4384-4da7-ad97-963133e6f0fb"|]
+// let userData = HttpHeaders.load (File "http_headers2.headerfile")
 
-let result = operation.Run(userData)
-//let result = operation.AsyncRun(userData) |> Async.RunSynchronously
+// let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some userData }
+
+//let result = operation.Run(runtimeContext)
+//let result = operation.AsyncRun(runtimeContext) |> Async.RunSynchronously
 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors

@@ -20,10 +20,8 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let ctx = MyProvider.GetContext()
-
 let operation = 
-    ctx.Operation<"""query testQuery {
+    MyProvider.Operation<"""query testQuery {
       things {
         id
         format

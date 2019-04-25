@@ -9,6 +9,13 @@ open FSharp.Data
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
+type GraphQLConnection() =
+    let client = new WebClient()
+    member internal __.Client = client
+    member __.Dispose() = client.Dispose()
+    interface IDisposable with
+        member x.Dispose() = x.Dispose()
+
 type GraphQLRequest  =
     { ServerUrl : string
       CustomHeaders: (string * string) []
@@ -28,13 +35,14 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
-    let private configureWebClient (headers : (string * string) []) (client : WebClient)=
+    let private configureWebClient (headers : seq<string * string>) (client : WebClient)=
         client.Headers.Set("content-type", "application/json")
         if not (isNull headers)
-        then headers |> Array.iter (fun (n, v) -> client.Headers.Set(n, v))
+        then headers |> Seq.iter (fun (n, v) -> client.Headers.Set(n, v))
 
-    let sendRequestAsync (client : WebClient) (request : GraphQLRequest) =
+    let sendRequestAsync (connection : GraphQLConnection) (request : GraphQLRequest) =
         async {
+            let client = connection.Client
             configureWebClient request.CustomHeaders client
             let variables = 
                 match request.Variables with
@@ -54,9 +62,10 @@ module GraphQLClient =
             return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
         }
        
-    let sendIntrospectionRequestAsync (client : WebClient) (serverUrl : string) customHeaders =
+    let sendIntrospectionRequestAsync (connection : GraphQLConnection) (serverUrl : string) customHeaders =
         let sendGet () =
             async {
+                let client = connection.Client
                 configureWebClient customHeaders client
                 return!
                     client.DownloadStringTaskAsync(serverUrl)
@@ -67,11 +76,11 @@ module GraphQLClient =
             with getex ->
                 let request =
                     { ServerUrl = serverUrl
-                      CustomHeaders = customHeaders
+                      CustomHeaders = Array.ofSeq customHeaders
                       OperationName = None
                       Query = Introspection.IntrospectionQuery
                       Variables = [||] }
-                try return! sendRequestAsync client request
+                try return! sendRequestAsync connection request
                 with postex -> return rethrow [getex; postex]
         }
 

@@ -20,14 +20,14 @@ open FSharp.Data.GraphQL
 
 // The URL here is for design time purposes.
 // It connects to the server to be able to map its schema.
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+//type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 // You can also provide the introspection schema yourself if you can't access the server
 // at design time. Just provide a file in the path of the project or a literal containing
 // the introspection query result.
 // WARNING: the introspection query result must contain all fields requested by the
 // standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
-//type MyProvider = GraphQLProvider<"sample_schema.json">
+type MyProvider = GraphQLProvider<"sample_schema.json">
 
 // Once mapped, all custom types of the schema (types that are not scalar types)
 // will be mapped into CLR types. You can create those types by filling each of its
@@ -37,23 +37,14 @@ let box = MyProvider.Types.Box(form = "Cubic", format = "Cubic", id = "2")
 
 let things : MyProvider.Types.IThing list = [ball; box]
 
+// All provided types have pretty printing.
 printfn "Things: %A\n" things
-
-// Once created the provider and the schema is successfully mapped,
-// We can start doing queries. You can optionally specify an runtime URL for the server.
-// NOTE: if you use a local introspection json file, the runtime URL is required.
-let runtimeUrl = "http://localhost:8084"
-
-// A context exists for reusing the same schema against different servers by filling an
-// runtime URL if needed. If not, the context will use the same static URL used for the
-// provider definition.
-let ctx = MyProvider.GetContext(runtimeUrl)
 
 // The operation method can be used to make queries, mutations, and subscriptions.
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
 let operation = 
-    ctx.Operation<"""query q {
+    MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
         appearsIn
@@ -71,10 +62,11 @@ let operation =
       }
     }""">()
 
-printfn "Server: %s\n" operation.ServerUrl
+// To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
+let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = None }
 
 // To run an operation, you just need to call the Run or AsyncRun method.
-let result = operation.Run()
+let result = operation.Run(runtimeContext)
 //let result = operation.AsyncRun() |> Async.RunSynchronously
 
 // If the operation runs without any error, result data will be on the Data property.

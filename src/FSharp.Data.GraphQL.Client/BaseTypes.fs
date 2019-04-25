@@ -102,22 +102,24 @@ module internal QuotationHelpers =
 module HttpHeaders =
     /// Loads HTTP headers from a StringLocation.
     /// Http headers are provided as strings in the same way they are encoded in an HTTP request (name and value, separated by a comma).
-    let load (location : StringLocation) =
+    let load (location : StringLocation) : seq<string * string> =
         let headersString =
             match location with
             | String headers -> headers
             | File path -> System.IO.File.ReadAllText path
-        if headersString = "" then [||]
+        if headersString = "" then upcast [||]
         else
-            headersString.Replace("\r\n", "\n").Split('\n')
-            |> Array.map (fun header -> 
-                let separatorIndex = header.IndexOf(':')
-                if separatorIndex = -1
-                then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
-                else
-                    let name = header.Substring(0, separatorIndex).Trim()
-                    let value = header.Substring(separatorIndex + 1).Trim()
-                    (name, value))
+            let headers =
+                headersString.Replace("\r\n", "\n").Split('\n')
+                |> Array.map (fun header -> 
+                    let separatorIndex = header.IndexOf(':')
+                    if separatorIndex = -1
+                    then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
+                    else
+                        let name = header.Substring(0, separatorIndex).Trim()
+                        let value = header.Substring(separatorIndex + 1).Trim()
+                        (name, value))
+            upcast headers
 
 /// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
@@ -612,29 +614,33 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
 
     override x.GetHashCode() = x.ResponseJson.GetHashCode()
 
+/// A context for running operations using the GraphQLProvider in runtime.
+type GraphQLProviderRuntimeContext =
+      /// The runtime server URL.
+    { ServerUrl : string
+      /// Custom HTTP headers to send to the server at runtime.
+      CustomHttpHeaders : seq<string * string> option }
+
 /// The base type for al GraphQLProvider operation provided types.
-type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []) =
-    member private __.Client = new WebClient()
+type OperationBase (query : string) =
+    /// Gets the query string of the operation.
+    member __.Query = query
 
-    member this.Dispose() = this.Client.Dispose()
+    /// Gets the GraphQLClient connection used to access the server.
+    member __.Connection = new GraphQLConnection()
 
-    /// Gets the GraphQL server URL that this operation is associated to.
-    member __.ServerUrl = serverUrl
+    member x.Dispose() = x.Connection.Dispose()
 
-    /// Gets custom HTTP Headers used to make requests to the GraphQL server which this operation is associated to.
-    member __.CustomHttpHeaders = customHttpHeaders
-
-    static member private ClientProperty = typeof<OperationBase>.GetProperty("Client", BindingFlags.NonPublic ||| BindingFlags.Instance)
-
-    /// Gets an instance of the WebClient used by an instance of an OperationBase type.
-    static member GetClientInstance(operation : OperationBase) : WebClient = downcast OperationBase.ClientProperty.GetValue(operation)
+    interface IDisposable with
+        member x.Dispose() = x.Dispose()
 
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
                                             schemaTypes : Expr,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
-                                            operationType : Type) =
+                                            operationType : Type,
+                                            defaultContext : GraphQLProviderRuntimeContext option) =
         let query = 
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
@@ -682,80 +688,82 @@ type OperationBase (serverUrl : string, customHttpHeaders : (string * string) []
                         | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
-            let customHttpHeadersExprMapper (args : Expr list) =
-                let headers = Expr.Coerce(args.[args.Length - 1], typeof<seq<string * string>>)
-                <@@ let headers = %%headers : seq<string * string>
-                    if isNull headers
-                    then [||]
-                    else Array.ofSeq headers @@>
+            let defaultContextExpr = 
+                match defaultContext with
+                | Some context -> QuotationHelpers.recordExpr context |> snd
+                | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    let customHttpHeaders = customHttpHeadersExprMapper args
                     <@@ let this = %%args.[0] : OperationBase
-                        let client = OperationBase.GetClientInstance(this)
-                        let customHttpHeaders = 
-                            let headers = %%customHttpHeaders : (string * string) []
-                            if headers.Length = 0 then this.CustomHttpHeaders else headers
+                        let context =
+                            let defaultContext = %%defaultContextExpr : GraphQLProviderRuntimeContext
+                            let actualContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                            if Object.ReferenceEquals(actualContext, null)
+                            then defaultContext
+                            else actualContext
+                        let customHttpHeaders =
+                            match context.CustomHttpHeaders with
+                            | Some headers when not (isNull headers) && Seq.length headers > 0 -> Array.ofSeq headers
+                            | _ -> [||]
                         let request =
-                            { ServerUrl = this.ServerUrl
+                            { ServerUrl = context.ServerUrl
                               CustomHeaders = customHttpHeaders
                               OperationName = Option.ofObj operationName
                               Query = query
                               Variables = %%variables }
-                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest client request)
+                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest this.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = null)]
-                let mdef = ProvidedMethod("Run", prm, rtdef, invoker)
+                let ctxprm =
+                    match defaultContext with
+                    | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
+                    | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
+                let mdef = ProvidedMethod("Run", varprm @ [ctxprm], rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
             let arundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    let customHttpHeaders = customHttpHeadersExprMapper args
                     <@@ let this = %%args.[0] : OperationBase
-                        let client = OperationBase.GetClientInstance(this)
-                        let customHttpHeaders = 
-                            let headers = %%customHttpHeaders : (string * string) []
-                            if headers.Length = 0 then this.CustomHttpHeaders else headers
+                        let context =
+                            let defaultContext = %%defaultContextExpr : GraphQLProviderRuntimeContext
+                            let actualContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                            if Object.ReferenceEquals(actualContext, null)
+                            then defaultContext
+                            else actualContext
+                        let customHttpHeaders =
+                            match context.CustomHttpHeaders with
+                            | Some headers when not (isNull headers) && Seq.length headers > 0 -> Array.ofSeq headers
+                            | _ -> [||]
                         let request =
-                            { ServerUrl = this.ServerUrl
+                            { ServerUrl = context.ServerUrl
                               CustomHeaders = customHttpHeaders
                               OperationName = Option.ofObj operationName
                               Query = query
                               Variables = %%variables }
                         async {
-                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL asynchronously" (fun _ -> GraphQLClient.sendRequestAsync client request)
+                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync this.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
                         } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
-                let prm = varprm @ [ProvidedParameter("customHttpHeaders", typeof<seq<string * string>>, optionalValue = null)]
-                let mdef = ProvidedMethod("AsyncRun", prm, Types.makeAsync rtdef, invoker)
+                let ctxprm =
+                    match defaultContext with
+                    | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
+                    | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
+                let mdef = ProvidedMethod("AsyncRun", varprm @ [ctxprm], Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                 mdef
             let members : MemberInfo list = [rtdef; rundef; arundef]
             members)
         tdef
-    
-    interface IDisposable with
-        member this.Dispose() = this.Dispose()
 
-/// The base type for all GraphQlProvider context provided types.
-type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHeaders : (string * string) []) =
-    /// Gets the server URL that this countext is bounded to.
-    member __.ServerUrl = serverUrl
-
-    /// Gets the introspection schema that this context is using to provide types.
-    member __.Schema = schema
-
-    /// Gets the custom HTTP headers that are used by default on each server call for this context.
-    member __.CustomHttpHeaders = customHttpHeaders
-
+/// The base type for the GraphQLProvider.
+type ProviderBase private () =
     static member private GetOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
@@ -817,111 +825,6 @@ type ContextBase (serverUrl : string, schema : IntrospectionSchema, customHttpHe
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
 
-    static member internal MakeProvidedType(schema : IntrospectionSchema,
-                                            schemaProvidedTypes : Map<TypeName, ProvidedTypeDefinition>,
-                                            resolutionFolder : string) =
-        let tdef = ProvidedTypeDefinition("Context", Some typeof<ContextBase>)
-        tdef.AddXmlDoc("Represents a connection to a GraphQL server. A context groups all operations and their types from a specific server connection.")
-        tdef.AddMemberDelayed(fun _ ->
-            let sprm = 
-                [ ProvidedStaticParameter("query", typeof<string>)
-                  ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
-                  ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "") ]
-            let smdef = ProvidedMethod("Operation", [], typeof<OperationBase>)
-            let genfn (mname : string) (args : obj []) =
-                let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
-                let query = 
-                    match queryLocation with
-                    | String query -> query
-                    | File path -> System.IO.File.ReadAllText(path)
-                let queryAst = Parser.parse query
-                let operationName : OperationName option = 
-                    match args.[2] :?> string with
-                    | "" -> 
-                        match queryAst.Definitions with
-                        | [] -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
-                        | _ -> queryAst.Definitions.Head.Name
-                    | x -> Some x
-                let operationDefinition =
-                    queryAst.Definitions
-                    |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
-                    |> List.find (fun d -> d.Name = operationName)
-                let operationAstFields =
-                    let infoMap = queryAst.GetInfoMap()
-                    match infoMap.TryFind(operationName) with
-                    | Some fields -> fields
-                    | None -> failwith "Error parsing query. Could not find field information for requested operation."
-                let operationTypeRef =
-                    let tref =
-                        match operationDefinition.OperationType with
-                        | Query -> schema.QueryType
-                        | Mutation -> 
-                            match schema.MutationType with
-                            | Some tref -> tref
-                            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-                        | Subscription -> 
-                            match schema.SubscriptionType with
-                            | Some tref -> tref
-                            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
-                    let tinst =
-                        match tref.Name with
-                        | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
-                        | None -> None
-                    match tinst with
-                    | Some t -> { tref with Kind = t.Kind }
-                    | None -> failwith "The operation was found in the schema, but it does not have a name."
-                let schemaTypes = Types.getSchemaTypes(schema)
-                let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
-                let (operationType, operationTypes) = ContextBase.GetOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
-                let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
-                let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-                let rootWrapper = generateWrapper "Types"
-                wrappersByPath.Add([], rootWrapper)
-                let rec getWrapper (path : string list) =
-                    if wrappersByPath.ContainsKey path
-                    then wrappersByPath.[path]
-                    else
-                        let wrapper = generateWrapper (path.Head.FirstCharUpper())
-                        let upperWrapper =
-                            let path = path.Tail
-                            if wrappersByPath.ContainsKey(path)
-                            then wrappersByPath.[path]
-                            else getWrapper path
-                        upperWrapper.AddMember(wrapper)
-                        wrappersByPath.Add(path, wrapper)
-                        wrapper
-                let includeType (path : string list) (t : ProvidedTypeDefinition) =
-                    let wrapper = getWrapper path
-                    wrapper.AddMember(t)
-                operationTypes |> Map.iter (fun (path, _) t -> includeType path t)
-                let operationTypeName : TypeName =
-                    match operationTypeRef.Name with
-                    | Some name -> name
-                    | None -> failwith "Error parsing query. Operation type does not have a name."
-                // Every time we run the query, we will need the schema type map as an expression.
-                // To avoid creating the type map expression every time we call Run method, we cache it here.
-                let schemaTypes =
-                    let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-                    let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
-                    <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
-                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType)
-                odef.AddMember(rootWrapper)
-                let invoker (args : Expr list) =
-                    <@@ let this = %%args.[0] : ContextBase
-                        new OperationBase(this.ServerUrl, this.CustomHttpHeaders) @@>
-                let mdef = ProvidedMethod(mname, [], odef, invoker)
-                mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
-                let members : MemberInfo list = [odef; mdef]
-                tdef.AddMembers(members)
-                mdef
-            smdef.DefineStaticParameters(sprm, genfn)
-            smdef)
-        tdef
-
-    static member internal Constructor = typeof<ContextBase>.GetConstructors().[0]
-
-/// The base type for the GraphQLProvider.
-type ProviderBase private () =
     static member internal GetSchemaProvidedTypes(schema : IntrospectionSchema) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes(schema)
@@ -1039,11 +942,11 @@ type ProviderBase private () =
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         !providedTypes
 
-    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string, webClient : WebClient) =
+    static member internal MakeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
-              ProvidedStaticParameter("customHttpHeaders", typeof<string>, parameterDefaultValue = "")
+              ProvidedStaticParameter("customHttpHeaders", typeof<string>, parameterDefaultValue = "")  
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
@@ -1056,33 +959,117 @@ type ProviderBase private () =
                         let customHttpHeaders = HttpHeaders.load httpHeadersLocation
                         let schemaJson =
                             match introspectionLocation with
-                            | Uri serverUrl -> GraphQLClient.sendIntrospectionRequest webClient serverUrl customHttpHeaders
-                            | IntrospectionFile path -> System.IO.File.ReadAllText path
+                            | Uri serverUrl -> 
+                                use connection = new GraphQLConnection()
+                                GraphQLClient.sendIntrospectionRequest connection serverUrl customHttpHeaders
+                            | IntrospectionFile path ->
+                                System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
                         let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
-                        let ctxdef = ContextBase.MakeProvidedType(schema, schemaProvidedTypes, resolutionFolder)
-                        let customHttpHeadersExpr = 
-                            let names = customHttpHeaders |> Array.map fst
-                            let values = customHttpHeaders |> Array.map snd
-                            <@@ Array.zip names values @@>
-                        let ctxmdef =
-                            let prm = 
-                                match introspectionLocation with
-                                | Uri serverUrl -> [ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)]
-                                | _ -> [ProvidedParameter("serverUrl", typeof<string>)]
-                            let invoker =
-                                QuotationHelpers.quoteRecord schema (fun (args : Expr list) schema ->
-                                    let serverUrl = args.[0]
-                                    Expr.NewObject(ContextBase.Constructor, [serverUrl; schema; customHttpHeadersExpr]))
-                            let mdef = ProvidedMethod("GetContext", prm, ctxdef, invoker, true)
-                            mdef.AddXmlDoc("Builds a connection to a GraphQL server. If no server URL is passed as an argument, the context will connect to the provider design-time URL.")
-                            mdef
+                        let omdef =
+                            let sprm = 
+                                [ ProvidedStaticParameter("query", typeof<string>)
+                                  ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
+                                  ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "") ]
+                            let smdef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
+                            let genfn (mname : string) (args : obj []) =
+                                let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
+                                let query = 
+                                    match queryLocation with
+                                    | String query -> query
+                                    | File path -> System.IO.File.ReadAllText(path)
+                                let queryAst = Parser.parse query
+                                let operationName : OperationName option = 
+                                    match args.[2] :?> string with
+                                    | "" -> 
+                                        match queryAst.Definitions with
+                                        | [] -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
+                                        | _ -> queryAst.Definitions.Head.Name
+                                    | x -> Some x
+                                let operationDefinition =
+                                    queryAst.Definitions
+                                    |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
+                                    |> List.find (fun d -> d.Name = operationName)
+                                let operationAstFields =
+                                    let infoMap = queryAst.GetInfoMap()
+                                    match infoMap.TryFind(operationName) with
+                                    | Some fields -> fields
+                                    | None -> failwith "Error parsing query. Could not find field information for requested operation."
+                                let operationTypeRef =
+                                    let tref =
+                                        match operationDefinition.OperationType with
+                                        | Query -> schema.QueryType
+                                        | Mutation -> 
+                                            match schema.MutationType with
+                                            | Some tref -> tref
+                                            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+                                        | Subscription -> 
+                                            match schema.SubscriptionType with
+                                            | Some tref -> tref
+                                            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+                                    let tinst =
+                                        match tref.Name with
+                                        | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
+                                        | None -> None
+                                    match tinst with
+                                    | Some t -> { tref with Kind = t.Kind }
+                                    | None -> failwith "The operation was found in the schema, but it does not have a name."
+                                let schemaTypes = Types.getSchemaTypes(schema)
+                                let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
+                                let (operationType, operationTypes) = ProviderBase.GetOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
+                                let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+                                let rootWrapper = generateWrapper "Types"
+                                wrappersByPath.Add([], rootWrapper)
+                                let rec getWrapper (path : string list) =
+                                    if wrappersByPath.ContainsKey path
+                                    then wrappersByPath.[path]
+                                    else
+                                        let wrapper = generateWrapper (path.Head.FirstCharUpper())
+                                        let upperWrapper =
+                                            let path = path.Tail
+                                            if wrappersByPath.ContainsKey(path)
+                                            then wrappersByPath.[path]
+                                            else getWrapper path
+                                        upperWrapper.AddMember(wrapper)
+                                        wrappersByPath.Add(path, wrapper)
+                                        wrapper
+                                let includeType (path : string list) (t : ProvidedTypeDefinition) =
+                                    let wrapper = getWrapper path
+                                    wrapper.AddMember(t)
+                                operationTypes |> Map.iter (fun (path, _) t -> includeType path t)
+                                let operationTypeName : TypeName =
+                                    match operationTypeRef.Name with
+                                    | Some name -> name
+                                    | None -> failwith "Error parsing query. Operation type does not have a name."
+                                // Every time we run the query, we will need the schema type map as an expression.
+                                // To avoid creating the type map expression every time we call Run method, we cache it here.
+                                let schemaTypes =
+                                    let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
+                                    let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
+                                    <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
+                                let defaultContext =
+                                    let httpHeaders : seq<string * string> option = 
+                                        if isNull customHttpHeaders || Seq.length customHttpHeaders > 0 then Some customHttpHeaders else None
+                                    match introspectionLocation with
+                                    | Uri x -> Some { ServerUrl = x; CustomHttpHeaders = httpHeaders }
+                                    | _ -> None
+                                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, defaultContext)
+                                odef.AddMember(rootWrapper)
+                                let invoker (_ : Expr list) = <@@ new OperationBase(query) @@>
+                                let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
+                                mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
+                                let members : MemberInfo list = [odef; mdef]
+                                tdef.AddMembers(members)
+                                mdef
+                            smdef.DefineStaticParameters(sprm, genfn)
+                            smdef
                         let schemapdef = 
                             let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; ctxdef; ctxmdef; schemapdef]
+                        let members : MemberInfo list = [typeWrapper; omdef; schemapdef]
                         members)
                     tdef
             let providerKey = { IntrospectionLocation = introspectionLocation; CustomHttpHeadersLocation = httpHeadersLocation }

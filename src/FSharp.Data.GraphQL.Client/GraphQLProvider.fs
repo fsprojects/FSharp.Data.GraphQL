@@ -16,14 +16,8 @@ type GraphQLTypeProvider (config) as this =
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
-    let webClient = new WebClient()
 
-    do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder, webClient)])
-
-    member __.Dispose() = webClient.Dispose()
-
-    interface IDisposable with
-        member this.Dispose() = this.Dispose()
+    do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder)])
 
 [<assembly:TypeProviderAssembly>] 
 do()

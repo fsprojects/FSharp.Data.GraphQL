@@ -19,7 +19,7 @@
 open FSharp.Data.GraphQL.Client
 open System.Net
 
-let client = new WebClient()
+let connection = new GraphQLConnection()
 
 let request : GraphQLRequest =
     { Query = """query q { viewer { login } }"""
@@ -30,8 +30,8 @@ let request : GraphQLRequest =
                "User-Agent", "[your github username here]" |]
       OperationName = Some "q" }
 
-let response = GraphQLClient.sendRequest client request
+let response = GraphQLClient.sendRequest connection request
 
 printfn "%s" response
 
-client.Dispose()
+connection.Dispose()

@@ -20,10 +20,8 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let ctx = MyProvider.GetContext()
-
 let operation = 
-    ctx.Operation<"""mutation m {
+    MyProvider.Operation<"""mutation m {
       setMoon (id: "1", isMoon: true) {
         id
         name
