@@ -161,7 +161,7 @@ Our client library now has a completely redesigned type provider. To start using
 1. Provide an URL to the desired GraphQL server (without any custom HTTP headers required). The provider will access the server, send an Introspection Query, and use the schema to provide the types used to make queries.
 
 ```fsharp
-type MyProvider = GraphQLProvider<"http://some.graphqlserver.org">
+type MyProvider = GraphQLProvider<"http://some.graphqlserver.development.org">
 ```
 
 2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/files/introspection_query.graphql) on the desired server and saving it into a file on the same path as the project using the provider:
@@ -173,10 +173,8 @@ type MyProvider = GraphQLProvider<"sample_schema.json">
 From now on, you can start running queries and mutations:
 
 ```fsharp
-let ctx = MyProvider.GetContext(runtimeUrl)
-
 let operation = 
-    ctx.Operation<"""query q {
+    MyProvider.Operation<"""query q {
       hero (id: "1001") {
         name
         appearsIn
@@ -194,12 +192,16 @@ let operation =
       }
     }""">()
 
-// If your server requires custom HTTP headers (for example, authentication headers),
-// you can specify them as a (string * string) seq.
-let customHttpHeaders : (string * string) seq = upcast [||]
+// This is a instance of GraphQLProviderRuntimeContext.
+// You can use it to provider a runtime URL to access your server,
+// and optionally additional HTTP headers (auth headers, for example).
+// If you use a local introspection file to parse the schema,
+// The runtime context is mandatory.
+let runtimeContext =
+  { ServerUrl = "http://some.graphqlserver.production.org"
+    CustomHttpHeaders = None }
 
-// Custom HTTP header parameter is optional.
-let result = operation.Run(customHttpHeaders)
+let result = operation.Run(runtimeContext)
 
 // Query result objects have pretty-printing and structural equality.
 printfn "Data: %A\n" result.Data
