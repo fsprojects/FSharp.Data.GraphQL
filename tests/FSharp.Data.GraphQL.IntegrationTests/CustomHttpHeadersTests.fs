@@ -14,12 +14,9 @@ let ball = Provider.Types.Ball(form = "Spheric", format = "Spheric", id = "1")
 let box = Provider.Types.Box(form = "Cubic", format = "Cubic", id = "2")
 let things : Provider.Types.IThing list = [ball; box]
 
-// We should be able to open up a context to the Giraffe test server.
-let context = Provider.GetContext("http://localhost:8084")
-
 module SimpleOperation =
     let operation = 
-        context.Operation<"""query q {
+        Provider.Operation<"""query q {
             hero (id: "1000") {
               name
               appearsIn
@@ -37,7 +34,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.Context.Operationff1a972bcced9a18c49e4d2648ce0a50
+    type Operation = Provider.Operationff1a972bcced9a18c49e4d2648ce0a50
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -98,7 +95,8 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
-    let result = SimpleOperation.operation.Run([| "UserData", userData |])
+    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    let result = SimpleOperation.operation.Run(context)
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true
@@ -107,7 +105,8 @@ let ``Should be able to start a simple query operation synchronously with custom
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
-    let result = SimpleOperation.operation.AsyncRun([| "UserData", userData |]) |> Async.RunSynchronously
+    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    let result = SimpleOperation.operation.AsyncRun(context) |> Async.RunSynchronously
     SimpleOperation.validateResult (Some userData) result
     result.CustomData.IsSome |> equals true
     result.CustomData.Value.ContainsKey("userData") |> equals true
@@ -152,7 +151,7 @@ let ``Should be able to use pattern matching methods on an union type`` () =
   
 module InterfaceOperation =
     let operation =
-        context.Operation<"""query testQuery {
+        Provider.Operation<"""query testQuery {
             things {
               id
               format
@@ -165,7 +164,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.Context.Operationfd48bf01957afc98699dcf542e099b28
+    type Operation = Provider.Operationfd48bf01957afc98699dcf542e099b28
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -230,7 +229,7 @@ let ``Should be able to use pattern matching methods on an interface type`` () =
 
 module MutationOperation =
     let operation =
-        context.Operation<"""mutation m {
+        Provider.Operation<"""mutation m {
             setMoon (id: "1", isMoon: true) {
                 id
                 name
@@ -238,7 +237,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.Context.Operation4b47d31cd6380f05ea35981f05930b16
+    type Operation = Provider.Operation4b47d31cd6380f05ea35981f05930b16
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -268,14 +267,14 @@ let ``Should be able to run a mutation asynchronously`` () =
 
 module VariablesOperation =
     let operation =
-        context.Operation<"""query q($filter: ThingFilter!) {
+        Provider.Operation<"""query q($filter: ThingFilter!) {
             things(filter: $filter) {
               id
               format
             }
           }""">()
 
-    type Operation = Provider.Context.Operatione05eb1fa8361713b898bc94fd5c29ee0
+    type Operation = Provider.Operatione05eb1fa8361713b898bc94fd5c29ee0
 
     let validateResult (userData : string option) (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -305,5 +304,5 @@ let ``Should be able to run a query with variables asyncrhonously`` () =
 
 [<Fact>]
 let ``Should be able to run a query from a query file`` () =
-    context.Operation<"operation.graphql">().Run()
+    Provider.Operation<"operation.graphql">().Run()
     |> SimpleOperation.validateResult None
