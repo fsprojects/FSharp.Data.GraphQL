@@ -90,7 +90,7 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    let context = Provider.GetContext([| "UserData", userData |], "http://localhost:8084")
     let result = SimpleOperation.operation.Run(context)
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true
@@ -100,7 +100,7 @@ let ``Should be able to start a simple query operation synchronously with custom
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    let context = Provider.GetContext([| "UserData", userData |], "http://localhost:8084")
     let result = SimpleOperation.operation.AsyncRun(context) |> Async.RunSynchronously
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true

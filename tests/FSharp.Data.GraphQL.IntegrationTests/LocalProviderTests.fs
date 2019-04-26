@@ -10,7 +10,7 @@ type Provider = GraphQLProvider<"introspection.json">
 type Episode = Provider.Types.Episode
 
 // As we are not using a connection to a server to get the introspection, we need a runtime context.
-let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = None }
+let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084")
 
 // We should be able to create instances of schema types.
 let ball = Provider.Types.Ball(form = "Spheric", format = "Spheric", id = "1")
@@ -82,11 +82,13 @@ let ``Should be able to pretty print schema types`` () =
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously`` () =
+    use context = getContext()
     SimpleOperation.operation.Run(context)
     |> SimpleOperation.validateResult
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously`` () =
+    use context = getContext()
     SimpleOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> SimpleOperation.validateResult
@@ -94,7 +96,7 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let context = { context with CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    use context = { getContext() with HttpHeaders = [| "UserData", userData |] }
     let result = SimpleOperation.operation.Run(context)
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true
@@ -104,7 +106,7 @@ let ``Should be able to start a simple query operation synchronously with custom
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
     let userData = Guid.NewGuid().ToString()
-    let context = { context with CustomHttpHeaders = Some (upcast [| "UserData", userData |]) }
+    use context = { getContext() with HttpHeaders = [| "UserData", userData |] }
     let result = SimpleOperation.operation.AsyncRun(context) |> Async.RunSynchronously
     SimpleOperation.validateResult result
     result.CustomData.IsSome |> equals true
@@ -113,6 +115,7 @@ let ``Should be able to start a simple query operation asynchronously with custo
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an union type`` () =
+    use context = getContext()
     let result = SimpleOperation.operation.Run(context)
     result.Data.IsSome |> equals true
     result.Data.Value.Hero.IsSome |> equals true
@@ -186,17 +189,20 @@ Form = "Cubic";}|];}"""
 
 [<Fact>]
 let ``Should be able to run a query with interface types synchronously`` () =
+    use context = getContext()
     InterfaceOperation.operation.Run(context)
     |> InterfaceOperation.validateResult
 
 [<Fact>]
 let ``Should be able to run a query with interface types asynchronously`` () =
+    use context = getContext()
     InterfaceOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> InterfaceOperation.validateResult
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an interface type`` () =
+    use context = getContext()
     let result = InterfaceOperation.operation.Run(context)
     result.Data.IsSome |> equals true
     let things = result.Data.Value.Things
@@ -245,11 +251,13 @@ module MutationOperation =
 
 [<Fact>]
 let ``Should be able to run a mutation synchronously`` () =
+    use context = getContext()
     MutationOperation.operation.Run(context)
     |> MutationOperation.validateResult
 
 [<Fact>]
 let ``Should be able to run a mutation asynchronously`` () =
+    use context = getContext()
     MutationOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> MutationOperation.validateResult
@@ -276,17 +284,20 @@ module VariablesOperation =
 [<Fact>]
 let ``Should be able to run a query with variables syncrhonously`` () =
     let filter = Provider.Types.ThingFilter(format = "Cubic")
+    use context = getContext()
     VariablesOperation.operation.Run(filter, context)
     |> VariablesOperation.validateResult filter
 
 [<Fact>]
 let ``Should be able to run a query with variables asyncrhonously`` () =
     let filter = Provider.Types.ThingFilter(format = "Cubic")
+    use context = getContext()
     VariablesOperation.operation.AsyncRun(filter, context)
     |> Async.RunSynchronously
     |> VariablesOperation.validateResult filter
 
 [<Fact>]
 let ``Should be able to run a query from a query file`` () =
+    use context = getContext()
     Provider.Operation<"operation.graphql">().Run(context)
     |> SimpleOperation.validateResult

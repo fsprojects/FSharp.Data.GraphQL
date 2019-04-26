@@ -94,8 +94,8 @@ let ``Should be able to start a simple query operation asynchronously`` () =
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
-    let headers = HttpHeaders.load (File "http_headers2.headerfile")
-    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some headers }
+    let headers = HttpHeaders.ofFile "http_headers2.headerfile"
+    let context = Provider.GetContext(headers, "http://localhost:8084")
     let result = SimpleOperation.operation.Run(context)
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
@@ -105,8 +105,8 @@ let ``Should be able to start a simple query operation synchronously with custom
 
 [<Fact>]
 let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
-    let headers = HttpHeaders.load (File "http_headers2.headerfile")
-    let context = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some headers }
+    let headers = HttpHeaders.ofFile "http_headers2.headerfile"
+    let context = Provider.GetContext(headers, "http://localhost:8084")
     let result = SimpleOperation.operation.AsyncRun(context) |> Async.RunSynchronously
     let userData = "45e7ca6f-4384-4da7-ad97-963133e6f0fb"
     SimpleOperation.validateResult (Some userData) result
