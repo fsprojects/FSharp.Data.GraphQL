@@ -27,7 +27,7 @@ let operation =
       }
     }""">()
 
-let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = None }
+let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
 
 let result = operation.Run(runtimeContext)
 

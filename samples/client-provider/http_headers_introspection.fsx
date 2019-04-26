@@ -49,9 +49,8 @@ let operation =
 let result = operation.Run()
 
 //let userData = Seq.ofArray [|"UserData", "45e7ca6f-4384-4da7-ad97-963133e6f0fb"|]
-// let userData = HttpHeaders.load (File "http_headers2.headerfile")
-
-// let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = Some userData }
+//let userData = HttpHeaders.ofFile "http_headers2.headerfile"
+//let runtimeContext = MyProvider.GetContext(httpHeaders = userData)
 
 //let result = operation.Run(runtimeContext)
 //let result = operation.AsyncRun(runtimeContext) |> Async.RunSynchronously
@@ -59,5 +58,3 @@ let result = operation.Run()
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData
-
-operation.Dispose()

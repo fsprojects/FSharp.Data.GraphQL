@@ -98,19 +98,13 @@ module internal QuotationHelpers =
         let func instance = arrayExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
 
-/// Contains helpers to build HTTP headers to be used in GraphQLProvider Run methods.
+/// Contains helpers to build HTTP header sequences to be used in GraphQLProvider Run methods.
 module HttpHeaders =
-    /// Loads HTTP headers from a StringLocation.
-    /// Http headers are provided as strings in the same way they are encoded in an HTTP request (name and value, separated by a comma).
-    let load (location : StringLocation) : seq<string * string> =
-        let headersString =
-            match location with
-            | String headers -> headers
-            | File path -> System.IO.File.ReadAllText path
-        if headersString = "" then upcast [||]
-        else
-            let headers =
-                headersString.Replace("\r\n", "\n").Split('\n')
+    /// Builds a sequence of HTTP headers as a sequence from a pre-formatted header string.
+    /// The input headers string should be a string containing headers in the same way they are
+    /// organized in a HTTP request (each header in a line, names and values separated by commas).
+    let ofString (headers : string) : seq<string * string> =
+        upcast (headers.Replace("\r\n", "\n").Split('\n')
                 |> Array.map (fun header -> 
                     let separatorIndex = header.IndexOf(':')
                     if separatorIndex = -1
@@ -118,8 +112,21 @@ module HttpHeaders =
                     else
                         let name = header.Substring(0, separatorIndex).Trim()
                         let value = header.Substring(separatorIndex + 1).Trim()
-                        (name, value))
-            upcast headers
+                        (name, value)))
+        
+    /// Builds a sequence of HTTP headers as a sequence from a header file.
+    /// The input file should be a file containing headers in the same way they are
+    /// organized in a HTTP request (each header in a line, names and values separated by commas).
+    let ofFile (path : string) =
+        System.IO.File.ReadAllText path |> ofString
+
+    let internal load (location : StringLocation) : seq<string * string> =
+        let headersString =
+            match location with
+            | String headers -> headers
+            | File path -> System.IO.File.ReadAllText path
+        if headersString = "" then upcast [||]
+        else headersString |> ofString
 
 /// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
@@ -614,25 +621,26 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
 
     override x.GetHashCode() = x.ResponseJson.GetHashCode()
 
+type internal GraphQLContextInfo =
+    { ServerUrl : string
+      HttpHeaders : seq<string * string> }
+
 /// A context for running operations using the GraphQLProvider in runtime.
 type GraphQLProviderRuntimeContext =
-      /// The runtime server URL.
+      /// Gets the URL of the server that this context refers to.
     { ServerUrl : string
-      /// Custom HTTP headers to send to the server at runtime.
-      CustomHttpHeaders : seq<string * string> option }
+      /// Gets the HTTP headers used for calls to the server that this context refers to.
+      HttpHeaders : seq<string * string> }
+    /// Gets the connection component used to make calls to the server.
+    member __.Connection = new GraphQLConnection()
+    member x.Dispose() = x.Connection.Dispose()
+    interface IDisposable with
+        member x.Dispose() = x.Dispose()
 
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member __.Query = query
-
-    /// Gets the GraphQLClient connection used to access the server.
-    member __.Connection = new GraphQLConnection()
-
-    member x.Dispose() = x.Connection.Dispose()
-
-    interface IDisposable with
-        member x.Dispose() = x.Dispose()
 
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
@@ -640,7 +648,7 @@ type OperationBase (query : string) =
                                             schemaTypes : Expr,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                                             operationType : Type,
-                                            defaultContext : GraphQLProviderRuntimeContext option) =
+                                            contextInfo : GraphQLContextInfo option) =
         let query = 
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
@@ -689,36 +697,33 @@ type OperationBase (query : string) =
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
-                match defaultContext with
-                | Some context -> QuotationHelpers.recordExpr context |> snd
+                match contextInfo with
+                | Some info -> 
+                    let serverUrl = info.ServerUrl
+                    let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
+                    let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
+                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    <@@ let this = %%args.[0] : OperationBase
-                        let context =
-                            let defaultContext = %%defaultContextExpr : GraphQLProviderRuntimeContext
-                            let actualContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
-                            if Object.ReferenceEquals(actualContext, null)
-                            then defaultContext
-                            else actualContext
-                        let customHttpHeaders =
-                            match context.CustomHttpHeaders with
-                            | Some headers when not (isNull headers) && Seq.length headers > 0 -> Array.ofSeq headers
-                            | _ -> [||]
+                    <@@ let argsContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
+                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
                         let request =
                             { ServerUrl = context.ServerUrl
-                              CustomHeaders = customHttpHeaders
+                              HttpHeaders = context.HttpHeaders
                               OperationName = Option.ofObj operationName
                               Query = query
                               Variables = %%variables }
-                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest this.Connection request)
+                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                        if isDefaultContext then context.Dispose() // If the user does not provide a context, we should dispose the default one after running the query
                         OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let ctxprm =
-                    match defaultContext with
+                    match contextInfo with
                     | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
                     | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
                 let mdef = ProvidedMethod("Run", varprm @ [ctxprm], rtdef, invoker)
@@ -728,31 +733,24 @@ type OperationBase (query : string) =
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    <@@ let this = %%args.[0] : OperationBase
-                        let context =
-                            let defaultContext = %%defaultContextExpr : GraphQLProviderRuntimeContext
-                            let actualContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
-                            if Object.ReferenceEquals(actualContext, null)
-                            then defaultContext
-                            else actualContext
-                        let customHttpHeaders =
-                            match context.CustomHttpHeaders with
-                            | Some headers when not (isNull headers) && Seq.length headers > 0 -> Array.ofSeq headers
-                            | _ -> [||]
+                    <@@ let argsContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
+                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
                         let request =
                             { ServerUrl = context.ServerUrl
-                              CustomHeaders = customHttpHeaders
+                              HttpHeaders = context.HttpHeaders
                               OperationName = Option.ofObj operationName
                               Query = query
                               Variables = %%variables }
                         async {
-                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync this.Connection request)
+                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                            if isDefaultContext then context.Dispose() // If the user does not provide a context, we should dispose the default one after running the query
                             return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
                         } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let ctxprm =
-                    match defaultContext with
+                    match contextInfo with
                     | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
                     | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
                 let mdef = ProvidedMethod("AsyncRun", varprm @ [ctxprm], Types.makeAsync rtdef, invoker)
@@ -946,7 +944,7 @@ type ProviderBase private () =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
-              ProvidedStaticParameter("customHttpHeaders", typeof<string>, parameterDefaultValue = "")  
+              ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
@@ -956,18 +954,38 @@ type ProviderBase private () =
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
                     tdef.AddXmlDoc("A type provider for GraphQL operations.")
                     tdef.AddMembersDelayed (fun _ ->
-                        let customHttpHeaders = HttpHeaders.load httpHeadersLocation
+                        let httpHeaders = HttpHeaders.load httpHeadersLocation
                         let schemaJson =
                             match introspectionLocation with
                             | Uri serverUrl -> 
                                 use connection = new GraphQLConnection()
-                                GraphQLClient.sendIntrospectionRequest connection serverUrl customHttpHeaders
+                                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
                         let schemaProvidedTypes = ProviderBase.GetSchemaProvidedTypes(schema)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+                        let ctxmdef =
+                            let prm =
+                                let serverUrl =
+                                    match introspectionLocation with
+                                    | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
+                                    | _ -> ProvidedParameter("serverUrl", typeof<string>)
+                                let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
+                                [httpHeaders; serverUrl]
+                            let defaultHttpHeadersExpr =
+                                let names = httpHeaders |> Seq.map fst |> Array.ofSeq
+                                let values = httpHeaders |> Seq.map snd |> Array.ofSeq
+                                Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
+                            let invoker (args : Expr list) =
+                                let serverUrl = args.[1]
+                                <@@ let httpHeaders =
+                                        match %%args.[0] : seq<string * string> with
+                                        | null -> %%defaultHttpHeadersExpr
+                                        | argHeaders -> argHeaders
+                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
+                            ProvidedMethod("GetContext", prm, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let omdef =
                             let sprm = 
                                 [ ProvidedStaticParameter("query", typeof<string>)
@@ -1050,13 +1068,11 @@ type ProviderBase private () =
                                     let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
                                     let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
                                     <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
-                                let defaultContext =
-                                    let httpHeaders : seq<string * string> option = 
-                                        if isNull customHttpHeaders || Seq.length customHttpHeaders > 0 then Some customHttpHeaders else None
+                                let contextInfo : GraphQLContextInfo option =
                                     match introspectionLocation with
-                                    | Uri x -> Some { ServerUrl = x; CustomHttpHeaders = httpHeaders }
+                                    | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, defaultContext)
+                                let odef = OperationBase.MakeProvidedType(query, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, contextInfo)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ new OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
@@ -1069,7 +1085,7 @@ type ProviderBase private () =
                         let schemapdef = 
                             let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; omdef; schemapdef]
+                        let members : MemberInfo list = [typeWrapper; ctxmdef; omdef; schemapdef]
                         members)
                     tdef
             let providerKey = { IntrospectionLocation = introspectionLocation; CustomHttpHeadersLocation = httpHeadersLocation }

@@ -25,12 +25,12 @@ type MyProvider = GraphQLProvider<"github_schema.json">
 
 let operation = MyProvider.Operation<"""query q { viewer { login } }""">()
 
-let headers = HttpHeaders.load (File "github_authorization_headers.headerfile")
+let headers = HttpHeaders.ofFile "github_authorization_headers.headerfile"
 
-// You need to edit the headers file before making this call at runtime.
-// Be sure to check out how to generate GitHub access tokens first.
-let runtimeContext = { ServerUrl = "https://api.github.com/graphql"; CustomHttpHeaders = Some headers }
+let runtimeContext = MyProvider.GetContext(serverUrl = "https://api.github.com/graphql", httpHeaders = headers)
 
-let result = operation.Run(runtimeContext)
-
-printfn "Data: %A\n" result.Data
+// Dispose runtime context after using it.
+try
+    let result = operation.Run(runtimeContext)
+    printfn "Data: %A\n" result.Data
+with _ -> runtimeContext.Dispose()

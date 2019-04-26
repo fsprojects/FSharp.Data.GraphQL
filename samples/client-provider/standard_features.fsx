@@ -63,7 +63,7 @@ let operation =
     }""">()
 
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
-let runtimeContext = { ServerUrl = "http://localhost:8084"; CustomHttpHeaders = None }
+let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
 
 // To run an operation, you just need to call the Run or AsyncRun method.
 let result = operation.Run(runtimeContext)
@@ -115,5 +115,3 @@ let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 els
 printfn "Hero friends (%i): %A\n" friends.Length friends
 printfn "Hero human friends (%i): %A\n" humanFriendsCount humanFriends
 printfn "Hero droid friends (%i): %A\n" droidFriendsCount droidFriends
-
-operation.Dispose()

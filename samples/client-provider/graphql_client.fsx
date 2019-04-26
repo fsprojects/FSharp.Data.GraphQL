@@ -25,7 +25,7 @@ let request : GraphQLRequest =
     { Query = """query q { viewer { login } }"""
       Variables = [||]
       ServerUrl = "https://api.github.com/graphql"
-      CustomHeaders = 
+      HttpHeaders = 
             [| "Authorization", "bearer [your bearer token here]"
                "User-Agent", "[your github username here]" |]
       OperationName = Some "q" }

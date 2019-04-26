@@ -36,5 +36,3 @@ let result = operation.Run()
 // Only direct responses will be received - we don't have a socket base connection.
 printfn "Mutation result: %A\n" result.Data
 printfn "Mutation errors: %A\n" result.Errors
-
-operation.Dispose()
