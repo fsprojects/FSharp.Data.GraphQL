@@ -53,6 +53,17 @@ let stringifyArg name (ctx: ResolveFieldContext) () =
 
 let stringifyInput = stringifyArg "input"
 
+type EnumTestType = Foo | Bar
+
+let EnumTestType = 
+  Define.Enum
+    ("EnumTestType"
+      , [ Define.EnumValue("Foo", EnumTestType.Foo)
+          Define.EnumValue("Bar", EnumTestType.Bar)
+        ]
+      , "Test enum"
+    )
+
 let TestType =
   Define.Object<unit>(
     name = "TestType",
@@ -62,6 +73,7 @@ let TestType =
         Define.Field("fieldWithNonNullableStringInput", String, "", [ Define.Input("input", String) ], stringifyInput)
         Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
         Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) ], stringifyInput)
+        Define.Field("fieldWithEnumInput", String, "", [ Define.Input("input", EnumTestType) ], stringifyInput)
         Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
         Define.Field("nnList", String, "", [ Define.Input("input", ListOf (Nullable String)) ], stringifyInput)
         Define.Field("listNN", String, "", [ Define.Input("input", Nullable (ListOf String)) ], stringifyInput)
@@ -516,3 +528,18 @@ let ``Execute uses argument default value when argument provided cannot be parse
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
+
+
+[<Fact>]
+let ``Execute handles enum input as variable`` () =
+    let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType) {
+        fieldWithEnumInput(input: $enumVar)
+      }"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", "Foo" :> obj ])
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Foo\"}" ]    
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+

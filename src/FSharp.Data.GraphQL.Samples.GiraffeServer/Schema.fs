@@ -252,7 +252,9 @@ module Schema =
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
                 Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
                 Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))
-                Define.Field("things", ListOf ThingType, "Gets things", fun _ _ -> things).WithQueryWeight(1.0) ])
+                Define.Field("things", ListOf ThingType, "Gets things", fun _ _ -> things).WithQueryWeight(1.0) 
+                Define.Field("enums", ListOf EpisodeType, "Gets things", [ Define.Input("input", EpisodeType) ], fun  ctx _ -> [ ctx.Arg("input") ])
+            ])
 
     let Subscription =
         Define.SubscriptionObject<Root>(
