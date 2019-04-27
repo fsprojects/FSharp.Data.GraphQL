@@ -3,10 +3,8 @@
     <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
-  </PropertyGroup>
   <ItemGroup>
+    <None Include="FSharp.Data.GraphQL.Server.fsproj.paket.template" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
@@ -22,7 +20,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <None Include="paket.template" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />

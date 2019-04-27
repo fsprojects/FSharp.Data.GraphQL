@@ -1,8 +1,0 @@
-{
-    "projFile": "query.fsx",
-    "outDir": "js",
-    "module": "commonjs",
-    "symbols": ["FABLE"],
-    "sourceMaps": true,
-    "plugins": "../../bin/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.dll"
-}

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp2.0;net47</TargetFrameworks>
+    <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
@@ -9,12 +9,10 @@
     <DebugSymbols>true</DebugSymbols>
     <DebugType>portable</DebugType>
   </PropertyGroup>
-  <PropertyGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.0' ">
-    <DefineConstants>$(DefineConstants);NETSTANDARD2_0</DefineConstants>
-  </PropertyGroup>
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="Literals.fs" />
     <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AsyncValTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />
@@ -27,7 +25,6 @@
     <Compile Include="SchemaTests.fs" />
     <Compile Include="CoercionTests.fs" />
     <Compile Include="IntrospectionTests.fs" />
-    <Compile Include="ReflectedSchemaTests.fs" />
     <Compile Include="ObservableExtensionsTests.fs" />
     <Compile Include="ExecutionTests.fs" />
     <Compile Include="ExecutorMiddlewareTests.fs" />
@@ -42,15 +39,23 @@
     <Compile Include="MiddlewaresTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
-    <Compile Include="Program.fs" Condition=" '$(TargetFramework)' == 'netcoreapp2.0' " />
+    <!-- <Compile Include="SerializationTests.fs" /> -->
+    <Compile Include="AstExtensionsTests.fs" />
   </ItemGroup>
   <ItemGroup>
+    <Content Include="xunit.runner.json" />
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="App.config" />
     <None Include="paket.references" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
+  </ItemGroup>
+  <ItemGroup Condition="$(OS) == Unix">
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

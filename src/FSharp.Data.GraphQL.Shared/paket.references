@@ -1,1 +1,3 @@
+group Shared
+FSharp.Core
 FParsec

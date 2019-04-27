@@ -34,7 +34,7 @@ let single (xs : 'a seq) =
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
-let hasError errMsg (errors: Error seq) =
+let hasError (errMsg : string) (errors: Error seq) =
     let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 let (<??) opt other =

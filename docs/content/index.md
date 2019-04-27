@@ -35,12 +35,12 @@ let Person = Define.Object("Person", [
     Define.Field("lastName", String, fun ctx p -> p.LastName)  
 ])
 
-// each schema must define so-called root query
+// Each schema must define so-called root query
 let QueryRoot = Define.Object("Query", [
     Define.Field("people", ListOf Person, fun ctx () -> people)
 ])
 
-// then initialize everything as part of schema
+// Then initialize everything as part of schema
 let schema = Schema(QueryRoot)
 ```
 

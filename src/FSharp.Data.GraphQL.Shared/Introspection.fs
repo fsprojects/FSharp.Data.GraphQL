@@ -11,70 +11,84 @@ open System.Reflection
 
 let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
-    if property = null then null else property.GetValue(o, null)
+    if isNull property then null else property.GetValue(o, null)
 
 /// Common GraphQL query that may be used to retrieve overall data 
 /// about schema type system itself.
-let introspectionQuery = """query IntrospectionQuery {
-    __schema {
-      queryType { name }
-      mutationType { name }
-      subscriptionType { name }
-      types {
-        ...FullType
-      }
-      directives {
-        name
-        description
-        locations
-        args {
-          ...InputValue
-        }
-      }
-    }
+let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
+__schema {
+  queryType {
+    name
   }
-
-  fragment FullType on __Type {
-    kind
+  mutationType {
+    name
+  }
+  subscriptionType {
+    name
+  }
+  types {
+    ...FullType
+  }
+  directives {
     name
     description
-    fields(includeDeprecated: true) {
-      name
-      description
-      args {
-        ...InputValue
-      }
-      type {
-        ...TypeRef
-      }
-      isDeprecated
-      deprecationReason
-    }
-    inputFields {
+    locations
+    args {
       ...InputValue
     }
-    interfaces {
-      ...TypeRef
-    }
-    enumValues(includeDeprecated: true) {
-      name
-      description
-      isDeprecated
-      deprecationReason
-    }
-    possibleTypes {
-      ...TypeRef
-    }
   }
+}
+}
 
-  fragment InputValue on __InputValue {
-    name
-    description
-    type { ...TypeRef }
-    defaultValue
+fragment FullType on __Type {
+kind
+name
+description
+fields(includeDeprecated: true) {
+  name
+  description
+  args {
+    ...InputValue
   }
+  type {
+    ...TypeRef
+  }
+  isDeprecated
+  deprecationReason
+}
+inputFields {
+  ...InputValue
+}
+interfaces {
+  ...TypeRef
+}
+enumValues(includeDeprecated: true) {
+  name
+  description
+  isDeprecated
+  deprecationReason
+}
+possibleTypes {
+  ...TypeRef
+}
+}
 
-  fragment TypeRef on __Type {
+fragment InputValue on __InputValue {
+name
+description
+type {
+  ...TypeRef
+}
+defaultValue
+}
+
+fragment TypeRef on __Type {
+kind
+name
+ofType {
+  kind
+  name
+  ofType {
     kind
     name
     ofType {
@@ -86,10 +100,20 @@ let introspectionQuery = """query IntrospectionQuery {
         ofType {
           kind
           name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+            }
+          }
         }
       }
     }
-  }"""
+  }
+}
+}"""
     
 /// GraphQL enum describing kind of the GraphQL type definition.
 /// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,
@@ -167,8 +191,8 @@ let rec __Type =
                 | Some name ->
                     let found = findIntrospected ctx name
                     match ctx.TryArg "includeDeprecated" with
-                    | None | Some false -> found.Fields |> Option.map Array.toSeq
-                    | Some true -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
+                    | Some true ->  found.Fields |> Option.map Array.toSeq
+                    | _ -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
         Define.Field("interfaces", Nullable (ListOf __Type), resolve = fun ctx t -> 
             match t.Name with 
             | None -> None

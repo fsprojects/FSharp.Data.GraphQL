@@ -1,26 +1,76 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <PropertyGroup Condition=" '$(TargetFramework)' == 'netstandard2.0' ">
-    <DefineConstants>$(DefineConstants);NETSTANDARD2_0;NO_GENERATIVE</DefineConstants>
+    <DefineConstants>$(DefineConstants);NO_GENERATIVE</DefineConstants>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
-    <Compile Include="ProvidedTypes.fsi" />
-    <Compile Include="ProvidedTypes.fs" />
-    <Compile Include="Serialization.fs" />
-    <Compile Include="QuotationHelpers.fs" />
-    <Compile Include="IntrospectionParser.fs" />
-    <Compile Include="GraphQlProvider.fs" />
-    <Compile Include="QueryDSL.fs" />
+    <Compile Include="..\..\paket-files\shared\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fsi</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Net\Http.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/Http.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\IO.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/IO.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\CommonRuntime\TextConversions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/TextConversions.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonValue.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonValue.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonConversions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonConversions.fs</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\shared\fsharp\FSharp.Data\src\Json\JsonExtensions.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/JsonExtensions.fs</Link>
+    </Compile>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Reflection.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Include="..\..\packages\shared\NETStandard.Library.NETFramework\build\net461\lib\System.Runtime.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Condition=" '$(TargetFramework)' == 'netstandard2.0' " Include="..\..\packages\shared\FParsec\lib\netstandard1.6\FParsec.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <None Condition=" '$(TargetFramework)' == 'netstandard2.0' " Include="..\..\packages\shared\FParsec\lib\netstandard1.6\FParsecCS.dll">
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+  <ItemGroup>
+    <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
+    <Compile Include="Extensions.fs" />
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="GraphQLClient.fs" />
+    <Compile Include="Locations.fs" />
+    <Compile Include="DesignTimeCache.fs" />
+    <Compile Include="BaseTypes.fs" />
+    <Compile Include="GraphQLProvider.fs" />
     <None Include="paket.references" />
   </ItemGroup>
-  <ItemGroup>
-    <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
-  </ItemGroup>
+  <Import Project="..\..\netfx.props" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

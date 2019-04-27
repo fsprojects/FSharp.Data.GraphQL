@@ -11,7 +11,7 @@ open BenchmarkDotNet.Attributes
 open FSharp.Data.GraphQL.Benchmarks
 open FSharp.Data.GraphQL.Server.Middlewares
 
-[<Config(typeof<GraphQLBenchConfig>); Jobs.MonoJob; Jobs.CoreJob>]
+[<Config(typeof<GraphQLBenchConfig>); MonoJob; CoreJob>]
 type SimpleExecutionWithMiddlewaresBenchmark() = 
     let mutable schema : Schema<unit> = Unchecked.defaultof<Schema<unit>>
     let mutable middlewares : IExecutorMiddleware list = []

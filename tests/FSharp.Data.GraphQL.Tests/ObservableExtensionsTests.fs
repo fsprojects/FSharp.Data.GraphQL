@@ -37,7 +37,7 @@ let `` bind should call OnComplete and return items in expected order`` () =
     sub.Received |> seqEquals [ 1; 1; 2; 2; 3; 3; 4; 4; 5; 5 ]
 
 [<Fact>]
-let `` ofAsync should call OnComplete and return items in expected order`` () =
+let ``ofAsync should call OnComplete and return items in expected order`` () =
     let source = async { return "test" }
     let obs = Observable.ofAsync source
     use sub = Observer.create obs
@@ -46,7 +46,7 @@ let `` ofAsync should call OnComplete and return items in expected order`` () =
 
 
 [<Fact>]
-let `` ofAsyncVal should call OnComplete and return items in expected order`` () =
+let ``ofAsyncVal should call OnComplete and return items in expected order`` () =
     let source = async { return "test" } |> AsyncVal.ofAsync
     let obs = Observable.ofAsyncVal source
     use sub = Observer.create obs

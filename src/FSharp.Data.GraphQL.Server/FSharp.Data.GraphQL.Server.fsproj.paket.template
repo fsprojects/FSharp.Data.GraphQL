@@ -11,3 +11,7 @@ summary
     FSharp implementation of Facebook GraphQL query language (Server)
 description
     FSharp implementation of Facebook GraphQL query language (Server)
+dependencies
+    FParsec >= LOCKEDVERSION-Shared
+    FSharp.Core >= LOCKEDVERSION-Shared
+    System.Reactive >= LOCKEDVERSION-Shared
