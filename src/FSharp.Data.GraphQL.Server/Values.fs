@@ -91,7 +91,10 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
     | Enum enumdef -> 
         fun value variables ->
             match value with
-            | Variable variableName -> variables.[variableName]
+            | Variable variableName -> 
+                match variables.TryFind variableName with
+                | Some var -> var
+                | None -> failwithf "Variable '%s' not supplied.\nVariables: %A" variableName variables
             | _ ->
                 let coerced = coerceEnumInput value
                 match coerced with
@@ -138,7 +141,14 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
                 |> List.fold (fun acc coerced -> cons coerced acc) nil
             mapped
         | other -> raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to list." (other.GetType())))
-    | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
+    | InputObject objdef -> 
+        coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
+    | Enum enumdef ->
+        match input with
+        | :? string as s ->
+            ReflectionHelper.parseUnion enumdef.Type s
+        | _ -> 
+            raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType()) enumdef.Name))
     | _ -> raise (GraphQLException <| errMsg + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions.")
 
 and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) errMsg =
