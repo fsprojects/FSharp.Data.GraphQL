@@ -68,7 +68,12 @@
 * Fixes for stream and defer execution.
 
 ### 0.0.17-beta - January 11 2019
-* Execute deferred results in parallel
+* Execute deferred results in parallel.
 
 ### 0.0.18-beta - January 16 2019
-* Fix dispose of deferred/stream responses
+* Fix dispose of deferred/stream responses.
+
+### 1.0.0-beta - April 27 2019
+* **Breaking Change** New type provider api! see samples/client-provider for details.
+* Fixes for #216 enum as a variable.
+* Upgraded paket and dependencies.
