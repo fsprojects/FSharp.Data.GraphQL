@@ -4,7 +4,6 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
-open FSharp.Data
 open Microsoft.FSharp.Reflection
 open System.Reflection
 open System.Collections

@@ -3,6 +3,8 @@
     <TargetFrameworks>netstandard2.0;net47</TargetFrameworks>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="TextConversions.fs" />
+    <Compile Include="JsonValue.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Diagnostics.fs" />
     <Compile Include="Extensions.fs" />
