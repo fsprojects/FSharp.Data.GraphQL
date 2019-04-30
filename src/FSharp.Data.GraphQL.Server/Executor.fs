@@ -13,6 +13,10 @@ open FSharp.Data.GraphQL.Planning
 type SchemaCompileMiddleware = 
     SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
+/// A function signature that represents a middleware for the post-schema compilation phase.
+type SchemaPostCompileMiddleware =
+    ISchema -> (ISchema -> unit) -> unit
+
 /// A function signature that represents a middleware for operation planning phase.
 /// I takes two arguments: A planning context, containing all the data used for the
 /// planning phase, and another function that can be called to pass
@@ -32,15 +36,18 @@ type OperationExecutionMiddleware =
 type IExecutorMiddleware =
     /// Defines the sub-middleware that intercepts the schema compile process of the Executor.
     abstract CompileSchema : SchemaCompileMiddleware option
+    /// Defines the sub-middleware that executes after the schema compilation phase of the Executor is complete.
+    abstract PostCompileSchema : SchemaPostCompileMiddleware option
     /// Defines the sub-middleware that intercepts the operation planning phase of the Executor.
     abstract PlanOperation : OperationPlanningMiddleware option
     /// Defines the sub-middleware that intercepts the operation execution phase of the Executor.
     abstract ExecuteOperationAsync : OperationExecutionMiddleware option
 
 /// A simple, concrete implementation for the IExecutorMiddleware interface.
-type ExecutorMiddleware(?compile, ?plan, ?execute) =
+type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
     interface IExecutorMiddleware with
         member __.CompileSchema = compile
+        member __.PostCompileSchema = postCompile
         member __.PlanOperation = plan
         member __.ExecuteOperationAsync = execute
 
@@ -74,6 +81,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     do
         let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
         runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
+        runMiddlewares (fun x -> x.PostCompileSchema) (upcast schema) ignore
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
