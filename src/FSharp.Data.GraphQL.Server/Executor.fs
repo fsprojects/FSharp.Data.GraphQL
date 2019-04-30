@@ -58,36 +58,25 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         fieldExecuteMap.SetExecute(TypeMetaFieldDef)
         fieldExecuteMap.SetExecute(TypeNameMetaFieldDef)
 
-    let rec runSchemaCompilingMiddlewares (ctx : SchemaCompileContext) (middlewares : SchemaCompileMiddleware list) =
-        match middlewares with
-        | [] -> compileSchema ctx
-        | x :: xs -> x ctx (fun ctx -> runSchemaCompilingMiddlewares ctx xs)
+    let middlewaresList = Seq.toList middlewares
 
-    let compileSchemaWithMiddlewares (ctx : SchemaCompileContext) =
-        middlewares
-        |> Seq.map (fun x -> x.CompileSchema)
-        |> Seq.choose id
-        |> List.ofSeq
-        |> runSchemaCompilingMiddlewares ctx
-
+    let rec runMiddlewares (phaseSel : IExecutorMiddleware -> ('ctx -> ('ctx -> 'res) -> 'res) option)
+                           (initialCtx : 'ctx)
+                           (onComplete : 'ctx -> 'res)
+                           : 'res =
+        let rec go ctx = function
+            | [] -> onComplete ctx
+            | m :: ms ->
+                match (phaseSel m) with
+                | Some f -> f ctx (fun ctx' -> go ctx' ms)
+                | None -> go ctx ms
+        go initialCtx middlewaresList
     do
         let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
-        compileSchemaWithMiddlewares compileCtx
+        runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
         match Validation.validate schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
-
-    let rec runOperationExecutionMiddlewares (ctx : ExecutionContext) (middlewares : OperationExecutionMiddleware list) =
-        match middlewares with
-        | [] -> executeOperation ctx
-        | x :: xs -> x ctx (fun ctx -> runOperationExecutionMiddlewares ctx xs)
-
-    let executeOperationWithMiddlewares (ctx : ExecutionContext) =
-        middlewares
-        |> Seq.map (fun x -> x.ExecuteOperationAsync)
-        |> Seq.choose id
-        |> List.ofSeq
-        |> runOperationExecutionMiddlewares ctx
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
         let prepareOutput res =
@@ -115,7 +104,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                       Errors = errors
                       FieldExecuteMap = fieldExecuteMap
                       Metadata = executionPlan.Metadata }
-                let! res = executeOperationWithMiddlewares executionCtx
+                let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation
                 return prepareOutput res
             with
             | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), executionPlan.Metadata))
@@ -124,18 +113,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         let variables = defaultArg variables Map.empty
         eval(executionPlan, data, variables)
-
-    let rec runOperationPlanningMiddlewares (ctx : PlanningContext) (middlewares : OperationPlanningMiddleware list) =
-        match middlewares with
-        | [] -> planOperation ctx
-        | x :: xs -> x ctx (fun ctx -> runOperationPlanningMiddlewares ctx xs)
-
-    let planOperationWithMiddlewares (ctx : PlanningContext) =
-        middlewares
-        |> Seq.map (fun x -> x.PlanOperation)
-        |> Seq.choose id
-        |> List.ofSeq
-        |> runOperationPlanningMiddlewares ctx
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
         match findOperation ast operationName with
@@ -158,7 +135,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                   Metadata = meta
                   Operation = operation
                   DocumentId = ast.GetHashCode() }
-            planOperationWithMiddlewares planningCtx
+            runMiddlewares (fun x -> x.PlanOperation) planningCtx planOperation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
 
     new(schema) = Executor(schema, middlewares = Seq.empty)
