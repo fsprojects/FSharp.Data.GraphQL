@@ -115,3 +115,48 @@ let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 els
 printfn "Hero friends (%i): %A\n" friends.Length friends
 printfn "Hero human friends (%i): %A\n" humanFriendsCount humanFriends
 printfn "Hero droid friends (%i): %A\n" droidFriendsCount droidFriends
+
+// You can also parse a result that matches the expected query response pattern.
+// Needs to have __typename field in each data object.
+let parsed = operation.ParseResult("""{
+  "documentId": -1401953899,
+  "data": {
+    "hero": {
+      "name": "Luke Skywalker",
+      "appearsIn": [
+        "NewHope",
+        "Empire",
+        "Jedi"
+      ],
+      "homePlanet": "Tatooine",
+      "friends": [
+        {
+          "name": "Han Solo",
+          "homePlanet": null,
+          "__typename": "Human"
+        },
+        {
+          "name": "Leia Organa",
+          "homePlanet": "Alderaan",
+          "__typename": "Human"
+        },
+        {
+          "name": "C-3PO",
+          "primaryFunction": "Protocol",
+          "__typename": "Droid"
+        },
+        {
+          "name": "R2-D2",
+          "primaryFunction": "Astromech",
+          "__typename": "Droid"
+        }
+      ],
+      "__typename": "Human"
+    },
+    "__typename": "Query"
+  }
+}""")
+
+printfn "Parsed result data: %A" parsed.Data
+printfn "Parsed result custom data: %A" parsed.CustomData
+printfn "Parsed result errors: %A" parsed.Errors

@@ -645,11 +645,11 @@ type OperationBase (query : string) =
     static member internal MakeProvidedType(userQuery,
                                             operationDefinition : OperationDefinition,
                                             operationTypeName : string, 
-                                            schemaTypes : Expr,
+                                            schemaTypesExpr : Expr,
                                             schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                                             operationType : Type,
                                             contextInfo : GraphQLContextInfo option) =
-        let query = 
+        let query =
             let ast = Parser.parse userQuery
             ast.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
         let className = 
@@ -720,7 +720,7 @@ type OperationBase (query : string) =
                         let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         if isDefaultContext then context.Dispose() // If the user does not provide a context, we should dispose the default one after running the query
-                        OperationResultBase(responseJson, %%schemaTypes, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let ctxprm =
                     match contextInfo with
@@ -746,7 +746,7 @@ type OperationBase (query : string) =
                             let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             if isDefaultContext then context.Dispose() // If the user does not provide a context, we should dispose the default one after running the query
-                            return OperationResultBase(responseJson, %%schemaTypes, operationTypeName)
+                            return OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName)
                         } @@>
                 let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                 let ctxprm =
@@ -756,7 +756,15 @@ type OperationBase (query : string) =
                 let mdef = ProvidedMethod("AsyncRun", varprm @ [ctxprm], Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                 mdef
-            let members : MemberInfo list = [rtdef; rundef; arundef]
+            let prdef =
+                let invoker (args : Expr list) =
+                    <@@ let responseJson = JsonValue.Parse %%args.[1]
+                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
+                let prm = [ProvidedParameter("responseJson", typeof<string>)]
+                let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
+                mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
+                mdef
+            let members : MemberInfo list = [rtdef; rundef; arundef; prdef]
             members)
         tdef
 
@@ -1066,8 +1074,8 @@ type ProviderBase private () =
                                 // To avoid creating the type map expression every time we call Run method, we cache it here.
                                 let schemaTypes =
                                     let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-                                    let schemaTypes = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
-                                    <@@ Array.zip schemaTypeNames (%%schemaTypes : IntrospectionType []) |> Map.ofArray @@>
+                                    let schemaTypesExpr = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
+                                    <@@ Array.zip schemaTypeNames (%%schemaTypesExpr : IntrospectionType []) |> Map.ofArray @@>
                                 let contextInfo : GraphQLContextInfo option =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
