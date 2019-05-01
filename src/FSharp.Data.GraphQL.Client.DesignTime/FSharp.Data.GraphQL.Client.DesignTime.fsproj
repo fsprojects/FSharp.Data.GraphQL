@@ -3,18 +3,18 @@
   <Import Project="..\..\netfx.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>netstandard2.0;netcoreapp2.0;net45</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;netcoreapp2.0;net461</TargetFrameworks>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\paket-files\sourcecode\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fsi</Link>
     </Compile>
-    <Compile Include="..\..\paket-files\sourcecode\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
@@ -28,9 +28,10 @@
     <Compile Include="Locations.fs" />
     <Compile Include="DesignTimeCache.fs" />
     <Compile Include="BaseTypes.fs" />
-    <Compile Include="GraphQLProvider.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProvider.Runtime.fs" />
+    <Compile Include="GraphQLProvider.DesignTime.fs" />
     <None Include="paket.references" />
-    <None Include="..\..\packages\sourcecode\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net45'">
+    <None Include="..\..\packages\sourcecode\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net461'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

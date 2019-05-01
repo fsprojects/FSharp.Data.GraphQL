@@ -7,8 +7,6 @@ open System.Reflection
 open FSharp.Core.CompilerServices
 open ProviderImplementation.ProvidedTypes
 open FSharp.Data.GraphQL
-open System
-open System.Net
 
 [<TypeProvider>]
 type GraphQLTypeProvider (config) as this =
