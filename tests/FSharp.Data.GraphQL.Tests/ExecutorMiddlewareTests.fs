@@ -30,7 +30,7 @@ let DataType =
             Define.Field("a", String, resolve = fun _ dt -> dt.a)
             Define.Field("b", String, resolve = fun _ dt -> dt.b)
             Define.Field("c", String, resolve = fun _ dt -> dt.c)
-            Define.Field("hasFoo", Boolean, resolve = fun ctx _ -> ctx.Context.Variables.ContainsKey "foo")
+            Define.Field("d", Boolean, "Returns its argument", [ Define.Input("input", Boolean) ], fun ctx _ -> ctx.Arg<bool> "input")
         ])
 let Query =
     Define.Object<TestSubject>(
@@ -44,7 +44,7 @@ let ast = parse """{
             a
             b
             c
-            hasFoo
+            d(input : true )
         }
     }"""
 
@@ -54,14 +54,18 @@ let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext 
     ctx.FieldExecuteMap.SetExecute("Data", fieldDef)
     next ctx
 
-// After the schema has been compiled, inject a fake variable "foo" to every input object
+// After the schema has been compiled, update the input fields to flip every boolean input
 let postCompileMiddleware (schema : ISchema) (next : ISchema -> unit) =
+    let flipBools execute value vars =
+        match value with
+        | BooleanValue b -> execute (BooleanValue (not b)) vars
+        | _ -> execute value vars
     schema.TypeMap.ToSeq()
     |> Seq.iter(fun (n, def) ->
                     match def with
                     | InputObject iobj ->
                         iobj.Fields
-                        |> Array.iter(fun f -> f.ExecuteInput <- (fun value vars -> f.ExecuteInput value (Map.add "foo" (upcast 1) vars)))
+                        |> Array.iter(fun f -> f.ExecuteInput <- (flipBools f.ExecuteInput))
                     | _ -> ())
     next schema
 
@@ -112,7 +116,7 @@ let ``Executor middleware: change fields and measure planning time`` () =
                     upcast NameValueLookup.ofList 
                         [ "a", upcast "Cookie" 
                           "b", upcast "Banana"
-                          "hasFoo", upcast true ] ]
+                          "d", upcast false ] ]
     match result with
     | Direct (data, errors) ->
         empty errors
