@@ -58,9 +58,9 @@
       <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.GraphQL.Shared">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Shared\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Shared\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Client\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'net47' ">
@@ -85,9 +85,9 @@
       <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Client.dll')">..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Client.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.GraphQL.Shared">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Debug\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Shared\bin\Release\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Shared\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Shared\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
     </Reference>
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
