@@ -31,7 +31,7 @@
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProvider.Runtime.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />
     <None Include="paket.references" />
-    <None Include="..\..\packages\sourcecode\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net461'">
+    <None Include="..\..\packages\common\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net461'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
   </ItemGroup>

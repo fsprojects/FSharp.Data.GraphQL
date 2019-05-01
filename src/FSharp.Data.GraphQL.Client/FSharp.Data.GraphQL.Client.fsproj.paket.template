@@ -14,9 +14,17 @@ description
 files
     bin/Release/net461/FSharp.Data.GraphQL.Client.dll ==> lib/net461
     bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll ==> lib/netstandard2.0
+    bin/Release/net461/FSharp.Data.GraphQL.Client.DesignTime.dll ==> lib/net461
+    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> lib/netstandard2.0
     bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
     bin/Release/typeproviders/fsharp41/netcoreapp2.0/*.dll ==> typeproviders/fsharp41/netcoreapp2.0
     bin/Release/typeproviders/fsharp41/net461/*.dll ==> typeproviders/fsharp41/net461
+    !bin/Release/typeproviders/fsharp41/netstandard2.0/FSharp.Core.dll
+    !bin/Release/typeproviders/fsharp41/netcoreapp2.0/FSharp.Core.dll
+    !bin/Release/typeproviders/fsharp41/net461/FSharp.Core.dll
+    !bin/Release/typeproviders/fsharp41/netstandard2.0/netstandard.dll
+    !bin/Release/typeproviders/fsharp41/netcoreapp2.0/netstandard.dll
+    !bin/Release/typeproviders/fsharp41/net461/netstandard.dll
 references
     FSharp.Data.GraphQL.Client.dll
 dependencies

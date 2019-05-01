@@ -3,7 +3,5 @@
 
 namespace FSharp.Data.GraphQL.Client
 
-#if !IS_DESIGNTIME
 [<assembly:CompilerServices.TypeProviderAssembly("FSharp.Data.GraphQL.Client.DesignTime.dll")>]
 do ()
-#endif
