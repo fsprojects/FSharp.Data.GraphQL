@@ -1,4 +1,4 @@
-group Shared
+group SourceCode
 FParsec
 System.Reactive
 FSharp.Core
