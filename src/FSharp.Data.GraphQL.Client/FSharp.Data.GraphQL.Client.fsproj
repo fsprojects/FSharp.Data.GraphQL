@@ -36,6 +36,8 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
+    <Compile Include="TextConversions.fs" />
+    <Compile Include="JsonValue.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="Schema.fs" />
