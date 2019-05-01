@@ -63,9 +63,9 @@ let postCompileMiddleware (schema : ISchema) (next : ISchema -> unit) =
     schema.TypeMap.ToSeq()
     |> Seq.iter(fun (n, def) ->
                     match def with
-                    | InputObject iobj ->
-                        iobj.Fields
-                        |> Array.iter(fun f -> f.ExecuteInput <- (flipBools f.ExecuteInput))
+                    | Object obj ->
+                        obj.Fields
+                        |> Map.iter(fun _ f -> f.Args |> Array.iter(fun f -> f.ExecuteInput <- (flipBools f.ExecuteInput)))
                     | _ -> ())
     next schema
 
