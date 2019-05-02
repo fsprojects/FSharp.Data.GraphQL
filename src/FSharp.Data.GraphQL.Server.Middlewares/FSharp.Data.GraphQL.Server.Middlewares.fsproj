@@ -14,6 +14,8 @@
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />
     <Compile Include="DefineExtensions.fs" />
+    <None Include="FSharp.Data.GraphQL.Server.Middlewares.fsproj.paket.template" />
+    <None Include="paket.references" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

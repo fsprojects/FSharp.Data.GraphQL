@@ -4,7 +4,6 @@
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
   </PropertyGroup>
   <ItemGroup>
-    <None Include="FSharp.Data.GraphQL.Server.fsproj.paket.template" />
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
@@ -17,9 +16,8 @@
     <Compile Include="DefineExtensions.fs" />
     <Compile Include="Relay/Node.fs" />
     <Compile Include="Relay/Connections.fs" />
-  </ItemGroup>
-  <ItemGroup>
     <None Include="paket.references" />
+    <None Include="FSharp.Data.GraphQL.Server.fsproj.paket.template" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />

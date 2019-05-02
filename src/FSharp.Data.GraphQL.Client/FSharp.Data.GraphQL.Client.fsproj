@@ -20,6 +20,7 @@
     <Compile Include="Locations.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
+    <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <None Include="paket.references" />
   </ItemGroup>
   <Target Name="BeforeBuild">
