@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL
 
+open FSharp.Data.GraphQL.Client
 open System.Collections.Concurrent
 open ProviderImplementation.ProvidedTypes
 

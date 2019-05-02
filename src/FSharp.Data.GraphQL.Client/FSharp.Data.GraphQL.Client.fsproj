@@ -9,14 +9,16 @@
   </PropertyGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
-    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
-      <Paket>True</Paket>
-      <Link>paket-files/ProvidedTypes.fsi</Link>
-    </Compile>
-    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/ProvidedTypes.fs</Link>
-    </Compile>
+    <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="TextConversions.fs" />
+    <Compile Include="JsonValue.fs" />
+    <Compile Include="Extensions.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="GraphQLClient.fs" />
+    <Compile Include="GraphQlProviderRuntimeContext.fs" />
+    <Compile Include="Locations.fs" />
+    <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
     <None Include="paket.references" />
   </ItemGroup>

@@ -268,7 +268,7 @@ module Serialization =
 
     let deserializeSchema (json : string) =
         Tracer.runAndMeasureExecutionTime "Deserialized schema" (fun _ ->
-            let result = deserializeRecord<GraphQLReply<IntrospectionResult>> json
+            let result = deserializeRecord<GraphQLResponse<IntrospectionResult>> json
             match result.Errors with
             | None -> result.Data.__schema
             | Some errors -> String.concat "\n" errors |> failwithf "%s")

@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL
+﻿namespace FSharp.Data.GraphQL.Client
 
 open System
 open System.IO

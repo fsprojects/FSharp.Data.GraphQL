@@ -10,12 +10,14 @@ open FSharp.Data.GraphQL
 
 [<TypeProvider>]
 type GraphQLTypeProvider (config) as this =
-    inherit TypeProviderForNamespaces(config, addDefaultProbingLocation = true)
+    inherit TypeProviderForNamespaces(config, 
+                                      assemblyReplacementMap = ["FSharp.Data.GraphQL.Client.DesignTime", "FSharp.Data.GraphQL.Client"],
+                                      addDefaultProbingLocation = true)
 
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
 
-    do this.AddNamespace(ns, [ProviderBase.MakeProvidedType(asm, ns, config.ResolutionFolder)])
+    do this.AddNamespace(ns, [Provider.makeProvidedType(asm, ns, config.ResolutionFolder)])
 
 [<assembly:TypeProviderAssembly>] 
 do()

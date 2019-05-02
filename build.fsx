@@ -168,6 +168,7 @@ Target.create "AssemblyInfo" (fun _ ->
         )
 
     !! "src/**/*.??proj"
+    -- "src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj"
     |> Seq.map getProjectDetails
     |> Seq.iter (fun (projFileName, _, folderName, attributes) ->
             match projFileName with

@@ -1,14 +1,14 @@
 /// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
-namespace FSharp.Data.GraphQL.Client
+namespace FSharp.Data.GraphQL
 
 open System
 open System.Net
-open FSharp.Data
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Client
 
-type GraphQLConnection() =
+type GraphQLClientConnection() =
     let client = new WebClient()
     member internal __.Client = client
     member __.Dispose() = client.Dispose()
@@ -39,7 +39,7 @@ module GraphQLClient =
         if not (isNull httpHeaders)
         then httpHeaders |> Seq.iter (fun (n, v) -> client.Headers.Set(n, v))
 
-    let sendRequestAsync (connection : GraphQLConnection) (request : GraphQLRequest) =
+    let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let client = connection.Client
             configureWebClient request.HttpHeaders client
@@ -61,7 +61,7 @@ module GraphQLClient =
             return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
         }
        
-    let sendIntrospectionRequestAsync (connection : GraphQLConnection) (serverUrl : string) httpHeaders =
+    let sendIntrospectionRequestAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
         let sendGet () =
             async {
                 let client = connection.Client

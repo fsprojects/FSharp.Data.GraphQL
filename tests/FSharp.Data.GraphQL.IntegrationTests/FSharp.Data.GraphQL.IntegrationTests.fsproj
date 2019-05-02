@@ -37,21 +37,6 @@
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.1' ">
-    <Reference Include="FSharp.Data.GraphQL.Client.DesignTime">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsec">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FParsec.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsecCS">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FParsecCS.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FParsecCS.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FParsecCS.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FParsecCS.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FParsecCS.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\netcoreapp2.0\FParsecCS.dll</HintPath>
-    </Reference>
     <Reference Include="FSharp.Data.GraphQL.Client">
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
@@ -64,21 +49,6 @@
     </Reference>
   </ItemGroup>
   <ItemGroup Condition=" '$(TargetFramework)' == 'net47' ">
-    <Reference Include="FSharp.Data.GraphQL.Client.DesignTime">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FSharp.Data.GraphQL.Client.DesignTime.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsec">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FParsec.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FParsec.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FParsec.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FParsec.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FParsec.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FParsec.dll</HintPath>
-    </Reference>
-    <Reference Include="FParsecCS">
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FParsecCS.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\typeproviders\fsharp41\net461\FParsecCS.dll</HintPath>
-      <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FParsecCS.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\typeproviders\fsharp41\net461\FParsecCS.dll</HintPath>
-      <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FParsecCS.dll')">..\..\bin\FSharp.Data.GraphQL.Client\typeproviders\fsharp41\net461\FParsecCS.dll</HintPath>
-    </Reference>
     <Reference Include="FSharp.Data.GraphQL.Client">
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net461\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\net461\FSharp.Data.GraphQL.Client.dll</HintPath>
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net461\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\net461\FSharp.Data.GraphQL.Client.dll</HintPath>

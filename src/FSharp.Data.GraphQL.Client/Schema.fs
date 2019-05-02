@@ -5,7 +5,7 @@ namespace FSharp.Data.GraphQL.Client
 
 open FSharp.Data.GraphQL.Types.Introspection
 
-type internal GraphQLReply<'T> = {
+type internal GraphQLResponse<'T> = {
     Data: 'T
     Errors: string [] option
 }
