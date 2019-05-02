@@ -16,7 +16,7 @@
     <Compile Include="Schema.fs" />
     <Compile Include="Serialization.fs" />
     <Compile Include="GraphQLClient.fs" />
-    <Compile Include="GraphQlProviderRuntimeContext.fs" />
+    <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="Locations.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
