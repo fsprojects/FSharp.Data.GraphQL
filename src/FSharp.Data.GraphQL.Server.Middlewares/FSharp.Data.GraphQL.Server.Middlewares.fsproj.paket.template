@@ -11,7 +11,15 @@ summary
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 description
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
+references
+	FSharp.Data.GraphQL.Server.Middlewares.dll
+    FSharp.Data.GraphQL.Shared.dll
 dependencies
-    FParsec >= LOCKEDVERSION-Common
-    FSharp.Core >= LOCKEDVERSION-Common
-    FSharp.Data.GraphQL.Server CURRENTVERSION
+	framework: net461
+		FParsec >= LOCKEDVERSION-Common
+		FSharp.Core >= LOCKEDVERSION-Common
+		FSharp.Data.GraphQL.Server CURRENTVERSION
+	framework: netstandard2.0
+		FParsec >= LOCKEDVERSION-Common
+		FSharp.Core >= LOCKEDVERSION-Common
+		FSharp.Data.GraphQL.Server CURRENTVERSION
