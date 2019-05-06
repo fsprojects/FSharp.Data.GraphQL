@@ -11,9 +11,8 @@ open FSharp.Data.GraphQL.Client
 type GraphQLClientConnection() =
     let client = new WebClient()
     member internal __.Client = client
-    member __.Dispose() = client.Dispose()
     interface IDisposable with
-        member x.Dispose() = x.Dispose()
+        member x.Dispose() = client.Dispose()
 
 type GraphQLRequest  =
     { ServerUrl : string

@@ -12,19 +12,20 @@
 // #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Client.dll"
 
 // Uncomment those to use dotnet build command for the client assembly using netstandard2.0
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/typeproviders/fsharp41/net461/netstandard.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/typeproviders/fsharp41/net461/netstandard.dll"
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:5000">
+
 
 // If you pass a query file, it will load the query from it.
-let operation = MyProvider.Operation<"operation.graphql">()
+let operation = MyProvider.Operation<"query GetSelf { viewer { self { name { f:full } } } }", "Foo">()
+let context = MyProvider.GetContext(httpHeaders=[("Authorization", "Mock john.berzy@mybazinga.com")])
+let result = operation.Run(context)
 
-let result = operation.Run()
-
-printfn "Data: %A\n" result.Data
+printfn "Data: %A\n" result.Data.Value.Viewer.Self.Name.
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData

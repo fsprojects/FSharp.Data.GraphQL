@@ -12,9 +12,9 @@
 // #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Client.dll"
 
 // Uncomment those to use dotnet build command for the client assembly using netstandard2.0
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/typeproviders/fsharp41/net461/netstandard.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/typeproviders/fsharp41/net461/netstandard.dll"
 
 open FSharp.Data.GraphQL
 
@@ -44,7 +44,7 @@ printfn "Things: %A\n" things
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
 let operation = 
-    MyProvider.Operation<"""query q {
+    MyProvider.Operation<"""query AE {
       hero (id: "1000") {
         name
         appearsIn
