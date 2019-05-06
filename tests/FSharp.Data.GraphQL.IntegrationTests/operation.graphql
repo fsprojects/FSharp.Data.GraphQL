@@ -1,4 +1,4 @@
-query q {
+query fileOp {
   hero(id: "1000") {
     name
     appearsIn

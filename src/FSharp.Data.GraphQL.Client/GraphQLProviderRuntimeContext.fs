@@ -15,6 +15,5 @@ type GraphQLProviderRuntimeContext =
       HttpHeaders : seq<string * string> }
     /// Gets the connection component used to make calls to the server.
     member __.Connection = new GraphQLClientConnection()
-    member x.Dispose() = x.Connection.Dispose()
     interface IDisposable with
-        member x.Dispose() = x.Dispose()
+        member x.Dispose() = (x.Connection :> IDisposable).Dispose()
