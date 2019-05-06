@@ -22,5 +22,6 @@
   <ItemGroup>
     <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
+  <Import Project="..\..\netfx.props" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

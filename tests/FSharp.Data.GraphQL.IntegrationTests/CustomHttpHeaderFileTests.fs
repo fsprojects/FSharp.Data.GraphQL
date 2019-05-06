@@ -16,7 +16,7 @@ let things : Provider.Types.IThing list = [ball; box]
 
 module SimpleOperation =
     let operation = 
-        Provider.Operation<"""query q {
+        Provider.Operation<"""query HeroQuery {
             hero (id: "1000") {
               name
               appearsIn
@@ -34,7 +34,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.Operationff1a972bcced9a18c49e4d2648ce0a50
+    type Operation = Provider.HeroQuery
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -153,7 +153,7 @@ let ``Should be able to use pattern matching methods on an union type`` () =
   
 module InterfaceOperation =
     let operation =
-        Provider.Operation<"""query testQuery {
+        Provider.Operation<"""query TestQuery {
             things {
               id
               format
@@ -166,7 +166,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.Operationfd48bf01957afc98699dcf542e099b28
+    type Operation = Provider.TestQuery
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -231,7 +231,7 @@ let ``Should be able to use pattern matching methods on an interface type`` () =
 
 module MutationOperation =
     let operation =
-        Provider.Operation<"""mutation m {
+        Provider.Operation<"""mutation M {
             setMoon (id: "1", isMoon: true) {
                 id
                 name
@@ -239,7 +239,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.Operation4b47d31cd6380f05ea35981f05930b16
+    type Operation = Provider.M
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -269,14 +269,14 @@ let ``Should be able to run a mutation asynchronously`` () =
 
 module VariablesOperation =
     let operation =
-        Provider.Operation<"""query q($filter: ThingFilter!) {
+        Provider.Operation<"""query ThingsQuery($filter: ThingFilter!) {
             things(filter: $filter) {
               id
               format
             }
           }""">()
 
-    type Operation = Provider.Operatione05eb1fa8361713b898bc94fd5c29ee0
+    type Operation = Provider.ThingsQuery
 
     let validateResult (userData : string option) (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -290,6 +290,44 @@ module VariablesOperation =
         result.Data.IsSome |> equals true
         hasItems result.Data.Value.Things
         result.Data.Value.Things |> Array.forall (fun x -> x.Format = filter.Format) |> equals true
+
+
+module FileOperation =
+    let fileOp = Provider.Operation<"operation.graphql">()
+    type Operation = Provider.FileOp
+    let validateResult (userData : string option) (result : Operation.OperationResult) =
+        result.CustomData.IsSome |> equals true
+        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.Value.ContainsKey("userData") |> equals true
+        match userData with
+        | Some userData -> result.CustomData.Value.["userData"] |> equals (upcast userData)
+        | None -> result.CustomData.Value.["userData"] |> equals (upcast "45883115-db2f-4ccc-ae6f-21ec17d4a7a1")
+        result.Errors |> equals None
+        result.Data.IsSome |> equals true
+        result.Data.Value.Hero.IsSome |> equals true
+        result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
+        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
+          [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
+             Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
+        result.Data.Value.Hero.Value.Friends |> equals expectedFriends
+        result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
+        let actual = normalize <| sprintf "%A" result.Data
+        let expected = normalize <| """Some
+  {Hero = Some
+  {Name = Some "Luke Skywalker";
+  AppearsIn = [|NewHope; Empire; Jedi|];
+  HomePlanet = Some "Tatooine";
+  Friends = [|Some {Name = Some "Han Solo";
+  HomePlanet = <null>;};
+  Some {Name = Some "Leia Organa";
+  HomePlanet = Some "Alderaan";};
+  Some {Name = Some "C-3PO";
+  PrimaryFunction = Some "Protocol";};
+  Some {Name = Some "R2-D2";
+  PrimaryFunction = Some "Astromech";}|];};}"""
+        actual |> equals expected
 
 [<Fact>]
 let ``Should be able to run a query with variables syncrhonously`` () =
@@ -306,5 +344,6 @@ let ``Should be able to run a query with variables asyncrhonously`` () =
 
 [<Fact>]
 let ``Should be able to run a query from a query file`` () =
-    Provider.Operation<"operation.graphql">().Run()
-    |> SimpleOperation.validateResult None
+
+    FileOperation.fileOp.Run()
+    |> FileOperation.validateResult None

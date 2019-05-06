@@ -17,5 +17,6 @@
     <None Include="FSharp.Data.GraphQL.Server.Middlewares.fsproj.paket.template" />
     <None Include="paket.references" />
   </ItemGroup>
+  <Import Project="..\..\netfx.props" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

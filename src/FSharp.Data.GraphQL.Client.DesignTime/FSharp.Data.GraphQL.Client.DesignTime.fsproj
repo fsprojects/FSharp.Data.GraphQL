@@ -28,16 +28,14 @@
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />
-    <Compile Include="DesignTimeCache.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\BaseTypes.fs" />
-    <Compile Include="ProvidedTypes.fs" />
+    <Compile Include="DesignTimeCache.fs" />
+    <Compile Include="ProvidedTypesHelper.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />
     <None Include="paket.references" />
     <None Include="..\..\packages\common\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net461'">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
-  </ItemGroup>
-  <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
