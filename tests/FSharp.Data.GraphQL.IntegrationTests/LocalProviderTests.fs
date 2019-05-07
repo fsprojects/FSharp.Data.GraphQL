@@ -285,14 +285,14 @@ module VariablesOperation =
 let ``Should be able to run a query with variables syncrhonously`` () =
     let filter = Provider.Types.ThingFilter(format = "Cubic")
     use context = getContext()
-    VariablesOperation.operation.Run(filter, context)
+    VariablesOperation.operation.Run(context, filter)
     |> VariablesOperation.validateResult filter
 
 [<Fact>]
 let ``Should be able to run a query with variables asyncrhonously`` () =
     let filter = Provider.Types.ThingFilter(format = "Cubic")
     use context = getContext()
-    VariablesOperation.operation.AsyncRun(filter, context)
+    VariablesOperation.operation.AsyncRun(context, filter)
     |> Async.RunSynchronously
     |> VariablesOperation.validateResult filter
 

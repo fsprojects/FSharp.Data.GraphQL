@@ -246,9 +246,15 @@ module internal ProvidedOperation =
                 let args =
                     let names = variables |> List.map fst
                     let args = 
-                        match args with
-                        | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
-                        | _ -> []
+                        match contextInfo with
+                        | Some _ ->
+                            match args with
+                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                            | _ -> []
+                        | None ->
+                            match args with
+                            | _ :: tail when tail.Length > 0 -> List.skip 1 tail
+                            | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
@@ -267,15 +273,20 @@ module internal ProvidedOperation =
                 let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
                 let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
                 required @ optional
-            let ctxprm =
+            let mprm =
                 match contextInfo with
-                | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
-                | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
+                | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
+                | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    <@@ let argsContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                    let argsContext = 
+                        match contextInfo with
+                        | Some _ -> args.[args.Length - 1]
+                        | None -> args.[1]
+                    <@@ 
+                        let argsContext = %%argsContext : GraphQLProviderRuntimeContext
                         let isDefaultContext = Object.ReferenceEquals(argsContext, null)
                         let context = if isDefaultContext then %%defaultContextExpr else argsContext
                         let request =
@@ -286,34 +297,37 @@ module internal ProvidedOperation =
                               Variables = %%variables }
                         let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                        if isDefaultContext then 
-                            (context :> IDisposable).Dispose() // If the user does not provide a context, we should dispose the default one after running the query
+                        // If the user does not provide a context, we should dispose the default one after running the query
+                        if isDefaultContext then (context :> IDisposable).Dispose()
                         OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
-
-                let mdef = ProvidedMethod("Run", varprm @ [ctxprm], rtdef, invoker)
+                let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
             let arundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
                     let variables = varExprMapper variables args
-                    <@@ let argsContext = %%args.[args.Length - 1] : GraphQLProviderRuntimeContext
+                    let argsContext = 
+                        match contextInfo with
+                        | Some _ -> args.[args.Length - 1]
+                        | None -> args.[1]
+                    <@@ let argsContext = %%argsContext : GraphQLProviderRuntimeContext
                         let isDefaultContext = Object.ReferenceEquals(argsContext, null)
                         let context = if isDefaultContext then %%defaultContextExpr else argsContext
                         let request =
                             { ServerUrl = context.ServerUrl
                               HttpHeaders = context.HttpHeaders
-                              OperationName = Option.ofObj operationName
+                              OperationName = Optnetion.ofObj operationName
                               Query = actualQuery
                               Variables = %%variables }
                         async {
                             let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                            if isDefaultContext then 
-                                (context :> IDisposable).Dispose() // If the user does not provide a context, we should dispose the default one after running the query
+                            // If the user does not provide a context, we should dispose the default one after running the query
+                            if isDefaultContext then (context :> IDisposable).Dispose()
                             return OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName)
                         } @@>
-                let mdef = ProvidedMethod("AsyncRun", varprm @ [ctxprm], Types.makeAsync rtdef, invoker)
+                let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                 mdef
             let prdef =
