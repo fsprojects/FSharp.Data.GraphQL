@@ -204,8 +204,7 @@ module internal ProvidedOperationResult =
         tdef
 
 module internal ProvidedOperation =
-    let makeProvidedType(userQuery,
-                         actualQuery,
+    let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
                          schemaTypesExpr : Expr,
@@ -234,7 +233,6 @@ module internal ProvidedOperation =
                         let (name, t) = mapVariable variableName itype
                         (name, Types.unwrapOption t)
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-
             let varExprMapper (variables : (string * Type) list) (args : Expr list) =
                 let exprMapper (name : string, value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
@@ -253,7 +251,6 @@ module internal ProvidedOperation =
                         | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
-
             let defaultContextExpr = 
                 match contextInfo with
                 | Some info -> 
@@ -262,7 +259,6 @@ module internal ProvidedOperation =
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
-            
             let varprm = 
                 let mapper (name: string, t : Type) =
                     match t with
@@ -271,12 +267,10 @@ module internal ProvidedOperation =
                 let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
                 let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
                 required @ optional
-
             let ctxprm =
                 match contextInfo with
                 | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>)
-        
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -299,7 +293,6 @@ module internal ProvidedOperation =
                 let mdef = ProvidedMethod("Run", varprm @ [ctxprm], rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
-
             let arundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -523,7 +516,6 @@ module internal Provider =
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
-            let operationTypeNames = HashSet<string>()
             let maker =
                 lazy
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
@@ -582,7 +574,7 @@ module internal Provider =
                                         | opdef::_ -> opdef.Name
                                         | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
                                     | x -> Some x
-                                let explicitOperationTypeName : string option = 
+                                let explicitOperationTypeName : TypeName option = 
                                     match args.[3] :?> string with
                                     | "" -> None   
                                     | x -> Some x    
@@ -614,12 +606,9 @@ module internal Provider =
                                     match tinst with
                                     | Some t -> { tref with Kind = t.Kind }
                                     | None -> failwith "The operation was found in the schema, but it does not have a name."
-
                                 let schemaTypes = Types.getSchemaTypes(schema)
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
-                                let actualQuery =
-                                    queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
-                                
+                                let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
                                     | Some name, _ -> 
@@ -633,11 +622,6 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-
-                                if not(operationTypeNames.Add className) then
-                                    failwithf "Operation Type '%s' exists, please use a different type name" className
-                                  
-                                let enumProvidedypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
                                 let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
@@ -674,7 +658,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(query, actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, contextInfo, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, contextInfo, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
