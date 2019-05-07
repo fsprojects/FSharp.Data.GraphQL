@@ -10,33 +10,32 @@ open System.Timers
 open FSharp.Data.GraphQL.Client
 open ProviderImplementation.ProvidedTypes
 
-// see: cache implementation http://www.fssnip.net/7UT/title/Threadsafe-Generic-MemoryCache-and-Memoize-Function
+// Cache implementation based on http://www.fssnip.net/7UT/title/Threadsafe-Generic-MemoryCache-and-Memoize-Function
 
-
-type CacheExpirationPolicy =
+type internal CacheExpirationPolicy =
     | NoExpiration
     | AbsoluteExpiration of TimeSpan
     | SlidingExpiration of TimeSpan
 
-type CacheEntryExpiration =
+type internal CacheEntryExpiration =
     | NeverExpires
     | ExpiresAt of DateTime
     | ExpiresAfter of TimeSpan
 
-type CacheEntry<'key, 'value> =
+type internal CacheEntry<'key, 'value> =
     { Key: 'key
       Value: 'value
       Expiration: CacheEntryExpiration
       LastUsage: DateTime }
 
-module CacheExpiration =
+module internal CacheExpiration =
     let isExpired (entry: CacheEntry<_,_>) =
         match entry.Expiration with
         | NeverExpires -> false
         | ExpiresAt date -> DateTime.UtcNow > date
         | ExpiresAfter window -> (DateTime.UtcNow - entry.LastUsage) > window
 
-type private IMemoryCacheStore<'key, 'value> =
+type internal IMemoryCacheStore<'key, 'value> =
     inherit IEnumerable<CacheEntry<'key, 'value>>
     abstract member Add: CacheEntry<'key, 'value> -> unit
     abstract member GetOrAdd: 'key -> ('key -> CacheEntry<'key, 'value>) -> CacheEntry<'key, 'value>
@@ -45,7 +44,7 @@ type private IMemoryCacheStore<'key, 'value> =
     abstract member Update: 'key -> (CacheEntry<'key, 'value> -> CacheEntry<'key, 'value>) -> unit
     abstract member TryFind: 'key -> CacheEntry<'key, 'value> option
 
-type MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
+type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     let policy = defaultArg cacheExpirationPolicy NoExpiration
     let store = 
         let entries = ConcurrentDictionary<'key, CacheEntry<'key, 'value>>()
@@ -118,7 +117,7 @@ type MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
        | AbsoluteExpiration time -> time |> getTimer |> Some
        | SlidingExpiration time -> time |> getTimer |> Some    
 
-    let observer =
+    let _observer =
         match timer with
         | Some t -> 
             let disposable = t.Elapsed |> Observable.subscribe (fun _ -> checkExpiration())
@@ -132,13 +131,12 @@ type MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     member __.GetOrAdd key value = getOrAdd key value    
     member __.GetOrAddResult key f = getOrAddResult key f
 
-
 type internal ProviderKey =
     { IntrospectionLocation : IntrospectionLocation
       CustomHttpHeadersLocation : StringLocation }
 
 module internal DesignTimeCache =
-    let private expiration = CacheExpirationPolicy.SlidingExpiration (TimeSpan.FromSeconds 30.0)
+    let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
     let private cache = MemoryCache<ProviderKey, ProvidedTypeDefinition>(expiration)
     let getOrAdd (key : ProviderKey) (defMaker : unit -> ProvidedTypeDefinition) =
         cache.GetOrAddResult key defMaker

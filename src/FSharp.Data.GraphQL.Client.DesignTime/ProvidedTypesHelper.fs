@@ -253,7 +253,7 @@ module internal ProvidedOperation =
                             | _ -> []
                         | None ->
                             match args with
-                            | _ :: tail when tail.Length > 0 -> List.skip 1 tail
+                            | _ :: _ :: tail when tail.Length > 0 -> tail
                             | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
@@ -317,7 +317,7 @@ module internal ProvidedOperation =
                         let request =
                             { ServerUrl = context.ServerUrl
                               HttpHeaders = context.HttpHeaders
-                              OperationName = Optnetion.ofObj operationName
+                              OperationName = Option.ofObj operationName
                               Query = actualQuery
                               Variables = %%variables }
                         async {
