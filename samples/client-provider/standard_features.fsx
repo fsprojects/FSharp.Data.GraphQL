@@ -1,20 +1,20 @@
 // Uncomment those to use build script client assembly
-// #r "../../bin/FSharp.Data.GraphQL.Client/net461/FSharp.Data.GraphQL.Client.dll"
-// #r "../../bin/FSharp.Data.GraphQL.Client/net461/FSharp.Data.GraphQL.Shared.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/net47/FSharp.Data.GraphQL.Client.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Shared/net47/FSharp.Data.GraphQL.Shared.dll"
 
 // Uncomment those to use build script client assembly using netstandard2.0
-// #r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
-// #r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
-// #r "../../bin/FSharp.Data.GraphQL.Client/typeproviders/fsharp41/net461/netstandard.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Shared/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/netstandard.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 // Uncomment those to use dotnet build command for the client assembly
-// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Shared.dll"
-// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Client.dll"
+// #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
+// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net47/FSharp.Data.GraphQL.Client.dll"
 
-// Uncomment those to use dotnet build command for the client assembly using netstandard2.0
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Release/typeproviders/fsharp41/net461/netstandard.dll"
+//Uncomment those to use dotnet build command for the client assembly using netstandard2.0
+#r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/netstandard.dll"
+#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
 
@@ -44,7 +44,7 @@ printfn "Things: %A\n" things
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
 let operation = 
-    MyProvider.Operation<"""query AE {
+    MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
         appearsIn
@@ -115,48 +115,3 @@ let droidFriendsCount = friends |> Array.map (fun x -> if x.IsDroid() then 1 els
 printfn "Hero friends (%i): %A\n" friends.Length friends
 printfn "Hero human friends (%i): %A\n" humanFriendsCount humanFriends
 printfn "Hero droid friends (%i): %A\n" droidFriendsCount droidFriends
-
-// You can also parse a result that matches the expected query response pattern.
-// Needs to have __typename field in each data object.
-let parsed = operation.ParseResult("""{
-  "documentId": -1401953899,
-  "data": {
-    "hero": {
-      "name": "Luke Skywalker",
-      "appearsIn": [
-        "NewHope",
-        "Empire",
-        "Jedi"
-      ],
-      "homePlanet": "Tatooine",
-      "friends": [
-        {
-          "name": "Han Solo",
-          "homePlanet": null,
-          "__typename": "Human"
-        },
-        {
-          "name": "Leia Organa",
-          "homePlanet": "Alderaan",
-          "__typename": "Human"
-        },
-        {
-          "name": "C-3PO",
-          "primaryFunction": "Protocol",
-          "__typename": "Droid"
-        },
-        {
-          "name": "R2-D2",
-          "primaryFunction": "Astromech",
-          "__typename": "Droid"
-        }
-      ],
-      "__typename": "Human"
-    },
-    "__typename": "Query"
-  }
-}""")
-
-printfn "Parsed result data: %A" parsed.Data
-printfn "Parsed result custom data: %A" parsed.CustomData
-printfn "Parsed result errors: %A" parsed.Errors
