@@ -5,7 +5,6 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Security.Cryptography
-open System.Globalization
 open FSharp.Core
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
@@ -235,14 +234,17 @@ module internal ProvidedOperation =
                         let (name, t) = mapVariable variableName itype
                         (name, Types.unwrapOption t)
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
+
             let varExprMapper (variables : (string * Type) list) (args : Expr list) =
                 let exprMapper (name : string, value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
-                    <@@ let value = 
-                            match (%%value : obj) with
-                            | :? RecordBase as v -> box (v.ToDictionary())
+                    <@@ let rec mapper (value : obj) =
+                            match value with
+                            | null -> null
+                            | OptionValue v -> v |> Option.map mapper |> box
+                            | :? RecordBase as v -> v.ToDictionary() |> box
                             | v -> v
-                        (name, value) @@>
+                        (name, mapper %%value) @@>
                 let args =
                     let names = variables |> List.map fst
                     let args = 
@@ -251,6 +253,7 @@ module internal ProvidedOperation =
                         | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
+
             let defaultContextExpr = 
                 match contextInfo with
                 | Some info -> 
@@ -260,7 +263,15 @@ module internal ProvidedOperation =
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             
-            let varprm = variables |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+            let varprm = 
+                let mapper (name: string, t : Type) =
+                    match t with
+                    | Option t -> ProvidedParameter(name, t, optionalValue = null)
+                    | _ -> ProvidedParameter(name, t)
+                let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
+                let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
+                required @ optional
+
             let ctxprm =
                 match contextInfo with
                 | Some _ -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)
@@ -288,6 +299,7 @@ module internal ProvidedOperation =
                 let mdef = ProvidedMethod("Run", varprm @ [ctxprm], rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
+
             let arundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name

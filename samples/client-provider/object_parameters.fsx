@@ -23,14 +23,14 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 let filter = MyProvider.Types.ThingFilter(format = "Cubic")
 
 let operation = 
-    MyProvider.Operation<"""query q($filter: ThingFilter!) {
+    MyProvider.Operation<"""query q($filter: ThingFilter) {
     things(filter: $filter) {
       id
       format
     }
   }""">()
 
-let result = operation.Run(filter = filter)
+let result = operation.Run()
 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors

@@ -6,7 +6,6 @@ namespace FSharp.Data.GraphQL.Client
 open System
 open Microsoft.FSharp.Reflection
 open System.Reflection
-open System.Collections
 open System.Collections.Generic
 open System.Globalization
 open FSharp.Data.GraphQL
@@ -15,43 +14,6 @@ module Serialization =
     let private isoDateFormat = "yyyy-MM-dd" 
     let private isoDateTimeFormat = "O"
     let isoDateTimeFormats = [|isoDateTimeFormat; isoDateFormat|]
-
-    let private isOption (t : Type) = 
-        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
-
-    let private isMap (t : Type) =
-       t = typeof<Map<string, obj>>
-
-    let private (|Option|_|) t =
-        if isOption t then Some (Option (t.GetGenericArguments().[0]))
-        else None
-
-    let private (|Array|_|) (t : Type) =
-        if t.IsArray then Some (Array (t.GetElementType()))
-        else None
-
-    let private (|List|_|) (t : Type) =
-        if t.IsGenericType
-        then
-            let gtype = t.GetGenericTypeDefinition()
-            if gtype = typedefof<_ list>
-            then Some (List (t.GetGenericArguments().[0]))
-            else None
-        else None
-
-    let private (|Seq|_|) (t : Type) =
-        if t.IsGenericType
-        then
-            let gtype = t.GetGenericTypeDefinition()
-            if gtype = typedefof<seq<_>>
-            then Some (Seq (t.GetGenericArguments().[0]))
-            else None
-        else None
-
-    let private (|Enum|_|) (t : Type) =
-        match t with
-        | (Option t | t) when t.IsEnum -> Some (Enum t)
-        | _ -> None
 
     let private makeOption t (value : obj) =
         let otype = typedefof<_ option>
@@ -94,11 +56,7 @@ module Serialization =
     let private isDateTimeOffsetType = isType typeof<DateTimeOffset>
     let private isGuidType = isType typeof<Guid>
     let private isBooleanType = isType typeof<bool>
-
-    let private downcastNumber (t : Type) n =
-        match t with
-        | t when isNumericType t -> downcastType t n
-        | _ -> failwithf "Error parsing JSON value: %O is not a numeric type." t
+    let private isEnumType = function (Option t | t) when t.IsEnum -> true | _ -> false
 
     let private downcastString (t : Type) (s : string) =
         match t with
@@ -115,9 +73,12 @@ module Serialization =
             match Guid.TryParse(s) with
             | (true, g) -> downcastType t g
             | _ -> failwithf "Error parsing JSON value: %O is a Guid type, but parsing of value \"%s\" failed." t s
-        | Enum et ->
-            try Enum.Parse(et, s) |> downcastType t
-            with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
+        | t when isEnumType t ->
+            match t with
+            | (Option et | et) ->
+                try Enum.Parse(et, s) |> downcastType t
+                with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
+            | _ -> failwithf "Error parsing JSON value: %O is not a enum type." t
         | _ -> failwithf "Error parsing JSON value: %O is not a string type." t
 
     let private downcastBoolean (t : Type) b =
@@ -150,6 +111,11 @@ module Serialization =
             | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
             | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
             | _ -> failwithf "Error parsing JSON value: %O is not an array type." t)
+
+    let private downcastNumber (t : Type) n =
+        match t with
+        | t when isNumericType t -> downcastType t n
+        | _ -> failwithf "Error parsing JSON value: %O is not a numeric type." t
 
     let rec private convert t parsed : obj =
         Tracer.runAndMeasureExecutionTime (sprintf "Converted JsonValue to %O type." t) (fun _ ->
@@ -201,66 +167,49 @@ module Serialization =
                 | JsonValue.Boolean b -> name, box b)
         Tracer.runAndMeasureExecutionTime "Deserialized JSON Record into FSharp Map" (fun _ ->
             helper values |> Map.ofArray)
-        
-    let (|EnumerableValue|_|) (x : obj) =
-        match x with
-        | :? IEnumerable as x -> Some (EnumerableValue (Seq.cast<obj> x |> Array.ofSeq))
-        | _ -> None
-
-    let (|OptionValue|_|) (x : obj) =
-        let xtype = x.GetType()
-        if isOption xtype
-        then
-            match FSharpValue.GetUnionFields(x, xtype) with
-            | (_, [|value|]) -> Some (OptionValue Some value)
-            | _ -> Some (OptionValue None)
-        else None
-
-    let (|EnumValue|_|) (x : obj) =
-        let xtype = x.GetType()
-        if xtype.IsEnum
-        then Some (x.ToString())
-        else None
 
     let rec toJsonValue (x : obj) : JsonValue =
-        let t = x.GetType()
-        Tracer.runAndMeasureExecutionTime (sprintf "Converted object type %s to JsonValue" (t.ToString())) (fun _ ->
-            match x with
-            | null -> JsonValue.Null
-            | OptionValue None -> JsonValue.Null
-            | :? byte as x -> JsonValue.Number (decimal x)
-            | :? sbyte as x -> JsonValue.Number (decimal x)
-            | :? uint16 as x -> JsonValue.Number (decimal x)
-            | :? int16 as x -> JsonValue.Number (decimal x)
-            | :? int as x -> JsonValue.Number (decimal x)
-            | :? uint32 as x -> JsonValue.Number (decimal x)
-            | :? int64 as x -> JsonValue.Number (decimal x)
-            | :? uint64 as x -> JsonValue.Number (decimal x)
-            | :? single as x -> JsonValue.Float (float x)
-            | :? double as x -> JsonValue.Float x
-            | :? decimal as x -> JsonValue.Float (float x)
-            | :? string as x -> JsonValue.String x
-            | :? Guid as x -> JsonValue.String (x.ToString())
-            | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
-            | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-            | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-            | :? bool as x -> JsonValue.Boolean x
-            | :? IDictionary<string, obj> as items ->
-                items
-                |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
-                |> Seq.toArray
-                |> JsonValue.Record
-            | EnumerableValue items -> 
-                items
-                |> Array.map toJsonValue
-                |> JsonValue.Array
-            | OptionValue (Some x) -> toJsonValue x
-            | EnumValue x -> JsonValue.String x
-            | _ ->
-                let xtype = t
-                let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-                let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
-                JsonValue.Record items)
+        if isNull x 
+        then JsonValue.Null
+        else
+            let t = x.GetType()
+            Tracer.runAndMeasureExecutionTime (sprintf "Converted object type %s to JsonValue" (t.ToString())) (fun _ ->
+                match x with
+                | null -> JsonValue.Null
+                | OptionValue None -> JsonValue.Null
+                | :? byte as x -> JsonValue.Number (decimal x)
+                | :? sbyte as x -> JsonValue.Number (decimal x)
+                | :? uint16 as x -> JsonValue.Number (decimal x)
+                | :? int16 as x -> JsonValue.Number (decimal x)
+                | :? int as x -> JsonValue.Number (decimal x)
+                | :? uint32 as x -> JsonValue.Number (decimal x)
+                | :? int64 as x -> JsonValue.Number (decimal x)
+                | :? uint64 as x -> JsonValue.Number (decimal x)
+                | :? single as x -> JsonValue.Float (float x)
+                | :? double as x -> JsonValue.Float x
+                | :? decimal as x -> JsonValue.Float (float x)
+                | :? string as x -> JsonValue.String x
+                | :? Guid as x -> JsonValue.String (x.ToString())
+                | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
+                | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+                | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
+                | :? bool as x -> JsonValue.Boolean x
+                | :? IDictionary<string, obj> as items ->
+                    items
+                    |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
+                    |> Seq.toArray
+                    |> JsonValue.Record
+                | EnumerableValue items -> 
+                    items
+                    |> Array.map toJsonValue
+                    |> JsonValue.Array
+                | OptionValue (Some x) -> toJsonValue x
+                | EnumValue x -> JsonValue.String x
+                | _ ->
+                    let xtype = t
+                    let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+                    let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
+                    JsonValue.Record items)
 
     let serializeRecord (x : obj) =
         Tracer.runAndMeasureExecutionTime (sprintf "Serialized object type %s to a JSON string" (x.GetType().ToString())) (fun _ ->
