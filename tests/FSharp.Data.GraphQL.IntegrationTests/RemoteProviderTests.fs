@@ -33,7 +33,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.Q
+    type Operation = Provider.Operations.Q
     
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -159,7 +159,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.TestQuery
+    type Operation = Provider.Operations.TestQuery
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -227,7 +227,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.M
+    type Operation = Provider.Operations.M
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -259,7 +259,7 @@ module VariablesOperation =
             }
           }""">()
 
-    type Operation = Provider.Q2
+    type Operation = Provider.Operations.Q2
 
     let validateResult (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -272,7 +272,7 @@ module VariablesOperation =
 
 module FileOperation =
     let fileOp = Provider.Operation<"operation.graphql">()
-    type Operation = Provider.FileOp
+    type Operation = Provider.Operations.FileOp
     
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true

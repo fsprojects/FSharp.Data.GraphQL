@@ -37,7 +37,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.Q
+    type Operation = Provider.Operations.Q
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -166,7 +166,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.TestQuery
+    type Operation = Provider.Operations.TestQuery
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -237,7 +237,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.M
+    type Operation = Provider.Operations.M
 
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -271,7 +271,7 @@ module VariablesOperation =
             }
           }""">()
 
-    type Operation = Provider.ThingsQuery
+    type Operation = Provider.Operations.ThingsQuery
 
     let validateResult (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -298,7 +298,7 @@ let ``Should be able to run a query with variables asyncrhonously`` () =
 
 module FileOperation =
     let fileop = Provider.Operation<"operation.graphql">()
-    type Operation = Provider.FileOp
+    type Operation = Provider.Operations.FileOp
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
         result.CustomData.Value.ContainsKey("documentId") |> equals true

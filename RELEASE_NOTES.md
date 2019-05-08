@@ -77,3 +77,9 @@
 * **Breaking Change** New type provider api! see samples/client-provider for details.
 * Fixes for #216 enum as a variable.
 * Upgraded paket and dependencies.
+
+### 1.0.0-beta2 - April 27 2019
+* **Breaking Change** GraphQLProvider now makes Nullable graphql inputs optional method arguments instead of options
+* **Breaking Change** GraphQLProvider uses the operation name as the generated operation type's names. if no operation name is specified it uses "Operation" + the query string's hash
+* Make the type provider cross-targeting
+* **Breaking Change** Add postcompile phase to middleware interface

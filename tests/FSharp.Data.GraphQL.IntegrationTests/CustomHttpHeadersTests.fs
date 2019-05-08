@@ -34,7 +34,7 @@ module SimpleOperation =
             }
           }""">()
 
-    type Operation = Provider.MyQuery
+    type Operation = Provider.Operations.MyQuery
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -164,7 +164,7 @@ module InterfaceOperation =
             }
           }""">()
     
-    type Operation = Provider.TestQuery
+    type Operation = Provider.Operations.TestQuery
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -237,7 +237,7 @@ module MutationOperation =
               }
             }""">()
 
-    type Operation = Provider.M
+    type Operation = Provider.Operations.M
 
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -274,7 +274,7 @@ module VariablesOperation =
             }
           }""">()
 
-    type Operation = Provider.FilterQuery
+    type Operation = Provider.Operations.FilterQuery
 
     let validateResult (userData : string option) (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
@@ -292,7 +292,7 @@ module VariablesOperation =
 
 module FileOperation =
     let fileOp = Provider.Operation<"operation.graphql">()
-    type Operation = Provider.FileOp
+    type Operation = Provider.Operations.FileOp
     let validateResult (userData : string option) (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
         result.CustomData.Value.ContainsKey("documentId") |> equals true
