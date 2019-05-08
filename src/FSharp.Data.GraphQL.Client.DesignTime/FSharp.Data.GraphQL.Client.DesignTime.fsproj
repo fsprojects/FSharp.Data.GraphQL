@@ -1,0 +1,43 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project Sdk="Microsoft.NET.Sdk">
+  <Import Project="..\..\netfx.props" />
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <TargetFrameworks>netstandard2.0;netcoreapp2.0;net461</TargetFrameworks>
+    <DefineConstants>NO_GENERATIVE;$(DefineConstants)</DefineConstants>
+    <Optimize>true</Optimize>
+    <Tailcalls>true</Tailcalls>
+    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fsi</Link>
+    </Compile>
+    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+      <Paket>True</Paket>
+      <Link>paket-files/ProvidedTypes.fs</Link>
+    </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Extensions.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Schema.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\ReflectionPatterns.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Serialization.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\BaseTypes.fs" />
+    <Compile Include="DesignTimeCache.fs" />
+    <Compile Include="ProvidedTypesHelper.fs" />
+    <Compile Include="GraphQLProvider.DesignTime.fs" />
+    <None Include="paket.references" />
+    <None Include="..\..\packages\common\NETStandard.Library.NETFramework\build\net461\lib\netstandard.dll" Condition="'$(TargetFramework)' == 'net461'">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+  </ItemGroup>
+  <Import Project="..\..\.paket\Paket.Restore.targets" />
+</Project>

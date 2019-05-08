@@ -1,4 +1,4 @@
-group Shared
+group Common
 FParsec
-System.Reactive
 FSharp.Core
+System.Reactive

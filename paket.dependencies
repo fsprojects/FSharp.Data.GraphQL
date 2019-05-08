@@ -2,15 +2,31 @@ source https://api.nuget.org/v3/index.json
 
 nuget NuGet.CommandLine
 
-group Shared
+group Common
+  source https://api.nuget.org/v3/index.json
+  frameworks: net461, netcoreapp2.0, netstandard2.0
+
+   nuget System.Reactive
+
+  # Be explicit about FSharp.Core 4.3.4 when designing libraries.
+  # See https://fsharp.github.io/2015/04/18/fsharp-core-notes.html#fsharpcore-entries-in-project-files for additional information.
+  nuget FSharp.Core 4.3.4
+  
+  # FParsec needs to be explicit for the client provider design time reference.
+  # This should not be a problem since FParsec almost never gets a new release.
+  nuget FParsec 1.0.3
+
+  # Those are needed for the client type provider.
+  nuget NETStandard.Library.NETFramework
+  github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fsi
+  github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fs
+
+group TestsAndSamples
   source https://api.nuget.org/v3/index.json
   frameworks: net47, netcoreapp2.1, netstandard2.0
-
-  nuget FSharp.Core 4.3.4 #https://fsharp.github.io/2015/04/18/fsharp-core-notes.html#fsharpcore-entries-in-project-files
-  nuget FParsec >= 1.0.3
-  nuget System.Reactive >= 4.1.5
+  
+  nuget FSharp.Core
   nuget Newtonsoft.Json
-  nuget NETStandard.Library.NETFramework
   nuget Suave
   nuget Microsoft.AspNetCore.All 2.1.6
   nuget Giraffe
@@ -20,15 +36,6 @@ group Shared
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
   nuget FSharp.Data.TypeProviders
-
-  github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fsi
-  github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fs
-  github fsharp/FSharp.Data src/Json/JsonValue.fs
-  github fsharp/FSharp.Data src/CommonRuntime/TextConversions.fs
-  github fsharp/FSharp.Data src/CommonRuntime/IO.fs
-  github fsharp/FSharp.Data src/Net/Http.fs
-  github fsharp/FSharp.Data src/Json/JsonConversions.fs
-  github fsharp/FSharp.Data src/Json/JsonExtensions.fs
 
 group Build
   source https://api.nuget.org/v3/index.json

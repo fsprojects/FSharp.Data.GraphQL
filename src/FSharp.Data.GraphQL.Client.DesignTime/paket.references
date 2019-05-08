@@ -1,0 +1,4 @@
+group Common
+FSharp.Core
+File:ProvidedTypes.fsi
+File:ProvidedTypes.fs

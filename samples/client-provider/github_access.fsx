@@ -27,10 +27,10 @@ let operation = MyProvider.Operation<"""query q { viewer { login } }""">()
 
 let headers = HttpHeaders.ofFile "github_authorization_headers.headerfile"
 
-let runtimeContext = MyProvider.GetContext(serverUrl = "https://api.github.com/graphql", httpHeaders = headers)
-
-// Dispose runtime context after using it.
-try
+let run () =
+    // Dispose runtime context after using it.
+    use runtimeContext = MyProvider.GetContext(serverUrl = "https://api.github.com/graphql", httpHeaders = headers)
     let result = operation.Run(runtimeContext)
     printfn "Data: %A\n" result.Data
-with _ -> runtimeContext.Dispose()
+
+run ()

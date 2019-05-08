@@ -23,8 +23,6 @@ open System
 open System.IO
 open System.Collections.Generic
 open System.Threading
-open System.Diagnostics
-open System.Threading.Tasks
 open Fake
 open Fake.Tools.Git
 open Fake.DotNet
@@ -168,6 +166,7 @@ Target.create "AssemblyInfo" (fun _ ->
         )
 
     !! "src/**/*.??proj"
+    -- "src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj"
     |> Seq.map getProjectDetails
     |> Seq.iter (fun (projFileName, _, folderName, attributes) ->
             match projFileName with
@@ -548,9 +547,8 @@ let pack id =
             Version = release.NugetVersion
             OutputPath = sprintf "nuget/%s.%s" project id
             TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
-            IncludeReferencedProjects = true
-            MinimumFromLockFile = true
-        })
+            MinimumFromLockFile = true })
+
 let publishPackage id =
     pack id
     Paket.push(fun p ->
@@ -599,7 +597,7 @@ Target.create "PublishNpm" (fun _ ->
 )
 
 // --------------------------------------------------------------------------------------
-// Run all targets by default. Invoke 'build <Target>' to override
+// Run all targets by default. Invoke 'build -t <Target>' to override
 
 Target.create "All" ignore
 

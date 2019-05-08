@@ -5,13 +5,13 @@ open System.Reflection
 [<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Client")>]
 [<assembly: AssemblyProductAttribute("FSharp.Data.GraphQL")>]
 [<assembly: AssemblyDescriptionAttribute("FSharp implementation of Facebook GraphQL query language")>]
-[<assembly: AssemblyVersionAttribute("0.0.12")>]
-[<assembly: AssemblyFileVersionAttribute("0.0.12")>]
+[<assembly: AssemblyVersionAttribute("0.0.18")>]
+[<assembly: AssemblyFileVersionAttribute("0.0.18")>]
 do ()
 
 module internal AssemblyVersionInformation =
     let [<Literal>] AssemblyTitle = "FSharp.Data.GraphQL.Client"
     let [<Literal>] AssemblyProduct = "FSharp.Data.GraphQL"
     let [<Literal>] AssemblyDescription = "FSharp implementation of Facebook GraphQL query language"
-    let [<Literal>] AssemblyVersion = "0.0.12"
-    let [<Literal>] AssemblyFileVersion = "0.0.12"
+    let [<Literal>] AssemblyVersion = "0.0.18"
+    let [<Literal>] AssemblyFileVersion = "0.0.18"

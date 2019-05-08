@@ -1,10 +1,2 @@
-group Shared
+group Common
 FSharp.Core
-File:ProvidedTypes.fsi
-File:ProvidedTypes.fs
-File:Http.fs
-File:IO.fs
-File:TextConversions.fs
-File:JsonValue.fs
-File:JsonConversions.fs
-File:JsonExtensions.fs
