@@ -562,6 +562,7 @@ module internal Provider =
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+                        let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
                         let ctxmdef =
                             let prm =
                                 let serverUrl =
@@ -692,15 +693,15 @@ module internal Provider =
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
                                 mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
-                                let members : MemberInfo list = [odef; mdef]
-                                tdef.AddMembers(members)
+                                operationWrapper.AddMember(odef)
+                                odef.AddMember(mdef)
                                 mdef
                             smdef.DefineStaticParameters(sprm, genfn)
                             smdef
                         let schemapdef = 
                             let getterCode = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getterCode, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; ctxmdef; omdef; schemapdef]
+                        let members : MemberInfo list = [typeWrapper; operationWrapper; ctxmdef; omdef; schemapdef]
                         members)
                     tdef
             let providerKey = { IntrospectionLocation = introspectionLocation; CustomHttpHeadersLocation = httpHeadersLocation }
