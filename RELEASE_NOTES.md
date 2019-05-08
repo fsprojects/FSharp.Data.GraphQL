@@ -82,4 +82,4 @@
 * **Breaking Change** GraphQLProvider now makes Nullable graphql inputs optional method arguments instead of options
 * **Breaking Change** GraphQLProvider uses the operation name as the generated operation type's names. if no operation name is specified it uses "Operation" + the query string's hash
 * Make the type provider cross-targeting
-
+* **Breaking Change** Add postcompile phase to middleware interface
