@@ -32,25 +32,6 @@ module Serialization =
         | Option t -> downcast (makeOption t (Convert.ChangeType(x, t)))
         | _ -> downcast (Convert.ChangeType(x, t))
 
-    let private isType (expected : Type) (t : Type) =
-        match t with
-        | Option t -> t = expected
-        | _ -> t = expected
-
-    let private isNumericType (t : Type) =
-        [| typeof<decimal>
-           typeof<double>
-           typeof<single>
-           typeof<uint64>
-           typeof<int64>
-           typeof<uint32>
-           typeof<int>
-           typeof<uint16>
-           typeof<int16>
-           typeof<byte>
-           typeof<sbyte> |]
-        |> Array.exists (fun expected -> isType expected t)
-
     let private isStringType = isType typeof<string>
     let private isDateTimeType = isType typeof<DateTime>
     let private isDateTimeOffsetType = isType typeof<DateTimeOffset>

@@ -9,6 +9,19 @@ open Microsoft.FSharp.Reflection
 
 [<AutoOpen>]
 module ReflectionPatterns =
+    let private numericTypes =
+        [| typeof<decimal>
+           typeof<double>
+           typeof<single>
+           typeof<uint64>
+           typeof<int64>
+           typeof<uint32>
+           typeof<int>
+           typeof<uint16>
+           typeof<int16>
+           typeof<byte>
+           typeof<sbyte> |]
+
     let isOption (t : Type) = 
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
@@ -36,6 +49,14 @@ module ReflectionPatterns =
     let (|Option|_|) t =
         if isOption t then Some (Option (t.GetGenericArguments().[0]))
         else None
+
+    let isType (expected : Type) (t : Type) =
+        match t with
+        | Option t -> t = expected
+        | _ -> t = expected
+
+    let isNumericType (t : Type) =
+        numericTypes |> Array.exists (fun expected -> isType expected t)
 
     let (|Array|_|) (t : Type) =
         if t.IsArray then Some (Array (t.GetElementType()))
