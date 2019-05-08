@@ -50,6 +50,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         else error ctx
     interface IExecutorMiddleware with
         member __.CompileSchema = None
+        member __.PostCompileSchema = None
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = Some (middleware threshold)
 
@@ -106,6 +107,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         next ctx
     interface IExecutorMiddleware with
         member __.CompileSchema = Some compileMiddleware
+        member __.PostCompileSchema = None
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = Some reportMiddleware
 
@@ -145,5 +147,6 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
         next ctx
     interface IExecutorMiddleware with
         member __.CompileSchema = Some middleware
+        member __.PostCompileSchema = None
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = None

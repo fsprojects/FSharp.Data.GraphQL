@@ -3,6 +3,7 @@ module FSharp.Data.GraphQL.Tests.ExecutorMiddlewareTests
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
@@ -29,6 +30,7 @@ let DataType =
             Define.Field("a", String, resolve = fun _ dt -> dt.a)
             Define.Field("b", String, resolve = fun _ dt -> dt.b)
             Define.Field("c", String, resolve = fun _ dt -> dt.c)
+            Define.Field("d", Boolean, "Returns its argument", [ Define.Input("input", Boolean) ], fun ctx _ -> ctx.Arg<bool> "input")
         ])
 let Query =
     Define.Object<TestSubject>(
@@ -42,6 +44,7 @@ let ast = parse """{
             a
             b
             c
+            d(input : true )
         }
     }"""
 
@@ -50,6 +53,21 @@ let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext 
     let fieldDef = Define.Field("a", String, fun _ dt -> dt.c)
     ctx.FieldExecuteMap.SetExecute("Data", fieldDef)
     next ctx
+
+// After the schema has been compiled, update the input fields to flip every boolean input
+let postCompileMiddleware (schema : ISchema) (next : ISchema -> unit) =
+    let flipBools execute value vars =
+        match value with
+        | BooleanValue b -> execute (BooleanValue (not b)) vars
+        | _ -> execute value vars
+    schema.TypeMap.ToSeq()
+    |> Seq.iter(fun (n, def) ->
+                    match def with
+                    | Object obj ->
+                        obj.Fields
+                        |> Map.iter(fun _ f -> f.Args |> Array.iter(fun f -> f.ExecuteInput <- (flipBools f.ExecuteInput)))
+                    | _ -> ())
+    next schema
 
 // On the planning phase, we watch the time needed to do the operation
 let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
@@ -83,6 +101,7 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
 let middleware =
     { new IExecutorMiddleware with
         member __.CompileSchema = Some compileMiddleware
+        member __.PostCompileSchema = Some postCompileMiddleware
         member __.PlanOperation = Some planningMiddleware
         member __.ExecuteOperationAsync = Some executionMiddleware }
 
@@ -96,7 +115,8 @@ let ``Executor middleware: change fields and measure planning time`` () =
                 [ "testData", 
                     upcast NameValueLookup.ofList 
                         [ "a", upcast "Cookie" 
-                          "b", upcast "Banana" ] ]
+                          "b", upcast "Banana"
+                          "d", upcast false ] ]
     match result with
     | Direct (data, errors) ->
         empty errors
