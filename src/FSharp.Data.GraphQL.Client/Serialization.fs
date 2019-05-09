@@ -104,7 +104,6 @@ module Serialization =
             match parsed with
             | JsonValue.Null -> downcastNone t
             | JsonValue.String s -> downcastString t s
-            | JsonValue.Number n -> downcastNumber t n
             | JsonValue.Float n -> downcastNumber t n
             | JsonValue.Integer n -> downcastNumber t n
             | JsonValue.Record jprops ->
@@ -144,7 +143,6 @@ module Serialization =
                 | JsonValue.Record fields -> name, (fields |> helper |> Map.ofArray |> box)
                 | JsonValue.Null -> name, null
                 | JsonValue.String s -> name, box s
-                | JsonValue.Number n -> name, box n
                 | JsonValue.Integer n -> name, box n
                 | JsonValue.Float f -> name, box f
                 | JsonValue.Array items -> name, (items |> Array.map (fun item -> null, item) |> helper |> Array.map snd |> box)
@@ -161,17 +159,8 @@ module Serialization =
                 match x with
                 | null -> JsonValue.Null
                 | OptionValue None -> JsonValue.Null
-                | :? byte as x -> JsonValue.Integer (int x)
-                | :? sbyte as x -> JsonValue.Integer (int x)
-                | :? uint16 as x -> JsonValue.Integer (int x)
-                | :? int16 as x -> JsonValue.Integer (int x)
                 | :? int as x -> JsonValue.Integer (int x)
-                | :? uint32 as x -> JsonValue.Integer (int x)
-                | :? int64 as x -> JsonValue.Integer (int x)
-                | :? uint64 as x -> JsonValue.Integer (int x)
-                | :? single as x -> JsonValue.Float (float x)
-                | :? double as x -> JsonValue.Float x
-                | :? decimal as x -> JsonValue.Number x
+                | :? float as x -> JsonValue.Float x
                 | :? string as x -> JsonValue.String x
                 | :? Guid as x -> JsonValue.String (x.ToString())
                 | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
