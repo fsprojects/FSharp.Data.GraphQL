@@ -48,26 +48,26 @@ module SimpleOperation =
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
+          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
+             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
-  {Hero = Some
-  {Name = Some "Luke Skywalker";
-  AppearsIn = [|NewHope; Empire; Jedi|];
-  HomePlanet = Some "Tatooine";
-  Friends = [|Some {Name = Some "Han Solo";
-  HomePlanet = <null>;};
-  Some {Name = Some "Leia Organa";
-  HomePlanet = Some "Alderaan";};
-  Some {Name = Some "C-3PO";
-  PrimaryFunction = Some "Protocol";};
-  Some {Name = Some "R2-D2";
-  PrimaryFunction = Some "Astromech";}|];};}"""
+            {Hero = Some
+            {AppearsIn = [|NewHope; Empire; Jedi|];
+            Friends = [|Some {HomePlanet = <null>;
+            Name = Some "Han Solo";};
+            Some {HomePlanet = Some "Alderaan";
+            Name = Some "Leia Organa";};
+            Some {Name = Some "C-3PO";
+            PrimaryFunction = Some "Protocol";};
+            Some {Name = Some "R2-D2";
+            PrimaryFunction = Some "Astromech";}|];
+            HomePlanet = Some "Tatooine";
+            Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 
 [<Fact>]
@@ -121,13 +121,13 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     friends 
     |> Array.choose (fun x -> x.TryAsHuman()) 
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None)
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan") |]
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
     friends
     |> Array.choose (fun x -> x.TryAsDroid())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech") |]
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
     try
       friends |> Array.map (fun x -> x.AsDroid()) |> ignore
       failwith "Expected exception when trying to get all friends as droids!"
@@ -140,14 +140,14 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     |> Array.filter (fun x -> x.IsHuman())
     |> Array.map (fun x -> x.AsHuman())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None)
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan") |]
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
+        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
     friends
     |> Array.filter (fun x -> x.IsDroid())
     |> Array.map (fun x -> x.AsDroid())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech") |]
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
+        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
   
 module InterfaceOperation =
     let operation =
@@ -182,12 +182,12 @@ module InterfaceOperation =
         result.Data.Value.Things |> equals expectedThings
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
-{Things = [|{Id = "1";
-Format = "Spheric";
-Form = "Spheric";};
-{Id = "2";
-Format = "Cubic";
-Form = "Cubic";}|];}"""
+            {Things = [|{Form = "Spheric";
+            Format = "Spheric";
+            Id = "1";};
+            {Form = "Cubic";
+            Format = "Cubic";
+            Id = "2";}|];}"""
         actual |> equals expected
 
 [<Fact>]
@@ -305,26 +305,26 @@ module FileOperation =
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
         let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Han Solo", homePlanet = None))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = Some "Leia Organa", homePlanet = Some "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "C-3PO", primaryFunction = Some "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = Some "R2-D2", primaryFunction = Some "Astromech")) |]
+          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
+             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
+             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
         let expected = normalize <| """Some
-  {Hero = Some
-  {Name = Some "Luke Skywalker";
-  AppearsIn = [|NewHope; Empire; Jedi|];
-  HomePlanet = Some "Tatooine";
-  Friends = [|Some {Name = Some "Han Solo";
-  HomePlanet = <null>;};
-  Some {Name = Some "Leia Organa";
-  HomePlanet = Some "Alderaan";};
-  Some {Name = Some "C-3PO";
-  PrimaryFunction = Some "Protocol";};
-  Some {Name = Some "R2-D2";
-  PrimaryFunction = Some "Astromech";}|];};}"""
+            {Hero = Some
+            {AppearsIn = [|NewHope; Empire; Jedi|];
+            Friends = [|Some {HomePlanet = <null>;
+            Name = Some "Han Solo";};
+            Some {HomePlanet = Some "Alderaan";
+            Name = Some "Leia Organa";};
+            Some {Name = Some "C-3PO";
+            PrimaryFunction = Some "Protocol";};
+            Some {Name = Some "R2-D2";
+            PrimaryFunction = Some "Astromech";}|];
+            HomePlanet = Some "Tatooine";
+            Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 [<Fact>]
 let ``Should be able to run a query with variables syncrhonously`` () =

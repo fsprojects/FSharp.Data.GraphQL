@@ -8,6 +8,7 @@ open System.Security.Cryptography
 open FSharp.Core
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
+open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Ast
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types.Introspection
@@ -146,20 +147,39 @@ module internal ProvidedRecord =
             let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
             metadata.Description |> Option.iter pdef.AddXmlDoc
             metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
-            upcast pdef
+            upcast pdef 
         tdef.AddMembersDelayed(fun _ -> List.map propertyMapper properties)
         let addConstructorDelayed (propertiesGetter : unit -> (string * Type) list) =
             tdef.AddMemberDelayed(fun _ ->
                 let properties = propertiesGetter ()
-                let prm = properties |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                let prm =
+                    let mapper (name : string, t : Type) = 
+                        match t with
+                        | Option t -> ProvidedParameter(name, t, optionalValue = null)
+                        | _ -> ProvidedParameter(name, t)
+                    let required = properties |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
+                    let optional = properties |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
+                    required @ optional
                 let invoker (args : Expr list) = 
                     let properties =
                         let args = 
                             let names = properties |> List.map (fun (name, _) -> name.FirstCharUpper())
-                            let mapper (name : string, value : Expr) =
+                            let types = properties |> List.map snd
+                            let mapper (name : string, t : Type, value : Expr) =
                                 let value = Expr.Coerce(value, typeof<obj>)
-                                <@@ { RecordProperty.Name = name; Value = %%value } @@>
-                            List.zip names args |> List.map mapper
+                                let isOption = isOption t
+                                <@@ let value =
+                                        match %%value, isOption with
+                                        | null, true -> box None
+                                        | OptionValue (Some null), true -> box (Some null)
+                                        | OptionValue (Some value), true -> box (makeSome value)
+                                        | OptionValue (Some value), false -> value
+                                        | OptionValue None, false -> null
+                                        | OptionValue None, true -> box None
+                                        | value, true -> makeSome value
+                                        | value, false -> value
+                                    { RecordProperty.Name = name; Value = value } @@>
+                            List.zip3 names types args |> List.map mapper
                         Expr.NewArray(typeof<RecordProperty>, args)
                     Expr.NewObject(ctor, [Expr.Value(name); properties])
                 ProvidedConstructor(prm, invoker))

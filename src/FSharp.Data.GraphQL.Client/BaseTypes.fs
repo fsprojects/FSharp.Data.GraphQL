@@ -7,6 +7,7 @@ open System
 open System.Globalization
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
+open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
 open Microsoft.FSharp.Reflection
@@ -90,17 +91,23 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             if distinctCount <> Seq.length properties
             then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
 
+    let properties = 
+        if not (isNull properties)
+        then properties |> Seq.sortBy (fun x -> x.Name) |> List.ofSeq
+        else []
+
     /// Gets the name of this provided record type.
     member __.GetName() = name
 
     /// Gets a list of this provided record properties.
-    member __.GetProperties() = List.ofSeq properties
+    member __.GetProperties() = properties
     
     /// Produces a dictionary containing all the properties and names of this provided record type.
     member x.ToDictionary() =
-        let mapper (v : obj) =
+        let rec mapper (v : obj) =
             match v with
             | :? RecordBase as v -> box (v.ToDictionary())
+            | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
         x.GetProperties()
         |> Seq.map (fun p -> p.Name, mapper p.Value)
@@ -120,17 +127,15 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         sb.ToString()
 
     member x.Equals(other : RecordBase) = 
-        let xprops = x.GetProperties() |> List.sortBy (fun x -> x.Name)
-        let yprops = other.GetProperties() |> List.sortBy (fun x -> x.Name)
-        x.GetName() = other.GetName() && xprops = yprops
-
+        x.GetName() = other.GetName() && x.GetProperties() = other.GetProperties()
 
     override x.Equals(other : obj) =
         match other with
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = x.GetName().GetHashCode() ^^^ x.GetProperties().GetHashCode()
+    override x.GetHashCode() = 
+        x.GetName().GetHashCode() ^^^ x.GetProperties().GetHashCode()
 
     interface IEquatable<RecordBase> with
         member x.Equals(other) = x.Equals(other)
@@ -224,34 +229,6 @@ module internal JsonValueHelper =
             | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
 
     let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (fieldName : string, fieldValue : JsonValue) =
-        let getOptionCases (t: Type) =
-            let otype = typedefof<_ option>.MakeGenericType(t)
-            let cases = FSharpType.GetUnionCases(otype)
-            let some = cases |> Array.find (fun c -> c.Name = "Some")
-            let none = cases |> Array.find (fun c -> c.Name = "None")
-            (some, none, otype)
-        let makeSome (value : obj) =
-            let (some, _, _) = getOptionCases (value.GetType())
-            FSharpValue.MakeUnion(some, [|value|])
-        let makeNone (t : Type) =
-            let (_, none, _) = getOptionCases t
-            FSharpValue.MakeUnion(none, [||])
-        let makeArray (itype : Type) (items : obj []) =
-            if Array.exists (fun x -> isNull x) items
-            then failwith "Array is an array of non null items, but a null item was found."
-            else
-                let arr = Array.CreateInstance(itype, items.Length)
-                items |> Array.iteri (fun i x -> arr.SetValue(x, i))
-                box arr
-        let makeOptionArray (itype : Type) (items : obj []) =
-            let (some, none, otype) = getOptionCases(itype)
-            let arr = Array.CreateInstance(otype, items.Length)
-            let mapper (i : int) (x : obj) =
-                if isNull x
-                then arr.SetValue(FSharpValue.MakeUnion(none, [||]), i)
-                else arr.SetValue(FSharpValue.MakeUnion(some, [|x|]), i)
-            items |> Array.iteri mapper
-            box arr
         let getScalarType (typeRef : IntrospectionTypeRef) =
             let getType (typeName : string) =
                 match Map.tryFind typeName Types.scalar with

@@ -9,6 +9,7 @@ open System.Reflection
 open System.Collections.Generic
 open System.Globalization
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
 module Serialization =
     let private isoDateFormat = "yyyy-MM-dd" 
