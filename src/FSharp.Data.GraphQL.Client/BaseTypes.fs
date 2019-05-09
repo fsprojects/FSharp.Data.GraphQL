@@ -300,7 +300,10 @@ module internal JsonValueHelper =
                 | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
                 | TypeKind.SCALAR -> getScalarType fieldType |> makeNoneIfNeeded
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
+            // GraphQL does not have a built-in spec type equivalent to System.Decimal.
+            // So in this case, we convert it to float, even if JsonValue.Parse did parse it to a System.Decimal.
             | JsonValue.Number n -> makeSomeIfNeeded (float n)
+            | JsonValue.Integer n -> makeSomeIfNeeded n
             | JsonValue.String s -> 
                 match fieldType.Kind with
                 | TypeKind.NON_NULL ->
@@ -349,8 +352,7 @@ module internal JsonValueHelper =
                 | Some (_, JsonValue.String message), Some (_, JsonValue.Array path) ->
                     let pathMapper = function
                         | JsonValue.String x -> box x
-                        | JsonValue.Float x -> box (int x)
-                        | JsonValue.Number x -> box (int x)
+                        | JsonValue.Integer x -> box x
                         | _ -> failwith "Error parsing response errors. A item in the path is neither a String or a Number."
                     { Message = message; Path = Array.map pathMapper path }
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."

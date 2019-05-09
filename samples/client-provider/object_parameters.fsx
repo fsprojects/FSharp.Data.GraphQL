@@ -20,13 +20,14 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8084">
 
-let filter = MyProvider.Types.ThingFilter(format = "Cubic")
+let filter = MyProvider.Types.ThingFilter(format = "Spheric")
 
 let operation = 
     MyProvider.Operation<"""query q($filter: ThingFilter!) {
     things(filter: $filter) {
       id
       format
+      order
     }
   }""">()
 
@@ -35,3 +36,5 @@ let result = operation.Run(filter = filter)
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData
+
+printfn "Order: %A" result.Data.Value.Things.[0].Order

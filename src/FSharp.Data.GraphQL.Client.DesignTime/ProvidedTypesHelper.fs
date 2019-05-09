@@ -124,25 +124,10 @@ module internal ProvidedRecord =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
             let pname = metadata.Name.FirstCharUpper()
-            let numericTypeName =
-                if isNumericType metadata.Type 
-                then metadata.Type.AssemblyQualifiedName
-                else null
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
                     match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
-                    | Some prop ->
-                        if not (isNull numericTypeName) && not (isNull prop.Value)
-                        then
-                            let destinationType = Type.GetType(numericTypeName)
-                            let actualType = prop.Value.GetType()
-                            match prop.Value, destinationType with
-                            | OptionValue value, Option destinationType when actualType <> destinationType -> 
-                                value |> Option.map (fun x -> Convert.ChangeType(x, destinationType)) |> box
-                            | _ when actualType <> destinationType -> 
-                                Convert.ChangeType(prop.Value, destinationType)
-                            | _ -> prop.Value
-                        else prop.Value
+                    | Some prop -> prop.Value
                     | None -> failwithf "Expected to find property \"%s\", but the property was not found." pname @@>
             let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
             metadata.Description |> Option.iter pdef.AddXmlDoc

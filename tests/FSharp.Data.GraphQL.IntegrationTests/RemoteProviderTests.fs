@@ -9,8 +9,8 @@ type Provider = GraphQLProvider<"http://localhost:8084">
 type Episode = Provider.Types.Episode
 
 // We should be able to create instances of schema types.
-let ball = Provider.Types.Ball(form = "Spheric", format = "Spheric", id = "1")
-let box = Provider.Types.Box(form = "Cubic", format = "Cubic", id = "2")
+let ball = Provider.Types.Ball(form = "Spheric", format = "Spheric", id = "1", order = 0, size = 1.11)
+let box = Provider.Types.Box(form = "Cubic", format = "Cubic", id = "2", order = 1, size = 2.0)
 let things : Provider.Types.IThing list = [ball; box]
 
 module SimpleOperation =
@@ -69,11 +69,15 @@ module SimpleOperation =
 let ``Should be able to pretty print schema types`` () =
     let actual = normalize <| sprintf "%A" things
     let expected = normalize <| """[{Form = "Spheric";
-        Format = "Spheric";
-        Id = "1";};
-         {Form = "Cubic";
-        Format = "Cubic";
-        Id = "2";}]"""
+      Format = "Spheric";
+      Id = "1";
+      Order = 0;
+      Size = 1.11;};
+      {Form = "Cubic";
+      Format = "Cubic";
+      Id = "2";
+      Order = 1;
+      Size = 2.0;}]"""
     actual |> equals expected
 
 [<Fact>]
