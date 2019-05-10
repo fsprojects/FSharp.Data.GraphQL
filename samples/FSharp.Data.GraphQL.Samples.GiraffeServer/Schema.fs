@@ -42,20 +42,30 @@ type Root =
 type IThing =
     abstract member Shape : string
     abstract member Id : string
+    abstract member Order : int
+    abstract member Size : float
 
 type Ball() =
     member __.Id = "1"
     member __.Shape = "Spheric"
+    member __.Order = 0
+    member __.Size = 1.20
     interface IThing with
         member this.Shape = this.Shape
         member this.Id = this.Id
+        member this.Order = this.Order
+        member this.Size = this.Size
 
 type Box() =
     member __.Shape = "Cubic"
     member __.Id = "2"
+    member __.Order = 1
+    member __.Size = 2.155
     interface IThing with
         member this.Shape = this.Shape
         member this.Id = this.Id
+        member this.Order = this.Order
+        member this.Size = this.Size
 
 type Character =
     | Human of Human
@@ -153,6 +163,8 @@ module Schema =
             [
                 Define.Field("format", String, "The format of the shape.", fun _ (t : IThing) -> t.Shape)
                 Define.Field("id", String, "The ID of the shape.", fun _ (t : IThing) -> t.Id)
+                Define.Field("order", Int, "The ID of the shape.", fun _ (t : IThing) -> t.Order)
+                Define.Field("size", Float, "The ID of the shape.", fun _ (t : IThing) -> t.Size)
                 Define.Field("form", String, "The format of the shape.", [], (fun _ (t : IThing) -> t.Shape), deprecationReason = "Use format field instead.")
             ])
 
@@ -166,6 +178,8 @@ module Schema =
             [
                 Define.Field("format", String, "The format of the ball.", fun _ (b : Ball) -> b.Shape)
                 Define.Field("id", String, "The ID of the ball.", fun _ (b : Ball) -> b.Id)
+                Define.Field("order", Int, "The ID of the shape.", fun _ (b : Ball) -> b.Order)
+                Define.Field("size", Float, "The ID of the shape.", fun _ (b : Ball) -> b.Size)
                 Define.Field("form", String, "The format of the shape.", [], (fun _ (b : Ball) -> b.Shape), deprecationReason = "Use format field instead.")
             ]
         )
@@ -180,6 +194,8 @@ module Schema =
             [
                 Define.Field("format", String, "The format of the box.", fun _ (b : Box) -> b.Shape)
                 Define.Field("id", String, "The ID of the box.", fun _ (b : Box) -> b.Id)
+                Define.Field("order", Int, "The ID of the shape.", fun _ (b : Box) -> b.Order)
+                Define.Field("size", Float, "The ID of the shape.", fun _ (b : Box) -> b.Size)
                 Define.Field("form", String, "The format of the shape.", [], (fun _ (b : Box) -> b.Shape), deprecationReason = "Use format field instead.")
             ]
         )

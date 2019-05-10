@@ -32,8 +32,8 @@ type JsonSaveOptions =
 [<RequireQualifiedAccess>]
 [<StructuredFormatDisplay("{_Print}")>]
 type JsonValue =
+  | Integer of int
   | String of string
-  | Number of decimal
   | Float of float
   | Record of properties:(string * JsonValue)[]
   | Array of elements:JsonValue[]
@@ -63,8 +63,8 @@ type JsonValue =
     let rec serialize indentation = function
       | Null -> w.Write "null"
       | Boolean b -> w.Write(if b then "true" else "false")
-      | Number number -> w.Write number
       | Float number -> w.Write number
+      | Integer number -> w.Write number
       | String s ->
           w.Write "\""
           JsonValue.JsonStringEncodeTo w s
@@ -128,6 +128,8 @@ type private JsonParser(jsonText:string) =
         i <- i + 1
     let isNumChar c =
       Char.IsDigit c || c = '.' || c='e' || c='E' || c='+' || c='-'
+    let isIntChar c =
+      Char.IsDigit c || c = '+' || c = '-'
     let throw() =
       let msg =
         sprintf
@@ -214,12 +216,16 @@ type private JsonParser(jsonText:string) =
             i <- i + 1
         let len = i - start
         let sub = s.Substring(start,len)
-        match TextConversions.AsDecimal CultureInfo.InvariantCulture sub with
-        | Some x -> JsonValue.Number x
-        | _ ->
+        let asFloat (sub : string) =
             match TextConversions.AsFloat [| |] false CultureInfo.InvariantCulture sub with
             | Some x -> JsonValue.Float x
             | _ -> throw()
+        if Seq.forall isIntChar sub
+        then
+            match TextConversions.AsInteger CultureInfo.InvariantCulture sub with
+            | Some x -> JsonValue.Integer x
+            | _ -> asFloat sub
+        else asFloat sub
 
     and parsePair() =
         let key = parseString()

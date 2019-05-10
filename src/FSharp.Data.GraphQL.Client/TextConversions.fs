@@ -3,7 +3,6 @@
 // This sample code is provided "as is" without warranty of any kind.
 // We disclaim all warranties, either express or implied, including the
 // warranties of merchantability and fitness for a particular purpose.
-//
 // A simple F# portable parser for JSON data
 // --------------------------------------------------------------------------------------
 
@@ -43,7 +42,7 @@ type TextConversions private() =
   static member val private DefaultRemovableAdornerCharacters = 
     Set.union TextConversions.DefaultNonCurrencyAdorners TextConversions.DefaultCurrencyAdorners
   
-  static member private RemoveAdorners (value:string) = 
+  static member private RemoveAdorners (value : string) = 
     String(value.ToCharArray() |> Array.filter (not << TextConversions.DefaultRemovableAdornerCharacters.Contains))
 
   static member AsString str =
@@ -51,12 +50,6 @@ type TextConversions private() =
 
   static member AsInteger cultureInfo text = 
     Int32.TryParse(TextConversions.RemoveAdorners text, NumberStyles.Integer, cultureInfo) |> asOption
-  
-  static member AsInteger64 cultureInfo text = 
-    Int64.TryParse(TextConversions.RemoveAdorners text, NumberStyles.Integer, cultureInfo) |> asOption
-  
-  static member AsDecimal cultureInfo text =
-    Decimal.TryParse(TextConversions.RemoveAdorners text, NumberStyles.Currency, cultureInfo) |> asOption
   
   static member AsFloat missingValues useNoneForMissingValues cultureInfo (text:string) = 
     match text.Trim() with
