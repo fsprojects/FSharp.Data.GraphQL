@@ -356,32 +356,35 @@ module internal JsonValueHelper =
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
 
+module internal ResultBase =
+    let get responseJson (schemaTypes : Map<string, IntrospectionType>) operationTypeName =
+        let data = 
+            let data = JsonValueHelper.getResponseDataFields responseJson
+            let operationType =
+                match schemaTypes.TryFind(operationTypeName) with
+                | Some def -> def
+                | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
+            match data with
+            | Some [||] | None -> None
+            | Some dataFields ->
+                let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+                let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
+                Some (RecordBase(operationType.Name, props))
+        let errors =
+            let errors = JsonValueHelper.getResponseErrors responseJson
+            match errors with
+            | Some [||] | None -> None
+            | Some errors -> Some (JsonValueHelper.getErrors errors)
+        let customData = 
+            let customData = JsonValueHelper.getResponseCustomFields responseJson
+            match customData with
+            | [||] -> None
+            | customData -> Some (Serialization.deserializeMap customData)
+        data, errors, customData
+
 /// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
-    let data = 
-        let data = JsonValueHelper.getResponseDataFields responseJson
-        let operationType =
-            match schemaTypes.TryFind(operationTypeName) with
-            | Some def -> def
-            | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
-        match data with
-        | Some [||] | None -> None
-        | Some dataFields ->
-            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-            let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
-            Some (RecordBase(operationType.Name, props))
-
-    let errors =
-        let errors = JsonValueHelper.getResponseErrors responseJson
-        match errors with
-        | Some [||] | None -> None
-        | Some errors -> Some (JsonValueHelper.getErrors errors)
-
-    let customData = 
-        let customData = JsonValueHelper.getResponseCustomFields responseJson
-        match customData with
-        | [||] -> None
-        | customData -> Some (Serialization.deserializeMap customData)
+    let data, errors, customData = ResultBase.get responseJson schemaTypes operationTypeName
 
     member private __.ResponseJson = responseJson
 
@@ -408,3 +411,6 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member __.Query = query
+
+type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IObservable<JsonValue>, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
+    let data, errors, customData = ResultBase.get responseJson schemaTypes operationTypeName
