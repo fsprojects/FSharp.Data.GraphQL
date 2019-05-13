@@ -4,16 +4,57 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.Collections
+open System.Collections.Generic
 open System.Globalization
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
-open Microsoft.FSharp.Reflection
 
 /// A type alias to represent a Type name.
 type TypeName = string
+
+type PathItem =
+    | Index of int
+    | Field of string
+
+type Path (items : PathItem seq) =
+    let items = Array.ofSeq items
+
+    new (items : obj seq) =
+        let mapper (x : obj) =
+            match x with
+            | :? int as x -> Index x
+            | :? string as x -> Field x
+            | _ -> failwith "Error mapping item array to path. One of the items is neither a System.Int32 or a System.String."
+        Path(Seq.map mapper items)
+
+    interface IEnumerable<PathItem> with
+        member __.GetEnumerator() = (items :> IEnumerable<PathItem>).GetEnumerator()
+
+    interface IEnumerable with
+        member __.GetEnumerator() = items.GetEnumerator()
+
+    member __.ToObjectArray() =
+        items |> Array.map (function Index x -> box x | Field x -> box x)
+
+    override x.ToString() =
+        sprintf "%A" (x.ToObjectArray())
+
+    member x.Equals(other : Path) =
+        x.ToObjectArray() = other.ToObjectArray()
+
+    override x.Equals(other : obj) =
+        match other with
+        | :? Path as other -> x.Equals(other)
+        | _ -> false
+
+    override __.GetHashCode() = items.GetHashCode()
+
+    interface IEquatable<Path> with
+        member x.Equals(other) = x.Equals(other)
 
 /// Contains data about a GQL operation error.
 type OperationError =
@@ -205,6 +246,15 @@ module internal JsonValueHelper =
             | _ -> failwithf "Expected error field of root type to be an Array type, but type is %A." errors
         | None -> None
 
+    let getResponsePath (responseJson : JsonValue) =
+        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "path") with
+        | Some (_, path) ->
+            match path with
+            | JsonValue.Array items -> Some items
+            | JsonValue.Null -> None
+            | _ -> failwithf "Expected path field of root to be a Record type, but type is %A." path
+        | None -> None
+
     let getResponseCustomFields (responseJson : JsonValue) =
         getResponseFields responseJson
         |> Array.filter (fun (name, _) -> name <> "data" && name <> "errors")
@@ -356,37 +406,33 @@ module internal JsonValueHelper =
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
 
-module internal ResultBase =
-    let get responseJson (schemaTypes : Map<string, IntrospectionType>) operationTypeName =
-        let data = 
-            let data = JsonValueHelper.getResponseDataFields responseJson
-            let operationType =
-                match schemaTypes.TryFind(operationTypeName) with
-                | Some def -> def
-                | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
-            match data with
-            | Some [||] | None -> None
-            | Some dataFields ->
-                let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
-                let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
-                Some (RecordBase(operationType.Name, props))
-        let errors =
-            let errors = JsonValueHelper.getResponseErrors responseJson
-            match errors with
-            | Some [||] | None -> None
-            | Some errors -> Some (JsonValueHelper.getErrors errors)
-        let customData = 
-            let customData = JsonValueHelper.getResponseCustomFields responseJson
-            match customData with
-            | [||] -> None
-            | customData -> Some (Serialization.deserializeMap customData)
-        data, errors, customData
-
 /// The base type for all GraphQLProvider operation result provided types.
+[<NoEquality; NoComparison>]
 type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
-    let data, errors, customData = ResultBase.get responseJson schemaTypes operationTypeName
+    let data = 
+        let data = JsonValueHelper.getResponseDataFields responseJson
+        let operationType =
+            match schemaTypes.TryFind(operationTypeName) with
+            | Some def -> def
+            | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
+        match data with
+        | Some [||] | None -> None
+        | Some dataFields ->
+            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+            let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
+            Some (RecordBase(operationType.Name, props))
 
-    member private __.ResponseJson = responseJson
+    let errors =
+        let errors = JsonValueHelper.getResponseErrors responseJson
+        match errors with
+        | Some [||] | None -> None
+        | Some errors -> Some (JsonValueHelper.getErrors errors)
+
+    let customData = 
+        let customData = JsonValueHelper.getResponseCustomFields responseJson
+        match customData with
+        | [||] -> None
+        | customData -> Some (Serialization.deserializeMap customData)
 
     /// Gets the data returned by the operation on the server.
     member __.Data = data
@@ -397,20 +443,34 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
     /// Gets all the custom data returned by the operation on server as a map of names and values.
     member __.CustomData = customData
 
-    member x.Equals(other : OperationResultBase) =
-        x.ResponseJson = other.ResponseJson
-
-    override x.Equals(other : obj) =
-        match other with
-        | :? OperationResultBase as other -> x.Equals(other)
-        | _ -> false
-
-    override x.GetHashCode() = x.ResponseJson.GetHashCode()
-
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member __.Query = query
 
+/// The base type for all GraphQLProvider deferred operation result provided types.
+[<NoEquality; NoComparison>]
+type DeferredResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
+    inherit OperationResultBase (responseJson, schemaTypes, operationTypeName)
+    
+    let path = 
+        let path = JsonValueHelper.getResponsePath responseJson
+        let mapper (x : JsonValue) =
+            match x with
+            | JsonValue.Integer x -> Index x
+            | JsonValue.String x -> Field x
+            | _ -> failwith "Error parsing response path. One of the items is neither an Integer value or a String value."
+        match path with
+        | Some [||] | None -> None
+        | Some path -> path |> Array.map mapper |> Path |> Some
+
+    /// Gets the path referring to the current deferred result.
+    member __.Path = path
+
+/// The base type for all GraphQLProvider subscription result provided types.
+[<NoEquality; NoComparison>]
 type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IObservable<JsonValue>, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
-    let data, errors, customData = ResultBase.get responseJson schemaTypes operationTypeName
+    inherit OperationResultBase (responseJson, schemaTypes, operationTypeName)
+
+    /// Gets the deferred results of the subscription operation as an observable.
+    member __.Deferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, schemaTypes, operationTypeName))
