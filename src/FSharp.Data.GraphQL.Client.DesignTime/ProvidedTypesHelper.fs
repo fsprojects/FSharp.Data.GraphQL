@@ -259,6 +259,7 @@ module internal ProvidedOperation =
                     <@@ let rec mapper (value : obj) =
                             match value with
                             | null -> null
+                            | :? EnumBase as v -> v.GetValue() |> box
                             | OptionValue v -> v |> Option.map mapper |> box
                             | :? RecordBase as v -> v.ToDictionary() |> box
                             | v -> v

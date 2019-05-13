@@ -152,6 +152,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     member x.ToDictionary() =
         let rec mapper (v : obj) =
             match v with
+            | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
             | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
