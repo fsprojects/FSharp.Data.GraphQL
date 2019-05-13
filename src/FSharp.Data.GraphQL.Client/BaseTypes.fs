@@ -16,10 +16,14 @@ open System.Text
 /// A type alias to represent a Type name.
 type TypeName = string
 
+/// A representation of a Path item.
 type PathItem =
+    /// Indicates that this path item refers to an index of another item inside a list field.
     | Index of int
-    | Field of string
+    /// Indicates that this path item refers to a field or type name.
+    | Name of string
 
+/// A representation for a path field type inside a GraphQL deferred result.
 type Path (items : PathItem seq) =
     let items = Array.ofSeq items
 
@@ -27,7 +31,7 @@ type Path (items : PathItem seq) =
         let mapper (x : obj) =
             match x with
             | :? int as x -> Index x
-            | :? string as x -> Field x
+            | :? string as x -> Name x
             | _ -> failwith "Error mapping item array to path. One of the items is neither a System.Int32 or a System.String."
         Path(Seq.map mapper items)
 
@@ -37,8 +41,9 @@ type Path (items : PathItem seq) =
     interface IEnumerable with
         member __.GetEnumerator() = items.GetEnumerator()
 
+    /// Converts this path to an object array, containing indexes and fields casted as objects.
     member __.ToObjectArray() =
-        items |> Array.map (function Index x -> box x | Field x -> box x)
+        items |> Array.map (function Index x -> box x | Name x -> box x)
 
     override x.ToString() =
         sprintf "%A" (x.ToObjectArray())
@@ -458,7 +463,7 @@ type DeferredResultBase (responseJson : JsonValue, schemaTypes : Map<string, Int
         let mapper (x : JsonValue) =
             match x with
             | JsonValue.Integer x -> Index x
-            | JsonValue.String x -> Field x
+            | JsonValue.String x -> Name x
             | _ -> failwith "Error parsing response path. One of the items is neither an Integer value or a String value."
         match path with
         | Some [||] | None -> None
