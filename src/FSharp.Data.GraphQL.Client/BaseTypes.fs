@@ -106,6 +106,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     member x.ToDictionary() =
         let rec mapper (v : obj) =
             match v with
+            | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
             | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
@@ -300,9 +301,6 @@ module internal JsonValueHelper =
                 | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
                 | TypeKind.SCALAR -> getScalarType fieldType |> makeNoneIfNeeded
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
-            // GraphQL does not have a built-in spec type equivalent to System.Decimal.
-            // So in this case, we convert it to float, even if JsonValue.Parse did parse it to a System.Decimal.
-            | JsonValue.Number n -> makeSomeIfNeeded (float n)
             | JsonValue.Integer n -> makeSomeIfNeeded n
             | JsonValue.String s -> 
                 match fieldType.Kind with
