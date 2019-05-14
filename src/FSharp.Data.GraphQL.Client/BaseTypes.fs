@@ -110,9 +110,9 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | :? RecordBase as v -> box (v.ToDictionary())
             | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
-        x.GetProperties()
-        |> Seq.map (fun p -> p.Name, mapper p.Value)
-        |> dict
+        match x.GetProperties() with
+        | [] -> null
+        | props -> props |> Seq.map (fun p -> p.Name, mapper p.Value) |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
