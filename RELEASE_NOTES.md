@@ -90,3 +90,6 @@
 
 ### 1.0.0-beta4 - May 13 2019
 * Fixing an bug when converting variable types to variables json in a query
+
+### 1.0.0-beta5 - May 13 2019
+* Fixing an bug when parsing json objects with no fields in serialization

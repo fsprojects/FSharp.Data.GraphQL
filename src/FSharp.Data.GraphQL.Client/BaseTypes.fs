@@ -106,13 +106,12 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     member x.ToDictionary() =
         let rec mapper (v : obj) =
             match v with
+            | null -> null
             | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
             | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
-        match x.GetProperties() with
-        | [] -> null
-        | props -> props |> Seq.map (fun p -> p.Name, mapper p.Value) |> dict
+        x.GetProperties() |> Seq.map (fun p -> p.Name, mapper p.Value) |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
