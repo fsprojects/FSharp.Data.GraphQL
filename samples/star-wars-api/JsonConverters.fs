@@ -1,36 +1,45 @@
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
-open System.Reflection
 open Microsoft.FSharp.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 
+[<Sealed>]
 type OptionConverter() =
     inherit JsonConverter()
-    
-    override __.CanConvert(t) = 
-        t.GetTypeInfo().IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
+
+    override __.CanConvert(t) =
+        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
 
     override __.WriteJson(writer, value, serializer) =
-        let getFields value =
-            let _, fields = FSharpValue.GetUnionFields(value, value.GetType())
-            fields.[0]
-        let value = 
-            match value with
-            | null ->null
-            | _ -> getFields value
+        let value =
+            if isNull value then null
+            else
+                let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
+                fields.[0]
         serializer.Serialize(writer, value)
 
-    override __.ReadJson(_, _, _, _) = failwith "Not supported"
+    override __.ReadJson(reader, t, _, serializer) =
+        let innerType = t.GetGenericArguments().[0]
+        let innerType =
+            if innerType.IsValueType then (typedefof<System.Nullable<_>>).MakeGenericType([|innerType|])
+            else innerType
+        let value = serializer.Deserialize(reader, innerType)
+        let cases = FSharpType.GetUnionCases(t)
+        if isNull value then FSharpValue.MakeUnion(cases.[0], [||])
+        else FSharpValue.MakeUnion(cases.[1], [|value|])
 
 [<Sealed>]
 type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
-    override __.CanConvert(t) = t = typeof<GraphQLQuery>    
+
+    override __.CanConvert(t) = t = typeof<GraphQLQuery>  
+    
     override __.WriteJson(_, _, _) =  failwith "Not supported"    
+
     override __.ReadJson(reader, _, _, serializer) =
         let jobj = JObject.Load reader
         let query = jobj.Property("query").Value.ToString()
@@ -66,9 +75,13 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
 [<Sealed>]
 type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
+
     override __.CanWrite = false
+
     override __.CanConvert(t) = t = typeof<WebSocketClientMessage>
+
     override __.WriteJson(_, _, _) = failwith "Not supported"
+
     override __.ReadJson(reader, _, _, _) =
         let jobj = JObject.Load reader
         let typ = jobj.Property("type").Value.ToString()
@@ -103,8 +116,11 @@ type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: 
 [<Sealed>]
 type WebSocketServerMessageConverter() =
     inherit JsonConverter()
+
     override __.CanRead = false
+
     override __.CanConvert(t) = t = typedefof<WebSocketServerMessage> || t.DeclaringType = typedefof<WebSocketServerMessage>
+
     override __.WriteJson(writer, value, _) =
         let value = value :?> WebSocketServerMessage
         let jobj = JObject()

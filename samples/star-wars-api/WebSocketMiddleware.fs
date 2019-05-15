@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
 open System.Threading
@@ -10,37 +10,50 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
 open System.Collections.Generic
 open System.Collections.Concurrent
-open FSharp.Data.GraphQL.Server.Middlewares
-open FSharp.Data.GraphQL.Types
 
 type GraphQLWebSocket(innerSocket : WebSocket) =
     inherit WebSocket()
+
     let subscriptions = ConcurrentDictionary<string, IDisposable>() :> IDictionary<string, IDisposable>
     let id = System.Guid.NewGuid()
+
     override __.CloseStatus = innerSocket.CloseStatus
+
     override __.CloseStatusDescription = innerSocket.CloseStatusDescription
+
     override __.State = innerSocket.State
+
     override __.SubProtocol = innerSocket.SubProtocol
+
     override __.CloseAsync(status, description, ct) = innerSocket.CloseAsync(status, description, ct)
+
     override __.CloseOutputAsync(status, description, ct) = innerSocket.CloseOutputAsync(status, description, ct)
+
     override this.Dispose() =
         this.UnsubscribeAll()
         innerSocket.Dispose()
+
     override __.ReceiveAsync(buffer : ArraySegment<byte>, ct) = innerSocket.ReceiveAsync(buffer, ct)
+
     override __.SendAsync(buffer : ArraySegment<byte>, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
+
     override __.Abort() = innerSocket.Abort()
+
     member __.Subscribe(id : string, unsubscriber : IDisposable) =
         subscriptions.Add(id, unsubscriber)
+
     member __.Unsubscribe(id : string) =
         match subscriptions.ContainsKey(id) with
         | true ->
             subscriptions.[id].Dispose()
             subscriptions.Remove(id) |> ignore
         | false -> ()
+
     member __.UnsubscribeAll() =
         subscriptions
         |> Seq.iter (fun x -> x.Value.Dispose())
         subscriptions.Clear()
+
     member __.Id = id
 
 module SocketManager =
@@ -82,7 +95,7 @@ module SocketManager =
             return JsonConvert.DeserializeObject<WebSocketClientMessage>(message, settings) |> Some
     }
 
-    let private handleMessages (executor : Executor<'Root>) (root : 'Root) (socket : GraphQLWebSocket) = async {
+    let private handleMessages (executor : Executor<'Root>) (root : unit -> 'Root) (socket : GraphQLWebSocket) = async {
         let send id output =
             Data (id, output)
             |> sendMessage socket
@@ -109,7 +122,7 @@ module SocketManager =
                 | Some ConnectionInit ->
                     do! sendMessage socket ConnectionAck
                 | Some (Start (id, payload)) ->
-                    executor.AsyncExecute(payload.ExecutionPlan, root, payload.Variables)
+                    executor.AsyncExecute(payload.ExecutionPlan, root(), payload.Variables)
                     |> Async.RunSynchronously
                     |> handle id
                     do! Data (id, Dictionary<string, obj>()) |> sendMessage socket
@@ -127,11 +140,11 @@ module SocketManager =
         | _ -> disposeSocket socket
     }
 
-    let startSocket (socket : GraphQLWebSocket) (executor : Executor<'Root>) (root : 'Root) =
+    let startSocket (socket : GraphQLWebSocket) (executor : Executor<'Root>) (root : unit -> 'Root) =
         sockets.Add(socket.Id, socket)
         handleMessages executor root socket |> Async.RunSynchronously
 
-type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : 'Root) =
+type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : unit -> 'Root) =
     member __.Invoke(ctx : HttpContext) =
         async {
             match ctx.WebSockets.IsWebSocketRequest with

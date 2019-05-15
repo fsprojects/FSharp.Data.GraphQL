@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Types

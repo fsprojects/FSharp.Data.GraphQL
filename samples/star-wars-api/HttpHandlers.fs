@@ -1,10 +1,9 @@
-﻿namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System.Text
 open Giraffe
 open Microsoft.AspNetCore.Http
 open Newtonsoft.Json
-open Newtonsoft.Json.Linq
 open FSharp.Data.GraphQL.Execution
 open System.IO
 open FSharp.Data.GraphQL
@@ -25,34 +24,18 @@ module HttpHandlers =
     let setContentTypeAsJson : HttpHandler =
         setHttpHeader "Content-Type" "application/json"
 
-    let private graphiQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let userData =
-            ctx.Request.Headers
-            |> Seq.map (|KeyValue|)
-            |> Seq.tryFind (fun (name, _) -> name = "UserData")
-            |> Option.map (snd >> (fun x -> x.ToString()))
-        userData |> Option.iter (printfn "User data: %s")
-        let jsonSettings =
-            JsonSerializerSettings()
-            |> tee (fun s ->
-                s.Converters <- [| OptionConverter() :> JsonConverter |]
-                s.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver())
-        let formatData (data : Output) : Output =
-            match userData with
-            | Some userData ->
-                data 
-                |> Seq.map (|KeyValue|) 
-                |> Seq.append (Seq.singleton ("UserData", box userData))
-                |> dict
-            | None -> data
+    let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
+        let jsonSettings = jsonSerializerSettings [| OptionConverter() |]
+        let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
         let json =
             function
             | Direct (data, _) ->
-                JsonConvert.SerializeObject(formatData data, jsonSettings)
+                JsonConvert.SerializeObject(data, jsonSettings)
             | Deferred (data, _, deferred) ->
-                deferred |> Observable.add(fun d -> printfn "Deferred: %s" (JsonConvert.SerializeObject(d, jsonSettings)))
-                JsonConvert.SerializeObject(formatData data, jsonSettings)
-            | Stream _ ->
+                deferred |> Observable.add(fun d -> printfn "Deferred: %s" (serialize d))
+                JsonConvert.SerializeObject(data, jsonSettings)
+            | Stream data ->  
+                data |> Observable.add(fun d -> printfn "Subscription data: %s" (serialize d))
                 "{}"
         let tryParse fieldName (data : byte []) =
             let raw = Encoding.UTF8.GetString data
@@ -64,13 +47,8 @@ module HttpHandlers =
                 | s -> s
             else None
         let mapString (s : string option) =
-            let mapper (v : obj) =
-                match v with
-                | null -> null
-                | :? JObject as jobj -> box (jobj.ToObject<ThingFilter>())
-                | _ -> v
-            Option.map (JsonConvert.DeserializeObject<Map<string, obj>> >> (Map.map (fun _ v -> mapper v))) s
-        let removeSpacesAndNewLines (str : string) = 
+            Option.map JsonConvert.DeserializeObject<Map<string, obj>> s
+        let removeWhitespacesAndLineBreaks (str : string) = 
             str.Trim().Replace("\r\n", " ")
         let readStream (s : Stream) =
             use ms = new MemoryStream(4096)
@@ -83,26 +61,24 @@ module HttpHandlers =
         | Some query, Some variables ->
             printfn "Received query: %s" query
             printfn "Received variables: %A" variables
-            let query = query |> removeSpacesAndNewLines
-            let result = Schema.executor.AsyncExecute(query, variables = variables, data = Schema.root) |> Async.RunSynchronously
+            let query = removeWhitespacesAndLineBreaks query
+            let root = { RequestId = System.Guid.NewGuid().ToString() }
+            let result = Schema.executor.AsyncExecute(query, root, variables) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
-            printfn "User data: %A" userData
             return! okWithStr (json result) next ctx
         | Some query, None ->
             printfn "Received query: %s" query
-            let query = query |> removeSpacesAndNewLines
+            let query = removeWhitespacesAndLineBreaks query
             let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
-            printfn "User data: %A" userData
             return! okWithStr (json result) next ctx
         | None, _ ->
             let result = Schema.executor.AsyncExecute(Introspection.IntrospectionQuery) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
-            printfn "User data: %A" userData
             return! okWithStr (json result) next ctx
     }
 
     let webApp : HttpHandler = 
         setCorsHeaders
-        >=> graphiQL 
+        >=> graphQL 
         >=> setContentTypeAsJson

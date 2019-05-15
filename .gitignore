@@ -195,4 +195,3 @@ docs/content/release-notes.md
 .fake
 docs/tools/FSharp.Formatting.svclog
 project.lock.json
-src/FSharp.Data.GraphQL.Samples.GiraffeServer/Properties/launchSettings.json

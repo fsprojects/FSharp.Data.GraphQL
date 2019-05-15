@@ -12,11 +12,6 @@ type Episode = Provider.Types.Episode
 // As we are not using a connection to a server to get the introspection, we need a runtime context.
 let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084")
 
-// We should be able to create instances of schema types.
-let ball = Provider.Types.Ball(form = "Spheric", format = "Spheric", id = "1", order = 0, size = 1.11)
-let box = Provider.Types.Box(form = "Cubic", format = "Cubic", id = "2", order = 1, size = 2.0)
-let things : Provider.Types.IThing list = [ball; box]
-
 module SimpleOperation =
     let operation = 
         Provider.Operation<"""query Q {
@@ -70,21 +65,6 @@ module SimpleOperation =
         actual |> equals expected
 
 [<Fact>]
-let ``Should be able to pretty print schema types`` () =
-    let actual = normalize <| sprintf "%A" things
-    let expected = normalize <| """[{Form = "Spheric";
-      Format = "Spheric";
-      Id = "1";
-      Order = 0;
-      Size = 1.11;};
-      {Form = "Cubic";
-      Format = "Cubic";
-      Id = "2";
-      Order = 1;
-      Size = 2.0;}]"""
-    actual |> equals expected
-
-[<Fact>]
 let ``Should be able to start a simple query operation synchronously`` () =
     use context = getContext()
     SimpleOperation.operation.Run(context)
@@ -96,26 +76,6 @@ let ``Should be able to start a simple query operation asynchronously`` () =
     SimpleOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> SimpleOperation.validateResult
-
-[<Fact>]
-let ``Should be able to start a simple query operation synchronously with custom HTTP headers`` () =
-    let userData = Guid.NewGuid().ToString()
-    use context = { getContext() with HttpHeaders = [| "UserData", userData |] }
-    let result = SimpleOperation.operation.Run(context)
-    SimpleOperation.validateResult result
-    result.CustomData.IsSome |> equals true
-    result.CustomData.Value.ContainsKey("userData") |> equals true
-    result.CustomData.Value.["userData"] |> equals (upcast userData)
-
-[<Fact>]
-let ``Should be able to start a simple query operation asynchronously with custom HTTP headers`` () =
-    let userData = Guid.NewGuid().ToString()
-    use context = { getContext() with HttpHeaders = [| "UserData", userData |] }
-    let result = SimpleOperation.operation.AsyncRun(context) |> Async.RunSynchronously
-    SimpleOperation.validateResult result
-    result.CustomData.IsSome |> equals true
-    result.CustomData.Value.ContainsKey("userData") |> equals true
-    result.CustomData.Value.["userData"] |> equals (upcast userData)
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an union type`` () =
@@ -155,82 +115,6 @@ let ``Should be able to use pattern matching methods on an union type`` () =
         SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
         SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
   
-module InterfaceOperation =
-    let operation =
-        Provider.Operation<"""query TestQuery {
-            things {
-              id
-              format
-              ...on Ball {
-                form
-              }
-              ...on Box {
-                form
-              }
-            }
-          }""">()
-    
-    type Operation = Provider.Operations.TestQuery
-
-    let validateResult (result : Operation.OperationResult) =
-        result.CustomData.IsSome |> equals true
-        result.CustomData.Value.ContainsKey("documentId") |> equals true
-        result.Errors |> equals None
-        result.Data.IsSome |> equals true
-        let expectedThings : Operation.Types.Things.Thing [] =
-          [| Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric")
-             Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
-        result.Data.Value.Things |> equals expectedThings
-        let actual = normalize <| sprintf "%A" result.Data
-        let expected = normalize <| """Some
-            {Things = [|{Form = "Spheric";
-            Format = "Spheric";
-            Id = "1";};
-            {Form = "Cubic";
-            Format = "Cubic";
-            Id = "2";}|];}"""
-        actual |> equals expected
-
-[<Fact>]
-let ``Should be able to run a query with interface types synchronously`` () =
-    use context = getContext()
-    InterfaceOperation.operation.Run(context)
-    |> InterfaceOperation.validateResult
-
-[<Fact>]
-let ``Should be able to run a query with interface types asynchronously`` () =
-    use context = getContext()
-    InterfaceOperation.operation.AsyncRun(context)
-    |> Async.RunSynchronously
-    |> InterfaceOperation.validateResult
-
-[<Fact>]
-let ``Should be able to use pattern matching methods on an interface type`` () =
-    use context = getContext()
-    let result = InterfaceOperation.operation.Run(context)
-    result.Data.IsSome |> equals true
-    let things = result.Data.Value.Things
-    let balls = things |> Array.choose (fun x -> x.TryAsBall())
-    balls |> equals [| InterfaceOperation.Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric") |]
-    let boxes = things |> Array.choose (fun x -> x.TryAsBox())
-    boxes |> equals [| InterfaceOperation.Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
-    try
-      things |> Array.map (fun x -> x.AsBall()) |> ignore
-      failwith "Expected exception when trying to get all things as balls!"
-    with _ -> ()
-    try
-      things |> Array.map (fun x -> x.AsBox()) |> ignore
-      failwith "Expected exception when trying to get all things as boxes!"
-    with _ -> ()
-    things
-    |> Array.filter (fun x -> x.IsBall())
-    |> Array.map (fun x -> x.AsBall())
-    |> equals [| InterfaceOperation.Operation.Types.Things.Ball(id = "1", format = "Spheric", form = "Spheric") |]
-    things
-    |> Array.filter (fun x -> x.IsBox())
-    |> Array.map (fun x -> x.AsBox())
-    |> equals [| InterfaceOperation.Operation.Types.Things.Box(id = "2", format = "Cubic", form = "Cubic") |]
-
 module MutationOperation =
     let operation =
         Provider.Operation<"""mutation M {
@@ -265,40 +149,6 @@ let ``Should be able to run a mutation asynchronously`` () =
     MutationOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
     |> MutationOperation.validateResult
-
-module VariablesOperation =
-    let operation =
-        Provider.Operation<"""query ThingsQuery($filter: ThingFilter!) {
-            things(filter: $filter) {
-              id
-              format
-            }
-          }""">()
-
-    type Operation = Provider.Operations.ThingsQuery
-
-    let validateResult (filter : Provider.Types.ThingFilter) (result : Operation.OperationResult) =
-        result.CustomData.IsSome |> equals true
-        result.CustomData.Value.ContainsKey("documentId") |> equals true
-        result.Errors |> equals None
-        result.Data.IsSome |> equals true
-        hasItems result.Data.Value.Things
-        result.Data.Value.Things |> Array.forall (fun x -> x.Format = filter.Format) |> equals true
-
-[<Fact>]
-let ``Should be able to run a query with variables syncrhonously`` () =
-    let filter = Provider.Types.ThingFilter(format = "Cubic")
-    use context = getContext()
-    VariablesOperation.operation.Run(context, filter)
-    |> VariablesOperation.validateResult filter
-
-[<Fact>]
-let ``Should be able to run a query with variables asyncrhonously`` () =
-    let filter = Provider.Types.ThingFilter(format = "Cubic")
-    use context = getContext()
-    VariablesOperation.operation.AsyncRun(context, filter)
-    |> Async.RunSynchronously
-    |> VariablesOperation.validateResult filter
 
 module FileOperation =
     let fileop = Provider.Operation<"operation.graphql">()

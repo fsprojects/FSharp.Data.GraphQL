@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
 open System.Text
@@ -39,3 +39,9 @@ module JsonHelpers =
         |> tee (fun s ->
             s.Converters <- List<JsonConverter>(converters)
             s.ContractResolver <- CamelCasePropertyNamesContractResolver())
+
+    let jsonSerializer (converters : JsonConverter seq) =
+        JsonSerializer()
+        |> tee (fun c ->
+            Seq.iter c.Converters.Add converters
+            c.ContractResolver <- CamelCasePropertyNamesContractResolver())

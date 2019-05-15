@@ -1,6 +1,6 @@
 ﻿#nowarn "40"
 
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -33,39 +33,8 @@ type Planet =
         x.IsMoon <- b
         x
 
-type ThingFilter =
-    { Format : string }
-
 type Root =
-    { ClientId: string }
-
-type IThing =
-    abstract member Shape : string
-    abstract member Id : string
-    abstract member Order : int
-    abstract member Size : float
-
-type Ball() =
-    member __.Id = "1"
-    member __.Shape = "Spheric"
-    member __.Order = 0
-    member __.Size = 1.20
-    interface IThing with
-        member this.Shape = this.Shape
-        member this.Id = this.Id
-        member this.Order = this.Order
-        member this.Size = this.Size
-
-type Box() =
-    member __.Shape = "Cubic"
-    member __.Id = "2"
-    member __.Order = 1
-    member __.Size = 2.155
-    interface IThing with
-        member this.Shape = this.Shape
-        member this.Id = this.Id
-        member this.Order = this.Order
-        member this.Size = this.Size
+    { RequestId: string }
 
 type Character =
     | Human of Human
@@ -122,9 +91,6 @@ module Schema =
             Name = Some "Death Star"
             IsMoon = Some false}]
 
-    let things : IThing list =
-        [ Ball(); Box() ]
-
     let getHuman id =
         humans |> List.tryFind (fun h -> h.Id = id)
 
@@ -133,11 +99,6 @@ module Schema =
 
     let getPlanet id =
         planets |> List.tryFind (fun p -> p.Id = id)
-
-    let getThings (filter : ThingFilter option) =
-        match filter with
-        | Some filter -> things |> List.filter (fun t -> t.Shape = filter.Format)
-        | None -> things
 
     let characters =
         (humans |> List.map Human) @ (droids |> List.map Droid)
@@ -148,57 +109,6 @@ module Schema =
 
     let getCharacter id =
         characters |> List.tryFind (matchesId id)
-
-    let ThingFilterType =
-        Define.InputObject<ThingFilter>(
-            name = "ThingFilter",
-            fields = [ Define.Input("format", String, description = "The format of  the shape to be filtered.") ],
-            description = "A filter used to select a thing.")
-
-    let ThingType =
-        Define.Interface(
-            name = "Thing",
-            description = "A thing.",
-            fieldsFn = fun () ->
-            [
-                Define.Field("format", String, "The format of the shape.", fun _ (t : IThing) -> t.Shape)
-                Define.Field("id", String, "The ID of the shape.", fun _ (t : IThing) -> t.Id)
-                Define.Field("order", Int, "The ID of the shape.", fun _ (t : IThing) -> t.Order)
-                Define.Field("size", Float, "The ID of the shape.", fun _ (t : IThing) -> t.Size)
-                Define.Field("form", String, "The format of the shape.", [], (fun _ (t : IThing) -> t.Shape), deprecationReason = "Use format field instead.")
-            ])
-
-    let BallType =
-        Define.Object<Ball>(
-            name = "Ball",
-            description = "A ball.",
-            interfaces = [ ThingType ],
-            isTypeOf = (fun o -> o :? Ball),
-            fieldsFn = fun () ->
-            [
-                Define.Field("format", String, "The format of the ball.", fun _ (b : Ball) -> b.Shape)
-                Define.Field("id", String, "The ID of the ball.", fun _ (b : Ball) -> b.Id)
-                Define.Field("order", Int, "The ID of the shape.", fun _ (b : Ball) -> b.Order)
-                Define.Field("size", Float, "The ID of the shape.", fun _ (b : Ball) -> b.Size)
-                Define.Field("form", String, "The format of the shape.", [], (fun _ (b : Ball) -> b.Shape), deprecationReason = "Use format field instead.")
-            ]
-        )
-
-    let BoxType =
-        Define.Object<Box>(
-            name = "Box",
-            description = "A box.",
-            interfaces = [ ThingType ],
-            isTypeOf = (fun o -> o :? Box),
-            fieldsFn = fun () ->
-            [
-                Define.Field("format", String, "The format of the box.", fun _ (b : Box) -> b.Shape)
-                Define.Field("id", String, "The ID of the box.", fun _ (b : Box) -> b.Id)
-                Define.Field("order", Int, "The ID of the shape.", fun _ (b : Box) -> b.Order)
-                Define.Field("size", Float, "The ID of the shape.", fun _ (b : Box) -> b.Size)
-                Define.Field("form", String, "The format of the shape.", [], (fun _ (b : Box) -> b.Shape), deprecationReason = "Use format field instead.")
-            ]
-        )
 
     let EpisodeType =
         Define.Enum(
@@ -268,11 +178,11 @@ module Schema =
     and RootType =
         Define.Object<Root>(
             name = "Root",
-            description = "The Root type to be passed to all our resolvers",
+            description = "The Root type to be passed to all our resolvers.",
             isTypeOf = (fun o -> o :? Root),
             fieldsFn = fun () ->
             [
-                Define.Field("clientid", String, "The ID of the client", fun _ r -> r.ClientId)
+                Define.Field("requestId", String, "The ID of the client.", fun _ (r : Root) -> r.RequestId)
             ])
 
     let Query =
@@ -281,8 +191,7 @@ module Schema =
             fields = [
                 Define.Field("hero", Nullable HumanType, "Gets human hero", [ Define.Input("id", String) ], fun ctx _ -> getHuman (ctx.Arg("id")))
                 Define.Field("droid", Nullable DroidType, "Gets droid", [ Define.Input("id", String) ], fun ctx _ -> getDroid (ctx.Arg("id")))
-                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id")))
-                Define.Field("things", ListOf ThingType, "Gets things", [ Define.Input("filter", Nullable ThingFilterType) ], fun ctx _ -> getThings (ctx.TryArg("filter") |> Option.flatten)).WithQueryWeight(1.0) ])
+                Define.Field("planet", Nullable PlanetType, "Gets planet", [ Define.Input("id", String) ], fun ctx _ -> getPlanet (ctx.Arg("id"))) ])
 
     let Subscription =
         Define.SubscriptionObject<Root>(
@@ -292,12 +201,11 @@ module Schema =
                     "watchMoon",
                     RootType,
                     PlanetType,
-                    "Watches to see if a planet is a moon",
+                    "Watches to see if a planet is a moon.",
                     [ Define.Input("id", String) ],
                     (fun ctx _ p -> if ctx.Arg("id") = p.Id then Some p else None)) ])
 
-    let schemaConfig =
-        { SchemaConfig.Default with Types = [ BallType; BoxType ] }
+    let schemaConfig = SchemaConfig.Default
 
     let Mutation =
         Define.Object<Root>(
@@ -306,7 +214,7 @@ module Schema =
                 Define.Field(
                     "setMoon",
                     Nullable PlanetType,
-                    "Sets a moon status",
+                    "Defines if a planet is actually a moon or not.",
                     [ Define.Input("id", String); Define.Input("isMoon", Boolean) ],
                     fun ctx _ ->
                         getPlanet (ctx.Arg("id"))
@@ -325,5 +233,3 @@ module Schema =
           Define.LiveQueryMiddleware() ]
 
     let executor = Executor(schema, middlewares)
-
-    let root = { ClientId = "5" }

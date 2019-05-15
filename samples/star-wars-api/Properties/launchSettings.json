@@ -15,7 +15,7 @@
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "FSharp.Data.GraphQL.Samples.GiraffeServer": {
+    "FSharp.Data.GraphQL.Samples.StarWarsApi": {
       "commandName": "Project",
       "launchBrowser": true,
       "environmentVariables": {
