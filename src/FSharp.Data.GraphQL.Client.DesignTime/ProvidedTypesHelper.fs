@@ -576,15 +576,15 @@ module internal Provider =
                                     | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                [httpHeaders; serverUrl]
+                                [serverUrl; httpHeaders]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
                                 Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
                             let invoker (args : Expr list) =
-                                let serverUrl = args.[1]
+                                let serverUrl = args.[0]
                                 <@@ let httpHeaders =
-                                        match %%args.[0] : seq<string * string> with
+                                        match %%args.[1] : seq<string * string> with
                                         | null -> %%defaultHttpHeadersExpr
                                         | argHeaders -> argHeaders
                                     { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
