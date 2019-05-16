@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
-open Microsoft.FSharp.Reflection
+open FSharp.Data.GraphQL.Ast.Extensions
 
 /// A type alias to represent a Type name.
 type TypeName = string
@@ -228,7 +228,16 @@ module internal JsonValueHelper =
             | JsonValue.String x -> x
             | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
 
-    let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (fieldName : string, fieldValue : JsonValue) =
+    let getAstField (astFields : AstFieldInfo list) (typeName : string) (aliasOrName : string) =
+        let finder (f : AstFieldInfo) =
+            match f with
+            | FragmentField f -> f.TypeCondition = typeName && f.AliasOrName.FirstCharUpper() = aliasOrName
+            | TypeField f -> f.AliasOrName.FirstCharUpper() = aliasOrName
+        match List.tryFind finder astFields with
+        | Some astField -> astField
+        | None -> failwithf "Expected to find Ast information for field \"%s\" on the type \"%s\", but it was not found." aliasOrName typeName
+
+    let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (astField : AstFieldInfo) (fieldName : string, fieldValue : JsonValue) =
         let getScalarType (typeRef : IntrospectionTypeRef) =
             let getType (typeName : string) =
                 match Map.tryFind typeName Types.scalar with
@@ -237,7 +246,7 @@ module internal JsonValueHelper =
             match typeRef.Name with
             | Some name -> getType name
             | None -> failwith "Expected scalar type to have a name, but it does not have one."
-        let rec helper (useOption : bool) (fieldType : IntrospectionTypeRef) (fieldValue : JsonValue) : obj =
+        let rec helper (useOption : bool) (fieldType : IntrospectionTypeRef) (astField : AstFieldInfo) (fieldValue : JsonValue) : obj =
             let makeSomeIfNeeded value =
                 match fieldType.Kind with
                 | TypeKind.NON_NULL | TypeKind.LIST -> value
@@ -254,7 +263,7 @@ module internal JsonValueHelper =
                     match fieldType.OfType with
                     | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
                     | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." fieldType.OfType
-                let items = items |> Array.map (helper false itemType)
+                let items = items |> Array.map (helper false itemType astField)
                 match itemType.Kind with
                 | TypeKind.NON_NULL -> 
                     match itemType.OfType with
@@ -280,11 +289,13 @@ module internal JsonValueHelper =
                     | Some tref -> tref
                     | None -> failwithf "Expected to find a type \"%s\" in the schema types, but it was not found." typeName
                 let fields = getFields schemaType
-                let mapper (name : string, value : JsonValue) =
+                let mapper (aliasOrName : string, value : JsonValue) =
+                    let astField = getAstField astField.Fields schemaType.Name aliasOrName
+                    let name = astField.Name.FirstCharUpper()
                     match fields.TryFind(name) with
-                    | Some fieldType -> 
-                        let value = helper true fieldType value
-                        { Name = name; Value = value }
+                    | Some fieldType ->
+                        let value = helper true fieldType astField value
+                        { Name = aliasOrName; Value = value }
                     | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
                 let props =
                     props
@@ -331,14 +342,16 @@ module internal JsonValueHelper =
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
                 | TypeKind.ENUM when fieldType.Name.IsSome -> EnumBase(fieldType.Name.Value, s) |> makeSomeIfNeeded
                 | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
-        fieldName, (helper true fieldType fieldValue)
+        fieldName, (helper true fieldType astField fieldValue)
 
-    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (fields : (string * JsonValue) []) =
+    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (operationAstFields : AstFieldInfo list) (fields : (string * JsonValue) []) =
         let fieldMap = getFields schemaType
-        let mapper (name : string, value : JsonValue) =
+        let mapper (aliasOrName : string, value : JsonValue) =
+            let astField = getAstField operationAstFields schemaType.Name aliasOrName
+            let name = astField.Name.FirstCharUpper()
             match fieldMap.TryFind(name) with
-            | Some fieldType -> getFieldValue schemaTypes fieldType (name, value)
-            | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
+            | Some fieldType -> getFieldValue schemaTypes fieldType astField (aliasOrName, value)
+            | None -> failwithf "Expected to find a field with name \"%s\" on the type %s, but found none." name schemaType.Name
         removeTypeNameField fields
         |> Array.map (firstUpper >> mapper)
 
@@ -357,7 +370,8 @@ module internal JsonValueHelper =
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
+type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationAstFields : AstFieldInfo [], operationTypeName : string) =
+    let operationAstFields = List.ofArray operationAstFields
     let data = 
         let data = JsonValueHelper.getResponseDataFields responseJson
         let operationType =
@@ -367,7 +381,7 @@ type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, In
         match data with
         | Some [||] | None -> None
         | Some dataFields ->
-            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType dataFields
+            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType operationAstFields dataFields
             let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
             Some (RecordBase(operationType.Name, props))
 

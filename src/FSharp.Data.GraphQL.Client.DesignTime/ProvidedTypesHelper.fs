@@ -113,9 +113,14 @@ module internal ProvidedInterface =
 
 type internal RecordPropertyMetadata =
     { Name : string
+      Alias : string option
       Description : string option
       DeprecationReason : string option
       Type : Type }
+    member x.AliasOrName =
+        match x.Alias with
+        | Some x -> x
+        | None -> x.Name
 
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
@@ -123,7 +128,7 @@ module internal ProvidedRecord =
     let makeProvidedType(tdef : ProvidedTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
-            let pname = metadata.Name.FirstCharUpper()
+            let pname = metadata.AliasOrName.FirstCharUpper()
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
                     match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
@@ -134,22 +139,23 @@ module internal ProvidedRecord =
             metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
             upcast pdef 
         tdef.AddMembersDelayed(fun _ -> List.map propertyMapper properties)
-        let addConstructorDelayed (propertiesGetter : unit -> (string * Type) list) =
+        let addConstructorDelayed (propertiesGetter : unit -> (string * string option * Type) list) =
             tdef.AddMemberDelayed(fun _ ->
                 let properties = propertiesGetter ()
                 let prm =
-                    let mapper (name : string, t : Type) = 
+                    let mapper (name : string, alias : string option, t : Type) =
+                        let aliasOrName = Option.defaultValue name alias
                         match t with
-                        | Option t -> ProvidedParameter(name, t, optionalValue = null)
-                        | _ -> ProvidedParameter(name, t)
-                    let required = properties |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
-                    let optional = properties |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
+                        | Option t -> ProvidedParameter(aliasOrName, t, optionalValue = null)
+                        | _ -> ProvidedParameter(aliasOrName, t)
+                    let required = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
+                    let optional = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
                     required @ optional
                 let invoker (args : Expr list) = 
                     let properties =
                         let args = 
-                            let names = properties |> List.map (fun (name, _) -> name.FirstCharUpper())
-                            let types = properties |> List.map snd
+                            let names = properties |> List.map (fun (name, alias, _) -> Option.defaultValue name alias) |> List.map (fun name -> name.FirstCharUpper())
+                            let types = properties |> List.map (fun (_, _, t) -> t)
                             let mapper (name : string, t : Type, value : Expr) =
                                 let value = Expr.Coerce(value, typeof<obj>)
                                 let isOption = isOption t
@@ -191,12 +197,12 @@ module internal ProvidedRecord =
                 let members : MemberInfo list = [asType; tryAsType; isType]
                 members)
             let propertiesGetter() =
-                let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, p.ParameterType) |> List.ofArray
-                let props = properties |> List.map (fun p -> p.Name, p.Type)
+                let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, None, p.ParameterType) |> List.ofArray
+                let props = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
                 bprops @ props
             addConstructorDelayed propertiesGetter
         | _ -> 
-            let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Type)
+            let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
         tdef
 
@@ -229,6 +235,7 @@ module internal ProvidedOperation =
                          operationTypeName : string,
                          schemaTypesExpr : Expr,
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
+                         operationAstFieldsExpr : Expr,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
                          className : string) =
@@ -320,7 +327,7 @@ module internal ProvidedOperation =
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         // If the user does not provide a context, we should dispose the default one after running the query
                         if isDefaultContext then (context :> IDisposable).Dispose()
-                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName) @@>
                 let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
@@ -346,7 +353,7 @@ module internal ProvidedOperation =
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            return OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName)
+                            return OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName)
                         } @@>
                 let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
@@ -354,7 +361,7 @@ module internal ProvidedOperation =
             let prdef =
                 let invoker (args : Expr list) =
                     <@@ let responseJson = JsonValue.Parse %%args.[1]
-                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName) @@>
                 let prm = [ProvidedParameter("responseJson", typeof<string>)]
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
@@ -394,7 +401,7 @@ module internal Provider =
                         let path = info.AliasOrName :: path
                         let astFields = info.Fields
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
-                        { Name = info.Name; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
+                        { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
@@ -452,6 +459,7 @@ module internal Provider =
                     then Types.scalar.[field.Type.Name.Value]
                     else typeof<string>
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -460,6 +468,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -475,6 +484,7 @@ module internal Provider =
                     then Types.scalar.[field.Type.Name.Value]
                     else Types.makeOption typeof<string>
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -483,6 +493,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -684,17 +695,18 @@ module internal Provider =
                                     match operationTypeRef.Name with
                                     | Some name -> name
                                     | None -> failwith "Error parsing query. Operation type does not have a name."
-                                // Every time we run the query, we will need the schema type map as an expression.
+                                // Every time we run the query, we will need the schema type map and the Ast Fields information as an expression.
                                 // To avoid creating the type map expression every time we call Run method, we cache it here.
                                 let schemaTypes =
                                     let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
                                     let schemaTypesExpr = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
                                     <@@ Array.zip schemaTypeNames (%%schemaTypesExpr : IntrospectionType []) |> Map.ofArray @@>
+                                let operationAstFields = Array.ofList operationAstFields |> QuotationHelpers.arrayExpr |> snd
                                 let contextInfo : GraphQLRuntimeContextInfo option =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, contextInfo, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationAstFields, operationType, contextInfo, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
