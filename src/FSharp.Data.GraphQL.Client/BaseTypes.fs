@@ -12,6 +12,15 @@ open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
 open FSharp.Data.GraphQL.Ast.Extensions
 
+/// Contains information about a field on the query.
+type SchemaFieldInfo =
+      /// Gets the alias or the name of the field.
+    { AliasOrName : string
+      /// Gets the introspection type information of the field.
+      SchemaTypeRef : IntrospectionTypeRef
+      /// Gets information about fields of this field, if it is an object type.
+      Fields : SchemaFieldInfo [] }
+
 /// A type alias to represent a Type name.
 type TypeName = string
 
@@ -215,11 +224,6 @@ module internal JsonValueHelper =
     let firstUpper (name : string, value) =
         name.FirstCharUpper(), value
 
-    let getFields (schemaType : IntrospectionType) =
-        match schemaType.Fields with
-        | None -> Map.empty
-        | Some fields -> fields |> Array.map (fun field -> field.Name.FirstCharUpper(), field.Type) |> Map.ofArray
-
     let getTypeName (fields : (string * JsonValue) seq) =
         fields
         |> Seq.tryFind (fun (name, _) -> name = "__typename")
@@ -228,16 +232,7 @@ module internal JsonValueHelper =
             | JsonValue.String x -> x
             | _ -> failwithf "Expected \"__typename\" field to be a string field, but it was %A." value)
 
-    let getAstField (astFields : AstFieldInfo list) (typeName : string) (aliasOrName : string) =
-        let finder (f : AstFieldInfo) =
-            match f with
-            | FragmentField f -> f.TypeCondition = typeName && f.AliasOrName.FirstCharUpper() = aliasOrName
-            | TypeField f -> f.AliasOrName.FirstCharUpper() = aliasOrName
-        match List.tryFind finder astFields with
-        | Some astField -> astField
-        | None -> failwithf "Expected to find Ast information for field \"%s\" on the type \"%s\", but it was not found." aliasOrName typeName
-
-    let rec getFieldValue (schemaTypes : Map<string, IntrospectionType>) (fieldType : IntrospectionTypeRef) (astField : AstFieldInfo) (fieldName : string, fieldValue : JsonValue) =
+    let rec getFieldValue (schemaField : SchemaFieldInfo) (fieldName : string, fieldValue : JsonValue) =
         let getScalarType (typeRef : IntrospectionTypeRef) =
             let getType (typeName : string) =
                 match Map.tryFind typeName Types.scalar with
@@ -246,24 +241,25 @@ module internal JsonValueHelper =
             match typeRef.Name with
             | Some name -> getType name
             | None -> failwith "Expected scalar type to have a name, but it does not have one."
-        let rec helper (useOption : bool) (fieldType : IntrospectionTypeRef) (astField : AstFieldInfo) (fieldValue : JsonValue) : obj =
+        let rec helper (useOption : bool) (schemaField : SchemaFieldInfo) (fieldValue : JsonValue) : obj =
             let makeSomeIfNeeded value =
-                match fieldType.Kind with
+                match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL | TypeKind.LIST -> value
                 | _ when useOption -> makeSome value
                 | _ -> value
             let makeNoneIfNeeded (t : Type) =
-                match fieldType.Kind with
+                match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL | TypeKind.LIST -> null
                 | _ when useOption -> makeNone t
                 | _ -> null
             match fieldValue with
             | JsonValue.Array items ->
                 let itemType =
-                    match fieldType.OfType with
+                    match schemaField.SchemaTypeRef.OfType with
                     | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
-                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." fieldType.OfType
-                let items = items |> Array.map (helper false itemType astField)
+                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
+                let schemaField = { schemaField with SchemaTypeRef = itemType }
+                let items = items |> Array.map (helper false schemaField)
                 match itemType.Kind with
                 | TypeKind.NON_NULL -> 
                     match itemType.OfType with
@@ -284,19 +280,13 @@ module internal JsonValueHelper =
                     match getTypeName props with
                     | Some typeName -> typeName
                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
-                let schemaType =
-                    match schemaTypes.TryFind(typeName) with
-                    | Some tref -> tref
-                    | None -> failwithf "Expected to find a type \"%s\" in the schema types, but it was not found." typeName
-                let fields = getFields schemaType
                 let mapper (aliasOrName : string, value : JsonValue) =
-                    let astField = getAstField astField.Fields schemaType.Name aliasOrName
-                    let name = astField.Name.FirstCharUpper()
-                    match fields.TryFind(name) with
-                    | Some fieldType ->
-                        let value = helper true fieldType astField value
-                        { Name = aliasOrName; Value = value }
-                    | None -> failwithf "Expected to find a field named \"%s\" on the type %s, but found none." name schemaType.Name
+                    let schemaField =
+                        match schemaField.Fields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
+                        | Some f -> f
+                        | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName typeName
+                    let value = helper true schemaField value
+                    { Name = aliasOrName; Value = value }
                 let props =
                     props
                     |> removeTypeNameField
@@ -305,17 +295,17 @@ module internal JsonValueHelper =
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
             | JsonValue.Null ->
-                match fieldType.Kind with
+                match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL -> failwith "Expected a non null item from the schema definition, but a null item was found in the response."
                 | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeNoneIfNeeded typeof<RecordBase>
                 | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
-                | TypeKind.SCALAR -> getScalarType fieldType |> makeNoneIfNeeded
+                | TypeKind.SCALAR -> getScalarType schemaField.SchemaTypeRef |> makeNoneIfNeeded
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
             | JsonValue.Integer n -> makeSomeIfNeeded n
             | JsonValue.String s -> 
-                match fieldType.Kind with
+                match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL ->
-                    match fieldType.OfType with
+                    match schemaField.SchemaTypeRef.OfType with
                     | Some itemType ->
                         match itemType.Kind with
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
@@ -332,7 +322,7 @@ module internal JsonValueHelper =
                         | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
                     | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                 | TypeKind.SCALAR ->
-                    match fieldType.Name with
+                    match schemaField.SchemaTypeRef.Name with
                     | Some "String" -> makeSomeIfNeeded s
                     | Some "URI" -> Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
@@ -340,19 +330,18 @@ module internal JsonValueHelper =
                         | (true, d) -> makeSomeIfNeeded d
                         | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
-                | TypeKind.ENUM when fieldType.Name.IsSome -> EnumBase(fieldType.Name.Value, s) |> makeSomeIfNeeded
+                | TypeKind.ENUM when schemaField.SchemaTypeRef.Name.IsSome -> EnumBase(schemaField.SchemaTypeRef.Name.Value, s) |> makeSomeIfNeeded
                 | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
-        fieldName, (helper true fieldType astField fieldValue)
+        fieldName, (helper true schemaField fieldValue)
 
-    let getFieldValues (schemaTypes : Map<string, IntrospectionType>) (schemaType : IntrospectionType) (operationAstFields : AstFieldInfo list) (fields : (string * JsonValue) []) =
-        let fieldMap = getFields schemaType
+    let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo []) (dataFields : (string * JsonValue) []) =
         let mapper (aliasOrName : string, value : JsonValue) =
-            let astField = getAstField operationAstFields schemaType.Name aliasOrName
-            let name = astField.Name.FirstCharUpper()
-            match fieldMap.TryFind(name) with
-            | Some fieldType -> getFieldValue schemaTypes fieldType astField (aliasOrName, value)
-            | None -> failwithf "Expected to find a field with name \"%s\" on the type %s, but found none." name schemaType.Name
-        removeTypeNameField fields
+            let schemaField =
+                match schemaFields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
+                | Some f -> f
+                | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName schemaTypeName
+            getFieldValue schemaField (aliasOrName, value)
+        removeTypeNameField dataFields
         |> Array.map (firstUpper >> mapper)
 
     let getErrors (errors : JsonValue []) =
@@ -370,20 +359,15 @@ module internal JsonValueHelper =
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationAstFields : AstFieldInfo [], operationTypeName : string) =
-    let operationAstFields = List.ofArray operationAstFields
+type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
     let data = 
         let data = JsonValueHelper.getResponseDataFields responseJson
-        let operationType =
-            match schemaTypes.TryFind(operationTypeName) with
-            | Some def -> def
-            | _ -> failwithf "Operation type %s could not be found on the schema types." operationTypeName
         match data with
         | Some [||] | None -> None
         | Some dataFields ->
-            let fieldValues = JsonValueHelper.getFieldValues schemaTypes operationType operationAstFields dataFields
+            let fieldValues = JsonValueHelper.getFieldValues operationTypeName operationFields dataFields
             let props = fieldValues |> Array.map (fun (name, value) -> { Name = name; Value = value })
-            Some (RecordBase(operationType.Name, props))
+            Some (RecordBase(operationTypeName, props))
 
     let errors =
         let errors = JsonValueHelper.getResponseErrors responseJson

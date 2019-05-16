@@ -6,6 +6,7 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Security.Cryptography
 open FSharp.Core
+open System.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
@@ -15,7 +16,6 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Ast.Extensions
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
-open System.Reflection
 open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
@@ -233,9 +233,8 @@ module internal ProvidedOperation =
     let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
-                         schemaTypesExpr : Expr,
+                         operationFieldsExpr : Expr,
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
-                         operationAstFieldsExpr : Expr,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
                          className : string) =
@@ -327,7 +326,7 @@ module internal ProvidedOperation =
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         // If the user does not provide a context, we should dispose the default one after running the query
                         if isDefaultContext then (context :> IDisposable).Dispose()
-                        OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
                 let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
@@ -353,7 +352,7 @@ module internal ProvidedOperation =
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            return OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName)
+                            return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                         } @@>
                 let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
@@ -361,7 +360,7 @@ module internal ProvidedOperation =
             let prdef =
                 let invoker (args : Expr list) =
                     <@@ let responseJson = JsonValue.Parse %%args.[1]
-                        OperationResultBase(responseJson, %%schemaTypesExpr, %%operationAstFieldsExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
                 let prm = [ProvidedParameter("responseJson", typeof<string>)]
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
@@ -695,18 +694,77 @@ module internal Provider =
                                     match operationTypeRef.Name with
                                     | Some name -> name
                                     | None -> failwith "Error parsing query. Operation type does not have a name."
-                                // Every time we run the query, we will need the schema type map and the Ast Fields information as an expression.
+                                let rec getKind (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
+                                    | _ -> tref.Kind
+                                let rec getTypeName (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
+                                    | _ ->
+                                        match tref.Name with
+                                        | Some tname -> tname
+                                        | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+                                let rec getIntrospectionType (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
+                                    | _ ->
+                                        let typeName = getTypeName tref
+                                        match schemaTypes.TryFind(typeName) with
+                                        | Some t -> t
+                                        | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
+                                let getOperationFields (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
+                                    let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
+                                        match introspectionType.Kind with
+                                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                            match astFields with
+                                            | [] -> acc
+                                            | field :: tail ->
+                                                let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
+                                                let tref =
+                                                    match field with
+                                                    | FragmentField fragf ->
+                                                        let fragmentType =
+                                                            let tref = 
+                                                                introspectionType.PossibleTypes
+                                                                |> Option.map (Array.tryFind (fun pt -> getTypeName pt = fragf.TypeCondition))
+                                                                |> Option.flatten
+                                                            match tref with
+                                                            | Some t -> getIntrospectionType t
+                                                            | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
+                                                        let field =
+                                                            fragmentType.Fields
+                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name)) 
+                                                            |> Option.flatten
+                                                        match field with
+                                                        | Some f -> f.Type
+                                                        | None -> throw fragmentType.Name
+                                                    | TypeField typef ->
+                                                        let field =
+                                                            introspectionType.Fields 
+                                                            |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
+                                                            |> Option.flatten
+                                                        match field with
+                                                        | Some f -> f.Type
+                                                        | None -> throw introspectionType.Name
+                                                let fields = 
+                                                    match getKind tref with
+                                                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                                        let schemaType = getIntrospectionType tref
+                                                        helper [] field.Fields schemaType
+                                                    | _ -> []
+                                                let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
+                                                helper (info :: acc) tail introspectionType
+                                        | _ -> []
+                                    helper [] operationAstFields operationType |> Array.ofList
+                                // Every time we run the query, we will need the schema types information as an expression.
                                 // To avoid creating the type map expression every time we call Run method, we cache it here.
-                                let schemaTypes =
-                                    let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-                                    let schemaTypesExpr = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
-                                    <@@ Array.zip schemaTypeNames (%%schemaTypesExpr : IntrospectionType []) |> Map.ofArray @@>
-                                let operationAstFields = Array.ofList operationAstFields |> QuotationHelpers.arrayExpr |> snd
+                                let operationFields = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
                                 let contextInfo : GraphQLRuntimeContextInfo option =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationAstFields, operationType, contextInfo, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
