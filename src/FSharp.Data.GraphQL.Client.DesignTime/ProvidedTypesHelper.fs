@@ -223,7 +223,7 @@ module internal ProvidedOperationResult =
         tdef.AddMemberDelayed(fun _ ->
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : OperationResultBase
-                    this.Data @@>
+                    this.RawData @@>
             let prop = ProvidedProperty("Data", operationType, getterCode)
             prop.AddXmlDoc("Contains the data returned by the operation on the server.")
             prop)

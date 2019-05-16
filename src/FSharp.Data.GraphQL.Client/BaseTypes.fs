@@ -11,6 +11,7 @@ open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
 open FSharp.Data.GraphQL.Ast.Extensions
+open System.ComponentModel
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
@@ -372,8 +373,8 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
     let errors =
         let errors = JsonValueHelper.getResponseErrors responseJson
         match errors with
-        | Some [||] | None -> None
-        | Some errors -> Some (JsonValueHelper.getErrors errors)
+        | Some [||] | None -> [||]
+        | Some errors -> JsonValueHelper.getErrors errors
 
     let customData = 
         let customData = JsonValueHelper.getResponseCustomFields responseJson
@@ -383,8 +384,10 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
 
     member private __.ResponseJson = responseJson
 
-    /// Gets the data returned by the operation on the server.
-    member __.Data = data
+    /// [omit]
+    [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
+    [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
+    member __.RawData = data
 
     /// Gets all the errors returned by the operation on the server.
     member __.Errors = errors

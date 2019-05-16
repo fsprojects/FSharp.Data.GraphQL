@@ -37,7 +37,7 @@ module SimpleOperation =
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
         result.CustomData.Value.ContainsKey("documentId") |> equals true
-        result.Errors |> equals None
+        result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
@@ -130,7 +130,7 @@ module MutationOperation =
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
         result.CustomData.Value.ContainsKey("documentId") |> equals true
-        result.Errors |> equals None
+        result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.SetMoon.IsSome |> equals true
         result.Data.Value.SetMoon.Value.Id |> equals "1"
@@ -156,7 +156,7 @@ module FileOperation =
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.IsSome |> equals true
         result.CustomData.Value.ContainsKey("documentId") |> equals true
-        result.Errors |> equals None
+        result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
