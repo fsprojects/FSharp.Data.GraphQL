@@ -125,6 +125,45 @@ type internal RecordPropertyMetadata =
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
+    // TODO: this function was created in order to generate overloads for the record type constructors.
+    // It could receive a review in the future to see if improvements can be done to generate all
+    // combinations of constructor overloads.
+    let combine (input : 'T list) =
+        let rec helper (input : 'T list) (startIndex : int) (length : int) =
+            let mutable combinations = List<List<'T>>()
+            if length = 2
+            then
+                let mutable combinationsIndex = 0
+                for inputIndex = startIndex to (input.Length - 1) do
+                    for i = (inputIndex + 1) to (input.Length - 1) do
+                        combinations.Add(List<'T>())
+                        combinations.[combinationsIndex].Add(input.[inputIndex])
+                        while combinations.[combinationsIndex].Count < length do
+                            combinations.[combinationsIndex].Add(input.[i])
+                        combinationsIndex <- combinationsIndex + 1
+                combinations
+            else
+                let combinationsOfMore = List<List<'T>>()
+                for i = startIndex to (input.Length - length) do
+                    combinations <- helper input (i + 1) (length - 1)
+                    for index = 0 to (combinations.Count - 1) do
+                        combinations.[index].Insert(0, input.[i])
+                    for y = 0 to (combinations.Count - 1) do
+                        combinationsOfMore.Add(combinations.[y])
+                combinationsOfMore
+        let output = List<List<'T>>()
+        output.Add(List<'T>())
+        for i = 0 to (input.Length - 1) do
+            let item = List<'T>()
+            item.Add(input.[i])
+            output.Add(item)
+        for i = 2 to input.Length do
+            helper input 0 i |> output.AddRange
+        output
+        |> Seq.map List.ofSeq
+        |> List.ofSeq
+        |> List.map (fun x -> x, List.except x input)
+
     let makeProvidedType(tdef : ProvidedTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
@@ -140,40 +179,40 @@ module internal ProvidedRecord =
             upcast pdef 
         tdef.AddMembersDelayed(fun _ -> List.map propertyMapper properties)
         let addConstructorDelayed (propertiesGetter : unit -> (string * string option * Type) list) =
-            tdef.AddMemberDelayed(fun _ ->
+            tdef.AddMembersDelayed(fun _ ->
                 let properties = propertiesGetter ()
-                let prm =
-                    let mapper (name : string, alias : string option, t : Type) =
-                        let aliasOrName = Option.defaultValue name alias
-                        match t with
-                        | Option t -> ProvidedParameter(aliasOrName, t, optionalValue = None)
-                        | _ -> ProvidedParameter(aliasOrName, t)
-                    let required = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
-                    let optional = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
-                    required @ optional
-                let invoker (args : Expr list) = 
-                    let properties =
-                        let args = 
-                            let names = properties |> List.map (fun (name, alias, _) -> Option.defaultValue name alias) |> List.map (fun name -> name.FirstCharUpper())
-                            let types = properties |> List.map (fun (_, _, t) -> t)
-                            let mapper (name : string, t : Type, value : Expr) =
-                                let value = Expr.Coerce(value, typeof<obj>)
-                                let isOption = isOption t
-                                <@@ let value =
-                                        match %%value, isOption with
-                                        | null, true -> box None
-                                        | OptionValue (Some null), true -> box (Some null)
-                                        | OptionValue (Some value), true -> box (makeSome value)
-                                        | OptionValue (Some value), false -> value
-                                        | OptionValue None, false -> null
-                                        | OptionValue None, true -> box None
-                                        | value, true -> makeSome value
-                                        | value, false -> value
-                                    { RecordProperty.Name = name; Value = value } @@>
-                            List.zip3 names types args |> List.map mapper
-                        Expr.NewArray(typeof<RecordProperty>, args)
-                    Expr.NewObject(ctor, [Expr.Value(name); properties])
-                ProvidedConstructor(prm, invoker))
+                let mapper (name : string, alias : string option, t : Type) = Option.defaultValue name alias, t
+                let requiredProperties = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
+                let optionalProperties = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
+                combine optionalProperties
+                |> List.map (fun (optionalProperties, missingProperties) ->
+                    let constructorProperties = requiredProperties @ optionalProperties
+                    let allProperties = constructorProperties @ missingProperties
+                    let names = allProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                    let constructorTypes = constructorProperties |> List.map snd
+                    let missingTypes = missingProperties |> List.map snd
+                    let invoker (args : Expr list) =
+                        let properties =
+                            let args =
+                                let coerced = 
+                                    List.zip constructorTypes args
+                                    |> List.map (fun (t, arg) -> t, Expr.Coerce(arg, typeof<obj>))
+                                    |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
+                                let missing = missingTypes |> List.map (makeNone >> Expr.Value)
+                                let args = coerced @ missing
+                                let mapper (name : string, value : Expr) =
+                                    let value = Expr.Coerce(value, typeof<obj>)
+                                    <@@ { RecordProperty.Name = name; Value = %%value } @@>
+                                List.zip names args |> List.map mapper
+                            Expr.NewArray(typeof<RecordProperty>, args)
+                        Expr.NewObject(ctor, [Expr.Value(name); properties])
+                    let constructorParams = 
+                        let mapper (name : string, t : Type) =
+                            match t with
+                            | Option t -> ProvidedParameter(name, t)
+                            | _ -> ProvidedParameter(name, t)
+                        List.map mapper constructorProperties
+                    ProvidedConstructor(constructorParams, invoker)))
         match tdef.BaseType with
         | :? ProvidedTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->

@@ -9,6 +9,11 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="Helpers.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="JsonConverters.fs" />
+    <Compile Include="HttpHandlers.fs" />
+    <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
     <None Include="paket.references" />
     <None Include="ApplicationInsights.config" />
