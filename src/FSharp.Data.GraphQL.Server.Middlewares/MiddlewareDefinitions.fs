@@ -35,12 +35,11 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                          | _ ->
                             checkThreshold current xs
             checkThreshold 0.0 fields
-        let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
-        let directFields = ctx.ExecutionPlan.Fields
-        let fields = directFields @ deferredFields
+        // let directFields = ctx.ExecutionPlan.Fields
+        // let fields = directFields
         let error (ctx : ExecutionContext) =
             GQLResponse.ErrorAsync("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
-        let (pass, totalWeight) = measureThreshold threshold fields
+        let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
         let ctx =
             match reportToMetadata with
             | true -> { ctx with Metadata = ctx.Metadata.Add("queryWeightThreshold", threshold).Add("queryWeight", totalWeight) }
@@ -99,10 +98,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         let ctx =
             match reportToMetadata with
             | true -> 
-                let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
-                let directFields = ctx.ExecutionPlan.Fields
-                let fields = directFields @ deferredFields
-                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] fields) }
+                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
             | false -> ctx
         next ctx
     interface IExecutorMiddleware with

@@ -8,7 +8,7 @@ module internal Observable =
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
             member __.Subscribe(observer) =
-                for item in items do observer.OnNext item
+                items |> Seq.iter(observer.OnNext)
                 observer.OnCompleted()
                 { new IDisposable with member __.Dispose() = () }
     }
