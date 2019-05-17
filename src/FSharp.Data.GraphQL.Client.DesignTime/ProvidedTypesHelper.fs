@@ -146,7 +146,7 @@ module internal ProvidedRecord =
                     let mapper (name : string, alias : string option, t : Type) =
                         let aliasOrName = Option.defaultValue name alias
                         match t with
-                        | Option t -> ProvidedParameter(aliasOrName, t, optionalValue = null)
+                        | Option t -> ProvidedParameter(aliasOrName, t, optionalValue = None)
                         | _ -> ProvidedParameter(aliasOrName, t)
                     let required = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
                     let optional = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
@@ -216,6 +216,8 @@ module internal ProvidedRecord =
         let names = properties |> List.map fst
         let values = properties |> List.map snd
         Expr.NewObject(ctor, [ <@@ List.zip names values @@> ])
+
+#nowarn "10001"
 
 module internal ProvidedOperationResult =
     let makeProvidedType(operationType : Type) =
@@ -726,11 +728,12 @@ module internal Provider =
                                                     | FragmentField fragf ->
                                                         let fragmentType =
                                                             let tref = 
-                                                                introspectionType.PossibleTypes
-                                                                |> Option.map (Array.tryFind (fun pt -> getTypeName pt = fragf.TypeCondition))
-                                                                |> Option.flatten
+                                                                Option.defaultValue [||] introspectionType.PossibleTypes
+                                                                |> Array.map getIntrospectionType
+                                                                |> Array.append [|introspectionType|]
+                                                                |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
                                                             match tref with
-                                                            | Some t -> getIntrospectionType t
+                                                            | Some t -> t
                                                             | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
                                                         let field =
                                                             fragmentType.Fields

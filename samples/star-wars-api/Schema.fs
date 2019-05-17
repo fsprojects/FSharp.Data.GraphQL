@@ -1,10 +1,10 @@
-﻿#nowarn "40"
-
-namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middlewares
+
+#nowarn "40"
 
 type Episode =
     | NewHope = 1

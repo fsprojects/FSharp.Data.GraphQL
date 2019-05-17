@@ -361,7 +361,7 @@ module internal JsonValueHelper =
 
 /// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
-    let data = 
+    let rawData = 
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
         | Some [||] | None -> None
@@ -387,7 +387,7 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
     /// [omit]
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
-    member __.RawData = data
+    member __.RawData = rawData
 
     /// Gets all the errors returned by the operation on the server.
     member __.Errors = errors
