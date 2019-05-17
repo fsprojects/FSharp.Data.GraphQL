@@ -373,14 +373,12 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
     let errors =
         let errors = JsonValueHelper.getResponseErrors responseJson
         match errors with
-        | Some [||] | None -> [||]
+        | None -> [||]
         | Some errors -> JsonValueHelper.getErrors errors
 
     let customData = 
-        let customData = JsonValueHelper.getResponseCustomFields responseJson
-        match customData with
-        | [||] -> None
-        | customData -> Some (Serialization.deserializeMap customData)
+        JsonValueHelper.getResponseCustomFields responseJson
+        |> Serialization.deserializeMap
 
     member private __.ResponseJson = responseJson
 

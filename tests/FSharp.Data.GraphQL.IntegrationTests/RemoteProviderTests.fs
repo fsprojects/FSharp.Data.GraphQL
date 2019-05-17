@@ -31,8 +31,7 @@ module SimpleOperation =
     type Operation = Provider.Operations.Q
     
     let validateResult (result : Operation.OperationResult) =
-        result.CustomData.IsSome |> equals true
-        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.ContainsKey("documentId") |> equals true
         result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
@@ -121,8 +120,7 @@ module MutationOperation =
     type Operation = Provider.Operations.M
 
     let validateResult (result : Operation.OperationResult) =
-        result.CustomData.IsSome |> equals true
-        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.ContainsKey("documentId") |> equals true
         result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.SetMoon.IsSome |> equals true
@@ -146,8 +144,7 @@ module FileOperation =
     type Operation = Provider.Operations.FileOp
     
     let validateResult (result : Operation.OperationResult) =
-        result.CustomData.IsSome |> equals true
-        result.CustomData.Value.ContainsKey("documentId") |> equals true
+        result.CustomData.ContainsKey("documentId") |> equals true
         result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
