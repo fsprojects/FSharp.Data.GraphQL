@@ -93,3 +93,8 @@
 
 ### 1.0.0-beta5 - May 13 2019
 * Fixing an bug when parsing json objects with no fields in serialization
+
+### 1.0.0-beta6 - May 17 2019
+* Changing constructors of provided types to have overloads instead of optional parameters (needed because of a limitation of the Type Provider SDK)
+* Adding support for field aliases
+* Operation result errors and custom data now are provided as their respective types instead of options (`Operation Error []` and `Map<string, obj>`)
