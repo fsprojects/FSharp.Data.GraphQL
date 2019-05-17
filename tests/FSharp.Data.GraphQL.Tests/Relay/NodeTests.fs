@@ -29,7 +29,7 @@ let rec Person =
     interfaces = [ Node ],
     fields = [
         Define.Field("id", ID, resolve = fun _ person -> toGlobalId "person" person.Id)
-        Define.Field("name", String, fun _ person -> person.Name)
+        Define.Field("name", Nullable String, fun _ person -> Some person.Name)
         Define.Field("age", Int, fun _ person -> person.Age) ])
 
 and Car =
@@ -38,7 +38,7 @@ and Car =
     interfaces = [ Node ],
     fields = [
         Define.Field("id", ID, fun _ car -> toGlobalId "car" car.Id)
-        Define.Field("model", String, fun _ car -> car.Model) ])
+        Define.Field("model", Nullable String, fun _ car -> Some car.Model) ])
 
 and resolve _ _ id =
     match id with
@@ -58,8 +58,7 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
     let result = sync <| Executor(schema).AsyncExecute(query)
     match expectedDeferred with
     | Some expectedDeferred ->
-        match result with
-        | Deferred(data, errors, deferred) ->
+        ensureDeferred result <| fun data errors deferred ->
             let expectedItemCount = Seq.length expectedDeferred
             empty errors
             data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
@@ -68,13 +67,10 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
             sub.Received
             |> Seq.cast<NameValueLookup>
             |> Seq.iter (fun ad -> expectedDeferred |> contains ad |> ignore)
-        | _ ->  fail "Expected a deferred GQLResponse"
     | None ->
-        match result with
-        | Direct(data, errors) -> 
+        ensureDirect result <| fun data errors ->
             empty errors
             data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
-        | _ ->  fail "Expected a direct GQLResponse"
 
 [<Fact>]
 let ``Node with global ID gets correct record - Defer`` () =

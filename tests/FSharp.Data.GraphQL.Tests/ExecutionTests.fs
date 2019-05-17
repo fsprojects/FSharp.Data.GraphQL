@@ -8,6 +8,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open Helpers
 
 #nowarn "40"
 
@@ -365,4 +366,70 @@ let ``Execution when querying returns unique document id with response`` () =
       data1.["documentId"] |> equals (data2.["documentId"])
     | _ -> fail "Expected Direct GQResponse"
 
-    
+type InnerNullableTest = { Kaboom : string }
+type NullableTest = { Inner : InnerNullableTest }
+
+[<Fact>]
+let ``Execution handles errors: properly propagates errors`` () =
+    let InnerObj =
+        Define.Object<InnerNullableTest>(
+            "Inner", [
+                Define.Field("kaboom", String, fun _ x -> x.Kaboom)
+            ])
+    let schema =
+        Schema(Define.Object<NullableTest>(
+                 "Type", [
+                     Define.Field("inner", Nullable InnerObj, fun _ x -> Some x.Inner)
+                 ]))
+    let expectedData =
+        NameValueLookup.ofList [
+            "inner", null
+        ]
+    let expectedErrors =
+        [
+            NameValueLookup.ofList [
+                "message", upcast "Non-Null field kaboom resolved as a null!"
+                "path", upcast [ "inner"; "kaboom" ]
+            ]
+        ]
+    let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
+    match result with
+    | Direct(data, errors) ->
+        data.["documentId"] |> notEquals null
+        data.["data"] |> equals (upcast expectedData)
+        data.["errors"] |> equals (upcast expectedErrors)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execution handles errors: nullable list fields`` () =
+    let InnerObject =
+        Define.Object<unit>(
+            "Inner", [
+                Define.Field("error", String, fun _ _ -> failwith "Resolver Error!")
+            ])
+    let schema =
+        Schema(Define.Object<unit>(
+                 "Type", [
+                     Define.Field("list", ListOf (Nullable InnerObject), fun _ _ -> [Some (); Some (); None;])
+                 ]))
+    let expectedData =
+        NameValueLookup.ofList [
+            "list", upcast [null; null; null]
+        ]
+    let expectedErrors =
+        [
+            NameValueLookup.ofList [
+                "message", upcast "Resolver Error!"
+                "path", upcast ["list", 0, "error"]
+            ]
+            NameValueLookup.ofList [
+                "message", upcast "Resolver Error!"
+                "path", upcast ["list", 1, "error"]
+            ]
+        ]
+    let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
+    ensureDirect result <| fun data errors ->
+        errors |> nonEmpty
+        data.["documentId"] |> notEquals null
+        data.["data"] |> equals (upcast expectedData)
+        data.["errors"] |> equals (upcast expectedData)
