@@ -255,10 +255,18 @@ module internal JsonValueHelper =
                 | _ -> null
             match fieldValue with
             | JsonValue.Array items ->
+                let schemaFieldType =
+                    match schemaField.SchemaTypeRef.Kind with
+                    | TypeKind.LIST -> schemaField.SchemaTypeRef.OfType
+                    | TypeKind.NON_NULL ->
+                        match schemaField.SchemaTypeRef.OfType with
+                        | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType
+                        | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
+                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef
                 let itemType =
-                    match schemaField.SchemaTypeRef.OfType with
-                    | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType.Value
-                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
+                    match schemaFieldType with
+                    | Some t -> t
+                    | None -> failwith "Schema type is a list type, but no underlying type was specified."
                 let schemaField = { schemaField with SchemaTypeRef = itemType }
                 let items = items |> Array.map (helper false schemaField)
                 match itemType.Kind with
@@ -301,6 +309,7 @@ module internal JsonValueHelper =
                 | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeNoneIfNeeded typeof<RecordBase>
                 | TypeKind.ENUM -> makeNoneIfNeeded typeof<EnumBase>
                 | TypeKind.SCALAR -> getScalarType schemaField.SchemaTypeRef |> makeNoneIfNeeded
+                | TypeKind.LIST -> null
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
             | JsonValue.Integer n -> makeSomeIfNeeded n
             | JsonValue.String s -> 

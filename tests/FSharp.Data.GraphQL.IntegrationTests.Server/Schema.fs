@@ -13,8 +13,8 @@ type InputField =
       IntOption : int option }
 
 type Input =
-    { Single : InputField
-      List : InputField list }
+    { Single : InputField option
+      List : InputField list option }
 
 module Schema =
     let InputFieldType =
@@ -31,8 +31,8 @@ module Schema =
             name ="Input",
             description = "Input object type.",
             fields = 
-                [ Define.Input("single", InputFieldType, description = "A single input field.")
-                  Define.Input("list", ListOf InputFieldType, description = "A list of input fields.") ])
+                [ Define.Input("single", Nullable InputFieldType, description = "A single input field.")
+                  Define.Input("list", Nullable (ListOf InputFieldType), description = "A list of input fields.") ])
 
     let OutputFieldType =
         Define.Object<InputField>(
@@ -50,8 +50,8 @@ module Schema =
             name = "Output",
             description = "The output for an input.",
             fields = 
-                [ Define.AutoField("single", OutputFieldType, description = "A single output field.")
-                  Define.AutoField("list", ListOf OutputFieldType, description = "A list of output fields.") ])
+                [ Define.AutoField("single", Nullable OutputFieldType, description = "A single output field.")
+                  Define.AutoField("list", Nullable (ListOf OutputFieldType), description = "A list of output fields.") ])
 
     let QueryType =
         Define.Object<Root>(

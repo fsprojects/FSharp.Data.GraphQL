@@ -122,6 +122,15 @@ type internal RecordPropertyMetadata =
         | Some x -> x
         | None -> x.Name
 
+type internal ProvidedRecordTypeDefinition(className, baseType) =
+    inherit ProvidedTypeDefinition(className, baseType, nonNullable = true)
+
+    let mutable properties : RecordPropertyMetadata list = []
+
+    member __.GetRecordProperties() = properties
+
+    member __.SetRecordProperties(props) = properties <- props
+
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
@@ -164,7 +173,7 @@ module internal ProvidedRecord =
         |> List.ofSeq
         |> List.map (fun x -> x, List.except x input)
 
-    let makeProvidedType(tdef : ProvidedTypeDefinition, properties : RecordPropertyMetadata list) =
+    let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
             let pname = metadata.AliasOrName.FirstCharUpper()
@@ -198,7 +207,7 @@ module internal ProvidedRecord =
                                     List.zip constructorTypes args
                                     |> List.map (fun (t, arg) -> t, Expr.Coerce(arg, typeof<obj>))
                                     |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
-                                let missing = missingTypes |> List.map (makeNone >> Expr.Value)
+                                let missing = missingTypes |> List.map (fun _ -> <@@ null @@>)
                                 let args = coerced @ missing
                                 let mapper (name : string, value : Expr) =
                                     let value = Expr.Coerce(value, typeof<obj>)
@@ -214,7 +223,7 @@ module internal ProvidedRecord =
                         List.map mapper constructorProperties
                     ProvidedConstructor(constructorParams, invoker)))
         match tdef.BaseType with
-        | :? ProvidedTypeDefinition as bdef ->
+        | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->
                 let asType = 
                     let invoker (args : Expr list) =
@@ -235,20 +244,18 @@ module internal ProvidedRecord =
                     ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
                 let members : MemberInfo list = [asType; tryAsType; isType]
                 members)
-            let propertiesGetter() =
-                let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, None, p.ParameterType) |> List.ofArray
-                let props = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
-                bprops @ props
+            let propertiesGetter() = bdef.GetRecordProperties() @ properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
         | _ -> 
             let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
+        tdef.SetRecordProperties(properties)
         tdef
 
     let preBuildProvidedType(metadata : ProvidedTypeMetadata, baseType : Type option) =
         let baseType = Option.defaultValue typeof<RecordBase> baseType
         let name = metadata.Name.FirstCharUpper()
-        let tdef = ProvidedTypeDefinition(name, Some baseType, nonNullable = true, isSealed = true)
+        let tdef = ProvidedRecordTypeDefinition(name, Some baseType)
         tdef
 
     let newObjectExpr(properties : (string * obj) list) =
@@ -553,7 +560,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveFieldMetadata
                         |> List.ofArray
-                    ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
@@ -562,7 +569,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveInputFieldMetadata
                         |> List.ofArray
-                    ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = ProvidedInterface.makeProvidedType(metadata)
                     providedTypes := (!providedTypes).Add(itype.Name, bdef)

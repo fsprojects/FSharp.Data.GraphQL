@@ -98,3 +98,7 @@
 * Changing constructors of provided types to have overloads instead of optional parameters (needed because of a limitation of the Type Provider SDK)
 * Adding support for field aliases
 * Operation result errors and custom data now are provided as their respective types instead of options (`Operation Error []` and `Map<string, obj>`)
+
+### 1.0.0-beta7 - May 17 2019
+* Minor bug fixes
+* Fixing an error on overload constructor definition
