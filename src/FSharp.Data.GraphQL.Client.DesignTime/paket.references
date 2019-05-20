@@ -1,4 +1,5 @@
 group Common
 FSharp.Core
+System.Net.Http
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs

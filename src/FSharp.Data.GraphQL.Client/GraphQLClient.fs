@@ -4,15 +4,16 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Net
+open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
+open System.Text
 
 type GraphQLClientConnection() =
-    let client = new WebClient()
+    let client = new HttpClient()
     member internal __.Client = client
     interface IDisposable with
-        member x.Dispose() = client.Dispose()
+        member __.Dispose() = client.Dispose()
 
 type GraphQLRequest  =
     { ServerUrl : string
@@ -33,15 +34,13 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
-    let private configureWebClient (httpHeaders : seq<string * string>) (client : WebClient)=
-        client.Headers.Set("content-type", "application/json")
+    let private addHeaders (httpHeaders : seq<string * string>) (content : HttpContent) =
         if not (isNull httpHeaders)
-        then httpHeaders |> Seq.iter (fun (n, v) -> client.Headers.Set(n, v))
+        then httpHeaders |> Seq.iter (fun (name, value) -> content.Headers.Add(name, value))
 
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let client = connection.Client
-            configureWebClient request.HttpHeaders client
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
@@ -57,20 +56,25 @@ module GraphQLClient =
                    "query", JsonValue.String request.Query
                    "variables", variables |]
                 |> JsonValue.Record
-            return! client.UploadStringTaskAsync(request.ServerUrl, requestJson.ToString()) |> Async.AwaitTask
+            use content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
+            addHeaders request.HttpHeaders content
+            let! response = client.PostAsync(request.ServerUrl, content) |> Async.AwaitTask
+            return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
         }
-       
+    
+    let sendRequest client request =
+        sendRequestAsync client request
+        |> Async.RunSynchronously
+
     let sendIntrospectionRequestAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
-        let sendGet () =
+        let sendGet() =
             async {
                 let client = connection.Client
-                configureWebClient httpHeaders client
-                return!
-                    client.DownloadStringTaskAsync(serverUrl)
-                    |> Async.AwaitTask
+                let! response = client.GetAsync(serverUrl) |> Async.AwaitTask
+                return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
             }
         async {
-            try return! sendGet ()
+            try return! sendGet()
             with getex ->
                 let request =
                     { ServerUrl = serverUrl
@@ -84,8 +88,4 @@ module GraphQLClient =
 
     let sendIntrospectionRequest client serverUrl httpHeaders = 
         sendIntrospectionRequestAsync client serverUrl httpHeaders
-        |> Async.RunSynchronously
-
-    let sendRequest client request =
-        sendRequestAsync client request
         |> Async.RunSynchronously
