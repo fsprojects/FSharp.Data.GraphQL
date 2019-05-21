@@ -15,6 +15,14 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
                     | Some w -> w
                     | None -> 0.0
+            // let rec getFields = function
+            //     | ResolveValue -> []
+            //     | SelectFields fields -> fields
+            //     | ResolveCollection field -> [ field ]
+            //     | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd
+            //     | ResolveDeferred info -> getFields info.Kind
+            //     | ResolveStreamed (info, _) -> getFields info.Kind
+            //     | ResolveLive info -> getFields info.Kind
             let rec checkThreshold acc fields =
                 match fields with
                 | [] -> (true, acc)
@@ -22,6 +30,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                     let current = acc + (getWeight x)
                     if current > threshold then (false, current)
                     else match x.Kind with
+                         | ResolveValue -> checkThreshold current xs
                          | SelectFields fields ->
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
@@ -32,11 +41,10 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                             let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
-                         | _ ->
-                            checkThreshold current xs
+                         | ResolveDeferred info -> checkThreshold current (info :: xs)
+                         | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
+                         | ResolveLive info -> checkThreshold current (info :: xs)
             checkThreshold 0.0 fields
-        // let directFields = ctx.ExecutionPlan.Fields
-        // let fields = directFields
         let error (ctx : ExecutionContext) =
             GQLResponse.ErrorAsync("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
         let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
