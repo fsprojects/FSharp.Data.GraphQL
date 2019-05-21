@@ -241,7 +241,8 @@ let schemaConfig =
 let sub =
     { FieldName = "live"
       TypeName = "Data"
-      Identity = fun (x : TestSubject) -> x.id }
+      Filter = (fun (x : TestSubject) (y : TestSubject) -> x.id = y.id)
+      Project = (fun x -> x.live) }
 
 schemaConfig.LiveFieldSubscriptionProvider.Register sub
 
@@ -1390,8 +1391,8 @@ let ``Each deferred result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
-                "b", null
                 "delayed", null
+                "b", null
             ]
         ]
     let expectedDeferred1 =

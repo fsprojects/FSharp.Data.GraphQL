@@ -267,17 +267,16 @@ let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>
 
 /// Run a resolution strategy with the provided context.
 /// This handles all null resolver errors/error propagation.
-let resolveWith name path value (ctx : ResolveFieldContext) (onSuccess : ResolveFieldContext -> obj list -> obj -> AsyncVal<ResolverResult<KeyValuePair<string, obj>>>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
+let resolveWith name path parent value (ctx : ResolveFieldContext) (onSuccess : ResolveFieldContext -> obj list -> obj -> obj -> AsyncVal<ResolverResult<KeyValuePair<string, obj>>>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
         let! resolved =
             value
             |> AsyncVal.map (Result.fromOption [])
             |> AsyncVal.rescue(resolverError path ctx >> List.singleton >> Error)
         match resolved with
         | Error errs when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
-        | Ok null when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, [])
         | Error [] | Ok null -> return Error [nullResolverError name path ctx] // Empty errors means that the value was None
         | Error errs -> return Error errs
-        | Ok v -> return! onSuccess ctx path v
+        | Ok v -> return! onSuccess ctx path parent v
     }
 
 let buildDeferredResult (data : obj) (errs : Error list) (path : obj list) : Output =
@@ -318,7 +317,7 @@ let collectFields (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) 
             |> ResolverResult.mapValue(fun _ -> data)
     }
 
-let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
     let name = ctx.ExecutionInfo.Identifier
     match returnDef with
     | Object objDef ->
@@ -342,7 +341,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         let resolveItem index item =
-            executeResolvers innerDef innerCtx (box index :: path) (toOption item |> AsyncVal.wrap)
+            executeResolvers innerDef innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
         match value with
         | :? System.Collections.IEnumerable as enumerable ->
             enumerable
@@ -353,7 +352,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
         | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
     | Nullable (Output innerDef) ->
-            executeResolvers innerDef ctx path (toOption value |> AsyncVal.wrap)
+            executeResolvers innerDef ctx path parent (toOption value |> AsyncVal.wrap)
     | Interface iDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
         let resolver = resolveInterfaceType possibleTypesFn iDef
@@ -378,18 +377,18 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         | None -> raiseError <| unionImplError uDef.Name resolvedDef.Name path ctx
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
-and deferred (ctx : ResolveFieldContext) (path : obj list) (value : obj) =
+and deferred (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
     let deferred =
         direct info.ReturnDef
-        |> resolveWith name path (value |> Some |> AsyncVal.wrap) ctx
+        |> resolveWith name path parent (value |> Some |> AsyncVal.wrap) ctx
         |> AsyncVal.map(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
         |> Observable.ofAsyncVal
         |> Observable.merge
     AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, null), Some deferred, [])
 
-and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (value : obj) =
+and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
     let innerCtx =
@@ -427,7 +426,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
     let resolveItem index item = asyncVal {
             let! result =
                 direct innerDef
-                |> resolveWith name (box index :: path) (item |> toOption |> AsyncVal.wrap) innerCtx
+                |> resolveWith name (box index :: path) parent (item |> toOption |> AsyncVal.wrap) innerCtx
             return (index, result)
         }
 
@@ -443,7 +442,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
         AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, box [||]), Some stream, [])
     | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
 
-and private live (ctx : ResolveFieldContext) (path : obj list) (value : obj) =
+and private live (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
     let name = info.Identifier
 
@@ -460,24 +459,25 @@ and private live (ctx : ResolveFieldContext) (path : obj list) (value : obj) =
 
     let typeName = getObjectName info.ParentDef
 
+    /// So the updatedValue here is actually the fresh parent.
     let resolveUpdate updatedValue =
-        executeResolvers info.ReturnDef ctx path (updatedValue |> Some |> AsyncVal.wrap)
+        executeResolvers info.ReturnDef ctx path parent (updatedValue |> Some |> AsyncVal.wrap)
         |> AsyncVal.map(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
         |> Observable.ofAsyncVal
         |> Observable.merge
 
     let provider = ctx.Schema.LiveFieldSubscriptionProvider
-    let identity = provider.TryFind typeName name |> Option.map (fun x -> x.Identity)
+    let filter = provider.TryFind typeName name |> Option.map (fun x -> x.Filter)
     let updates =
-        match identity with
-        | Some identityFn -> provider.Add (identityFn value) typeName name |> Observable.bind(resolveUpdate)
+        match filter with
+        | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate
         | None -> failwithf "No live provider for %s:%s" typeName name
   
-    executeResolvers info.ReturnDef ctx path (value |> Some |> AsyncVal.wrap)
+    executeResolvers info.ReturnDef ctx path parent (value |> Some |> AsyncVal.wrap)
     |> AsyncVal.map(Result.map(fun (data, deferred, errs) -> (data, Some <| Option.fold Observable.merge2 updates deferred, errs)))
 
 /// Actually execute the resolvers.
-and private executeResolvers (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (value : AsyncVal<obj option>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
+and private executeResolvers (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : AsyncVal<obj option>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
     let name = ctx.ExecutionInfo.Identifier
 
     let rec innerListDef = function
@@ -490,20 +490,20 @@ and private executeResolvers (returnDef : OutputDef) (ctx : ResolveFieldContext)
     match ctx.ExecutionInfo.Kind, returnDef with
     | ResolveDeferred info, _ when info.IsNullable -> // We can only defer nullable fields
         deferred
-        |> resolveWith name path value { ctx with ExecutionInfo = { info with IsNullable = false } }
+        |> resolveWith name path parent value { ctx with ExecutionInfo = { info with IsNullable = false } }
     | ResolveDeferred info, _ ->
         raiseError <| deferredNullableError (info.Identifier) (info.ReturnDef.ToString()) path ctx
     | ResolveStreamed (info, mode), HasList innerDef -> // We can only stream lists
         streamed mode innerDef
-        |> resolveWith name path value { ctx with ExecutionInfo = info; }
+        |> resolveWith name path parent value { ctx with ExecutionInfo = info; }
     | ResolveStreamed (info, _), _ ->
         raiseError <| streamListError info.Identifier (returnDef.ToString()) path ctx
     | ResolveLive info, _ ->
         live
-        |> resolveWith name path value { ctx with ExecutionInfo = info }
+        |> resolveWith name path parent value { ctx with ExecutionInfo = info }
     | _ ->
         direct returnDef
-        |> resolveWith name path value ctx
+        |> resolveWith name path parent value ctx
 
 
 and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef : ObjectDef) (ctx : ResolveFieldContext) (path : obj list) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
@@ -512,7 +512,7 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
             let resolver = ctx.Context.FieldExecuteMap.GetExecute(objDef.Name, field.Definition.Name)
             let fieldCtx = createFieldContext objDef argDefs ctx field
             let fieldPath = (field.Identifier :> obj :: path)
-            executeResolvers field.ReturnDef fieldCtx fieldPath (resolveField resolver fieldCtx value)
+            executeResolvers field.ReturnDef fieldCtx fieldPath value (resolveField resolver fieldCtx value)
         let! res =
             fields
             |> List.toArray
@@ -569,7 +569,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Args = args
               Variables = ctx.Variables }
         let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
-        executeResolvers info.ReturnDef fieldCtx path (resolveField execute fieldCtx rootValue)
+        executeResolvers info.ReturnDef fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
         |> AsyncVal.rescue (resolverError path fieldCtx >> List.singleton >> Error)
         |> AsyncVal.map(Result.catchError(fun errs -> KeyValuePair(name, null), None, errs))
 
@@ -610,7 +610,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Variables = ctx.Variables }
     // FIXME: Subscriptions + Defer?
     let onValue v = asyncVal {
-            match! executeResolvers returnType fieldCtx [ info.Identifier ] (toOption v |> AsyncVal.wrap) with
+            match! executeResolvers returnType fieldCtx [ info.Identifier ] value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
             | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
             | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"

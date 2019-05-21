@@ -122,8 +122,10 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
     let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let identity (identityName : string) (x : obj) =
             x.GetType().GetProperty(identityName).GetValue(x)
+        let project (fieldName : string) (x : obj) =
+            x.GetType().GetProperty(fieldName).GetValue(x)
         let makeSubscription id typeName fieldName : LiveFieldSubscription =
-            { Identity = identity id; TypeName = typeName; FieldName = fieldName }
+            { Filter = (fun x y -> identity id x = identity id y); Project = project fieldName; TypeName = typeName; FieldName = fieldName }
         let getObjDefs (def : FieldDef) =
             let rec helper (acc : ObjectDef list) (def : TypeDef) =
                 match def with

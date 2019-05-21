@@ -313,8 +313,10 @@ and ISubscriptionProvider =
 /// Represents a subscription of a field in a live query.
 and ILiveFieldSubscription =
     interface
-        /// A function that given the object marked with live directive, returns fields representing the identity of it.
-        abstract member Identity : obj -> obj
+        /// Determine if we should propagate the event
+        abstract member Filter : obj -> obj -> bool
+        /// Project out the field marked with the @live directive
+        abstract member Project : obj -> obj
         /// The type name of the object that is ready for live query in this subscription.
         abstract member TypeName : string
         /// The field name of the object that is ready for live query in this subscription.
@@ -322,38 +324,47 @@ and ILiveFieldSubscription =
     end
 
 /// Represents a generic typed, subscription field in a live query.
-and ILiveFieldSubscription<'Object, 'Identity> =
+and ILiveFieldSubscription<'Object, 'Field> =
     interface
         inherit ILiveFieldSubscription
-        /// A function that given the object marked with live directive, returns fields representing the identity of it.
-        abstract member Identity : 'Object -> 'Identity
+        /// Determine if we should propagate the event
+        abstract member Filter : 'Object -> 'Object -> bool
+        /// Project out the field marked with the @live directive
+        abstract member Project : 'Object -> 'Field
     end
 
 /// Represents a subscription of a field in a live query.
 and LiveFieldSubscription =
-    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
-      Identity : obj -> obj
+    { /// Determine if we should propagate the event
+      Filter : obj -> obj -> bool
+      /// Project out the field marked with the @live directive
+      Project : obj -> obj
       /// The type name of the object that is ready for live query in this subscription.
       TypeName : string
       /// The field name of the object that is ready for live query in this subscription.
       FieldName : string }
     interface ILiveFieldSubscription with
-        member this.Identity x = this.Identity x
+        member this.Filter x y = this.Filter x y
+        member this.Project x = this.Project x
         member this.TypeName = this.TypeName
         member this.FieldName = this.FieldName
 
 /// Represents a generic typed, subscription field in a live query.
-and LiveFieldSubscription<'Object, 'Identity> =
-    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
-      Identity : 'Object -> 'Identity
+and LiveFieldSubscription<'Object, 'Field> =
+    { /// Determine if we should propagate the event
+      Filter : 'Object -> 'Object -> bool
+      /// Project out the field marked with the @live directive
+      Project : 'Object -> 'Field
       /// The type name of the object that is ready for live query in this subscription.
       TypeName : string
       /// The field name of the object that is ready for live query in this subscription.
       FieldName : string }
-    interface ILiveFieldSubscription<'Object, 'Identity> with
-        member this.Identity x = this.Identity x
+    interface ILiveFieldSubscription<'Object, 'Field> with
+        member this.Filter x y = this.Filter x y
+        member this.Project x = this.Project x
     interface ILiveFieldSubscription with
-        member this.Identity x = upcast this.Identity (downcast x)
+        member this.Filter x y = this.Filter (downcast x) (downcast y)
+        member this.Project x = upcast this.Project (downcast x)
         member this.TypeName = this.TypeName
         member this.FieldName = this.FieldName
 
@@ -368,8 +379,8 @@ and ILiveFieldSubscriptionProvider =
         abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
-        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
-        abstract member Add : obj -> string -> string -> IObservable<obj>
+        /// Creates an active subscription, and returns the IObservable stream of projected POCO objects
+        abstract member Add : (obj -> bool) -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
         abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
