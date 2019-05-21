@@ -327,6 +327,20 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
       data.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
 
+[<Fact>]
+let ``Execution handles basic tasks: list of scalars`` () =
+    let schema =
+        Schema(Define.Object<InlineTest>(
+                "Type", [
+                    Define.Field("strings", ListOf String, fun _ _ -> ["foo"; "bar"; "baz"])
+                ]))
+    let result = sync <| Executor(schema).AsyncExecute("query Example { strings }")
+    match result with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
+    | _ -> fail "Expected Direct GQResponse"
+
 type TwiceTest = { A : string; B : int }
 
 [<Fact>]
@@ -429,7 +443,7 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->
-        errors |> nonEmpty
         data.["documentId"] |> notEquals null
         data.["data"] |> equals (upcast expectedData)
+        errors |> nonEmpty
         data.["errors"] |> equals (upcast expectedData)

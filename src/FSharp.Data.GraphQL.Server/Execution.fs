@@ -353,7 +353,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
         | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
     | Nullable (Output innerDef) ->
-            executeResolvers innerDef ctx path (value |> Some |> AsyncVal.wrap)
+            executeResolvers innerDef ctx path (toOption value |> AsyncVal.wrap)
     | Interface iDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
         let resolver = resolveInterfaceType possibleTypesFn iDef
@@ -425,7 +425,6 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
         |> Observable.bind collectBuffered
 
     let resolveItem index item = asyncVal {
-            // let! result = executeResolvers innerDef innerCtx (box index :: path) (toOption item |> AsyncVal.wrap)
             let! result =
                 direct innerDef
                 |> resolveWith name (box index :: path) (item |> toOption |> AsyncVal.wrap) innerCtx
@@ -609,14 +608,16 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables }
-    ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
-    |> Observable.bind(fun v -> 
-        let result = asyncVal {
-            match! executeResolvers returnType fieldCtx [info.Identifier] (Some v |> AsyncVal.wrap) with
-            // FIXME: Subscriptions + Defer? What about errors?
-            | Ok (data, _, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
+    // FIXME: Subscriptions + Defer?
+    let onValue v = asyncVal {
+            match! executeResolvers returnType fieldCtx [ info.Identifier ] (toOption v |> AsyncVal.wrap) with
+            | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
+            | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
+            | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
+            | Error errs -> return NameValueLookup.ofList["data", null; "errors", upcast errs] :> Output
         }
-        Observable.ofAsyncVal result)
+    ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
+    |> Observable.bind(onValue >> Observable.ofAsyncVal)
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
