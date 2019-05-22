@@ -605,7 +605,8 @@ module internal Provider =
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
               ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
-              ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
+              ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
+              ProvidedStaticParameter("uploadInputType", typeof<string>, parameterDefaultValue = "") ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)

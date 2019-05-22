@@ -20,6 +20,7 @@
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL.Client\MimeTypes.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Extensions.fs" />

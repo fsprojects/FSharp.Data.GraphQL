@@ -10,6 +10,7 @@
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="MimeTypes.fs" />
     <Compile Include="TextConversions.fs" />
     <Compile Include="JsonValue.fs" />
     <Compile Include="Extensions.fs" />

@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.IO
 open System.Globalization
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
