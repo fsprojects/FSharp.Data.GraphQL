@@ -259,7 +259,7 @@ Target.create "RunTests" (fun _ ->
         |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
         if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
         then failwith "Timeout while waiting for Giraffe server to run. Can not run integration tests."
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     startTestServer ()
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
@@ -547,7 +547,8 @@ let pack id =
             Version = release.NugetVersion
             OutputPath = sprintf "nuget/%s.%s" project id
             TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
-            MinimumFromLockFile = true })
+            MinimumFromLockFile = true
+            IncludeReferencedProjects = false })
 
 let publishPackage id =
     pack id
