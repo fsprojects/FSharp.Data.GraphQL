@@ -29,3 +29,22 @@ type TypeInfo with
                 | _ -> first.ToLower()
             x.GetDeclaredMethod(first + propertyName.Substring(1))
         | prop, _ -> prop
+
+module Option =
+    let mergeWith (f: 'T -> 'T -> 'T) (o1 : 'T option) (o2 : 'T option) : 'T option =
+        match (o1, o2) with
+        | Some a, Some b -> Some (f a b)
+        | Some a, _ -> Some a
+        | _, Some b -> Some b
+        | _, _ -> None
+
+module Result =
+    let catchError (handle : 'Err -> 'T) (r : Result<'T, 'Err>) : 'T =
+        match r with
+        | Ok x -> x
+        | Error err -> handle err
+
+    let fromOption (errValue : 'Err) (o : 'T option) : Result<'T, 'Err> =
+        match o with
+        | Some x -> Ok x
+        | None -> Error errValue

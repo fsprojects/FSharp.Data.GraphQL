@@ -23,9 +23,9 @@ type Root =
             x.NumberHolder.Number <- num 
             return x.NumberHolder
         }    
-    member x.ChangeFail(num): NumberHolder = 
+    member x.ChangeFail(num): NumberHolder option =
         failwith "Cannot change number"
-    member x.AsyncChangeFail(num): Async<NumberHolder> = 
+    member x.AsyncChangeFail(num): Async<NumberHolder option> =
         async { 
             return failwith "Cannot change number"
         }
@@ -39,8 +39,8 @@ let schema =
       [
         Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber")))
         Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber")))
-        Define.Field("failToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
-        Define.AsyncField("promiseAndFailToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber")))
+        Define.Field("failToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
+        Define.AsyncField("promiseAndFailToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber")))
     ]))
 
 [<Fact>]

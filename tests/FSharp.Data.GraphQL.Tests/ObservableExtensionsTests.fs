@@ -8,13 +8,6 @@ open FSharp.Data.GraphQL
 open Helpers
 open System
 
-let ms x =
-    let factor =
-        match Environment.ProcessorCount with
-        | x when x >= 8 -> 1
-        | x when x >= 4 -> 5
-        | _ -> 20
-    x * factor
 
 let delay time x = async {
     do! Async.Sleep(ms time)
@@ -231,3 +224,10 @@ let ``mapAsync should call OnComplete and return items in expected order`` () =
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals source
+
+[<Fact>]
+let ``singleton should call OnComplete and return item`` () =
+    let obs = Observable.singleton 1
+    use sub = Observer.create obs
+    sub.WaitCompleted(timeout = ms 10)
+    sub.Received |> seqEquals (Seq.singleton 1)

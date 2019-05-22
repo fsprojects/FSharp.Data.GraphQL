@@ -32,6 +32,7 @@ group TestsAndSamples
   nuget Giraffe
   nuget Microsoft.NET.Test.Sdk
   nuget xunit 
+  nuget xunit.runner.utility
   nuget xunit.runner.console
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
