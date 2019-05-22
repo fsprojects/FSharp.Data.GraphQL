@@ -23,3 +23,8 @@ dependencies
 		FParsec = LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
 		System.Reactive >= LOCKEDVERSION-Common
+files
+	bin/Release/net461/FSharp.Data.GraphQL.Server.dll ==> lib/net461
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.dll ==> lib/netstandard2.0
+	bin/Release/net461/FSharp.Data.GraphQL.Shared.dll ==> lib/net461
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0
