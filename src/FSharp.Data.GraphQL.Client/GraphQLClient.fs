@@ -12,12 +12,12 @@ open System.Text
 
 /// The base type for all GraphQLProvider upload types.
 /// Upload types are used in GraphQL multipart request spec, mostly for file uploading features.
-type UploadBase (stream : Stream, fileName : string, ?contentType : string, ?ownsStream : bool) =
+type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStream : bool) =
     new(bytes : byte [], fileName, ?contentType) = 
         let stream = new MemoryStream(bytes)
         match contentType with
-        | Some ct -> new UploadBase(stream, fileName, ct, true)
-        | None -> new UploadBase(stream, fileName, ownsStream = true)
+        | Some ct -> new Upload(stream, fileName, ct, true)
+        | None -> new Upload(stream, fileName, ownsStream = true)
 
     /// Gets the stream associated to this Upload type.
     member __.Stream = stream
@@ -75,6 +75,24 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
+    let private postAsync (client : HttpClient) (serverUrl : string) (content : HttpContent) =
+        async {
+            let! response = client.PostAsync(serverUrl, content) |> Async.AwaitTask
+            let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            if response.IsSuccessStatusCode
+            then return content
+            else return failwithf "Unexpected response from GraphQL server at \"%s\" (status code: %i, message: \"%s\")." serverUrl (int response.StatusCode) content
+        }
+
+    let private getAsync (client : HttpClient) (serverUrl : string) =
+        async {
+            let! response = client.GetAsync(serverUrl) |> Async.AwaitTask
+            let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            if response.IsSuccessStatusCode
+            then return content
+            else return failwithf "Unexpected response from GraphQL server at \"%s\" (status code: %i, message: \"%s\")." serverUrl (int response.StatusCode) content
+        }
+
     let private addHeaders (httpHeaders : seq<string * string>) (content : HttpContent) =
         if not (isNull httpHeaders)
         then httpHeaders |> Seq.iter (fun (name, value) -> content.Headers.Add(name, value))
@@ -100,8 +118,7 @@ module GraphQLClient =
                 |> JsonValue.Record
             use content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
             addHeaders request.HttpHeaders content
-            let! response = client.PostAsync(request.ServerUrl, content) |> Async.AwaitTask
-            return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return! postAsync client request.ServerUrl content
         }
     
     /// Sends a request to a GraphQL server.
@@ -113,9 +130,7 @@ module GraphQLClient =
     let sendIntrospectionRequestAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
         let sendGet() =
             async {
-                let client = connection.Client
-                let! response = client.GetAsync(serverUrl) |> Async.AwaitTask
-                return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                return! getAsync connection.Client serverUrl
             }
         async {
             try return! sendGet()
@@ -146,12 +161,12 @@ module GraphQLClient =
                 |> Array.map (fun (name, value) ->
                     match value with
                     | null -> name, null
-                    | :? UploadBase -> name, null
+                    | :? Upload -> name, null
                     | _ -> name, value)
             let files = 
                 request.Variables
-                |> Array.filter (fun (_, value) -> not (isNull value) && value.GetType() = typeof<UploadBase>)
-                |> Array.map (fun (name, value) -> name, value :?> UploadBase)
+                |> Array.filter (fun (_, value) -> not (isNull value) && value.GetType() = typeof<Upload>)
+                |> Array.map (fun (name, value) -> name, value :?> Upload)
             use operationContent = 
                 let variables = 
                     match request.Variables with
@@ -187,8 +202,7 @@ module GraphQLClient =
                     content.Headers.Add("Content-Type", value.ContentType)
                     content)
             fileContents |> Array.iter content.Add
-            let! response = client.PostAsync(request.ServerUrl, content) |> Async.AwaitTask
-            return! response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            return! postAsync client request.ServerUrl content
         }
 
     /// Executes a multipart request to a GraphQL server.

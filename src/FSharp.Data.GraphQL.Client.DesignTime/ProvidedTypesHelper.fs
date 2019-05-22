@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.IO
 open System.Security.Cryptography
 open FSharp.Core
 open System.Reflection
@@ -285,6 +286,7 @@ module internal ProvidedOperation =
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
+                         uploadInputTypeName : string option,
                          className : string) =
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
@@ -294,12 +296,15 @@ module internal ProvidedOperation =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
                     | NamedType typeName ->
-                        match Types.scalar.TryFind(typeName) with
-                        | Some t -> (variableName, Types.makeOption t)
-                        | None ->
-                            match schemaProvidedTypes.TryFind(typeName) with
+                        match uploadInputTypeName with
+                        | Some uploadInputTypeName when typeName = uploadInputTypeName -> (variableName, Types.makeOption typeof<Upload>)
+                        | _ ->
+                            match Types.scalar.TryFind(typeName) with
                             | Some t -> (variableName, Types.makeOption t)
-                            | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
+                            | None ->
+                                match schemaProvidedTypes.TryFind(typeName) with
+                                | Some t -> (variableName, Types.makeOption t)
+                                | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
                     | ListType itype -> 
                         let (name, t) = mapVariable variableName itype
                         (name, t |> Types.makeArray |> Types.makeOption)
@@ -352,7 +357,6 @@ module internal ProvidedOperation =
                 match contextInfo with
                 | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
-            let shouldUseMultipartRequest = schemaProvidedTypes |> Map.exists (fun _ t -> t.BaseType = typeof<UploadBase>)
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -372,7 +376,7 @@ module internal ProvidedOperation =
                               Query = actualQuery
                               Variables = %%variables }
                         let response = 
-                            if shouldUseMultipartRequest
+                            if uploadInputTypeName.IsSome
                             then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                             else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
@@ -401,7 +405,7 @@ module internal ProvidedOperation =
                               Variables = %%variables }
                         async {
                             let! response = 
-                                if shouldUseMultipartRequest
+                                if uploadInputTypeName.IsSome
                                 then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
                                 else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
@@ -425,17 +429,20 @@ module internal ProvidedOperation =
         tdef
 
 module internal Provider =
-    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadProvidedType : ProvidedTypeDefinition option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
-            | _ when tref.Name.IsSome && uploadProvidedType.IsSome && tref.Name.Value = uploadProvidedType.Value.Name -> Types.makeOption uploadProvidedType.Value
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
             | TypeKind.SCALAR when tref.Name.IsSome ->
-                if Types.scalar.ContainsKey(tref.Name.Value)
-                then Types.scalar.[tref.Name.Value] |> Types.makeOption
-                else Types.makeOption typeof<string>
+                match uploadInputTypeName with
+                | Some uploadInputTypeName when uploadInputTypeName = tref.Name.Value ->
+                    Types.makeOption typeof<Upload>
+                | _ ->
+                    if Types.scalar.ContainsKey(tref.Name.Value)
+                    then Types.scalar.[tref.Name.Value] |> Types.makeOption
+                    else Types.makeOption typeof<string>
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> Types.makeOption providedEnum
@@ -489,9 +496,6 @@ module internal Provider =
 
     let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
-        uploadInputTypeName |> Option.iter (fun name -> 
-            let uploadProvidedType = ProvidedTypeDefinition(name, Some typeof<UploadBase>, nonNullable = true, isSealed = true)
-            providedTypes := (!providedTypes).Add(name, uploadProvidedType))
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
@@ -512,10 +516,15 @@ module internal Provider =
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
-                    // Unknown scalar types will be mapped to a string type.
-                    if Types.scalar.ContainsKey(field.Type.Name.Value)
-                    then Types.scalar.[field.Type.Name.Value]
-                    else typeof<string>
+                    match uploadInputTypeName with
+                    | Some uploadInputTypeName when uploadInputTypeName = field.Type.Name.Value ->
+                        // We assume that upload types are Scalar types on the server.
+                        typeof<Upload>
+                    | _ ->
+                        // Unknown scalar types will be mapped to a string type.
+                        if Types.scalar.ContainsKey(field.Type.Name.Value)
+                        then Types.scalar.[field.Type.Name.Value]
+                        else typeof<string>
                 { Name = field.Name
                   Alias = None
                   Description = field.Description
@@ -719,7 +728,6 @@ module internal Provider =
                                     | None -> failwith "The operation was found in the schema, but it does not have a name."
                                 let schemaTypes = Types.getSchemaTypes(schema)
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
-                                let uploadProvidedType = uploadInputTypeName |> Option.map (fun name -> schemaProvidedTypes.[name])
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
@@ -734,7 +742,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadProvidedType, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                                 let rootWrapper = generateWrapper "Types"
@@ -831,7 +839,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
