@@ -170,7 +170,6 @@ let DataType =
             Define.Field("delayed", Nullable AsyncDataType, (fun _ d -> Some d.delayed))
             Define.Field("delayedList", ListOf AsyncDataType, (fun _ d -> d.delayedList))
             Define.Field("resolverError", Nullable NonNullAsyncDataType, (fun _ d -> Some d.resolverError))
-            // FIXME: The nullable test can't use a nullable value! (Same goes for the others)
             Define.Field("nullableError", Nullable NonNullAsyncDataType, (fun _ d -> Some d.nullableError))
             Define.Field("resolverListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.resolverListError))
             Define.Field("nullableListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.nullableListError))

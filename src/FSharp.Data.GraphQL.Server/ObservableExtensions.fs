@@ -64,4 +64,10 @@ module internal Observable =
 
     let empty<'T> = Seq.empty<'T> |> ofSeq
 
-    let singleton (value : 'T) = Seq.singleton value |> ofSeq
+    let singleton (value : 'T) = {
+        new IObservable<'T> with
+            member __.Subscribe(observer) =
+                observer.OnNext value
+                observer.OnCompleted()
+                { new IDisposable with member __.Dispose() = () }
+    }
