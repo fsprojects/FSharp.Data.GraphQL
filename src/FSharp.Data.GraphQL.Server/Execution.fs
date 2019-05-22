@@ -340,7 +340,9 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
         | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
     | Nullable (Output innerDef) ->
-            executeResolvers { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true } } path parent (toOption value |> AsyncVal.wrap)
+        let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
+        executeResolvers innerCtx path parent (toOption value |> AsyncVal.wrap)
+        |> AsyncVal.map(Result.catchError (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
     | Interface iDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
         let resolver = resolveInterfaceType possibleTypesFn iDef
