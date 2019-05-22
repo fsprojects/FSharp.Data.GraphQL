@@ -102,3 +102,6 @@
 ### 1.0.0-beta7 - May 17 2019
 * Minor bug fixes
 * Fixing an error on overload constructor definition
+
+### 1.0.0-beta8 - May 22 2019
+* Performance improvements
