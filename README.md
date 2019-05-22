@@ -39,7 +39,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### GraphiQL client
 
-Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run `FSharp.Data.GraphQL.Samples.GiraffeServer` project on Debug settings - this will create a Giraffe server compatible with GraphQL spec, running on port 8084. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
+Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run the [Star Wars API sample project](samples/star-wars-api) on Debug settings - this will create a Giraffe server compatible with GraphQL spec, running on port 8084. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
 
 ```graphql
 {
@@ -167,7 +167,7 @@ type MyProvider = GraphQLProvider<"http://some.graphqlserver.development.org">
 2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/files/introspection_query.graphql) on the desired server and saving it into a file on the same path as the project using the provider:
 
 ```fsharp
-type MyProvider = GraphQLProvider<"sample_schema.json">
+type MyProvider = GraphQLProvider<"swapi_schema.json">
 ```
 
 From now on, you can start running queries and mutations:

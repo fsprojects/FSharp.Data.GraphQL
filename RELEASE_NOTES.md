@@ -83,3 +83,22 @@
 * **Breaking Change** GraphQLProvider uses the operation name as the generated operation type's names. if no operation name is specified it uses "Operation" + the query string's hash
 * Make the type provider cross-targeting
 * **Breaking Change** Add postcompile phase to middleware interface
+
+### 1.0.0-beta3 - May 10 2019
+* **Breaking Change** GraphQLProvider record types constructors now receives option arguments as optional arguments
+* Revision on scalar types parsing - fixed some wrong behaviors such as parsing ints as floats
+
+### 1.0.0-beta4 - May 13 2019
+* Fixing an bug when converting variable types to variables json in a query
+
+### 1.0.0-beta5 - May 13 2019
+* Fixing an bug when parsing json objects with no fields in serialization
+
+### 1.0.0-beta6 - May 17 2019
+* Changing constructors of provided types to have overloads instead of optional parameters (needed because of a limitation of the Type Provider SDK)
+* Adding support for field aliases
+* Operation result errors and custom data now are provided as their respective types instead of options (`Operation Error []` and `Map<string, obj>`)
+
+### 1.0.0-beta7 - May 17 2019
+* Minor bug fixes
+* Fixing an error on overload constructor definition

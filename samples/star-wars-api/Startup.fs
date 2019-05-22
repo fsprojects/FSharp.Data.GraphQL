@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.GiraffeServer
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.Configuration
@@ -22,7 +22,7 @@ type Startup private () =
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
-            .UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, Schema.root)
+            .UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, fun () -> { RequestId = Guid.NewGuid().ToString() })
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set

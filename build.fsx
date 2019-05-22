@@ -246,9 +246,9 @@ Target.create "RunTests" (fun _ ->
             then waiter.Set() |> ignore
         let errHandler (msg : string) =
             failwithf "Error while starting Giraffe server. %s" msg
-        let serverProjectDir = "samples" </> "FSharp.Data.GraphQL.Samples.GiraffeServer"
-        let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.GiraffeServer.fsproj"
-        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> "FSharp.Data.GraphQL.Samples.GiraffeServer.dll"
+        let serverProjectDir = "samples" </> "star-wars-api"
+        let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
+        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.dll"
         restore serverProject
         build serverProject
         CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]

@@ -1,7 +1,8 @@
 #r "../../packages/samples/Suave/lib/net461/Suave.dll"
 #r "../../packages/Newtonsoft.Json/lib/net45/Newtonsoft.Json.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net47/FSharp.Data.GraphQL.Server.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net461/FSharp.Data.GraphQL.Shared.dll"
+#r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net461/FSharp.Data.GraphQL.Server.dll"
+
 #nowarn "40"
 
 open System
@@ -76,7 +77,7 @@ let json o = JsonConvert.SerializeObject(o, settings)
 
 let tryParse data =
     let raw = Text.Encoding.UTF8.GetString data
-    if raw <> null && raw <> ""
+    if not (isNull raw) && raw <> ""
     then
         let map = JsonConvert.DeserializeObject<Map<string,obj>>(raw)
         Map.tryFind "query" map

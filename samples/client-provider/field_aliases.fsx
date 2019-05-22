@@ -18,23 +18,47 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"swapi_schema.json">
 
-let filter = MyProvider.Types.ThingFilter(format = "Spheric")
+let operation =
+    MyProvider.Operation<"""query TestQuery {
+      myHero: hero(id: "1000") {
+        hisName: name
+        appearsIn
+        homePlanet
+        hisFriends: friends {
+          ... on Human {
+            humanName: name
+            appearsIn
+            homePlanet
+          }
+          ... on Droid {
+            droidName: name
+            appearsIn
+            primaryFunction
+          }
+        }
+      }
+    }""">()
 
-let operation = 
-    MyProvider.Operation<"""query q($filter: ThingFilter!) {
-    things(filter: $filter) {
-      id
-      format
-      order
-    }
-  }""">()
+let ctx = MyProvider.GetContext(serverUrl = "http://localhost:8084")
 
-let result = operation.Run(filter = filter)
+let result = operation.Run(ctx)
 
-printfn "Data: %A\n" result.Data
-printfn "Errors: %A\n" result.Errors
-printfn "Custom data: %A\n" result.CustomData
+let hisName = result.Data.Value.MyHero.Value.HisName.Value
 
-printfn "Order: %A" result.Data.Value.Things.[0].Order
+let hisFriends = result.Data.Value.MyHero.Value.HisFriends |> Array.choose id
+
+let humanFriendNames =
+  hisFriends |> Array.choose (fun f -> f.TryAsHuman()) |> Array.map (fun h -> h.HumanName)
+
+let droidFriendNames =
+  hisFriends |> Array.choose (fun f -> f.TryAsDroid()) |> Array.map (fun h -> h.DroidName)
+
+printfn "His name: %s" hisName
+
+printfn "Human friend names: %A" humanFriendNames
+
+printfn "Droid friend names: %A" droidFriendNames
+
+printfn "Data: %A" result.Data

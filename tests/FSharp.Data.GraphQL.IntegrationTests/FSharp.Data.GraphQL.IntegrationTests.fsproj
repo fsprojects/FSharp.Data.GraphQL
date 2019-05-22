@@ -13,8 +13,6 @@
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
-    <Compile Include="CustomHttpHeaderFileTests.fs" />
-    <Compile Include="CustomHttpHeadersTests.fs" />
     <Compile Include="RemoteProviderTests.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -23,12 +21,6 @@
   </ItemGroup>
   <ItemGroup>
     <None Include="paket.references" />
-    <None Include="http_headers1.headerfile">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
-    <None Include="http_headers2.headerfile">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </None>
     <None Include="operation.graphql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
