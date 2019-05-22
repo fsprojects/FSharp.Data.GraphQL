@@ -105,3 +105,6 @@
 
 ### 1.0.0-beta8 - May 22 2019
 * Performance improvements
+
+### 1.0.0-beta9 - May 22 2019
+* Fixing dependency issue on Server component
