@@ -4,6 +4,8 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.Collections
+open System.Collections.Generic
 open System.IO
 open System.Net.Http
 open FSharp.Data.GraphQL
@@ -105,7 +107,7 @@ module GraphQLClient =
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
                 | _ -> 
-                    let json = Map.ofSeq request.Variables |> Serialization.toJsonValue
+                    let json = Map.ofArray request.Variables |> Serialization.toJsonValue
                     json.ToString() |> JsonValue.String
             let operationName =
                 match request.OperationName with
@@ -154,7 +156,8 @@ module GraphQLClient =
     let sendMultipartRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let client = connection.Client
-            use content = new MultipartContent()
+            let boundary = sprintf "----GraphQLProviderBoundary%s" (Guid.NewGuid().ToString("N"))
+            use content = new MultipartContent("form-data", boundary)
             addHeaders request.HttpHeaders content
             let variables = 
                 request.Variables
@@ -162,35 +165,45 @@ module GraphQLClient =
                     match value with
                     | null -> name, null
                     | :? Upload -> name, null
+                    | :? IEnumerable<Upload> as x -> name, x |> Seq.map (fun _ -> null) |> box
                     | _ -> name, value)
             let files = 
+                let isUpload (value : obj) =
+                    match value with
+                    | null -> false
+                    | :? Upload | :? IEnumerable<Upload> -> true
+                    | _ -> false
+                let rec mapper (name: string, value : obj) =
+                    match value with
+                    | :? IEnumerable<Upload> as x -> x |> Seq.mapi (fun ix x -> sprintf "%s.%i" name ix, x) |> Array.ofSeq
+                    | _ -> [| name, value :?> Upload |]
                 request.Variables
-                |> Array.filter (fun (_, value) -> not (isNull value) && value.GetType() = typeof<Upload>)
-                |> Array.map (fun (name, value) -> name, value :?> Upload)
+                |> Array.filter (fun (_, value) -> isUpload value)
+                |> Array.collect mapper
             use operationContent = 
                 let variables = 
                     match request.Variables with
                     | null | [||] -> JsonValue.Null
-                    | _ -> 
-                        let json = 
-                            variables
-                            |> Map.ofArray
-                            |> Serialization.toJsonValue
-                        json.ToString() |> JsonValue.String
+                    | _ -> variables |> Map.ofArray |> Serialization.toJsonValue
+                let operationName =
+                    match request.OperationName with
+                    | Some x -> JsonValue.String x
+                    | None -> JsonValue.Null
                 let json =
-                    [| "query", JsonValue.String request.Query
+                    [| "operationName", operationName
+                       "query", JsonValue.String request.Query
                        "variables", variables |]
                     |> JsonValue.Record
-                let content = new StringContent(json.ToString())
+                let content = new StringContent(json.ToString(JsonSaveOptions.DisableFormatting))
                 content.Headers.Add("Content-Disposition", "form-data; name=\"operations\"")
                 content
             content.Add(operationContent)
             use mapContent =
                 let files =
                     files
-                    |> Array.mapi (fun ix (name, _) -> sprintf "\"%i\"" ix, JsonValue.Array [| JsonValue.String (sprintf "variables.%s" name) |])
+                    |> Array.mapi (fun ix (name, _) -> ix.ToString(), JsonValue.Array [| JsonValue.String (sprintf "variables.%s" name) |])
                     |> JsonValue.Record
-                let content = new StringContent(files.ToString())
+                let content = new StringContent(files.ToString(JsonSaveOptions.DisableFormatting))
                 content.Headers.Add("Content-Disposition", "form-data; name=\"map\"")
                 content
             content.Add(mapContent)

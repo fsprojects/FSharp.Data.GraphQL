@@ -16,14 +16,15 @@
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/netstandard.dll"
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
+open System
 open System.IO
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:3001/graphql", uploadInputTypeName = "Upload">
+type MyProvider = GraphQLProvider<"http://ipv4.fiddler:3001/graphql", uploadInputTypeName = "Upload">
 
 let mutation =
-    MyProvider.Operation<"""mutation singleFileUpload($file : Upload!) {
-      singleUpload(file : $file) {
+    MyProvider.Operation<"""mutation multipleFilesUpload($files: [Upload!]!) {
+      multipleUpload(files: $files) {
         id
         path
         filename
@@ -31,17 +32,12 @@ let mutation =
       }
     }""">()
 
-let upload () =
-    use input = new Upload(File.OpenRead("text_file.txt"), "text_file.txt", ownsStream = true)
+let upload() =
+    let input = 
+        [| new Upload(File.OpenRead("txt_file.txt"), "text.txt", ownsStream = true)
+           new Upload(File.OpenRead("png_file.png"), "image.png", ownsStream = true) |]
     let result = mutation.Run(input)
+    input |> Array.iter (fun x -> (x :> IDisposable).Dispose())
     printfn "Data: %A" result.Data
 
-let query =
-    MyProvider.Operation<"""query uploadsQuery {
-        uploads {
-          id
-          filename
-          mimetype
-          path
-        }
-      }""">()
+upload()

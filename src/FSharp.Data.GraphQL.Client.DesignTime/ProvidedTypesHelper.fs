@@ -357,6 +357,7 @@ module internal ProvidedOperation =
                 match contextInfo with
                 | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
+            let shouldUseMultipartRequest = uploadInputTypeName.IsSome
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -376,7 +377,7 @@ module internal ProvidedOperation =
                               Query = actualQuery
                               Variables = %%variables }
                         let response = 
-                            if uploadInputTypeName.IsSome
+                            if shouldUseMultipartRequest
                             then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                             else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
@@ -405,7 +406,7 @@ module internal ProvidedOperation =
                               Variables = %%variables }
                         async {
                             let! response = 
-                                if uploadInputTypeName.IsSome
+                                if shouldUseMultipartRequest
                                 then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
                                 else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
