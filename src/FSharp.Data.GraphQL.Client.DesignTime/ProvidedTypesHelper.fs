@@ -352,6 +352,7 @@ module internal ProvidedOperation =
                 match contextInfo with
                 | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
+            let shouldUseMultipartRequest = schemaProvidedTypes |> Map.exists (fun _ t -> t.BaseType = typeof<UploadBase>)
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -370,7 +371,10 @@ module internal ProvidedOperation =
                               OperationName = Option.ofObj operationName
                               Query = actualQuery
                               Variables = %%variables }
-                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest context.Connection request)
+                        let response = 
+                            if shouldUseMultipartRequest
+                            then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
+                            else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         // If the user does not provide a context, we should dispose the default one after running the query
                         if isDefaultContext then (context :> IDisposable).Dispose()
@@ -396,7 +400,10 @@ module internal ProvidedOperation =
                               Query = actualQuery
                               Variables = %%variables }
                         async {
-                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                            let! response = 
+                                if shouldUseMultipartRequest
+                                then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
+                                else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
@@ -418,10 +425,11 @@ module internal ProvidedOperation =
         tdef
 
 module internal Provider =
-    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadProvidedType : ProvidedTypeDefinition option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
+            | _ when tref.Name.IsSome && uploadProvidedType.IsSome && tref.Name.Value = uploadProvidedType.Value.Name -> Types.makeOption uploadProvidedType.Value
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
             | TypeKind.SCALAR when tref.Name.IsSome ->
@@ -479,8 +487,11 @@ module internal Provider =
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
 
-    let getSchemaProvidedTypes(schema : IntrospectionSchema) =
+    let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
+        uploadInputTypeName |> Option.iter (fun name -> 
+            let uploadProvidedType = ProvidedTypeDefinition(name, Some typeof<UploadBase>, nonNullable = true, isSealed = true)
+            providedTypes := (!providedTypes).Add(name, uploadProvidedType))
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
@@ -606,10 +617,15 @@ module internal Provider =
             [ ProvidedStaticParameter("introspection", typeof<string>)
               ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
-              ProvidedStaticParameter("uploadInputType", typeof<string>, parameterDefaultValue = "") ]
+              ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "") ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
+            let uploadInputTypeName = 
+                let name : string = unbox args.[3]
+                match name with
+                | "" -> None
+                | _ -> Some name
             let maker =
                 lazy
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
@@ -624,7 +640,7 @@ module internal Provider =
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
-                        let schemaProvidedTypes = getSchemaProvidedTypes(schema)
+                        let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
@@ -703,6 +719,7 @@ module internal Provider =
                                     | None -> failwith "The operation was found in the schema, but it does not have a name."
                                 let schemaTypes = Types.getSchemaTypes(schema)
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
+                                let uploadProvidedType = uploadInputTypeName |> Option.map (fun name -> schemaProvidedTypes.[name])
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
@@ -717,7 +734,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadProvidedType, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                                 let rootWrapper = generateWrapper "Types"
