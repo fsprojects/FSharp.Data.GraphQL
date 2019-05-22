@@ -61,8 +61,8 @@ let executor =
             fieldsFn = fun () ->
                 [ Define.Field("id", Int, resolve = fun _ a -> a.id)
                   Define.Field("value", String, resolve = fun _ a -> a.value)
-                  Define.Field("subjects", Nullable (ListOf (Nullable SubjectType)),
-                    resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq |> Some)
+                  Define.Field("subjects", ListOf (Nullable SubjectType), 
+                    resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq)
                     .WithQueryWeight(1.0) ])
     and BType = 
         Define.Object<B>(
@@ -71,7 +71,7 @@ let executor =
             fieldsFn = fun () ->
                 [ Define.Field("id", Int, resolve = fun _ b -> b.id)
                   Define.Field("value", Int, resolve = fun _ b -> b.value)
-                  Define.Field("subjects", ListOf (Nullable SubjectType),
+                  Define.Field("subjects", ListOf (Nullable SubjectType), 
                     resolve = fun _ (b : B) -> b.subjects |> List.map getSubject |> List.toSeq)
                     .WithQueryWeight(1.0) ])
     let Query =
@@ -176,7 +176,7 @@ let ``Deferred queries : Should pass when below threshold``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", upcast null
+                "subjects", upcast []
             ]
         ]
     let expectedDeferred = 
@@ -194,12 +194,14 @@ let ``Deferred queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj ]
         ]
     let result = execute query
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
 
@@ -245,7 +247,8 @@ let ``Streamed queries : Should pass when below threshold``() =
             "path", upcast [ "A" :> obj; "subjects" :> obj; 1 :> obj ]
         ]
     let result = execute query
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expected)
         use sub = Observer.create deferred
@@ -255,6 +258,7 @@ let ``Streamed queries : Should pass when below threshold``() =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
 
@@ -278,9 +282,11 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
     asts query
     |> Seq.map execute
     |> Seq.iter (fun result ->
-        ensureDirect result <| fun data errors ->
+        match result with
+        | Direct(data, errors) ->
             errors |> equals expectedErrors
             data.["data"] |> isNameValueDict |> empty
+        | _ -> fail "Expected Direct GQLResponse"
         result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
         result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0))
 
@@ -319,9 +325,11 @@ let ``Inline fragment query : Should pass when below threshold``() =
             ]
         ]
     let result = execute query
-    ensureDirect result <| fun data errors ->
+    match result with
+    | Direct (data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
 
@@ -352,9 +360,11 @@ let ``Inline fragment query : Should not pass when above threshold``() =
             }
         }"""
     let result = execute query
-    ensureDirect result <| fun data errors ->
+    match result with
+    | Direct (data, errors) ->
         errors |> equals expectedErrors
         data.["data"] |> isNameValueDict |> empty
+    | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
 
@@ -391,9 +401,11 @@ let ``Object list filter: should return filter information in Metadata``() =
     let expectedFilter = 
         "subjects", And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" })
     let result = execute query
-    ensureDirect result <| fun data errors ->
+    match result with
+    | Direct (data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
     result.Metadata.TryFind<(string * ObjectListFilter) list>("filters") |> equals (Some [ expectedFilter ])

@@ -9,11 +9,10 @@ open System.Collections.Generic
 /// A struct used to operate on both synchronous values and Async computations
 /// using the same, uniform API.
 /// </summary>
-[<Struct>]
 type AsyncVal<'T> =
-    | Value of value : 'T
-    | Async of asynchronous : Async<'T>
-    | Failure of exn : Exception
+    | Value of 'T
+    | Async of Async<'T>
+    | Failure of Exception
 
     static member Zero = Value(Unchecked.defaultof<'T>)
     override x.ToString () = 

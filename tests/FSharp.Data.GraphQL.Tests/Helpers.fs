@@ -14,20 +14,18 @@ let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
 let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
 let isNameValueDict actual = isDict<string, obj> actual
-let fail (message: string) =
-    Assert.True(false, message)
 let equals (expected : 'x) (actual : 'x) =
-    Assert.True((actual = expected), sprintf "expected %O\nbut got %O" expected actual)
+    Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
 let notEquals (expected : 'x) (actual : 'x) =
     Assert.True((actual <> expected), sprintf "unexpected %+A" expected)
 let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
-    | true, errors -> fail <| sprintf "expected ExecutionResult to have no errors but got %+A" errors
+    | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors
     | false, _ -> ()
-let nonEmpty (xs : 'a seq) =
-    Assert.False(Seq.isEmpty xs, sprintf "expected non-empty sequence, but got %A" xs)
 let empty (xs: 'a seq) =
     Assert.True(Seq.isEmpty xs, sprintf "expected empty sequence, but got %A" xs)
+let fail (message: string) =
+    Assert.True(false, message)
 let single (xs : 'a seq) =
     let length = Seq.length xs
     if length <> 1
@@ -57,16 +55,6 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
-
-let ensureDeferred (result : GQLResponse) (onDeferred : Output -> Error list -> IObservable<Output> -> unit) : unit =
-    match result with
-    | Deferred(data, errors, deferred) -> onDeferred data errors deferred
-    | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
-
-let ensureDirect (result : GQLResponse) (onDirect : Output -> Error list -> unit) : unit =
-    match result with
-    | Direct(data, errors) -> onDirect data errors
-    | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
 
 open Newtonsoft.Json
 open Newtonsoft.Json.Serialization
@@ -133,14 +121,6 @@ let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
     elif times > 0
     then ensureThat condition (times - 1) errorMsg
 
-let ms x =
-    let factor =
-        match Environment.ProcessorCount with
-        | x when x >= 8 -> 1
-        | x when x >= 4 -> 5
-        | _ -> 20
-    x * factor
-
 type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
     let received = List<'T>()
     let mutable isCompleted = false
@@ -156,10 +136,10 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
         match expectedItemCount with
         | Some x -> 
             if received.Count < x
-            then failwithf "Expected to receive %i items, but received %i\nItems: %A" x received.Count received
+            then failwithf "Expected to receive %i items, but received %i" x received.Count
         | None -> ()
     member __.WaitForItems(expectedItemCount) =
-        let errorMsg = sprintf "Expected to receive least %i items, but received %i\nItems: %A" expectedItemCount received.Count received
+        let errorMsg = sprintf "Expected to receive least %i items, but received %i" expectedItemCount received.Count
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
     member x.WaitForItem() = x.WaitForItems(1)
     member __.IsCompleted 

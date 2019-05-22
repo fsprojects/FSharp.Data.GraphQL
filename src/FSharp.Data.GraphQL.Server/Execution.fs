@@ -4,9 +4,6 @@ module FSharp.Data.GraphQL.Execution
 
 open System
 open System.Collections.Generic
-open System.Linq
-open FSharp.Data.GraphQL.Extensions
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -62,12 +59,6 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                 i <- Int32.MaxValue
             else i <- i+1
     let getValue key = (kvals |> Array.find (fun kv -> kv.Key = key)).Value
-
-    let (|BoxedSeq|_|) (xs : obj) =
-        match xs with
-        | (:? System.Collections.IEnumerable as enumerable) -> Some (Seq.cast<obj> enumerable)
-        | _ -> None
-
     let rec structEq (x: NameValueLookup) (y: NameValueLookup) =
         if Object.ReferenceEquals(x, y) then true
         elif Object.ReferenceEquals(y, null) then false
@@ -80,7 +71,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
                 else
                     match a.Value, b.Value with
                     | (:? NameValueLookup as x), (:? NameValueLookup as y) -> structEq x y
-                    | (BoxedSeq x), (BoxedSeq y) ->
+                    | (:? seq<obj> as x), (:? seq<obj> as y) -> 
                         if Seq.length x <> Seq.length y then false else Seq.forall2 (=) x y
                     | a1, b1 -> a1 = b1) y.Buffer
     let pad (sb: System.Text.StringBuilder) times =
@@ -111,7 +102,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             else sb.Append("null") |> ignore
         ()
     /// Returns raw content of the current lookup.
-    member __.Buffer : KeyValuePair<string, obj> [] = kvals
+    member private __.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
     member __.Count = kvals.Length
     /// Updates an entry's value under given key. It will throw an exception
@@ -242,289 +233,288 @@ let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (par
         execute ctx parentValue
         |> AsyncVal.map(fun v -> if isNull v then None else Some v)
 
-type ResolverResult<'T> = Result<'T * IObservable<Output> option * Error list, Error list>
+// Deferred values require knowledge of their parent value
+// Also, the values we return for the non-deferred values are all leaves in the resolution tree
+// So what we do is build up a tree containing all of the result values, rather than just computing the leaves,
+// Then we use that tree to resolve the original query, and pass it along to the deferred fields
+// So that they know their parent values, and are able to properly resolve
 
-module ResolverResult =
-    let mapValue (f : 'T -> 'U) (r : ResolverResult<'T>) : ResolverResult<'U> =
-        Result.map(fun (data, deferred, errs) -> (f data, deferred, errs)) r
+/// Represents the materialized tree of all result values
+type ResolverTree =
+    | ResolverLeaf of ResolverLeaf
+    | ResolverError of ResolverError
+    | ResolverObjectNode of ResolverNode
+    | ResolverListNode of ResolverNode
+    member x.Name =
+        match x with
+        | ResolverLeaf leaf -> leaf.Name
+        | ResolverError err -> err.Name
+        | ResolverObjectNode node -> node.Name
+        | ResolverListNode l -> l.Name
+    member x.Value =
+        match x with
+        | ResolverLeaf leaf -> leaf.Value
+        | ResolverError _ -> None
+        | ResolverObjectNode node -> node.Value
+        | ResolverListNode l -> l.Value
+and ResolverLeaf = { Name: string; Value: obj option }
+and ResolverError = { Name: string; Message: string; PathToOrigin: obj list }
+and ResolverNode = { Name: string; Value: obj option; Children: AsyncVal<ResolverTree> [] }
+
+module ResolverTree =
+    let rec pathFold leafOp errorOp nodeOp listOp =
+        let rec helper path = function
+            | ResolverLeaf leaf ->
+                leafOp ((leaf.Name :> obj)::path) leaf
+            | ResolverError err ->
+                let origin = (err.PathToOrigin |> List.rev)
+                let toString x = x.ToString()
+                let head = List.tryHead path |> Option.map toString
+                let shouldAdd = err.Name <> "__index" && Some (err.Name) <> head
+                let path' = if shouldAdd then origin@((err.Name :> obj)::path) else origin@path
+                errorOp path' err
+            | ResolverObjectNode node ->
+                let path' = if node.Name <> "__index" then (node.Name :> obj)::path else path
+                let mapper (c : AsyncVal<ResolverTree>) = asyncVal {
+                    let! c' = c
+                    return helper path' c'
+                }
+                let ts = node.Children |> Array.map mapper
+                nodeOp path' node.Name node.Value ts
+            | ResolverListNode node ->
+                let path' = (node.Name :> obj)::path
+                let mapper (i : int) (c : AsyncVal<ResolverTree>) = asyncVal {
+                    let! c' = c
+                    return helper ((box i)::path') c'
+                }
+                let ts = node.Children |> Array.mapi mapper
+                listOp path' node.Name node.Value ts
+        helper []
+
+let private foldChildren (children : AsyncVal<AsyncVal<KeyValuePair<string, obj> * Error list>> []) =
+    children
+    |> Array.fold (fun (kvpsErrs : AsyncVal<KeyValuePair<string, obj> list * Error list>) child -> asyncVal {
+        let! kvps, errs = kvpsErrs
+        let! c = child
+        let! c, e = c
+        return c::kvps, e@errs
+    }) (Value ([], []))
+
+let private treeToDict =
+    ResolverTree.pathFold
+        (fun _ leaf -> asyncVal { return KeyValuePair<_,_>(leaf.Name, match leaf.Value with | Some v -> v | None -> null), [] })
+        (fun path error -> asyncVal {
+            let (e:Error) = (error.Message, path |> List.rev)
+            return KeyValuePair<_,_>(error.Name, box null), [e]})
+        (fun _ name value children -> asyncVal {
+            let! dicts, errors = children |> foldChildren
+            match value with
+            | Some _ -> return KeyValuePair<_,_>(name, NameValueLookup(dicts |> List.rev |> List.toArray) |> box), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
+        (fun _ name value children -> asyncVal {
+            let! dicts, errors = children |> foldChildren
+            match value with
+            | Some _ -> return KeyValuePair<_,_>(name, dicts |> List.map(fun d -> d.Value) |> List.rev |> List.toArray |> box), errors
+            | None -> return KeyValuePair<_,_>(name, null), errors})
+
+let private errorDict tree message path = asyncVal {
+    let! data, err = treeToDict tree
+    return (data, (message, path) :: err)
+}
 
 type StreamOutput =
     | NonList of (KeyValuePair<string, obj> * Error list)
     | NonBufferedList of int * (KeyValuePair<string, obj> * Error list)
     | BufferedList of int list * (KeyValuePair<string, obj> * Error list) list
 
-let private raiseError err = AsyncVal.wrap <| Error [err]
-
-let private resolverError path ctx e = (ctx.Schema.ParseError e, List.rev path)
-let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
-let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
-let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)
-let private unionImplError unionName tyName path ctx = resolverError path ctx (GraphQLException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" unionName tyName))
-let private deferredNullableError name tyName path ctx = resolverError path ctx (GraphQLException (sprintf "Deferred field %s of type '%s' must be nullable" name tyName))
-let private streamListError name tyName path ctx = resolverError path ctx (GraphQLException (sprintf "Streamed field %s of type '%s' must be list" name tyName))
-
-let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = AsyncVal.wrap <| Ok(KeyValuePair(name, box v), None, [])
-
-
-let buildDeferredResult (data : obj) (errs : Error list) (path : obj list) : Output =
-    let formattedErrors =
-        errs
-        |> List.map(fun (msg, path) -> NameValueLookup.ofList ["message", upcast msg; "path", upcast path])
-    let formattedPath = List.rev path
-    match formattedErrors with
-    | [] -> upcast NameValueLookup.ofList [ "data", data; "path", upcast formattedPath ]
-    | _ -> upcast NameValueLookup.ofList [ "data", data; "errors", upcast formattedErrors; "path", upcast formattedPath ]
-
-let deferResults path (res : ResolverResult<obj>) : IObservable<Output> =
-    match res with
-    | Ok (data, deferred, errs) ->
-        let deferredData = Observable.singleton <| buildDeferredResult data errs path
-        Option.fold Observable.concat2 deferredData deferred
-    | Error errs -> Observable.singleton <| buildDeferredResult null errs path
-
-/// Collect together an array of results using the appropriate execution strategy.
-let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {
-
-        let! collected =
-            match strategy with
-            | Parallel -> AsyncVal.collectParallel rs
-            | Sequential -> AsyncVal.collectSequential rs
-
-        let data = Array.zeroCreate (collected.Length)
-
-        let merge r acc =
-            match (r, acc) with
-            | Ok(field, d, e), Ok(i, deferred, errs) ->
-                Array.set data i field
-                Ok(i - 1, Option.mergeWith Observable.merge2 deferred d, e @ errs)
-            | Error e, Ok (_, _, errs) -> Error (e @ errs)
-            | Ok (_, _, e), Error errs -> Error (e @ errs)
-            | Error e, Error errs -> Error (e @ errs)
-        return
-            Array.foldBack merge collected (Ok (data.Length - 1, None, []))
-            |> ResolverResult.mapValue(fun _ -> data)
-    }
-
-let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
-    let name = ctx.ExecutionInfo.Identifier
-    match returnDef with
-    | Object objDef ->
-        let fields =
-            match ctx.ExecutionInfo.Kind with
-            | SelectFields fields -> fields
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-        executeObjectFields fields name objDef ctx path value
-    | Scalar scalarDef ->
-        match scalarDef.CoerceValue value with
-        | Some v' -> resolved name v'
-        | None -> raiseError <| coercionError value scalarDef.Name path ctx
-    | Enum enumDef ->
-        let enumCase = enumDef.Options |> Array.tryPick(fun case -> if case.Value.Equals(value) then coerceStringValue value else None)
-        match enumCase with
-        | Some v' -> resolved name (v' :> obj)
-        | None -> raiseError <| coercionError value enumDef.Name path  ctx
-    | List (Output innerDef) ->
-        let innerCtx =
-            match ctx.ExecutionInfo.Kind with
-            | ResolveCollection innerPlan -> { ctx with ExecutionInfo = { innerPlan with ReturnDef = innerDef } }
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-        let resolveItem index item =
-            executeResolvers innerCtx (box index :: path) value (toOption item |> AsyncVal.wrap)
-        match value with
-        | :? System.Collections.IEnumerable as enumerable ->
-            enumerable
-            |> Seq.cast<obj>
-            |> Seq.toArray
-            |> Array.mapi resolveItem
-            |> collectFields Parallel
-            |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
-        | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
-    | Nullable (Output innerDef) ->
-        let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
-        executeResolvers innerCtx path parent (toOption value |> AsyncVal.wrap)
-        |> AsyncVal.map(Result.catchError (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
-    | Interface iDef ->
-        let possibleTypesFn = ctx.Schema.GetPossibleTypes
-        let resolver = resolveInterfaceType possibleTypesFn iDef
-        let resolvedDef = resolver value
-        let typeMap =
-            match ctx.ExecutionInfo.Kind with
-            | ResolveAbstraction typeMap -> typeMap
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-        match Map.tryFind resolvedDef.Name typeMap with
-        | Some fields -> executeObjectFields fields name resolvedDef ctx path value
-        | None -> raiseError <| interfaceImplError iDef.Name resolvedDef.Name path ctx
-    | Union uDef ->
-        let possibleTypesFn = ctx.Schema.GetPossibleTypes
-        let resolver = resolveUnionType possibleTypesFn uDef
-        let resolvedDef = resolver value
-        let typeMap =
-            match ctx.ExecutionInfo.Kind with
-            | ResolveAbstraction typeMap -> typeMap
-            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-        match Map.tryFind resolvedDef.Name typeMap with
-        | Some fields -> executeObjectFields fields name resolvedDef ctx path (uDef.ResolveValue value)
-        | None -> raiseError <| unionImplError uDef.Name resolvedDef.Name path ctx
-    | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
-
-and deferred (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
-    let info = ctx.ExecutionInfo
-    let name = info.Identifier
-    let deferred =
-        executeResolvers ctx path parent (toOption value |> AsyncVal.wrap)
-        |> Observable.ofAsyncVal
-        |> Observable.bind(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
-    AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, null), Some deferred, [])
-
-and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
-    let info = ctx.ExecutionInfo
-    let name = info.Identifier
-    let innerCtx =
-        match info.Kind with
-        | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
-        | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
-
-    let collectBuffered : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<Output> = function
-        | [] -> Observable.empty
-        | [(index, result)] ->
-            result
-            |> ResolverResult.mapValue(fun d -> box [|d.Value|])
-            |> deferResults (box index :: path)
-        | chunk ->
-            let data = Array.zeroCreate (chunk.Length)
-            let merge (index, r : ResolverResult<KeyValuePair<string, obj>>) (i, indicies, deferred, errs) =
-                match r with
-                | Ok (item, d, e) ->
-                    Array.set data i item.Value
-                    (i - 1, box index :: indicies, Option.mergeWith Observable.merge2 d deferred, e @ errs)
-                | Error e -> (i - 1, box index :: indicies, deferred, e @ errs)
-            let (_, indicies, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
-            deferResults (box indicies :: path) (Ok (box data, deferred, errs))
-
-    let buffer (items : IObservable<int * ResolverResult<KeyValuePair<string, obj>>>) : IObservable<Output> =
-        let buffered =
-            match options.Interval, options.PreferredBatchSize with
-            | Some i, None -> Observable.bufferByTiming i items
-            | None, Some c -> Observable.bufferByElementCount c items
-            | Some i, Some c -> Observable.bufferByTimingAndElementCount i c items
-            | None, None -> Observable.map(List.singleton) items
-        buffered
-        |> Observable.bind collectBuffered
-
-    let resolveItem index item = asyncVal {
-            let! result = executeResolvers innerCtx (box index :: path) parent (toOption item |> AsyncVal.wrap)
-            return (index, result)
-        }
-
-    match value with
-    | :? System.Collections.IEnumerable as enumerable ->
-        let stream =
-            enumerable
-            |> Seq.cast<obj>
-            |> Seq.toArray
-            |> Array.mapi resolveItem
+let private treeToStream (streamOptions : BufferedStreamOptions) tree =
+    let buffer (options : BufferedStreamOptions) =
+        let mapBuffered =
+            Observable.map (fun items ->
+                let indexes = items |> List.map fst
+                let values = items |> List.map snd
+                (indexes, values) |> BufferedList)
+        let mapNonBuffered =
+            Observable.map NonBufferedList
+        match options.Interval, options.PreferredBatchSize with
+        | Some i, None -> Observable.bufferByTiming i >> mapBuffered
+        | None, Some c -> Observable.bufferByElementCount c >> mapBuffered
+        | Some i, Some c -> Observable.bufferByTimingAndElementCount i c >> mapBuffered
+        | None, None -> mapNonBuffered
+    let streamList =
+        function 
+        | ResolverListNode list -> 
+            list.Children
+            |> Array.mapi (fun i x -> 
+                asyncVal {
+                    let! x' = x
+                    return i, x' 
+                })
             |> Observable.ofAsyncValSeq
-            |> buffer
-        AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, box [||]), Some stream, [])
-    | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
-
-and private live (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : obj) =
-    let info = ctx.ExecutionInfo
-    let name = info.Identifier
-
-    let rec getObjectName = function
-        | Object objDef -> objDef.Name
-        | Scalar scalarDef -> scalarDef.Name
-        | Enum enumDef -> enumDef.Name
-        | Nullable (Output innerDef) -> getObjectName innerDef
-        | Interface iDef -> iDef.Name
-        | Union uDef ->
-            let resolver = resolveUnionType ctx.Schema.GetPossibleTypes uDef
-            getObjectName (resolver value)
-        | returnDef -> failwithf "Unexpected value of returnDef: %O" returnDef
-
-    let typeName = getObjectName info.ParentDef
-
-    /// So the updatedValue here is actually the fresh parent.
-    let resolveUpdate updatedValue =
-        executeResolvers ctx path parent (updatedValue |> Some |> AsyncVal.wrap)
-        |> AsyncVal.map(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
-        |> Observable.ofAsyncVal
+            |> Observable.map (fun (i, t) -> 
+                asyncVal {
+                    let! dict = treeToDict t
+                    return i, dict
+                } |> Observable.ofAsyncVal)
+            |> Observable.merge
+            |> buffer streamOptions
+        | other -> 
+            async {
+                let! dict = treeToDict other
+                return dict |> NonList
+            } |> Observable.ofAsync
+    match tree with
+    | ResolverObjectNode node ->
+        node.Children
+        |> Observable.ofAsyncValSeq
+        |> Observable.map streamList
         |> Observable.merge
+    | tree -> streamList tree
 
-    let provider = ctx.Schema.LiveFieldSubscriptionProvider
-    let filter = provider.TryFind typeName name |> Option.map (fun x -> x.Filter)
-    let updates =
-        match filter with
-        | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate
-        | None -> failwithf "No live provider for %s:%s" typeName name
-  
-    executeResolvers ctx path parent (value |> Some |> AsyncVal.wrap)
-    |> AsyncVal.map(Result.map(fun (data, deferred, errs) -> (data, Some <| Option.fold Observable.merge2 updates deferred, errs)))
+let private errorStream bufferMode tree message path = 
+    treeToStream bufferMode tree
+    |> Observable.map (fun output -> 
+        let errorDict (dict : KeyValuePair<string, obj> * Error list) =
+            let (data, err) = dict
+            (data, (message, path) :: err)
+        match output with
+        | NonList x -> errorDict x |> NonList
+        | NonBufferedList (ix, x) -> (ix, errorDict x) |> NonBufferedList
+        | BufferedList (ix, x) -> (ix, x |> List.map errorDict) |> BufferedList)
 
-/// Actually execute the resolvers.
-and private executeResolvers (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (value : AsyncVal<obj option>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> =
-    let info = ctx.ExecutionInfo
-    let name = info.Identifier
-    let returnDef = info.ReturnDef
+let private nullResolverError name = asyncVal { return ResolverError { Name = name; Message = sprintf "Non-Null field %s resolved as a null!" name; PathToOrigin = []} }
 
-    let rec innerListDef = function
-        | Nullable (Output innerDef) -> innerListDef innerDef
-        | List (Output innerDef) -> Some innerDef
-        | _ -> None
+let private propagateError name err = asyncVal { return ResolverError { Name = name; Message = err.Message; PathToOrigin = (err.Name :> obj)::err.PathToOrigin} }
 
-    let (|HasList|_|) = innerListDef
+/// Builds the result tree for a given query
+let rec private buildResolverTree (returnDef: OutputDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (value: obj option) : AsyncVal<ResolverTree> =
+    let name = ctx.ExecutionInfo.Identifier
+    let filterDeferredTypeMap map =
+        let filter info =
+            if not ctx.ExecutionInfo.IsDeferred && info.IsDeferred
+            then info.ResolveDeferred ()
+            else info
+        map |> Map.map (fun _ v ->  v |> List.map filter)
+    let resolveDirect kind  =
+        match returnDef with
+        | Object objdef ->
+            match kind with
+            | SelectFields fields ->
+                match value with
+                | Some v -> buildObjectFields fields objdef ctx fieldExecuteMap name v
+                | None ->
+                    if ctx.ExecutionInfo.IsNullable
+                    then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+                    else nullResolverError name
+            | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+        | Scalar scalardef ->
+            let name = ctx.ExecutionInfo.Identifier
+            let (coerce: obj -> obj option) = scalardef.CoerceValue
+            asyncVal {
+                return ResolverLeaf { Name = name; Value = value |> Option.bind(coerce) }
+            }
+        | Enum _ ->
+            let name = ctx.ExecutionInfo.Identifier
+            asyncVal {
+                let value' = value |> Option.bind(fun v ->  coerceStringValue v |> Option.map(fun v' -> v' :> obj))
+                return ResolverLeaf { Name = name; Value = value' }
+            }
+        | List (Output innerdef) ->
+            let innerCtx =
+                match kind with
+                | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+            let rec build acc (items: obj list) = 
+                    match items with
+                    | value::xs ->
+                        if not innerCtx.ExecutionInfo.IsNullable && isNull value
+                        then nullResolverError innerCtx.ExecutionInfo.Identifier
+                        else
+                            let t = asyncVal { 
+                                let! res = buildResolverTree innerdef innerCtx fieldExecuteMap (toOption value)
+                                match res with
+                                | ResolverError e when not innerCtx.ExecutionInfo.IsNullable -> return! propagateError name e
+                                | _ -> return res
+                            }
+                            build (t::acc) xs
+                    | [] -> asyncVal { return ResolverListNode { Name = name; Value = value; Children = acc |> List.map (AsyncVal.map (fun x -> x)) |> List.rev |> List.toArray } }
+            match value with
+            | None when not ctx.ExecutionInfo.IsNullable -> nullResolverError name
+            | None -> asyncVal { return ResolverListNode { Name = name; Value = None; Children = [| |] } }
+            | ObjectOption (:? System.Collections.IEnumerable as enumerable) ->
+                enumerable
+                |> Seq.cast<obj>
+                |> Seq.toList
+                |> build []
+            | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
+        | Nullable (Output innerdef) ->
+            // Stop propagation of null values
+            buildResolverTree innerdef ctx fieldExecuteMap value
+        | Interface idef ->
+            let possibleTypesFn = ctx.Schema.GetPossibleTypes
+            let resolver = resolveInterfaceType possibleTypesFn idef
+            let typeMap =
+                match kind with
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+            match value with
+            | Some v ->
+                let resolvedDef = resolver v
+                match Map.tryFind resolvedDef.Name typeMap with
+                | Some fields -> buildObjectFields fields resolvedDef ctx fieldExecuteMap name v
+                | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" idef.Name resolvedDef.Name)); PathToOrigin = [] } }
+            | None ->
+                if ctx.ExecutionInfo.IsNullable
+                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+                else nullResolverError name
+        | Union udef ->
+            let possibleTypesFn = ctx.Schema.GetPossibleTypes
+            let resolver = resolveUnionType possibleTypesFn udef
+            let typeMap =
+                match kind with
+                | ResolveAbstraction typeMap -> filterDeferredTypeMap typeMap
+                | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
+            match value with
+            | Some v ->
+                let resolvedDef = resolver v
+                match Map.tryFind resolvedDef.Name typeMap with
+                | Some fields ->
+                    // Make sure to propagate the original union type to the object node
+                    buildObjectFields fields resolvedDef ctx fieldExecuteMap name (udef.ResolveValue v)
+                    |> AsyncVal.map(fun tree ->
+                        match tree with
+                        | ResolverObjectNode node ->  ResolverObjectNode { node with Value = value }
+                        | t -> t)
+                | None -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError (GraphQLException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" udef.Name resolvedDef.Name)); PathToOrigin = [] } }
+            | None ->
+                if ctx.ExecutionInfo.IsNullable
+                then asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+                else nullResolverError name
+        | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
+    match ctx.ExecutionInfo.Kind, returnDef, ctx.ExecutionInfo.IsDeferred with
+    | ResolveDeferred _, (Scalar _ | Enum _ | Nullable _), false -> asyncVal { return ResolverLeaf { Name = name; Value = None } }
+    | ResolveDeferred _, (Object _ | Interface _ | Union _), false -> asyncVal { return ResolverObjectNode { Name = name; Value = None; Children = [| |] } }
+    | ResolveDeferred _, List _, false -> asyncVal { return ResolverListNode { Name = name; Value = Some (upcast [ ]); Children = [| |] } }
+    | _ -> resolveDirect ctx.ExecutionInfo.Kind
 
-    /// Run a resolution strategy with the provided context.
-    /// This handles all null resolver errors/error propagation.
-    let resolveWith (ctx : ResolveFieldContext) (onSuccess : ResolveFieldContext -> obj list -> obj -> obj -> AsyncVal<ResolverResult<KeyValuePair<string, obj>>>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
-            let! resolved =
-                value
-                |> AsyncVal.map Ok
-                |> AsyncVal.rescue(resolverError path ctx >> List.singleton >> Error)
-            match resolved with
-            | Error errs when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
-            | Ok None when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, [])
-            | Error errs -> return Error errs
-            | Ok None -> return Error [nullResolverError name path ctx]
-            | Ok (Some v) -> return! onSuccess ctx path parent v
-        }
-
-    match info.Kind, returnDef with
-    | ResolveDeferred innerInfo, _ when innerInfo.IsNullable -> // We can only defer nullable fields
-        deferred
-        |> resolveWith { ctx with ExecutionInfo = { innerInfo with IsNullable = false } }
-    | ResolveDeferred innerInfo, _ ->
-        raiseError <| deferredNullableError (innerInfo.Identifier) (innerInfo.ReturnDef.ToString()) path ctx
-    | ResolveStreamed (innerInfo, mode), HasList innerDef -> // We can only stream lists
-        streamed mode innerDef
-        |> resolveWith { ctx with ExecutionInfo = innerInfo; }
-    | ResolveStreamed (innerInfo, _), _ ->
-        raiseError <| streamListError innerInfo.Identifier (returnDef.ToString()) path ctx
-    | ResolveLive innerInfo, _ ->
-        live
-        |> resolveWith { ctx with ExecutionInfo = innerInfo }
-    | _ ->
-        direct returnDef
-        |> resolveWith ctx
-
-
-and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef : ObjectDef) (ctx : ResolveFieldContext) (path : obj list) (value : obj) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
-        let executeField field =
-            let argDefs = ctx.Context.FieldExecuteMap.GetArgs(objDef.Name, field.Definition.Name)
-            let resolver = ctx.Context.FieldExecuteMap.GetExecute(objDef.Name, field.Definition.Name)
-            let fieldCtx = createFieldContext objDef argDefs ctx field
-            let fieldPath = (field.Identifier :> obj :: path)
-            executeResolvers fieldCtx fieldPath value (resolveField resolver fieldCtx value)
-        let! res =
-            fields
-            |> List.toArray
-            |> Array.map executeField
-            |> collectFields Parallel
-        match res with
-        | Error errs -> return Error errs
-        | Ok(kvps, def, errs) -> return Ok (KeyValuePair(objName, box <| NameValueLookup(kvps)), def, errs)
-    }
+and buildObjectFields (fields: ExecutionInfo list) (objdef: ObjectDef) (ctx: ResolveFieldContext) (fieldExecuteMap: FieldExecuteMap) (name: string) (value: obj): AsyncVal<ResolverTree> =
+    let rec build acc = function
+        | info::xs ->
+            let argDefs = fieldExecuteMap.GetArgs(objdef.Name, info.Definition.Name)
+            let fieldCtx = createFieldContext objdef argDefs ctx info
+            let execute = fieldExecuteMap.GetExecute(objdef.Name, info.Definition.Name)
+            let t = 
+                resolveField execute fieldCtx value
+                |> AsyncVal.bind (buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap)
+                |> AsyncVal.rescue (fun e -> ResolverError { Name = info.Identifier; Message = ctx.Schema.ParseError e; PathToOrigin = []})
+                |> AsyncVal.bind (fun tree ->
+                    match tree with
+                    | ResolverError e when not info.IsNullable -> propagateError name e
+                    | _ when not info.IsNullable && tree.Value.IsNone -> asyncVal { return ResolverError { Name = name; Message = ctx.Schema.ParseError(GraphQLException (sprintf "Non-Null field %s resolved as a null!" info.Identifier)); PathToOrigin = [info.Identifier]}}
+                    | _ -> asyncVal { return tree })
+            build (t::acc) xs
+        | [] -> asyncVal { return ResolverObjectNode { Name = name; Value = Some value; Children = acc |> List.rev |> List.toArray } }
+    build [] fields
 
 let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
     match subfield.Resolve with
@@ -557,39 +547,280 @@ let private (|String|Other|) (o : obj) =
     | :? string as s -> String s
     | _ -> Other
 
-let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (rootValue : obj) : AsyncVal<GQLResponse> =
-    let executeRootOperation (name, info) =
-        let fDef = info.Definition
-        let argDefs = ctx.FieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+let formatErrors (errors : Error list) =
+    errors 
+    |> List.map (fun err ->
+        let (message, path) = err
+        NameValueLookup.ofList ["message", upcast message; "path", upcast path])
+
+let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: ObjectDef) (fieldExecuteMap: FieldExecuteMap) value =
+    let buildRootTree (name, info) =
+        let fdef = info.Definition
+        let argDefs = fieldExecuteMap.GetArgs(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
         let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
-        let path = [info.Identifier :> obj]
         let fieldCtx =
             { ExecutionInfo = info
               Context = ctx
-              ReturnType = fDef.TypeDef
+              ReturnType = fdef.TypeDef
               ParentType = objdef
               Schema = ctx.Schema
               Args = args
               Variables = ctx.Variables }
-        let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        let execute = fieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
+        execute fieldCtx value
+        |> AsyncVal.bind(fun r -> buildResolverTree info.ReturnDef fieldCtx fieldExecuteMap (toOption r))
+        |> AsyncVal.rescue(fun e -> ResolverError { Name = name; Message = ctx.Schema.ParseError e; PathToOrigin = []})
+    let resultTrees =
+        resultSet
+        |> Array.map buildRootTree
+    let dict =
         asyncVal {
-            let! result =
-                executeResolvers fieldCtx path rootValue (resolveField execute fieldCtx rootValue)
-                |> AsyncVal.rescue (resolverError path fieldCtx >> List.singleton >> Error)
-            match result with
-            | Error errs when info.IsNullable -> return Ok(KeyValuePair(name, null), None, errs)
-            | Error errs -> return Error errs
-            | Ok r -> return Ok r
+            let! trees =
+                match ctx.ExecutionPlan.Strategy with
+                | ExecutionStrategy.Parallel -> resultTrees |> AsyncVal.collectParallel
+                | ExecutionStrategy.Sequential -> resultTrees |> AsyncVal.collectSequential
+            let! dicts, errors =
+                trees
+                |> Array.fold(fun (kvpsErrs : AsyncVal<KeyValuePair<string, obj> list * Error list>) (tree) -> asyncVal {
+                    let! k, e = treeToDict tree
+                    let! kvps, errs = kvpsErrs
+                    return k::kvps, e@errs}) (Value ([],[]))
+            return NameValueLookup(dicts |> List.rev |> List.toArray), (errors |> List.rev)
         }
+    let rec traversePath (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) (path: obj list) (tree: ResolverTree) (pathAcc: obj list) : IObservable<ResolverTree * obj list> =
+        let removeDuplicatedIndexes (path : obj list) =
+            let value = Some ("__index" :> obj)
+            let rec remove (path : obj list) last =
+                match path with
+                | [] -> []
+                | x :: xs when last = Some x && last = value -> remove xs <| Some x
+                | x :: xs -> x :: (remove xs <| Some x)
+            remove path None
+        let path' =
+            match removeDuplicatedIndexes path with
+            | [] -> []
+            | xs -> List.tail xs
+        match path', tree with
+        | [], t ->
+            buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+            |> AsyncVal.map (fun res ->
+                match d.Info.Kind with
+                | SelectFields [f] -> [|res, List.rev (box f.Identifier :: pathAcc)|]
+                | _ -> [|res, List.rev pathAcc|])
+            |> Observable.ofAsyncVal
+            |> Observable.concatSeq
+        | [String p], t ->
+            buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+            |> AsyncVal.map (fun res ->
+                match res with
+                | ResolverError _ -> [||] // A deferred fragment that was not found, just ignore it
+                | _ -> [|res, List.rev((p :> obj)::pathAcc)|])
+            |> Observable.ofAsyncVal
+            |> Observable.concatSeq
+        | ([p; String "__index"] | [p]), t ->
+            buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap t.Value
+            |> AsyncVal.map (fun res -> [|res, List.rev(p::pathAcc)|])
+            |> Observable.ofAsyncVal
+            |> Observable.concatSeq
+        | [head'; String "__index"; head; String "__index"] as p, ResolverObjectNode n ->
+            n.Children
+            |> Observable.ofAsyncValSeq
+            |> Observable.filter (fun c -> c.Name = head.ToString())
+            |> Observable.bind (fun next -> traversePath d fieldCtx p next (head'::pathAcc))
+        | p, ResolverObjectNode n ->
+            let head = p |> List.head
+            n.Children
+            |> Observable.ofAsyncValSeq
+            |> Observable.filter (fun c -> c.Name = head.ToString())
+            |> Observable.bind (fun next -> traversePath d fieldCtx p next (head::pathAcc))
+        | p, ResolverListNode l ->
+            l.Children
+            |> Seq.mapi (fun i c -> asyncVal { 
+                let! c' = c
+                return i, c' })
+            |> Observable.ofAsyncValSeq
+            |> Observable.bind (fun (i, c) -> traversePath d fieldCtx p c ((box i)::pathAcc))
+        | _ ,_ -> raise <| GraphQLException("Path terminated unexpectedly!")
+    let bnvli (path : obj list) (indexes : int list) (err : Error list) (data : obj list) =
+        match err with
+        | [] -> NameValueLookup.ofList [ "data", upcast data; "path", upcast (path @ [box indexes ]) ]
+        | _ -> NameValueLookup.ofList [ "data", null; "errors", upcast (formatErrors err); "path",  upcast (path @ (indexes |> List.map box)) ]
+    let nvli (path : obj list) (index : int) (err : Error list) data =
+        match err with
+        | [] -> NameValueLookup.ofList ["data", data; "path", upcast (path @ [index])]
+        | _ -> NameValueLookup.ofList ["data", null; "errors", upcast (formatErrors err); "path", upcast (path @ [index])]
+    let nvl (path : obj list) (err : Error list) data =
+        match err with
+        | [] -> NameValueLookup.ofList ["data", data; "path", upcast path]
+        | _ -> NameValueLookup.ofList ["data", data; "errors", upcast (formatErrors err); "path", upcast path]
+    let mapDefer (d : KeyValuePair<string, obj>) (e : Error list) (path : obj list) =
+        match d.Value, e with
+        | null, [] -> Seq.empty
+        | :? NameValueLookup as x, _ -> x |> Seq.map (fun x -> nvl path e x.Value)
+        | x, _ -> nvl path e x |> Seq.singleton
+    let mapStream (path : obj list) (output : StreamOutput) =
+        let errorMapper e = e |> List.map (fun (msg, p) -> (msg, path@p))
+        match output with
+        | NonList (d, e) ->
+            match d.Value, e with
+            | null, [] -> Seq.empty
+            | x, _ -> nvl path (errorMapper e) x |> Seq.singleton
+        | NonBufferedList (i, (d, e)) ->
+            match d.Value, e with
+            | null, [] -> Seq.empty
+            | x, _ -> nvli path i (errorMapper e) (box [x]) |> Seq.singleton
+        | BufferedList (ix, dx) ->
+            let dx = dx |> List.filter (fun (d, e) -> match d.Value, e with | null, [] -> false | _ -> true)
+            match dx with
+            | [] -> Seq.empty
+            | dx -> 
+                let values = dx |> List.map fst |> List.map (fun x -> x.Value) |> List.filter (fun x -> not (isNull x))
+                let err = dx |> List.map snd |> List.concat
+                bnvli path ix err values |> Seq.singleton
 
-    asyncVal {
-        match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
-        | Ok (data, Some deferred, errs) -> return GQLResponse.Deferred(NameValueLookup(data), errs, deferred, ctx.Metadata)
-        | Ok (data, None, errs) -> return GQLResponse.Direct(NameValueLookup(data), errs, ctx.Metadata)
-        | Error errs -> return GQLResponse.Direct(null, errs, ctx.Metadata)
+    let mapLive (tree : ResolverTree) (path : obj list) (d : DeferredExecutionInfo) (fieldCtx : ResolveFieldContext) = asyncVal {
+        let getFieldName (node : ResolverNode) = asyncVal {
+            match node.Children |> Array.tryHead with
+            | Some c -> 
+                let! res = c
+                return res.Name
+            | None -> failwithf "Expected a child for the object %A, but got none." node.Value
+        }
+        let rec getObjectName (returnDef : OutputDef) (value : obj) (possibleTypesFn : TypeDef -> ObjectDef []) =
+            match returnDef with
+            | Object objdef -> objdef.Name
+            | Scalar scalardef -> scalardef.Name
+            | Enum enumdef -> enumdef.Name
+            | Nullable (Output innerdef) -> getObjectName innerdef value possibleTypesFn
+            | Interface idef -> idef.Name
+            | Union udef ->
+                let resolver = resolveUnionType possibleTypesFn udef
+                match toOption value with
+                | Some v -> getObjectName (resolver v) value possibleTypesFn
+                | None -> failwithf "Unexpected value of returnDef: %O." returnDef
+            | _ -> failwithf "Unexpected value of returnDef: %O." returnDef
+        match d.Kind with
+        | LiveExecution ->
+            match tree with
+            | ResolverObjectNode node ->
+                let value = tree.Value
+                let typeName = getObjectName d.Info.ReturnDef value ctx.Schema.GetPossibleTypes
+                let! fieldName = getFieldName node
+                let provider = ctx.Schema.LiveFieldSubscriptionProvider
+                let identity = provider.TryFind typeName fieldName |> Option.map (fun x -> x.Identity)
+                match identity, toOption value with
+                | Some identity, Some value ->
+                    return 
+                        provider.Add (identity value) typeName fieldName
+                        |> Observable.map (fun v -> asyncVal {
+                            let! tree = buildResolverTree d.Info.ReturnDef fieldCtx fieldExecuteMap (Some v)
+                            let! data, err = treeToDict tree
+                            return mapDefer data err path } |> Observable.ofAsyncVal)
+                        |> Observable.merge
+                        |> Observable.toSeq
+                        |> Seq.concat
+                | _ -> return Seq.empty
+            | _ -> return Seq.empty
+        | _ -> return Seq.empty
     }
+    let deferredResult (tree : ResolverTree) (d : DeferredExecutionInfo) =
+        let fdef = d.Info.Definition
+        let args = getArgumentValues fdef.Args d.Info.Ast.Arguments ctx.Variables
+        let fieldCtx =
+            { ExecutionInfo = d.Info
+              Context = ctx
+              ReturnType = fdef.TypeDef
+              ParentType = objdef
+              Schema = ctx.Schema
+              Args = args
+              Variables = ctx.Variables }
+        let path = d.Path |> List.map box
+        let head =
+            match path with
+            | [] -> [box fdef.Name]
+            | xs -> [List.head xs]
+        traversePath d fieldCtx path tree head
+        |> Observable.bind (fun (tree, path) ->
+            let outerResult =
+                let deferred = 
+                    match d.Kind with
+                    | LiveExecution -> Observable.empty
+                    | StreamedExecution options ->
+                        treeToStream options tree
+                        |> Observable.map (fun output -> mapStream path output)
+                        |> Observable.concatSeq
+                    | DeferredExecution -> 
+                        treeToDict tree
+                        |> Observable.ofAsyncVal
+                        |> Observable.map (fun (data, err) -> mapDefer data err path)
+                        |> Observable.concatSeq
+                let live = 
+                    mapLive tree path d fieldCtx
+                    |> Observable.ofAsyncVal
+                    |> Observable.concatSeq
+                Observable.merge2 deferred live
+            let innerResult =
+                d.DeferredFields
+                |> Seq.map (fun d ->
+                    let fieldCtx = { fieldCtx with ExecutionInfo = d.Info }
+                    let path = d.Path |> List.rev |> List.map box
+                    traversePath d fieldCtx path tree [List.head path]
+                    |> Observable.bind (fun (tree, path) ->
+                        let deferred =
+                            match d.Kind with
+                            | LiveExecution -> Observable.empty
+                            | StreamedExecution bufferMode ->
+                                let stream =
+                                    if d.DeferredFields.Length > 0
+                                    then errorStream bufferMode tree "Maximum degree of nested deferred executions reached." path
+                                    else treeToStream bufferMode tree
+                                stream
+                                |> Observable.map (fun output -> mapStream path output)
+                                |> Observable.concatSeq
+                            | DeferredExecution ->
+                                let dict =
+                                    if d.DeferredFields.Length > 0
+                                    then errorDict tree "Maximum degree of nested deferred executions reached." path
+                                    else treeToDict tree
+                                dict
+                                |> Observable.ofAsyncVal
+                                |> Observable.map (fun (data, err) -> mapDefer data err path)
+                                |> Observable.concatSeq
+                        let live = 
+                            mapLive tree path d fieldCtx
+                            |> Observable.ofAsyncVal
+                            |> Observable.concatSeq
+                        Observable.merge2 deferred live))
+                |> Observable.ofSeq
+                |> Observable.merge
+            Observable.merge2 outerResult innerResult)
+    let deferredResults =
+        if ctx.ExecutionPlan.DeferredFields.Length = 0
+        then None
+        else
+            resultTrees
+            |> Array.map2 (fun (name, (info : ExecutionInfo)) tree -> 
+                match info.Kind with
+                | ResolveDeferred info when info.ParentDef = upcast objdef -> Some info, (buildRootTree (name, info))
+                | _ -> None, tree) resultSet
+            |> Array.map (fun (info, tree) -> tree |> AsyncVal.map (fun t -> info, t))
+            |> Seq.map (AsyncVal.map (fun (info, tree) ->
+                let buildResult (d : DeferredExecutionInfo) =
+                    match info with 
+                    | Some info -> { d with Info = info; Path = [] }
+                    | None -> d
+                    |> deferredResult tree
+                ctx.ExecutionPlan.DeferredFields
+                |> Seq.filter (fun d -> (List.head d.Path) = tree.Name)
+                |> Seq.map buildResult
+                |> Observable.ofSeq
+                |> Observable.merge))
+            |> Observable.ofAsyncValSeq
+            |> Observable.merge
+            |> Some
+    dict, deferredResults
 
-let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) value =
+let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) (fieldExecuteMap: FieldExecuteMap) (subscriptionProvider: ISubscriptionProvider) value =
     // Subscription queries can only have one root field
     let nameOrAlias, info = Array.head resultSet
     let subdef = info.Definition :?> SubscriptionFieldDef
@@ -603,15 +834,19 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables }
-    let onValue v = asyncVal {
-            match! executeResolvers fieldCtx [ info.Identifier ] value (toOption v |> AsyncVal.wrap) with
-            | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
-            | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
-            | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
-            | Error errs -> return NameValueLookup.ofList["data", null; "errors", upcast errs] :> Output
+    subscriptionProvider.Add fieldCtx value subdef
+    |> Observable.bind(fun v -> 
+        let dict = asyncVal {
+            let! tree = buildResolverTree returnType fieldCtx fieldExecuteMap (Some v)
+            return! treeToDict tree
         }
-    ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
-    |> Observable.bind(onValue >> Observable.ofAsyncVal)
+        dict
+        |> AsyncVal.map(fun (data, err) -> 
+            let output = NameValueLookup.ofList[nameOrAlias, data.Value]                
+            match err with
+            | [] -> NameValueLookup.ofList["data", box output] :> Output
+            | _ -> NameValueLookup.ofList["data", box output; "errors", upcast (formatErrors err)] :> Output)
+        |> Observable.ofAsyncVal)
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
@@ -654,14 +889,20 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
         |> List.filter (fun info -> info.Include ctx.Variables)
         |> List.map (fun info -> (info.Identifier, info))
         |> List.toArray
+    let parseQuery o =
+        let dict, deferred = executeQueryOrMutation resultSet ctx o ctx.FieldExecuteMap ctx.RootValue
+        match deferred with
+        | Some d -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Deferred(dict', errors', d |> Observable.map(fun x -> upcast x), ctx.Metadata))
+        | None -> dict |> AsyncVal.map(fun (dict', errors') -> GQLResponse.Direct(dict', errors', ctx.Metadata))
     match ctx.ExecutionPlan.Operation.OperationType with
-    | Query -> executeQueryOrMutation resultSet ctx ctx.Schema.Query ctx.RootValue
+    | Query -> parseQuery ctx.Schema.Query
     | Mutation ->
         match ctx.Schema.Mutation with
-        | Some m -> executeQueryOrMutation resultSet ctx m ctx.RootValue
+        | Some m ->
+            parseQuery m
         | None -> raise(InvalidOperationException("Attempted to make a mutation but no mutation schema was present!"))
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some s ->
-            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.RootValue, ctx.Metadata))
+            AsyncVal.wrap(GQLResponse.Stream(executeSubscription resultSet ctx s ctx.FieldExecuteMap ctx.Schema.SubscriptionProvider ctx.RootValue, ctx.Metadata))
         | None -> raise(InvalidOperationException("Attempted to make a subscription but no subscription schema was present!"))

@@ -313,10 +313,8 @@ and ISubscriptionProvider =
 /// Represents a subscription of a field in a live query.
 and ILiveFieldSubscription =
     interface
-        /// Determine if we should propagate the event
-        abstract member Filter : obj -> obj -> bool
-        /// Project out the field marked with the @live directive
-        abstract member Project : obj -> obj
+        /// A function that given the object marked with live directive, returns fields representing the identity of it.
+        abstract member Identity : obj -> obj
         /// The type name of the object that is ready for live query in this subscription.
         abstract member TypeName : string
         /// The field name of the object that is ready for live query in this subscription.
@@ -324,47 +322,38 @@ and ILiveFieldSubscription =
     end
 
 /// Represents a generic typed, subscription field in a live query.
-and ILiveFieldSubscription<'Object, 'Field> =
+and ILiveFieldSubscription<'Object, 'Identity> =
     interface
         inherit ILiveFieldSubscription
-        /// Determine if we should propagate the event
-        abstract member Filter : 'Object -> 'Object -> bool
-        /// Project out the field marked with the @live directive
-        abstract member Project : 'Object -> 'Field
+        /// A function that given the object marked with live directive, returns fields representing the identity of it.
+        abstract member Identity : 'Object -> 'Identity
     end
 
 /// Represents a subscription of a field in a live query.
 and LiveFieldSubscription =
-    { /// Determine if we should propagate the event
-      Filter : obj -> obj -> bool
-      /// Project out the field marked with the @live directive
-      Project : obj -> obj
+    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
+      Identity : obj -> obj
       /// The type name of the object that is ready for live query in this subscription.
       TypeName : string
       /// The field name of the object that is ready for live query in this subscription.
       FieldName : string }
     interface ILiveFieldSubscription with
-        member this.Filter x y = this.Filter x y
-        member this.Project x = this.Project x
+        member this.Identity x = this.Identity x
         member this.TypeName = this.TypeName
         member this.FieldName = this.FieldName
 
 /// Represents a generic typed, subscription field in a live query.
-and LiveFieldSubscription<'Object, 'Field> =
-    { /// Determine if we should propagate the event
-      Filter : 'Object -> 'Object -> bool
-      /// Project out the field marked with the @live directive
-      Project : 'Object -> 'Field
+and LiveFieldSubscription<'Object, 'Identity> =
+    { /// A function that given the object marked with live directive, returns fields representing the identity of it.
+      Identity : 'Object -> 'Identity
       /// The type name of the object that is ready for live query in this subscription.
       TypeName : string
       /// The field name of the object that is ready for live query in this subscription.
       FieldName : string }
-    interface ILiveFieldSubscription<'Object, 'Field> with
-        member this.Filter x y = this.Filter x y
-        member this.Project x = this.Project x
+    interface ILiveFieldSubscription<'Object, 'Identity> with
+        member this.Identity x = this.Identity x
     interface ILiveFieldSubscription with
-        member this.Filter x y = this.Filter (downcast x) (downcast y)
-        member this.Project x = upcast this.Project (downcast x)
+        member this.Identity x = upcast this.Identity (downcast x)
         member this.TypeName = this.TypeName
         member this.FieldName = this.FieldName
 
@@ -379,8 +368,8 @@ and ILiveFieldSubscriptionProvider =
         abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
-        /// Creates an active subscription, and returns the IObservable stream of projected POCO objects
-        abstract member Add : (obj -> bool) -> string -> string -> IObservable<obj>
+        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
+        abstract member Add : obj -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
         abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
@@ -645,8 +634,19 @@ and ExecutionInfo =
       /// Type definition marking returned type.
       ReturnDef : OutputDef
       /// Flag determining if flag allows to have nullable output.
-      IsNullable : bool }
-
+      IsNullable : bool
+      /// Flag determining if the execution is deferred or streamed.
+      IsDeferred : bool }
+    member this.ResolveDirect () =
+        match this.Kind with
+        | ResolveDeferred info -> info
+        | _ -> this
+    member this.ResolveDeferred () =
+        let isNullable = 
+            match this.Kind with
+            | ResolveCollection _ -> false
+            | _ -> true
+        { this with Kind = ResolveDeferred this; IsNullable = isNullable }
     /// Get a nested info recognized by path provided as parameter. Path may consist of fields names or aliases.
     member this.GetPath (keys: string list) : ExecutionInfo option =
         let rec path info segments =
@@ -658,8 +658,6 @@ and ExecutionInfo =
             | head :: tail ->
                 match info.Kind with
                 | ResolveDeferred inner -> path inner segments
-                | ResolveLive inner -> path inner segments
-                | ResolveStreamed (inner, _) -> path inner segments
                 | ResolveValue -> None
                 | ResolveCollection inner -> path inner segments
                 | SelectFields fields ->
@@ -689,15 +687,7 @@ and ExecutionInfo =
             | ResolveDeferred inner -> 
                 pad indent sb
                 sb.Append("ResolveDeferred: ").AppendLine(nameAs info) |> ignore
-                str (indent+1) sb inner
-            | ResolveLive inner ->
-                pad indent sb
-                sb.Append("ResolveLive: ").AppendLine(nameAs info) |> ignore
-                str (indent+1) sb inner
-            | ResolveStreamed (inner, mode) ->
-                pad indent sb
-                sb.Append("ResolveStreamed: ").AppendLine(nameAs info) |> ignore
-                str (indent+1) sb inner
+                str (indent+1) sb inner                
             | SelectFields fields ->
                 pad indent sb
                 sb.Append("SelectFields: ").AppendLine(nameAs info) |> ignore
@@ -736,19 +726,6 @@ and ExecutionInfoKind =
     | ResolveAbstraction of typeFields : Map<string, ExecutionInfo list>
     /// Reduce result set as a deferred result.
     | ResolveDeferred of ExecutionInfo
-    /// Reduce the current field as a stream, applying
-    /// the provided execution info on each of the
-    /// collection's elements.
-    | ResolveStreamed of ExecutionInfo * BufferedStreamOptions
-    /// Reduce the current field as a live query.
-    | ResolveLive of ExecutionInfo
-
-/// Buffered stream options. Used to specify how the buffer will behavior in a stream.
-and BufferedStreamOptions =
-      /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
-    { Interval : int option
-      /// The maximum number of items that will be buffered before being sent to the subscriber.
-      PreferredBatchSize : int option }
 
 /// Wrapper for a resolve method defined by the user or generated by a runtime.
 and Resolve =
@@ -810,6 +787,27 @@ and VarDef =
       /// Optional default value.
       DefaultValue: Value option }
 
+/// Execution plan of the current GraphQL operation. It describes, which
+/// fiels will be resolved and how to do so.
+and DeferredExecutionInfo = {
+    Info : ExecutionInfo
+    Path : string list
+    Kind : DeferredExecutionInfoKind
+    DeferredFields : DeferredExecutionInfo list
+}
+
+/// Buffered stream options. Used to specify how the buffer will behavior in a stream.
+and BufferedStreamOptions =
+      /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
+    { Interval : int option
+      /// The maximum number of items that will be buffered before being sent to the subscriber.
+      PreferredBatchSize : int option }
+
+/// Kind of deferred execution.
+and DeferredExecutionInfoKind =
+    | DeferredExecution
+    | StreamedExecution of BufferedStreamOptions
+    | LiveExecution
 
 /// The context used to hold all the information for a schema compiling proccess.
 and SchemaCompileContext =
@@ -831,6 +829,8 @@ and ExecutionPlan =
       Strategy : ExecutionStrategy
       /// List of fields of top level query/mutation object to be resolved.
       Fields : ExecutionInfo list
+      /// A list of all deferred fields in the query
+      DeferredFields : DeferredExecutionInfo list
       /// List of variables defined within executed query.
       Variables : VarDef list
       /// A dictionary of metadata associated with custom operations on the planning of this plan.

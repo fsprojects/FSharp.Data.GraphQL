@@ -109,10 +109,10 @@ type SchemaConfig =
                 match registeredSubscriptions.TryGetValue(key) with
                 | (true, (sub, _)) -> Some sub
                 | _ -> None
-            member __.Add filterFn (typeName : string) (fieldName : string) =
+            member __.Add (identity) (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
-                | true, (sub, channel) -> channel |> Observable.choose (fun x -> if filterFn x then Some (sub.Project x) else None)
+                | true, (sub, channel) -> channel |> Observable.filter (fun o -> sub.Identity o = identity)
                 | false, _ -> Observable.Empty()
             member __.AsyncPublish<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
                 let key = typeName, fieldName

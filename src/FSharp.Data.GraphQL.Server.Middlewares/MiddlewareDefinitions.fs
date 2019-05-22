@@ -15,14 +15,6 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
                     | Some w -> w
                     | None -> 0.0
-            // let rec getFields = function
-            //     | ResolveValue -> []
-            //     | SelectFields fields -> fields
-            //     | ResolveCollection field -> [ field ]
-            //     | ResolveAbstraction typeFields -> typeFields |> Map.toList |> List.collect snd
-            //     | ResolveDeferred info -> getFields info.Kind
-            //     | ResolveStreamed (info, _) -> getFields info.Kind
-            //     | ResolveLive info -> getFields info.Kind
             let rec checkThreshold acc fields =
                 match fields with
                 | [] -> (true, acc)
@@ -30,7 +22,6 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                     let current = acc + (getWeight x)
                     if current > threshold then (false, current)
                     else match x.Kind with
-                         | ResolveValue -> checkThreshold current xs
                          | SelectFields fields ->
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
@@ -41,13 +32,15 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                             let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
                             let (pass, current) = checkThreshold current fields
                             if pass then checkThreshold current xs else (false, current)
-                         | ResolveDeferred info -> checkThreshold current (info :: xs)
-                         | ResolveStreamed (info, _) -> checkThreshold current (info :: xs)
-                         | ResolveLive info -> checkThreshold current (info :: xs)
+                         | _ ->
+                            checkThreshold current xs
             checkThreshold 0.0 fields
+        let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
+        let directFields = ctx.ExecutionPlan.Fields
+        let fields = directFields @ deferredFields
         let error (ctx : ExecutionContext) =
             GQLResponse.ErrorAsync("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
-        let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
+        let (pass, totalWeight) = measureThreshold threshold fields
         let ctx =
             match reportToMetadata with
             | true -> { ctx with Metadata = ctx.Metadata.Add("queryWeightThreshold", threshold).Add("queryWeight", totalWeight) }
@@ -106,7 +99,10 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         let ctx =
             match reportToMetadata with
             | true -> 
-                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
+                let deferredFields = ctx.ExecutionPlan.DeferredFields |> List.map (fun f -> f.Info)
+                let directFields = ctx.ExecutionPlan.Fields
+                let fields = directFields @ deferredFields
+                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] fields) }
             | false -> ctx
         next ctx
     interface IExecutorMiddleware with
@@ -122,10 +118,8 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
     let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let identity (identityName : string) (x : obj) =
             x.GetType().GetProperty(identityName).GetValue(x)
-        let project (fieldName : string) (x : obj) =
-            x.GetType().GetProperty(fieldName).GetValue(x)
         let makeSubscription id typeName fieldName : LiveFieldSubscription =
-            { Filter = (fun x y -> identity id x = identity id y); Project = project fieldName; TypeName = typeName; FieldName = fieldName }
+            { Identity = identity id; TypeName = typeName; FieldName = fieldName }
         let getObjDefs (def : FieldDef) =
             let rec helper (acc : ObjectDef list) (def : TypeDef) =
                 match def with

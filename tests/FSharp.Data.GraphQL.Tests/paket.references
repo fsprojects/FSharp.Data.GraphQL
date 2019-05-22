@@ -3,5 +3,4 @@ FSharp.Core
 Newtonsoft.Json
 Microsoft.NET.Test.Sdk
 xunit
-xunit.runner.utility
 xunit.runner.visualstudio

@@ -35,18 +35,14 @@ type TestSubject = {
     mutable live: string
     delayed : AsyncTestSubject
     delayedList : AsyncTestSubject list
-    resolverError : NonNullAsyncTestSubject
-    resolverListError : NonNullAsyncTestSubject list
-    nullableError : NonNullAsyncTestSubject
-    nullableListError : NonNullAsyncTestSubject list
+    resolverError : AsyncTestSubject
+    resolverListError : AsyncTestSubject list
+    nullableError : AsyncTestSubject
+    nullableListError : AsyncTestSubject list
     bufferedList : AsyncTestSubject list
 }
 
 and AsyncTestSubject = {
-    value : Async<string option>
-}
-
-and NonNullAsyncTestSubject = {
     value : Async<string>
 }
 
@@ -89,8 +85,8 @@ and InterfaceSubject =
 let AType =
     Define.Object<A>(
         "A", [
-            Define.Field("a", Nullable String, resolve = fun _ a -> Some a.a)
-            Define.Field("id", Nullable String, resolve = fun _ a -> Some a.id)
+            Define.Field("a", String, resolve = fun _ a -> a.a)
+            Define.Field("id", String, resolve = fun _ a -> a.id)
         ])
 
 let BType =
@@ -104,20 +100,20 @@ let InterfaceType =
     Define.Interface(
         "TestInterface", [
             Define.Field("id", String, resolve = fun _ (x : InterfaceSubject) -> x.Id)
-            Define.Field("value", Nullable String, resolve = fun _ (x : InterfaceSubject) -> Some x.Value)
+            Define.Field("value", String, resolve = fun _ (x : InterfaceSubject) -> x.Value)
         ])
 
 let CType =
     Define.Object<C>(
         name ="C",
-        fields = [ Define.Field("id", String, (fun _ (c : C) -> c.id)); Define.Field("value", Nullable String, (fun _ c -> Some c.value)) ],
+        fields = [ Define.Field("id", String, (fun _ (c : C) -> c.id)); Define.Field("value", String, (fun _ c -> c.value)) ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? C))
 
 let DType =
     Define.Object<D>(
         name = "D",
-        fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", Nullable String, (fun _ d -> Some d.value)) ],
+        fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", String, (fun _ d -> d.value)) ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? D))
 
@@ -140,18 +136,13 @@ let rec InnerDataType =
         fieldsFn = fun () ->
         [
             Define.Field("a", String, (fun _ d -> d.a))
-            Define.Field("innerList", Nullable (ListOf InnerDataType), (fun _ d -> Some d.innerList))
+            Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
         ])
 
 let AsyncDataType =
     Define.Object<AsyncTestSubject>(
         name = "AsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", Nullable String, (fun _ d -> d.value )) ])
-
-let NonNullAsyncDataType =
-    Define.Object<NonNullAsyncTestSubject>(
-        name = "NonNullAsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", String, (fun _ d -> d.value )) ])
+        fieldsFn = fun () -> [ Define.AsyncField("value", String, (fun _ d -> d.value)) ])
 
 let DataType =
     Define.Object<TestSubject>(
@@ -159,20 +150,20 @@ let DataType =
         fieldsFn = fun () ->
         [
             Define.Field("id", String, (fun _ d -> d.id))
-            Define.Field("a", Nullable String, (fun _ d -> Some d.a))
-            Define.Field("b", Nullable String, (fun _ d -> Some d.b))
-            Define.Field("union", Nullable UnionType, (fun _ d -> Some d.union))
-            Define.Field("list", Nullable (ListOf UnionType), (fun _ d -> Some d.list))
-            Define.Field("innerList", Nullable (ListOf InnerDataType), (fun _ d -> Some d.innerList))
+            Define.Field("a", String, (fun _ d -> d.a))
+            Define.Field("b", String, (fun _ d -> d.b))
+            Define.Field("union", UnionType, (fun _ d -> d.union))
+            Define.Field("list", ListOf UnionType, (fun _ d -> d.list))
+            Define.Field("innerList", ListOf InnerDataType, (fun _ d -> d.innerList))
             Define.Field("live", String, (fun _ d -> d.live))
-            Define.Field("iface", Nullable InterfaceType, (fun _ d -> Some d.iface))
-            Define.Field("ifaceList", Nullable (ListOf InterfaceType), (fun _ d -> Some d.ifaceList))
-            Define.Field("delayed", Nullable AsyncDataType, (fun _ d -> Some d.delayed))
+            Define.Field("iface", InterfaceType, (fun _ d -> d.iface))
+            Define.Field("ifaceList", ListOf InterfaceType, (fun _ d -> d.ifaceList))
+            Define.Field("delayed", AsyncDataType, (fun _ d -> d.delayed))
             Define.Field("delayedList", ListOf AsyncDataType, (fun _ d -> d.delayedList))
-            Define.Field("resolverError", Nullable NonNullAsyncDataType, (fun _ d -> Some d.resolverError))
-            Define.Field("nullableError", Nullable NonNullAsyncDataType, (fun _ d -> Some d.nullableError))
-            Define.Field("resolverListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.resolverListError))
-            Define.Field("nullableListError", Nullable (ListOf NonNullAsyncDataType), (fun _ d -> Some d.nullableListError))
+            Define.Field("resolverError", AsyncDataType, (fun _ d -> d.resolverError))
+            Define.Field("nullableError", AsyncDataType, (fun _ d -> d.nullableError))
+            Define.Field("resolverListError", ListOf AsyncDataType, (fun _ d -> d.resolverListError))
+            Define.Field("nullableListError", ListOf AsyncDataType, (fun _ d -> d.nullableListError))
             Define.Field("bufferedList", ListOf AsyncDataType, (fun _ d -> d.bufferedList))
         ])
 
@@ -202,10 +193,10 @@ let data = {
        ifaceList = [
             { D.id = "2000"; value = "D" }; { C.id = "3000"; value = "C2" }
        ]
-       delayed = { value = delay 5000 (Some "Delayed value") }
+       delayed = { value = delay 5000 "Delayed value" }
        delayedList = [
-           { value = delay 5000 (Some "Slow") }
-           { value = async { return (Some "Fast") } }
+           { value = delay 5000 "Delayed value 1" }
+           { value = async { return "Delayed value 2" } }
        ]
        resolverError = { value = async { return failwith "Resolver error!" } }
        resolverListError = [ 
@@ -218,9 +209,9 @@ let data = {
            { value = async { return null } }
        ]
        bufferedList = [
-            { value = delay 5000 (Some "Buffered 1") }
-            { value = delay 1000 (Some "Buffered 2") }
-            { value = async { return (Some "Buffered 3") } }
+            { value = delay 5000 "Buffered 1" }
+            { value = delay 1000 "Buffered 2" }
+            { value = async { return "Buffered 3" } }
        ]
    }
 
@@ -240,8 +231,7 @@ let schemaConfig =
 let sub =
     { FieldName = "live"
       TypeName = "Data"
-      Filter = (fun (x : TestSubject) (y : TestSubject) -> x.id = y.id)
-      Project = (fun x -> x.live) }
+      Identity = fun (x : TestSubject) -> x.id }
 
 schemaConfig.LiveFieldSubscriptionProvider.Register sub
 
@@ -269,7 +259,9 @@ let ``Resolver error`` () =
         ]
     let expectedDeferred =
         NameValueLookup.ofList [
-            "data", null
+            "data", upcast NameValueLookup.ofList [
+                "resolverError", null
+            ]
             "errors", upcast [
                 box <| NameValueLookup.ofList [
                     "message", upcast "Resolver error!"
@@ -286,12 +278,14 @@ let ``Resolver error`` () =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Resolver list error`` () =
@@ -307,7 +301,7 @@ let ``Resolver list error`` () =
             "errors", upcast [
                 box <| NameValueLookup.ofList [
                     "message", upcast "Resolver error!"
-                    "path", upcast [ box "testData"; upcast "resolverListError"; upcast 0; upcast "value" ]
+                    "path", upcast [ "testData"; "resolverListError"; "value" ]
                 ]
             ]
             "path", upcast [ box "testData"; upcast "resolverListError"; upcast 0 ]
@@ -318,7 +312,7 @@ let ``Resolver list error`` () =
             "errors", upcast [
                 box <| NameValueLookup.ofList [
                     "message", upcast "Resolver error!"
-                    "path", upcast [ box "testData"; upcast "resolverListError"; upcast 1; upcast "value" ]
+                    "path", upcast [ "testData"; "resolverListError"; "value" ]
                 ]
             ]
             "path", upcast [ box "testData"; upcast "resolverListError"; upcast 1 ]
@@ -331,7 +325,8 @@ let ``Resolver list error`` () =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -341,6 +336,7 @@ let ``Resolver list error`` () =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Nullable error`` () =
@@ -352,7 +348,9 @@ let ``Nullable error`` () =
         ]
     let expectedDeferred =
         NameValueLookup.ofList [
-            "data", null
+            "data", upcast NameValueLookup.ofList [
+                "nullableError", null
+            ]
             "errors", upcast [
                 box <| NameValueLookup.ofList [
                     "message", upcast "Non-Null field value resolved as a null!"
@@ -369,12 +367,14 @@ let ``Nullable error`` () =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Single Root object field - Defer and Stream`` () =
@@ -392,28 +392,32 @@ let ``Single Root object field - Defer and Stream`` () =
             ]
             "path", upcast [ "testData"; "iface" ]
         ]
-    let query = """{
+    let query = sprintf """{
         testData {
-            iface @defer {
+            iface @%s {
                 id
                 value
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``Single Root object list field - Defer`` () =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
-                "ifaceList", upcast null
+                "ifaceList", upcast [ ]
             ]
         ]
     let expectedDeferred =
@@ -439,12 +443,14 @@ let ``Single Root object list field - Defer`` () =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Single Root object list field - Stream`` () =
@@ -483,7 +489,8 @@ let ``Single Root object list field - Stream`` () =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -493,9 +500,10 @@ let ``Single Root object list field - Stream`` () =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
-let ``Interface field - Defer`` () =
+let ``Interface field - Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -510,24 +518,28 @@ let ``Interface field - Defer`` () =
             "data", upcast "C"
             "path", upcast [ "testData"; "iface"; "value" ]
         ]
-    let query = """{
+    let query = sprintf """{
         testData {
             iface {
                 id
-                value @defer
+                value @%s
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
-let ``Interface list field - Defer`` () =
+let ``Interface list field - Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -553,25 +565,29 @@ let ``Interface list field - Defer`` () =
             "data", upcast "C2"
             "path", upcast [ box "testData"; upcast "ifaceList"; upcast 1; upcast "value" ]
         ]
-    let query = """{
+    let query = sprintf """{
         testData {
             ifaceList {
                 id
-                value @defer
+                value @%s
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted(2)
-        sub.Received
-        |> Seq.cast<NameValueLookup>
-        |> contains expectedDeferred1
-        |> contains expectedDeferred2
-        |> ignore
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) -> 
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted(2)
+            sub.Received
+            |> Seq.cast<NameValueLookup>
+            |> contains expectedDeferred1
+            |> contains expectedDeferred2
+            |> ignore
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``Each live result should be sent as soon as it is computed`` () =
@@ -606,7 +622,8 @@ let ``Each live result should be sent as soon as it is computed`` () =
     use mre2 = new ManualResetEvent(false)
     resetLiveData()
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -626,6 +643,7 @@ let ``Each live result should be sent as soon as it is computed`` () =
         |> itemEquals 0 expectedLive
         |> itemEquals 1 expectedDeferred
         |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
 let ``Live Query`` () =
@@ -649,7 +667,8 @@ let ``Live Query`` () =
     }"""
     resetLiveData()
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -660,6 +679,7 @@ let ``Live Query`` () =
         |> Seq.cast<NameValueLookup>
         |> contains expectedLive
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Parallel Defer`` () =
@@ -668,7 +688,7 @@ let ``Parallel Defer`` () =
            "testData", upcast NameValueLookup.ofList [
                 "a", null
                 "b", upcast "Banana"
-                "innerList", upcast null
+                "innerList", upcast []
             ]
         ]
     let expectedDeferred1 =
@@ -696,7 +716,8 @@ let ``Parallel Defer`` () =
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -706,51 +727,45 @@ let ``Parallel Defer`` () =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
-let ``Parallel Stream`` () =
+let ``Parallell Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
-                "a", upcast "Apple"
+                "a", null
                 "b", upcast "Banana"
                 "innerList", upcast []
             ]
         ]
     let expectedDeferred1 =
         NameValueLookup.ofList [
-            "data", upcast [
-                box <| NameValueLookup.ofList [
-                        "a", upcast "Inner A"
-                        "innerList", upcast []
-                    ]
-                ]
-            "path", upcast [box "testData"; upcast "innerList"; upcast 0]
+            "data", upcast "Apple"
+            "path", upcast ["testData"; "a"]
         ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "a", upcast "Inner B"
+                    "a", upcast "Inner A"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "innerList"; upcast 0; upcast "innerList"; upcast 0]
+            "path", upcast [box "testData"; upcast "innerList"; upcast 0]
         ]
     let query = 
         parse """{
             testData {
-                a
+                a @stream
                 b
                 innerList @stream {
-                    a
-                    innerList @stream {
-                         a
-                    }
+                    a                    
                 }
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -760,6 +775,7 @@ let ``Parallel Stream`` () =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Inner Object List Defer`` () =
@@ -767,7 +783,7 @@ let ``Inner Object List Defer`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
-                "innerList", upcast null
+                "innerList", upcast []
             ]
         ]
     let expectedDeferred =
@@ -788,12 +804,14 @@ let ``Inner Object List Defer`` () =
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Inner Object List Stream`` () =
@@ -822,12 +840,14 @@ let ``Inner Object List Stream`` () =
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) -> 
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Nested Inner Object List Defer`` () =
@@ -835,7 +855,7 @@ let ``Nested Inner Object List Defer`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
-                "innerList", upcast null
+                "innerList", upcast []
             ]
         ]
     let expectedDeferred1 =
@@ -843,7 +863,7 @@ let ``Nested Inner Object List Defer`` () =
             "data", upcast [
                 box <| NameValueLookup.ofList [
                     "a", upcast "Inner A"
-                    "innerList", upcast null
+                    "innerList", upcast []
                 ]
             ]
             "path", upcast ["testData"; "innerList"]
@@ -872,7 +892,8 @@ let ``Nested Inner Object List Defer`` () =
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -882,6 +903,7 @@ let ``Nested Inner Object List Defer`` () =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Nested Inner Object List Stream`` () =
@@ -889,7 +911,7 @@ let ``Nested Inner Object List Stream`` () =
         NameValueLookup.ofList [
            "testData", upcast NameValueLookup.ofList [
                 "b", upcast "Banana"
-                "innerList", upcast null
+                "innerList", upcast []
             ]
         ]
     let expectedDeferred1 =
@@ -932,7 +954,8 @@ let ``Nested Inner Object List Stream`` () =
             }
         }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -943,6 +966,7 @@ let ``Nested Inner Object List Stream`` () =
         |> contains expectedDeferred2
         |> contains expectedDeferred3
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Simple Defer and Stream`` () =
@@ -958,19 +982,23 @@ let ``Simple Defer and Stream`` () =
             "data", upcast "Apple"
             "path", upcast ["testData"; "a"]
         ]
-    let query = """{
+    let query = sprintf """{
         testData {
-            a @defer
+            a @%s
             b
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``List Defer``() =
@@ -978,7 +1006,7 @@ let ``List Defer``() =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
                 "a", upcast "Apple"
-                "list", upcast null
+                "list", upcast []
             ]
         ]
     let expectedDeferred =
@@ -1011,12 +1039,14 @@ let ``List Defer``() =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals (upcast expectedDeferred)
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``List Fragment Defer and Stream - Exclusive``() =
@@ -1047,7 +1077,7 @@ let ``List Fragment Defer and Stream - Exclusive``() =
             list {
                 ... on A {
                     id
-                    a @defer
+                    a @%s
                 }
                 ... on B {
                     id
@@ -1056,13 +1086,17 @@ let ``List Fragment Defer and Stream - Exclusive``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``List Fragment Defer and Stream - Common``() =
@@ -1092,7 +1126,7 @@ let ``List Fragment Defer and Stream - Common``() =
             a
             list {
                 ... on A {
-                    id @defer
+                    id @%s
                     a
                 }
                 ... on B {
@@ -1102,13 +1136,17 @@ let ``List Fragment Defer and Stream - Common``() =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLResponse")
 
 [<Fact>]
 let ``List inside root - Stream``() =
@@ -1149,7 +1187,8 @@ let ``List inside root - Stream``() =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -1159,6 +1198,7 @@ let ``List inside root - Stream``() =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``List Stream``() =
@@ -1205,7 +1245,8 @@ let ``List Stream``() =
         }
     }"""
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = Observer.create deferred
@@ -1215,6 +1256,7 @@ let ``List Stream``() =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Should buffer stream list correctly by timing information``() =
@@ -1234,7 +1276,7 @@ let ``Should buffer stream list correctly by timing information``() =
                     "value", upcast "Buffered 2"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [box 2; upcast 1]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2; 1]]
         ]        
     let expectedDeferred2 =
         NameValueLookup.ofList [
@@ -1243,7 +1285,7 @@ let ``Should buffer stream list correctly by timing information``() =
                     "value", upcast "Buffered 1"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast 0]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0]]
         ]   
     let query = 
         ms 3000
@@ -1258,7 +1300,8 @@ let ``Should buffer stream list correctly by timing information``() =
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -1281,6 +1324,7 @@ let ``Should buffer stream list correctly by timing information``() =
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
 let ``Should buffer stream list correctly by count information``() =
@@ -1300,7 +1344,7 @@ let ``Should buffer stream list correctly by count information``() =
                     "value", upcast "Buffered 2"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast [box 2; upcast 1]]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [2; 1]]
         ]        
     let expectedDeferred2 =
         NameValueLookup.ofList [
@@ -1309,7 +1353,7 @@ let ``Should buffer stream list correctly by count information``() =
                     "value", upcast "Buffered 1"
                 ]
             ]
-            "path", upcast [box "testData"; upcast "bufferedList"; upcast 0]
+            "path", upcast [box "testData"; upcast "bufferedList"; upcast [0]]
         ]   
     let query = parse """{
         testData {
@@ -1321,7 +1365,8 @@ let ``Should buffer stream list correctly by count information``() =
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -1345,9 +1390,10 @@ let ``Should buffer stream list correctly by count information``() =
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLResponse"
 
 [<Fact>]
-let ``Union Defer`` () =
+let ``Union Defer and Stream`` () =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
@@ -1365,7 +1411,7 @@ let ``Union Defer`` () =
         testData {
             a
             b
-            union @defer {
+            union @%s {
                 ... on A {
                     id
                     a
@@ -1377,21 +1423,25 @@ let ``Union Defer`` () =
             }
         }
     }"""
-    let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
-        empty errors
-        data.["data"] |> equals (upcast expectedDirect)
-        use sub = Observer.create deferred
-        sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+    asts query
+    |> Seq.iter (fun query ->
+        let result = query |> executor.AsyncExecute |> sync
+        match result with
+        | Deferred(data, errors, deferred) ->
+            empty errors
+            data.["data"] |> equals (upcast expectedDirect)
+            use sub = Observer.create deferred
+            sub.WaitCompleted()
+            sub.Received |> single |> equals (upcast expectedDeferred)
+        | _ -> fail "Expected Deferred GQLRespnse")
 
 [<Fact>]
 let ``Each deferred result should be sent as soon as it is computed``() =
     let expectedDirect =
         NameValueLookup.ofList [
             "testData", upcast NameValueLookup.ofList [
-                "delayed", null
                 "b", null
+                "delayed", null
             ]
         ]
     let expectedDeferred1 =
@@ -1408,16 +1458,17 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         ]
     let query = parse """{
         testData {
+            b @defer
             delayed @defer {
                 value
             }
-            b @defer
         }
     }"""
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -1436,6 +1487,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
 let ``Each deferred result of a list should be sent as soon as it is computed`` () =
@@ -1454,12 +1506,12 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         ]
     let expectedDeferred1 =
         NameValueLookup.ofList [
-            "data", upcast "Fast"
+            "data", upcast "Delayed value 2"
             "path", upcast [box "testData"; upcast "delayedList"; upcast 1; upcast "value"]
         ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
-            "data", upcast "Slow"
+            "data", upcast "Delayed value 1"
             "path", upcast [box "testData"; upcast "delayedList"; upcast 0; upcast "value"]
         ]
     let query = parse """{
@@ -1472,7 +1524,8 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -1491,6 +1544,7 @@ let ``Each deferred result of a list should be sent as soon as it is computed`` 
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
 
 [<Fact>]
 let ``Each streamed result should be sent as soon as it is computed - async seq``() =
@@ -1504,7 +1558,7 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Fast"
+                    "value", upcast "Delayed value 2"
                 ]
             ]
             "path", upcast [box "testData"; upcast "delayedList"; upcast 1]
@@ -1513,7 +1567,7 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         NameValueLookup.ofList [
             "data", upcast [
                 box <| NameValueLookup.ofList [
-                    "value", upcast "Slow"
+                    "value", upcast "Delayed value 1"
                 ]
             ]
             "path", upcast [box "testData"; upcast "delayedList"; upcast 0]
@@ -1528,7 +1582,8 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
     use mre1 = new ManualResetEvent(false)
     use mre2 = new ManualResetEvent(false)
     let result = query |> executor.AsyncExecute |> sync
-    ensureDeferred result <| fun data errors deferred ->
+    match result with
+    | Deferred(data, errors, deferred) ->
         empty errors
         data.["data"] |> equals (upcast expectedDirect)
         use sub = deferred |> Observer.createWithCallback (fun sub _ ->
@@ -1547,3 +1602,4 @@ let ``Each streamed result should be sent as soon as it is computed - async seq`
         |> itemEquals 0 expectedDeferred1
         |> itemEquals 1 expectedDeferred2
         |> ignore
+    | _ -> fail "Expected Deferred GQLRespnse"
