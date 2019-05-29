@@ -322,7 +322,7 @@ module internal JsonValueHelper =
                         | TypeKind.SCALAR -> 
                             match itemType.Name with
                             | Some "String" | Some "ID" -> box s
-                            | Some "URI" -> Uri(s) |> box
+                            | Some "URI" -> System.Uri(s) |> box
                             | Some "Date" -> 
                                 match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
@@ -334,7 +334,7 @@ module internal JsonValueHelper =
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
                     | Some "String" -> makeSomeIfNeeded s
-                    | Some "URI" -> Uri(s) |> makeSomeIfNeeded
+                    | Some "URI" -> System.Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
                         match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d

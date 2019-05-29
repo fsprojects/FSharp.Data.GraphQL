@@ -36,6 +36,7 @@ module Serialization =
     let private isStringType = isType typeof<string>
     let private isDateTimeType = isType typeof<DateTime>
     let private isDateTimeOffsetType = isType typeof<DateTimeOffset>
+    let private isUriType = isType typeof<Uri>
     let private isGuidType = isType typeof<Guid>
     let private isBooleanType = isType typeof<bool>
     let private isEnumType = function (Option t | t) when t.IsEnum -> true | _ -> false
@@ -43,6 +44,10 @@ module Serialization =
     let private downcastString (t : Type) (s : string) =
         match t with
         | t when isStringType t -> downcastType t s
+        | t when isUriType t ->
+            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
+            | (true, uri) -> downcastType t uri
+            | _ -> failwithf "Error parsing JSON value: %O is an URI type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeType t ->
             match DateTime.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
@@ -167,6 +172,7 @@ module Serialization =
                 | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? bool as x -> JsonValue.Boolean x
+                | :? Uri as x -> JsonValue.String (x.ToString())
                 | :? IDictionary<string, obj> as items ->
                     items
                     |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
