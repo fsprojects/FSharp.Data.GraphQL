@@ -108,3 +108,6 @@
 
 ### 1.0.0-beta9 - May 22 2019
 * Fixing dependency issue on Server component
+
+### 1.0.0-beta90 - May 29 2019
+* Fixing a wrong cast for System.Uri type
