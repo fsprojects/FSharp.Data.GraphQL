@@ -447,8 +447,6 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
         JsonValueHelper.getResponseCustomFields responseJson
         |> Serialization.deserializeMap
 
-    member private __.ResponseJson = responseJson
-
     /// [omit]
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
