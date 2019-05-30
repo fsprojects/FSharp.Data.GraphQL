@@ -4,13 +4,20 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Collections
 open System.Collections.Generic
 open System.IO
 open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
+open System.Net
+
+type GraphQLRequestException(statusCode : HttpStatusCode, errorMessage : string) =
+    inherit exn(sprintf "Unexpected response from the server: \"%s\"" errorMessage)
+
+    member __.StatusCode = statusCode
+
+    member __.ErrorMessage = errorMessage
 
 /// The base type for all GraphQLProvider upload types.
 /// Upload types are used in GraphQL multipart request spec, mostly for file uploading features.
@@ -77,13 +84,20 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
-    let private postAsync (client : HttpClient) (serverUrl : string) (content : HttpContent) =
+    let private addHeaders (httpHeaders : seq<string * string>) (requestMessage : HttpRequestMessage) =
+        if not (isNull httpHeaders)
+        then httpHeaders |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add(name, value))
+
+    let private postAsync (client : HttpClient) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) =
         async {
-            let! response = client.PostAsync(serverUrl, content) |> Async.AwaitTask
+            use requestMessage = new HttpRequestMessage(HttpMethod.Post, serverUrl)
+            requestMessage.Content <- content
+            addHeaders httpHeaders requestMessage
+            let! response = client.SendAsync(requestMessage) |> Async.AwaitTask
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             if response.IsSuccessStatusCode
             then return content
-            else return failwithf "Unexpected response from GraphQL server at \"%s\" (status code: %i, message: \"%s\")." serverUrl (int response.StatusCode) content
+            else return raise <| GraphQLRequestException(response.StatusCode, content)
         }
 
     let private getAsync (client : HttpClient) (serverUrl : string) =
@@ -92,12 +106,8 @@ module GraphQLClient =
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             if response.IsSuccessStatusCode
             then return content
-            else return failwithf "Unexpected response from GraphQL server at \"%s\" (status code: %i, message: \"%s\")." serverUrl (int response.StatusCode) content
+            else return raise <| GraphQLRequestException(response.StatusCode, content)
         }
-
-    let private addHeaders (httpHeaders : seq<string * string>) (content : HttpContent) =
-        if not (isNull httpHeaders)
-        then httpHeaders |> Seq.iter (fun (name, value) -> content.Headers.Add(name, value))
 
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
@@ -119,8 +129,7 @@ module GraphQLClient =
                    "variables", variables |]
                 |> JsonValue.Record
             use content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
-            addHeaders request.HttpHeaders content
-            return! postAsync client request.ServerUrl content
+            return! postAsync client request.ServerUrl request.HttpHeaders content
         }
     
     /// Sends a request to a GraphQL server.
@@ -158,7 +167,6 @@ module GraphQLClient =
             let client = connection.Client
             let boundary = sprintf "----GraphQLProviderBoundary%s" (Guid.NewGuid().ToString("N"))
             use content = new MultipartContent("form-data", boundary)
-            addHeaders request.HttpHeaders content
             let variables = 
                 request.Variables
                 |> Array.map (fun (name, value) ->
@@ -215,7 +223,7 @@ module GraphQLClient =
                     content.Headers.Add("Content-Type", value.ContentType)
                     content)
             fileContents |> Array.iter content.Add
-            return! postAsync client request.ServerUrl content
+            return! postAsync client request.ServerUrl request.HttpHeaders content
         }
 
     /// Executes a multipart request to a GraphQL server.
