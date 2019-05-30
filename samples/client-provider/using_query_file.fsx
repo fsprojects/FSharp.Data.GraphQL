@@ -28,3 +28,9 @@ let result = operation.Run()
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors
 printfn "Custom data: %A\n" result.CustomData
+
+type Character = MyProvider.Operations.Q.Types.Hero.Friends.Character
+type Human = MyProvider.Operations.Q.Types.Hero.Friends.Human
+type Droid = MyProvider.Operations.Q.Types.Hero.Friends.Droid
+
+let human = Human()

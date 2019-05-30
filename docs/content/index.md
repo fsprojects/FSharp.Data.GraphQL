@@ -69,7 +69,6 @@ For more examples, clone [FSharp.Data.GraphQL github repository](https://github.
 - A mandatory Star Wars schema introduction using [GraphiQL](https://github.com/graphql/graphiql) client.
 - An example using [RelayJS](https://facebook.github.io/relay/) data structures (which this library supports).
 - A client example, using type providers to operate on any GraphQL schema available - worth noticing: it's compatbile with [Fable](https://fable-compiler.github.io/) compiler!
-- A fully fledged ToDo application, where *FSharp.Data.GraphQL* is used for both server and client.
 
 Contributing and copyright
 --------------------------

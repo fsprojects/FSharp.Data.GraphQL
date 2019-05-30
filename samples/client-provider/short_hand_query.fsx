@@ -18,7 +18,7 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"sample_schema.json">
+type MyProvider = GraphQLProvider<"swapi_schema.json">
 
 let operation = 
     MyProvider.Operation<"""{

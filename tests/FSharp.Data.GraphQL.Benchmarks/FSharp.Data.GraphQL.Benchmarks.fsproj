@@ -13,6 +13,7 @@
   <ItemGroup>
     <Compile Include="Prolog.fs" />
     <Compile Include="Schema.fs" />
+    <Compile Include="AsyncSchema.fs" />
     <Compile Include="AsyncValBenchmark.fs" />
     <Compile Include="ParsingBenchmark.fs" />
     <Compile Include="ExecutionBenchmark.fs" />

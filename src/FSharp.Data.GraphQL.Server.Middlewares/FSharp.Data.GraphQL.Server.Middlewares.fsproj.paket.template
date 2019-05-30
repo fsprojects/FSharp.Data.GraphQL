@@ -12,14 +12,18 @@ summary
 description
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 references
-	FSharp.Data.GraphQL.Server.Middlewares.dll
     FSharp.Data.GraphQL.Shared.dll
 dependencies
 	framework: net461
 		FParsec >= LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
-		FSharp.Data.GraphQL.Server CURRENTVERSION
+		FSharp.Data.GraphQL.Server = CURRENTVERSION
 	framework: netstandard2.0
 		FParsec >= LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
-		FSharp.Data.GraphQL.Server CURRENTVERSION
+		FSharp.Data.GraphQL.Server = CURRENTVERSION
+files
+	bin/Release/net461/FSharp.Data.GraphQL.Server.Middlewares.dll ==> lib/net461
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.Middlewares.dll ==> lib/netstandard2.0
+	bin/Release/net461/FSharp.Data.GraphQL.Shared.dll ==> lib/net461
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0

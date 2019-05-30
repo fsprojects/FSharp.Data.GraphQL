@@ -4,8 +4,10 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.IO
 open System.Security.Cryptography
 open FSharp.Core
+open System.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
@@ -15,7 +17,6 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Ast.Extensions
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
-open System.Reflection
 open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
@@ -113,17 +114,70 @@ module internal ProvidedInterface =
 
 type internal RecordPropertyMetadata =
     { Name : string
+      Alias : string option
       Description : string option
       DeprecationReason : string option
       Type : Type }
+    member x.AliasOrName =
+        match x.Alias with
+        | Some x -> x
+        | None -> x.Name
+
+type internal ProvidedRecordTypeDefinition(className, baseType) =
+    inherit ProvidedTypeDefinition(className, baseType, nonNullable = true)
+
+    let mutable properties : RecordPropertyMetadata list = []
+
+    member __.GetRecordProperties() = properties
+
+    member __.SetRecordProperties(props) = properties <- props
 
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
-    let makeProvidedType(tdef : ProvidedTypeDefinition, properties : RecordPropertyMetadata list) =
+    // TODO: this function was created in order to generate overloads for the record type constructors.
+    // It could receive a review in the future to see if improvements can be done to generate all
+    // combinations of constructor overloads.
+    let combine (input : 'T list) =
+        let rec helper (input : 'T list) (startIndex : int) (length : int) =
+            let mutable combinations = List<List<'T>>()
+            if length = 2
+            then
+                let mutable combinationsIndex = 0
+                for inputIndex = startIndex to (input.Length - 1) do
+                    for i = (inputIndex + 1) to (input.Length - 1) do
+                        combinations.Add(List<'T>())
+                        combinations.[combinationsIndex].Add(input.[inputIndex])
+                        while combinations.[combinationsIndex].Count < length do
+                            combinations.[combinationsIndex].Add(input.[i])
+                        combinationsIndex <- combinationsIndex + 1
+                combinations
+            else
+                let combinationsOfMore = List<List<'T>>()
+                for i = startIndex to (input.Length - length) do
+                    combinations <- helper input (i + 1) (length - 1)
+                    for index = 0 to (combinations.Count - 1) do
+                        combinations.[index].Insert(0, input.[i])
+                    for y = 0 to (combinations.Count - 1) do
+                        combinationsOfMore.Add(combinations.[y])
+                combinationsOfMore
+        let output = List<List<'T>>()
+        output.Add(List<'T>())
+        for i = 0 to (input.Length - 1) do
+            let item = List<'T>()
+            item.Add(input.[i])
+            output.Add(item)
+        for i = 2 to input.Length do
+            helper input 0 i |> output.AddRange
+        output
+        |> Seq.map List.ofSeq
+        |> List.ofSeq
+        |> List.map (fun x -> x, List.except x input)
+
+    let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
-            let pname = metadata.Name.FirstCharUpper()
+            let pname = metadata.AliasOrName.FirstCharUpper()
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : RecordBase
                     match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
@@ -134,42 +188,43 @@ module internal ProvidedRecord =
             metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
             upcast pdef 
         tdef.AddMembersDelayed(fun _ -> List.map propertyMapper properties)
-        let addConstructorDelayed (propertiesGetter : unit -> (string * Type) list) =
-            tdef.AddMemberDelayed(fun _ ->
+        let addConstructorDelayed (propertiesGetter : unit -> (string * string option * Type) list) =
+            tdef.AddMembersDelayed(fun _ ->
                 let properties = propertiesGetter ()
-                let prm =
-                    let mapper (name : string, t : Type) = 
-                        match t with
-                        | Option t -> ProvidedParameter(name, t, optionalValue = null)
-                        | _ -> ProvidedParameter(name, t)
-                    let required = properties |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
-                    let optional = properties |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
-                    required @ optional
-                let invoker (args : Expr list) = 
-                    let properties =
-                        let args = 
-                            let names = properties |> List.map (fun (name, _) -> name.FirstCharUpper())
-                            let types = properties |> List.map snd
-                            let mapper (name : string, t : Type, value : Expr) =
-                                let value = Expr.Coerce(value, typeof<obj>)
-                                let isOption = isOption t
-                                <@@ let value =
-                                        match %%value, isOption with
-                                        | null, true -> box None
-                                        | OptionValue (Some null), true -> box (Some null)
-                                        | OptionValue (Some value), true -> box (makeSome value)
-                                        | OptionValue (Some value), false -> value
-                                        | OptionValue None, false -> null
-                                        | OptionValue None, true -> box None
-                                        | value, true -> makeSome value
-                                        | value, false -> value
-                                    { RecordProperty.Name = name; Value = value } @@>
-                            List.zip3 names types args |> List.map mapper
-                        Expr.NewArray(typeof<RecordProperty>, args)
-                    Expr.NewObject(ctor, [Expr.Value(name); properties])
-                ProvidedConstructor(prm, invoker))
+                let mapper (name : string, alias : string option, t : Type) = Option.defaultValue name alias, t
+                let requiredProperties = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
+                let optionalProperties = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
+                combine optionalProperties
+                |> List.map (fun (optionalProperties, missingProperties) ->
+                    let constructorProperties = requiredProperties @ optionalProperties
+                    let allProperties = constructorProperties @ missingProperties
+                    let names = allProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                    let constructorTypes = constructorProperties |> List.map snd
+                    let missingTypes = missingProperties |> List.map snd
+                    let invoker (args : Expr list) =
+                        let properties =
+                            let args =
+                                let coerced = 
+                                    List.zip constructorTypes args
+                                    |> List.map (fun (t, arg) -> t, Expr.Coerce(arg, typeof<obj>))
+                                    |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
+                                let missing = missingTypes |> List.map (fun _ -> <@@ null @@>)
+                                let args = coerced @ missing
+                                let mapper (name : string, value : Expr) =
+                                    let value = Expr.Coerce(value, typeof<obj>)
+                                    <@@ { RecordProperty.Name = name; Value = %%value } @@>
+                                List.zip names args |> List.map mapper
+                            Expr.NewArray(typeof<RecordProperty>, args)
+                        Expr.NewObject(ctor, [Expr.Value(name); properties])
+                    let constructorParams = 
+                        let mapper (name : string, t : Type) =
+                            match t with
+                            | Option t -> ProvidedParameter(name, t)
+                            | _ -> ProvidedParameter(name, t)
+                        List.map mapper constructorProperties
+                    ProvidedConstructor(constructorParams, invoker)))
         match tdef.BaseType with
-        | :? ProvidedTypeDefinition as bdef ->
+        | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->
                 let asType = 
                     let invoker (args : Expr list) =
@@ -190,20 +245,18 @@ module internal ProvidedRecord =
                     ProvidedMethod("Is" + name, [], typeof<bool>, invoker)
                 let members : MemberInfo list = [asType; tryAsType; isType]
                 members)
-            let propertiesGetter() =
-                let bprops = bdef.GetConstructors().[0].GetParameters() |> Array.map (fun p -> p.Name, p.ParameterType) |> List.ofArray
-                let props = properties |> List.map (fun p -> p.Name, p.Type)
-                bprops @ props
+            let propertiesGetter() = bdef.GetRecordProperties() @ properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
         | _ -> 
-            let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Type)
+            let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
+        tdef.SetRecordProperties(properties)
         tdef
 
     let preBuildProvidedType(metadata : ProvidedTypeMetadata, baseType : Type option) =
         let baseType = Option.defaultValue typeof<RecordBase> baseType
         let name = metadata.Name.FirstCharUpper()
-        let tdef = ProvidedTypeDefinition(name, Some baseType, nonNullable = true, isSealed = true)
+        let tdef = ProvidedRecordTypeDefinition(name, Some baseType)
         tdef
 
     let newObjectExpr(properties : (string * obj) list) =
@@ -211,13 +264,15 @@ module internal ProvidedRecord =
         let values = properties |> List.map snd
         Expr.NewObject(ctor, [ <@@ List.zip names values @@> ])
 
+#nowarn "10001"
+
 module internal ProvidedOperationResult =
     let makeProvidedType(operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
         tdef.AddMemberDelayed(fun _ ->
             let getterCode (args : Expr list) =
                 <@@ let this = %%args.[0] : OperationResultBase
-                    this.Data @@>
+                    this.RawData @@>
             let prop = ProvidedProperty("Data", operationType, getterCode)
             prop.AddXmlDoc("Contains the data returned by the operation on the server.")
             prop)
@@ -227,10 +282,11 @@ module internal ProvidedOperation =
     let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
-                         schemaTypesExpr : Expr,
+                         operationFieldsExpr : Expr,
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
+                         uploadInputTypeName : string option,
                          className : string) =
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
@@ -240,12 +296,15 @@ module internal ProvidedOperation =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
                     | NamedType typeName ->
-                        match Types.scalar.TryFind(typeName) with
-                        | Some t -> (variableName, Types.makeOption t)
-                        | None ->
-                            match schemaProvidedTypes.TryFind(typeName) with
+                        match uploadInputTypeName with
+                        | Some uploadInputTypeName when typeName = uploadInputTypeName -> (variableName, Types.makeOption typeof<Upload>)
+                        | _ ->
+                            match Types.scalar.TryFind(typeName) with
                             | Some t -> (variableName, Types.makeOption t)
-                            | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
+                            | None ->
+                                match schemaProvidedTypes.TryFind(typeName) with
+                                | Some t -> (variableName, Types.makeOption t)
+                                | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
                     | ListType itype -> 
                         let (name, t) = mapVariable variableName itype
                         (name, t |> Types.makeArray |> Types.makeOption)
@@ -298,6 +357,7 @@ module internal ProvidedOperation =
                 match contextInfo with
                 | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
+            let shouldUseMultipartRequest = uploadInputTypeName.IsSome
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
@@ -316,11 +376,14 @@ module internal ProvidedOperation =
                               OperationName = Option.ofObj operationName
                               Query = actualQuery
                               Variables = %%variables }
-                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL query" (fun _ -> GraphQLClient.sendRequest context.Connection request)
+                        let response = 
+                            if shouldUseMultipartRequest
+                            then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
+                            else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                         let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                         // If the user does not provide a context, we should dispose the default one after running the query
                         if isDefaultContext then (context :> IDisposable).Dispose()
-                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
                 let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                 mdef
@@ -342,11 +405,14 @@ module internal ProvidedOperation =
                               Query = actualQuery
                               Variables = %%variables }
                         async {
-                            let! response = Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                            let! response = 
+                                if shouldUseMultipartRequest
+                                then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
+                                else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            return OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName)
+                            return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                         } @@>
                 let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
@@ -354,7 +420,7 @@ module internal ProvidedOperation =
             let prdef =
                 let invoker (args : Expr list) =
                     <@@ let responseJson = JsonValue.Parse %%args.[1]
-                        OperationResultBase(responseJson, %%schemaTypesExpr, operationTypeName) @@>
+                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
                 let prm = [ProvidedParameter("responseJson", typeof<string>)]
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
@@ -364,16 +430,20 @@ module internal ProvidedOperation =
         tdef
 
 module internal Provider =
-    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
             | TypeKind.SCALAR when tref.Name.IsSome ->
-                if Types.scalar.ContainsKey(tref.Name.Value)
-                then Types.scalar.[tref.Name.Value] |> Types.makeOption
-                else Types.makeOption typeof<string>
+                match uploadInputTypeName with
+                | Some uploadInputTypeName when uploadInputTypeName = tref.Name.Value ->
+                    Types.makeOption typeof<Upload>
+                | _ ->
+                    if Types.scalar.ContainsKey(tref.Name.Value)
+                    then Types.scalar.[tref.Name.Value] |> Types.makeOption
+                    else Types.makeOption typeof<string>
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> Types.makeOption providedEnum
@@ -394,7 +464,7 @@ module internal Provider =
                         let path = info.AliasOrName :: path
                         let astFields = info.Fields
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
-                        { Name = info.Name; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
+                        { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
@@ -425,7 +495,7 @@ module internal Provider =
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
 
-    let getSchemaProvidedTypes(schema : IntrospectionSchema) =
+    let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes(schema)
         let getSchemaType (tref : IntrospectionTypeRef) =
@@ -447,11 +517,17 @@ module internal Provider =
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
-                    // Unknown scalar types will be mapped to a string type.
-                    if Types.scalar.ContainsKey(field.Type.Name.Value)
-                    then Types.scalar.[field.Type.Name.Value]
-                    else typeof<string>
+                    match uploadInputTypeName with
+                    | Some uploadInputTypeName when uploadInputTypeName = field.Type.Name.Value ->
+                        // We assume that upload types are Scalar types on the server.
+                        typeof<Upload>
+                    | _ ->
+                        // Unknown scalar types will be mapped to a string type.
+                        if Types.scalar.ContainsKey(field.Type.Name.Value)
+                        then Types.scalar.[field.Type.Name.Value]
+                        else typeof<string>
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -460,6 +536,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -475,6 +552,7 @@ module internal Provider =
                     then Types.scalar.[field.Type.Name.Value]
                     else Types.makeOption typeof<string>
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -483,6 +561,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
+                  Alias = None
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -502,7 +581,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveFieldMetadata
                         |> List.ofArray
-                    ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
@@ -511,7 +590,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveInputFieldMetadata
                         |> List.ofArray
-                    ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = ProvidedInterface.makeProvidedType(metadata)
                     providedTypes := (!providedTypes).Add(itype.Name, bdef)
@@ -547,10 +626,16 @@ module internal Provider =
         let prm = 
             [ ProvidedStaticParameter("introspection", typeof<string>)
               ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
-              ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder) ]
+              ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
+              ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "") ]
         generator.DefineStaticParameters(prm, fun tname args ->
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
+            let uploadInputTypeName = 
+                let name : string = unbox args.[3]
+                match name with
+                | "" -> None
+                | _ -> Some name
             let maker =
                 lazy
                     let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
@@ -565,7 +650,7 @@ module internal Provider =
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
-                        let schemaProvidedTypes = getSchemaProvidedTypes(schema)
+                        let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
@@ -576,15 +661,15 @@ module internal Provider =
                                     | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                [httpHeaders; serverUrl]
+                                [serverUrl; httpHeaders]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
                                 Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
                             let invoker (args : Expr list) =
-                                let serverUrl = args.[1]
+                                let serverUrl = args.[0]
                                 <@@ let httpHeaders =
-                                        match %%args.[0] : seq<string * string> with
+                                        match %%args.[1] : seq<string * string> with
                                         | null -> %%defaultHttpHeadersExpr
                                         | argHeaders -> argHeaders
                                     { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
@@ -658,7 +743,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
                                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                                 let rootWrapper = generateWrapper "Types"
@@ -684,17 +769,78 @@ module internal Provider =
                                     match operationTypeRef.Name with
                                     | Some name -> name
                                     | None -> failwith "Error parsing query. Operation type does not have a name."
-                                // Every time we run the query, we will need the schema type map as an expression.
+                                let rec getKind (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
+                                    | _ -> tref.Kind
+                                let rec getTypeName (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
+                                    | _ ->
+                                        match tref.Name with
+                                        | Some tname -> tname
+                                        | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+                                let rec getIntrospectionType (tref : IntrospectionTypeRef) =
+                                    match tref.Kind with
+                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
+                                    | _ ->
+                                        let typeName = getTypeName tref
+                                        match schemaTypes.TryFind(typeName) with
+                                        | Some t -> t
+                                        | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
+                                let getOperationFields (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
+                                    let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
+                                        match introspectionType.Kind with
+                                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                            match astFields with
+                                            | [] -> acc
+                                            | field :: tail ->
+                                                let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
+                                                let tref =
+                                                    match field with
+                                                    | FragmentField fragf ->
+                                                        let fragmentType =
+                                                            let tref = 
+                                                                Option.defaultValue [||] introspectionType.PossibleTypes
+                                                                |> Array.map getIntrospectionType
+                                                                |> Array.append [|introspectionType|]
+                                                                |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
+                                                            match tref with
+                                                            | Some t -> t
+                                                            | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
+                                                        let field =
+                                                            fragmentType.Fields
+                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name)) 
+                                                            |> Option.flatten
+                                                        match field with
+                                                        | Some f -> f.Type
+                                                        | None -> throw fragmentType.Name
+                                                    | TypeField typef ->
+                                                        let field =
+                                                            introspectionType.Fields 
+                                                            |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
+                                                            |> Option.flatten
+                                                        match field with
+                                                        | Some f -> f.Type
+                                                        | None -> throw introspectionType.Name
+                                                let fields = 
+                                                    match getKind tref with
+                                                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                                        let schemaType = getIntrospectionType tref
+                                                        helper [] field.Fields schemaType
+                                                    | _ -> []
+                                                let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
+                                                helper (info :: acc) tail introspectionType
+                                        | _ -> []
+                                    helper [] operationAstFields operationType |> Array.ofList
+                                // Every time we run the query, we will need the schema types information as an expression.
                                 // To avoid creating the type map expression every time we call Run method, we cache it here.
-                                let schemaTypes =
-                                    let schemaTypeNames = schemaTypes |> Seq.map (fun x -> x.Key) |> Array.ofSeq
-                                    let schemaTypesExpr = schemaTypes |> Seq.map (fun x -> x.Value) |> Array.ofSeq |> QuotationHelpers.arrayExpr |> snd
-                                    <@@ Array.zip schemaTypeNames (%%schemaTypesExpr : IntrospectionType []) |> Map.ofArray @@>
+                                let operationFields = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
                                 let contextInfo : GraphQLRuntimeContextInfo option =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, schemaTypes, schemaProvidedTypes, operationType, contextInfo, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)

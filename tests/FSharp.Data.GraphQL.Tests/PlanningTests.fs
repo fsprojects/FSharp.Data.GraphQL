@@ -141,7 +141,6 @@ let ``Planning should retain correct types for lists``() =
     listInfo.Identifier |> equals "people"
     listInfo.ReturnDef |> equals (upcast PersonList)
     let (ResolveCollection(info)) = listInfo.Kind
-    info.Identifier |> equals "__index"
     info.ParentDef |> equals (upcast PersonList)
     info.ReturnDef |> equals (upcast Person)
     let (SelectFields(innerFields)) = info.Kind
@@ -152,7 +151,6 @@ let ``Planning should retain correct types for lists``() =
                 ("lastName", upcast Person, upcast String)
                 ("friends", upcast Person, upcast PersonList) ]
     let (ResolveCollection(friendInfo)) = (innerFields |> List.find (fun i -> i.Identifier = "friends")).Kind
-    friendInfo.Identifier |> equals "__index"
     friendInfo.ParentDef |> equals (upcast PersonList)
     friendInfo.ReturnDef |> equals (upcast Person)
 
@@ -180,7 +178,6 @@ let ``Planning should work with interfaces``() =
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast INamedList)
     let (ResolveCollection(info)) = listInfo.Kind
-    info.Identifier |> equals "__index"
     info.ParentDef |> equals (upcast INamedList)
     info.ReturnDef |> equals (upcast INamed)
     let (ResolveAbstraction(innerFields)) = info.Kind
@@ -217,7 +214,6 @@ let ``Planning should work with unions``() =
     listInfo.Identifier |> equals "names"
     listInfo.ReturnDef |> equals (upcast UNamedList)
     let (ResolveCollection(info)) = listInfo.Kind
-    info.Identifier |> equals "__index"
     info.ParentDef |> equals (upcast UNamedList)
     info.ReturnDef |> equals (upcast UNamed)
     let (ResolveAbstraction(innerFields)) = info.Kind
