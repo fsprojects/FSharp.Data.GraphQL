@@ -426,9 +426,8 @@ module internal JsonValueHelper =
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
 [<NoEquality; NoComparison>]
-type OperationResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
+type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
     let rawData = 
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
@@ -468,8 +467,8 @@ type OperationBase (query : string) =
 
 /// The base type for all GraphQLProvider deferred operation result provided types.
 [<NoEquality; NoComparison>]
-type DeferredResultBase (responseJson : JsonValue, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
-    inherit OperationResultBase (responseJson, schemaTypes, operationTypeName)
+type DeferredResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+    inherit OperationResultBase (responseJson, operationFields, operationTypeName)
     
     let path = 
         let path = JsonValueHelper.getResponsePath responseJson
@@ -487,8 +486,8 @@ type DeferredResultBase (responseJson : JsonValue, schemaTypes : Map<string, Int
 
 /// The base type for all GraphQLProvider subscription result provided types.
 [<NoEquality; NoComparison>]
-type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IObservable<JsonValue>, schemaTypes : Map<string, IntrospectionType>, operationTypeName : string) =
-    inherit OperationResultBase (responseJson, schemaTypes, operationTypeName)
+type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IObservable<JsonValue>, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+    inherit OperationResultBase (responseJson, operationFields, operationTypeName)
 
     /// Gets the deferred results of the subscription operation as an observable.
-    member __.Deferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, schemaTypes, operationTypeName))
+    member __.Deferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, operationFields, operationTypeName))
