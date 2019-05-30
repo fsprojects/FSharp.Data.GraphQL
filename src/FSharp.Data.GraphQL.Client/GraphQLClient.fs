@@ -10,14 +10,6 @@ open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
-open System.Net
-
-type GraphQLRequestException(statusCode : HttpStatusCode, errorMessage : string) =
-    inherit exn(sprintf "Unexpected response from the server: \"%s\"" errorMessage)
-
-    member __.StatusCode = statusCode
-
-    member __.ErrorMessage = errorMessage
 
 /// The base type for all GraphQLProvider upload types.
 /// Upload types are used in GraphQL multipart request spec, mostly for file uploading features.
@@ -84,6 +76,12 @@ module GraphQLClient =
                 | ex -> mapper (acc + " " + ex.Message) tail
         failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
 
+    let private ensureSuccessCode (response : Async<HttpResponseMessage>) =
+        async {
+            let! response = response
+            return response.EnsureSuccessStatusCode()
+        }
+
     let private addHeaders (httpHeaders : seq<string * string>) (requestMessage : HttpRequestMessage) =
         if not (isNull httpHeaders)
         then httpHeaders |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add(name, value))
@@ -93,20 +91,16 @@ module GraphQLClient =
             use requestMessage = new HttpRequestMessage(HttpMethod.Post, serverUrl)
             requestMessage.Content <- content
             addHeaders httpHeaders requestMessage
-            let! response = client.SendAsync(requestMessage) |> Async.AwaitTask
+            let! response = client.SendAsync(requestMessage) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            if response.IsSuccessStatusCode
-            then return content
-            else return raise <| GraphQLRequestException(response.StatusCode, content)
+            return content
         }
 
     let private getAsync (client : HttpClient) (serverUrl : string) =
         async {
-            let! response = client.GetAsync(serverUrl) |> Async.AwaitTask
+            let! response = client.GetAsync(serverUrl) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
-            if response.IsSuccessStatusCode
-            then return content
-            else return raise <| GraphQLRequestException(response.StatusCode, content)
+            return content
         }
 
     /// Sends a request to a GraphQL server asynchronously.
