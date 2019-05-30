@@ -4,7 +4,7 @@ open System
 open System.Reactive.Linq
 
 /// Extension methods to observable, used in place of FSharp.Control.Observable
-module internal Observable =
+module Observable =
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
             member __.Subscribe(observer) =
@@ -62,7 +62,12 @@ module internal Observable =
     let ofAsyncValSeq (items : AsyncVal<'Item> seq) =
         items |> Seq.map ofAsyncVal |> Observable.Merge
 
-    let empty<'T> = Seq.empty<'T> |> ofSeq
+    let empty<'T> = {
+        new IObservable<'T> with
+            member __.Subscribe(observer) =
+                observer.OnCompleted()
+                { new IDisposable with member __.Dispose() = () }
+    }
 
     let singleton (value : 'T) = {
         new IObservable<'T> with

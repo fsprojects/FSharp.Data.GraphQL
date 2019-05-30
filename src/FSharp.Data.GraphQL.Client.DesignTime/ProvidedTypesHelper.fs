@@ -278,8 +278,21 @@ module internal ProvidedOperationResult =
             prop)
         tdef
 
+module internal ProvidedSubscriptionResult =
+    let makeProvidedType(operationType : Type) =
+        let tdef = ProvidedTypeDefinition("SubscriptionResult", Some typeof<SubscriptionResultBase>, nonNullable = true)
+        tdef.AddMemberDelayed(fun _ ->
+            let getterCode (args : Expr list) =
+                <@@ let this = %%args.[0] : SubscriptionResultBase
+                    this.RawData @@>
+            let prop = ProvidedProperty("Data", operationType, getterCode)
+            prop.AddXmlDoc("Contains the immediate data returned by the subscription on the server.")
+            prop)
+        tdef
+
 module internal ProvidedOperation =
-    let makeProvidedType(actualQuery : string,
+    let makeProvidedType(userQuery : string,
+                         actualQuery : string,
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
                          operationFieldsExpr : Expr,
@@ -292,6 +305,7 @@ module internal ProvidedOperation =
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
             let rtdef = ProvidedOperationResult.makeProvidedType(operationType)
+            let stdef = ProvidedSubscriptionResult.makeProvidedType(operationType)
             let variables =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
@@ -312,7 +326,7 @@ module internal ProvidedOperation =
                         let (name, t) = mapVariable variableName itype
                         (name, Types.unwrapOption t)
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-            let varExprMapper (variables : (string * Type) list) (args : Expr list) =
+            let varExprMapper (variables : (string * Type) list) (isSubscription : bool) (args : Expr list) =
                 let exprMapper (name : string, value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
                     <@@ let rec mapper (value : obj) =
@@ -326,14 +340,18 @@ module internal ProvidedOperation =
                 let args =
                     let names = variables |> List.map fst
                     let args = 
-                        match contextInfo with
-                        | Some _ ->
+                        match contextInfo, isSubscription with
+                        | Some _, false ->
                             match args with
-                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
+                            | _ :: tail when tail.Length > 1 -> List.take (tail.Length - 1) tail
                             | _ -> []
-                        | None ->
+                        | None, false ->
                             match args with
                             | _ :: _ :: tail when tail.Length > 0 -> tail
+                            | _ -> []
+                        | _, true ->
+                            match args with
+                            | _ :: tail  when tail.Length > 3 ->  List.take (tail.Length - 3) tail
                             | _ -> []
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
@@ -353,21 +371,28 @@ module internal ProvidedOperation =
                 let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
                 let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
                 required @ optional
-            let mprm =
+            let rmprm =
                 match contextInfo with
                 | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
                 | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
+            let smprm =
+                let handler = ProvidedParameter("subscriptionHandler", typeof<IGraphQLSubscriptionHandler>, optionalValue = null)
+                let connectionParams = ProvidedParameter("connectionParams", typeof<seq<string * obj>>, optionalValue = null)
+                let serverUrl =
+                    match contextInfo with
+                    | Some info -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = info.ServerUrl)
+                    | None ->ProvidedParameter("serverUrl", typeof<string>)
+                varprm @ [serverUrl; connectionParams; handler]
             let shouldUseMultipartRequest = uploadInputTypeName.IsSome
             let rundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables args
+                    let variables = varExprMapper variables false args
                     let argsContext = 
                         match contextInfo with
                         | Some _ -> args.[args.Length - 1]
                         | None -> args.[1]
-                    <@@ 
-                        let argsContext = %%argsContext : GraphQLProviderRuntimeContext
+                    <@@ let argsContext = %%argsContext : GraphQLProviderRuntimeContext
                         let isDefaultContext = Object.ReferenceEquals(argsContext, null)
                         let context = if isDefaultContext then %%defaultContextExpr else argsContext
                         let request =
@@ -384,13 +409,45 @@ module internal ProvidedOperation =
                         // If the user does not provide a context, we should dispose the default one after running the query
                         if isDefaultContext then (context :> IDisposable).Dispose()
                         OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
-                let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
+                let mdef = ProvidedMethod("Run", rmprm, rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
+                mdef
+            let subdef = 
+                let invoker (args : Expr list) =
+                    let operationName = Option.toObj operationDefinition.Name
+                    let variables = varExprMapper variables true args
+                    let handler = args.[args.Length - 1]
+                    let connectionParams = args.[args.Length - 2]
+                    let serverUrl = args.[args.Length - 3]
+                    <@@ let argsHandler = %% handler : IGraphQLSubscriptionHandler
+                        let isDefaultHandler = Object.ReferenceEquals(argsHandler, null)
+                        let handler : IGraphQLSubscriptionHandler = 
+                            if isDefaultHandler
+                            then upcast new GraphQLOverWebSocketSubscriptionHandler()
+                            else argsHandler
+                        let connectionParams =
+                            match %%connectionParams : seq<string * obj> with
+                            | null -> [||]
+                            | p -> Array.ofSeq p
+                        let serverUrl = %%serverUrl : string
+                        let connection = handler.Connect(serverUrl, connectionParams)
+                        let request =
+                            { OperationName = Option.ofObj operationName
+                              Query = userQuery
+                              Variables = %%variables }
+                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL subscription" (fun _ -> handler.Subscribe(request))
+                        let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response.Data)
+                        let deferredResponseJson = Tracer.runAndMeasureExecutionTime "Parsed a deferred GraphQL response to a JsonValue" (fun _ -> response.Deferred |> Observable.map JsonValue.Parse)
+                        // If the user does not provide a context, we should dispose the default one after running the query
+                        if isDefaultHandler then connection.Dispose()
+                        SubscriptionResultBase(responseJson, deferredResponseJson, %%operationFieldsExpr, operationTypeName) @@>
+                let mdef = ProvidedMethod("Subscribe", smprm, stdef, invoker)
+                mdef.AddXmlDoc("Subscribe to the operation on the server.")
                 mdef
             let arundef = 
                 let invoker (args : Expr list) =
                     let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables args
+                    let variables = varExprMapper variables false args
                     let argsContext = 
                         match contextInfo with
                         | Some _ -> args.[args.Length - 1]
@@ -414,7 +471,7 @@ module internal ProvidedOperation =
                             if isDefaultContext then (context :> IDisposable).Dispose()
                             return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                         } @@>
-                let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
+                let mdef = ProvidedMethod("AsyncRun", rmprm, Types.makeAsync rtdef, invoker)
                 mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                 mdef
             let prdef =
@@ -425,7 +482,7 @@ module internal ProvidedOperation =
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
                 mdef
-            let members : MemberInfo list = [rtdef; rundef; arundef; prdef]
+            let members : MemberInfo list = [rtdef; stdef; rundef; arundef; prdef; subdef]
             members)
         tdef
 
@@ -730,6 +787,7 @@ module internal Provider =
                                 let schemaTypes = Types.getSchemaTypes(schema)
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
+                                let userQuery = queryAst.ToQueryString().Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
                                     | Some name, _ -> 
@@ -840,7 +898,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
+                                let odef = ProvidedOperation.makeProvidedType(userQuery, actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)

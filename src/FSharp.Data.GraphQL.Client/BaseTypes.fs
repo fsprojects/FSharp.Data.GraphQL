@@ -488,4 +488,4 @@ type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IO
     inherit OperationResultBase (responseJson, operationFields, operationTypeName)
 
     /// Gets the deferred results of the subscription operation as an observable.
-    member __.Deferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, operationFields, operationTypeName))
+    member __.RawDeferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, operationFields, operationTypeName))

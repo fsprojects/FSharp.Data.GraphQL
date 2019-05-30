@@ -4,7 +4,6 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Collections
 open System.Collections.Generic
 open System.IO
 open System.Net.Http

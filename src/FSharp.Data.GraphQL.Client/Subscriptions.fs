@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
+open FSharp.Data.GraphQL
 
 /// A subscription request, containing essential data for requesting a subscription query on the server.
 type GraphQLSubscriptionRequest  =
@@ -23,30 +24,27 @@ type GraphQLSubscriptionResponse =
 
 /// An interface for implementing subscription handlers for GraphQLProvider.
 type IGraphQLSubscriptionHandler =
-    inherit IDisposable
     /// Wnen implemented, starts a connection to a GraphQL server which supports subscriptions accordingly to the implementation protocol.
-    abstract member Connect : string -> unit
+    abstract member Connect : string * (string * obj) [] -> IDisposable
     /// When implemented, start a subscription to the GraphQL using the implementation protocol.
     abstract member Subscribe : GraphQLSubscriptionRequest -> GraphQLSubscriptionResponse
 
 type internal WebSocketClientMessage =
-    | ConnectionInit of payload : string
+    | ConnectionInit of payload : (string * obj) []
     | ConnectionTerminate
     | Start of id : string * payload : GraphQLSubscriptionRequest
     | Stop of id : string
 
 type internal WebSocketServerMessage =
     | ConnectionAck
-    | ConnectionError of payload : obj
+    | ConnectionError of payload : (string * obj) []
     | Data of id : string * payload : GraphQLSubscriptionResponse
-    | Error of id : string option * err : string
+    | Error of id : string option * payload : (string * obj) []
     | Complete of id : string
 
 /// A GraphQL subscription handler which uses GraphQL Over Web Socket interface.
 /// See https://github.com/apollographql/subscriptions-transport-ws/blob/master/PROTOCOL.md for information.
 type GraphQLOverWebSocketSubscriptionHandler() =
     interface IGraphQLSubscriptionHandler with
-        member __.Connect(serverUrl) = ()
-        member __.Subscribe(request) = Unchecked.defaultof<GraphQLSubscriptionResponse>
-    interface IDisposable with
-        member __.Dispose() = ()
+        member __.Connect(serverUrl, connectionParams) = { new IDisposable with member __.Dispose() = () }
+        member __.Subscribe(request) = { Data = null; Deferred = Observable.empty<string> }
