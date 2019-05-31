@@ -219,7 +219,8 @@ Target.create "Build" (fun _ ->
                         CustomParams = Some "--no-restore" } })))
 
 /// The path to the .NET CLI executable.
-let dotNetCliExe = DotNet.Options.Create().DotNetCliPath
+let dotNetCliExe = 
+    DotNet.Options.Create().DotNetCliPath
 
 Target.create "RunTests" (fun _ ->
     let restore =
