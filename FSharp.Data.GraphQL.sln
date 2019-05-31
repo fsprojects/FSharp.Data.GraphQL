@@ -1,7 +1,7 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.27130.2026
+# Visual Studio Version 16
+VisualStudioVersion = 16.0.28922.388
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B98-5CED-492C-A5B7-A5B4F73CF142}"
 	ProjectSection(SolutionItems) = preProject
@@ -72,6 +72,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
+		samples\client-provider\field_aliases.fsx = samples\client-provider\field_aliases.fsx
 		samples\client-provider\github_access.fsx = samples\client-provider\github_access.fsx
 		samples\client-provider\github_authorization_headers.headerfile = samples\client-provider\github_authorization_headers.headerfile
 		samples\client-provider\github_schema.json = samples\client-provider\github_schema.json
@@ -81,7 +82,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-p
 		samples\client-provider\http_headers_introspection.fsx = samples\client-provider\http_headers_introspection.fsx
 		samples\client-provider\mutations.fsx = samples\client-provider\mutations.fsx
 		samples\client-provider\operation.graphql = samples\client-provider\operation.graphql
-		samples\client-provider\scalar_parameters.fsx = samples\client-provider\scalar_parameters.fsx
+		samples\client-provider\parameters.fsx = samples\client-provider\parameters.fsx
 		samples\client-provider\short_hand_query.fsx = samples\client-provider\short_hand_query.fsx
 		samples\client-provider\standard_features.fsx = samples\client-provider\standard_features.fsx
 		samples\client-provider\swapi_schema.json = samples\client-provider\swapi_schema.json
@@ -114,6 +115,27 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "star-wars-api", "star-wars-api", "{F66BEE6C-0CB7-4F39-97E4-243F797E8723}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.StarWarsApi", "samples\star-wars-api\FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj", "{B837B3ED-83CE-446F-A4E5-44CB06AA6505}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "file-upload", "file-upload", "{A47968E2-CDD1-4BCF-9093-D0C5225A815B}"
+	ProjectSection(SolutionItems) = preProject
+		samples\client-provider\file-upload\multiple_files_upload.fsx = samples\client-provider\file-upload\multiple_files_upload.fsx
+		samples\client-provider\file-upload\png_file.png = samples\client-provider\file-upload\png_file.png
+		samples\client-provider\file-upload\README.md = samples\client-provider\file-upload\README.md
+		samples\client-provider\file-upload\single_file_upload.fsx = samples\client-provider\file-upload\single_file_upload.fsx
+		samples\client-provider\file-upload\txt_file.txt = samples\client-provider\file-upload\txt_file.txt
+		samples\client-provider\file-upload\uploaded_files.fsx = samples\client-provider\file-upload\uploaded_files.fsx
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{9D5C46E8-0C07-4384-8E58-903F7C2C7171}"
+	ProjectSection(SolutionItems) = preProject
+		samples\client-provider\file-upload\server\.env = samples\client-provider\file-upload\server\.env
+		samples\client-provider\file-upload\server\.gitignore = samples\client-provider\file-upload\server\.gitignore
+		samples\client-provider\file-upload\server\package-lock.json = samples\client-provider\file-upload\server\package-lock.json
+		samples\client-provider\file-upload\server\package.json = samples\client-provider\file-upload\server\package.json
+		samples\client-provider\file-upload\server\resolvers.mjs = samples\client-provider\file-upload\server\resolvers.mjs
+		samples\client-provider\file-upload\server\server.mjs = samples\client-provider\file-upload\server\server.mjs
+		samples\client-provider\file-upload\server\types.mjs = samples\client-provider\file-upload\server\types.mjs
+	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -244,6 +266,8 @@ Global
 		{F7858DA7-E067-486B-9E9C-697F0A56C620} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{F66BEE6C-0CB7-4F39-97E4-243F797E8723} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 		{B837B3ED-83CE-446F-A4E5-44CB06AA6505} = {F66BEE6C-0CB7-4F39-97E4-243F797E8723}
+		{A47968E2-CDD1-4BCF-9093-D0C5225A815B} = {3D948D55-3CD2-496D-A04C-3B4E7BB69140}
+		{9D5C46E8-0C07-4384-8E58-903F7C2C7171} = {A47968E2-CDD1-4BCF-9093-D0C5225A815B}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
