@@ -4,7 +4,6 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.IO
 open System.Security.Cryptography
 open FSharp.Core
 open System.Reflection
@@ -135,45 +134,6 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
-    // TODO: this function was created in order to generate overloads for the record type constructors.
-    // It could receive a review in the future to see if improvements can be done to generate all
-    // combinations of constructor overloads.
-    let combine (input : 'T list) =
-        let rec helper (input : 'T list) (startIndex : int) (length : int) =
-            let mutable combinations = List<List<'T>>()
-            if length = 2
-            then
-                let mutable combinationsIndex = 0
-                for inputIndex = startIndex to (input.Length - 1) do
-                    for i = (inputIndex + 1) to (input.Length - 1) do
-                        combinations.Add(List<'T>())
-                        combinations.[combinationsIndex].Add(input.[inputIndex])
-                        while combinations.[combinationsIndex].Count < length do
-                            combinations.[combinationsIndex].Add(input.[i])
-                        combinationsIndex <- combinationsIndex + 1
-                combinations
-            else
-                let combinationsOfMore = List<List<'T>>()
-                for i = startIndex to (input.Length - length) do
-                    combinations <- helper input (i + 1) (length - 1)
-                    for index = 0 to (combinations.Count - 1) do
-                        combinations.[index].Insert(0, input.[i])
-                    for y = 0 to (combinations.Count - 1) do
-                        combinationsOfMore.Add(combinations.[y])
-                combinationsOfMore
-        let output = List<List<'T>>()
-        output.Add(List<'T>())
-        for i = 0 to (input.Length - 1) do
-            let item = List<'T>()
-            item.Add(input.[i])
-            output.Add(item)
-        for i = 2 to input.Length do
-            helper input 0 i |> output.AddRange
-        output
-        |> Seq.map List.ofSeq
-        |> List.ofSeq
-        |> List.map (fun x -> x, List.except x input)
-
     let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
@@ -194,7 +154,7 @@ module internal ProvidedRecord =
                 let mapper (name : string, alias : string option, t : Type) = Option.defaultValue name alias, t
                 let requiredProperties = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
                 let optionalProperties = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
-                combine optionalProperties
+                List.combine optionalProperties
                 |> List.map (fun (optionalProperties, missingProperties) ->
                     let constructorProperties = requiredProperties @ optionalProperties
                     let allProperties = constructorProperties @ missingProperties
@@ -325,16 +285,7 @@ module internal ProvidedOperation =
                         (name, mapper %%value) @@>
                 let args =
                     let names = variables |> List.map fst
-                    let args = 
-                        match contextInfo with
-                        | Some _ ->
-                            match args with
-                            | _ :: tail when tail.Length > 0 -> List.take (tail.Length - 1) tail
-                            | _ -> []
-                        | None ->
-                            match args with
-                            | _ :: _ :: tail when tail.Length > 0 -> tail
-                            | _ -> []
+                    let args = List.skip (args.Length - variables.Length) args
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
@@ -345,78 +296,84 @@ module internal ProvidedOperation =
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
-            let varprm = 
-                let mapper (name: string, t : Type) =
-                    match t with
-                    | Option t -> ProvidedParameter(name, t, optionalValue = null)
-                    | _ -> ProvidedParameter(name, t)
-                let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
-                let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
-                required @ optional
+            let varprm =
+                let requiredVariables = variables |> List.filter (fun (_, t) -> not (isOption t))
+                let optionalVariables = variables |> List.filter (fun (_, t) -> isOption t)
+                List.combine optionalVariables
+                |> List.map (fun (optionalVariables, _) ->
+                    let methodVariables = requiredVariables @ optionalVariables
+                    methodVariables |> List.map (fun (name, t) -> ProvidedParameter(name, t)))
             let mprm =
+                let varprmctx = varprm |> List.map (fun x -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: x)
                 match contextInfo with
-                | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
-                | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
+                | Some _ -> varprm @ varprmctx
+                | None -> varprmctx
             let shouldUseMultipartRequest = uploadInputTypeName.IsSome
-            let rundef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables args
-                    let argsContext = 
-                        match contextInfo with
-                        | Some _ -> args.[args.Length - 1]
-                        | None -> args.[1]
-                    <@@ 
-                        let argsContext = %%argsContext : GraphQLProviderRuntimeContext
-                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
-                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
-                        let request =
-                            { ServerUrl = context.ServerUrl
-                              HttpHeaders = context.HttpHeaders
-                              OperationName = Option.ofObj operationName
-                              Query = actualQuery
-                              Variables = %%variables }
-                        let response = 
-                            if shouldUseMultipartRequest
-                            then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
-                            else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                        let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                        // If the user does not provide a context, we should dispose the default one after running the query
-                        if isDefaultContext then (context :> IDisposable).Dispose()
-                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
-                let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
-                mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
-                mdef
-            let arundef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables args
-                    let argsContext = 
-                        match contextInfo with
-                        | Some _ -> args.[args.Length - 1]
-                        | None -> args.[1]
-                    <@@ let argsContext = %%argsContext : GraphQLProviderRuntimeContext
-                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
-                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
-                        let request =
-                            { ServerUrl = context.ServerUrl
-                              HttpHeaders = context.HttpHeaders
-                              OperationName = Option.ofObj operationName
-                              Query = actualQuery
-                              Variables = %%variables }
-                        async {
-                            let! response = 
+            let rundefs : MemberInfo list = 
+                let operationName = Option.toObj operationDefinition.Name
+                mprm |> List.map (fun mprm ->
+                    // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
+                    let variables = mprm |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                    let invoker (args : Expr list) =
+                        // First arg is the operation instance, second should be the context, if the overload has one
+                        // We determine it by calculating the difference in length of variables and arguments
+                        let isDefaultContext, context = 
+                            if args.Length - variables.Length = 2
+                            then false, args.[1]
+                            else true, defaultContextExpr
+                        let variables = varExprMapper variables args
+                        <@@ 
+                            let context = %%context : GraphQLProviderRuntimeContext
+                            let request =
+                                { ServerUrl = context.ServerUrl
+                                  HttpHeaders = context.HttpHeaders
+                                  OperationName = Option.ofObj operationName
+                                  Query = actualQuery
+                                  Variables = %%variables }
+                            let response = 
                                 if shouldUseMultipartRequest
-                                then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
-                                else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                                then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
+                                else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
-                        } @@>
-                let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
-                mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
-                mdef
+                            OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                    let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
+                    mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
+                    upcast mdef)
+            let arundefs : MemberInfo list = 
+                let operationName = Option.toObj operationDefinition.Name
+                mprm |> List.map (fun mprm ->
+                    // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
+                    let variables = mprm |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                    let invoker (args : Expr list) =
+                        // First arg is the operation instance, second should be the context, if the overload has one
+                        // We determine it by calculating the difference in length of variables and arguments
+                        let isDefaultContext, context = 
+                            if args.Length - variables.Length = 2
+                            then false, args.[1]
+                            else true, defaultContextExpr
+                        let variables = varExprMapper variables args
+                        <@@ let context = %%context : GraphQLProviderRuntimeContext
+                            let request =
+                                { ServerUrl = context.ServerUrl
+                                  HttpHeaders = context.HttpHeaders
+                                  OperationName = Option.ofObj operationName
+                                  Query = actualQuery
+                                  Variables = %%variables }
+                            async {
+                                let! response = 
+                                    if shouldUseMultipartRequest
+                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
+                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                                // If the user does not provide a context, we should dispose the default one after running the query
+                                if isDefaultContext then (context :> IDisposable).Dispose()
+                                return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
+                            } @@>
+                    let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
+                    mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
+                    upcast mdef)
             let prdef =
                 let invoker (args : Expr list) =
                     <@@ let responseJson = JsonValue.Parse %%args.[1]
@@ -425,7 +382,7 @@ module internal ProvidedOperation =
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
                 mdef
-            let members : MemberInfo list = [rtdef; rundef; arundef; prdef]
+            let members : MemberInfo list = [rtdef; prdef] @ rundefs @ arundefs
             members)
         tdef
 
