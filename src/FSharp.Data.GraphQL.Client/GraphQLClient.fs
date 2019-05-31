@@ -65,17 +65,6 @@ type GraphQLRequest  =
 
 /// Executes calls to GraphQL servers and return their responses.
 module GraphQLClient =
-    let private rethrow (exns : exn list) =
-        let rec mapper (acc : string) (exns : exn list) =
-            let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)
-            match exns with
-            | [] -> acc
-            | ex :: tail ->
-                match ex with
-                | :? AggregateException as ex -> aggregateMapper ex
-                | ex -> mapper (acc + " " + ex.Message) tail
-        failwithf "Failure calling GraphQL server. %s" (mapper "" exns)
-
     let private ensureSuccessCode (response : Async<HttpResponseMessage>) =
         async {
             let! response = response
@@ -133,10 +122,17 @@ module GraphQLClient =
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
     let sendIntrospectionRequestAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
-        let sendGet() =
-            async {
-                return! getAsync connection.Client serverUrl
-            }
+        let sendGet() = async { return! getAsync connection.Client serverUrl }
+        let rethrow (exns : exn list) =
+            let rec mapper (acc : string) (exns : exn list) =
+                let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)
+                match exns with
+                | [] -> acc.TrimEnd()
+                | ex :: tail ->
+                    match ex with
+                    | :? AggregateException as ex -> mapper (acc + aggregateMapper ex + " ") tail
+                    | ex -> mapper (acc + ex.Message + " ") tail
+            failwithf "Failure trying to recover introspection schema from server at \"%s\". Errors: %s" serverUrl (mapper "" exns)
         async {
             try return! sendGet()
             with getex ->
