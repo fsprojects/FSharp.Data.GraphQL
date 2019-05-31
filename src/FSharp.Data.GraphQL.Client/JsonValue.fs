@@ -18,12 +18,12 @@ open System.ComponentModel
 open System.Globalization
 open System.Text
 
-/// Specifies the formatting behaviour of JSON values
+/// Specifies the formatting behaviour of JSON values.
 [<RequireQualifiedAccess>]
 type JsonSaveOptions =
-  /// Format (indent) the JsonValue
+  /// Format (indent) the JsonValue.
   | None = 0
-  /// Print the JsonValue in one line in a compact way
+  /// Print the JsonValue in one line in a compact way.
   | DisableFormatting = 1
 
 /// Represents a JSON value. Large numbers that do not fit in the
@@ -42,7 +42,7 @@ type JsonValue =
 
   /// [omit]
   [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
-  [<CompilerMessageAttribute("This method is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
+  [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
   member x._Print =
     let str = x.ToString()
     if str.Length > 512 then str.Substring(0, 509) + "..."
@@ -276,7 +276,6 @@ type private JsonParser(jsonText:string) =
         i <- i + expected.Length
         r
 
-    // Start by parsing the top-level value
     member __.Parse() =
         let value = parseRootValue()
         skipWhitespace()
@@ -285,10 +284,10 @@ type private JsonParser(jsonText:string) =
         value
 
 type JsonValue with
-  /// Parses the specified JSON string
+  /// Parses the specified JSON string.
   static member Parse(text) = JsonParser(text).Parse()
 
-  /// Attempts to parse the specified JSON string
+  /// Attempts to parse the specified JSON string.
   static member TryParse(text) =
     try Some <| JsonParser(text).Parse()
     with _ -> None
