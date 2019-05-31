@@ -570,7 +570,9 @@ module internal Provider =
         let ofInputFieldType (field : IntrospectionInputVal) = { field with Type = field.Type.OfType.Value }
         let rec resolveFieldMetadata (field : IntrospectionField) : RecordPropertyMetadata =
             match field.Type.Kind with
-            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> resolveFieldMetadata |> unwrapOption
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> 
+                if field.Type.OfType.Value.Name.IsSome && field.Type.OfType.Value.Name.Value = "File" then failwithf "%A" (ofFieldType field |> resolveFieldMetadata)
+                ofFieldType field |> resolveFieldMetadata |> unwrapOption
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
@@ -806,7 +808,7 @@ module internal Provider =
                                 let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
                                 let rootWrapper = generateWrapper "Types"
                                 wrappersByPath.Add([], rootWrapper)
-                                let rec getWrapper (path : string list) =
+                                let rec resolveWrapper (path : string list) =
                                     if wrappersByPath.ContainsKey path
                                     then wrappersByPath.[path]
                                     else
@@ -815,12 +817,12 @@ module internal Provider =
                                             let path = path.Tail
                                             if wrappersByPath.ContainsKey(path)
                                             then wrappersByPath.[path]
-                                            else getWrapper path
+                                            else resolveWrapper path
                                         upperWrapper.AddMember(wrapper)
                                         wrappersByPath.Add(path, wrapper)
                                         wrapper
                                 let includeType (path : string list) (t : ProvidedTypeDefinition) =
-                                    let wrapper = getWrapper path
+                                    let wrapper = resolveWrapper path
                                     wrapper.AddMember(t)
                                 operationTypes |> Map.iter (fun (path, _) t -> includeType path t)
                                 let operationTypeName : TypeName =

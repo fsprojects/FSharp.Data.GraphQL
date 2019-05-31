@@ -10,7 +10,8 @@ type InputField =
     { String : string
       Int : int
       StringOption : string option
-      IntOption : int option }
+      IntOption : int option
+      Uri : System.Uri }
 
 type Input =
     { Single : InputField option
@@ -24,7 +25,8 @@ module Schema =
                 [ Define.Input("string", String, description = "A string value.") 
                   Define.Input("int", Int, description = "An integer value.")
                   Define.Input("stringOption", Nullable String, description = "A string option value.")
-                  Define.Input("intOption", Nullable Int, description = "An integer option value.") ])
+                  Define.Input("intOption", Nullable Int, description = "An integer option value.")
+                  Define.Input("uri", Uri, description = "An URI value.") ])
 
     let InputType =
         Define.InputObject<Input>(
@@ -43,7 +45,8 @@ module Schema =
                   Define.AutoField("int", Int, description = "An integer value.")
                   Define.AutoField("stringOption", Nullable String, description = "A string option value.")
                   Define.AutoField("intOption", Nullable Int, description = "An integer option value.")
-                  Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
+                  Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = [])
+                  Define.AutoField("uri", Uri, description = "An URI value.") ])
 
     let OutputType =
         Define.Object<Input>(

@@ -1,0 +1,123 @@
+query Activities($taskId: ID!) {
+  node(id: $taskId) {
+    ...on KanbanTask {
+      id
+      board {
+        node {
+          id
+        }
+      }
+      activities {
+        edges {
+          node {
+            id
+              createdBy {
+                id
+                avatar {
+                  image {
+                    url
+                  }
+                }
+                name {
+                  full
+                }
+              }
+              createdAt
+              data {
+                ...on StatusChanged {
+                  from
+                  to
+                }
+                ...on CommentAdded {
+                  content
+                  files {
+                    name
+                    preview(width: 100)
+                    url
+                  }
+                }
+                ...on EmailMessageAdded {
+                  emailFrom: from {
+                    email {
+                      address
+                    }
+                  }
+                  emailTo: to {
+                    email {
+                      address
+                    }
+                  }
+                  htmlBody
+                  subject
+                  attachments {
+                    name
+                    url
+                    preview(width: 100)
+                  }
+                }
+                ...on AssigneeChanged {
+                  fromAssignee: from {
+                    id
+                    avatar {
+                      image {
+                        url
+                      }
+                    }
+                    name {
+                      full
+                    }
+                  }
+                  toAssignee: to {
+                    id
+                    avatar {
+                      image {
+                        url
+                      }
+                    }
+                    name {
+                      full
+                    }
+                  }
+                }
+                ...on DeadlineChanged {
+                  fromDeadline: from
+                  toDeadline: to
+                }
+                ...on DescriptionChanged {
+                  fromDescription: from
+                  toDescription: to
+                }
+                ...on Attachments {
+                  files {
+                    name
+                    url
+                    preview(width: 100)
+                  }
+                }
+                ...on CommunityChanged {
+                  fromCommunity: from {
+                    id
+                    name
+                  }
+                  toCommunity: to {
+                    id
+                    name
+                  }
+                }
+                ...on TaskStepsChanged {
+                  fromSteps: from {
+                    completed
+                    description
+                  }
+                  toSteps: to {
+                    completed
+                    description
+                  }
+                }
+              }
+          }
+        }
+      }
+    }
+  }
+}

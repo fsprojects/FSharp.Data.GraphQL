@@ -18,35 +18,8 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"introspection.json">
 
-let operation =
-    MyProvider.Operation<"""query q($input: Input!) {
-            echo(input: $input) {
-              list {
-                ...Field
-              }
-              single {
-                ...Field
-              }
-            }
-        }
+let operation1 = MyProvider.Operation<"without_fragment.graphql">()
 
-        fragment Field on OutputField {
-            string
-            stringOption
-            int
-            intOption
-            uri
-            deprecated
-        }""">()
-
-//let input = MyProvider.Types.Input()
-//let input = MyProvider.Types.Input(single = MyProvider.Types.InputField("A", 1, System.Uri("http://localhost:1234")))
-let input = MyProvider.Types.Input(list = [||])
-
-type x = MyProvider.Operations.Q.
-
-let result = operation.Run(input)
-
-printfn "%A" result.Data.Value.Echo
+//let operation2 = MyProvider.Operation<"with_fragment.graphql">()
