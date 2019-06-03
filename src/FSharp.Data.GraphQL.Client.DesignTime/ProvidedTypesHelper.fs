@@ -407,7 +407,7 @@ module internal Provider =
                 | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
                 if (!providedTypes).ContainsKey(path, tref.Name.Value)
-                then upcast (!providedTypes).[path, tref.Name.Value]
+                then Types.makeOption (!providedTypes).[path, tref.Name.Value]
                 else
                     let ifields typeName =
                         if schemaTypes.ContainsKey(typeName)
@@ -591,7 +591,7 @@ module internal Provider =
             let uploadInputTypeName = 
                 let name : string = unbox args.[3]
                 match name with
-                | "" -> None
+                | null | "" -> None
                 | _ -> Some name
             let maker =
                 lazy
