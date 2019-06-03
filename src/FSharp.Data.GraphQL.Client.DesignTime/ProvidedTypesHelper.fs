@@ -647,7 +647,7 @@ module internal Provider =
                                 let queryAst = Parser.parse query
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
-                                    | "" -> 
+                                    | null | "" -> 
                                         let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
                                         match operationDefinitions with
                                         | opdef :: _ -> opdef.Name
@@ -655,7 +655,7 @@ module internal Provider =
                                     | x -> Some x
                                 let explicitOperationTypeName : TypeName option = 
                                     match args.[3] :?> string with
-                                    | "" -> None   
+                                    | null | "" -> None   
                                     | x -> Some x    
                                 let operationDefinition =
                                     queryAst.Definitions
