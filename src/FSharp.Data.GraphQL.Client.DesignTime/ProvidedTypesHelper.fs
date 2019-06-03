@@ -152,8 +152,7 @@ module internal ProvidedRecord =
             tdef.AddMembersDelayed(fun _ ->
                 let properties = propertiesGetter ()
                 let mapper (name : string, alias : string option, t : Type) = Option.defaultValue name alias, t
-                let requiredProperties = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
-                let optionalProperties = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
+                let (optionalProperties, requiredProperties) = properties |> List.map mapper |> List.partition (fun (_, t) -> isOption t)
                 List.combine optionalProperties
                 |> List.map (fun (optionalProperties, missingProperties) ->
                     let constructorProperties = requiredProperties @ optionalProperties
@@ -297,8 +296,7 @@ module internal ProvidedOperation =
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             let varprm =
-                let requiredVariables = variables |> List.filter (fun (_, t) -> not (isOption t))
-                let optionalVariables = variables |> List.filter (fun (_, t) -> isOption t)
+                let (optionalVariables, requiredVariables) = variables |> List.partition (fun (_, t) -> isOption t)
                 List.combine optionalVariables
                 |> List.map (fun (optionalVariables, _) ->
                     let methodVariables = requiredVariables @ optionalVariables
