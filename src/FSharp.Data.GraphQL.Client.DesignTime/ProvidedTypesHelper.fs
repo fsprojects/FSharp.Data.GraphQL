@@ -651,7 +651,7 @@ module internal Provider =
                                         let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
                                         match operationDefinitions with
                                         | opdef :: _ -> opdef.Name
-                                        | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
+                                        | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
                                     | x -> Some x
                                 let explicitOperationTypeName : TypeName option = 
                                     match args.[3] :?> string with

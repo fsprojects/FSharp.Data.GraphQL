@@ -4,14 +4,12 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.IO
 open System.Globalization
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
-open FSharp.Data.GraphQL.Ast.Extensions
 open System.ComponentModel
 
 /// Contains information about a field on the query.
