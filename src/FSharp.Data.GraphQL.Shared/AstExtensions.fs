@@ -157,7 +157,7 @@ type Document with
                   SelectionSet = [] }
             let shouldIncludeTypeName = options.HasFlag(QueryStringPrintingOptions.IncludeTypeNames)
             let hasTypeName = selectionSet |> List.exists (function Field f -> f.Name = "__typename" | _ -> false)
-            if selectionSet.Length > 0 && shouldIncludeTypeName && not (hasTypeName)
+            if selectionSet.Length > 0 && shouldIncludeTypeName && not hasTypeName
             then selectionSet @ [Field typeNameMetaField]
             else selectionSet
         let rec printSelectionSet (selectionSet : Selection list) =
@@ -201,7 +201,7 @@ type Document with
                         else sb.Append(name))
                     printVariables odef.VariableDefinitions
                     printDirectives odef.Directives
-                    printSelectionSet (setSelectionSetOptions odef.SelectionSet)
+                    printSelectionSet odef.SelectionSet
                 | FragmentDefinition fdef ->
                     sb.Append("fragment " + fdef.Name.Value + " ")
                     sb.Append("on " + fdef.TypeCondition.Value + " ")

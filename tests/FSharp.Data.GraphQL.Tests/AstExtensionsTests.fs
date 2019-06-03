@@ -222,7 +222,6 @@ let ``Should be able to print type name meta field`` () =
     }
     __typename
   }
-  __typename
 }"""
     let query = """query q {
   hero(id: "1000") {
