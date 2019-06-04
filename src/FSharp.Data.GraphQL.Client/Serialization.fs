@@ -175,7 +175,7 @@ module Serialization =
                 | :? Uri as x -> JsonValue.String (x.ToString())
                 | :? IDictionary<string, obj> as items ->
                     items
-                    |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
+                    |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
                     |> Seq.toArray
                     |> JsonValue.Record
                 | EnumerableValue items -> 

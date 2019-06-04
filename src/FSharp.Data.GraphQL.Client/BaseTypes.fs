@@ -121,7 +121,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | _ -> v
         x.GetProperties()
         |> Seq.filter (fun p -> not (isNull p.Value))
-        |> Seq.map (fun p -> p.Name.FirstCharLower(), mapper p.Value)
+        |> Seq.map (fun p -> p.Name, mapper p.Value)
         |> dict
 
     override x.ToString() =
