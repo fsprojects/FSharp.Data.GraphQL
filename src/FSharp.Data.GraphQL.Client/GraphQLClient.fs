@@ -99,9 +99,7 @@ module GraphQLClient =
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
-                | _ -> 
-                    let json = Map.ofArray request.Variables |> Serialization.toJsonValue
-                    json.ToString() |> JsonValue.String
+                | _ -> Map.ofArray request.Variables |> Serialization.toJsonValue
             let operationName =
                 match request.OperationName with
                 | Some x -> JsonValue.String x

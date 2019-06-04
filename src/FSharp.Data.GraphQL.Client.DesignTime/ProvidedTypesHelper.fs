@@ -298,20 +298,24 @@ module internal ProvidedOperation =
             let varprm =
                 let (optionalVariables, requiredVariables) = variables |> List.partition (fun (_, t) -> isOption t)
                 List.combine optionalVariables
-                |> List.map (fun (optionalVariables, _) ->
+                |> List.map (fun (optionalVariables, missingVariables) ->
+                    let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
                     let methodVariables = requiredVariables @ optionalVariables
-                    methodVariables |> List.map (fun (name, t) -> ProvidedParameter(name, t)))
+                    methodVariables |> List.map (fun (name, t) -> ProvidedParameter(name, t)), missingVariables)
             let mprm =
-                let varprmctx = varprm |> List.map (fun x -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: x)
+                let varprmctx = varprm |> List.map (fun (prm, missing) -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: prm, missing)
                 match contextInfo with
                 | Some _ -> varprm @ varprmctx
                 | None -> varprmctx
             let shouldUseMultipartRequest = uploadInputTypeName.IsSome
             let rundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
-                mprm |> List.map (fun mprm ->
+                mprm |> List.map (fun (mprm, missing) ->
                     // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
-                    let variables = mprm |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                    let variables = 
+                        mprm 
+                        |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                        |> List.append missing
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload has one
                         // We determine it by calculating the difference in length of variables and arguments
@@ -341,9 +345,12 @@ module internal ProvidedOperation =
                     upcast mdef)
             let arundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
-                mprm |> List.map (fun mprm ->
+                mprm |> List.map (fun (mprm, missing) ->
                     // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
-                    let variables = mprm |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                    let variables = 
+                        mprm 
+                        |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
+                        |> List.append missing
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload has one
                         // We determine it by calculating the difference in length of variables and arguments

@@ -111,16 +111,18 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     /// Gets a list of this provided record properties.
     member __.GetProperties() = properties
     
-    /// Produces a dictionary containing all the properties and names of this provided record type.
+    /// Produces a dictionary containing all the properties of this provided record type.
     member x.ToDictionary() =
         let rec mapper (v : obj) =
             match v with
-            | null -> null
             | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
             | OptionValue v -> v |> Option.map mapper |> Option.toObj
             | _ -> v
-        x.GetProperties() |> Seq.map (fun p -> p.Name, mapper p.Value) |> dict
+        x.GetProperties()
+        |> Seq.filter (fun p -> not (isNull p.Value))
+        |> Seq.map (fun p -> p.Name.FirstCharLower(), mapper p.Value)
+        |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
