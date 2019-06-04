@@ -393,6 +393,26 @@ module internal ProvidedOperation =
 
 module internal Provider =
     let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+        let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
+        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+        let rootWrapper = generateWrapper "Types"
+        wrappersByPath.Add([], rootWrapper)
+        let rec getWrapper (path : string list) =
+            if wrappersByPath.ContainsKey path
+            then wrappersByPath.[path]
+            else
+                let wrapper = generateWrapper (path.Head.FirstCharUpper())
+                let upperWrapper =
+                    let path = path.Tail
+                    if wrappersByPath.ContainsKey(path)
+                    then wrappersByPath.[path]
+                    else getWrapper path
+                upperWrapper.AddMember(wrapper)
+                wrappersByPath.Add(path, wrapper)
+                wrapper
+        let includeType (path : string list) (t : ProvidedTypeDefinition) =
+            let wrapper = getWrapper path
+            wrapper.AddMember(t)
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
@@ -431,6 +451,7 @@ module internal Provider =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                         providedTypes := (!providedTypes).Add((path, tref.Name.Value), tdef)
+                        includeType path tdef
                         let properties =
                             astFields
                             |> List.filter (function | TypeField _ -> true | _ -> false)
@@ -449,13 +470,14 @@ module internal Provider =
                                 else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
                             let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
                             let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
+                            includeType path tdef
                             ProvidedRecord.makeProvidedType(tdef, properties)
                         fragmentProperties
                         |> List.map createFragmentType
                     fragmentTypes |> List.iter (fun fragmentType -> providedTypes := (!providedTypes).Add((path, fragmentType.Name), fragmentType))
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
+        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes, rootWrapper
 
     let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
@@ -706,28 +728,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
-                                let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
-                                let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-                                let rootWrapper = generateWrapper "Types"
-                                wrappersByPath.Add([], rootWrapper)
-                                let rec getWrapper (path : string list) =
-                                    if wrappersByPath.ContainsKey path
-                                    then wrappersByPath.[path]
-                                    else
-                                        let wrapper = generateWrapper (path.Head.FirstCharUpper())
-                                        let upperWrapper =
-                                            let path = path.Tail
-                                            if wrappersByPath.ContainsKey(path)
-                                            then wrappersByPath.[path]
-                                            else getWrapper path
-                                        upperWrapper.AddMember(wrapper)
-                                        wrappersByPath.Add(path, wrapper)
-                                        wrapper
-                                let includeType (path : string list) (t : ProvidedTypeDefinition) =
-                                    let wrapper = getWrapper path
-                                    wrapper.AddMember(t)
-                                operationTypes |> Map.iter (fun (path, _) t -> includeType path t)
+                                let (operationType, operationTypes, rootWrapper) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
                                     | Some name -> name
