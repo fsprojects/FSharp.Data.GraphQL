@@ -325,7 +325,7 @@ module internal JsonValueHelper =
                             | Some "String" | Some "ID" -> box s
                             | Some "URI" -> System.Uri(s) |> box
                             | Some "Date" -> 
-                                match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                                match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
                                 | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                             | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
@@ -337,7 +337,7 @@ module internal JsonValueHelper =
                     | Some "String" -> makeSomeIfNeeded s
                     | Some "URI" -> System.Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
-                        match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                        match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d
                         | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."

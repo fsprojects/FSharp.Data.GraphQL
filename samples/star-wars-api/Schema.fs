@@ -224,7 +224,7 @@ module Schema =
                             schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                             x))])
 
-    let schema = Schema(Query, Mutation, Subscription, schemaConfig)
+    let schema : ISchema<Root> = upcast Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)

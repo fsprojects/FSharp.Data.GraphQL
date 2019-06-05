@@ -295,34 +295,32 @@ module internal ProvidedOperation =
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
+            // Method variables are the ones that will be on each overload of the Run/AsyncRun methods
+            // Overloads are made from the set of all required variables, plus a combination of optional variables
+            // Each possible combination result in an overload (required + one possible combination)
             let varprm =
                 let (optionalVariables, requiredVariables) = variables |> List.partition (fun (_, t) -> isOption t)
-                List.combine optionalVariables
-                |> List.map (fun (optionalVariables, missingVariables) ->
+                List.combine optionalVariables |> List.map (fun (optionalVariables, _) ->
                     let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
-                    let methodVariables = requiredVariables @ optionalVariables
-                    methodVariables |> List.map (fun (name, t) -> ProvidedParameter(name, t)), missingVariables)
+                    requiredVariables @ optionalVariables)
             let mprm =
-                let varprmctx = varprm |> List.map (fun (prm, missing) -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: prm, missing)
+                let varprmctx = varprm |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
                 match contextInfo with
                 | Some _ -> varprm @ varprmctx
                 | None -> varprmctx
             let shouldUseMultipartRequest = uploadInputTypeName.IsSome
             let rundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
-                mprm |> List.map (fun (mprm, missing) ->
+                mprm |> List.map (fun varprm ->
                     // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
-                    let variables = 
-                        mprm 
-                        |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
-                        |> List.append missing
+                    let variables = varprm |> List.filter (fun (name, _) -> name <> "runtimeContext")
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload has one
                         // We determine it by calculating the difference in length of variables and arguments
-                        let isDefaultContext, context = 
+                        let args, isDefaultContext, context = 
                             if args.Length - variables.Length = 2
-                            then false, args.[1]
-                            else true, defaultContextExpr
+                            then List.skip 2 args, false, args.[1]
+                            else args.Tail, true, defaultContextExpr
                         let variables = varExprMapper variables args
                         <@@ 
                             let context = %%context : GraphQLProviderRuntimeContext
@@ -340,25 +338,23 @@ module internal ProvidedOperation =
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
                             OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                    let mprm = varprm |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                     let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
                     mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                     upcast mdef)
             let arundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
-                mprm |> List.map (fun (mprm, missing) ->
+                mprm |> List.map (fun varprm ->
                     // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
-                    let variables = 
-                        mprm 
-                        |> List.filter (fun prm -> prm.Name <> "runtimeContext") |> List.map (fun prm -> prm.Name, prm.ParameterType)
-                        |> List.append missing
+                    let variables = varprm |> List.filter (fun (name, _) -> name <> "runtimeContext")
                     let invoker (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload has one
                         // We determine it by calculating the difference in length of variables and arguments
-                        let isDefaultContext, context = 
+                        let args, isDefaultContext, context = 
                             if args.Length - variables.Length = 2
-                            then false, args.[1]
-                            else true, defaultContextExpr
-                        let variables = varExprMapper variables args
+                            then List.skip 2 args, false, args.[1]
+                            else args.Tail, true, defaultContextExpr
+                        let variables = varExprMapper variables args // Need to remove first arg (opration instance)
                         <@@ let context = %%context : GraphQLProviderRuntimeContext
                             let request =
                                 { ServerUrl = context.ServerUrl
@@ -376,6 +372,7 @@ module internal ProvidedOperation =
                                 if isDefaultContext then (context :> IDisposable).Dispose()
                                 return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                             } @@>
+                    let mprm = varprm |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                     let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
                     mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast mdef)

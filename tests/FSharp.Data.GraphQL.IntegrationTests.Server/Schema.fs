@@ -63,10 +63,10 @@ module Schema =
             fields = 
                 [ Define.Field(
                     name = "echo",
-                    typedef = OutputType,
+                    typedef = Nullable OutputType,
                     description = "Enters an input type and get it back.",
-                    args = [ Define.Input("input", InputType, description = "The input to be echoed as an output.") ],
-                    resolve = (fun ctx _ -> ctx.Arg("input"))) ])
+                    args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
+                    resolve = (fun ctx _ -> ctx.TryArg("input") |> Option.flatten)) ])
 
     let schema : ISchema<Root> = upcast Schema(QueryType)
 

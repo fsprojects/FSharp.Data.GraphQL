@@ -12,10 +12,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
 module Serialization =
-    let private isoDateFormat = "yyyy-MM-dd" 
-    let private isoDateTimeFormat = "O"
-    let isoDateTimeFormats = [|isoDateTimeFormat; isoDateFormat|]
-
     let private makeOption t (value : obj) =
         let otype = typedefof<_ option>
         let cases = FSharpType.GetUnionCases(otype.MakeGenericType([|t|]))
@@ -49,11 +45,11 @@ module Serialization =
             | (true, uri) -> downcastType t uri
             | _ -> failwithf "Error parsing JSON value: %O is an URI type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeType t ->
-            match DateTime.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeOffsetType t ->
-            match DateTimeOffset.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date time offset type, but parsing of value \"%s\" failed." t s
         | t when isGuidType t ->
@@ -154,6 +150,9 @@ module Serialization =
                 | JsonValue.Boolean b -> name, box b)
         Tracer.runAndMeasureExecutionTime "Deserialized JSON Record into FSharp Map" (fun _ ->
             helper values |> Map.ofArray)
+
+    let private isoDateFormat = "yyyy-MM-dd" 
+    let private isoDateTimeFormat = "O"
 
     let rec toJsonValue (x : obj) : JsonValue =
         if isNull x 
