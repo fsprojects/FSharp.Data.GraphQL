@@ -1,187 +1,195 @@
 ﻿module FSharp.Data.GraphQL.IntegrationTests.LocalProviderTests
 
-open System
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
 
-// Local provider should be able to be created from local introspection json file.
-type Provider = GraphQLProvider<"introspection.json">
-type Episode = Provider.Types.Episode
+let [<Literal>] ServerUrl = "http://localhost:8085"
 
-// As we are not using a connection to a server to get the introspection, we need a runtime context.
-let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084")
+type Provider = GraphQLProvider<ServerUrl>
+
+let context = Provider.GetContext(ServerUrl)
+
+type Input = Provider.Types.Input
+type InputField = Provider.Types.InputField
 
 module SimpleOperation =
     let operation = 
-        Provider.Operation<"""query Q {
-            hero (id: "1000") {
-              name
-              appearsIn
-              homePlanet
-              friends {
-                ... on Human {
-                  name
-                  homePlanet
-                }
-                ... on Droid {
-                  name
-                  primaryFunction
-                }
+        Provider.Operation<"""query Q($input: Input) {
+            echo(input: $input) {
+              single {
+                ...Field
+              }
+              list {
+                ...Field
               }
             }
-          }""">()
+          }
 
+          fragment Field on OutputField {
+            string
+            stringOption
+            int
+            intOption
+            uri
+            deprecated
+          }""">()
+    
     type Operation = Provider.Operations.Q
 
-    let validateResult (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.Errors |> equals [||]
+    let validateResult (input : Input option) (result : Operation.OperationResult) =
         result.Data.IsSome |> equals true
-        result.Data.Value.Hero.IsSome |> equals true
-        result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
-        result.Data.Value.Hero.Value.Friends |> equals expectedFriends
-        result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
-        let actual = normalize <| sprintf "%A" result.Data
-        let expected = normalize <| """Some
-            {Hero = Some
-            {AppearsIn = [|NewHope; Empire; Jedi|];
-            Friends = [|Some {HomePlanet = <null>;
-            Name = Some "Han Solo";};
-            Some {HomePlanet = Some "Alderaan";
-            Name = Some "Leia Organa";};
-            Some {Name = Some "C-3PO";
-            PrimaryFunction = Some "Protocol";};
-            Some {Name = Some "R2-D2";
-            PrimaryFunction = Some "Astromech";}|];
-            HomePlanet = Some "Tatooine";
-            Name = Some "Luke Skywalker";};}"""
-        actual |> equals expected
+        input |> Option.iter (fun input ->
+            result.Data.Value.Echo.IsSome |> equals true
+            input.List |> Option.iter (fun list ->
+                result.Data.Value.Echo.Value.List.IsSome |> equals true
+                let input = list |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
+                let output = result.Data.Value.Echo.Value.List.Value |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
+                input |> equals output)
+            input.Single |> Option.iter (fun single ->
+                result.Data.Value.Echo.Value.Single.IsSome |> equals true
+                let input = single.Int, single.IntOption, single.String, single.StringOption, single.Uri
+                let output = result.Data.Value.Echo.Value.Single.Value |> map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
+                input |> equals output))
 
 [<Fact>]
-let ``Should be able to start a simple query operation synchronously`` () =
-    use context = getContext()
+let ``Should be able to execute a query without sending input field``() =
+    SimpleOperation.operation.Run()
+    |> SimpleOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a query using context, without sending input field``() =
     SimpleOperation.operation.Run(context)
-    |> SimpleOperation.validateResult
+    |> SimpleOperation.validateResult None
 
 [<Fact>]
-let ``Should be able to start a simple query operation asynchronously`` () =
-    use context = getContext()
+let ``Should be able to execute a query without sending input field asynchronously``() =
+    SimpleOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a query using context, without sending input field, asynchornously``() =
     SimpleOperation.operation.AsyncRun(context)
     |> Async.RunSynchronously
-    |> SimpleOperation.validateResult
+    |> SimpleOperation.validateResult None
 
 [<Fact>]
-let ``Should be able to use pattern matching methods on an union type`` () =
-    use context = getContext()
-    let result = SimpleOperation.operation.Run(context)
-    result.Data.IsSome |> equals true
-    result.Data.Value.Hero.IsSome |> equals true
-    let friends = result.Data.Value.Hero.Value.Friends |> Array.choose id
-    friends 
-    |> Array.choose (fun x -> x.TryAsHuman()) 
-    |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
-    friends
-    |> Array.choose (fun x -> x.TryAsDroid())
-    |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
-    try
-      friends |> Array.map (fun x -> x.AsDroid()) |> ignore
-      failwith "Expected exception when trying to get all friends as droids!"
-    with _ -> ()
-    try
-      friends |> Array.map (fun x -> x.AsHuman()) |> ignore
-      failwith "Expected exception when trying to get all friends as humans!"
-    with _ -> ()
-    friends
-    |> Array.filter (fun x -> x.IsHuman())
-    |> Array.map (fun x -> x.AsHuman())
-    |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
-    friends
-    |> Array.filter (fun x -> x.IsDroid())
-    |> Array.map (fun x -> x.AsDroid())
-    |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
-  
-module MutationOperation =
-    let operation =
-        Provider.Operation<"""mutation M {
-            setMoon (id: "1", isMoon: true) {
-                id
-                name
-                isMoon
-              }
-            }""">()
-
-    type Operation = Provider.Operations.M
-
-    let validateResult (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.Errors |> equals [||]
-        result.Data.IsSome |> equals true
-        result.Data.Value.SetMoon.IsSome |> equals true
-        result.Data.Value.SetMoon.Value.Id |> equals "1"
-        result.Data.Value.SetMoon.Value.Name |> equals (Some "Tatooine")
-        result.Data.Value.SetMoon.Value.IsMoon |> equals (Some true)
+let ``Should be able to execute a query sending an empty input field``() =
+    let input = Input()
+    SimpleOperation.operation.Run(input)
+    |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
-let ``Should be able to run a mutation synchronously`` () =
-    use context = getContext()
-    MutationOperation.operation.Run(context)
-    |> MutationOperation.validateResult
+let ``Should be able to execute a query using context, sending an empty input field``() =
+    let input = Input()
+    SimpleOperation.operation.Run(context, input)
+    |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
-let ``Should be able to run a mutation asynchronously`` () =
-    use context = getContext()
-    MutationOperation.operation.AsyncRun(context)
+let ``Should be able to execute a query without sending an empty input field asynchornously``() =
+    let input = Input()
+    SimpleOperation.operation.AsyncRun(input)
     |> Async.RunSynchronously
-    |> MutationOperation.validateResult
-
-module FileOperation =
-    let fileop = Provider.Operation<"operation.graphql">()
-    type Operation = Provider.Operations.FileOp
-    let validateResult (result : Operation.OperationResult) =
-        result.CustomData.ContainsKey("documentId") |> equals true
-        result.Errors |> equals [||]
-        result.Data.IsSome |> equals true
-        result.Data.Value.Hero.IsSome |> equals true
-        result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
-        result.Data.Value.Hero.Value.Friends |> equals expectedFriends
-        result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
-        let actual = normalize <| sprintf "%A" result.Data
-        let expected = normalize <| """Some
-            {Hero = Some
-            {AppearsIn = [|NewHope; Empire; Jedi|];
-            Friends = [|Some {HomePlanet = <null>;
-            Name = Some "Han Solo";};
-            Some {HomePlanet = Some "Alderaan";
-            Name = Some "Leia Organa";};
-            Some {Name = Some "C-3PO";
-            PrimaryFunction = Some "Protocol";};
-            Some {Name = Some "R2-D2";
-            PrimaryFunction = Some "Astromech";}|];
-            HomePlanet = Some "Tatooine";
-            Name = Some "Luke Skywalker";};}"""
-        actual |> equals expected
+    |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
-let ``Should be able to run a query from a query file`` () =
-    use context = getContext()
-    FileOperation.fileop.Run(context)
-    |> FileOperation.validateResult
+let ``Should be able to execute a query using context, sending an empty input field, asynchronously``() =
+    let input = Input()
+    SimpleOperation.operation.AsyncRun(context, input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query sending an input field with single field``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let input = Input(single)
+    SimpleOperation.operation.Run(input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with single field``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let input = Input(single)
+    SimpleOperation.operation.Run(context, input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query without sending an an input field with single field asynchornously``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let input = Input(single)
+    SimpleOperation.operation.AsyncRun(input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with single field, asynchronously``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let input = Input(single)
+    SimpleOperation.operation.AsyncRun(context, input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query sending an input field with list field``() =
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(list)
+    SimpleOperation.operation.Run(input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with list field``() =
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(list)
+    SimpleOperation.operation.Run(context, input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query without sending an an input field with list field asynchornously``() =
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(list)
+    SimpleOperation.operation.AsyncRun(input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with list field, asynchronously``() =
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(list)
+    SimpleOperation.operation.AsyncRun(context, input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query sending an input field with single and list fields``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(single, list)
+    SimpleOperation.operation.Run(input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with single and list fields``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(single, list)
+    SimpleOperation.operation.Run(context, input)
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query without sending an an input field with single and list fields asynchornously``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(single, list)
+    SimpleOperation.operation.AsyncRun(input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)
+
+[<Fact>]
+let ``Should be able to execute a query using context, sending an an input field with single and list fields, asynchronously``() =
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let input = Input(single, list)
+    SimpleOperation.operation.AsyncRun(context, input)
+    |> Async.RunSynchronously
+    |> SimpleOperation.validateResult (Some input)

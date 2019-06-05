@@ -169,9 +169,7 @@ module internal ProvidedRecord =
                                     |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
                                 let missing = missingTypes |> List.map (fun _ -> <@@ null @@>)
                                 let args = coerced @ missing
-                                let mapper (name : string, value : Expr) =
-                                    let value = Expr.Coerce(value, typeof<obj>)
-                                    <@@ { RecordProperty.Name = name; Value = %%value } @@>
+                                let mapper (name : string, value : Expr) = <@@ { RecordProperty.Name = name; Value = %%value } @@>
                                 List.zip names args |> List.map mapper
                             Expr.NewArray(typeof<RecordProperty>, args)
                         Expr.NewObject(ctor, [Expr.Value(name); properties])
@@ -217,11 +215,6 @@ module internal ProvidedRecord =
         let name = metadata.Name.FirstCharUpper()
         let tdef = ProvidedRecordTypeDefinition(name, Some baseType)
         tdef
-
-    let newObjectExpr(properties : (string * obj) list) =
-        let names = properties |> List.map fst
-        let values = properties |> List.map snd
-        Expr.NewObject(ctor, [ <@@ List.zip names values @@> ])
 
 #nowarn "10001"
 
@@ -277,9 +270,11 @@ module internal ProvidedOperation =
                     <@@ let rec mapper (value : obj) =
                             match value with
                             | null -> null
+                            | :? string -> value // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
                             | :? EnumBase as v -> v.GetValue() |> box
-                            | OptionValue v -> v |> Option.map mapper |> box
                             | :? RecordBase as v -> v.ToDictionary() |> box
+                            | OptionValue v -> v |> Option.map mapper |> box
+                            | EnumerableValue v -> v |> Array.map mapper |> box
                             | v -> v
                         (name, mapper %%value) @@>
                 let args =
@@ -444,34 +439,32 @@ module internal Provider =
                         let astFields = info.Fields
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
                         { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
+                    let fragmentProperties =
+                        astFields
+                        |> List.choose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> Some f | _ -> None)
+                        |> List.groupBy (fun field -> field.TypeCondition)
+                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
+                    let baseProperties =
+                        astFields
+                        |> List.filter (function | TypeField _ -> true | FragmentField f when f.TypeCondition = tref.Name.Value -> true | _ -> false)
+                        |> List.map (getPropertyMetadata tref.Name.Value)
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                         providedTypes := (!providedTypes).Add((path, tref.Name.Value), tdef)
                         includeType path tdef
-                        let properties =
-                            astFields
-                            |> List.filter (function | TypeField _ -> true | _ -> false)
-                            |> List.map (getPropertyMetadata tref.Name.Value)
-                        ProvidedRecord.makeProvidedType(tdef, properties)
-                    let fragmentProperties =
-                        astFields
-                        |> List.choose (function FragmentField f -> Some f | _ -> None)
-                        |> List.groupBy (fun field -> field.TypeCondition)
-                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
-                    let fragmentTypes =
-                        let createFragmentType (typeName, properties) =
-                            let itype =
-                                if schemaTypes.ContainsKey(typeName)
-                                then schemaTypes.[typeName]
-                                else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
-                            let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
-                            let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
-                            includeType path tdef
-                            ProvidedRecord.makeProvidedType(tdef, properties)
-                        fragmentProperties
-                        |> List.map createFragmentType
-                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes := (!providedTypes).Add((path, fragmentType.Name), fragmentType))
+                        ProvidedRecord.makeProvidedType(tdef, baseProperties)
+                    let createFragmentType (typeName, properties) =
+                        let itype =
+                            if schemaTypes.ContainsKey(typeName)
+                            then schemaTypes.[typeName]
+                            else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
+                        let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
+                        let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
+                        providedTypes := (!providedTypes).Add((path, typeName), tdef)
+                        includeType path tdef
+                        ProvidedRecord.makeProvidedType(tdef, properties) |> ignore
+                    fragmentProperties |> List.iter createFragmentType
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes, rootWrapper
