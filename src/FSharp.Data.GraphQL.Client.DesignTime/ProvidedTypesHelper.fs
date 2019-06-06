@@ -58,11 +58,11 @@ module internal QuotationHelpers =
         caseInfo.DeclaringType, Expr.NewUnionCase(caseInfo, coerceValues fieldTypeLookup fields)
 
     and recordExpr instance = 
-        let tpy = instance.GetType()
+        let typ = instance.GetType()
         let fields = FSharpValue.GetRecordFields(instance)
-        let fieldInfo = FSharpType.GetRecordFields(tpy)
+        let fieldInfo = FSharpType.GetRecordFields(typ)
         let fieldTypeLookup indx = fieldInfo.[indx].PropertyType
-        tpy, Expr.NewRecord(instance.GetType(), coerceValues fieldTypeLookup fields)
+        typ, Expr.NewRecord(instance.GetType(), coerceValues fieldTypeLookup fields)
 
     and arrayExpr (instance : 'a array) =
         let typ = typeof<'a>
@@ -445,9 +445,12 @@ module internal Provider =
                         |> List.groupBy (fun field -> field.TypeCondition)
                         |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
                     let baseProperties =
-                        astFields
-                        |> List.filter (function | TypeField _ -> true | FragmentField f when f.TypeCondition = tref.Name.Value -> true | _ -> false)
-                        |> List.map (getPropertyMetadata tref.Name.Value)
+                        astFields 
+                        |> List.choose (fun x ->
+                            match x with
+                            | TypeField _ -> Some (getPropertyMetadata tref.Name.Value x)
+                            | FragmentField f when f.TypeCondition = tref.Name.Value -> Some (getPropertyMetadata tref.Name.Value x)
+                            | _ -> None)
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
@@ -589,9 +592,10 @@ module internal Provider =
             | Some ptype -> ptype
             | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
         schemaTypes
-        |> Seq.map (fun kvp -> kvp.Value)
-        |> Seq.filter (fun itype -> itype.Kind = TypeKind.INTERFACE || itype.Kind = TypeKind.UNION)
-        |> Seq.map (fun itype -> getProvidedType itype.Name, (possibleTypes itype))
+        |> Seq.choose (fun kvp -> 
+            if kvp.Value.Kind = TypeKind.INTERFACE || kvp.Value.Kind = TypeKind.UNION 
+            then Some (getProvidedType kvp.Value.Name, (possibleTypes kvp.Value))
+            else None)
         |> Seq.iter (fun (itype, ptypes) -> ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         !providedTypes
 

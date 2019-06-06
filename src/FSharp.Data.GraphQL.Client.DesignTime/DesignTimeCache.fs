@@ -69,9 +69,8 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
         }
     
     let checkExpiration () =
-        store 
-        |> Seq.filter CacheExpiration.isExpired
-        |> Seq.map (fun entry -> entry.Key)
+        store
+        |> Seq.choose (fun entry -> if CacheExpiration.isExpired entry then Some entry.Key else None)
         |> Seq.iter store.Remove
 
     let newCacheEntry key value =

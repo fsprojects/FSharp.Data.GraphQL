@@ -122,8 +122,10 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | EnumerableValue v -> v |> Array.map mapper |> box
             | _ -> v
         x.GetProperties()
-        |> Seq.filter (fun p -> not (isNull p.Value))
-        |> Seq.map (fun p -> p.Name, mapper p.Value)
+        |> Seq.choose (fun p -> 
+            if not (isNull p.Value)
+            then Some (p.Name, mapper p.Value)
+            else None)
         |> dict
 
     override x.ToString() =
@@ -179,8 +181,10 @@ module internal Types =
         let isIntrospectionType (name : string) =
             schemaTypeNames |> Array.contains name
         introspection.Types
-        |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
-        |> Array.map (fun t -> t.Name, t)
+        |> Array.choose (fun t ->
+            if not (isIntrospectionType t.Name) && not (isScalarType t.Name)
+            then Some(t.Name, t)
+            else None)
         |> Map.ofArray
 
     let makeOption (t : Type) = typedefof<_ option>.MakeGenericType(t)
