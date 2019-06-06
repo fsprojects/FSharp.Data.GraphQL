@@ -41,12 +41,12 @@ module Schema =
             name = "OutputField",
             description = "The output for a field input.",
             fields =
-                [ Define.AutoField("string", String, description = "A string value.") 
+                [ Define.Field("string", String, resolve = (fun _ x -> x.String), description = "A string value.") 
                   Define.AutoField("int", Int, description = "An integer value.")
                   Define.AutoField("stringOption", Nullable String, description = "A string option value.")
                   Define.AutoField("intOption", Nullable Int, description = "An integer option value.")
-                  Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = [])
-                  Define.AutoField("uri", Uri, description = "An URI value.") ])
+                  Define.AutoField("uri", Uri, description = "An URI value.")
+                  Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
 
     let OutputType =
         Define.Object<Input>(
@@ -57,17 +57,21 @@ module Schema =
                   Define.AutoField("list", Nullable (ListOf OutputFieldType), description = "A list of output fields.") ])
 
     let QueryType =
+        let mapper (ctx : ResolveFieldContext) (_ : Root) : Input option =
+            match ctx.TryArg("input") with
+            | Some input -> input
+            | None -> None
         Define.Object<Root>(
             name = "Query",
             description = "The query type.",
             fields = 
                 [ Define.Field(
                     name = "echo",
-                    typedef = OutputType,
+                    typedef = Nullable OutputType,
                     description = "Enters an input type and get it back.",
-                    args = [ Define.Input("input", InputType, description = "The input to be echoed as an output.") ],
-                    resolve = (fun ctx _ -> ctx.Arg("input"))) ])
+                    args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
+                    resolve = mapper) ])
 
-    let schema = Schema(QueryType)
+    let schema : ISchema<Root> = upcast Schema(QueryType)
 
     let executor = Executor(schema)

@@ -219,7 +219,8 @@ Target.create "Build" (fun _ ->
                         CustomParams = Some "--no-restore" } })))
 
 /// The path to the .NET CLI executable.
-let dotNetCliExe = DotNet.Options.Create().DotNetCliPath
+let dotNetCliExe = 
+    DotNet.Options.Create().DotNetCliPath
 
 Target.create "RunTests" (fun _ ->
     let restore =
@@ -238,17 +239,17 @@ Target.create "RunTests" (fun _ ->
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "--no-build -v=normal" } }) project
-    let startTestServer () =
+    let startServer serverProject =
         use waiter = new ManualResetEvent(false)
+        let serverProjectDir = Path.GetDirectoryName(serverProject)
+        let projectName = Path.GetFileNameWithoutExtension(serverProject)
+        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> (projectName + ".dll")
         let stdHandler (msg : string) =
             let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
             if msg.ToLowerInvariant().Contains(expectedMessage)
             then waiter.Set() |> ignore
         let errHandler (msg : string) =
-            failwithf "Error while starting Giraffe server. %s" msg
-        let serverProjectDir = "samples" </> "star-wars-api"
-        let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
-        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.dll"
+            failwithf "Error while starting %s server. %s" msg projectName
         restore serverProject
         build serverProject
         CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]
@@ -258,9 +259,10 @@ Target.create "RunTests" (fun _ ->
         |> Proc.start
         |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
         if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
-        then failwith "Timeout while waiting for Giraffe server to run. Can not run integration tests."
+        then failwithf "Timeout while waiting for %s server to run. Can not run integration tests." projectName
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    startTestServer ()
+    startServer ("samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj")
+    startServer ("tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj")
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
 // --------------------------------------------------------------------------------------

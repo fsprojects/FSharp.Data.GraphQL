@@ -4,7 +4,6 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.IO
 open System.Security.Cryptography
 open FSharp.Core
 open System.Reflection
@@ -135,45 +134,6 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
-    // TODO: this function was created in order to generate overloads for the record type constructors.
-    // It could receive a review in the future to see if improvements can be done to generate all
-    // combinations of constructor overloads.
-    let combine (input : 'T list) =
-        let rec helper (input : 'T list) (startIndex : int) (length : int) =
-            let mutable combinations = List<List<'T>>()
-            if length = 2
-            then
-                let mutable combinationsIndex = 0
-                for inputIndex = startIndex to (input.Length - 1) do
-                    for i = (inputIndex + 1) to (input.Length - 1) do
-                        combinations.Add(List<'T>())
-                        combinations.[combinationsIndex].Add(input.[inputIndex])
-                        while combinations.[combinationsIndex].Count < length do
-                            combinations.[combinationsIndex].Add(input.[i])
-                        combinationsIndex <- combinationsIndex + 1
-                combinations
-            else
-                let combinationsOfMore = List<List<'T>>()
-                for i = startIndex to (input.Length - length) do
-                    combinations <- helper input (i + 1) (length - 1)
-                    for index = 0 to (combinations.Count - 1) do
-                        combinations.[index].Insert(0, input.[i])
-                    for y = 0 to (combinations.Count - 1) do
-                        combinationsOfMore.Add(combinations.[y])
-                combinationsOfMore
-        let output = List<List<'T>>()
-        output.Add(List<'T>())
-        for i = 0 to (input.Length - 1) do
-            let item = List<'T>()
-            item.Add(input.[i])
-            output.Add(item)
-        for i = 2 to input.Length do
-            helper input 0 i |> output.AddRange
-        output
-        |> Seq.map List.ofSeq
-        |> List.ofSeq
-        |> List.map (fun x -> x, List.except x input)
-
     let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
         let propertyMapper (metadata : RecordPropertyMetadata) : MemberInfo =
@@ -192,9 +152,8 @@ module internal ProvidedRecord =
             tdef.AddMembersDelayed(fun _ ->
                 let properties = propertiesGetter ()
                 let mapper (name : string, alias : string option, t : Type) = Option.defaultValue name alias, t
-                let requiredProperties = properties |> List.filter (fun (_, _, t) -> not (isOption t)) |> List.map mapper
-                let optionalProperties = properties |> List.filter (fun (_, _, t) -> isOption t) |> List.map mapper
-                combine optionalProperties
+                let (optionalProperties, requiredProperties) = properties |> List.map mapper |> List.partition (fun (_, t) -> isOption t)
+                List.combine optionalProperties
                 |> List.map (fun (optionalProperties, missingProperties) ->
                     let constructorProperties = requiredProperties @ optionalProperties
                     let allProperties = constructorProperties @ missingProperties
@@ -210,9 +169,7 @@ module internal ProvidedRecord =
                                     |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
                                 let missing = missingTypes |> List.map (fun _ -> <@@ null @@>)
                                 let args = coerced @ missing
-                                let mapper (name : string, value : Expr) =
-                                    let value = Expr.Coerce(value, typeof<obj>)
-                                    <@@ { RecordProperty.Name = name; Value = %%value } @@>
+                                let mapper (name : string, value : Expr) = <@@ { RecordProperty.Name = name; Value = %%value } @@>
                                 List.zip names args |> List.map mapper
                             Expr.NewArray(typeof<RecordProperty>, args)
                         Expr.NewObject(ctor, [Expr.Value(name); properties])
@@ -259,11 +216,6 @@ module internal ProvidedRecord =
         let tdef = ProvidedRecordTypeDefinition(name, Some baseType)
         tdef
 
-    let newObjectExpr(properties : (string * obj) list) =
-        let names = properties |> List.map fst
-        let values = properties |> List.map snd
-        Expr.NewObject(ctor, [ <@@ List.zip names values @@> ])
-
 #nowarn "10001"
 
 module internal ProvidedOperationResult =
@@ -278,21 +230,8 @@ module internal ProvidedOperationResult =
             prop)
         tdef
 
-module internal ProvidedSubscriptionResult =
-    let makeProvidedType(operationType : Type) =
-        let tdef = ProvidedTypeDefinition("SubscriptionResult", Some typeof<SubscriptionResultBase>, nonNullable = true)
-        tdef.AddMemberDelayed(fun _ ->
-            let getterCode (args : Expr list) =
-                <@@ let this = %%args.[0] : SubscriptionResultBase
-                    this.RawData @@>
-            let prop = ProvidedProperty("Data", operationType, getterCode)
-            prop.AddXmlDoc("Contains the immediate data returned by the subscription on the server.")
-            prop)
-        tdef
-
 module internal ProvidedOperation =
-    let makeProvidedType(userQuery : string,
-                         actualQuery : string,
+    let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
                          operationFieldsExpr : Expr,
@@ -305,7 +244,6 @@ module internal ProvidedOperation =
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
             let rtdef = ProvidedOperationResult.makeProvidedType(operationType)
-            let stdef = ProvidedSubscriptionResult.makeProvidedType(operationType)
             let variables =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
@@ -326,33 +264,22 @@ module internal ProvidedOperation =
                         let (name, t) = mapVariable variableName itype
                         (name, Types.unwrapOption t)
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-            let varExprMapper (variables : (string * Type) list) (isSubscription : bool) (args : Expr list) =
+            let varExprMapper (variables : (string * Type) list) (args : Expr list) =
                 let exprMapper (name : string, value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
                     <@@ let rec mapper (value : obj) =
                             match value with
                             | null -> null
+                            | :? string -> value // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
                             | :? EnumBase as v -> v.GetValue() |> box
-                            | OptionValue v -> v |> Option.map mapper |> box
                             | :? RecordBase as v -> v.ToDictionary() |> box
+                            | OptionValue v -> v |> Option.map mapper |> box
+                            | EnumerableValue v -> v |> Array.map mapper |> box
                             | v -> v
                         (name, mapper %%value) @@>
                 let args =
                     let names = variables |> List.map fst
-                    let args = 
-                        match contextInfo, isSubscription with
-                        | Some _, false ->
-                            match args with
-                            | _ :: tail when tail.Length > 1 -> List.take (tail.Length - 1) tail
-                            | _ -> []
-                        | None, false ->
-                            match args with
-                            | _ :: _ :: tail when tail.Length > 0 -> tail
-                            | _ -> []
-                        | _, true ->
-                            match args with
-                            | _ :: tail  when tail.Length > 3 ->  List.take (tail.Length - 3) tail
-                            | _ -> []
+                    let args = List.skip (args.Length - variables.Length) args
                     List.zip names args |> List.map exprMapper
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
@@ -363,117 +290,87 @@ module internal ProvidedOperation =
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
-            let varprm = 
-                let mapper (name: string, t : Type) =
-                    match t with
-                    | Option t -> ProvidedParameter(name, t, optionalValue = null)
-                    | _ -> ProvidedParameter(name, t)
-                let required = variables |> List.filter (fun (_, t) -> not (isOption t)) |> List.map mapper
-                let optional = variables |> List.filter (fun (_, t) -> isOption t) |> List.map mapper
-                required @ optional
-            let rmprm =
+            // Method variables are the ones that will be on each overload of the Run/AsyncRun methods
+            // Overloads are made from the set of all required variables, plus a combination of optional variables
+            // Each possible combination result in an overload (required + one possible combination)
+            let varprm =
+                let (optionalVariables, requiredVariables) = variables |> List.partition (fun (_, t) -> isOption t)
+                List.combine optionalVariables |> List.map (fun (optionalVariables, _) ->
+                    let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
+                    requiredVariables @ optionalVariables)
+            let mprm =
+                let varprmctx = varprm |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
                 match contextInfo with
-                | Some _ -> varprm @ [ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>, optionalValue = null)]
-                | None -> ProvidedParameter("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: varprm
-            let smprm =
-                let handler = ProvidedParameter("subscriptionHandler", typeof<IGraphQLSubscriptionHandler>, optionalValue = null)
-                let connectionParams = ProvidedParameter("connectionParams", typeof<seq<string * obj>>, optionalValue = null)
-                let serverUrl =
-                    match contextInfo with
-                    | Some info -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = info.ServerUrl)
-                    | None ->ProvidedParameter("serverUrl", typeof<string>)
-                varprm @ [serverUrl; connectionParams; handler]
+                | Some _ -> varprm @ varprmctx
+                | None -> varprmctx
             let shouldUseMultipartRequest = uploadInputTypeName.IsSome
-            let rundef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables false args
-                    let argsContext = 
-                        match contextInfo with
-                        | Some _ -> args.[args.Length - 1]
-                        | None -> args.[1]
-                    <@@ let argsContext = %%argsContext : GraphQLProviderRuntimeContext
-                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
-                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
-                        let request =
-                            { ServerUrl = context.ServerUrl
-                              HttpHeaders = context.HttpHeaders
-                              OperationName = Option.ofObj operationName
-                              Query = actualQuery
-                              Variables = %%variables }
-                        let response = 
-                            if shouldUseMultipartRequest
-                            then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
-                            else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                        let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                        // If the user does not provide a context, we should dispose the default one after running the query
-                        if isDefaultContext then (context :> IDisposable).Dispose()
-                        OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
-                let mdef = ProvidedMethod("Run", rmprm, rtdef, invoker)
-                mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
-                mdef
-            let subdef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables true args
-                    let handler = args.[args.Length - 1]
-                    let connectionParams = args.[args.Length - 2]
-                    let serverUrl = args.[args.Length - 3]
-                    <@@ let argsHandler = %% handler : IGraphQLSubscriptionHandler
-                        let isDefaultHandler = Object.ReferenceEquals(argsHandler, null)
-                        let handler : IGraphQLSubscriptionHandler = 
-                            if isDefaultHandler
-                            then upcast new GraphQLOverWebSocketSubscriptionHandler()
-                            else argsHandler
-                        let connectionParams =
-                            match %%connectionParams : seq<string * obj> with
-                            | null -> [||]
-                            | p -> Array.ofSeq p
-                        let serverUrl = %%serverUrl : string
-                        let connection = handler.Connect(serverUrl, connectionParams)
-                        let request =
-                            { OperationName = Option.ofObj operationName
-                              Query = userQuery
-                              Variables = %%variables }
-                        let response = Tracer.runAndMeasureExecutionTime "Ran a GraphQL subscription" (fun _ -> handler.Subscribe(request))
-                        let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response.Data)
-                        let deferredResponseJson = Tracer.runAndMeasureExecutionTime "Parsed a deferred GraphQL response to a JsonValue" (fun _ -> response.Deferred |> Observable.map JsonValue.Parse)
-                        // If the user does not provide a context, we should dispose the default one after running the query
-                        if isDefaultHandler then connection.Dispose()
-                        SubscriptionResultBase(responseJson, deferredResponseJson, %%operationFieldsExpr, operationTypeName) @@>
-                let mdef = ProvidedMethod("Subscribe", smprm, stdef, invoker)
-                mdef.AddXmlDoc("Subscribe to the operation on the server.")
-                mdef
-            let arundef = 
-                let invoker (args : Expr list) =
-                    let operationName = Option.toObj operationDefinition.Name
-                    let variables = varExprMapper variables false args
-                    let argsContext = 
-                        match contextInfo with
-                        | Some _ -> args.[args.Length - 1]
-                        | None -> args.[1]
-                    <@@ let argsContext = %%argsContext : GraphQLProviderRuntimeContext
-                        let isDefaultContext = Object.ReferenceEquals(argsContext, null)
-                        let context = if isDefaultContext then %%defaultContextExpr else argsContext
-                        let request =
-                            { ServerUrl = context.ServerUrl
-                              HttpHeaders = context.HttpHeaders
-                              OperationName = Option.ofObj operationName
-                              Query = actualQuery
-                              Variables = %%variables }
-                        async {
-                            let! response = 
+            let rundefs : MemberInfo list = 
+                let operationName = Option.toObj operationDefinition.Name
+                mprm |> List.map (fun varprm ->
+                    // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
+                    let variables = varprm |> List.filter (fun (name, _) -> name <> "runtimeContext")
+                    let invoker (args : Expr list) =
+                        // First arg is the operation instance, second should be the context, if the overload has one
+                        // We determine it by calculating the difference in length of variables and arguments
+                        let args, isDefaultContext, context = 
+                            if args.Length - variables.Length = 2
+                            then List.skip 2 args, false, args.[1]
+                            else args.Tail, true, defaultContextExpr
+                        let variables = varExprMapper variables args
+                        <@@ 
+                            let context = %%context : GraphQLProviderRuntimeContext
+                            let request =
+                                { ServerUrl = context.ServerUrl
+                                  HttpHeaders = context.HttpHeaders
+                                  OperationName = Option.ofObj operationName
+                                  Query = actualQuery
+                                  Variables = %%variables }
+                            let response = 
                                 if shouldUseMultipartRequest
-                                then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
-                                else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                                then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
+                                else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
-                        } @@>
-                let mdef = ProvidedMethod("AsyncRun", rmprm, Types.makeAsync rtdef, invoker)
-                mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
-                mdef
+                            OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                    let mprm = varprm |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                    let mdef = ProvidedMethod("Run", mprm, rtdef, invoker)
+                    mdef.AddXmlDoc("Executes the operation on the server and fetch its results.")
+                    upcast mdef)
+            let arundefs : MemberInfo list = 
+                let operationName = Option.toObj operationDefinition.Name
+                mprm |> List.map (fun varprm ->
+                    // We rebuild our variables by taking the name and type of each parameter (and removing the context parameter)
+                    let variables = varprm |> List.filter (fun (name, _) -> name <> "runtimeContext")
+                    let invoker (args : Expr list) =
+                        // First arg is the operation instance, second should be the context, if the overload has one
+                        // We determine it by calculating the difference in length of variables and arguments
+                        let args, isDefaultContext, context = 
+                            if args.Length - variables.Length = 2
+                            then List.skip 2 args, false, args.[1]
+                            else args.Tail, true, defaultContextExpr
+                        let variables = varExprMapper variables args // Need to remove first arg (opration instance)
+                        <@@ let context = %%context : GraphQLProviderRuntimeContext
+                            let request =
+                                { ServerUrl = context.ServerUrl
+                                  HttpHeaders = context.HttpHeaders
+                                  OperationName = Option.ofObj operationName
+                                  Query = actualQuery
+                                  Variables = %%variables }
+                            async {
+                                let! response = 
+                                    if shouldUseMultipartRequest
+                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
+                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                                // If the user does not provide a context, we should dispose the default one after running the query
+                                if isDefaultContext then (context :> IDisposable).Dispose()
+                                return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
+                            } @@>
+                    let mprm = varprm |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                    let mdef = ProvidedMethod("AsyncRun", mprm, Types.makeAsync rtdef, invoker)
+                    mdef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
+                    upcast mdef)
             let prdef =
                 let invoker (args : Expr list) =
                     <@@ let responseJson = JsonValue.Parse %%args.[1]
@@ -482,12 +379,32 @@ module internal ProvidedOperation =
                 let mdef = ProvidedMethod("ParseResult", prm, rtdef, invoker)
                 mdef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
                 mdef
-            let members : MemberInfo list = [rtdef; stdef; rundef; arundef; prdef; subdef]
+            let members : MemberInfo list = [rtdef; prdef] @ rundefs @ arundefs
             members)
         tdef
 
 module internal Provider =
     let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+        let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
+        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+        let rootWrapper = generateWrapper "Types"
+        wrappersByPath.Add([], rootWrapper)
+        let rec getWrapper (path : string list) =
+            if wrappersByPath.ContainsKey path
+            then wrappersByPath.[path]
+            else
+                let wrapper = generateWrapper (path.Head.FirstCharUpper())
+                let upperWrapper =
+                    let path = path.Tail
+                    if wrappersByPath.ContainsKey(path)
+                    then wrappersByPath.[path]
+                    else getWrapper path
+                upperWrapper.AddMember(wrapper)
+                wrappersByPath.Add(path, wrapper)
+                wrapper
+        let includeType (path : string list) (t : ProvidedTypeDefinition) =
+            let wrapper = getWrapper path
+            wrapper.AddMember(t)
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
@@ -507,7 +424,7 @@ module internal Provider =
                 | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
                 if (!providedTypes).ContainsKey(path, tref.Name.Value)
-                then upcast (!providedTypes).[path, tref.Name.Value]
+                then Types.makeOption (!providedTypes).[path, tref.Name.Value]
                 else
                     let ifields typeName =
                         if schemaTypes.ContainsKey(typeName)
@@ -522,35 +439,35 @@ module internal Provider =
                         let astFields = info.Fields
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
                         { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
+                    let fragmentProperties =
+                        astFields
+                        |> List.choose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> Some f | _ -> None)
+                        |> List.groupBy (fun field -> field.TypeCondition)
+                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
+                    let baseProperties =
+                        astFields
+                        |> List.filter (function | TypeField _ -> true | FragmentField f when f.TypeCondition = tref.Name.Value -> true | _ -> false)
+                        |> List.map (getPropertyMetadata tref.Name.Value)
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                         providedTypes := (!providedTypes).Add((path, tref.Name.Value), tdef)
-                        let properties =
-                            astFields
-                            |> List.filter (function | TypeField _ -> true | _ -> false)
-                            |> List.map (getPropertyMetadata tref.Name.Value)
-                        ProvidedRecord.makeProvidedType(tdef, properties)
-                    let fragmentProperties =
-                        astFields
-                        |> List.choose (function FragmentField f -> Some f | _ -> None)
-                        |> List.groupBy (fun field -> field.TypeCondition)
-                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
-                    let fragmentTypes =
-                        let createFragmentType (typeName, properties) =
-                            let itype =
-                                if schemaTypes.ContainsKey(typeName)
-                                then schemaTypes.[typeName]
-                                else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
-                            let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
-                            let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
-                            ProvidedRecord.makeProvidedType(tdef, properties)
-                        fragmentProperties
-                        |> List.map createFragmentType
-                    fragmentTypes |> List.iter (fun fragmentType -> providedTypes := (!providedTypes).Add((path, fragmentType.Name), fragmentType))
+                        includeType path tdef
+                        ProvidedRecord.makeProvidedType(tdef, baseProperties)
+                    let createFragmentType (typeName, properties) =
+                        let itype =
+                            if schemaTypes.ContainsKey(typeName)
+                            then schemaTypes.[typeName]
+                            else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
+                        let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
+                        let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
+                        providedTypes := (!providedTypes).Add((path, typeName), tdef)
+                        includeType path tdef
+                        ProvidedRecord.makeProvidedType(tdef, properties) |> ignore
+                    fragmentProperties |> List.iter createFragmentType
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes
+        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes, rootWrapper
 
     let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
@@ -570,9 +487,7 @@ module internal Provider =
         let ofInputFieldType (field : IntrospectionInputVal) = { field with Type = field.Type.OfType.Value }
         let rec resolveFieldMetadata (field : IntrospectionField) : RecordPropertyMetadata =
             match field.Type.Kind with
-            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> 
-                if field.Type.OfType.Value.Name.IsSome && field.Type.OfType.Value.Name.Value = "File" then failwithf "%A" (ofFieldType field |> resolveFieldMetadata)
-                ofFieldType field |> resolveFieldMetadata |> unwrapOption
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> resolveFieldMetadata |> unwrapOption
             | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType =
@@ -693,7 +608,7 @@ module internal Provider =
             let uploadInputTypeName = 
                 let name : string = unbox args.[3]
                 match name with
-                | "" -> None
+                | null | "" -> None
                 | _ -> Some name
             let maker =
                 lazy
@@ -749,14 +664,15 @@ module internal Provider =
                                 let queryAst = Parser.parse query
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
-                                    | "" -> 
-                                        match queryAst.Definitions with
-                                        | opdef::_ -> opdef.Name
-                                        | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no definitions."
+                                    | null | "" -> 
+                                        let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
+                                        match operationDefinitions with
+                                        | opdef :: _ -> opdef.Name
+                                        | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
                                     | x -> Some x
                                 let explicitOperationTypeName : TypeName option = 
                                     match args.[3] :?> string with
-                                    | "" -> None   
+                                    | null | "" -> None   
                                     | x -> Some x    
                                 let operationDefinition =
                                     queryAst.Definitions
@@ -789,7 +705,6 @@ module internal Provider =
                                 let schemaTypes = Types.getSchemaTypes(schema)
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
-                                let userQuery = queryAst.ToQueryString().Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
                                     | Some name, _ -> 
@@ -803,28 +718,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
-                                let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
-                                let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-                                let rootWrapper = generateWrapper "Types"
-                                wrappersByPath.Add([], rootWrapper)
-                                let rec resolveWrapper (path : string list) =
-                                    if wrappersByPath.ContainsKey path
-                                    then wrappersByPath.[path]
-                                    else
-                                        let wrapper = generateWrapper (path.Head.FirstCharUpper())
-                                        let upperWrapper =
-                                            let path = path.Tail
-                                            if wrappersByPath.ContainsKey(path)
-                                            then wrappersByPath.[path]
-                                            else resolveWrapper path
-                                        upperWrapper.AddMember(wrapper)
-                                        wrappersByPath.Add(path, wrapper)
-                                        wrapper
-                                let includeType (path : string list) (t : ProvidedTypeDefinition) =
-                                    let wrapper = resolveWrapper path
-                                    wrapper.AddMember(t)
-                                operationTypes |> Map.iter (fun (path, _) t -> includeType path t)
+                                let (operationType, operationTypes, rootWrapper) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
                                     | Some name -> name
@@ -900,7 +794,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(userQuery, actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
                                 odef.AddMember(rootWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)

@@ -14,6 +14,10 @@ open Newtonsoft.Json.Linq
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+    let private converters : JsonConverter [] = [| OptionConverter() |]
+    let private jsonSettings = jsonSerializerSettings converters
+    let private jsonSerializer = jsonSerializer converters
+
     let internalServerError : HttpHandler = setStatusCode 500
 
     let okWithStr str : HttpHandler = setStatusCode 200 >=> text str
@@ -26,8 +30,23 @@ module HttpHandlers =
         setHttpHeader "Content-Type" "application/json"
 
     let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let jsonSettings = jsonSerializerSettings [| OptionConverter() |]
         let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
+
+        let deserialize (data : string) =
+            let getMap (token : JToken) = 
+                let rec mapper (name : string) (token : JToken) =
+                    match name, token.Type with
+                    | "variables", JTokenType.Object -> token.Children<JProperty>() |> Seq.map (fun x -> x.Name, mapper x.Name x.Value) |> Map.ofSeq |> box
+                    | _, JTokenType.Object -> token.ToObject<Input>(jsonSerializer) |> box
+                    | name, JTokenType.Array -> token |> Seq.map (fun x -> mapper name x) |> Array.ofSeq |> box
+                    | _ -> (token :?> JValue).Value
+                token.Children<JProperty>()
+                |> Seq.map (fun x -> x.Name, mapper x.Name x.Value)
+                |> Map.ofSeq
+            if System.String.IsNullOrWhiteSpace(data) 
+            then None
+            else data |> JToken.Parse |> getMap |> Some
+
         let json =
             function
             | Direct (data, _) ->
@@ -38,31 +57,36 @@ module HttpHandlers =
             | Stream data ->  
                 data |> Observable.add(fun d -> printfn "Subscription data: %s" (serialize d))
                 "{}"
-        let tryParse fieldName (data : byte []) =
-            let raw = Encoding.UTF8.GetString data
-            if System.String.IsNullOrWhiteSpace(raw) |> not
-            then
-                let map = JsonConvert.DeserializeObject<Map<string,string>>(raw)
-                match Map.tryFind fieldName map with
-                | Some s when System.String.IsNullOrWhiteSpace(s) -> None
-                | s -> s
-            else None
-        let mapString (s : string option) =
-            let deserialize = JsonConvert.DeserializeObject<Map<string, obj>>
-            let mapper _ (x : obj) =
-                match x with
-                | :? JObject as x -> box (x.ToObject<Input>(jsonSerializer [| OptionConverter() |]))
-                | _ -> x
-            s |> Option.map (deserialize >> Map.map mapper)
-        let removeWhitespacesAndLineBreaks (str : string) = 
-            str.Trim().Replace("\r\n", " ")
+        
+        let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace("\r\n", " ")
+
         let readStream (s : Stream) =
             use ms = new MemoryStream(4096)
             s.CopyTo(ms)
             ms.ToArray()
-        let body = readStream ctx.Request.Body
-        let query = body |> tryParse "query"
-        let variables = body |> tryParse "variables" |> mapString
+        
+        let data = Encoding.UTF8.GetString(readStream ctx.Request.Body) |> deserialize
+        
+        let query =
+            data |> Option.bind (fun data ->
+                if data.ContainsKey("query")
+                then
+                    match data.["query"] with
+                    | :? string as x -> Some x
+                    | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
+                else None)
+        
+        let variables =
+            data |> Option.bind (fun data ->
+                if data.ContainsKey("variables")
+                then
+                    match data.["variables"] with
+                    | null -> None
+                    | :? string as x -> deserialize x
+                    | :? Map<string, obj> as x -> Some x
+                    | _ -> failwith "Failure deserializing response. Could not read variables - it is not a object in the request."
+                else None)
+        
         match query, variables  with
         | Some query, Some variables ->
             printfn "Received query: %s" query

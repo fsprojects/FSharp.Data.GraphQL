@@ -12,3 +12,5 @@ let equals (expected : 'T) (actual : 'T) =
 
 let hasItems (seq : seq<'T>) =
     Assert.True(Seq.length seq > 0)
+
+let map fn x = fn x

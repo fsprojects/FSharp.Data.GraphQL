@@ -13,7 +13,8 @@
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
-    <Compile Include="RemoteProviderTests.fs" />
+    <Compile Include="SwapiLocalProviderTests.fs" />
+    <Compile Include="SwapiRemoteProviderTests.fs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="introspection.json" />

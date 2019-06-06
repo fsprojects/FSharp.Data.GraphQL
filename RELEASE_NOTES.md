@@ -111,4 +111,6 @@
 
 ### 1.0.0-beta90 - May 29 2019
 * Fixing a wrong cast for System.Uri type
-* Adding support for file uploads through [GraphQL Multipart Request Spec](https://github.com/jaydenseric/graphql-multipart-request-spec).
+* Adding support for file uploads through [GraphQL Multipart Request Spec](https://github.com/jaydenseric/graphql-multipart-request-spec)
+* Changing variable parameters of Run/AsyncRun methods to work as overloaded methods instead of one having optional parameters
+* Minor bug fixes
