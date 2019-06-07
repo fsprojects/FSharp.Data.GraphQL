@@ -52,10 +52,10 @@ export default {
     uploads: () => db.get('uploads').value()
   },
   Mutation: {
-    singleUpload: (obj, { file }) => processUpload(file),
-    async multipleUpload(obj, { files }) {
+    singleUpload: (obj, { request }) => processUpload(request.file),
+    async multipleUpload(obj, { request }) {
       const { resolve, reject } = await promisesAll.all(
-        files.map(processUpload)
+        request.files.map(processUpload)
       )
 
       if (reject.length)

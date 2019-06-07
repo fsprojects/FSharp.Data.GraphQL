@@ -5,43 +5,12 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
-open System.IO
 open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
-
-/// The base type for all GraphQLProvider upload types.
-/// Upload types are used in GraphQL multipart request spec, mostly for file uploading features.
-type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStream : bool) =
-    new(bytes : byte [], fileName, ?contentType) = 
-        let stream = new MemoryStream(bytes)
-        match contentType with
-        | Some ct -> new Upload(stream, fileName, ct, true)
-        | None -> new Upload(stream, fileName, ownsStream = true)
-
-    /// Gets the stream associated to this Upload type.
-    member __.Stream = stream
-
-    /// Gets the content type of this Upload type.
-    member __.ContentType =
-        match contentType with
-        | Some ct -> ct
-        | None ->
-            let ext = Path.GetExtension(fileName)
-            match MimeTypes.dict.Force().TryGetValue(ext) with
-            | (true, mime) -> mime
-            | _ -> "application/octet-stream"
-        
-    /// Gets the name of the file which contained on the stream.
-    member __.FileName = fileName
-
-    /// Gets a boolean value indicating if this Upload type owns the stream associated with it.
-    /// If true, it will dispose the stream when this Upload type is disposed.
-    member __.OwnsStream = defaultArg ownsStream false
-
-    interface IDisposable with
-        member x.Dispose() = if x.OwnsStream then x.Stream.Dispose()
+open System.Reflection
+open ReflectionPatterns
 
 /// The connection component for GraphQLClient module.
 type GraphQLClientConnection() =
@@ -155,32 +124,31 @@ module GraphQLClient =
             let client = connection.Client
             let boundary = sprintf "----GraphQLProviderBoundary%s" (Guid.NewGuid().ToString("N"))
             use content = new MultipartContent("form-data", boundary)
-            let variables = 
-                request.Variables
-                |> Array.map (fun (name, value) ->
-                    match value with
-                    | null -> name, null
-                    | :? Upload -> name, null
-                    | :? IEnumerable<Upload> as x -> name, x |> Seq.map (fun _ -> null) |> box
-                    | _ -> name, value)
             let files = 
-                let isUpload (value : obj) =
+                let rec chooser (name: string, value : obj) =
                     match value with
-                    | null -> false
-                    | :? Upload | :? IEnumerable<Upload> -> true
-                    | _ -> false
-                let rec mapper (name: string, value : obj) =
-                    match value with
-                    | :? IEnumerable<Upload> as x -> x |> Seq.mapi (fun ix x -> sprintf "%s.%i" name ix, x) |> Array.ofSeq
-                    | _ -> [| name, value :?> Upload |]
+                    | null | :? string -> None
+                    | :? Upload as x -> Some [|name, x|]
+                    | OptionValue x -> x |> Option.bind (fun x -> chooser (name, x))
+                    | :? IDictionary<string, obj> as x ->
+                        x |> Seq.choose (fun kvp -> chooser (sprintf "%s.%s" name (kvp.Key.FirstCharLower()), kvp.Value)) 
+                          |> Seq.collect id
+                          |> Array.ofSeq
+                          |> Some
+                    | EnumerableValue x -> 
+                        x |> Array.mapi (fun ix x -> chooser (sprintf "%s.%i" name ix, x))
+                          |> Array.choose id
+                          |> Array.collect id
+                          |> Some
+                    | _ -> None
                 request.Variables
-                |> Array.filter (fun (_, value) -> isUpload value)
-                |> Array.collect mapper
+                |> Array.choose chooser
+                |> Array.collect id
             use operationContent = 
                 let variables = 
                     match request.Variables with
                     | null | [||] -> JsonValue.Null
-                    | _ -> variables |> Map.ofArray |> Serialization.toJsonValue
+                    | _ -> request.Variables |> Map.ofArray |> Serialization.toJsonValue
                 let operationName =
                     match request.OperationName with
                     | Some x -> JsonValue.String x

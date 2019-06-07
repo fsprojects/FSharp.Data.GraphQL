@@ -172,6 +172,7 @@ module Serialization =
                 | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? bool as x -> JsonValue.Boolean x
                 | :? Uri as x -> JsonValue.String (x.ToString())
+                | :? Upload -> JsonValue.Null
                 | :? IDictionary<string, obj> as items ->
                     items
                     |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
@@ -184,9 +185,8 @@ module Serialization =
                 | OptionValue (Some x) -> toJsonValue x
                 | EnumValue x -> JsonValue.String x
                 | _ ->
-                    let xtype = t
-                    let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-                    let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
+                    let props = t.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+                    let items = props |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
                     JsonValue.Record items)
 
     let serializeRecord (x : obj) =

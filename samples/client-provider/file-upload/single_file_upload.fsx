@@ -22,8 +22,8 @@ open FSharp.Data.GraphQL
 type MyProvider = GraphQLProvider<"http://localhost:3001/graphql", uploadInputTypeName = "Upload">
 
 let mutation =
-    MyProvider.Operation<"""mutation singleFileUpload($file : Upload!) {
-      singleUpload(file : $file) {
+    MyProvider.Operation<"""mutation singleFileUpload($request : SingleUploadRequest!) {
+      singleUpload(request : $request) {
         id
         path
         filename
@@ -32,7 +32,8 @@ let mutation =
     }""">()
 
 let upload() =
-    use input = new Upload(File.OpenRead("txt_file.txt"), "text.txt", ownsStream = true)
+    use upload = new Upload(File.OpenRead("txt_file.txt"), "text.txt", ownsStream = true)
+    let input = MyProvider.Types.SingleUploadRequest(upload)
     let result = mutation.Run(input)
     printfn "Data: %A" result.Data
 

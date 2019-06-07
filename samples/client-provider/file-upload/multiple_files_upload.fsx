@@ -23,8 +23,8 @@ open FSharp.Data.GraphQL
 type MyProvider = GraphQLProvider<"http://localhost:3001/graphql", uploadInputTypeName = "Upload">
 
 let mutation =
-    MyProvider.Operation<"""mutation multipleFilesUpload($files: [Upload!]!) {
-      multipleUpload(files: $files) {
+    MyProvider.Operation<"""mutation multipleFilesUpload($request: MultipleUploadRequest!) {
+      multipleUpload(request: $request) {
         id
         path
         filename
@@ -36,7 +36,8 @@ let upload() =
     let input = 
         [| new Upload(File.OpenRead("txt_file.txt"), "text.txt", ownsStream = true)
            new Upload(File.OpenRead("png_file.png"), "image.png", ownsStream = true) |]
-    let result = mutation.Run(input)
+    let request = MyProvider.Types.MultipleUploadRequest(input)
+    let result = mutation.Run(request)
     input |> Array.iter (fun x -> (x :> IDisposable).Dispose())
     printfn "Data: %A" result.Data
 

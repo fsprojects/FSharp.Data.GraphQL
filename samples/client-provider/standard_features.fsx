@@ -20,14 +20,14 @@ open FSharp.Data.GraphQL
 
 // The URL here is for design time purposes.
 // It connects to the server to be able to map its schema.
-//type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:8084">
 
 // You can also provide the introspection schema yourself if you can't access the server
 // at design time. Just provide a file in the path of the project or a literal containing
 // the introspection query result.
 // WARNING: the introspection query result must contain all fields requested by the
 // standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
-type MyProvider = GraphQLProvider<"swapi_schema.json">
+//type MyProvider = GraphQLProvider<"swapi_schema.json">
 
 // The operation method can be used to make queries, mutations, and subscriptions.
 // Although subscription operations can be created, the client provider still

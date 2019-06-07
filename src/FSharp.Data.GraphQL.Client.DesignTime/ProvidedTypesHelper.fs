@@ -131,6 +131,11 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 
     member __.SetRecordProperties(props) = properties <- props
 
+[<AutoOpen>]
+module internal Failures =
+    let uploadTypeIsNotScalar uploadTypeName =
+        failwithf "Upload type \"%s\" was found on the schema, but it is not a Scalar type. Upload types can only be used if they are defined as scalar types." uploadTypeName
+
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
@@ -408,16 +413,10 @@ module internal Provider =
         let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
         let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
+            | TypeKind.SCALAR when tref.Name.IsSome -> Types.mapScalarType uploadInputTypeName tref.Name.Value |> Types.makeOption
+            | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
             | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.unwrapOption
             | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> Types.makeArray |> Types.makeOption
-            | TypeKind.SCALAR when tref.Name.IsSome ->
-                match uploadInputTypeName with
-                | Some uploadInputTypeName when uploadInputTypeName = tref.Name.Value ->
-                    Types.makeOption typeof<Upload>
-                | _ ->
-                    if Types.scalar.ContainsKey(tref.Name.Value)
-                    then Types.scalar.[tref.Name.Value] |> Types.makeOption
-                    else Types.makeOption typeof<string>
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> Types.makeOption providedEnum
@@ -490,25 +489,17 @@ module internal Provider =
         let ofInputFieldType (field : IntrospectionInputVal) = { field with Type = field.Type.OfType.Value }
         let rec resolveFieldMetadata (field : IntrospectionField) : RecordPropertyMetadata =
             match field.Type.Kind with
-            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> resolveFieldMetadata |> unwrapOption
-            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
-                let providedType =
-                    match uploadInputTypeName with
-                    | Some uploadInputTypeName when uploadInputTypeName = field.Type.Name.Value ->
-                        // We assume that upload types are Scalar types on the server.
-                        typeof<Upload>
-                    | _ ->
-                        // Unknown scalar types will be mapped to a string type.
-                        if Types.scalar.ContainsKey(field.Type.Name.Value)
-                        then Types.scalar.[field.Type.Name.Value]
-                        else typeof<string>
+                let providedType = Types.mapScalarType uploadInputTypeName field.Type.Name.Value
                 { Name = field.Name
                   Alias = None
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
                 |> makeOption
+            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofFieldType field |> resolveFieldMetadata |> unwrapOption
+            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofFieldType field |> resolveFieldMetadata |> makeArrayOption
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
@@ -521,19 +512,17 @@ module internal Provider =
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         and resolveInputFieldMetadata (field : IntrospectionInputVal) : RecordPropertyMetadata =
             match field.Type.Kind with
-            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofInputFieldType field |> resolveInputFieldMetadata |> unwrapOption
-            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofInputFieldType field |> resolveInputFieldMetadata |> makeArrayOption
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
-                let providedType =
-                    if Types.scalar.ContainsKey(field.Type.Name.Value)
-                    then Types.scalar.[field.Type.Name.Value]
-                    else Types.makeOption typeof<string>
+                let providedType = Types.mapScalarType uploadInputTypeName field.Type.Name.Value
                 { Name = field.Name
                   Alias = None
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
                 |> makeOption
+            | _ when uploadInputTypeName.IsSome && field.Type.Name.IsSome && uploadInputTypeName.Value = field.Type.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
+            | TypeKind.NON_NULL when field.Type.Name.IsNone && field.Type.OfType.IsSome -> ofInputFieldType field |> resolveInputFieldMetadata |> unwrapOption
+            | TypeKind.LIST when field.Type.Name.IsNone && field.Type.OfType.IsSome ->  ofInputFieldType field |> resolveInputFieldMetadata |> makeArrayOption
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.INPUT_OBJECT | TypeKind.UNION | TypeKind.ENUM) when field.Type.Name.IsSome ->
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype

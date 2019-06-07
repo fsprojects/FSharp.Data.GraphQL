@@ -11,6 +11,7 @@ open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
 open System.ComponentModel
+open System.Collections.Generic
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
@@ -111,8 +112,8 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     /// Gets a list of this provided record properties.
     member __.GetProperties() = properties
     
-    /// Produces a dictionary containing all the properties of this provided record type.
-    member x.ToDictionary() =
+    /// Produces an enumerable containing all the properties of this provided record type.
+    member x.ToEnumerable() : IEnumerable<string * obj> =
         let rec mapper (v : obj) =
             match v with
             | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
@@ -126,7 +127,9 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             if not (isNull p.Value)
             then Some (p.Name, mapper p.Value)
             else None)
-        |> dict
+
+    /// Produces a dictionary containing all the properties of this provided record type.
+    member x.ToDictionary() = x.ToEnumerable() |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
@@ -186,6 +189,15 @@ module internal Types =
             then Some(t.Name, t)
             else None)
         |> Map.ofArray
+
+    let mapScalarType uploadInputTypeName tname =
+        match uploadInputTypeName with
+        | Some uploadInputTypeName when uploadInputTypeName = tname -> typeof<Upload>
+        | _ ->
+            // Unknown scalar types will be mapped to a string type.
+            if scalar.ContainsKey(tname)
+            then scalar.[tname]
+            else typeof<string>
 
     let makeOption (t : Type) = typedefof<_ option>.MakeGenericType(t)
 
