@@ -803,6 +803,10 @@ module internal Provider =
                         let members : MemberInfo list = [typeWrapper; operationWrapper; ctxmdef; omdef; schemapdef]
                         members)
                     tdef
-            let providerKey = { IntrospectionLocation = introspectionLocation; CustomHttpHeadersLocation = httpHeadersLocation }
+            let providerKey = 
+                { IntrospectionLocation = introspectionLocation
+                  CustomHttpHeadersLocation = httpHeadersLocation
+                  UploadInputTypeName = uploadInputTypeName
+                  ResolutionFolder = resolutionFolder }
             DesignTimeCache.getOrAdd providerKey maker.Force)
         generator

@@ -51,7 +51,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
         let get, getEnumerator =
             let values = entries |> Seq.map (fun kvp -> kvp.Value)
             (fun () -> values), (fun () -> values.GetEnumerator())
-        {new IMemoryCacheStore<'key, 'value> with
+        { new IMemoryCacheStore<'key, 'value> with
             member __.Add entry = entries.AddOrUpdate(entry.Key, entry, fun _ _ -> entry) |> ignore
             member __.GetOrAdd key getValue = entries.GetOrAdd(key, getValue)
             member __.Remove key = entries.TryRemove key |> ignore
@@ -65,8 +65,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
                 | (true, entry) -> Some entry
                 | _ -> None
             member __.GetEnumerator () = getEnumerator ()
-            member __.GetEnumerator () = getEnumerator () :> Collections.IEnumerator
-        }
+            member __.GetEnumerator () = getEnumerator () :> Collections.IEnumerator }
     
     let checkExpiration () =
         store
@@ -80,8 +79,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
                        | NoExpiration -> NeverExpires
                        | AbsoluteExpiration time -> ExpiresAt (DateTime.UtcNow + time)
                        | SlidingExpiration window -> ExpiresAfter window
-          LastUsage = DateTime.UtcNow
-        }
+          LastUsage = DateTime.UtcNow }
 
     let add key value =
         if key |> store.Contains
@@ -132,7 +130,9 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
 
 type internal ProviderKey =
     { IntrospectionLocation : IntrospectionLocation
-      CustomHttpHeadersLocation : StringLocation }
+      CustomHttpHeadersLocation : StringLocation
+      UploadInputTypeName : string option
+      ResolutionFolder : string }
 
 module internal DesignTimeCache =
     let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
