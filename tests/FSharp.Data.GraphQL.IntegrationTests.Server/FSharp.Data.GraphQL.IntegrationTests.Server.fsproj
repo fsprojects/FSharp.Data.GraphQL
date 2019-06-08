@@ -10,6 +10,8 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Helpers.fs" />
+    <Compile Include="CustomSchemaTypes.fs" />
+    <Compile Include="MultipartRequest.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="JsonConverters.fs" />
     <Compile Include="HttpHandlers.fs" />

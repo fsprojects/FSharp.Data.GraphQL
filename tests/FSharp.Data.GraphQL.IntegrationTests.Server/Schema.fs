@@ -17,6 +17,11 @@ type Input =
     { Single : InputField option
       List : InputField list option }
 
+type UploadedFile =
+    { Name : string
+      ContentType : string
+      ContentAsText : string }
+
 module Schema =
     let InputFieldType =
         Define.InputObject<InputField>(
@@ -48,6 +53,15 @@ module Schema =
                   Define.AutoField("uri", Uri, description = "An URI value.")
                   Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
 
+    let UploadedFileType =
+        Define.Object<UploadedFile>(
+            name = "UploadedFile",
+            description = "Contains data of an uploaded file.",
+            fields =
+                [ Define.AutoField("name", String, description = "The name of the file.")
+                  Define.AutoField("contentType", String, description = "The content type of the file.")
+                  Define.AutoField("contentAsText", String, description = "The content of the file as text.") ])
+
     let OutputType =
         Define.Object<Input>(
             name = "Output",
@@ -57,10 +71,6 @@ module Schema =
                   Define.AutoField("list", Nullable (ListOf OutputFieldType), description = "A list of output fields.") ])
 
     let QueryType =
-        let mapper (ctx : ResolveFieldContext) (_ : Root) : Input option =
-            match ctx.TryArg("input") with
-            | Some input -> input
-            | None -> None
         Define.Object<Root>(
             name = "Query",
             description = "The query type.",
@@ -70,7 +80,47 @@ module Schema =
                     typedef = Nullable OutputType,
                     description = "Enters an input type and get it back.",
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
-                    resolve = mapper) ])
+                    resolve = fun ctx _ -> ctx.TryArg("input") |> Option.flatten) ])
+
+    let MutationType =
+        let mapper (file : File) =
+            let contentAsText =
+                use reader = new System.IO.StreamReader(file.Content, System.Text.Encoding.UTF8)
+                reader.ReadToEnd()
+            { Name = file.Name; ContentType = file.ContentType; ContentAsText = contentAsText }
+        Define.Object<Root>(
+            name = "Mutation",
+            fields =
+                [ Define.Field(
+                    name = "singleUpload",
+                    typedef = UploadedFileType,
+                    description = "Uploads a single file to the server and get it back.",
+                    args = [ Define.Input("file", Upload, description = "The file to be uploaded.") ],
+                    resolve = fun ctx _ -> mapper (ctx.Arg("file")))
+                  Define.Field(
+                    name = "nullableSingleUpload",
+                    typedef = Nullable UploadedFileType,
+                    description = "Uploads (maybe) a single file to the server and get it back (maybe).",
+                    args = [ Define.Input("file", Nullable Upload, description = "The file to be uploaded.") ],
+                    resolve = fun ctx _ -> ctx.TryArg("file") |> Option.flatten |> Option.map mapper)
+                  Define.Field(
+                    name = "multipleUpload",
+                    typedef = ListOf UploadedFileType,
+                    description = "Uploads a list of files to the server and get them back.",
+                    args = [ Define.Input("files", ListOf Upload, description = "The files to upload.") ],
+                    resolve = fun ctx _ -> ctx.Arg("files") |> Seq.map mapper)
+                  Define.Field(
+                    name = "nullableMultipleUpload",
+                    typedef = Nullable (ListOf UploadedFileType),
+                    description = "Uploads (maybe) a list of files to the server and get them back (maybe).",
+                    args = [ Define.Input("files", Nullable (ListOf Upload), description = "The files to upload.") ],
+                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map mapper))
+                  Define.Field(
+                    name = "nullableMultipleNullableUpload",
+                    typedef = Nullable (ListOf (Nullable UploadedFileType)),
+                    description = "Uploads (maybe) a list of files (maybe) to the server and get them back (maybe).",
+                    args = [ Define.Input("files", Nullable (ListOf (Nullable Upload)), description = "The files to upload.") ],
+                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map (Option.map mapper))) ])
 
     let schema : ISchema<Root> = upcast Schema(QueryType)
 

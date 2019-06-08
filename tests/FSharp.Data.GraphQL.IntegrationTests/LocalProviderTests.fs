@@ -6,7 +6,7 @@ open FSharp.Data.GraphQL
 
 let [<Literal>] ServerUrl = "http://localhost:8085"
 
-type Provider = GraphQLProvider<ServerUrl>
+type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
 
 let context = Provider.GetContext(ServerUrl)
 
@@ -38,6 +38,8 @@ module SimpleOperation =
     type Operation = Provider.Operations.Q
 
     let validateResult (input : Input option) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Classic")
         result.Data.IsSome |> equals true
         input |> Option.iter (fun input ->
             result.Data.Value.Echo.IsSome |> equals true
