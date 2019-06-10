@@ -362,10 +362,6 @@ let ``Should be able to execute a multiple upload asynchronously by sending no u
     |> Async.RunSynchronously
     |> OptionalMultipleUploadOperation.validateResult None
 
-
-
-
-
 module OptionalMultipleOptionalUploadOperation =
     let operation =
         Provider.Operation<"""mutation NullableMultipleNullableUpload($files: [Upload]) {
