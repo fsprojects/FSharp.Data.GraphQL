@@ -6,7 +6,6 @@ open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open Newtonsoft.Json.Serialization
 open System.Collections.Generic
-open System.Runtime.Serialization.Formatters
 
 [<AutoOpen>]
 module Helpers =
@@ -35,14 +34,19 @@ module JsonHelpers =
         | null -> None
         | p -> Some(p.Value.ToString())
 
-    let jsonSerializerSettings (converters : JsonConverter seq) =
+    let getJsonSerializerSettings (converters : JsonConverter seq) =
         JsonSerializerSettings()
         |> tee (fun s ->
             s.Converters <- List<JsonConverter>(converters)
             s.ContractResolver <- CamelCasePropertyNamesContractResolver())
 
-    let jsonSerializer (converters : JsonConverter seq) =
+    let getJsonSerializer (converters : JsonConverter seq) =
         JsonSerializer()
         |> tee (fun c ->
             Seq.iter c.Converters.Add converters
             c.ContractResolver <- CamelCasePropertyNamesContractResolver())
+
+    let private converters : JsonConverter [] = [| OptionConverter() |]
+
+    let jsonSettings = getJsonSerializerSettings converters
+    let jsonSerializer = getJsonSerializer converters

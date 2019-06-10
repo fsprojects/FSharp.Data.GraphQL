@@ -9,11 +9,12 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="JsonConverters.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="CustomSchemaTypes.fs" />
     <Compile Include="MultipartRequest.fs" />
     <Compile Include="Schema.fs" />
-    <Compile Include="JsonConverters.fs" />
+    <Compile Include="Variables.fs" />
     <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />

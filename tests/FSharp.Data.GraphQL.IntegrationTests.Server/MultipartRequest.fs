@@ -11,7 +11,7 @@ type Operation =
       /// Contains the query used in this operation.
     { Query : string
       /// Contains variables used by this operation.
-      Variables : Map<string, obj> }
+      Variables : Map<string, obj> option }
 
 /// <summary> A GrahpQL request using multipart request specification. </summary>
 /// <remarks> For more information, see https://github.com/jaydenseric/graphql-multipart-request-spec. </remarks>
@@ -41,6 +41,7 @@ module MultipartRequest =
                 let pickFromMap varName =
                     map |> Map.tryPick (fun k v -> if v = varName then files |> Map.tryFind k else None)
                 match varValue with
+                | :? JToken as value -> box value
                 | :? seq<obj> as values ->
                     values
                     |> Seq.mapi (fun valueIndex value ->
@@ -60,7 +61,7 @@ module MultipartRequest =
                     match pickFromMap varName with
                     | Some file -> box file
                     | None -> value
-            { operation with Variables = operation.Variables |> Map.map (fun k v -> findFile k v) }
+            { operation with Variables = operation.Variables |> Option.map (Map.map (fun k v -> findFile k v)) }
         match operations with
         | [ operation ] -> [ mapOperation None operation ]
         | operations -> operations |> List.mapi (fun ix operation -> mapOperation (Some ix) operation)
