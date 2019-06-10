@@ -11,7 +11,6 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Control.Tasks
 open Newtonsoft.Json.Linq
 open Giraffe.HttpStatusCodeHandlers.RequestErrors
-open Giraffe.HttpStatusCodeHandlers.Successful
 open Microsoft.AspNetCore.WebUtilities
 open FSharp.Data.GraphQL.Ast
 
