@@ -80,7 +80,7 @@ module MultipartRequest =
                                 | None -> String.Format("variables.{0}.{1}", varName, valueIndex)
                             match pickFromMap varName with
                             | Some file -> box file
-                            | None -> value)
+                            | None -> null)
                         |> box
                     | value ->
                         let varName =

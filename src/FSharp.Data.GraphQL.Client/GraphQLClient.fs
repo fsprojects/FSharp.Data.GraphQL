@@ -137,7 +137,7 @@ module GraphQLClient =
                           |> Some
                     | EnumerableValue x -> 
                         x |> Array.mapi (fun ix x -> chooser (sprintf "%s.%i" name ix, x))
-                          |> Array.choose id
+                          |> Array.choose id // We can't choose directly with chooser because we need to know the original index for each item
                           |> Array.collect id
                           |> Some
                     | _ -> None

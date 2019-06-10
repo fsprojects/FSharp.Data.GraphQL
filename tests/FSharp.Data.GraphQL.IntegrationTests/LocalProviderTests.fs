@@ -361,3 +361,77 @@ let ``Should be able to execute a multiple upload asynchronously by sending no u
     OptionalMultipleUploadOperation.operation.AsyncRun()
     |> Async.RunSynchronously
     |> OptionalMultipleUploadOperation.validateResult None
+
+
+
+
+
+module OptionalMultipleOptionalUploadOperation =
+    let operation =
+        Provider.Operation<"""mutation NullableMultipleNullableUpload($files: [Upload]) {
+            nullableMultipleNullableUpload(files: $files) {
+              name
+              contentType
+              contentAsText
+            }
+          }""">()
+
+    type Operation = Provider.Operations.NullableMultipleNullableUpload
+
+    let validateResult (files : File option [] option) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        let receivedFiles =
+            result.Data.Value.NullableMultipleNullableUpload
+            |> Option.map (Array.map (Option.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText })))
+        receivedFiles |> equals files
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload``() =
+    let files = 
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
+    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload asynchronously``() =
+    let files = 
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleOptionalUploadOperation.operation.AsyncRun(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
+    |> Async.RunSynchronously
+    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload by sending no uploads``() =
+    OptionalMultipleOptionalUploadOperation.operation.Run()
+    |> OptionalMultipleOptionalUploadOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload asynchronously by sending no uploads``() =
+    OptionalMultipleOptionalUploadOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> OptionalMultipleOptionalUploadOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload by sending some uploads``() =
+    let files = 
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           None
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
+           None |]
+    OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
+    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+
+[<Fact>]
+let ``Should be able to execute a multiple optional upload asynchronously by sending some uploads``() =
+    let files = 
+        [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           None
+           Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
+           None |]
+    OptionalMultipleOptionalUploadOperation.operation.AsyncRun(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
+    |> Async.RunSynchronously
+    |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
