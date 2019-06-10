@@ -88,9 +88,10 @@ module HttpHandlers =
             |> List.collect id
 
         let getVariables (vardefs : VariableDefinition list) (data : Map<string, obj>) =
-            if data.ContainsKey("variables")
-            then parseVariables Schema.schema vardefs data.["variables"] |> Some
-            else None
+            match data.TryFind("variables") with
+            | Some null -> None
+            | Some variables -> parseVariables Schema.schema vardefs variables |> Some
+            | _ -> None
 
         if isMultipartRequest ctx.Request
         then

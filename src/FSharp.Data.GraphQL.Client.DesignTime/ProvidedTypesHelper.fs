@@ -235,6 +235,10 @@ module internal ProvidedOperationResult =
             prop)
         tdef
 
+type internal RequestType =
+    | Classic
+    | Multipart of uploadInputTypeName : string
+
 module internal ProvidedOperation =
     let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
@@ -243,7 +247,7 @@ module internal ProvidedOperation =
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
-                         uploadInputTypeName : string option,
+                         requestType : RequestType,
                          className : string) =
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
@@ -253,8 +257,8 @@ module internal ProvidedOperation =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
                     | NamedType typeName ->
-                        match uploadInputTypeName with
-                        | Some uploadInputTypeName when typeName = uploadInputTypeName -> (variableName, Types.makeOption typeof<Upload>)
+                        match requestType with
+                        | Multipart uploadInputTypeName when typeName = uploadInputTypeName -> (variableName, Types.makeOption typeof<Upload>)
                         | _ ->
                             match Types.scalar.TryFind(typeName) with
                             | Some t -> (variableName, Types.makeOption t)
@@ -308,7 +312,10 @@ module internal ProvidedOperation =
                 match contextInfo with
                 | Some _ -> varprm @ varprmctx
                 | None -> varprmctx
-            let shouldUseMultipartRequest = uploadInputTypeName.IsSome
+            let shouldUseMultipartRequest =
+                match requestType with
+                | Multipart _ -> true
+                | Classic -> false
             let rundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
                 mprm |> List.map (fun varprm ->
@@ -388,8 +395,13 @@ module internal ProvidedOperation =
             members)
         tdef
 
+type internal ProvidedOperationMetadata =
+    { OperationType : Type
+      RequestType : RequestType
+      TypeWrapper : ProvidedTypeDefinition }
+
 module internal Provider =
-    let getOperationProvidedTypes(schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
         let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
@@ -410,8 +422,8 @@ module internal Provider =
         let includeType (path : string list) (t : ProvidedTypeDefinition) =
             let wrapper = getWrapper path
             wrapper.AddMember(t)
-        let providedTypes = ref Map.empty<Path * TypeName, ProvidedTypeDefinition>
-        let rec getProvidedType (providedTypes : Map<Path * TypeName, ProvidedTypeDefinition> ref) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
+        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
+        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.SCALAR when tref.Name.IsSome -> Types.mapScalarType uploadInputTypeName tref.Name.Value |> Types.makeOption
             | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
@@ -422,8 +434,8 @@ module internal Provider =
                 | Some providedEnum -> Types.makeOption providedEnum
                 | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
-                if (!providedTypes).ContainsKey(path, tref.Name.Value)
-                then Types.makeOption (!providedTypes).[path, tref.Name.Value]
+                if providedTypes.ContainsKey(path, tref.Name.Value)
+                then Types.makeOption providedTypes.[path, tref.Name.Value]
                 else
                     let ifields typeName =
                         if schemaTypes.ContainsKey(typeName)
@@ -453,7 +465,7 @@ module internal Provider =
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
-                        providedTypes := (!providedTypes).Add((path, tref.Name.Value), tdef)
+                        providedTypes.Add((path, tref.Name.Value), tdef)
                         includeType path tdef
                         ProvidedRecord.makeProvidedType(tdef, baseProperties)
                     let createFragmentType (typeName, properties) =
@@ -463,13 +475,34 @@ module internal Provider =
                             else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
                         let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
-                        providedTypes := (!providedTypes).Add((path, typeName), tdef)
+                        providedTypes.Add((path, typeName), tdef)
                         includeType path tdef
                         ProvidedRecord.makeProvidedType(tdef, properties) |> ignore
                     fragmentProperties |> List.iter createFragmentType
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        (getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef), !providedTypes, rootWrapper
+        let operationType = getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef
+        let requestType =
+            let uploadType = typeof<Upload>
+            let rec containsUploadType (t : ProvidedTypeDefinition) =
+                let baseContains =
+                    match t.BaseType with
+                    | :? ProvidedTypeDefinition as t -> containsUploadType t
+                    | _ -> false
+                let typeContains =
+                    t.DeclaredProperties |> Seq.exists (fun prop ->
+                        match prop.PropertyType with
+                        | :? ProvidedTypeDefinition as t -> containsUploadType t
+                        | Option t when t = uploadType -> true
+                        | Array t when t = uploadType -> true
+                        | _ -> prop.PropertyType = typeof<Upload>)
+                baseContains || typeContains
+            match operationType, uploadInputTypeName with
+            | :? ProvidedTypeDefinition as t, Some uploadInputTypeName -> if containsUploadType t then Multipart uploadInputTypeName else Classic
+            | _ -> Classic
+        { OperationType = operationType
+          RequestType = requestType
+          TypeWrapper = rootWrapper }
 
     let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
@@ -711,7 +744,7 @@ module internal Provider =
                                             |> Array.map (fun x -> x.ToString("x2"))
                                             |> Array.reduce (+)
                                         "Operation" + hash
-                                let (operationType, operationTypes, rootWrapper) = getOperationProvidedTypes(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
                                     | Some name -> name
@@ -787,8 +820,8 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, operationType, contextInfo, uploadInputTypeName, className)
-                                odef.AddMember(rootWrapper)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.RequestType, className)
+                                odef.AddMember(metadata.TypeWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)
                                 mdef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
