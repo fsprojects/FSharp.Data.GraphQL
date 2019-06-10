@@ -34,7 +34,7 @@ type OptionConverter() =
 type IDictionaryConverter() =
     inherit JsonConverter()
 
-    let fail() = raise <| JsonSerializationException("Unexpected end when reading a JSON object into a Map<string, obj>.")
+    let fail() = raise <| JsonSerializationException("Unexpected end when reading a JSON object into an IDictionary<string, object>.")
 
     let rec writeObject (writer : JsonWriter) (value : obj) =
         writer.WriteStartObject()
@@ -86,10 +86,13 @@ type IDictionaryConverter() =
         let list = List<obj>()
         let mutable (endReached, failed) = false, false
         while (not endReached && not failed) do
-            if reader.TokenType <> JsonToken.Comment && reader.TokenType <> JsonToken.EndArray then
-                list.Add(readValue reader)
-            elif reader.TokenType = JsonToken.EndArray then 
-                endReached <- true
+            if not (reader.Read()) 
+            then failed <- true
+            else
+                if reader.TokenType <> JsonToken.Comment && reader.TokenType <> JsonToken.EndArray then
+                    list.Add(readValue reader)
+                elif reader.TokenType = JsonToken.EndArray then 
+                    endReached <- true
         if not endReached then fail()
         upcast Array.ofSeq list
 
