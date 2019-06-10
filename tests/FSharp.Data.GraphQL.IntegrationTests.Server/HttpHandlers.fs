@@ -104,7 +104,7 @@ module HttpHandlers =
             | Some boundary ->
                 use ms = copyBodyToMemory(ctx.Request)
                 let reader = MultipartReader(boundary, ms)
-                let request = MultipartRequest.read(reader, jsonSerializer) |> Async.AwaitTask |> Async.RunSynchronously
+                let request = reader |> MultipartRequest.read |> Async.AwaitTask |> Async.RunSynchronously
                 let results = 
                     request.Operations
                     |> List.map (fun op ->

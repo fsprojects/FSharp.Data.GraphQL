@@ -235,10 +235,6 @@ module internal ProvidedOperationResult =
             prop)
         tdef
 
-type internal RequestType =
-    | Classic
-    | Multipart of uploadInputTypeName : string
-
 module internal ProvidedOperation =
     let makeProvidedType(actualQuery : string,
                          operationDefinition : OperationDefinition,
@@ -247,7 +243,7 @@ module internal ProvidedOperation =
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
-                         requestType : RequestType,
+                         uploadInputTypeName : string option,
                          className : string) =
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
@@ -257,21 +253,22 @@ module internal ProvidedOperation =
                 let rec mapVariable (variableName : string) (vartype : InputType) =
                     match vartype with
                     | NamedType typeName ->
-                        match requestType with
-                        | Multipart uploadInputTypeName when typeName = uploadInputTypeName -> (variableName, Types.makeOption typeof<Upload>)
+                        match uploadInputTypeName with
+                        | Some uploadInputTypeName when typeName = uploadInputTypeName -> 
+                            variableName, Types.makeOption typeof<Upload>
                         | _ ->
                             match Types.scalar.TryFind(typeName) with
-                            | Some t -> (variableName, Types.makeOption t)
+                            | Some t -> variableName, Types.makeOption t
                             | None ->
                                 match schemaProvidedTypes.TryFind(typeName) with
-                                | Some t -> (variableName, Types.makeOption t)
+                                | Some t -> variableName, Types.makeOption t
                                 | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
                     | ListType itype -> 
-                        let (name, t) = mapVariable variableName itype
-                        (name, t |> Types.makeArray |> Types.makeOption)
+                        let name, t = mapVariable variableName itype
+                        name, t |> Types.makeArray |> Types.makeOption
                     | NonNullType itype -> 
-                        let (name, t) = mapVariable variableName itype
-                        (name, Types.unwrapOption t)
+                        let name, t = mapVariable variableName itype
+                        name, Types.unwrapOption t
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
             let varExprMapper (variables : (string * Type) list) (args : Expr list) =
                 let exprMapper (name : string, value : Expr) =
@@ -313,9 +310,13 @@ module internal ProvidedOperation =
                 | Some _ -> varprm @ varprmctx
                 | None -> varprmctx
             let shouldUseMultipartRequest =
-                match requestType with
-                | Multipart _ -> true
-                | Classic -> false
+                let rec existsUploadType (t : Type) =
+                    match t with
+                    | :? ProvidedTypeDefinition as tdef -> tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType)
+                    | Option t -> existsUploadType t
+                    | Array t -> existsUploadType t
+                    | _ -> t = typeof<Upload>
+                variables |> Seq.exists (snd >> existsUploadType)
             let rundefs : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
                 mprm |> List.map (fun varprm ->
@@ -397,7 +398,7 @@ module internal ProvidedOperation =
 
 type internal ProvidedOperationMetadata =
     { OperationType : Type
-      RequestType : RequestType
+      UploadInputTypeName : string option
       TypeWrapper : ProvidedTypeDefinition }
 
 module internal Provider =
@@ -482,31 +483,13 @@ module internal Provider =
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         let operationType = getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef
-        let requestType =
-            let uploadType = typeof<Upload>
-            let rec containsUploadType (t : ProvidedTypeDefinition) =
-                let baseContains =
-                    match t.BaseType with
-                    | :? ProvidedTypeDefinition as t -> containsUploadType t
-                    | _ -> false
-                let typeContains =
-                    t.DeclaredProperties |> Seq.exists (fun prop ->
-                        match prop.PropertyType with
-                        | :? ProvidedTypeDefinition as t -> containsUploadType t
-                        | Option t when t = uploadType -> true
-                        | Array t when t = uploadType -> true
-                        | _ -> prop.PropertyType = typeof<Upload>)
-                baseContains || typeContains
-            match operationType, uploadInputTypeName with
-            | :? ProvidedTypeDefinition as t, Some uploadInputTypeName -> if containsUploadType t then Multipart uploadInputTypeName else Classic
-            | _ -> Classic
         { OperationType = operationType
-          RequestType = requestType
+          UploadInputTypeName = uploadInputTypeName
           TypeWrapper = rootWrapper }
 
     let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
-        let schemaTypes = Types.getSchemaTypes(schema)
+        let schemaTypes = Types.getSchemaTypes schema
         let getSchemaType (tref : IntrospectionTypeRef) =
             match tref.Name with
             | Some name ->
@@ -728,7 +711,7 @@ module internal Provider =
                                     match tinst with
                                     | Some t -> { tref with Kind = t.Kind }
                                     | None -> failwith "The operation was found in the schema, but it does not have a name."
-                                let schemaTypes = Types.getSchemaTypes(schema)
+                                let schemaTypes = Types.getSchemaTypes schema
                                 let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
@@ -820,7 +803,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.RequestType, className)
+                                let odef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
                                 odef.AddMember(metadata.TypeWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let mdef = ProvidedMethod(mname, [], odef, invoker, isStatic = true)

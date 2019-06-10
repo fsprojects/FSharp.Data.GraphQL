@@ -195,3 +195,169 @@ let ``Should be able to execute a query using context, sending an an input field
     SimpleOperation.operation.AsyncRun(context, input)
     |> Async.RunSynchronously
     |> SimpleOperation.validateResult (Some input)
+
+module SingleRequiredUploadOperation =
+    let operation =
+        Provider.Operation<"""mutation SingleUpload($file: Upload!) {
+            singleUpload(file: $file) {
+              name
+              contentType
+              contentAsText
+            }
+          }""">()
+
+    type Operation = Provider.Operations.SingleUpload
+
+    let validateResult (file : File) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        result.Data.Value.SingleUpload.Name |> equals file.Name
+        result.Data.Value.SingleUpload.ContentAsText |> equals file.Content
+        result.Data.Value.SingleUpload.ContentType |> equals file.ContentType
+
+[<Fact>]
+let ``Should be able to execute a single required upload``() =
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleRequiredUploadOperation.operation.Run(file.MakeUpload())
+    |> SingleRequiredUploadOperation.validateResult file
+
+[<Fact>]
+let ``Should be able to execute a single required upload asynchronously``() =
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleRequiredUploadOperation.operation.AsyncRun(file.MakeUpload())
+    |> Async.RunSynchronously
+    |> SingleRequiredUploadOperation.validateResult file
+
+module SingleOptionalUploadOperation =
+    let operation =
+        Provider.Operation<"""mutation NullableSingleUpload($file: Upload) {
+            nullableSingleUpload(file: $file) {
+              name
+              contentType
+              contentAsText
+            }
+          }""">()
+
+    type Operation = Provider.Operations.NullableSingleUpload
+
+    let validateResult (file : File option) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        file |> Option.iter (fun file ->
+        result.Data.Value.NullableSingleUpload.IsSome |> equals true
+        result.Data.Value.NullableSingleUpload.Value.Name |> equals file.Name
+        result.Data.Value.NullableSingleUpload.Value.ContentAsText |> equals file.Content
+        result.Data.Value.NullableSingleUpload.Value.ContentType |> equals file.ContentType)
+
+[<Fact>]
+let ``Should be able to execute a single optional upload by passing a file``() =
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleOptionalUploadOperation.operation.Run(file.MakeUpload())
+    |> SingleOptionalUploadOperation.validateResult (Some file)
+
+[<Fact>]
+let ``Should be able to execute a single optional upload by passing a file, asynchronously``() =
+    let file = { Name = "file.txt"; ContentType = "text/plain"; Content = "Sample text file contents" }
+    SingleOptionalUploadOperation.operation.AsyncRun(file.MakeUpload())
+    |> Async.RunSynchronously
+    |> SingleOptionalUploadOperation.validateResult (Some file)
+
+[<Fact>]
+let ``Should be able to execute a single optional upload by not passing a file``() =
+    SingleOptionalUploadOperation.operation.Run()
+    |> SingleOptionalUploadOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a single optional upload by not passing a file asynchronously``() =
+    SingleOptionalUploadOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> SingleOptionalUploadOperation.validateResult None
+
+module RequiredMultipleUploadOperation =
+    let operation =
+        Provider.Operation<"""mutation MultipleUpload($files: [Upload!]!) {
+            multipleUpload(files: $files) {
+              name
+              contentType
+              contentAsText
+            }
+          }""">()
+
+    type Operation = Provider.Operations.MultipleUpload
+
+    let validateResult (files : File []) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        let receivedFiles =
+            result.Data.Value.MultipleUpload
+            |> Array.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText })
+        receivedFiles |> equals files
+
+[<Fact>]
+let ``Should be able to execute a multiple required upload``() =
+    let files = 
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    RequiredMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
+    |> RequiredMultipleUploadOperation.validateResult files
+
+[<Fact>]
+let ``Should be able to execute a multiple required upload asynchronously``() =
+    let files = 
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    RequiredMultipleUploadOperation.operation.AsyncRun(files |> Array.map (fun f -> f.MakeUpload()))
+    |> Async.RunSynchronously
+    |> RequiredMultipleUploadOperation.validateResult files
+
+module OptionalMultipleUploadOperation =
+    let operation =
+        Provider.Operation<"""mutation NullableMultipleUpload($files: [Upload!]) {
+            nullableMultipleUpload(files: $files) {
+              name
+              contentType
+              contentAsText
+            }
+          }""">()
+
+    type Operation = Provider.Operations.NullableMultipleUpload
+
+    let validateResult (files : File [] option) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        let receivedFiles =
+            result.Data.Value.NullableMultipleUpload
+            |> Option.map (Array.map (fun file -> { Name = file.Name; ContentType = file.ContentType; Content = file.ContentAsText }))
+        receivedFiles |> equals files
+
+[<Fact>]
+let ``Should be able to execute a multiple upload``() =
+    let files = 
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
+    |> OptionalMultipleUploadOperation.validateResult (Some files)
+
+[<Fact>]
+let ``Should be able to execute a multiple upload asynchronously``() =
+    let files = 
+        [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
+           { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
+    OptionalMultipleUploadOperation.operation.AsyncRun(files |> Array.map (fun f -> f.MakeUpload()))
+    |> Async.RunSynchronously
+    |> OptionalMultipleUploadOperation.validateResult (Some files)
+
+[<Fact>]
+let ``Should be able to execute a multiple upload by sending no uploads``() =
+    OptionalMultipleUploadOperation.operation.Run()
+    |> OptionalMultipleUploadOperation.validateResult None
+
+[<Fact>]
+let ``Should be able to execute a multiple upload asynchronously by sending no uploads``() =
+    OptionalMultipleUploadOperation.operation.AsyncRun()
+    |> Async.RunSynchronously
+    |> OptionalMultipleUploadOperation.validateResult None
