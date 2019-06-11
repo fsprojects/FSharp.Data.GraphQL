@@ -123,7 +123,7 @@ module GraphQLClient =
         async {
             let client = connection.Client
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
-            use content = new MultipartContent("form-data", boundary)
+            let content = new MultipartContent("form-data", boundary)
             let files = 
                 let rec chooseFileValues (name: string, value : obj) =
                     match value with
@@ -144,7 +144,7 @@ module GraphQLClient =
                 request.Variables
                 |> Array.choose chooseFileValues
                 |> Array.collect id
-            use operationContent = 
+            let operationContent = 
                 let variables = 
                     match request.Variables with
                     | null | [||] -> JsonValue.Null
@@ -162,7 +162,7 @@ module GraphQLClient =
                 content.Headers.Add("Content-Disposition", "form-data; name=\"operations\"")
                 content
             content.Add(operationContent)
-            use mapContent =
+            let mapContent =
                 let files =
                     files
                     |> Array.mapi (fun ix (name, _) -> ix.ToString(), JsonValue.Array [| JsonValue.String ("variables." + name) |])
