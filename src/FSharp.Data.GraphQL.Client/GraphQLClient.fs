@@ -131,13 +131,13 @@ module GraphQLClient =
                     | :? Upload as x -> Some [|name, x|]
                     | OptionValue x -> x |> Option.bind (fun x -> chooser (name, x))
                     | :? IDictionary<string, obj> as x ->
-                        x |> Seq.choose (fun kvp -> chooser (sprintf "%s.%s" name (kvp.Key.FirstCharLower()), kvp.Value)) 
+                        x |> Seq.choose (fun kvp -> chooser (sprintf "%s.%s" name (kvp.Key.FirstCharLower()), kvp.Value))
                           |> Seq.collect id
                           |> Array.ofSeq
                           |> Some
                     | EnumerableValue x -> 
                         x |> Array.mapi (fun ix x -> chooser (sprintf "%s.%i" name ix, x))
-                          |> Array.choose id // We can't choose directly with chooser because we need to know the original index for each item
+                          |> Array.choose id // We can't choose directly above because we need to know the original index for each item
                           |> Array.collect id
                           |> Some
                     | _ -> None

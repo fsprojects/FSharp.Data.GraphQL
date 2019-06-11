@@ -2,6 +2,7 @@ module FSharp.Data.GraphQL.IntegrationTests.Helpers
 
 open Xunit
 open System.Text
+open System.Collections.Generic
 open FSharp.Data.GraphQL
 
 let normalize (x : string) =
@@ -24,3 +25,13 @@ type File =
     member x.MakeUpload() =
         let bytes = Encoding.UTF8.GetBytes(x.Content)
         new Upload(bytes, x.Name, x.ContentType)
+    static member FromDictionary(dict : IDictionary<string, obj>) =
+        { Name = downcast dict.["Name"]
+          ContentType = downcast dict.["ContentType"]
+          Content = downcast dict.["ContentAsText"] }
+
+type FilesRequest =
+    { Single : File
+      Multiple : File []
+      NullableMultiple : File [] option
+      NullableMultipleNullable : File option [] option }

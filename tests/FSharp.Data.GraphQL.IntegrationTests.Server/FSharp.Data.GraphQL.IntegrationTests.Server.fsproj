@@ -12,8 +12,8 @@
     <Compile Include="JsonConverters.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="CustomSchemaTypes.fs" />
-    <Compile Include="MultipartRequest.fs" />
     <Compile Include="Schema.fs" />
+    <Compile Include="MultipartRequest.fs" />
     <Compile Include="Variables.fs" />
     <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />

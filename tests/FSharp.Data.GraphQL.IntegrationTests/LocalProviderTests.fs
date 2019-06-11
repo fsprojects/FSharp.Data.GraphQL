@@ -431,3 +431,60 @@ let ``Should be able to execute a multiple optional upload asynchronously by sen
     OptionalMultipleOptionalUploadOperation.operation.AsyncRun(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
     |> Async.RunSynchronously
     |> OptionalMultipleOptionalUploadOperation.validateResult (Some files)
+
+module UploadRequestOperation =
+    let operation =
+        Provider.Operation<"""mutation UploadRequestOperation($request: UploadRequest!) {
+            uploadRequest(request: $request) {
+              single {
+                ...File
+              }
+              multiple {
+                ...File
+              }
+              nullableMultiple {
+                ...File
+              }
+              nullableMultipleNullable {
+                ...File
+              }
+            }
+          }
+
+          fragment File on UploadedFile {
+            name
+            contentType
+            contentAsText
+          }""">()
+
+    type Operation = Provider.Operations.UploadRequestOperation
+
+    type Request = Provider.Types.UploadRequest
+
+    let validateResult (request : FilesRequest) (result : Operation.OperationResult) =
+        result.CustomData.ContainsKey("requestType") |> equals true
+        result.CustomData.["requestType"] |> equals (box "Multipart")
+        result.Data.IsSome |> equals true
+        result.Data.Value.UploadRequest.Single.ToDictionary() |> File.FromDictionary |> equals request.Single
+        result.Data.Value.UploadRequest.Multiple |> Array.map ((fun x -> x.ToDictionary()) >> File.FromDictionary) |> equals request.Multiple
+        result.Data.Value.UploadRequest.NullableMultiple |> Option.map (Array.map ((fun x -> x.ToDictionary()) >> File.FromDictionary)) |> equals request.NullableMultiple
+        result.Data.Value.UploadRequest.NullableMultipleNullable |> Option.map (Array.map (Option.map ((fun x -> x.ToDictionary()) >> File.FromDictionary))) |> equals request.NullableMultipleNullable
+
+[<Fact>]
+let ``Should be able to upload files inside another input type``() =
+    let request =
+        { Single = { Name = "single.txt"; ContentType = "text/plain"; Content = "Single file content" }
+          Multiple = 
+            [| { Name = "multiple1.txt"; ContentType = "text/plain"; Content = "Multiple files first file content" }
+               { Name = "multiple2.txt"; ContentType = "text/plain"; Content = "Multiple files second file content" } |]
+          NullableMultiple = Some [| { Name = "multiple3.txt"; ContentType = "text/plain"; Content = "Multiple files third file content" } |]
+          NullableMultipleNullable = 
+            Some [| Some { Name = "multiple4.txt"; ContentType = "text/plain"; Content = "Multiple files fourth file content" }; None |] }
+    let input = 
+        let makeUpload (x : File) = x.MakeUpload()
+        UploadRequestOperation.Request(single = makeUpload request.Single, 
+                                       multiple = Array.map makeUpload request.Multiple,
+                                       nullableMultiple = Array.map makeUpload request.NullableMultiple.Value,
+                                       nullableMultipleNullable = Array.map (Option.map makeUpload) request.NullableMultipleNullable.Value)
+    UploadRequestOperation.operation.Run(input)
+    |> UploadRequestOperation.validateResult request

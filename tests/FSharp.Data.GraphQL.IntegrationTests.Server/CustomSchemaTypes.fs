@@ -16,28 +16,17 @@ type File =
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
 module SchemaDefinitions =
-    let private coerceStreamInput (_ : Value) : Stream option =
-        failwith "Can not coerce stream input. The type `Stream` can only be passed as a variable through a multipart request."
+    let private coerceUploadInput (_ : Value) : File option =
+        failwith "Can not coerce upload input. The type `Upload` can only be passed as a variable through a multipart request."
     
-    let private coerceStreamValue (value : obj) =
+    let private coerceUploadValue (value : obj) =
         match value with
-        | :? Stream as stream -> Some stream
+        | :? File as file -> Some file
         | _ -> None
 
     /// GraphQL type for binary data stream representation.
-    let Stream : ScalarDefinition<Stream> =
-        { Name = "Stream"
-          Description = Some "The `Stream` type represents a stream of binary data."
-          CoerceInput = coerceStreamInput
-          CoerceValue = coerceStreamValue }
-
-    /// GraphQL type for multipart request file uploads.
-    let Upload : InputObjectDefinition<File> =
+    let Upload : ScalarDefinition<File> =
         { Name = "Upload"
-          Description = Some "The `Upload` type is used to represent a file upload to the server."
-          FieldsFn = fun () -> 
-          [| 
-            Define.Input("name", String, description = "Gets the name of the file.")
-            Define.Input("contentType", String, description = "Gets the MIME content type of the file.")
-            Define.Input("content", Stream, description = "Gets the content of the file.")
-          |] }
+          Description = Some "The `Upload` type represents an upload of binary data."
+          CoerceInput = coerceUploadInput
+          CoerceValue = coerceUploadValue }

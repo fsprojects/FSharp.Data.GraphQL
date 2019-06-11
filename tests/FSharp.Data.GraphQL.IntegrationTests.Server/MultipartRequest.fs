@@ -43,22 +43,42 @@ type MultipartRequest =
 
 /// Contains tools for working with GraphQL multipart requests.
 module MultipartRequest =
-    let private parseOperations (operations: Operation list) (map : IDictionary<string, string list>) (files : IDictionary<string, File>) =
-        let map =
-            map
-            |> Seq.choose (fun x -> x.Value |> Seq.tryHead |> Option.map (fun v -> x.Key, v))
-            |> Map.ofSeq
-        let files =
-            files
-            |> Seq.map (|KeyValue|)
-            |> Map.ofSeq
+    let private parseOperations (operations: Operation list) (map : IDictionary<string, string>) (files : IDictionary<string, File>) =
         let mapOperation (operationIndex : int option) (operation : Operation) =
             let findFile (varName : string) (varValue : obj) =
-                let pickFromMap varName =
-                    map |> Map.tryPick (fun k v -> if v = varName then files |> Map.tryFind k else None)
+                let tryPickMultipleFilesFromMap (length : int) (varName : string) =
+                    Seq.init length (fun ix -> 
+                        match map.TryGetValue(sprintf "%s.%i" varName ix) with
+                        | (true, v) -> Some v
+                        | _ -> None)
+                    |> Seq.map (fun key ->
+                        key |> Option.map (fun key ->
+                            match files.TryGetValue(key) with
+                            | (true, v) -> Some v
+                            | _ -> None)
+                        |> Option.flatten)
+                    |> List.ofSeq
+                let pickMultipleFilesFromMap (length : int) (varName : string) =
+                    Seq.init length (fun ix -> map.[sprintf "%s.%i" varName ix])
+                    |> Seq.map (fun key -> files.[key])
+                    |> List.ofSeq
+                let tryPickSingleFileFromMap varName =
+                    let found = map |> Seq.choose (fun kvp -> if kvp.Key = varName then Some files.[kvp.Value] else None) |> List.ofSeq
+                    match found with
+                    | [x] -> Some x
+                    | _ -> None
+                let pickSingleFileFromMap varName =
+                    map 
+                    |> Seq.choose (fun kvp -> if kvp.Key = varName then Some files.[kvp.Value] else None)
+                    |> Seq.exactlyOne
+                let pickFileRequestFromMap (request : UploadRequest) varName =
+                    { UploadRequest.Single = pickSingleFileFromMap (sprintf "%s.single" varName)
+                      Multiple = pickMultipleFilesFromMap request.Multiple.Length (sprintf "%s.multiple" varName)
+                      NullableMultiple = request.NullableMultiple |> Option.map (fun x -> pickMultipleFilesFromMap x.Length (sprintf "%s.nullableMultiple" varName))
+                      NullableMultipleNullable = request.NullableMultipleNullable |> Option.map (fun x -> tryPickMultipleFilesFromMap x.Length (sprintf "%s.nullableMultipleNullable" varName)) }
                 let rec isUpload (t : InputType) =
                     match t with
-                    | NamedType tname -> tname = "Upload"
+                    | NamedType tname -> tname = "Upload" || tname = "UploadRequest"
                     | ListType t | NonNullType t -> isUpload t
                 let ast = Parser.parse operation.Query
                 let vardefs = 
@@ -70,26 +90,29 @@ module MultipartRequest =
                 then varValue
                 else
                     match varValue with
+                    | :? JObject as jreq ->
+                        let request = jreq.ToObject<UploadRequest>(jsonSerializer)
+                        let varName =
+                            match operationIndex with
+                            | Some operationIndex -> sprintf "%i.variables.%s" operationIndex varName
+                            | None -> sprintf "variables.%s" varName
+                        pickFileRequestFromMap request varName |> box
                     | :? IEnumerable as values ->
                         values
                         |> Seq.cast<obj>
-                        |> Seq.mapi (fun valueIndex value ->
+                        |> Seq.mapi (fun valueIndex _ ->
                             let varName =
                                 match operationIndex with
-                                | Some operationIndex -> String.Format("{0}.variables.{1}.{2}", operationIndex, varName, valueIndex)
-                                | None -> String.Format("variables.{0}.{1}", varName, valueIndex)
-                            match pickFromMap varName with
-                            | Some file -> box file
-                            | None -> null)
+                                | Some operationIndex -> sprintf "%i.variables.%s.%i" operationIndex varName valueIndex
+                                | None -> sprintf "variables.%s.%i" varName valueIndex
+                            tryPickSingleFileFromMap varName |> Option.map box |> Option.toObj)
                         |> box
-                    | value ->
+                    | _ ->
                         let varName =
                             match operationIndex with
-                            | Some operationIndex -> String.Format("{0}.variables.{1}", operationIndex, varName)
-                            | None -> String.Format("variables.{0}", varName)
-                        match pickFromMap varName with
-                        | Some file -> box file
-                        | None -> value
+                            | Some operationIndex -> sprintf "%i.variables.%s" operationIndex varName
+                            | None -> sprintf "variables.%s" varName
+                        tryPickSingleFileFromMap varName |> Option.map box |> Option.toObj
             { operation with Variables = operation.Variables |> Option.map (Map.map (fun k v -> findFile k v)) }
         match operations with
         | [ operation ] -> [ mapOperation None operation ]
@@ -105,7 +128,7 @@ module MultipartRequest =
                     section <- GraphQLMultipartSection.FromSection(next)
                 }
             let mutable operations : string = null
-            let mutable map : IDictionary<string, string list> = null
+            let mutable map : IDictionary<string, string> = null
             let files = Dictionary<string, File>()
             do! readNextSection ()
             while not section.IsNone do
@@ -113,8 +136,12 @@ module MultipartRequest =
                 | Form section ->
                     let! value = section.GetValueAsync() |> Async.AwaitTask
                     match section.Name with
-                    | "operations" -> operations <- value
-                    | "map" -> map <- JsonConvert.DeserializeObject<IDictionary<string, string list>>(value)
+                    | "operations" -> 
+                        operations <- value
+                    | "map" -> 
+                        map <- JsonConvert.DeserializeObject<Map<string, string list>>(value)
+                               |> Seq.map (fun kvp -> kvp.Value.Head, kvp.Key)
+                               |> Map.ofSeq
                     | _ -> failwithf "Error reading multipart request. Unexpected section name \"%s\"." section.Name
                 | File section ->
                     let stream = new System.IO.MemoryStream(4096)

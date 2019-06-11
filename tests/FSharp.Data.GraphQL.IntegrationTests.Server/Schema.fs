@@ -23,6 +23,18 @@ type UploadedFile =
       ContentType : string
       ContentAsText : string }
 
+type UploadRequest =
+    { Single : File
+      Multiple : File list
+      NullableMultiple : File list option
+      NullableMultipleNullable : File option list option }
+
+type UploadResponse =
+    { Single : UploadedFile
+      Multiple : UploadedFile list
+      NullableMultiple : UploadedFile list option
+      NullableMultipleNullable : UploadedFile option list option }
+
 module Schema =
     let InputFieldType =
         Define.InputObject<InputField>(
@@ -63,6 +75,26 @@ module Schema =
                   Define.AutoField("contentType", String, description = "The content type of the file.")
                   Define.AutoField("contentAsText", String, description = "The content of the file as text.") ])
 
+    let UploadRequestType =
+        Define.InputObject<UploadRequest>(
+            name = "UploadRequest",
+            description = "Request for uploading files in several different forms.",
+            fields =
+                [ Define.Input("single", Upload, description = "A single file upload.")
+                  Define.Input("multiple", ListOf Upload, description = "Multiple file uploads.")
+                  Define.Input("nullableMultiple", Nullable (ListOf Upload), description = "Optional list of multiple file uploads.")
+                  Define.Input("nullableMultipleNullable", Nullable (ListOf (Nullable Upload)), description = "Optional list of multiple optional file uploads.") ])
+
+    let UploadResponseType =
+        Define.Object<UploadResponse>(
+            name = "UploadResponse",
+            description = "Contains uploaded files of an upload files request.",
+            fields =
+                [ Define.AutoField("single", UploadedFileType, description = "A single file upload.")
+                  Define.AutoField("multiple", ListOf UploadedFileType, description = "Multiple file uploads.")
+                  Define.AutoField("nullableMultiple", Nullable (ListOf UploadedFileType), description = "Optional list of multiple file uploads.")
+                  Define.AutoField("nullableMultipleNullable", Nullable (ListOf (Nullable UploadedFileType)), description = "Optional list of multiple optional file uploads.") ])
+
     let OutputType =
         Define.Object<Input>(
             name = "Output",
@@ -84,11 +116,16 @@ module Schema =
                     resolve = fun ctx _ -> ctx.TryArg("input") |> Option.flatten) ])
 
     let MutationType =
+        let contentAsText (stream : System.IO.Stream) =
+            use reader = new System.IO.StreamReader(stream, Encoding.UTF8)
+            reader.ReadToEnd()
         let mapUploadToOutput (file : File) =
-            let contentAsText =
-                use reader = new System.IO.StreamReader(file.Content, Encoding.UTF8)
-                reader.ReadToEnd()
-            { Name = file.Name; ContentType = file.ContentType; ContentAsText = contentAsText }
+            { Name = file.Name; ContentType = file.ContentType; ContentAsText = contentAsText file.Content }
+        let mapUploadRequestToOutput (request : UploadRequest) =
+            { Single = mapUploadToOutput request.Single
+              Multiple = request.Multiple |> List.map mapUploadToOutput
+              NullableMultiple = request.NullableMultiple |> Option.map (List.map mapUploadToOutput)
+              NullableMultipleNullable = request.NullableMultipleNullable |> Option.map (List.map (Option.map mapUploadToOutput)) }
         Define.Object<Root>(
             name = "Mutation",
             fields =
@@ -121,7 +158,13 @@ module Schema =
                     typedef = Nullable (ListOf (Nullable UploadedFileType)),
                     description = "Uploads (maybe) a list of files (maybe) to the server and get them back (maybe).",
                     args = [ Define.Input("files", Nullable (ListOf (Nullable Upload)), description = "The files to upload.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map (Option.map mapUploadToOutput))) ])
+                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map (Option.map mapUploadToOutput)))
+                  Define.Field(
+                    name = "uploadRequest",
+                    typedef = UploadResponseType,
+                    description = "Upload several files in different forms.",
+                    args = [ Define.Input("request", UploadRequestType, description = "The request for uploading several files in different forms.") ],
+                    resolve = fun ctx _ -> mapUploadRequestToOutput (ctx.Arg("request"))) ])
 
     let schema : ISchema<Root> = upcast Schema(QueryType, MutationType)
 

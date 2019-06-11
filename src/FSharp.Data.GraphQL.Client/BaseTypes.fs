@@ -116,6 +116,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     member x.ToEnumerable() : IEnumerable<string * obj> =
         let rec mapper (v : obj) =
             match v with
+            | null -> null
             | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
             | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
