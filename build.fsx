@@ -260,7 +260,7 @@ Target.create "RunTests" (fun _ ->
         |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
         if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
         then failwithf "Timeout while waiting for %s server to run. Can not run integration tests." projectName
-    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
     startServer ("samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj")
     startServer ("tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj")
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
