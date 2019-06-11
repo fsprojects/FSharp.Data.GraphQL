@@ -123,7 +123,7 @@ module GraphQLClient =
         async {
             let client = connection.Client
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
-            let content = new MultipartContent("form-data", boundary)
+            use content = new MultipartContent("form-data", boundary)
             let files = 
                 let rec chooseFileValues (name: string, value : obj) =
                     match value with
