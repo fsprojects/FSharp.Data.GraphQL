@@ -26,6 +26,10 @@
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <None Include="paket.references" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="System.Net.Primitives" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
   <Target Name="BeforeBuild">
     <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Restore" />
     <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp2.0" />

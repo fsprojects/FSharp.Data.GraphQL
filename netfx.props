@@ -31,6 +31,5 @@
     <Reference Include="System.IO" Condition="'$(BaseFrameworkPathOverrideForMono)' != '' AND $(TargetFramework.StartsWith('net4'))" />
     <Reference Include="System.Threading.Tasks" Condition="'$(BaseFrameworkPathOverrideForMono)' != '' AND $(TargetFramework.StartsWith('net4'))" />
     <Reference Include="System.Text.Encoding" Condition="'$(BaseFrameworkPathOverrideForMono)' != '' AND $(TargetFramework.StartsWith('net4'))" />
-    <Reference Include="System.Net.Primitives" Condition="'$(BaseFrameworkPathOverrideForMono)' != '' AND $(TargetFramework.StartsWith('net4'))" />
   </ItemGroup>
 </Project>

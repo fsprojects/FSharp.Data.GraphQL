@@ -41,5 +41,9 @@
     </None>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="System.Net.Primitives" />
+    <Reference Include="System.Net.Http" />
+  </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
