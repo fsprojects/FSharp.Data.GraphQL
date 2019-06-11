@@ -123,7 +123,7 @@ module GraphQLClient =
         async {
             let client = connection.Client
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
-            use content = new MultipartContent("form-data", boundary)
+            let content = new MultipartContent("form-data", boundary)
             let files = 
                 let rec chooseFileValues (name: string, value : obj) =
                     match value with
@@ -179,7 +179,9 @@ module GraphQLClient =
                     content.Headers.Add("Content-Type", value.ContentType)
                     content)
             fileContents |> Array.iter content.Add
-            return! postAsync client request.ServerUrl request.HttpHeaders content
+            let! result = postAsync client request.ServerUrl request.HttpHeaders content
+            content.Dispose()
+            return result
         }
 
     /// Executes a multipart request to a GraphQL server.
