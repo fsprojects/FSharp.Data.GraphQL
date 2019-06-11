@@ -41,7 +41,6 @@
     <Compile Include="MiddlewaresTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
-    <!-- <Compile Include="SerializationTests.fs" /> -->
     <Compile Include="AstExtensionsTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

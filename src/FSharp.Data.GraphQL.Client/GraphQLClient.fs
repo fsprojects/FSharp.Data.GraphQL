@@ -122,27 +122,27 @@ module GraphQLClient =
     let sendMultipartRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let client = connection.Client
-            let boundary = sprintf "----GraphQLProviderBoundary%s" (Guid.NewGuid().ToString("N"))
+            let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             use content = new MultipartContent("form-data", boundary)
             let files = 
-                let rec chooser (name: string, value : obj) =
+                let rec chooseFileValues (name: string, value : obj) =
                     match value with
                     | null | :? string -> None
                     | :? Upload as x -> Some [|name, x|]
-                    | OptionValue x -> x |> Option.bind (fun x -> chooser (name, x))
+                    | OptionValue x -> x |> Option.bind (fun x -> chooseFileValues (name, x))
                     | :? IDictionary<string, obj> as x ->
-                        x |> Seq.choose (fun kvp -> chooser (sprintf "%s.%s" name (kvp.Key.FirstCharLower()), kvp.Value))
+                        x |> Seq.choose (fun kvp -> chooseFileValues (name + "." + (kvp.Key.FirstCharLower()), kvp.Value))
                           |> Seq.collect id
                           |> Array.ofSeq
                           |> Some
                     | EnumerableValue x -> 
-                        x |> Array.mapi (fun ix x -> chooser (sprintf "%s.%i" name ix, x))
+                        x |> Array.mapi (fun ix x -> chooseFileValues (name + "." + (ix.ToString()), x))
                           |> Array.choose id // We can't choose directly above because we need to know the original index for each item
                           |> Array.collect id
                           |> Some
                     | _ -> None
                 request.Variables
-                |> Array.choose chooser
+                |> Array.choose chooseFileValues
                 |> Array.collect id
             use operationContent = 
                 let variables = 
@@ -165,7 +165,7 @@ module GraphQLClient =
             use mapContent =
                 let files =
                     files
-                    |> Array.mapi (fun ix (name, _) -> ix.ToString(), JsonValue.Array [| JsonValue.String (sprintf "variables.%s" name) |])
+                    |> Array.mapi (fun ix (name, _) -> ix.ToString(), JsonValue.Array [| JsonValue.String ("variables." + name) |])
                     |> JsonValue.Record
                 let content = new StringContent(files.ToString(JsonSaveOptions.DisableFormatting))
                 content.Headers.Add("Content-Disposition", "form-data; name=\"map\"")

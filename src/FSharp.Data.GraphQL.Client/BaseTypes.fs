@@ -112,25 +112,23 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     /// Gets a list of this provided record properties.
     member __.GetProperties() = properties
     
-    /// Produces an enumerable containing all the properties of this provided record type.
-    member x.ToEnumerable() : IEnumerable<string * obj> =
-        let rec mapper (v : obj) =
+    /// Produces a dictionary containing all the properties of this provided record type.
+    member x.ToDictionary() =
+        let rec mapDictionaryValue (v : obj) =
             match v with
             | null -> null
             | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
             | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
-            | OptionValue v -> v |> Option.map mapper |> Option.toObj
-            | EnumerableValue v -> v |> Array.map mapper |> box
+            | OptionValue v -> v |> Option.map mapDictionaryValue |> Option.toObj
+            | EnumerableValue v -> v |> Array.map mapDictionaryValue |> box
             | _ -> v
         x.GetProperties()
         |> Seq.choose (fun p -> 
             if not (isNull p.Value)
-            then Some (p.Name, mapper p.Value)
+            then Some (p.Name, mapDictionaryValue p.Value)
             else None)
-
-    /// Produces a dictionary containing all the properties of this provided record type.
-    member x.ToDictionary() = x.ToEnumerable() |> dict
+        |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value

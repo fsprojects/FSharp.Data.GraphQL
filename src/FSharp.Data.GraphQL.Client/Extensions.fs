@@ -24,7 +24,7 @@ module internal List =
     /// For each combination set, returns also items that are outside of the combination.
     /// For each item of the result list, the first tuple item is the combination, and
     /// the second tuple item is a list of items that are not in the combination set.
-    let combine (input : 'T list) =
+    let combinations (input : 'T list) =
         let rec helper (input : 'T list) (startIndex : int) (length : int) =
             let mutable combinations = List<List<'T>>()
             if length = 2

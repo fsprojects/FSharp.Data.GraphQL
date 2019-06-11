@@ -1,12 +1,15 @@
 <?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
+<Project>
+  <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
   <Import Project="..\..\netfx.props" />
   <Import Project="..\..\fsc.props" />
   <PropertyGroup>
+    <OutputType>Exe</OutputType>
     <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
+  <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
     <EmbeddedResource Remove=".paket\**" />
   </ItemGroup>
@@ -53,5 +56,9 @@
       <HintPath Condition="Exists('..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Shared.dll')">..\..\bin\FSharp.Data.GraphQL.Client\net461\FSharp.Data.GraphQL.Shared.dll</HintPath>
     </Reference>
   </ItemGroup>
+  <Target Name="AfterBuild">
+     <!-- We need this to prevent System.Net.Http.dll to be loaded on Mono, as it does have its issues with it. See https://github.com/dotnet/corefx/issues/19914 for details. -->
+     <Delete Files="bin\$(Configuration)\$(TargetFramework)\System.Net.Http.dll" Condition=" '$(TargetFramework)' == 'net47' AND '$(OS)' == 'Unix' " />
+  </Target> 
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>
