@@ -325,13 +325,13 @@ module internal ProvidedOperation =
             // Multipart requests should only be used when the user specifies a upload type name AND the type
             // is present in the query as an input value. If not, we fallback to classic requests.
             let shouldUseMultipartRequest =
-                let rec existsUploadType (t : Type) =
+                let rec existsUploadType (foundTypes : ProvidedTypeDefinition list) (t : Type) =
                     match t with
-                    | :? ProvidedTypeDefinition as tdef -> tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType)
-                    | Option t -> existsUploadType t
-                    | Array t -> existsUploadType t
+                    | :? ProvidedTypeDefinition as tdef when not (List.contains tdef foundTypes) -> tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType (tdef :: foundTypes))
+                    | Option t -> existsUploadType foundTypes t
+                    | Array t -> existsUploadType foundTypes t
                     | _ -> t = typeof<Upload>
-                variables |> Seq.exists (snd >> existsUploadType)
+                variables |> Seq.exists (snd >> existsUploadType [])
             let runMethodOverloads : MemberInfo list = 
                 let operationName = Option.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
