@@ -811,12 +811,12 @@ module internal Provider =
                                     helper [] operationAstFields operationType |> Array.ofList
                                 // Every time we run the query, we will need the schema types information as an expression.
                                 // To avoid creating the type map expression every time we call Run method, we cache it here.
-                                let operationFields = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
+                                let operationFieldsExpr = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
                                 let contextInfo : GraphQLRuntimeContextInfo option =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFields, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
+                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
                                 operationDef.AddMember(metadata.TypeWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)

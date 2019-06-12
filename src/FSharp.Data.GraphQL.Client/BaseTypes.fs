@@ -11,7 +11,6 @@ open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
 open System.ComponentModel
-open System.Collections.Generic
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
@@ -310,7 +309,7 @@ module internal JsonValueHelper =
                     match getTypeName props with
                     | Some typeName -> typeName
                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
-                let mapper (aliasOrName : string, value : JsonValue) =
+                let mapRecordProperty (aliasOrName : string, value : JsonValue) =
                     let schemaField =
                         match schemaField.Fields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
                         | Some f -> f
@@ -320,7 +319,7 @@ module internal JsonValueHelper =
                 let props =
                     props
                     |> removeTypeNameField
-                    |> Array.map (firstUpper >> mapper)
+                    |> Array.map (firstUpper >> mapRecordProperty)
                 RecordBase(typeName, props) |> makeSomeIfNeeded
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
@@ -366,14 +365,14 @@ module internal JsonValueHelper =
         fieldName, (helper true schemaField fieldValue)
 
     let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo []) (dataFields : (string * JsonValue) []) =
-        let mapper (aliasOrName : string, value : JsonValue) =
+        let mapFieldValue (aliasOrName : string, value : JsonValue) =
             let schemaField =
                 match schemaFields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
                 | Some f -> f
                 | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName schemaTypeName
             getFieldValue schemaField (aliasOrName, value)
         removeTypeNameField dataFields
-        |> Array.map (firstUpper >> mapper)
+        |> Array.map (firstUpper >> mapFieldValue)
 
     let getErrors (errors : JsonValue []) =
         let errorMapper = function
