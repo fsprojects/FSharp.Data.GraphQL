@@ -78,7 +78,7 @@ module GraphQLClient =
                    "query", JsonValue.String request.Query
                    "variables", variables |]
                 |> JsonValue.Record
-            use content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
+            let content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
             return! postAsync client request.ServerUrl request.HttpHeaders content
         }
     
@@ -180,7 +180,6 @@ module GraphQLClient =
                     content)
             fileContents |> Array.iter content.Add
             let! result = postAsync client request.ServerUrl request.HttpHeaders content
-            content.Dispose()
             return result
         }
 
