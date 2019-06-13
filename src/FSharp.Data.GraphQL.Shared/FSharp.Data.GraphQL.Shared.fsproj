@@ -10,8 +10,8 @@
     <Compile Include="Ast.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
-    <Compile Include="Validation.fs" />
     <Compile Include="Introspection.fs" />
+    <Compile Include="Validation.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="AstExtensions.fs" />
