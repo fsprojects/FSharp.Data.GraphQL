@@ -22,7 +22,8 @@
     <Compile Include="Relay\MutationTests.fs" />
     <Compile Include="AbstractionTests.fs" />
     <Compile Include="DirectivesTests.fs" />
-    <Compile Include="ValidationTests.fs" />
+    <Compile Include="TypeValidationTests.fs" />
+    <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
     <Compile Include="CoercionTests.fs" />

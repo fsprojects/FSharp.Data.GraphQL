@@ -82,7 +82,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
         runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
         runMiddlewares (fun x -> x.PostCompileSchema) (upcast schema) ignore
-        match Validation.validate schema.TypeMap with
+        match Validation.Types.validateTypeMap schema.TypeMap with
         | Validation.Success -> ()
         | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 

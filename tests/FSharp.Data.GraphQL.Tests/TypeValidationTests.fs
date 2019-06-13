@@ -1,9 +1,10 @@
 ﻿/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
-module FSharp.Data.GraphQL.Tests.ValidationTests
+module FSharp.Data.GraphQL.Tests.TypeValidationTests
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL.Validation.Types
 open FSharp.Data.GraphQL.Types
 open Xunit
 
@@ -64,4 +65,3 @@ let ``Validation should succeed if object implements interface correctly``() =
     
     let result = validateImplements TestData TestInterface
     equals Success result
-    
