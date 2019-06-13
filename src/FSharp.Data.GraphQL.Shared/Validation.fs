@@ -69,3 +69,9 @@ module Ast =
         |> List.distinctBy fst
         |> List.filter (fun (_, count) -> count > 0)
         |> List.fold (fun acc (name, count) -> acc @ Error [ (sprintf "Operation '%s' has %i definitions. Each operation name must be unique." name count ) ]) Success
+
+    let validateLoneAnonymousOperation (operations : OperationDefinition list) =
+        let unamed = operations |> List.filter (fun x -> x.Name.IsNone)
+        if unamed.Length = 1 && operations.Length = 1
+        then Success
+        else Error [ "Anonymous operations must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
