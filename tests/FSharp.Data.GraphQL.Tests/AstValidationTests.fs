@@ -353,3 +353,14 @@ fragment argOnOptional on Dog {
 }"""
     let shouldPass = Parser.parse query3 |> Validation.Ast.validateArgumentNames schemaInfo
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that arguments passed to fields are unique between themselves`` () =
+    let query =
+        """fragment duplicatedArgs on Dog {
+  doesKnowCommand(dogCommand: SIT, dogCommand: CLEAN_UP_HOUSE)
+}"""
+    let expectedFailureResult =
+        Error [ "More than one argument named 'dogCommand' was defined in field 'doesKnowCommand'. Field arguments must be unique." ]
+    let shouldFail = Parser.parse query |> Validation.Ast.validateArgumentUniqueness
+    shouldFail |> equals expectedFailureResult

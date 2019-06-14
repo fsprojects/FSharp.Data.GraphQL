@@ -335,3 +335,27 @@ module Ast =
         |> List.fold (fun acc (objectType, selectionSet) ->
             let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
             set |> List.fold (fun acc selection -> checkFieldArgumentNames acc schemaInfo selection) acc) Success
+
+    let rec private checkArgumentUniqueness (fragmentDefinitions : FragmentDefinition list) (acc : ValidationResult) =
+        function
+        | Field field -> 
+            field.Arguments
+            |> List.groupBy (fun x -> x.Name)
+            |> List.map (fun (name, args) -> name, args.Length)
+            |> List.fold (fun acc (name, length) ->
+                if length > 0
+                then acc @ Error [ sprintf "More than one argument named '%s' was defined in field '%s'. Field arguments must be unique." name field.Name ]
+                else acc) acc
+        | InlineFragment frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness fragmentDefinitions acc) |> List.reduce (@)
+        | FragmentSpread spread ->
+            match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+            | Some frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness fragmentDefinitions acc) |> List.reduce (@)
+            | None -> acc
+
+    let validateArgumentUniqueness (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.collect (function
+            | FragmentDefinition frag -> frag.SelectionSet
+            | OperationDefinition op -> op.SelectionSet)
+        |> List.fold (fun acc def -> checkArgumentUniqueness fragmentDefinitions acc def) Success
