@@ -67,16 +67,18 @@ type SchemaInfo =
       QueryType : IntrospectionType option
       SubscriptionType : IntrospectionType option
       MutationType : IntrospectionType option }
+    static member private TryGetSchemaTypeByRef (schemaTypes : Map<string, IntrospectionType>) (tref : IntrospectionTypeRef) =
+        match tref.Kind with
+        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> SchemaInfo.TryGetSchemaTypeByRef schemaTypes tref.OfType.Value
+        | _ -> tref.Name |> Option.bind schemaTypes.TryFind
+    member x.TryGetTypeByRef(tref : IntrospectionTypeRef) =
+        SchemaInfo.TryGetSchemaTypeByRef x.SchemaTypes tref
     static member FromIntrospectionSchema(schema : IntrospectionSchema) =
         let schemaTypes = schema.Types |> Seq.map (fun x -> x.Name, x) |> Map.ofSeq
-        let rec getSchemaType (tref : IntrospectionTypeRef) =
-            match tref.Kind with
-            | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getSchemaType tref.OfType.Value
-            | _ -> tref.Name |> Option.bind schemaTypes.TryFind
         { SchemaTypes = schema.Types |> Seq.map (fun x -> x.Name, x) |> Map.ofSeq
-          QueryType = getSchemaType schema.QueryType
-          MutationType = schema.MutationType |> Option.bind getSchemaType
-          SubscriptionType = schema.SubscriptionType |> Option.bind getSchemaType }
+          QueryType = SchemaInfo.TryGetSchemaTypeByRef schemaTypes schema.QueryType
+          MutationType = schema.MutationType |> Option.bind (SchemaInfo.TryGetSchemaTypeByRef schemaTypes)
+          SubscriptionType = schema.SubscriptionType |> Option.bind (SchemaInfo.TryGetSchemaTypeByRef schemaTypes) }
     member x.TryGetOperationType(ot : OperationType) =
         match ot with
         | Query -> x.QueryType
@@ -84,6 +86,15 @@ type SchemaInfo =
         | Subscription -> x.SubscriptionType
     member x.TryGetTypeByName(name : string) =
         x.SchemaTypes.TryFind(name)
+
+type SelectionInfo =
+    { Alias : string option
+      Name : string
+      SelectionSet : SelectionInfo list
+      Args : Argument list
+      FieldType : IntrospectionTypeRef
+      ParentType : IntrospectionType }
+    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
 module Ast =
     let private getOperationDefinitions (ast : Document) =
@@ -179,3 +190,85 @@ module Ast =
                 | None when odef.Name.IsNone -> acc @ Error [ "Could not find operation in the schema." ]
                 | None -> acc @ Error [ sprintf "Could not find operation '%s' in the schema." odef.Name.Value ]
             | FragmentDefinition frag -> validateFragmentDefinition acc frag) Success
+
+    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (selectionSet : Selection list) =
+        let getFragSelectionInfo (frag : FragmentDefinition) =
+            let fragType =
+                match frag.TypeCondition with
+                | Some typeCondition ->
+                    match schemaInfo.TryGetTypeByName(typeCondition) with
+                    | Some fragType -> fragType
+                    | None -> failwithf "Failure reading schema. Can not find type '%s' specified by a fragment type condition." typeCondition
+                | None -> parentType
+            getSelectionSetInfo schemaInfo fragmentDefinitions fragType frag.SelectionSet
+        selectionSet
+        |> List.collect (function
+            | Field field ->
+                let fieldType = 
+                    match parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten with
+                    | Some t -> t.Type
+                    | None -> failwithf "Failure reading schema. Can not find field '%s' of type '%s'." field.Name parentType.Name
+                [ { Alias = field.Alias
+                    Name = field.Name
+                    SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType field.SelectionSet
+                    Args = field.Arguments
+                    FieldType = fieldType
+                    ParentType = parentType } ]
+            | InlineFragment frag -> getFragSelectionInfo frag
+            | FragmentSpread spread ->
+                match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+                | Some frag -> getFragSelectionInfo frag
+                | None -> failwithf "Failure reading schema. Can not find fragment '%s'." spread.Name)
+
+    let rec private sameResponseShape (acc : ValidationResult) (fieldA : SelectionInfo, fieldB : SelectionInfo) =
+        if fieldA.FieldType = fieldB.FieldType
+        then
+            let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
+            let fieldsForName = mergedSet |> List.groupBy (fun x -> x.AliasOrName)
+            fieldsForName
+            |> List.map snd
+            |> List.fold (fun acc selectionSet ->
+                if selectionSet.Length < 2
+                then acc
+                else List.pairwise selectionSet |> List.fold (fun acc pairs -> sameResponseShape acc pairs) acc) acc
+        else acc @ Error [ sprintf "Field name or alias '%s' appears two times, but they do not have the same return types in the scope of the parent type." fieldA.AliasOrName ]
+
+    let rec private fieldsInSetCanMerge (set : SelectionInfo list) =
+        let fieldsForName = set |> List.groupBy (fun x -> x.AliasOrName)
+        fieldsForName
+        |> List.fold (fun acc (aliasOrName, selectionSet) ->
+            if selectionSet.Length < 2
+            then acc
+            else
+                List.pairwise selectionSet
+                |> List.map (fun pairs -> pairs, sameResponseShape acc pairs)
+                |> List.map (fun ((fieldA, fieldB), acc) ->
+                    if fieldA.ParentType = fieldB.ParentType || fieldA.ParentType.Kind <> TypeKind.OBJECT || fieldB.ParentType.Kind <> TypeKind.OBJECT
+                    then
+                        if fieldA.Name <> fieldB.Name then acc @ Error [ sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Name fieldB.Name ]
+                        else if fieldA.Args <> fieldB.Args then acc @ Error [ sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Name ]
+                        else
+                            let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
+                            acc @ (fieldsInSetCanMerge mergedSet)
+                    else acc)
+                |> List.reduce (@)) Success
+
+    let validateFieldSelectionMerging (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.choose (function 
+            | FragmentDefinition f ->
+                match f.TypeCondition with
+                | Some typeCondition ->
+                    match schemaInfo.TryGetTypeByName typeCondition with
+                    | Some ftype -> Some (ftype, f.SelectionSet)
+                    | None -> None
+                | None -> None
+            | OperationDefinition o ->
+                match schemaInfo.TryGetOperationType(o.OperationType) with
+                | Some otype -> Some (otype, o.SelectionSet)
+                | None -> None)
+        |> List.fold (fun acc (objectType, selectionSet) ->
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            acc @ (fieldsInSetCanMerge set)) Success
+

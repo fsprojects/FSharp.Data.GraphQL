@@ -6,10 +6,26 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open Xunit
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Ast
 
-type Dog = { Name : string }
+type Command =
+    | SIT = 1
+    | HEEL = 2
+    | JUMP = 3
 
-type Cat = { Name : string }
+type Dog = 
+    { Name : string
+      BarkVolume : int
+      Nickname : string
+      KnownCommands : Command list }
+    member x.DoesKnowCommand(cmd : Command) = x.KnownCommands |> List.contains cmd
+
+type Cat = 
+    { Name : string
+      MeowVolume : int
+      Nickname : string
+      KnownCommands : Command list }
+    member x.DoesKnowCommand(cmd : Command) = x.KnownCommands |> List.contains cmd
 
 type CatOrDog =
     | Cat of Cat
@@ -19,11 +35,35 @@ type Root =
     { Cat : Cat
       Dog : Dog }
 
+let Command =
+    Define.Enum<Command>(
+        name = "Command",
+        options = 
+            [ Define.EnumValue("SIT", Command.SIT)
+              Define.EnumValue("HEEL", Command.HEEL)
+              Define.EnumValue("JUMP", Command.JUMP) ])
+
 let Pet = Define.Interface<obj>("Pet", [ Define.Field("name", String) ])
 
-let Dog = Define.Object<Dog>("Dog", fields = [ Define.AutoField("name", String) ], interfaces = [ Pet ])
+let Dog = 
+    Define.Object<Dog>(
+        name = "Dog", 
+        fields = 
+            [ Define.AutoField("name", String)
+              Define.AutoField("barkVolume", Int)
+              Define.AutoField("nickname", String)
+              Define.Field("doesKnowCommand", Boolean, [ Define.Input("dogCommand", Command) ], fun ctx (dog : Dog) -> dog.DoesKnowCommand(ctx.Arg("dogCommand"))) ], 
+        interfaces = [ Pet ])
 
-let Cat = Define.Object<Cat>("Cat", fields = [ Define.AutoField("name", String) ], interfaces = [ Pet ])
+let Cat = 
+    Define.Object<Cat>(
+        name = "Cat", 
+        fields = 
+            [ Define.AutoField("name", String)
+              Define.AutoField("meowVolume", Int)
+              Define.AutoField("nickname", String)
+              Define.Field("doesKnowCommand", Boolean, [ Define.Input("catCommand", Command) ], fun ctx (dog : Cat) -> dog.DoesKnowCommand(ctx.Arg("catCommand")))], 
+        interfaces = [ Pet ])
 
 let CatOrDog =
     Define.Union(
@@ -33,6 +73,9 @@ let CatOrDog =
         resolveType = (function | Cat _ -> upcast Cat | Dog _ -> upcast Dog))
 
 let Root = Define.Object<Root>("Root", [ Define.Field("catOrDog", CatOrDog) ])
+
+let schema : ISchema = upcast Schema(Root)
+let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema.Introspected)
 
 [<Fact>]
 let ``Validation should grant that each operation name is unique in the document`` () =
@@ -111,8 +154,6 @@ fragment multipleSubscriptions on Subscription {
 
 [<Fact>]
 let ``Validation should grant that selections contains only fields of their scoped types`` () =
-    let schema : ISchema = upcast Schema(Root)
-    let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema.Introspected)
     let query1 =
         """fragment fieldNotDefined on Dog {
   meowVolume
@@ -138,3 +179,90 @@ fragment aliasedLyingFieldTargetNotDefined on Dog {
                 "Field 'barkVolume' is not defined in schema type 'CatOrDog'." ]
     let actual = [query1; query2; query3] |> List.map (Parser.parse >> Validation.Ast.validateSelectionFieldTypes schemaInfo) |> List.reduce (@)
     actual |> equals expected
+
+[<Fact>]
+let ``Validation should grant that fields in any selection set can be merged`` () =
+    let query1 =
+        """fragment conflictingBecauseAlias on Dog {
+  name: nickname
+  name
+}"""
+    let query2 =
+        """fragment conflictingArgsOnValues on Dog {
+  doesKnowCommand(dogCommand: SIT)
+  doesKnowCommand(dogCommand: HEEL)
+}
+
+fragment conflictingArgsValueAndVar on Dog {
+  doesKnowCommand(dogCommand: SIT)
+  doesKnowCommand(dogCommand: $dogCommand)
+}
+
+fragment conflictingArgsWithVars on Dog {
+  doesKnowCommand(dogCommand: $varOne)
+  doesKnowCommand(dogCommand: $varTwo)
+}
+
+fragment differingArgs on Dog {
+  doesKnowCommand(dogCommand: SIT)
+  doesKnowCommand
+}"""
+    let query3 =
+        """fragment conflictingDifferingResponses on Pet {
+  ... on Dog {
+    someValue: nickname
+  }
+  ... on Cat {
+    someValue: meowVolume
+  }
+}"""
+    let expectedFailureResult = 
+        Error [ "Field name or alias 'name' is referring to fields 'nickname' and 'name', but they are different fields in the scope of the parent type."
+                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                "Field name or alias 'someValue' appears two times, but they do not have the same return types in the scope of the parent type."]
+    let shouldFail = [query1; query2; query3] |> List.map (Parser.parse >> Validation.Ast.validateFieldSelectionMerging schemaInfo) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query4 =
+        """fragment mergeIdenticalFields on Dog {
+  name
+  name
+}
+
+fragment mergeIdenticalAliasesAndFields on Dog {
+  otherName: name
+  otherName: name
+}"""
+    let query5 =
+        """fragment mergeIdenticalFieldsWithIdenticalArgs on Dog {
+  doesKnowCommand(dogCommand: SIT)
+  doesKnowCommand(dogCommand: SIT)
+}
+
+fragment mergeIdenticalFieldsWithIdenticalValues on Dog {
+  doesKnowCommand(dogCommand: $dogCommand)
+  doesKnowCommand(dogCommand: $dogCommand)
+}"""
+    let query6 =
+        """fragment safeDifferingFields on Pet {
+  ... on Dog {
+    volume: barkVolume
+  }
+  ... on Cat {
+    volume: meowVolume
+  }
+}
+
+fragment safeDifferingArgs on Pet {
+  ... on Dog {
+    doesKnowCommand(dogCommand: SIT)
+  }
+  ... on Cat {
+    doesKnowCommand(catCommand: JUMP)
+  }
+}"""
+    let shouldPass = [query4; query5; query6] |> List.map (Parser.parse >> Validation.Ast.validateFieldSelectionMerging schemaInfo) |> List.reduce (@)
+    shouldPass |> equals Success
+    
