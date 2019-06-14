@@ -62,6 +62,29 @@ module Types =
         |> Seq.map snd
         |> Seq.fold (fun acc namedDef -> acc @ validateType namedDef) Success
 
+type SchemaInfo =
+    { SchemaTypes : Map<string, IntrospectionType>
+      QueryType : IntrospectionType option
+      SubscriptionType : IntrospectionType option
+      MutationType : IntrospectionType option }
+    static member FromIntrospectionSchema(schema : IntrospectionSchema) =
+        let schemaTypes = schema.Types |> Seq.map (fun x -> x.Name, x) |> Map.ofSeq
+        let rec getSchemaType (tref : IntrospectionTypeRef) =
+            match tref.Kind with
+            | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getSchemaType tref.OfType.Value
+            | _ -> tref.Name |> Option.bind schemaTypes.TryFind
+        { SchemaTypes = schema.Types |> Seq.map (fun x -> x.Name, x) |> Map.ofSeq
+          QueryType = getSchemaType schema.QueryType
+          MutationType = schema.MutationType |> Option.bind getSchemaType
+          SubscriptionType = schema.SubscriptionType |> Option.bind getSchemaType }
+    member x.TryGetOperationType(ot : OperationType) =
+        match ot with
+        | Query -> x.QueryType
+        | Mutation -> x.MutationType
+        | Subscription -> x.SubscriptionType
+    member x.TryGetTypeByName(name : string) =
+        x.SchemaTypes.TryFind(name)
+
 module Ast =
     let private getOperationDefinitions (ast : Document) =
         ast.Definitions |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
@@ -92,7 +115,7 @@ module Ast =
             | selection :: tail ->
                 let acc =
                     match selection with
-                    | Field field -> field.Name :: acc
+                    | Field field -> field.AliasOrName :: acc
                     | InlineFragment frag -> getFieldNames acc frag.SelectionSet
                     | FragmentSpread spread ->
                         let frag = fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
@@ -116,3 +139,43 @@ module Ast =
         getOperationDefinitions ast
         |> List.choose (fun def -> if def.OperationType = Subscription then Some (def.Name, getFieldNames [] def.SelectionSet) else None)
         |> List.fold (fun acc (name, fieldNames) -> validate acc name fieldNames) Success
+
+    let validateSelections (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        let rec validateFragmentDefinition (acc : ValidationResult) (frag : FragmentDefinition)  =
+           match frag.TypeCondition with
+           | Some typeCondition ->
+               match schemaInfo.TryGetTypeByName typeCondition with
+               | Some fragType -> checkFieldsOfType acc frag.SelectionSet fragType
+               | None when frag.Name.IsSome -> acc @ Error [ sprintf "Fragment '%s' has type condition '%s', but that type does not exist in schema definition." frag.Name.Value frag.TypeCondition.Value ]
+               | None -> acc @ Error [ sprintf "A fragment has type condition '%s', but that type does not exist in schema definition." typeCondition ]
+           | None when frag.Name.IsSome -> acc @ Error [ sprintf "Fragment '%s' does not have a type condition." frag.Name.Value ]
+           | None -> acc @ Error [ "Fragment does not have a type condition." ]
+        and checkFieldsOfType (acc : ValidationResult) (selectionSet : Selection list) (objectType : IntrospectionType) =
+            match selectionSet with
+            | [] -> acc
+            | selection :: tail ->
+                let acc =
+                    match selection with
+                    | Field field ->
+                       let exists = objectType.Fields |> Option.map (Array.exists (fun f -> f.Name = field.Name)) |> Option.defaultValue false
+                       if not exists
+                       then acc @ Error [ sprintf "Field '%s' is not defined in schema type '%s'." field.Name objectType.Name ]
+                       else acc
+                    | InlineFragment frag -> validateFragmentDefinition acc frag
+                    | FragmentSpread spread ->
+                       let frag = fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                       match frag with
+                       | Some frag -> validateFragmentDefinition acc frag
+                       | None -> acc @ Error [ sprintf "Fragment '%s' was not defined in the document." spread.Name ]
+                checkFieldsOfType acc tail objectType
+        ast.Definitions
+        |> List.fold (fun acc def ->
+            match def with
+            | OperationDefinition odef ->
+                let operationType = schemaInfo.TryGetOperationType(odef.OperationType)
+                match operationType with
+                | Some otype -> checkFieldsOfType acc odef.SelectionSet otype
+                | None when odef.Name.IsNone -> acc @ Error [ "Could not find operation in the schema." ]
+                | None -> acc @ Error [ sprintf "Could not find operation '%s' in the schema." odef.Name.Value ]
+            | FragmentDefinition frag -> validateFragmentDefinition acc frag) Success
