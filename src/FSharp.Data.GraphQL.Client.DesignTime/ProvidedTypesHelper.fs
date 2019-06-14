@@ -416,7 +416,12 @@ type internal ProvidedOperationMetadata =
 
 module internal Provider =
     let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
-        let generateWrapper name = ProvidedTypeDefinition(name, None, isSealed = true)
+        let generateWrapper name = 
+            let rec resolveWrapperName actual =
+                if schemaTypes.ContainsKey(actual)
+                then resolveWrapperName (actual + "Fields")
+                else actual
+            ProvidedTypeDefinition(resolveWrapperName name, None, isSealed = true)
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
@@ -424,7 +429,7 @@ module internal Provider =
             if wrappersByPath.ContainsKey path
             then wrappersByPath.[path]
             else
-                let wrapper = generateWrapper (path.Head.FirstCharUpper())
+                let wrapper = generateWrapper (path.Head.FirstCharUpper() + "Fields")
                 let upperWrapper =
                     let path = path.Tail
                     if wrappersByPath.ContainsKey(path)
