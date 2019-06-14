@@ -92,7 +92,7 @@ type SelectionInfo =
       Name : string
       SelectionSet : SelectionInfo list
       Args : Argument list
-      FieldType : IntrospectionTypeRef
+      FieldType : IntrospectionTypeRef option
       ParentType : IntrospectionType }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
@@ -195,7 +195,7 @@ module Ast =
         let getFragSelectionInfo (frag : FragmentDefinition) =
             let fragType =
                 match frag.TypeCondition with
-                | Some typeCondition ->
+                | Some typeCondition -> 
                     match schemaInfo.TryGetTypeByName(typeCondition) with
                     | Some fragType -> fragType
                     | None -> failwithf "Failure reading schema. Can not find type '%s' specified by a fragment type condition." typeCondition
@@ -204,10 +204,7 @@ module Ast =
         selectionSet
         |> List.collect (function
             | Field field ->
-                let fieldType = 
-                    match parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten with
-                    | Some t -> t.Type
-                    | None -> failwithf "Failure reading schema. Can not find field '%s' of type '%s'." field.Name parentType.Name
+                let fieldType = parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten |> Option.map (fun f -> f.Type)
                 [ { Alias = field.Alias
                     Name = field.Name
                     SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType field.SelectionSet
@@ -253,22 +250,48 @@ module Ast =
                     else acc)
                 |> List.reduce (@)) Success
 
+    let private tryGetSelectionSetAndType (schemaInfo : SchemaInfo) =
+        function
+        | FragmentDefinition f ->
+            match f.TypeCondition with
+            | Some typeCondition ->
+                match schemaInfo.TryGetTypeByName typeCondition with
+                | Some ftype -> Some (ftype, f.SelectionSet)
+                | None -> None
+            | None -> None
+        | OperationDefinition o ->
+            match schemaInfo.TryGetOperationType(o.OperationType) with
+            | Some otype -> Some (otype, o.SelectionSet)
+            | None -> None
+
     let validateFieldSelectionMerging (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         ast.Definitions
-        |> List.choose (function 
-            | FragmentDefinition f ->
-                match f.TypeCondition with
-                | Some typeCondition ->
-                    match schemaInfo.TryGetTypeByName typeCondition with
-                    | Some ftype -> Some (ftype, f.SelectionSet)
-                    | None -> None
-                | None -> None
-            | OperationDefinition o ->
-                match schemaInfo.TryGetOperationType(o.OperationType) with
-                | Some otype -> Some (otype, o.SelectionSet)
-                | None -> None)
+        |> List.choose (tryGetSelectionSetAndType schemaInfo)
         |> List.fold (fun acc (objectType, selectionSet) ->
             let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
             acc @ (fieldsInSetCanMerge set)) Success
 
+    let rec private checkLeafFieldSelection (acc : ValidationResult) (selection : SelectionInfo) =
+        let rec validateByKind (acc : ValidationResult) (fieldType : IntrospectionTypeRef) (selectionSetLength : int) =
+            match fieldType.Kind with
+            | TypeKind.NON_NULL | TypeKind.LIST when fieldType.OfType.IsSome -> 
+                validateByKind acc fieldType.OfType.Value selectionSetLength
+            | TypeKind.SCALAR | TypeKind.ENUM when selectionSetLength > 0 ->
+                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should not contain inner fields in its selection." selection.Name selection.ParentType.Name (fieldType.Kind.ToString()) ]
+            | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.OBJECT when selectionSetLength = 0 ->
+                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Name selection.ParentType.Name (fieldType.Kind.ToString()) ]
+            | _ -> acc
+        let acc =
+            match selection.FieldType with
+            | Some fieldType -> validateByKind acc fieldType selection.SelectionSet.Length
+            | None -> acc
+        selection.SelectionSet |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc
+
+    let validateLeafFieldSelections (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.choose (tryGetSelectionSetAndType schemaInfo)
+        |> List.fold (fun acc (objectType, selectionSet) ->
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            set |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc) Success

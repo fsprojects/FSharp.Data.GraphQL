@@ -6,12 +6,17 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open Xunit
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Ast
 
 type Command =
     | SIT = 1
     | HEEL = 2
     | JUMP = 3
+
+type IPet =
+    abstract Name : string
+
+type Human =
+    { Name : string }
 
 type Dog = 
     { Name : string
@@ -19,6 +24,8 @@ type Dog =
       Nickname : string
       KnownCommands : Command list }
     member x.DoesKnowCommand(cmd : Command) = x.KnownCommands |> List.contains cmd
+    interface IPet with
+        member x.Name = x.Name
 
 type Cat = 
     { Name : string
@@ -26,14 +33,17 @@ type Cat =
       Nickname : string
       KnownCommands : Command list }
     member x.DoesKnowCommand(cmd : Command) = x.KnownCommands |> List.contains cmd
+    interface IPet with
+        member x.Name = x.Name
 
 type CatOrDog =
     | Cat of Cat
     | Dog of Dog
 
 type Root =
-    { Cat : Cat
-      Dog : Dog }
+    { CatOrDog : CatOrDog
+      Pet : IPet
+      Human : Human }
 
 let Command =
     Define.Enum<Command>(
@@ -43,7 +53,7 @@ let Command =
               Define.EnumValue("HEEL", Command.HEEL)
               Define.EnumValue("JUMP", Command.JUMP) ])
 
-let Pet = Define.Interface<obj>("Pet", [ Define.Field("name", String) ])
+let Pet = Define.Interface<IPet>("Pet", [ Define.Field("name", String) ])
 
 let Dog = 
     Define.Object<Dog>(
@@ -67,12 +77,24 @@ let Cat =
 
 let CatOrDog =
     Define.Union(
-        "CatOrDog",
+        name = "CatOrDog",
         options = [ Cat; Dog ],
         resolveValue = (function | Cat c -> box c | Dog d -> upcast d),
         resolveType = (function | Cat _ -> upcast Cat | Dog _ -> upcast Dog))
 
-let Root = Define.Object<Root>("Root", [ Define.Field("catOrDog", CatOrDog) ])
+let Human =
+    Define.Object<Human>(
+        name = "Human",
+        fields =
+            [ Define.AutoField("name", String) ])
+
+let Root = 
+    Define.Object<Root>(
+        name = "Root", 
+        fields =
+            [ Define.Field("catOrDog", CatOrDog)
+              Define.Field("pet", Pet)
+              Define.Field("human", Human) ])
 
 let schema : ISchema = upcast Schema(Root)
 let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema.Introspected)
@@ -266,3 +288,36 @@ fragment safeDifferingArgs on Pet {
     let shouldPass = [query4; query5; query6] |> List.map (Parser.parse >> Validation.Ast.validateFieldSelectionMerging schemaInfo) |> List.reduce (@)
     shouldPass |> equals Success
     
+[<Fact>]
+let ``Validation should grant that leaf fields have sub fields when necessary, and do not have if they are scalar or enums`` () =
+    let query1 =
+        """fragment scalarSelectionsNotAllowedOnInt on Dog {
+  barkVolume {
+    sinceWhen
+  }
+}"""
+    let query2 =
+        """query directQueryOnObjectWithoutSubFields {
+  human
+}
+
+query directQueryOnInterfaceWithoutSubFields {
+  pet
+}
+
+query directQueryOnUnionWithoutSubFields {
+  catOrDog
+}"""
+    let expectedFailureResult = 
+        Error [ "Field 'barkVolume' of 'Dog' type is of type kind SCALAR, and therefore should not contain inner fields in its selection."
+                "Field 'human' of 'Root' type is of type kind OBJECT, and therefore should have inner fields in its selection."
+                "Field 'pet' of 'Root' type is of type kind INTERFACE, and therefore should have inner fields in its selection."
+                "Field 'catOrDog' of 'Root' type is of type kind UNION, and therefore should have inner fields in its selection." ]
+    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateLeafFieldSelections schemaInfo) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query4 =
+        """fragment scalarSelection on Dog {
+  barkVolume
+}"""
+    let shouldPass = Parser.parse query4 |> Validation.Ast.validateLeafFieldSelections schemaInfo
+    shouldPass |> equals Success
