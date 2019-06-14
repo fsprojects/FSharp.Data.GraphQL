@@ -93,13 +93,26 @@ let Human =
         fields =
             [ Define.AutoField("name", String) ])
 
+let Arguments =
+    Define.Object<obj>(
+        name = "Arguments",
+        fields =
+            [ Define.Field("multipleReqs", Int, [ Define.Input("x", Int); Define.Input("y", Int) ], fun ctx _ -> ctx.Arg("x") + ctx.Arg("y"))
+              Define.Field("booleanArgField", Nullable Boolean, [ Define.Input("booleanArg", Nullable Boolean) ], fun ctx _ -> ctx.Arg("booleanArg"))
+              Define.Field("floatArgField", Nullable Float, [ Define.Input("floatArg", Nullable Float) ], fun ctx _ -> ctx.Arg("floatArg"))
+              Define.Field("intArgField", Nullable Int, [ Define.Input("intArg", Nullable Int) ], fun ctx _ -> ctx.Arg("intArg"))
+              Define.Field("nonNullBooleanArgField", Boolean, [ Define.Input("nonNullBooleanArg", Boolean) ], fun ctx _ -> ctx.Arg("nonNullBooleanArg"))
+              Define.Field("booleanListArgField", Nullable (ListOf (Nullable Boolean)), [ Define.Input("booleanListArg", ListOf (Nullable Boolean)) ], fun ctx _ -> ctx.Arg("booleanListArg") |> Some)
+              Define.Field("optionalNonNullBooleanArgField", Boolean, [ Define.Input("optionalBooleanArg", Boolean, false) ], fun ctx _ -> ctx.Arg("optionalBooleanArg")) ])
+
 let Root = 
     Define.Object<Root>(
         name = "Root", 
         fields =
-            [ Define.Field("catOrDog", CatOrDog)
-              Define.Field("pet", Pet)
-              Define.Field("human", Human) ])
+            [ Define.AutoField("catOrDog", CatOrDog)
+              Define.AutoField("pet", Pet)
+              Define.AutoField("human", Human)
+              Define.Field("arguments", Arguments) ])
 
 let schema : ISchema = upcast Schema(Root)
 
@@ -364,3 +377,33 @@ let ``Validation should grant that arguments passed to fields are unique between
         Error [ "More than one argument named 'dogCommand' was defined in field 'doesKnowCommand'. Field arguments must be unique." ]
     let shouldFail = Parser.parse query |> Validation.Ast.validateArgumentUniqueness
     shouldFail |> equals expectedFailureResult
+
+[<Fact>]
+let ``Validation should grant that required arguments with no default values are passed`` () =
+    let query1 =
+        """fragment missingRequiredArg on Arguments {
+  nonNullBooleanArgField
+}"""
+    let query2 =
+        """fragment missingRequiredArg on Arguments {
+  nonNullBooleanArgField(nonNullBooleanArg: null)
+}"""
+    let expectedFailureResult =
+        Error [ "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value."
+                "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value." ]
+    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateRequiredArguments schemaInfo) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query3 =
+        """fragment goodBooleanArg on Arguments {
+  booleanArgField(booleanArg: true)
+}
+
+fragment goodNonNullArg on Arguments {
+  nonNullBooleanArgField(nonNullBooleanArg: true)
+}"""
+    let query4 =
+        """fragment goodBooleanArgDefault on Arguments {
+  booleanArgField
+}"""
+    let shouldPass = [query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateRequiredArguments schemaInfo) |> List.reduce (@)
+    shouldPass |> equals Success

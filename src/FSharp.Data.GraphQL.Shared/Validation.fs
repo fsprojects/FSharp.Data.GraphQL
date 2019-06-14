@@ -307,25 +307,22 @@ module Ast =
     let rec private checkFieldArgumentNames (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         match selection.FieldType with
         | Some fieldTypeRef ->
-            match schemaInfo.TryGetTypeByRef(fieldTypeRef) with
-            | Some fieldType ->
-                let acc =
-                    selection.Arguments
+            let acc =
+                selection.Arguments
+                |> List.fold (fun acc arg ->
+                    match selection.ArgDefs |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
+                    | Some _ -> acc
+                    | None -> acc @ Error [ sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Name selection.ParentType.Name arg.Name ]) acc
+            selection.Directives
+            |> List.fold (fun acc directive ->
+                match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+                | Some directiveType ->
+                    directive.Arguments
                     |> List.fold (fun acc arg ->
-                        match selection.ArgDefs |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
+                        match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
                         | Some _ -> acc
-                        | None -> acc @ Error [ sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Name selection.ParentType.Name arg.Name ]) acc
-                selection.Directives
-                |> List.fold (fun acc directive ->
-                    match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
-                    | Some directiveType ->
-                        directive.Arguments
-                        |> List.fold (fun acc arg ->
-                            match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
-                            | Some _ -> acc
-                            | None -> acc @ Error [ sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Name selection.ParentType.Name arg.Name ]) acc
-                    | None -> acc) acc
-            | None -> failwithf "Failure reading schema. Could not find type of field '%s' in type '%s'." selection.Name selection.ParentType.Name
+                        | None -> acc @ Error [ sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Name selection.ParentType.Name arg.Name ]) acc
+                | None -> acc) acc
         | None -> acc
 
     let validateArgumentNames (schemaInfo : SchemaInfo) (ast : Document) =
@@ -336,7 +333,7 @@ module Ast =
             let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
             set |> List.fold (fun acc selection -> checkFieldArgumentNames acc schemaInfo selection) acc) Success
 
-    let rec private checkArgumentUniqueness (fragmentDefinitions : FragmentDefinition list) (acc : ValidationResult) =
+    let rec private checkArgumentUniqueness (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) =
         function
         | Field field -> 
             field.Arguments
@@ -346,10 +343,10 @@ module Ast =
                 if length > 0
                 then acc @ Error [ sprintf "More than one argument named '%s' was defined in field '%s'. Field arguments must be unique." name field.Name ]
                 else acc) acc
-        | InlineFragment frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness fragmentDefinitions acc) |> List.reduce (@)
+        | InlineFragment frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) |> List.reduce (@)
         | FragmentSpread spread ->
             match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
-            | Some frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness fragmentDefinitions acc) |> List.reduce (@)
+            | Some frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) |> List.reduce (@)
             | None -> acc
 
     let validateArgumentUniqueness (ast : Document) =
@@ -358,4 +355,37 @@ module Ast =
         |> List.collect (function
             | FragmentDefinition frag -> frag.SelectionSet
             | OperationDefinition op -> op.SelectionSet)
-        |> List.fold (fun acc def -> checkArgumentUniqueness fragmentDefinitions acc def) Success
+        |> List.fold (fun acc def -> checkArgumentUniqueness acc fragmentDefinitions def) Success
+
+    let rec private checkRequiredArguments (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
+        let acc =
+            selection.ArgDefs
+            |> Option.map (Array.fold (fun acc argDef ->
+                match argDef.Type.Kind with
+                | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
+                    match selection.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
+                    | Some arg when arg.Value <> EnumValue "null" -> acc // TODO: null values are being mapped into an enum value, this should be fixed in the parser! A null value must be able to be parsed.
+                    | _ -> acc @ Error [ sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Name selection.ParentType.Name ]
+                | _ -> acc) acc)
+            |> Option.defaultValue acc
+        selection.Directives
+        |> List.fold (fun acc directive ->
+            match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+            | Some directiveType ->
+                directiveType.Args
+                |> Array.fold (fun acc argDef ->
+                    match argDef.Type.Kind with
+                    | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
+                        match selection.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
+                        | Some arg when arg.Value <> EnumValue "null" -> acc
+                        | _ -> acc @ Error [ sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Name selection.ParentType.Name ]
+                    | _ -> acc) acc
+            | None -> acc) acc
+
+    let validateRequiredArguments (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.choose (tryGetSelectionSetAndType schemaInfo)
+        |> List.fold (fun acc (objectType, selectionSet) ->
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            set |> List.fold (fun acc selection -> checkRequiredArguments acc schemaInfo selection) acc) Success
