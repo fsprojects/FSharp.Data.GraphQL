@@ -66,7 +66,8 @@ type SchemaInfo =
     { SchemaTypes : Map<string, IntrospectionType>
       QueryType : IntrospectionType option
       SubscriptionType : IntrospectionType option
-      MutationType : IntrospectionType option }
+      MutationType : IntrospectionType option
+      Directives : IntrospectionDirective [] }
     static member private TryGetSchemaTypeByRef (schemaTypes : Map<string, IntrospectionType>) (tref : IntrospectionTypeRef) =
         match tref.Kind with
         | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> SchemaInfo.TryGetSchemaTypeByRef schemaTypes tref.OfType.Value
@@ -78,7 +79,8 @@ type SchemaInfo =
         { SchemaTypes = schema.Types |> Seq.map (fun x -> x.Name, x) |> Map.ofSeq
           QueryType = SchemaInfo.TryGetSchemaTypeByRef schemaTypes schema.QueryType
           MutationType = schema.MutationType |> Option.bind (SchemaInfo.TryGetSchemaTypeByRef schemaTypes)
-          SubscriptionType = schema.SubscriptionType |> Option.bind (SchemaInfo.TryGetSchemaTypeByRef schemaTypes) }
+          SubscriptionType = schema.SubscriptionType |> Option.bind (SchemaInfo.TryGetSchemaTypeByRef schemaTypes)
+          Directives = schema.Directives }
     member x.TryGetOperationType(ot : OperationType) =
         match ot with
         | Query -> x.QueryType
@@ -91,9 +93,11 @@ type SelectionInfo =
     { Alias : string option
       Name : string
       SelectionSet : SelectionInfo list
-      Args : Argument list
+      Arguments : Argument list
+      Directives : Directive list
       FieldType : IntrospectionTypeRef option
-      ParentType : IntrospectionType }
+      ParentType : IntrospectionType
+      ArgDefs : IntrospectionInputVal [] option }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
 module Ast =
@@ -204,13 +208,17 @@ module Ast =
         selectionSet
         |> List.collect (function
             | Field field ->
-                let fieldType = parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten |> Option.map (fun f -> f.Type)
+                let ifield = parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten
+                let argDefs = ifield |> Option.map (fun f -> f.Args)
+                let fieldType = ifield |> Option.map (fun f -> f.Type)
                 [ { Alias = field.Alias
                     Name = field.Name
                     SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType field.SelectionSet
-                    Args = field.Arguments
+                    Arguments = field.Arguments
+                    Directives = field.Directives
                     FieldType = fieldType
-                    ParentType = parentType } ]
+                    ParentType = parentType
+                    ArgDefs = argDefs } ]
             | InlineFragment frag -> getFragSelectionInfo frag
             | FragmentSpread spread ->
                 match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
@@ -243,7 +251,7 @@ module Ast =
                     if fieldA.ParentType = fieldB.ParentType || fieldA.ParentType.Kind <> TypeKind.OBJECT || fieldB.ParentType.Kind <> TypeKind.OBJECT
                     then
                         if fieldA.Name <> fieldB.Name then acc @ Error [ sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Name fieldB.Name ]
-                        else if fieldA.Args <> fieldB.Args then acc @ Error [ sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Name ]
+                        else if fieldA.Arguments <> fieldB.Arguments then acc @ Error [ sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Name ]
                         else
                             let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
                             acc @ (fieldsInSetCanMerge mergedSet)
@@ -295,3 +303,35 @@ module Ast =
         |> List.fold (fun acc (objectType, selectionSet) ->
             let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
             set |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc) Success
+
+    let rec private checkFieldArgumentNames (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
+        match selection.FieldType with
+        | Some fieldTypeRef ->
+            match schemaInfo.TryGetTypeByRef(fieldTypeRef) with
+            | Some fieldType ->
+                let acc =
+                    selection.Arguments
+                    |> List.fold (fun acc arg ->
+                        match selection.ArgDefs |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
+                        | Some _ -> acc
+                        | None -> acc @ Error [ sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Name selection.ParentType.Name arg.Name ]) acc
+                selection.Directives
+                |> List.fold (fun acc directive ->
+                    match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+                    | Some directiveType ->
+                        directive.Arguments
+                        |> List.fold (fun acc arg ->
+                            match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
+                            | Some _ -> acc
+                            | None -> acc @ Error [ sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Name selection.ParentType.Name arg.Name ]) acc
+                    | None -> acc) acc
+            | None -> failwithf "Failure reading schema. Could not find type of field '%s' in type '%s'." selection.Name selection.ParentType.Name
+        | None -> acc
+
+    let validateArgumentNames (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.choose (tryGetSelectionSetAndType schemaInfo)
+        |> List.fold (fun acc (objectType, selectionSet) ->
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            set |> List.fold (fun acc selection -> checkFieldArgumentNames acc schemaInfo selection) acc) Success

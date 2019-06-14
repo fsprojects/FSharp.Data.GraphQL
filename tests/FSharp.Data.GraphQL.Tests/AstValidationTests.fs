@@ -11,6 +11,7 @@ type Command =
     | SIT = 1
     | HEEL = 2
     | JUMP = 3
+    | CLEAN_UP_HOUSE = 4
 
 type IPet =
     abstract Name : string
@@ -22,8 +23,11 @@ type Dog =
     { Name : string
       BarkVolume : int
       Nickname : string
-      KnownCommands : Command list }
+      KnownCommands : Command list
+      IsHouseTrainedAtOtherHomes : bool
+      IsHouseTrainedAtOwnHome : bool }
     member x.DoesKnowCommand(cmd : Command) = x.KnownCommands |> List.contains cmd
+    member x.IsHouseTrained(atOtherHomes : bool) = if atOtherHomes then x.IsHouseTrainedAtOtherHomes else x.IsHouseTrainedAtOwnHome
     interface IPet with
         member x.Name = x.Name
 
@@ -62,7 +66,8 @@ let Dog =
             [ Define.AutoField("name", String)
               Define.AutoField("barkVolume", Int)
               Define.AutoField("nickname", String)
-              Define.Field("doesKnowCommand", Boolean, [ Define.Input("dogCommand", Command) ], fun ctx (dog : Dog) -> dog.DoesKnowCommand(ctx.Arg("dogCommand"))) ], 
+              Define.Field("doesKnowCommand", Boolean, [ Define.Input("dogCommand", Command) ], fun ctx (dog : Dog) -> dog.DoesKnowCommand(ctx.Arg("dogCommand")))
+              Define.Field("isHouseTrained", Boolean, [ Define.Input("atOtherHomes", Boolean) ], fun ctx (dog : Dog) -> dog.IsHouseTrained(ctx.Arg("atOtherHomes"))) ], 
         interfaces = [ Pet ])
 
 let Cat = 
@@ -97,6 +102,7 @@ let Root =
               Define.Field("human", Human) ])
 
 let schema : ISchema = upcast Schema(Root)
+
 let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema.Introspected)
 
 [<Fact>]
@@ -320,4 +326,30 @@ query directQueryOnUnionWithoutSubFields {
   barkVolume
 }"""
     let shouldPass = Parser.parse query4 |> Validation.Ast.validateLeafFieldSelections schemaInfo
+    shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that arguments passed to fields exists in their definition`` () =
+    let query1 =
+        """fragment invalidArgName on Dog {
+  doesKnowCommand(command: CLEAN_UP_HOUSE)
+}"""
+    let query2 =
+        """fragment invalidArgName on Dog {
+  isHouseTrained(atOtherHomes: true) @include(unless: false)
+}"""
+    let expectedFailureResult =
+        Error [ "Field 'doesKnowCommand' of type 'Dog' does not have an input named 'command' in its definition."
+                "Directive 'include' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'unless' in its definition."]
+    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateArgumentNames schemaInfo) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query3 =
+        """fragment argOnRequiredArg on Dog {
+  doesKnowCommand(dogCommand: SIT)
+}
+
+fragment argOnOptional on Dog {
+  isHouseTrained(atOtherHomes: true) @include(if: true)
+}"""
+    let shouldPass = Parser.parse query3 |> Validation.Ast.validateArgumentNames schemaInfo
     shouldPass |> equals Success
