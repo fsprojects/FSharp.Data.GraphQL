@@ -140,7 +140,7 @@ module Ast =
         |> List.choose (fun def -> if def.OperationType = Subscription then Some (def.Name, getFieldNames [] def.SelectionSet) else None)
         |> List.fold (fun acc (name, fieldNames) -> validate acc name fieldNames) Success
 
-    let validateSelections (schemaInfo : SchemaInfo) (ast : Document) =
+    let validateSelectionFieldTypes (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         let rec validateFragmentDefinition (acc : ValidationResult) (frag : FragmentDefinition)  =
            match frag.TypeCondition with
