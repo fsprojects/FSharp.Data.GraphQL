@@ -69,7 +69,7 @@ query getName {
   }
 }"""
     let actual = Parser.parse query |> Validation.Ast.validateLoneAnonymousOperation
-    let expected = Error [ "Anonymous operations must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
+    let expected = Error [ "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
     actual |> equals expected
 
 [<Fact>]

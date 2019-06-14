@@ -105,7 +105,7 @@ module Ast =
         let unamed = operations |> List.filter (fun x -> x.Name.IsNone)
         if unamed.Length = 1 && operations.Length = 1
         then Success
-        else Error [ "Anonymous operations must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
+        else Error [ "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
 
     let validateSubscriptionSingleRootField (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
