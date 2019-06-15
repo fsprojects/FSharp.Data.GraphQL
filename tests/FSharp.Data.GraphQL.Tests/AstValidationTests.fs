@@ -508,3 +508,49 @@ let ``Validation should grant that fragment spreads exists in document`` () =
 }"""
     let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentSpreadTargetDefined
     shouldFail |> equals (Error [ "Fragment spread 'undefinedFragment' refers to a non-existent fragment definition in the document." ])
+
+[<Fact>]
+let ``Validation should grant that fragment definitions dont refer themselves`` () =
+    let query1 =
+        """{
+  dog {
+    ...nameFragment
+  }
+}
+
+fragment nameFragment on Dog {
+  name
+  ...barkVolumeFragment
+}
+
+fragment barkVolumeFragment on Dog {
+  barkVolume
+  ...nameFragment
+}"""
+    let query2 =
+        """{
+  dog {
+    ...dogFragment
+  }
+}
+
+fragment dogFragment on Dog {
+  name
+  owner {
+    ...ownerFragment
+  }
+}
+
+fragment ownerFragment on Dog {
+  name
+  pets {
+    ...dogFragment
+  }
+}"""
+    let expectedFailureResult =
+        Error [ "Fragment 'nameFragment' is making a cyclic reference."
+                "Fragment 'barkVolumeFragment' is making a cyclic reference."
+                "Fragment 'dogFragment' is making a cyclic reference."
+                "Fragment 'ownerFragment' is making a cyclic reference."]
+    let shouldFail = [query1;query2] |> List.map (Parser.parse >> Validation.Ast.validateFragmentsMustNotFormCycles) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult

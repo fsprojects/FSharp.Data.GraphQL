@@ -491,7 +491,7 @@ module Ast =
             then acc
             else acc @ Error [ sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value ]) Success
 
-    let rec fragmentSpreadTargetDefinedInSelection (acc : ValidationResult) (fragmentDefinitionNames : string list) =
+    let rec private fragmentSpreadTargetDefinedInSelection (acc : ValidationResult) (fragmentDefinitionNames : string list) =
         function
         | Field field -> 
             match field.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
@@ -519,3 +519,35 @@ module Ast =
                 match odef.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
                 | [] -> acc
                 | results -> List.reduce (@) results) Success
+
+    let rec private checkFragmentMustNotHaveCycles (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (frag : FragmentDefinition) =
+        frag.Name 
+        |> Option.map (fun name ->
+            visited := name :: !visited
+            if List.contains name !visited
+            then acc @ Error [ sprintf "Fragment '%s' is making a cyclic reference." name ]
+            else
+                match frag.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited) with
+                | [] -> acc
+                | results -> List.reduce (@) results)
+        |> Option.defaultValue acc
+
+    and private checkFragmentsMustNotHaveCyclesInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) =
+        function
+        | Field field -> 
+            match field.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited) with
+            | [] -> acc
+            | results -> List.reduce (@) results
+        | InlineFragment frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited frag
+        | FragmentSpread spread ->
+            visited := spread.Name :: !visited
+            if List.contains spread.Name !visited
+            then acc @ Error [ sprintf "Fragment '%s' is making a cyclic reference." spread.Name ]
+            else
+                match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+                | Some frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited frag
+                | None -> acc
+
+    let validateFragmentsMustNotFormCycles (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        fragmentDefinitions |> List.fold (fun acc def -> checkFragmentMustNotHaveCycles acc fragmentDefinitions (ref []) def) Success
