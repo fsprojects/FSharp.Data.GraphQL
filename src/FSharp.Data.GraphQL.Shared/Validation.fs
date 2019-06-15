@@ -343,10 +343,16 @@ module Ast =
                 if length > 0
                 then acc @ Error [ sprintf "More than one argument named '%s' was defined in field '%s'. Field arguments must be unique." name field.Name ]
                 else acc) acc
-        | InlineFragment frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) |> List.reduce (@)
+        | InlineFragment frag -> 
+            match frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) with
+            | [] -> acc
+            | results -> List.reduce (@) results
         | FragmentSpread spread ->
             match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
-            | Some frag -> frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) |> List.reduce (@)
+            | Some frag -> 
+                match frag.SelectionSet |> List.map (checkArgumentUniqueness acc fragmentDefinitions) with
+                | [] -> acc
+                | results -> List.reduce (@) results
             | None -> acc
 
     let validateArgumentUniqueness (ast : Document) =
@@ -394,6 +400,39 @@ module Ast =
         let fragmentDefinitions = getFragmentDefinitions ast
         fragmentDefinitions
         |> List.filter (fun f -> f.Name.IsSome)
-        |> List.groupBy (fun f -> f.Name)
-        |> List.choose (fun (name, frags) -> if frags.Length > 1 then Some (name.Value, frags.Length) else None)
+        |> List.groupBy (fun f -> f.Name.Value)
+        |> List.choose (fun (name, frags) -> if frags.Length > 1 then Some (name, frags.Length) else None)
         |> List.fold (fun acc (name, length) -> acc @ Error [ sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name ]) Success
+
+    let rec private checkFragmentTypeExistence (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (frag : FragmentDefinition) =
+        let acc =
+            match frag.TypeCondition |> Option.map schemaInfo.TryGetTypeByName |> Option.flatten with
+            | Some _ -> acc
+            | None when frag.Name.IsSome -> acc @ Error [ sprintf "Fragment '%s' has type condition '%s', but that type does not exist in the schema." frag.Name.Value frag.TypeCondition.Value ]
+            | None -> acc @ Error [ sprintf "An inline fragment in the document has type condition '%s', but that type does not exist in the schema." frag.TypeCondition.Value ]
+        match frag.SelectionSet with
+        | [] -> acc
+        | selectionSet -> selectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo) |> List.reduce (@)
+
+    and private checkFragmentTypeExistenceInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) =
+        function
+        | Field field -> 
+            match field.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo) with
+            | [] -> acc
+            | results -> List.reduce (@) results
+        | InlineFragment frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo frag
+        | FragmentSpread spread ->
+            match fragmentDefinitions |> List.tryFind(fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+            | Some frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo frag
+            | None -> acc
+       
+    let validateFragmentTypeExistence (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.fold (fun acc def ->
+            match def with
+            | FragmentDefinition frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo frag
+            | OperationDefinition operation -> 
+                match operation.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo) with
+                | [] -> acc
+                | results -> List.reduce (@) results) Success

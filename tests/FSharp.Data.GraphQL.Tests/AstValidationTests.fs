@@ -410,7 +410,7 @@ fragment goodNonNullArg on Arguments {
 
 [<Fact>]
 let ``Validation should grant that fragment definitions have unique names`` () =
-    let query =
+    let query1 =
         """{
   dog {
     ...fragmentOne
@@ -426,5 +426,41 @@ fragment fragmentOne on Dog {
     name
   }
 }"""
-    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentNameUniqueness
+    let shouldFail = Parser.parse query1 |> Validation.Ast.validateFragmentNameUniqueness
     shouldFail |> equals (Error [ "There are 2 fragments with name 'fragmentOne' in the document. Fragment definitions must have unique names." ])
+    let query2 =
+        """fragment correctType on Dog {
+  name
+}
+
+fragment inlineFragment on Dog {
+  ... on Dog {
+    name
+  }
+}
+
+fragment inlineFragment2 on Dog {
+  ... @include(if: true) {
+    name
+  }
+}"""
+    let shouldPass = Parser.parse query2 |> Validation.Ast.validateFragmentNameUniqueness
+    shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that type conditions of fragments refers to existing types in the schema`` () =
+    let query =
+        """fragment notOnExistingType on NotInSchema {
+  name
+}
+
+fragment inlineNotExistingType on Dog {
+  ... on NotInSchema {
+    name
+  }
+}"""
+    let expectedFailureResult =
+        Error [ "Fragment 'notOnExistingType' has type condition 'NotInSchema', but that type does not exist in the schema."
+                "An inline fragment in the document has type condition 'NotInSchema', but that type does not exist in the schema." ]
+    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentTypeExistence schemaInfo
+    shouldFail |> equals expectedFailureResult
