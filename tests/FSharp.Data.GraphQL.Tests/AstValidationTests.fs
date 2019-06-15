@@ -482,3 +482,18 @@ fragment inlineFragOnScalar on Dog {
                 "An inline fragment has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types." ]
     let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsOnCompositeTypes schemaInfo
     shouldFail |> equals expectedFailureResult
+
+[<Fact>]
+let ``Validation should grant that fragment definitions are used in at least one operation`` () =
+    let query =
+        """fragment nameFragment on Dog {
+  name
+}
+
+{
+  dog {
+    name
+  }
+}"""
+    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsMustBeUsed
+    shouldFail |> equals (Error [ "Fragment 'nameFragment' is not used in any operation in the document. Fragments must be used in at least one operation." ])

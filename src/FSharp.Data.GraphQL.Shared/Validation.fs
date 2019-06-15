@@ -472,3 +472,21 @@ module Ast =
                 | [] -> acc
                 | results -> List.reduce (@) results
             | FragmentDefinition frag -> checkFragmentOnCompositeTypes acc fragmentDefinitions schemaInfo frag) Success
+
+    let validateFragmentsMustBeUsed (ast : Document) =
+        let rec getSpreadNames (acc : string list) =
+            function
+            | Field field -> field.SelectionSet |> List.collect (getSpreadNames acc)
+            | InlineFragment frag -> frag.SelectionSet |> List.collect (getSpreadNames acc)
+            | _ -> acc
+        let fragmentSpreadNames =
+            ast.Definitions
+            |> List.collect (function
+                | FragmentDefinition frag -> frag.SelectionSet |> List.collect (getSpreadNames [])
+                | OperationDefinition odef -> odef.SelectionSet |> List.collect (getSpreadNames []))
+            |> List.distinct
+        getFragmentDefinitions ast
+        |> List.fold (fun acc def ->
+            if def.Name.IsSome && List.contains def.Name.Value fragmentSpreadNames
+            then acc
+            else acc @ Error [ sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value ]) Success
