@@ -497,3 +497,14 @@ let ``Validation should grant that fragment definitions are used in at least one
 }"""
     let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsMustBeUsed
     shouldFail |> equals (Error [ "Fragment 'nameFragment' is not used in any operation in the document. Fragments must be used in at least one operation." ])
+
+[<Fact>]
+let ``Validation should grant that fragment spreads exists in document`` () =
+    let query =
+        """{
+  dog {
+    ...undefinedFragment
+  }
+}"""
+    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentSpreadTargetDefined
+    shouldFail |> equals (Error [ "Fragment spread 'undefinedFragment' refers to a non-existent fragment definition in the document." ])

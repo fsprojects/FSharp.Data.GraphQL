@@ -490,3 +490,32 @@ module Ast =
             if def.Name.IsSome && List.contains def.Name.Value fragmentSpreadNames
             then acc
             else acc @ Error [ sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value ]) Success
+
+    let rec fragmentSpreadTargetDefinedInSelection (acc : ValidationResult) (fragmentDefinitionNames : string list) =
+        function
+        | Field field -> 
+            match field.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
+            | [] -> acc
+            | results -> List.reduce (@) results
+        | InlineFragment frag ->
+            match frag.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
+            | [] -> acc
+            | results -> List.reduce (@) results
+        | FragmentSpread spread ->
+            if List.contains spread.Name fragmentDefinitionNames
+            then acc
+            else acc @ Error [ sprintf "Fragment spread '%s' refers to a non-existent fragment definition in the document." spread.Name ]
+
+    let validateFragmentSpreadTargetDefined (ast : Document) =
+        let fragmentDefinitionNames = getFragmentDefinitions ast |> List.choose (fun def -> def.Name)
+        ast.Definitions
+        |> List.fold (fun acc def ->
+            match def with
+            | FragmentDefinition frag -> 
+                match frag.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
+                | [] -> acc
+                | results -> List.reduce (@) results
+            | OperationDefinition odef ->
+                match odef.SelectionSet |> List.map (fragmentSpreadTargetDefinedInSelection acc fragmentDefinitionNames) with
+                | [] -> acc
+                | results -> List.reduce (@) results) Success
