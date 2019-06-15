@@ -407,3 +407,24 @@ fragment goodNonNullArg on Arguments {
 }"""
     let shouldPass = [query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateRequiredArguments schemaInfo) |> List.reduce (@)
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that fragment definitions have unique names`` () =
+    let query =
+        """{
+  dog {
+    ...fragmentOne
+  }
+}
+
+fragment fragmentOne on Dog {
+  name
+}
+
+fragment fragmentOne on Dog {
+  owner {
+    name
+  }
+}"""
+    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentNameUniqueness
+    shouldFail |> equals (Error [ "There are 2 fragments with name 'fragmentOne' in the document. Fragment definitions must have unique names." ])

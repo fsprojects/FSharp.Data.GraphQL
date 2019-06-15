@@ -389,3 +389,11 @@ module Ast =
         |> List.fold (fun acc (objectType, selectionSet) ->
             let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
             set |> List.fold (fun acc selection -> checkRequiredArguments acc schemaInfo selection) acc) Success
+
+    let validateFragmentNameUniqueness (ast : Document) =   
+        let fragmentDefinitions = getFragmentDefinitions ast
+        fragmentDefinitions
+        |> List.filter (fun f -> f.Name.IsSome)
+        |> List.groupBy (fun f -> f.Name)
+        |> List.choose (fun (name, frags) -> if frags.Length > 1 then Some (name.Value, frags.Length) else None)
+        |> List.fold (fun acc (name, length) -> acc @ Error [ sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name ]) Success
