@@ -432,7 +432,43 @@ module Ast =
         |> List.fold (fun acc def ->
             match def with
             | FragmentDefinition frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo frag
-            | OperationDefinition operation -> 
-                match operation.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo) with
+            | OperationDefinition odef -> 
+                match odef.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo) with
                 | [] -> acc
                 | results -> List.reduce (@) results) Success
+
+    let rec private checkFragmentOnCompositeTypes (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (frag : FragmentDefinition) =
+        let acc =
+            match frag.TypeCondition |> Option.map schemaInfo.TryGetTypeByName |> Option.flatten with
+            | Some fragType ->
+                match fragType.Kind with
+                | TypeKind.UNION | TypeKind.OBJECT | TypeKind.INTERFACE -> acc
+                | _ when frag.Name.IsSome -> acc @ Error [ sprintf "Fragment '%s' has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." frag.Name.Value (fragType.Kind.ToString()) ]
+                | _ -> acc @ Error [ sprintf "An inline fragment has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." (fragType.Kind.ToString()) ]
+            | None -> acc
+        match frag.SelectionSet |> List.map (checkSelectionFragmentsOnCompositeType acc fragmentDefinitions schemaInfo) with
+        | [] -> acc
+        | results -> List.reduce (@) results
+
+    and private checkSelectionFragmentsOnCompositeType (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) =
+        function
+        | Field field ->
+            match field.SelectionSet |> List.map (checkSelectionFragmentsOnCompositeType acc fragmentDefinitions schemaInfo) with
+            | [] -> acc
+            | results -> List.reduce (@) results
+        | InlineFragment frag -> checkFragmentOnCompositeTypes acc fragmentDefinitions schemaInfo frag
+        | FragmentSpread spread ->
+            match fragmentDefinitions |> List.tryFind(fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+            | Some frag -> checkFragmentOnCompositeTypes acc fragmentDefinitions schemaInfo frag
+            | None -> acc
+
+    let validateFragmentsOnCompositeTypes (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.fold (fun acc def ->
+            match def with
+            | OperationDefinition odef -> 
+                match odef.SelectionSet |> List.map (checkSelectionFragmentsOnCompositeType acc fragmentDefinitions schemaInfo) with
+                | [] -> acc
+                | results -> List.reduce (@) results
+            | FragmentDefinition frag -> checkFragmentOnCompositeTypes acc fragmentDefinitions schemaInfo frag) Success

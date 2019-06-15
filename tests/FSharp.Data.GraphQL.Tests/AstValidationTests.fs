@@ -464,3 +464,21 @@ fragment inlineNotExistingType on Dog {
                 "An inline fragment in the document has type condition 'NotInSchema', but that type does not exist in the schema." ]
     let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentTypeExistence schemaInfo
     shouldFail |> equals expectedFailureResult
+
+[<Fact>]
+let ``Validation should grant that type fragments are only used in composite types`` () =
+    let query =
+        """fragment fragOnScalar on Int {
+  something
+}
+
+fragment inlineFragOnScalar on Dog {
+  ... on Boolean {
+    somethingElse
+  }
+}"""
+    let expectedFailureResult =
+        Error [ "Fragment 'fragOnScalar' has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types."
+                "An inline fragment has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types." ]
+    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsOnCompositeTypes schemaInfo
+    shouldFail |> equals expectedFailureResult
