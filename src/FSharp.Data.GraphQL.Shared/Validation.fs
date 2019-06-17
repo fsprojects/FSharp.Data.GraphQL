@@ -353,7 +353,7 @@ module Ast =
             |> List.groupBy (fun x -> x.Name)
             |> List.map (fun (name, args) -> name, args.Length)
             |> List.fold (fun acc (name, length) ->
-                if length > 0
+                if length > 1
                 then acc @ Error [ sprintf "More than one argument named '%s' was defined in field '%s'. Field arguments must be unique." name field.Name ]
                 else acc) acc
         | InlineFragment frag -> 
@@ -589,18 +589,18 @@ module Ast =
             |> getFragmentAndParentTypes []
             |> List.fold (fun acc types -> checkFragmentSpreadIsPossibleInSelection acc types) acc) Success
 
-    let checkCoercibleType (acc : ValidationResult) (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
+    let checkInputValue (acc : ValidationResult) (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
         let rec getFieldMap (acc : Map<string, IntrospectionTypeRef>) (fields : (string * IntrospectionTypeRef) list) : Map<string, IntrospectionTypeRef> =
             match fields with
             | [] -> acc
             | (name, tref) :: fields -> getFieldMap (acc.Add(name, tref)) fields
-        let rec isCoercible (tref : IntrospectionTypeRef) (argName : string) (value : Value) =
+        let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : Value) =
             let canNotCoerce = Error [ sprintf "Argument field or value named '%s' can not be coerced. It does not match a valid literal representation for the type." argName ]
             match value with
             // TODO: null values are being parsed as an Enum. Isn't it better to make an option for null values?
             | EnumValue "null" when tref.Kind = TypeKind.NON_NULL -> Error [ sprintf "Argument '%s' value can not be coerced. It's type is non-nullable but the argument has a null value." argName ]
             | EnumValue "null" -> Success
-            | _ when tref.Kind = TypeKind.NON_NULL -> isCoercible tref.OfType.Value argName value
+            | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ -> 
                 match tref.Name, tref.Kind with
                 | Some ("Int" | "Float"), TypeKind.SCALAR -> Success
@@ -623,7 +623,7 @@ module Ast =
                 | _ -> canNotCoerce
             | ListValue values ->
                 match tref.Kind with
-                | TypeKind.LIST when tref.OfType.IsSome && values.Length > 0 -> values |> List.map (isCoercible tref.OfType.Value argName) |> List.reduce (@)
+                | TypeKind.LIST when tref.OfType.IsSome && values.Length > 0 -> values |> List.map (checkIsCoercible tref.OfType.Value argName) |> List.reduce (@)
                 | TypeKind.LIST when tref.OfType.IsSome -> acc
                 | _ -> canNotCoerce
             | ObjectValue props ->
@@ -639,7 +639,7 @@ module Ast =
                                 else acc) acc
                         props |> Seq.fold (fun acc kvp ->
                             match fieldMap.TryFind(kvp.Key) with
-                            | Some fieldTypeRef -> isCoercible fieldTypeRef kvp.Key kvp.Value
+                            | Some fieldTypeRef -> checkIsCoercible fieldTypeRef kvp.Key kvp.Value
                             | None -> acc @ Error []) acc
                     | None -> canNotCoerce
                 | _ -> canNotCoerce
@@ -650,17 +650,17 @@ module Ast =
                     |> List.tryFind (fun v -> v.VariableName = varName)
                     |> Option.map (fun v -> v, schemaInfo.TryGetInputType(v.Type))
                 match variableDefinition with
-                | Some (vdef, Some vtype) when vdef.DefaultValue.IsSome -> isCoercible vtype argName vdef.DefaultValue.Value
+                | Some (vdef, Some vtype) when vdef.DefaultValue.IsSome -> checkIsCoercible vtype argName vdef.DefaultValue.Value
                 | Some (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
                 | _ -> acc
         selection.Arguments
         |> List.fold (fun acc arg ->
             let argumentTypeRef = selection.InputValues |> Option.defaultValue [||] |> Array.tryFind (fun x -> x.Name = arg.Name) |> Option.map (fun x -> x.Type)
             match argumentTypeRef with
-            | Some argumentTypeRef -> acc @ (isCoercible argumentTypeRef arg.Name arg.Value)
+            | Some argumentTypeRef -> acc @ (checkIsCoercible argumentTypeRef arg.Name arg.Value)
             | None -> acc @ Error [ sprintf "Can not coerce argument '%s'. The argument can not be infered from the schema." arg.Name ]) acc
 
-    let validateValuesOfCoercibleType (schemaInfo : SchemaInfo) (ast : Document) =
+    let validateInputValues (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         ast.Definitions
         |> List.choose (fun def ->
@@ -671,4 +671,4 @@ module Ast =
             | _ -> None)
         |> List.fold (fun acc (vars, (objectType, selectionSet)) ->
             getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
-            |> List.fold (fun acc selection -> checkCoercibleType acc schemaInfo vars selection) acc) Success
+            |> List.fold (fun acc selection -> checkInputValue acc schemaInfo vars selection) acc) Success

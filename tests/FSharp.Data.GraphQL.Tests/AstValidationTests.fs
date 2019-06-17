@@ -710,7 +710,7 @@ fragment dogOrHumanFragment on DogOrHuman {
     shouldPass |> equals Success
 
 [<Fact>]
-let ``Validation should grant that each input have value of coercible type`` () =
+let ``Validation should grant that each input have a valid value`` () =
     let query1 =
         """fragment stringIntoInt on Arguments {
   intArgField(intArg: "123")
@@ -732,7 +732,7 @@ fragment nullRequiredBooleanArg on Arguments {
                 "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."
                 "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."
                 "Can not coerce argument 'complex'. Type 'FindDogInput' have a required field 'name', but that field does not exist in the argument." ]
-    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateValuesOfCoercibleType schemaInfo) |> List.reduce (@)
+    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateInputValues schemaInfo) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query2 =
         """fragment goodBooleanArg on Arguments {
@@ -757,5 +757,5 @@ query goodComplexDefaultValue($search: FindDogInput = { name: "Fido" }) {
 fragment validList on Arguments {
   booleanListArgField(booleanListArg: [false, null, true])
 }"""
-    let shouldPass = [query2;query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateValuesOfCoercibleType schemaInfo) |> List.reduce (@)
+    let shouldPass = [query2;query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateInputValues schemaInfo) |> List.reduce (@)
     shouldPass |> equals Success
