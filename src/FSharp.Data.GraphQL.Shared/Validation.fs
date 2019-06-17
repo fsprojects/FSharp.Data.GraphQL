@@ -589,7 +589,7 @@ module Ast =
             |> getFragmentAndParentTypes []
             |> List.fold (fun acc types -> checkFragmentSpreadIsPossibleInSelection acc types) acc) Success
 
-    let checkInputValue (acc : ValidationResult) (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
+    let private checkInputValue (acc : ValidationResult) (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
         let rec getFieldMap (acc : Map<string, IntrospectionTypeRef>) (fields : (string * IntrospectionTypeRef) list) : Map<string, IntrospectionTypeRef> =
             match fields with
             | [] -> acc
@@ -672,3 +672,26 @@ module Ast =
         |> List.fold (fun acc (vars, (objectType, selectionSet)) ->
             getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
             |> List.fold (fun acc selection -> checkInputValue acc schemaInfo vars selection) acc) Success
+
+    let rec private getDirectiveNames (fragmentDefinitions : FragmentDefinition list) =
+        function
+        | Field field -> field.Directives |> List.map (fun x -> x.Name) |> List.append (field.SelectionSet |> List.collect (getDirectiveNames fragmentDefinitions))
+        | InlineFragment frag -> frag.Directives |> List.map (fun x -> x.Name) |> List.append (frag.SelectionSet |> List.collect (getDirectiveNames fragmentDefinitions))
+        | FragmentSpread spread ->
+            let fragDirectiveNames =
+                match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+                | Some frag -> frag.Directives |> List.map (fun x -> x.Name) |> List.append (frag.SelectionSet |> List.collect (getDirectiveNames fragmentDefinitions))
+                | None -> []
+            spread.Directives |> List.map (fun x -> x.Name) |> List.append fragDirectiveNames
+
+    let validateDirectivesDefined (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.collect (function
+            | FragmentDefinition frag -> frag.Directives |> List.map (fun x -> x.Name) |> List.append (frag.SelectionSet |> List.collect (getDirectiveNames fragmentDefinitions))
+            | OperationDefinition odef -> odef.Directives |> List.map (fun x -> x.Name) |> List.append (odef.SelectionSet |> List.collect (getDirectiveNames fragmentDefinitions)))
+        |> List.distinct
+        |> List.fold (fun acc name ->
+            if schemaInfo.Directives |> Array.exists (fun x -> x.Name = name)
+            then acc
+            else acc @ Error [ sprintf "Directive '%s' is not supported by the schema." name ]) Success

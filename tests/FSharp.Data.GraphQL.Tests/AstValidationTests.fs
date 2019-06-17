@@ -759,3 +759,20 @@ fragment validList on Arguments {
 }"""
     let shouldPass = [query2;query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateInputValues schemaInfo) |> List.reduce (@)
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that directives are supported by the schema`` () =
+    let query1 = """query dogOperation {
+dog @unknownDirective {
+  name
+}
+}"""
+    let shouldFail = Parser.parse query1 |> Validation.Ast.validateDirectivesDefined schemaInfo
+    shouldFail |> equals (Error ["Directive 'unknownDirective' is not supported by the schema."])
+    let query2 = """query dogOperation {
+dog @include(if: true) {
+  name
+}
+}"""
+    let shouldPass = Parser.parse query2 |> Validation.Ast.validateDirectivesDefined schemaInfo
+    shouldPass |> equals Success
