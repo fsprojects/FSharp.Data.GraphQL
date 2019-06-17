@@ -723,11 +723,16 @@ query badComplexValue {
 fragment nullRequiredBooleanArg on Arguments {
   nonNullBooleanArgField(nonNullBooleanArg: null)
 }"""
+    let query2 =
+        """{
+  findDog(complex: { favoriteCookieFlavor: "Bacon" })
+}"""
     let expectedFailureResult =
-        Error [ "Argument field or value named 'intArg' can not be coerced into the expected type."
-                "Argument field or value named 'name' can not be coerced into the expected type."
-                "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value." ]
-    let shouldFail = Parser.parse query1 |> Validation.Ast.validateValuesOfCoercibleType schemaInfo
+        Error [ "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."
+                "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."
+                "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."
+                "Can not coerce argument 'complex'. Type 'FindDogInput' have a required field 'name', but that field does not exist in the argument." ]
+    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateValuesOfCoercibleType schemaInfo) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query2 =
         """fragment goodBooleanArg on Arguments {
@@ -739,7 +744,7 @@ fragment coercedIntIntoFloatArg on Arguments {
   floatArgField(floatArg: 123)
 }
 
-query goodComplexDefaultValue($search: ComplexInput = { name: "Fido" }) {
+query goodComplexDefaultValue($search: FindDogInput = { name: "Fido" }) {
   findDog(complex: $search)
 }"""
     let query3 =

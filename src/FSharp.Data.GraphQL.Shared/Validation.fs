@@ -88,6 +88,11 @@ type SchemaInfo =
         | Subscription -> x.SubscriptionType
     member x.TryGetTypeByName(name : string) =
         x.SchemaTypes.TryFind(name)
+    member x.TryGetInputType(input : InputType) =
+        match input with
+        | NamedType name -> x.TryGetTypeByName(name) |> Option.map IntrospectionTypeRef.Named
+        | ListType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.List
+        | NonNullType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.NonNull
 
 type SelectionInfo =
     { Alias : string option
@@ -585,53 +590,48 @@ module Ast =
             |> List.fold (fun acc types -> checkFragmentSpreadIsPossibleInSelection acc types) acc) Success
 
     let checkCoercibleType (acc : ValidationResult) (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
-        let rec getFieldMap (acc : Map<string, IntrospectionTypeRef>) (fields : IntrospectionField list) : Map<string, IntrospectionTypeRef> =
+        let rec getFieldMap (acc : Map<string, IntrospectionTypeRef>) (fields : (string * IntrospectionTypeRef) list) : Map<string, IntrospectionTypeRef> =
             match fields with
             | [] -> acc
-            | field :: fields -> getFieldMap (acc.Add(field.Name, field.Type)) fields
+            | (name, tref) :: fields -> getFieldMap (acc.Add(name, tref)) fields
         let rec isCoercible (tref : IntrospectionTypeRef) (argName : string) (value : Value) =
-            let canNotCoerce = Error [ sprintf "Argument field or value named '%s' can not be coerced into the expected type." argName ]
+            let canNotCoerce = Error [ sprintf "Argument field or value named '%s' can not be coerced. It does not match a valid literal representation for the type." argName ]
             match value with
             // TODO: null values are being parsed as an Enum. Isn't it better to make an option for null values?
             | EnumValue "null" when tref.Kind = TypeKind.NON_NULL -> Error [ sprintf "Argument '%s' value can not be coerced. It's type is non-nullable but the argument has a null value." argName ]
             | EnumValue "null" -> Success
+            | _ when tref.Kind = TypeKind.NON_NULL -> isCoercible tref.OfType.Value argName value
             | IntValue _ -> 
                 match tref.Name, tref.Kind with
                 | Some ("Int" | "Float"), TypeKind.SCALAR -> Success
-                | _, TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | FloatValue _ ->
                 match tref.Name, tref.Kind with
                 | Some "Float", TypeKind.SCALAR -> Success
-                | _, TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | BooleanValue _ ->
                 match tref.Name, tref.Kind with
                 | Some "Boolean", TypeKind.SCALAR -> Success
-                | _, TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | StringValue _ ->
                 match tref.Name, tref.Kind with
                 | Some ("String" | "URI" | "ID"), TypeKind.SCALAR -> Success
-                | _, TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | EnumValue _ ->
                 match tref.Kind with
                 | TypeKind.ENUM -> Success
-                | TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | ListValue values ->
                 match tref.Kind with
                 | TypeKind.LIST when tref.OfType.IsSome && values.Length > 0 -> values |> List.map (isCoercible tref.OfType.Value argName) |> List.reduce (@)
                 | TypeKind.LIST when tref.OfType.IsSome -> acc
-                | TypeKind.NON_NULL when tref.OfType.IsSome -> isCoercible tref.OfType.Value argName value
                 | _ -> canNotCoerce
             | ObjectValue props ->
                 match tref.Kind with
-                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION when tref.Name.IsSome ->
+                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.INPUT_OBJECT when tref.Name.IsSome ->
                     match schemaInfo.TryGetTypeByRef(tref) with
                     | Some itype ->
-                        let fieldMap = Option.defaultValue [||] itype.Fields |> List.ofArray |> getFieldMap Map.empty
+                        let fieldMap = itype.InputFields |> Option.defaultValue [||] |> Array.map (fun x -> x.Name, x.Type) |> List.ofArray |> getFieldMap Map.empty
                         let acc =
                             fieldMap |> Seq.fold (fun acc kvp -> 
                                 if kvp.Value.Kind = TypeKind.NON_NULL && not (props.ContainsKey(kvp.Key))
@@ -644,13 +644,21 @@ module Ast =
                     | None -> canNotCoerce
                 | _ -> canNotCoerce
             | Variable varName ->
-                let variableDefinition = variables |> Option.defaultValue [] |> List.tryFind (fun v -> v.VariableName = varName)
+                let variableDefinition = 
+                    variables
+                    |> Option.defaultValue [] 
+                    |> List.tryFind (fun v -> v.VariableName = varName)
+                    |> Option.map (fun v -> v, schemaInfo.TryGetInputType(v.Type))
                 match variableDefinition with
-                | Some variableDefinition when variableDefinition.DefaultValue.IsSome -> isCoercible tref argName variableDefinition.DefaultValue.Value
+                | Some (vdef, Some vtype) when vdef.DefaultValue.IsSome -> isCoercible vtype argName vdef.DefaultValue.Value
+                | Some (vdef, None) when vdef.DefaultValue.IsSome -> canNotCoerce
                 | _ -> acc
-        match selection.FieldType with
-        | Some fieldTypeRef -> selection.Arguments |> List.fold (fun acc arg -> acc @ (isCoercible fieldTypeRef arg.Name arg.Value)) acc
-        | None -> acc
+        selection.Arguments
+        |> List.fold (fun acc arg ->
+            let argumentTypeRef = selection.InputValues |> Option.defaultValue [||] |> Array.tryFind (fun x -> x.Name = arg.Name) |> Option.map (fun x -> x.Type)
+            match argumentTypeRef with
+            | Some argumentTypeRef -> acc @ (isCoercible argumentTypeRef arg.Name arg.Value)
+            | None -> acc @ Error [ sprintf "Can not coerce argument '%s'. The argument can not be infered from the schema." arg.Name ]) acc
 
     let validateValuesOfCoercibleType (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
