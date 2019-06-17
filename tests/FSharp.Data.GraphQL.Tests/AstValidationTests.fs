@@ -16,8 +16,18 @@ type Command =
 type IPet =
     abstract Name : string
 
+type ISentient =
+    abstract Name : string
+
 type Human =
     { Name : string }
+    interface ISentient with
+        member x.Name = x.Name
+
+type Alien =
+    { Name : string }
+    interface ISentient with
+        member x.Name = x.Name
 
 type Dog = 
     { Name : string
@@ -44,9 +54,20 @@ type CatOrDog =
     | Cat of Cat
     | Dog of Dog
 
+type HumanOrAlien =
+    | Human of Human
+    | Alien of Alien
+
+type DogOrHuman =
+    | Dog of Dog
+    | Human of Human
+
 type Root =
     { CatOrDog : CatOrDog
+      HumanOrAlien : HumanOrAlien
+      DogOrHuman : DogOrHuman
       Pet : IPet
+      Sentient : ISentient
       Human : Human }
 
 let Command =
@@ -58,6 +79,8 @@ let Command =
               Define.EnumValue("JUMP", Command.JUMP) ])
 
 let Pet = Define.Interface<IPet>("Pet", [ Define.Field("name", String) ])
+
+let Sentient = Define.Interface<ISentient>("Sentient", [ Define.Field("name", String) ])
 
 let Dog = 
     Define.Object<Dog>(
@@ -84,14 +107,34 @@ let CatOrDog =
     Define.Union(
         name = "CatOrDog",
         options = [ Cat; Dog ],
-        resolveValue = (function | Cat c -> box c | Dog d -> upcast d),
-        resolveType = (function | Cat _ -> upcast Cat | Dog _ -> upcast Dog))
+        resolveValue = (function | CatOrDog.Cat c -> box c | CatOrDog.Dog d -> upcast d),
+        resolveType = (function | CatOrDog.Cat _ -> upcast Cat | CatOrDog.Dog _ -> upcast Dog))
 
 let Human =
     Define.Object<Human>(
         name = "Human",
-        fields =
-            [ Define.AutoField("name", String) ])
+        fields = [ Define.AutoField("name", String) ],
+        interfaces = [ Sentient ])
+
+let Alien =
+    Define.Object<Alien>(
+        name = "Alien",
+        fields = [ Define.AutoField("name", String) ],
+        interfaces = [ Sentient ])
+
+let HumanOrAlien =
+    Define.Union(
+        name = "HumanOrAlien",
+        options = [ Human; Alien ],
+        resolveValue = (function | HumanOrAlien.Human h -> box h | HumanOrAlien.Alien a -> upcast a),
+        resolveType = (function | HumanOrAlien.Human _ -> upcast Human | HumanOrAlien.Alien _ -> upcast Alien))
+
+let DogOrHuman =
+    Define.Union(
+        name = "DogOrHuman",
+        options = [ Dog; Human ],
+        resolveValue = (function | DogOrHuman.Human h -> box h | DogOrHuman.Dog d -> upcast d),
+        resolveType = (function | DogOrHuman.Human _ -> upcast Human | DogOrHuman.Dog _ -> upcast Dog))
 
 let Arguments =
     Define.Object<obj>(
@@ -110,6 +153,8 @@ let Root =
         name = "Root", 
         fields =
             [ Define.AutoField("catOrDog", CatOrDog)
+              Define.AutoField("humanOrAlien", HumanOrAlien)
+              Define.AutoField("dogOrHuman", DogOrHuman)
               Define.AutoField("pet", Pet)
               Define.AutoField("human", Human)
               Define.Field("arguments", Arguments) ])
@@ -554,3 +599,102 @@ fragment ownerFragment on Dog {
                 "Fragment 'ownerFragment' is making a cyclic reference."]
     let shouldFail = [query1;query2] |> List.map (Parser.parse >> Validation.Ast.validateFragmentsMustNotFormCycles) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
+
+[<Fact>]
+let ``Validation should grant that each fragment spread is possible`` () =
+    let query1 =
+        """fragment catInDogFragmentInvalid on Dog {
+  ... on Cat {
+    meowVolume
+  }
+}"""
+    let query2 =
+        """fragment sentientFragment on Sentient {
+  ... on Dog {
+    barkVolume
+  }
+}
+
+fragment humanOrAlienFragment on HumanOrAlien {
+  ... on Cat {
+    meowVolume
+  }
+}"""
+    let query3 =
+        """fragment nonIntersectingInterfaces on Pet {
+  ...sentientFragment
+}
+
+fragment sentientFragment on Sentient {
+  name
+}"""
+    let query4 =
+        """fragment sentientFragment on Sentient {
+  ... on Dog {
+    barkVolume
+  }
+}
+
+fragment humanOrAlienFragment on HumanOrAlien {
+  ... on Cat {
+    meowVolume
+  }
+}"""
+    let expectedFailureResult =
+        Error [ "Fragment type condition 'Cat' is not applicable to the parent type of the field 'Dog'."
+                "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
+                "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'."
+                "Fragment type condition 'Sentient' is not applicable to the parent type of the field 'Pet'."
+                "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
+                "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'." ]
+    let shouldFail = [query1;query2;query3;query4] |> List.map (Parser.parse >> Validation.Ast.validateFragmentSpreadIsPossible schemaInfo) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query5 =
+        """fragment dogFragment on Dog {
+  ... on Dog {
+    barkVolume
+  }
+}"""
+    let query6 =
+        """fragment petNameFragment on Pet {
+  name
+}
+
+fragment interfaceWithinObjectFragment on Dog {
+  ...petNameFragment
+}"""
+    let query7 =
+        """fragment catOrDogNameFragment on CatOrDog {
+  ... on Cat {
+    meowVolume
+  }
+}
+
+fragment unionWithObjectFragment on Dog {
+  ...catOrDogNameFragment
+}"""
+    let query8 =
+        """fragment petFragment on Pet {
+  name
+  ... on Dog {
+    barkVolume
+  }
+}
+
+fragment catOrDogFragment on CatOrDog {
+  ... on Cat {
+    meowVolume
+  }
+}"""
+    let query9 =
+        """fragment unionWithInterface on Pet {
+  ...dogOrHumanFragment
+}
+
+fragment dogOrHumanFragment on DogOrHuman {
+  ... on Dog {
+    barkVolume
+  }
+}"""
+    let shouldPass = [query5;query6;query7;query8;query9] |> List.map (Parser.parse >> Validation.Ast.validateFragmentSpreadIsPossible schemaInfo) |> List.reduce (@)
+    shouldPass |> equals Success

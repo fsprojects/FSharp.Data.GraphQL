@@ -97,8 +97,10 @@ type SelectionInfo =
       Directives : Directive list
       FieldType : IntrospectionTypeRef option
       ParentType : IntrospectionType
+      FragmentType : IntrospectionType option
       ArgDefs : IntrospectionInputVal [] option }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+    member x.FragmentOrParentType = x.FragmentType |> Option.defaultValue x.ParentType
 
 module Ast =
     let private getOperationDefinitions (ast : Document) =
@@ -195,29 +197,38 @@ module Ast =
                 | None -> acc @ Error [ sprintf "Could not find operation '%s' in the schema." odef.Name.Value ]
             | FragmentDefinition frag -> validateFragmentDefinition acc frag) Success
 
-    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (selectionSet : Selection list) =
+    let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
+        let parentPossibleTypes = parentType.PossibleTypes |> Option.defaultValue [||] |> Array.choose (fun x -> x.Name) |> Array.append [|parentType.Name|] |> Set.ofArray
+        let fragmentPossibleTypes = fragmentType.PossibleTypes |> Option.defaultValue [||] |> Array.choose (fun x -> x.Name) |> Array.append [|fragmentType.Name|] |> Set.ofArray
+        let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
+        applicableTypes.Count > 0
+
+    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentType : IntrospectionType option) (selectionSet : Selection list) =
         let getFragSelectionInfo (frag : FragmentDefinition) =
-            let fragType =
-                match frag.TypeCondition with
-                | Some typeCondition -> 
-                    match schemaInfo.TryGetTypeByName(typeCondition) with
-                    | Some fragType -> fragType
-                    | None -> failwithf "Failure reading schema. Can not find type '%s' specified by a fragment type condition." typeCondition
+            let parentType =
+                match fragmentType with
+                | Some outerFragmentType -> outerFragmentType
                 | None -> parentType
-            getSelectionSetInfo schemaInfo fragmentDefinitions fragType frag.SelectionSet
+            let fragmentType = frag.TypeCondition |> Option.bind schemaInfo.TryGetTypeByName
+            getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentType frag.SelectionSet
         selectionSet
         |> List.collect (function
             | Field field ->
-                let ifield = parentType.Fields |> Option.map (Array.tryFind (fun f -> f.Name = field.Name)) |> Option.flatten
+                let ifield = 
+                    match parentType.Fields |> Option.bind (Array.tryFind (fun f -> f.Name = field.Name)), fragmentType with
+                    | None, Some fragType -> fragType.Fields |> Option.bind (Array.tryFind (fun f -> f.Name = field.Name))
+                    | x, _ -> x
                 let argDefs = ifield |> Option.map (fun f -> f.Args)
                 let fieldType = ifield |> Option.map (fun f -> f.Type)
+                let selectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentType field.SelectionSet
                 [ { Alias = field.Alias
                     Name = field.Name
-                    SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType field.SelectionSet
+                    SelectionSet = selectionSet
                     Arguments = field.Arguments
                     Directives = field.Directives
                     FieldType = fieldType
                     ParentType = parentType
+                    FragmentType = fragmentType
                     ArgDefs = argDefs } ]
             | InlineFragment frag -> getFragSelectionInfo frag
             | FragmentSpread spread ->
@@ -248,7 +259,7 @@ module Ast =
                 List.pairwise selectionSet
                 |> List.map (fun pairs -> pairs, sameResponseShape acc pairs)
                 |> List.map (fun ((fieldA, fieldB), acc) ->
-                    if fieldA.ParentType = fieldB.ParentType || fieldA.ParentType.Kind <> TypeKind.OBJECT || fieldB.ParentType.Kind <> TypeKind.OBJECT
+                    if fieldA.FragmentOrParentType = fieldB.FragmentOrParentType || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
                     then
                         if fieldA.Name <> fieldB.Name then acc @ Error [ sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Name fieldB.Name ]
                         else if fieldA.Arguments <> fieldB.Arguments then acc @ Error [ sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Name ]
@@ -277,7 +288,7 @@ module Ast =
         ast.Definitions
         |> List.choose (tryGetSelectionSetAndType schemaInfo)
         |> List.fold (fun acc (objectType, selectionSet) ->
-            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
             acc @ (fieldsInSetCanMerge set)) Success
 
     let rec private checkLeafFieldSelection (acc : ValidationResult) (selection : SelectionInfo) =
@@ -286,9 +297,9 @@ module Ast =
             | TypeKind.NON_NULL | TypeKind.LIST when fieldType.OfType.IsSome -> 
                 validateByKind acc fieldType.OfType.Value selectionSetLength
             | TypeKind.SCALAR | TypeKind.ENUM when selectionSetLength > 0 ->
-                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should not contain inner fields in its selection." selection.Name selection.ParentType.Name (fieldType.Kind.ToString()) ]
+                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should not contain inner fields in its selection." selection.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()) ]
             | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.OBJECT when selectionSetLength = 0 ->
-                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Name selection.ParentType.Name (fieldType.Kind.ToString()) ]
+                acc @ Error [ sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()) ]
             | _ -> acc
         let acc =
             match selection.FieldType with
@@ -301,36 +312,33 @@ module Ast =
         ast.Definitions
         |> List.choose (tryGetSelectionSetAndType schemaInfo)
         |> List.fold (fun acc (objectType, selectionSet) ->
-            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
             set |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc) Success
 
     let rec private checkFieldArgumentNames (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
-        match selection.FieldType with
-        | Some fieldTypeRef ->
-            let acc =
-                selection.Arguments
+        let acc =
+            selection.Arguments
+            |> List.fold (fun acc arg ->
+                match selection.ArgDefs |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
+                | Some _ -> acc
+                | None -> acc @ Error [ sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Name selection.FragmentOrParentType.Name arg.Name ]) acc
+        selection.Directives
+        |> List.fold (fun acc directive ->
+            match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+            | Some directiveType ->
+                directive.Arguments
                 |> List.fold (fun acc arg ->
-                    match selection.ArgDefs |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
+                    match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
                     | Some _ -> acc
-                    | None -> acc @ Error [ sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Name selection.ParentType.Name arg.Name ]) acc
-            selection.Directives
-            |> List.fold (fun acc directive ->
-                match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
-                | Some directiveType ->
-                    directive.Arguments
-                    |> List.fold (fun acc arg ->
-                        match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
-                        | Some _ -> acc
-                        | None -> acc @ Error [ sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Name selection.ParentType.Name arg.Name ]) acc
-                | None -> acc) acc
-        | None -> acc
+                    | None -> acc @ Error [ sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Name selection.FragmentOrParentType.Name arg.Name ]) acc
+            | None -> acc) acc
 
     let validateArgumentNames (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         ast.Definitions
         |> List.choose (tryGetSelectionSetAndType schemaInfo)
         |> List.fold (fun acc (objectType, selectionSet) ->
-            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
             set |> List.fold (fun acc selection -> checkFieldArgumentNames acc schemaInfo selection) acc) Success
 
     let rec private checkArgumentUniqueness (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) =
@@ -371,7 +379,7 @@ module Ast =
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match selection.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
                     | Some arg when arg.Value <> EnumValue "null" -> acc // TODO: null values are being mapped into an enum value, this should be fixed in the parser! A null value must be able to be parsed.
-                    | _ -> acc @ Error [ sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Name selection.ParentType.Name ]
+                    | _ -> acc @ Error [ sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Name selection.FragmentOrParentType.Name ]
                 | _ -> acc) acc)
             |> Option.defaultValue acc
         selection.Directives
@@ -384,7 +392,7 @@ module Ast =
                     | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                         match selection.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
                         | Some arg when arg.Value <> EnumValue "null" -> acc
-                        | _ -> acc @ Error [ sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Name selection.ParentType.Name ]
+                        | _ -> acc @ Error [ sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Name selection.FragmentOrParentType.Name ]
                     | _ -> acc) acc
             | None -> acc) acc
 
@@ -393,7 +401,7 @@ module Ast =
         ast.Definitions
         |> List.choose (tryGetSelectionSetAndType schemaInfo)
         |> List.fold (fun acc (objectType, selectionSet) ->
-            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType selectionSet
+            let set = getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
             set |> List.fold (fun acc selection -> checkRequiredArguments acc schemaInfo selection) acc) Success
 
     let validateFragmentNameUniqueness (ast : Document) =   
@@ -551,3 +559,28 @@ module Ast =
     let validateFragmentsMustNotFormCycles (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         fragmentDefinitions |> List.fold (fun acc def -> checkFragmentMustNotHaveCycles acc fragmentDefinitions (ref []) def) Success
+
+    let private checkFragmentSpreadIsPossibleInSelection (acc : ValidationResult) (parentType : IntrospectionType, fragmentType : IntrospectionType) =
+        if not (typesAreApplicable (parentType, fragmentType))
+        then acc @ Error [ sprintf "Fragment type condition '%s' is not applicable to the parent type of the field '%s'." fragmentType.Name parentType.Name ]
+        else acc
+
+    let rec private getFragmentAndParentTypes (acc : (IntrospectionType * IntrospectionType) list) (set : SelectionInfo list) =
+        match set with
+        | [] -> acc
+        | selection :: tail ->
+            let acc =
+                match selection.FragmentType with
+                | Some fragType when fragType.Name <> selection.ParentType.Name -> (selection.ParentType, fragType) :: acc
+                | _ -> acc
+            getFragmentAndParentTypes acc tail
+
+    let validateFragmentSpreadIsPossible (schemaInfo : SchemaInfo) (ast : Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.choose (tryGetSelectionSetAndType schemaInfo)
+        |> List.fold (fun acc (objectType, selectionSet) ->
+            let fragmentAndParentTypes =
+                getSelectionSetInfo schemaInfo fragmentDefinitions objectType None selectionSet
+                |> getFragmentAndParentTypes []
+            fragmentAndParentTypes |> List.fold (fun acc types -> checkFragmentSpreadIsPossibleInSelection acc types) acc) Success
