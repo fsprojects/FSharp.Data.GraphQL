@@ -776,3 +776,12 @@ dog @include(if: true) {
 }"""
     let shouldPass = Parser.parse query2 |> Validation.Ast.validateDirectivesDefined schemaInfo
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that directives are in valid locations`` () =
+    let query =
+        """query myQuery @skip(if: $foo) {
+  field
+}"""
+    let shouldFail = Parser.parse query |> Validation.Ast.validateDirectivesAreInValidLocations schemaInfo
+    shouldFail |> equals (Error [ "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition." ])

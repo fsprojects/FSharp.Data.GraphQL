@@ -695,3 +695,84 @@ module Ast =
             if schemaInfo.Directives |> Array.exists (fun x -> x.Name = name)
             then acc
             else acc @ Error [ sprintf "Directive '%s' is not supported by the schema." name ]) Success
+
+    let rec private checkDirectivesInSelectionSet (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (selectionSet : Selection list) =
+        match selectionSet |> List.map (checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions) with
+        | [] -> acc
+        | results -> List.reduce (@) results
+
+    and private checkDirectivesInFragment (acc : ValidationResult) (schemaInfo : SchemaInfo)  (fragmentDefinitions : FragmentDefinition list) (frag : FragmentDefinition) =
+        let acc =
+            frag.Directives
+            |> List.fold (fun acc directive ->
+                match schemaInfo.Directives |> Array.tryFind (fun x -> x.Name = directive.Name) with
+                | Some directiveDef ->
+                    let expectedLocation =
+                        match frag.Name with
+                        | Some _ -> DirectiveLocation.FRAGMENT_DEFINITION
+                        | None -> DirectiveLocation.INLINE_FRAGMENT
+                    if directiveDef.Locations |> Array.contains expectedLocation
+                    then acc
+                    else 
+                        match frag.Name with
+                        | Some fragName -> acc @ Error [ sprintf "Fragment definition '%s' has a directive '%s', but this directive location is not supported by the schema definition." fragName directive.Name ]
+                        | None -> acc @ Error [ sprintf "An inline fragment has a directive '%s', but this directive location is not supported by the schema definition." directive.Name ]
+                | None -> acc) acc
+        checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions frag.SelectionSet
+
+    and private checkDirectivesInValidLocationOnSelection (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) =
+        function
+        | Field field ->
+            let acc =
+                field.Directives
+                |> List.fold (fun acc directive ->
+                    match schemaInfo.Directives |> Array.tryFind (fun x -> x.Name = directive.Name) with
+                    | Some directiveDef ->
+                        if directiveDef.Locations |> Array.contains DirectiveLocation.FIELD
+                        then acc
+                        else acc @ Error [ sprintf "Field or alias '%s' has a directive '%s', but this directive location is not supported by the schema definition." field.AliasOrName directive.Name ]
+                    | None -> acc) acc
+            checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions field.SelectionSet
+        | InlineFragment frag -> checkDirectivesInFragment acc schemaInfo fragmentDefinitions frag
+        | FragmentSpread spread ->
+            let acc =
+                spread.Directives
+                |> List.fold (fun acc directive ->
+                    match schemaInfo.Directives |> Array.tryFind (fun x -> x.Name = directive.Name) with
+                    | Some directiveDef ->
+                        if directiveDef.Locations |> Array.contains DirectiveLocation.FRAGMENT_SPREAD
+                        then acc
+                        else acc @ Error [ sprintf "Fragment spread '%s' has a directive '%s', but this directive location is not supported by the schema definition." spread.Name directive.Name ]
+                    | None -> acc) acc
+            match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+            | Some frag -> checkDirectivesInFragment acc schemaInfo fragmentDefinitions frag
+            | None -> acc
+
+    let private checkDirectivesInOperation (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (operation : OperationDefinition) =
+        let expectedDirective =
+            match operation.OperationType with
+            | Query -> DirectiveLocation.QUERY
+            | Mutation -> DirectiveLocation.MUTATION
+            | Subscription -> DirectiveLocation.SUBSCRIPTION
+        let acc =
+            operation.Directives
+            |> List.fold (fun acc directive ->
+                match schemaInfo.Directives |> Array.tryFind (fun x -> x.Name = directive.Name) with
+                | Some directiveDef ->
+                    if directiveDef.Locations |> Array.contains expectedDirective
+                    then acc
+                    else 
+                        match operation.Name with
+                        | Some operationName ->
+                            acc @ Error [ sprintf "%s operation '%s' has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) operationName directive.Name ]
+                        | None -> acc @ Error [ sprintf "This %s operation has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) directive.Name ]
+                | None -> acc) acc
+        operation.SelectionSet |> List.fold (fun acc selection -> checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions selection) acc
+
+    let validateDirectivesAreInValidLocations (schemaInfo : SchemaInfo) (ast: Document) =
+        let fragmentDefinitions = getFragmentDefinitions ast
+        ast.Definitions
+        |> List.fold (fun acc def ->
+            match def with
+            | OperationDefinition odef -> checkDirectivesInOperation acc schemaInfo fragmentDefinitions odef
+            | FragmentDefinition frag -> checkDirectivesInFragment acc schemaInfo fragmentDefinitions frag) Success
