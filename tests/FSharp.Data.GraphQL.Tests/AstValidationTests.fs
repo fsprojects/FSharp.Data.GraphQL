@@ -41,6 +41,9 @@ type Dog =
     interface IPet with
         member x.Name = x.Name
 
+type FindDogInput =
+    { Name : string }
+
 type Cat = 
     { Name : string
       MeowVolume : int
@@ -69,6 +72,7 @@ type Root =
       Pet : IPet
       Sentient : ISentient
       Human : Human }
+    member __.FindDog(_ : FindDogInput) : Dog option = None
 
 let Command =
     Define.Enum<Command>(
@@ -81,6 +85,11 @@ let Command =
 let Pet = Define.Interface<IPet>("Pet", [ Define.Field("name", String) ])
 
 let Sentient = Define.Interface<ISentient>("Sentient", [ Define.Field("name", String) ])
+
+let FindDogInput =
+    Define.InputObject<FindDogInput>(
+        name = "FindDogInput",
+        fields = [ Define.Input("name", String) ])
 
 let Dog = 
     Define.Object<Dog>(
@@ -157,7 +166,8 @@ let Root =
               Define.AutoField("dogOrHuman", DogOrHuman)
               Define.AutoField("pet", Pet)
               Define.AutoField("human", Human)
-              Define.Field("arguments", Arguments) ])
+              Define.Field("arguments", Arguments)
+              Define.Field("findDog", Nullable Dog, [ Define.Input("complex", FindDogInput) ], fun ctx (r : Root) -> r.FindDog(ctx.Arg("complex"))) ])
 
 let schema : ISchema = upcast Schema(Root)
 
@@ -697,4 +707,50 @@ fragment dogOrHumanFragment on DogOrHuman {
   }
 }"""
     let shouldPass = [query5;query6;query7;query8;query9] |> List.map (Parser.parse >> Validation.Ast.validateFragmentSpreadIsPossible schemaInfo) |> List.reduce (@)
+    shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that each input have value of coercible type`` () =
+    let query1 =
+        """fragment stringIntoInt on Arguments {
+  intArgField(intArg: "123")
+}
+
+query badComplexValue {
+  findDog(complex: { name: 123 })
+}
+
+fragment nullRequiredBooleanArg on Arguments {
+  nonNullBooleanArgField(nonNullBooleanArg: null)
+}"""
+    let expectedFailureResult =
+        Error [ "Argument field or value named 'intArg' can not be coerced into the expected type."
+                "Argument field or value named 'name' can not be coerced into the expected type."
+                "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value." ]
+    let shouldFail = Parser.parse query1 |> Validation.Ast.validateValuesOfCoercibleType schemaInfo
+    shouldFail |> equals expectedFailureResult
+    let query2 =
+        """fragment goodBooleanArg on Arguments {
+  booleanArgField(booleanArg: true)
+}
+
+fragment coercedIntIntoFloatArg on Arguments {
+  # Note: The input coercion rules for Float allow Int literals.
+  floatArgField(floatArg: 123)
+}
+
+query goodComplexDefaultValue($search: ComplexInput = { name: "Fido" }) {
+  findDog(complex: $search)
+}"""
+    let query3 =
+        """fragment stringIntoInt on Arguments {
+  intArgField(intArg: null)
+}"""
+    let query4 = """fragment validEmptyList on Arguments {
+  booleanListArgField(booleanListArg: [])
+}
+fragment validList on Arguments {
+  booleanListArgField(booleanListArg: [false, null, true])
+}"""
+    let shouldPass = [query2;query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateValuesOfCoercibleType schemaInfo) |> List.reduce (@)
     shouldPass |> equals Success
