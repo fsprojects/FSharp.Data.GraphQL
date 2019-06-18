@@ -83,8 +83,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
         runMiddlewares (fun x -> x.PostCompileSchema) (upcast schema) ignore
         match Validation.Types.validateTypeMap schema.TypeMap with
-        | Validation.Success -> ()
-        | Validation.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
+        | Validation.Types.Success -> ()
+        | Validation.Types.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
         let prepareOutput res =

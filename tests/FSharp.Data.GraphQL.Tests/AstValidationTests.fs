@@ -171,7 +171,11 @@ let Root =
 
 let schema : ISchema = upcast Schema(Root)
 
-let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema.Introspected)
+let schemaInfo = Validation.Ast.SchemaInfo.FromIntrospectionSchema(schema.Introspected)
+
+let getContext = Parser.parse >> Validation.Ast.getValidationContext schemaInfo
+
+open FSharp.Data.GraphQL.Validation.Ast
 
 [<Fact>]
 let ``Validation should grant that each operation name is unique in the document`` () =
@@ -187,8 +191,8 @@ mutation dogOperation {
     id
   }
 }"""
-    let actual = Parser.parse query |> Validation.Ast.validateOperationNameUniqueness
-    let expected = Error [ "Operation 'dogOperation' has 2 definitions. Each operation name must be unique." ]
+    let actual = getContext query |> Validation.Ast.validateOperationNameUniqueness
+    let expected = Error [ {Message = "Operation 'dogOperation' has 2 definitions. Each operation name must be unique."; Path = None; } ]
     actual |> equals expected
 
 [<Fact>]
@@ -207,8 +211,9 @@ query getName {
     }
   }
 }"""
-    let actual = Parser.parse query |> Validation.Ast.validateLoneAnonymousOperation
-    let expected = Error [ "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation." ]
+    let actual = getContext query |> Validation.Ast.validateLoneAnonymousOperation
+    let expected = Error [ { Message = "An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation."
+                             Path = None } ]
     actual |> equals expected
 
 [<Fact>]
@@ -242,10 +247,10 @@ fragment multipleSubscriptions on Subscription {
   __typename
 }"""
     let expected =
-        Error [ "Subscription operations should have only one root field. Operation 'sub1' has 2 fields (disallowedSecondRootField,  newMessage)."
-                "Subscription operations should have only one root field. Operation 'sub2' has 2 fields (disallowedSecondRootField,  newMessage)."
-                "Subscription operations should have only one root field. Operation 'sub3' has 2 fields (__typename,  newMessage)." ]
-    let actual = [query1; query2; query3] |> List.map (Parser.parse >> Validation.Ast.validateSubscriptionSingleRootField) |> List.reduce (@)
+        Error [ { Message = "Subscription operations should have only one root field. Operation 'sub1' has 2 fields (disallowedSecondRootField,  newMessage)."; Path = None }
+                { Message = "Subscription operations should have only one root field. Operation 'sub2' has 2 fields (disallowedSecondRootField,  newMessage)."; Path = None }
+                { Message = "Subscription operations should have only one root field. Operation 'sub3' has 2 fields (__typename,  newMessage)."; Path = None }]
+    let actual = [query1; query2; query3] |> List.map (getContext >> Validation.Ast.validateSubscriptionSingleRootField) |> List.reduce (@)
     actual |> equals expected
 
 [<Fact>]
@@ -268,12 +273,12 @@ fragment aliasedLyingFieldTargetNotDefined on Dog {
   barkVolume
 }"""
     let expected =
-        Error [ "Field 'meowVolume' is not defined in schema type 'Dog'."
-                "Field 'kawVolume' is not defined in schema type 'Dog'."
-                "Field 'nickname' is not defined in schema type 'Pet'."
-                "Field 'name' is not defined in schema type 'CatOrDog'."
-                "Field 'barkVolume' is not defined in schema type 'CatOrDog'." ]
-    let actual = [query1; query2; query3] |> List.map (Parser.parse >> Validation.Ast.validateSelectionFieldTypes schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Field 'meowVolume' is not defined in schema type 'Dog'."; Path = Some ["fieldNotDefined"; "meowVolume"] }
+                { Message = "Field 'kawVolume' is not defined in schema type 'Dog'."; Path = Some ["aliasedLyingFieldTargetNotDefined"; "barkVolume"] }
+                { Message = "Field 'nickname' is not defined in schema type 'Pet'."; Path = Some ["definedOnImplementorsButNotInterface"; "nickname"] }
+                { Message = "Field 'name' is not defined in schema type 'CatOrDog'."; Path = Some ["directFieldSelectionOnUnion"; "name"] }
+                { Message = "Field 'barkVolume' is not defined in schema type 'CatOrDog'."; Path = Some ["directFieldSelectionOnUnion"; "barkVolume"] } ]
+    let actual = [query1; query2; query3] |> List.map (getContext >> Validation.Ast.validateSelectionFieldTypes) |> List.reduce (@)
     actual |> equals expected
 
 [<Fact>]
@@ -313,13 +318,19 @@ fragment differingArgs on Dog {
   }
 }"""
     let expectedFailureResult = 
-        Error [ "Field name or alias 'name' is referring to fields 'nickname' and 'name', but they are different fields in the scope of the parent type."
-                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
-                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
-                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
-                "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
-                "Field name or alias 'someValue' appears two times, but they do not have the same return types in the scope of the parent type."]
-    let shouldFail = [query1; query2; query3] |> List.map (Parser.parse >> Validation.Ast.validateFieldSelectionMerging schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Field name or alias 'name' is referring to fields 'nickname' and 'name', but they are different fields in the scope of the parent type."
+                  Path = Some ["conflictingBecauseAlias"; "name"] }
+                { Message = "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                  Path = Some ["conflictingArgsOnValues"; "doesKnowCommand"] }
+                { Message = "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                  Path = Some ["conflictingArgsValueAndVar"; "doesKnowCommand"] }
+                { Message = "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                  Path = Some ["conflictingArgsWithVars"; "doesKnowCommand"] }
+                { Message = "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
+                  Path = Some ["differingArgs"; "doesKnowCommand"] }
+                { Message = "Field name or alias 'someValue' appears two times, but they do not have the same return types in the scope of the parent type."
+                  Path = Some ["conflictingDifferingResponses"; "someValue"] } ]
+    let shouldFail = [query1; query2; query3] |> List.map (getContext >> Validation.Ast.validateFieldSelectionMerging) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query4 =
         """fragment mergeIdenticalFields on Dog {
@@ -359,7 +370,7 @@ fragment safeDifferingArgs on Pet {
     doesKnowCommand(catCommand: JUMP)
   }
 }"""
-    let shouldPass = [query4; query5; query6] |> List.map (Parser.parse >> Validation.Ast.validateFieldSelectionMerging schemaInfo) |> List.reduce (@)
+    let shouldPass = [query4; query5; query6] |> List.map (getContext >> Validation.Ast.validateFieldSelectionMerging) |> List.reduce (@)
     shouldPass |> equals Success
     
 [<Fact>]
@@ -383,17 +394,21 @@ query directQueryOnUnionWithoutSubFields {
   catOrDog
 }"""
     let expectedFailureResult = 
-        Error [ "Field 'barkVolume' of 'Dog' type is of type kind SCALAR, and therefore should not contain inner fields in its selection."
-                "Field 'human' of 'Root' type is of type kind OBJECT, and therefore should have inner fields in its selection."
-                "Field 'pet' of 'Root' type is of type kind INTERFACE, and therefore should have inner fields in its selection."
-                "Field 'catOrDog' of 'Root' type is of type kind UNION, and therefore should have inner fields in its selection." ]
-    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateLeafFieldSelections schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Field 'barkVolume' of 'Dog' type is of type kind SCALAR, and therefore should not contain inner fields in its selection."
+                  Path = Some ["scalarSelectionsNotAllowedOnInt"; "barkVolume"] }
+                { Message = "Field 'human' of 'Root' type is of type kind OBJECT, and therefore should have inner fields in its selection."
+                  Path = Some ["directQueryOnObjectWithoutSubFields"; "human"] }
+                { Message = "Field 'pet' of 'Root' type is of type kind INTERFACE, and therefore should have inner fields in its selection."
+                  Path = Some ["directQueryOnInterfaceWithoutSubFields"; "pet"] }
+                { Message = "Field 'catOrDog' of 'Root' type is of type kind UNION, and therefore should have inner fields in its selection."
+                  Path = Some ["directQueryOnUnionWithoutSubFields"; "catOrDog"] } ]
+    let shouldFail = [query1; query2] |> List.map (getContext >> Validation.Ast.validateLeafFieldSelections) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query4 =
         """fragment scalarSelection on Dog {
   barkVolume
 }"""
-    let shouldPass = Parser.parse query4 |> Validation.Ast.validateLeafFieldSelections schemaInfo
+    let shouldPass = getContext query4 |> Validation.Ast.validateLeafFieldSelections
     shouldPass |> equals Success
 
 [<Fact>]
@@ -407,9 +422,11 @@ let ``Validation should grant that arguments passed to fields exists in their de
   isHouseTrained(atOtherHomes: true) @include(unless: false)
 }"""
     let expectedFailureResult =
-        Error [ "Field 'doesKnowCommand' of type 'Dog' does not have an input named 'command' in its definition."
-                "Directive 'include' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'unless' in its definition."]
-    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateArgumentNames schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Field 'doesKnowCommand' of type 'Dog' does not have an input named 'command' in its definition."
+                  Path = Some ["invalidArgName"; "doesKnowCommand"] }
+                { Message = "Directive 'include' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'unless' in its definition."
+                  Path = Some ["invalidArgName"; "isHouseTrained"] } ]
+    let shouldFail = [query1; query2] |> List.map (getContext >> Validation.Ast.validateArgumentNames) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query3 =
         """fragment argOnRequiredArg on Dog {
@@ -419,7 +436,7 @@ let ``Validation should grant that arguments passed to fields exists in their de
 fragment argOnOptional on Dog {
   isHouseTrained(atOtherHomes: true) @include(if: true)
 }"""
-    let shouldPass = Parser.parse query3 |> Validation.Ast.validateArgumentNames schemaInfo
+    let shouldPass = getContext query3 |> Validation.Ast.validateArgumentNames
     shouldPass |> equals Success
 
 [<Fact>]
@@ -429,8 +446,9 @@ let ``Validation should grant that arguments passed to fields are unique between
   doesKnowCommand(dogCommand: SIT, dogCommand: CLEAN_UP_HOUSE)
 }"""
     let expectedFailureResult =
-        Error [ "More than one argument named 'dogCommand' was defined in field 'doesKnowCommand'. Field arguments must be unique." ]
-    let shouldFail = Parser.parse query |> Validation.Ast.validateArgumentUniqueness
+        Error [ { Message = "More than one argument named 'dogCommand' was defined in field 'doesKnowCommand'. Field arguments must be unique."
+                  Path = Some ["duplicatedArgs"; "doesKnowCommand"] } ]
+    let shouldFail = getContext query |> Validation.Ast.validateArgumentUniqueness
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]
@@ -444,9 +462,11 @@ let ``Validation should grant that required arguments with no default values are
   nonNullBooleanArgField(nonNullBooleanArg: null)
 }"""
     let expectedFailureResult =
-        Error [ "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value."
-                "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value." ]
-    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateRequiredArguments schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value."
+                  Path = Some ["missingRequiredArg"; "nonNullBooleanArgField"] }
+                { Message = "Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value."
+                  Path = Some ["missingRequiredArg"; "nonNullBooleanArgField"] } ]
+    let shouldFail = [query1; query2] |> List.map (getContext >> Validation.Ast.validateRequiredArguments) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query3 =
         """fragment goodBooleanArg on Arguments {
@@ -460,7 +480,7 @@ fragment goodNonNullArg on Arguments {
         """fragment goodBooleanArgDefault on Arguments {
   booleanArgField
 }"""
-    let shouldPass = [query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateRequiredArguments schemaInfo) |> List.reduce (@)
+    let shouldPass = [query3; query4] |> List.map (getContext >> Validation.Ast.validateRequiredArguments) |> List.reduce (@)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -481,8 +501,8 @@ fragment fragmentOne on Dog {
     name
   }
 }"""
-    let shouldFail = Parser.parse query1 |> Validation.Ast.validateFragmentNameUniqueness
-    shouldFail |> equals (Error [ "There are 2 fragments with name 'fragmentOne' in the document. Fragment definitions must have unique names." ])
+    let shouldFail = getContext query1 |> Validation.Ast.validateFragmentNameUniqueness
+    shouldFail |> equals (Error [ {Message = "There are 2 fragments with name 'fragmentOne' in the document. Fragment definitions must have unique names."; Path = None } ])
     let query2 =
         """fragment correctType on Dog {
   name
@@ -499,7 +519,7 @@ fragment inlineFragment2 on Dog {
     name
   }
 }"""
-    let shouldPass = Parser.parse query2 |> Validation.Ast.validateFragmentNameUniqueness
+    let shouldPass = getContext query2 |> Validation.Ast.validateFragmentNameUniqueness
     shouldPass |> equals Success
 
 [<Fact>]
@@ -515,9 +535,9 @@ fragment inlineNotExistingType on Dog {
   }
 }"""
     let expectedFailureResult =
-        Error [ "Fragment 'notOnExistingType' has type condition 'NotInSchema', but that type does not exist in the schema."
-                "An inline fragment in the document has type condition 'NotInSchema', but that type does not exist in the schema." ]
-    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentTypeExistence schemaInfo
+        Error [ { Message = "Fragment 'notOnExistingType' has type condition 'NotInSchema', but that type does not exist in the schema."; Path = None }
+                { Message = "Inline fragment has type condition 'NotInSchema', but that type does not exist in the schema."; Path = Some ["inlineNotExistingType"] } ]
+    let shouldFail = getContext query |> Validation.Ast.validateFragmentTypeExistence
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]
@@ -533,9 +553,9 @@ fragment inlineFragOnScalar on Dog {
   }
 }"""
     let expectedFailureResult =
-        Error [ "Fragment 'fragOnScalar' has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types."
-                "An inline fragment has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types." ]
-    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsOnCompositeTypes schemaInfo
+        Error [ {Message = "Fragment 'fragOnScalar' has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types."; Path = Some ["fragOnScalar"; "something"] }
+                { Message = "Inline fragment has type kind SCALAR, but fragments can only be defined in UNION, OBJECT or INTERFACE types."; Path = Some ["inlineFragOnScalar"; "somethingElse"] } ]
+    let shouldFail = getContext query |> Validation.Ast.validateFragmentsOnCompositeTypes
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]
@@ -550,8 +570,8 @@ let ``Validation should grant that fragment definitions are used in at least one
     name
   }
 }"""
-    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentsMustBeUsed
-    shouldFail |> equals (Error [ "Fragment 'nameFragment' is not used in any operation in the document. Fragments must be used in at least one operation." ])
+    let shouldFail = getContext query |> Validation.Ast.validateFragmentsMustBeUsed
+    shouldFail |> equals (Error [ {Message = "Fragment 'nameFragment' is not used in any operation in the document. Fragments must be used in at least one operation."; Path = None } ])
 
 [<Fact>]
 let ``Validation should grant that fragment spreads exists in document`` () =
@@ -561,8 +581,8 @@ let ``Validation should grant that fragment spreads exists in document`` () =
     ...undefinedFragment
   }
 }"""
-    let shouldFail = Parser.parse query |> Validation.Ast.validateFragmentSpreadTargetDefined
-    shouldFail |> equals (Error [ "Fragment spread 'undefinedFragment' refers to a non-existent fragment definition in the document." ])
+    let shouldFail = getContext query |> Validation.Ast.validateFragmentSpreadTargetDefined
+    shouldFail |> equals (Error [ {Message = "Fragment spread 'undefinedFragment' refers to a non-existent fragment definition in the document."; Path = Some ["dog"] } ])
 
 [<Fact>]
 let ``Validation should grant that fragment definitions dont refer themselves`` () =
@@ -603,11 +623,11 @@ fragment ownerFragment on Dog {
   }
 }"""
     let expectedFailureResult =
-        Error [ "Fragment 'nameFragment' is making a cyclic reference."
-                "Fragment 'barkVolumeFragment' is making a cyclic reference."
-                "Fragment 'dogFragment' is making a cyclic reference."
-                "Fragment 'ownerFragment' is making a cyclic reference."]
-    let shouldFail = [query1;query2] |> List.map (Parser.parse >> Validation.Ast.validateFragmentsMustNotFormCycles) |> List.reduce (@)
+        Error [ { Message = "Fragment 'nameFragment' is making a cyclic reference."; Path = None }
+                { Message = "Fragment 'barkVolumeFragment' is making a cyclic reference."; Path = None }
+                { Message = "Fragment 'dogFragment' is making a cyclic reference."; Path = None }
+                { Message = "Fragment 'ownerFragment' is making a cyclic reference."; Path = None } ]
+    let shouldFail = [query1;query2] |> List.map (getContext >> Validation.Ast.validateFragmentsMustNotFormCycles) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]
@@ -651,13 +671,19 @@ fragment humanOrAlienFragment on HumanOrAlien {
   }
 }"""
     let expectedFailureResult =
-        Error [ "Fragment type condition 'Cat' is not applicable to the parent type of the field 'Dog'."
-                "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
-                "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'."
-                "Fragment type condition 'Sentient' is not applicable to the parent type of the field 'Pet'."
-                "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
-                "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'." ]
-    let shouldFail = [query1;query2;query3;query4] |> List.map (Parser.parse >> Validation.Ast.validateFragmentSpreadIsPossible schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Fragment type condition 'Cat' is not applicable to the parent type of the field 'Dog'."
+                  Path = Some ["catInDogFragmentInvalid"; "meowVolume"] }
+                { Message = "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
+                  Path = Some ["sentientFragment"; "barkVolume"] }
+                { Message = "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'."
+                  Path = Some ["humanOrAlienFragment"; "meowVolume"] }
+                { Message = "Fragment type condition 'Sentient' is not applicable to the parent type of the field 'Pet'."
+                  Path = Some ["nonIntersectingInterfaces"; "name"] }
+                { Message = "Fragment type condition 'Dog' is not applicable to the parent type of the field 'Sentient'."
+                  Path = Some ["sentientFragment"; "barkVolume"] }
+                { Message = "Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'."
+                  Path = Some ["humanOrAlienFragment"; "meowVolume"] } ]
+    let shouldFail = [query1;query2;query3;query4] |> List.map (getContext >> Validation.Ast.validateFragmentSpreadIsPossible) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query5 =
         """fragment dogFragment on Dog {
@@ -706,7 +732,7 @@ fragment dogOrHumanFragment on DogOrHuman {
     barkVolume
   }
 }"""
-    let shouldPass = [query5;query6;query7;query8;query9] |> List.map (Parser.parse >> Validation.Ast.validateFragmentSpreadIsPossible schemaInfo) |> List.reduce (@)
+    let shouldPass = [query5;query6;query7;query8;query9] |> List.map (getContext >> Validation.Ast.validateFragmentSpreadIsPossible) |> List.reduce (@)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -728,11 +754,15 @@ fragment nullRequiredBooleanArg on Arguments {
   findDog(complex: { favoriteCookieFlavor: "Bacon" })
 }"""
     let expectedFailureResult =
-        Error [ "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."
-                "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."
-                "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."
-                "Can not coerce argument 'complex'. Type 'FindDogInput' have a required field 'name', but that field does not exist in the argument." ]
-    let shouldFail = [query1; query2] |> List.map (Parser.parse >> Validation.Ast.validateInputValues schemaInfo) |> List.reduce (@)
+        Error [ { Message = "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."
+                  Path = Some ["badComplexValue"; "findDog"] }
+                { Message = "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."
+                  Path = Some ["stringIntoInt"; "intArgField"] }
+                { Message = "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."
+                  Path = Some ["nullRequiredBooleanArg"; "nonNullBooleanArgField"] }
+                { Message = "Can not coerce argument 'complex'. Argument definition 'FindDogInput' have a required field 'name', but that field does not exist in the literal value for the argument."
+                  Path = Some ["findDog"] } ]
+    let shouldFail = [query1; query2] |> List.map (getContext >> Validation.Ast.validateInputValues) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query2 =
         """fragment goodBooleanArg on Arguments {
@@ -757,7 +787,7 @@ query goodComplexDefaultValue($search: FindDogInput = { name: "Fido" }) {
 fragment validList on Arguments {
   booleanListArgField(booleanListArg: [false, null, true])
 }"""
-    let shouldPass = [query2;query3; query4] |> List.map (Parser.parse >> Validation.Ast.validateInputValues schemaInfo) |> List.reduce (@)
+    let shouldPass = [query2;query3; query4] |> List.map (getContext >> Validation.Ast.validateInputValues) |> List.reduce (@)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -767,14 +797,14 @@ dog @unknownDirective {
   name
 }
 }"""
-    let shouldFail = Parser.parse query1 |> Validation.Ast.validateDirectivesDefined schemaInfo
-    shouldFail |> equals (Error ["Directive 'unknownDirective' is not supported by the schema."])
+    let shouldFail = getContext query1 |> Validation.Ast.validateDirectivesDefined
+    shouldFail |> equals (Error [ {Message = "Directive 'unknownDirective' is not defined in the schema."; Path = Some ["dogOperation"; "dog"] } ])
     let query2 = """query dogOperation {
 dog @include(if: true) {
   name
 }
 }"""
-    let shouldPass = Parser.parse query2 |> Validation.Ast.validateDirectivesDefined schemaInfo
+    let shouldPass = getContext query2 |> Validation.Ast.validateDirectivesDefined
     shouldPass |> equals Success
 
 [<Fact>]
@@ -783,5 +813,6 @@ let ``Validation should grant that directives are in valid locations`` () =
         """query myQuery @skip(if: $foo) {
   field
 }"""
-    let shouldFail = Parser.parse query |> Validation.Ast.validateDirectivesAreInValidLocations schemaInfo
-    shouldFail |> equals (Error [ "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition." ])
+    let shouldFail = getContext query |> Validation.Ast.validateDirectivesAreInValidLocations
+    shouldFail |> equals (Error [ { Message = "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition."
+                                    Path = Some ["myQuery"] } ])
