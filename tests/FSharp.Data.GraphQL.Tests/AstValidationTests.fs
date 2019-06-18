@@ -816,3 +816,26 @@ let ``Validation should grant that directives are in valid locations`` () =
     let shouldFail = getContext query |> Validation.Ast.validateDirectivesAreInValidLocations
     shouldFail |> equals (Error [ { Message = "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition."
                                     Path = Some ["myQuery"] } ])
+
+[<Fact>]
+let ``Validation should grant that directives are unique in their locations`` () =
+    let query1 =
+        """query q($foo: Boolean = true, $bar: Boolean = false) {
+  field @skip(if: $foo) @skip(if: $bar)
+}"""
+    let expectedFailureResult =
+        Error [ { Message = "Directive 'skip' appears 2 times in the location it is used. Directives must be unique in their locations."
+                  Path = Some ["q"; "field"] } ]
+    let shouldFail = getContext query1 |> Validation.Ast.validateUniqueDirectivesPerLocation
+    shouldFail |> equals expectedFailureResult
+    let query2 =
+        """query q($foo: Boolean = true, $bar: Boolean = false) {
+  field @skip(if: $foo) {
+    subfieldA
+  }
+  field @skip(if: $bar) {
+    subfieldB
+  }
+}"""
+    let shouldPass = getContext query2 |> Validation.Ast.validateUniqueDirectivesPerLocation
+    shouldPass |> equals Success

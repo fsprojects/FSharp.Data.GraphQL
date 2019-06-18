@@ -693,26 +693,26 @@ module Ast =
             | FragmentDefinitionInfo fdef -> Some (None, fdef.SelectionSet))
         |> List.fold (fun acc (vars, selectionSet) -> selectionSet |> List.fold (fun acc selection -> checkInputValue acc ctx.Schema vars selection) acc) Success
 
-    let rec private getDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * string list) list =
+    let rec private getDistinctDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * string list) list =
         match selection with
         | Field field ->
             let path = field.AliasOrName :: path
             let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
-            let selectionSetDirectives = field.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
+            let selectionSetDirectives = field.SelectionSet |> List.collect (getDistinctDirectiveNamesInSelection path)
             fieldDirectives |> List.append selectionSetDirectives
-        | InlineFragment frag -> getDirectiveNamesInDefinition path (FragmentDefinition frag)
+        | InlineFragment frag -> getDistinctDirectiveNamesInDefinition path (FragmentDefinition frag)
         | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
 
-    and private getDirectiveNamesInDefinition (path : Path) (frag : Definition) : (Path * string list) list =
+    and private getDistinctDirectiveNamesInDefinition (path : Path) (frag : Definition) : (Path * string list) list =
         let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
-        let selectionSetDirectives = frag.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
+        let selectionSetDirectives = frag.SelectionSet |> List.collect (getDistinctDirectiveNamesInSelection path)
         fragDirectives |> List.append selectionSetDirectives
 
     let validateDirectivesDefined (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
-            getDirectiveNamesInDefinition path def.Definition)
+            getDistinctDirectiveNamesInDefinition path def.Definition)
         |> List.fold (fun acc (path, names) ->
             names |> List.fold (fun acc name ->
                 if ctx.Schema.Directives |> Array.exists (fun x -> x.Name = name)
@@ -799,16 +799,30 @@ module Ast =
             | OperationDefinition odef -> checkDirectivesInOperation acc ctx.Schema fragmentDefinitions path odef
             | FragmentDefinition frag -> checkDirectivesInFragment acc ctx.Schema fragmentDefinitions path (ref []) frag) Success
 
+    let rec private getDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * string list) list =
+        match selection with
+        | Field field ->
+            let path = field.AliasOrName :: path
+            let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) ]
+            let selectionSetDirectives = field.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
+            fieldDirectives |> List.append selectionSetDirectives
+        | InlineFragment frag -> getDirectiveNamesInDefinition path (FragmentDefinition frag)
+        | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) ]
+
+    and private getDirectiveNamesInDefinition (path : Path) (frag : Definition) : (Path * string list) list =
+        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) ]
+        let selectionSetDirectives = frag.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
+        fragDirectives |> List.append selectionSetDirectives
+
     let validateUniqueDirectivesPerLocation (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
-            let defDirectives : Path * string list = path, def.Directives |> List.map (fun x -> x.Name)
+            let defDirectives = path, def.Directives |> List.map (fun x -> x.Name)
             let selectionSetDirectives = def.Definition.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
             defDirectives :: selectionSetDirectives)
-        |> List.fold (fun acc (path, names) ->
-            names 
-            |> List.groupBy id 
-            |> List.map (fun (k, v) -> k, v.Length) 
+        |> List.map (fun (path, directives) -> path, directives |> List.groupBy id |> List.map (fun (k, v) -> k, v.Length))
+        |> List.fold (fun acc (path, directives) ->
+            directives 
             |> List.filter (fun (_, length) -> length > 1)
             |> List.fold (fun acc (name, length) -> acc @ Error.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name length, path)) acc) Success
