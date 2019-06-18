@@ -855,6 +855,14 @@ module Ast =
                     acc @ Error.AsResult(sprintf "Variable '%s' has a type is not an input type defined by the schema (%s)." var.VariableName (var.Type.ToString()))
                 | _ -> acc) acc) Success
 
+    let private checkVariablesDefinedInDirective (acc : ValidationResult) (variableDefinitions : VariableDefinition list) (path : Path) (directive : Directive) =
+        directive.Arguments
+        |> List.choose (fun arg -> match arg.Value with | Variable varName -> Some (arg.Name, varName) | _ -> None)
+        |> List.fold (fun acc (argName, varName) -> 
+            match variableDefinitions |> List.tryFind (fun x -> x.VariableName = varName) with
+            | Some _ -> acc
+            | None -> acc @ Error.AsResult(sprintf "A variable '%s' is referenced in an argument '%s' of directive '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName argName directive.Name path.Head, path)) acc
+
     let rec private checkVariablesDefinedInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) (variableDefinitions : VariableDefinition list) (path : Path) =
         function
         | Field field -> 
@@ -866,15 +874,32 @@ module Ast =
                     match variableDefinitions |> List.tryFind (fun x -> x.VariableName = varName) with
                     | Some _ -> acc
                     | None -> acc @ Error.AsResult(sprintf "A variable '%s' is referenced in argument '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName argName field.AliasOrName)) acc
-            field.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
-        | InlineFragment frag -> frag.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+            let acc =
+                field.SelectionSet 
+                |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+            field.Directives
+            |> List.fold (fun acc directive -> checkVariablesDefinedInDirective acc variableDefinitions path directive) acc
+        | InlineFragment frag -> 
+            let acc =
+                frag.SelectionSet
+                |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+            frag.Directives
+            |> List.fold (fun acc directive -> checkVariablesDefinedInDirective acc variableDefinitions path directive) acc
         | FragmentSpread spread ->
             if List.contains spread.Name !visitedFragments
             then acc
             else
-                match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
-                | Some frag -> frag.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
-                | None -> acc
+                let acc =
+                    match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+                    | Some frag -> 
+                        let acc =
+                            frag.SelectionSet 
+                            |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+                        frag.Directives
+                        |> List.fold (fun acc directive -> checkVariablesDefinedInDirective acc variableDefinitions path directive) acc
+                    | None -> acc
+                spread.Directives
+                |> List.fold (fun acc directive -> checkVariablesDefinedInDirective acc variableDefinitions path directive) acc
 
     let validateVariablesUsesDefined (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
@@ -884,3 +909,44 @@ module Ast =
             let path = match operationName with | Some name -> [name] | None -> []
             selectionSet
             |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions (ref []) varDefs path selection) acc) Success
+
+    let rec private variableIsUsedInDirective (name : string) (directive : Directive) =
+        let validArgNames = directive.Arguments |> List.choose (fun x -> match x.Value with | Variable varName -> Some varName | _ -> None)
+        List.contains name validArgNames
+
+    let rec private variableIsUsedInSelection (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) =
+        function
+        | Field field ->
+            let validArgNames = field.Arguments |> List.choose (fun x -> match x.Value with | Variable varName -> Some varName | _ -> None)
+            if List.contains name validArgNames
+            then true
+            else 
+                let acc = field.SelectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection name fragmentDefinitions visitedFragments selection) false
+                field.Directives |> List.fold (fun acc directive -> acc || variableIsUsedInDirective name directive) acc
+        | InlineFragment frag ->
+            let acc = frag.SelectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection name fragmentDefinitions visitedFragments selection) false
+            frag.Directives |> List.fold (fun acc directive -> acc || variableIsUsedInDirective name directive) acc
+        | FragmentSpread spread ->
+            if List.contains spread.Name !visitedFragments
+            then false
+            else
+                let acc =
+                    match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+                    | Some frag -> 
+                        let acc = frag.SelectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection name fragmentDefinitions visitedFragments selection) false
+                        frag.Directives |> List.fold (fun acc directive -> acc || variableIsUsedInDirective name directive) acc
+                    | None -> false
+                spread.Directives |> List.fold (fun acc directive -> acc || variableIsUsedInDirective name directive) acc
+
+    let validateAllVariablesUsed (ctx : ValidationContext) =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        ctx.Document.Definitions
+        |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
+        |> List.fold (fun acc (operationName, selectionSet, varDefs) ->
+            varDefs |> List.map (fun x -> x.VariableName) |> List.fold (fun acc varName ->
+                let isUsed = selectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection varName fragmentDefinitions (ref []) selection) false
+                match operationName, isUsed with
+                | _ , true -> acc
+                | Some operationName, _ -> acc @ Error.AsResult(sprintf "Variable definition '%s' is not used in operation '%s'. Every variable must be used." varName operationName)
+                | None, _ -> acc @ Error.AsResult(sprintf "Variable definition '%s' is not used in operation. Every variable must be used." varName))
+                acc) Success

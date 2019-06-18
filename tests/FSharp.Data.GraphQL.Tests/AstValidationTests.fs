@@ -928,3 +928,56 @@ let ``Validation should grant that all referenced variables are defined variable
 }"""
     let shouldPass = getContext query2 |> Validation.Ast.validateVariablesUsesDefined
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that all defined variables are used in the operation they were defined`` () =
+    let query1 =
+        """query variableUnused($atOtherHomes: Boolean) {
+  dog {
+    isHousetrained
+  }
+}"""
+    let query2 =
+        """query variableNotUsedWithinFragment($atOtherHomes: Boolean) {
+  dog {
+    ...isHousetrainedWithoutVariableFragment
+  }
+}
+
+fragment isHousetrainedWithoutVariableFragment on Dog {
+  isHousetrained
+}"""
+    let query3 =
+        """query queryWithUsedVar($atOtherHomes: Boolean) {
+  dog {
+    ...isHousetrainedFragment
+  }
+}
+
+query queryWithExtraVar($atOtherHomes: Boolean, $extra: Int) {
+  dog {
+    ...isHousetrainedFragment
+  }
+}
+
+fragment isHousetrainedFragment on Dog {
+  isHousetrained(atOtherHomes: $atOtherHomes)
+}"""
+    let expectedFailureResult =
+        Error [ { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableUnused'. Every variable must be used."; Path = None }
+                { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableNotUsedWithinFragment'. Every variable must be used."; Path = None }
+                { Message = "Variable definition 'extra' is not used in operation 'queryWithExtraVar'. Every variable must be used."; Path = None } ]
+    let shouldFail = [query1; query2; query3] |> List.map (getContext >> Validation.Ast.validateAllVariablesUsed) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
+    let query4 =
+        """query variableUsedInFragment($atOtherHomes: Boolean) {
+  dog {
+    ...isHousetrainedFragment
+  }
+}
+
+fragment isHousetrainedFragment on Dog {
+  isHousetrained(atOtherHomes: $atOtherHomes)
+}"""
+    let shouldPass = getContext query4 |> Validation.Ast.validateAllVariablesUsed
+    shouldPass |> equals Success
