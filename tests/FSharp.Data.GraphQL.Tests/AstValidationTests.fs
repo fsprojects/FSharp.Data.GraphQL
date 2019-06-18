@@ -839,3 +839,30 @@ let ``Validation should grant that directives are unique in their locations`` ()
 }"""
     let shouldPass = getContext query2 |> Validation.Ast.validateUniqueDirectivesPerLocation
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that variables are unique in their operations`` () =
+    let query1 =
+        """query houseTrainedQuery($atOtherHomes: Boolean, $atOtherHomes: Boolean) {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}"""
+    let shouldFail = getContext query1 |> Validation.Ast.validateVariableUniqueness
+    shouldFail |> equals (Error [ { Message = "Variable 'atOtherHomes' in operation 'houseTrainedQuery' is declared 2 times. Variables must be unique in their operations."; Path = None } ])
+    let query2 =
+        """query A($atOtherHomes: Boolean) {
+  ...HouseTrainedFragment
+}
+
+query B($atOtherHomes: Boolean) {
+  ...HouseTrainedFragment
+}
+
+fragment HouseTrainedFragment on Root {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}"""
+    let shouldPass = getContext query2 |> Validation.Ast.validateUniqueDirectivesPerLocation
+    shouldPass |> equals Success

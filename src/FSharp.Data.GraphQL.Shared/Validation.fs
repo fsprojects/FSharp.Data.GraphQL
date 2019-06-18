@@ -826,3 +826,16 @@ module Ast =
             directives 
             |> List.filter (fun (_, length) -> length > 1)
             |> List.fold (fun acc (name, length) -> acc @ Error.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name length, path)) acc) Success
+
+    let validateVariableUniqueness (ctx : ValidationContext) =
+        ctx.Document.Definitions
+        |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
+        |> List.fold (fun acc (operationName, vars) ->
+            vars
+            |> List.groupBy id
+            |> List.map (fun (k, v) -> k, v.Length)
+            |> List.filter (fun (_, length) -> length > 1)
+            |> List.fold (fun acc (var, length) ->
+                match operationName with
+                | Some operationName -> acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName length)
+                | None -> acc @ Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName length)) acc) Success
