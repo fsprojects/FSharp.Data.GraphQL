@@ -41,8 +41,9 @@ type Dog =
     interface IPet with
         member x.Name = x.Name
 
-type FindDogInput =
-    { Name : string }
+type ComplexInput =
+    { Name : string option
+      Owner : string option }
 
 type Cat = 
     { Name : string
@@ -72,7 +73,8 @@ type Root =
       Pet : IPet
       Sentient : ISentient
       Human : Human }
-    member __.FindDog(_ : FindDogInput) : Dog option = None
+    member __.FindDog(_ : ComplexInput) : Dog option = None
+    member __.BooleanList(_ : bool list option) : bool option = None
 
 let Command =
     Define.Enum<Command>(
@@ -86,10 +88,10 @@ let Pet = Define.Interface<IPet>("Pet", [ Define.Field("name", String) ])
 
 let Sentient = Define.Interface<ISentient>("Sentient", [ Define.Field("name", String) ])
 
-let FindDogInput =
-    Define.InputObject<FindDogInput>(
-        name = "FindDogInput",
-        fields = [ Define.Input("name", String) ])
+let ComplexInput =
+    Define.InputObject<ComplexInput>(
+        name = "ComplexInput",
+        fields = [ Define.Input("name", Nullable String); Define.Input("owner", Nullable String) ])
 
 let Dog = 
     Define.Object<Dog>(
@@ -167,7 +169,8 @@ let Root =
               Define.AutoField("pet", Pet)
               Define.AutoField("human", Human)
               Define.Field("arguments", Arguments)
-              Define.Field("findDog", Nullable Dog, [ Define.Input("complex", FindDogInput) ], fun ctx (r : Root) -> r.FindDog(ctx.Arg("complex"))) ])
+              Define.Field("findDog", Nullable Dog, [ Define.Input("complex", ComplexInput) ], fun ctx (r : Root) -> r.FindDog(ctx.Arg("complex")))
+              Define.Field("booleanList", Nullable Boolean, [ Define.Input("booleanListArg", Nullable (ListOf Boolean)) ], fun ctx (r : Root) -> r.BooleanList(ctx.Arg("booleanListArg"))) ])
 
 let schema : ISchema = upcast Schema(Root)
 
@@ -754,14 +757,10 @@ fragment nullRequiredBooleanArg on Arguments {
   findDog(complex: { favoriteCookieFlavor: "Bacon" })
 }"""
     let expectedFailureResult =
-        Error [ { Message = "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."
-                  Path = Some ["badComplexValue"; "findDog"] }
-                { Message = "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."
-                  Path = Some ["stringIntoInt"; "intArgField"] }
-                { Message = "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."
-                  Path = Some ["nullRequiredBooleanArg"; "nonNullBooleanArgField"] }
-                { Message = "Can not coerce argument 'complex'. Argument definition 'FindDogInput' have a required field 'name', but that field does not exist in the literal value for the argument."
-                  Path = Some ["findDog"] } ]
+       Error [ { Message = "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["badComplexValue"; "findDog"] }
+               { Message = "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["stringIntoInt"; "intArgField"] }
+               { Message = "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."; Path = Some ["nullRequiredBooleanArg"; "nonNullBooleanArgField"] }
+               { Message = "Can not coerce argument 'complex'. The field 'favoriteCookieFlavor' is not a valid field in the argument definition."; Path = Some ["findDog"] } ]
     let shouldFail = [query1; query2] |> List.map (getContext >> Validation.Ast.validateInputValues) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
     let query2 =
@@ -774,7 +773,7 @@ fragment coercedIntIntoFloatArg on Arguments {
   floatArgField(floatArg: 123)
 }
 
-query goodComplexDefaultValue($search: FindDogInput = { name: "Fido" }) {
+query goodComplexDefaultValue($search: ComplexInput = { name: "Fido" }) {
   findDog(complex: $search)
 }"""
     let query3 =
@@ -865,4 +864,48 @@ fragment HouseTrainedFragment on Root {
   }
 }"""
     let shouldPass = getContext query2 |> Validation.Ast.validateUniqueDirectivesPerLocation
+    shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that variables are input types`` () =
+    let query1 =
+        """query takesCat($cat: Cat) {
+  name
+}
+
+query takesDogBang($dog: Dog!) {
+  name
+}
+
+query takesListOfPet($pets: [Pet]) {
+  name
+}
+
+query takesCatOrDog($catOrDog: CatOrDog) {
+  name
+}"""
+    let expectedFailureResult =
+        Error [ { Message = "Variable 'cat' in operation 'takesCat' has a type that is not an input type defined by the schema (Cat)."; Path = None }
+                { Message = "Variable 'dog' in operation 'takesDogBang' has a type that is not an input type defined by the schema (Dog!)."; Path = None }
+                { Message = "Variable 'pets' in operation 'takesListOfPet' has a type that is not an input type defined by the schema ([Pet])."; Path = None }
+                { Message = "Variable 'catOrDog' in operation 'takesCatOrDog' has a type that is not an input type defined by the schema (CatOrDog)."; Path = None } ]
+    let shouldFail = getContext query1 |> Validation.Ast.validateVariablesAsInputTypes
+    shouldFail |> equals expectedFailureResult
+    let query2 =
+        """query takesBoolean($atOtherHomes: Boolean) {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}
+
+query takesComplexInput($complexInput: ComplexInput) {
+  findDog(complex: $complexInput) {
+    name
+  }
+}
+
+query TakesListOfBooleanBang($booleans: [Boolean!]) {
+  booleanList(booleanListArg: $booleans)
+}"""
+    let shouldPass = getContext query2 |> Validation.Ast.validateVariablesAsInputTypes
     shouldPass |> equals Success

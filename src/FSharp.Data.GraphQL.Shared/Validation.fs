@@ -111,7 +111,10 @@ module Ast =
             x.SchemaTypes.TryFind(name)
         member x.TryGetInputType(input : InputType) =
             match input with
-            | NamedType name -> x.TryGetTypeByName(name) |> Option.map IntrospectionTypeRef.Named
+            | NamedType name -> 
+                x.TryGetTypeByName(name)
+                |> Option.bind (fun x -> match x.Kind with | TypeKind.INPUT_OBJECT | TypeKind.SCALAR -> Some x | _ -> None)
+                |> Option.map IntrospectionTypeRef.Named
             | ListType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.List
             | NonNullType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.NonNull
     
@@ -666,7 +669,7 @@ module Ast =
                         props |> Seq.fold (fun acc kvp ->
                             match fieldMap.TryFind(kvp.Key) with
                             | Some fieldTypeRef -> checkIsCoercible fieldTypeRef kvp.Key kvp.Value
-                            | None -> acc @ Error []) acc
+                            | None -> acc @ Error.AsResult(sprintf "Can not coerce argument '%s'. The field '%s' is not a valid field in the argument definition." argName kvp.Key, selection.Path)) acc
                     | None -> canNotCoerce
                 | _ -> canNotCoerce
             | Variable varName ->
@@ -839,3 +842,15 @@ module Ast =
                 match operationName with
                 | Some operationName -> acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName length)
                 | None -> acc @ Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName length)) acc) Success
+
+    let validateVariablesAsInputTypes (ctx : ValidationContext) =
+        ctx.Document.Definitions
+        |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
+        |> List.fold (fun acc (operationName, vars) ->
+            vars |> List.fold (fun acc var ->
+                match operationName, ctx.Schema.TryGetInputType(var.Type) with
+                | Some operationName, None -> 
+                    acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' has a type that is not an input type defined by the schema (%s)." var.VariableName operationName (var.Type.ToString()))
+                | None, None ->
+                    acc @ Error.AsResult(sprintf "Variable '%s' has a type is not an input type defined by the schema (%s)." var.VariableName (var.Type.ToString()))
+                | _ -> acc) acc) Success
