@@ -909,3 +909,22 @@ query TakesListOfBooleanBang($booleans: [Boolean!]) {
 }"""
     let shouldPass = getContext query2 |> Validation.Ast.validateVariablesAsInputTypes
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that all referenced variables are defined variables`` () =
+    let query1 = 
+        """query variableIsNotDefined {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}"""
+    let shouldFail = getContext query1 |> Validation.Ast.validateVariablesUsesDefined
+    shouldFail |> equals (Error [ { Message = "A variable 'atOtherHomes' is referenced in argument 'atOtherHomes' of field with alias or name 'isHousetrained', but that variable is not defined in the operation."; Path = None } ])
+    let query2 =
+        """query variableIsDefined($atOtherHomes: Boolean) {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}"""
+    let shouldPass = getContext query2 |> Validation.Ast.validateVariablesUsesDefined
+    shouldPass |> equals Success

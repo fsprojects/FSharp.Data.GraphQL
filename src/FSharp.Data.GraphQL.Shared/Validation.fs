@@ -854,3 +854,33 @@ module Ast =
                 | None, None ->
                     acc @ Error.AsResult(sprintf "Variable '%s' has a type is not an input type defined by the schema (%s)." var.VariableName (var.Type.ToString()))
                 | _ -> acc) acc) Success
+
+    let rec private checkVariablesDefinedInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) (variableDefinitions : VariableDefinition list) (path : Path) =
+        function
+        | Field field -> 
+            let path = field.AliasOrName :: path
+            let acc = 
+                field.Arguments 
+                |> List.choose (fun arg -> match arg.Value with | Variable varName -> Some (arg.Name, varName) | _ -> None)
+                |> List.fold (fun acc (argName, varName) ->
+                    match variableDefinitions |> List.tryFind (fun x -> x.VariableName = varName) with
+                    | Some _ -> acc
+                    | None -> acc @ Error.AsResult(sprintf "A variable '%s' is referenced in argument '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName argName field.AliasOrName)) acc
+            field.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+        | InlineFragment frag -> frag.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+        | FragmentSpread spread ->
+            if List.contains spread.Name !visitedFragments
+            then acc
+            else
+                match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+                | Some frag -> frag.SelectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments variableDefinitions path selection) acc
+                | None -> acc
+
+    let validateVariablesUsesDefined (ctx : ValidationContext) =
+        let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        ctx.Document.Definitions
+        |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
+        |> List.fold (fun acc (operationName, selectionSet, varDefs) ->
+            let path = match operationName with | Some name -> [name] | None -> []
+            selectionSet
+            |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions (ref []) varDefs path selection) acc) Success
