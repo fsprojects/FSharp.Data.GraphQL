@@ -716,10 +716,13 @@ module internal Provider =
                                     | String query -> query
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
+                                #if IS_DESIGNTIME
+                                let validationResultMaker = lazy Validation.Ast.validateDocument schema queryAst
                                 if clientQueryValidation then
-                                    (fun () -> Validation.Ast.validateDocument schema queryAst)
+                                    validationResultMaker.Force
                                     |> QueryValidationDesignTimeCache.getOrAdd query
                                     |> throwExceptionIfValidationFailed
+                                #endif
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
                                     | null | "" -> 
@@ -860,6 +863,7 @@ module internal Provider =
                         let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
                         members)
                     tdef
+            #if IS_DESIGNTIME
             let providerKey = 
                 { IntrospectionLocation = introspectionLocation
                   CustomHttpHeadersLocation = httpHeadersLocation
@@ -867,4 +871,7 @@ module internal Provider =
                   ResolutionFolder = resolutionFolder
                   ClientQueryValidation = clientQueryValidation }
             ProviderDesignTimeCache.getOrAdd providerKey maker.Force)
+            #else
+            maker.Force())
+            #endif
         generator

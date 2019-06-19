@@ -3,6 +3,8 @@
 
 namespace FSharp.Data.GraphQL
 
+#if IS_DESIGNTIME
+
 open System
 open System.Collections.Concurrent
 open System.Collections.Generic
@@ -148,3 +150,5 @@ module internal QueryValidationDesignTimeCache =
     let getOrAdd (query : string) (validationResultMaker : unit -> Ast.ValidationResult) =
         let key = query.MD5Hash()
         cache.GetOrAddResult key validationResultMaker
+
+#endif
