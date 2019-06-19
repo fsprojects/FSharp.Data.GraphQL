@@ -564,37 +564,38 @@ module Ast =
                 | [] -> acc
                 | results -> List.reduce (@) results) Success
 
-    let rec private checkFragmentMustNotHaveCycles (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (frag : FragmentDefinition) =
+    let rec private checkFragmentMustNotHaveCycles (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (validated : string list ref) (frag : FragmentDefinition) =
         frag.Name 
         |> Option.map (fun name ->
-            visited := name :: !visited
             if List.contains name !visited
-            then acc @ Error.AsResult(sprintf "Fragment '%s' is making a cyclic reference." name)
+            then
+                if not (List.contains name !validated) then
+                    validated := name :: !validated
+                    acc @ Error.AsResult(sprintf "Fragment '%s' is making a cyclic reference." name)
+                else acc
             else
-                match frag.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited) with
+                visited := name :: !visited
+                match frag.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited validated) with
                 | [] -> acc
                 | results -> List.reduce (@) results)
         |> Option.defaultValue acc
 
-    and private checkFragmentsMustNotHaveCyclesInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) =
+    and private checkFragmentsMustNotHaveCyclesInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (validated : string list ref) =
         function
         | Field field -> 
-            match field.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited) with
+            match field.SelectionSet |> List.map (checkFragmentsMustNotHaveCyclesInSelection acc fragmentDefinitions visited validated) with
             | [] -> acc
             | results -> List.reduce (@) results
-        | InlineFragment frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited frag
+        | InlineFragment frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited validated frag
         | FragmentSpread spread ->
-            visited := spread.Name :: !visited
-            if List.contains spread.Name !visited
-            then acc @ Error.AsResult(sprintf "Fragment '%s' is making a cyclic reference." spread.Name)
-            else
-                match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
-                | Some frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited frag
-                | None -> acc
+            match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
+            | Some frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited validated frag
+            | None -> acc
 
     let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
-        fragmentDefinitions |> List.fold (fun acc def -> checkFragmentMustNotHaveCycles acc fragmentDefinitions (ref []) def) Success
+        let visited, validated = ref [], ref []
+        fragmentDefinitions |> List.fold (fun acc def -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited validated def) Success
 
     let private checkFragmentSpreadIsPossibleInSelection (acc : ValidationResult) (path : Path, parentType : IntrospectionType, fragmentType : IntrospectionType) =
         if not (typesAreApplicable (parentType, fragmentType))
@@ -722,8 +723,8 @@ module Ast =
                 then acc
                 else acc @ Error.AsResult(sprintf "Directive '%s' is not defined in the schema." name, path)) acc) Success
 
-    let rec private checkDirectivesInSelectionSet (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (selectionSet : Selection list) =
-        match selectionSet |> List.map (checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions path) with
+    let rec private checkDirectivesInSelectionSet (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (visitedFragments : string list ref) (selectionSet : Selection list) =
+        match selectionSet |> List.map (checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions path visitedFragments) with
         | [] -> acc
         | results -> List.reduce (@) results
 
@@ -746,9 +747,9 @@ module Ast =
                 | None -> acc) acc
         match frag.Name with
         | Some fragName when List.contains fragName !visitedFragments -> acc
-        | _ -> checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions path frag.SelectionSet
+        | _ -> checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions path visitedFragments frag.SelectionSet
 
-    and private checkDirectivesInValidLocationOnSelection (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) =
+    and private checkDirectivesInValidLocationOnSelection (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (visitedFragments : string list ref) =
         function
         | Field field ->
             let path = field.AliasOrName :: path
@@ -761,8 +762,8 @@ module Ast =
                         then acc
                         else acc @ Error.AsResult(sprintf "Field or alias '%s' has a directive '%s', but this directive location is not supported by the schema definition." field.AliasOrName directive.Name, path)
                     | None -> acc) acc
-            checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions path field.SelectionSet
-        | InlineFragment frag -> checkDirectivesInFragment acc schemaInfo fragmentDefinitions path (ref []) frag
+            checkDirectivesInSelectionSet acc schemaInfo fragmentDefinitions path visitedFragments field.SelectionSet
+        | InlineFragment frag -> checkDirectivesInFragment acc schemaInfo fragmentDefinitions path visitedFragments frag
         | FragmentSpread spread ->
             spread.Directives
             |> List.fold (fun acc directive ->
@@ -773,7 +774,7 @@ module Ast =
                     else acc @ Error.AsResult(sprintf "Fragment spread '%s' has a directive '%s', but this directive location is not supported by the schema definition." spread.Name directive.Name, path)
                 | None -> acc) acc
 
-    let private checkDirectivesInOperation (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (operation : OperationDefinition) =
+    let private checkDirectivesInOperation (acc : ValidationResult) (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (visitedFragments : string list ref) (operation : OperationDefinition) =
         let expectedDirectiveLocation =
             match operation.OperationType with
             | Query -> DirectiveLocation.QUERY
@@ -791,16 +792,17 @@ module Ast =
                         | Some operationName -> acc @ Error.AsResult(sprintf "%s operation '%s' has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) operationName directive.Name, path)
                         | None -> acc @ Error.AsResult(sprintf "This %s operation has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) directive.Name, path)
                 | None -> acc) acc
-        operation.SelectionSet |> List.fold (fun acc selection -> checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions path selection) acc
+        operation.SelectionSet |> List.fold (fun acc selection -> checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions path visitedFragments selection) acc
 
     let internal validateDirectivesAreInValidLocations (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
+        let visitedFragments = ref []
         ctx.Document.Definitions
         |> List.fold (fun acc def ->
             let path = match def.Name with | Some name -> [name] | None -> []
             match def with
-            | OperationDefinition odef -> checkDirectivesInOperation acc ctx.Schema fragmentDefinitions path odef
-            | FragmentDefinition frag -> checkDirectivesInFragment acc ctx.Schema fragmentDefinitions path (ref []) frag) Success
+            | OperationDefinition odef -> checkDirectivesInOperation acc ctx.Schema fragmentDefinitions path visitedFragments odef
+            | FragmentDefinition frag -> checkDirectivesInFragment acc ctx.Schema fragmentDefinitions path visitedFragments frag) Success
 
     let rec private getDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * string list) list =
         match selection with
@@ -904,11 +906,12 @@ module Ast =
 
     let internal validateVariablesUsesDefined (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let visitedFragments = ref []
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, selectionSet, varDefs) ->
             let path = match operationName with | Some name -> [name] | None -> []
-            selectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions (ref []) varDefs path selection) acc) Success
+            selectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions visitedFragments varDefs path selection) acc) Success
 
     let rec private variableIsUsedInDirective (name : string) (directive : Directive) =
         let validArgNames = directive.Arguments |> List.choose (fun x -> match x.Value with | Variable varName -> Some varName | _ -> None)
@@ -940,11 +943,12 @@ module Ast =
 
     let internal validateAllVariablesUsed (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
+        let visitedFragments = ref  []
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, selectionSet, varDefs) ->
             varDefs |> List.map (fun x -> x.VariableName) |> List.fold (fun acc varName ->
-                let isUsed = selectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection varName fragmentDefinitions (ref []) selection) false
+                let isUsed = selectionSet |> List.fold (fun acc selection -> acc || variableIsUsedInSelection varName fragmentDefinitions visitedFragments selection) false
                 match operationName, isUsed with
                 | _ , true -> acc
                 | Some operationName, _ -> acc @ Error.AsResult(sprintf "Variable definition '%s' is not used in operation '%s'. Every variable must be used." varName operationName)
@@ -1008,6 +1012,7 @@ module Ast =
             | None -> acc
 
     let internal validateVariableUsagesAllowed (ctx : ValidationContext) =
+        let visitedFragments = ref []
         ctx.OperationDefinitions
         |> List.map (function def -> def.SelectionSet, def.Definition.VariableDefinitions)
         |> List.map (fun (selectionSet, varDefs) -> 
@@ -1017,7 +1022,7 @@ module Ast =
                 |> Map.ofList
             selectionSet, varNamesAndTypeRefs)
         |> List.fold (fun acc (selectionSet, varNamesAndTypeRefs) ->
-            selectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs (ref []) selection) acc) Success
+            selectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs visitedFragments selection) acc) Success
 
     let private allValidations =
         [ validateFragmentsMustNotFormCycles
