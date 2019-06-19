@@ -701,7 +701,7 @@ module internal Provider =
                                     | [last] ->
                                         match last.Path with
                                         | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
-                                        | None -> sprintf "%s\n%s." acc last.Message
+                                        | None -> sprintf "%s\n%s" acc last.Message
                                     | actual :: remaining ->
                                         match actual.Path with
                                         | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)

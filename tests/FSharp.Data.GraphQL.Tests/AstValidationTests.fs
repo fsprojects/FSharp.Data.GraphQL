@@ -1097,3 +1097,4 @@ fragment ownerFragment on Dog {
                   Path = Some ["ownerFragment"; "pets"] } ]
     let shouldFail = [query1;query2] |> List.map (Parser.parse >> Validation.Ast.validateDocument schema.Introspected) |> List.reduce (@)
     shouldFail |> equals expectedFailureResult
+    
