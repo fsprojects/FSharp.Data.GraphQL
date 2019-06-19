@@ -251,6 +251,9 @@ Target.create "RunTests" (fun _ ->
             failwithf "Error while starting %s server. %s" msg projectName
         restore serverProject
         build serverProject
+        // The server executable must be run instead of the project.
+        // "dotnet run" command (used to run projects instead of the dll) spawns additional dotnet processes
+        // that are not handled as child processes, so FAKE will not be able to track and kill them after the tests are done.
         CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]
         |> CreateProcess.withWorkingDirectory serverProjectDir
         |> CreateProcess.redirectOutput
