@@ -966,28 +966,31 @@ module Ast =
             elif variableTypeRef.OfType.IsSome then areTypesCompatible variableTypeRef.OfType.Value locationTypeRef.OfType.Value
             else false
         elif variableTypeRef.Kind = TypeKind.LIST then false
-        else variableTypeRef = locationTypeRef
+        else variableTypeRef.Name = locationTypeRef.Name && variableTypeRef.Kind = locationTypeRef.Kind
 
-    let private checkVariableUsageAllowedOnArguments (acc : ValidationResult) (locationTypeRef : IntrospectionTypeRef) (inputs : IntrospectionInputVal []) (varNamesAndTypeRefs : Map<string, VariableDefinition *  IntrospectionTypeRef>) (path : Path) (args : Argument list) =
+    let private checkVariableUsageAllowedOnArguments (acc : ValidationResult) (inputs : IntrospectionInputVal []) (varNamesAndTypeRefs : Map<string, VariableDefinition *  IntrospectionTypeRef>) (path : Path) (args : Argument list) =
         args
         |> List.choose (fun arg -> match arg.Value with | Variable varName -> Some (arg.Name, varName) | _ -> None)
         |> List.fold (fun acc (argName, varName) ->
             match varNamesAndTypeRefs.TryFind(varName) with
             | Some (varDef, variableTypeRef) ->
                 let err = Error.AsResult(sprintf "Variable '%s' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference." varName, path)
-                if locationTypeRef.Kind = TypeKind.NON_NULL && locationTypeRef.OfType.IsSome && variableTypeRef.Kind <> TypeKind.NON_NULL
-                then
-                    let hasNonNullVariableDefaultValue = varDef.DefaultValue.IsSome
-                    let input = inputs |> Array.tryFind (fun x -> x.Name = argName)
-                    let hasLocationDefaultValue = input |> Option.bind (fun x -> x.DefaultValue) |> Option.isSome
-                    if not hasNonNullVariableDefaultValue && not hasLocationDefaultValue
-                    then acc @ err
-                    else
-                        let nullableLocationType = locationTypeRef.OfType.Value
-                        if not (areTypesCompatible variableTypeRef nullableLocationType)
-                        then acc @ err else acc
-                elif not (areTypesCompatible variableTypeRef locationTypeRef)
-                then acc @ err else acc
+                match inputs |> Array.tryFind (fun x -> x.Name = argName) with
+                | Some input ->
+                    let locationTypeRef = input.Type
+                    if locationTypeRef.Kind = TypeKind.NON_NULL && locationTypeRef.OfType.IsSome && variableTypeRef.Kind <> TypeKind.NON_NULL
+                    then
+                        let hasNonNullVariableDefaultValue = varDef.DefaultValue.IsSome
+                        let hasLocationDefaultValue = input.DefaultValue.IsSome
+                        if not hasNonNullVariableDefaultValue && not hasLocationDefaultValue
+                        then acc @ err
+                        else
+                            let nullableLocationType = locationTypeRef.OfType.Value
+                            if not (areTypesCompatible variableTypeRef nullableLocationType)
+                            then acc @ err else acc
+                    elif not (areTypesCompatible variableTypeRef locationTypeRef)
+                    then acc @ err else acc
+                | None -> acc
             | None -> acc) acc
 
     let rec private checkVariableUsageAllowedOnSelection (acc : ValidationResult) (varNamesAndTypeRefs : Map<string, VariableDefinition * IntrospectionTypeRef>) (visitedFragments : string list ref) (selection : SelectionInfo) =
@@ -998,10 +1001,10 @@ module Ast =
             if selection.FragmentSpreadName.IsSome then visitedFragments := selection.FragmentSpreadName.Value :: !visitedFragments
             match selection.FieldType with
             | Some fieldType ->
-                let acc = selection.Field.Arguments |> checkVariableUsageAllowedOnArguments acc fieldType inputs varNamesAndTypeRefs selection.Path
+                let acc = selection.Field.Arguments |> checkVariableUsageAllowedOnArguments acc inputs varNamesAndTypeRefs selection.Path
                 let acc = selection.SelectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs visitedFragments selection) acc
                 selection.Field.Directives
-                |> List.fold (fun acc directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments acc fieldType inputs varNamesAndTypeRefs selection.Path) acc
+                |> List.fold (fun acc directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments acc inputs varNamesAndTypeRefs selection.Path) acc
             | None -> acc
 
     let internal validateVariableUsagesAllowed (ctx : ValidationContext) =

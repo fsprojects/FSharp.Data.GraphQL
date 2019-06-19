@@ -693,11 +693,16 @@ module internal Provider =
                                 let rec formatValidationExceptionMessage (acc : string) (errors : Validation.Ast.Error list) =
                                     let rec formatPath (acc : string) (path : Validation.Ast.Path) =
                                         match path with
-                                        | [] -> acc
+                                        | [] -> "path: " + acc
+                                        | [last] when acc = "" -> last
                                         | [last] -> sprintf "%s, %s" acc last
                                         | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
                                     match errors with
                                     | [] -> acc
+                                    | [last] when acc = "" ->
+                                        match last.Path with
+                                        | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
+                                        | None -> sprintf "%s" last.Message
                                     | [last] ->
                                         match last.Path with
                                         | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
