@@ -628,8 +628,36 @@ module internal Provider =
             [ ProvidedStaticParameter("introspection", typeof<string>)
               ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
-              ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "") ]
+              ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
+              ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
+        let validateAst (schema : IntrospectionSchema) (queryAst : Document) =
+            let validationResult = Validation.Ast.validateDocument schema queryAst
+            let rec formatValidationExceptionMessage (acc : string) (errors : Validation.Ast.Error list) =
+                let rec formatPath (acc : string) (path : Validation.Ast.Path) =
+                    match path with
+                    | [] -> "path: " + acc
+                    | [last] when acc = "" -> last
+                    | [last] -> sprintf "%s, %s" acc last
+                    | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
+                match errors with
+                | [] -> acc
+                | [last] when acc = "" ->
+                    match last.Path with
+                    | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
+                    | None -> sprintf "%s" last.Message
+                | [last] ->
+                    match last.Path with
+                    | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
+                    | None -> sprintf "%s\n%s" acc last.Message
+                | actual :: remaining ->
+                    match actual.Path with
+                    | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
+                    | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
+            match validationResult with
+            | Validation.Ast.Error msgs -> failwith (formatValidationExceptionMessage "" msgs)
+            | Validation.Ast.Success -> ()
         generator.DefineStaticParameters(staticParams, fun tname args ->
+            let clientQueryValidation : bool = downcast args.[4]
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
             let uploadInputTypeName = 
@@ -689,31 +717,8 @@ module internal Provider =
                                     | String query -> query
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
-                                let validationResult = Validation.Ast.validateDocument schema queryAst
-                                let rec formatValidationExceptionMessage (acc : string) (errors : Validation.Ast.Error list) =
-                                    let rec formatPath (acc : string) (path : Validation.Ast.Path) =
-                                        match path with
-                                        | [] -> "path: " + acc
-                                        | [last] when acc = "" -> last
-                                        | [last] -> sprintf "%s, %s" acc last
-                                        | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
-                                    match errors with
-                                    | [] -> acc
-                                    | [last] when acc = "" ->
-                                        match last.Path with
-                                        | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
-                                        | None -> sprintf "%s" last.Message
-                                    | [last] ->
-                                        match last.Path with
-                                        | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
-                                        | None -> sprintf "%s\n%s" acc last.Message
-                                    | actual :: remaining ->
-                                        match actual.Path with
-                                        | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
-                                        | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
-                                match validationResult with
-                                | Validation.Ast.Error msgs -> failwith (formatValidationExceptionMessage "" msgs)
-                                | Validation.Ast.Success -> ()
+                                if clientQueryValidation
+                                then validateAst schema queryAst
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
                                     | null | "" -> 
@@ -866,6 +871,7 @@ module internal Provider =
                 { IntrospectionLocation = introspectionLocation
                   CustomHttpHeadersLocation = httpHeadersLocation
                   UploadInputTypeName = uploadInputTypeName
-                  ResolutionFolder = resolutionFolder }
+                  ResolutionFolder = resolutionFolder
+                  ClientQueryValidation = clientQueryValidation }
             DesignTimeCache.getOrAdd providerKey maker.Force)
         generator
