@@ -5,6 +5,8 @@ namespace FSharp.Data.GraphQL.Client
 
 open System
 open System.Collections.Generic
+open System.Text
+open System.Security.Cryptography
 
 /// Extensions for types used by the GraphQL client library.
 [<AutoOpen>]
@@ -17,6 +19,12 @@ module internal Extensions =
         /// Returns the input string with the first character in lower case.
         member this.FirstCharLower() =
             this.Substring(0, 1).ToLowerInvariant() + this.Substring(1)
+
+        member this.MD5Hash() =
+            Encoding.UTF8.GetBytes(this)
+            |> MD5.Create().ComputeHash
+            |> Array.map (fun x -> x.ToString("x2"))
+            |> Array.reduce (+)
 
 /// Basic operations on lists.
 module internal List =
