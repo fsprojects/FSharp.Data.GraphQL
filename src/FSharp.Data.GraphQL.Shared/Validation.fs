@@ -217,11 +217,9 @@ module Ast =
                     fragSelection
                 | None -> [])
 
-    let private getOperationDefinitions (ast : Document) =
-        ast.Definitions |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
+    let private getOperationDefinitions (ast : Document) = ast.Definitions |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
 
-    let private getFragmentDefinitions (ast : Document) =
-        ast.Definitions |> List.choose (function | FragmentDefinition x -> Some x | _ -> None)
+    let private getFragmentDefinitions (ast : Document) = ast.Definitions |> List.choose (function | FragmentDefinition x -> Some x | _ -> None)
 
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
@@ -249,7 +247,7 @@ module Ast =
           Schema = schemaInfo
           Document = ast }
 
-    let validateOperationNameUniqueness (ctx : ValidationContext) =
+    let internal validateOperationNameUniqueness (ctx : ValidationContext) =
         let names = ctx.Document.Definitions |> List.choose (fun x -> x.Name)
         names
         |> List.map (fun name -> name, names |> List.filter (fun x -> x = name) |> List.length)
@@ -257,14 +255,14 @@ module Ast =
         |> List.filter (fun (_, count) -> count > 1)
         |> List.fold (fun acc (name, count) -> acc @ Error.AsResult(sprintf "Operation '%s' has %i definitions. Each operation name must be unique." name count)) Success
 
-    let validateLoneAnonymousOperation (ctx : ValidationContext) =
+    let internal validateLoneAnonymousOperation (ctx : ValidationContext) =
         let operations = ctx.OperationDefinitions |> List.map (fun x -> x.Definition)
         let unamed = operations |> List.filter (fun x -> x.Name.IsNone)
         if unamed.Length = 1 && operations.Length = 1
         then Success
         else Error.AsResult("An anonymous operation must be the only operation in a document. This document has at least one anonymous operation and more than one operation.")
 
-    let validateSubscriptionSingleRootField (ctx : ValidationContext) =
+    let internal validateSubscriptionSingleRootField (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
         let rec getFieldNames (acc : string list) (selectionSet : Selection list) =
             match selectionSet with
@@ -299,7 +297,7 @@ module Ast =
             | _ -> None)
         |> List.fold (fun acc (name, fieldNames) -> validate acc name fieldNames) Success
 
-    let validateSelectionFieldTypes (ctx : ValidationContext) =
+    let internal validateSelectionFieldTypes (ctx : ValidationContext) =
         let rec validateFragmentDefinition (acc : ValidationResult) (frag : FragmentDefinitionInfo)  =
            let fdef = frag.Definition
            match fdef.TypeCondition with
@@ -368,7 +366,7 @@ module Ast =
                     else acc)
                 |> List.reduce (@)) Success
 
-    let validateFieldSelectionMerging (ctx : ValidationContext) =
+    let internal validateFieldSelectionMerging (ctx : ValidationContext) = 
         ctx.Definitions |> List.fold (fun acc def -> acc @ (fieldsInSetCanMerge def.SelectionSet)) Success
 
     let rec private checkLeafFieldSelection (acc : ValidationResult) (selection : SelectionInfo) =
@@ -387,7 +385,7 @@ module Ast =
             | None -> acc
         selection.SelectionSet |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc
 
-    let validateLeafFieldSelections (ctx : ValidationContext) =
+    let internal validateLeafFieldSelections (ctx : ValidationContext) =
         ctx.Definitions |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc) Success
 
     let private checkFieldArgumentNames (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
@@ -408,9 +406,8 @@ module Ast =
                     | None -> acc @ Error.AsResult(sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path)) acc
             | None -> acc) acc
 
-    let validateArgumentNames (ctx : ValidationContext) =
-        ctx.Definitions
-        |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkFieldArgumentNames acc ctx.Schema selection) acc) Success
+    let internal validateArgumentNames (ctx : ValidationContext) =
+        ctx.Definitions |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkFieldArgumentNames acc ctx.Schema selection) acc) Success
 
     let rec private checkArgumentUniqueness (acc : ValidationResult) (selectionSet : SelectionInfo list) =
         match selectionSet with
@@ -427,7 +424,7 @@ module Ast =
             let acc = selection.SelectionSet |> checkArgumentUniqueness acc
             checkArgumentUniqueness acc tail
 
-    let validateArgumentUniqueness (ctx : ValidationContext) =
+    let internal validateArgumentUniqueness (ctx : ValidationContext) =
         ctx.Definitions
         |> List.map (fun def -> def.SelectionSet)
         |> List.fold (fun acc selectionSet -> checkArgumentUniqueness acc selectionSet) Success
@@ -457,11 +454,11 @@ module Ast =
                     | _ -> acc) acc
             | None -> acc) acc
 
-    let validateRequiredArguments (ctx : ValidationContext) =
+    let internal validateRequiredArguments (ctx : ValidationContext) =
         ctx.Definitions
         |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkRequiredArguments acc ctx.Schema selection) acc) Success
 
-    let validateFragmentNameUniqueness (ctx : ValidationContext) =
+    let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
         ctx.FragmentDefinitions
         |> List.filter (fun f -> f.Definition.Name.IsSome)
         |> List.groupBy (fun f -> f.Definition.Name.Value)
@@ -488,7 +485,7 @@ module Ast =
         | InlineFragment frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo path frag
         | _ -> acc
        
-    let validateFragmentTypeExistence (ctx : ValidationContext) =
+    let internal validateFragmentTypeExistence (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
         ctx.Document.Definitions
         |> List.fold (fun acc def ->
@@ -513,22 +510,20 @@ module Ast =
             | None -> acc
         selection.SelectionSet |> List.fold (fun acc selection -> checkFragmentOnCompositeType acc selection) acc
 
-    let validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
+    let internal validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def -> def.SelectionSet)
         |> List.fold (fun acc selection -> checkFragmentOnCompositeType acc selection) Success
 
-    let validateFragmentsMustBeUsed (ctx : ValidationContext) =
+    let internal validateFragmentsMustBeUsed (ctx : ValidationContext) =
         let rec getSpreadNames (acc : string list) =
             function
             | Field field -> field.SelectionSet |> List.collect (getSpreadNames acc)
             | InlineFragment frag -> frag.SelectionSet |> List.collect (getSpreadNames acc)
-            | _ -> acc
+            | FragmentSpread spread -> spread.Name :: acc
         let fragmentSpreadNames =
             ctx.Document.Definitions
-            |> List.collect (function
-                | FragmentDefinition frag -> frag.SelectionSet |> List.collect (getSpreadNames [])
-                | OperationDefinition odef -> odef.SelectionSet |> List.collect (getSpreadNames []))
+            |> List.collect (fun def -> def.SelectionSet |> List.collect (getSpreadNames []))
             |> List.distinct
         getFragmentDefinitions ctx.Document
         |> List.fold (fun acc def ->
@@ -552,7 +547,7 @@ module Ast =
             then acc
             else acc @ Error.AsResult(sprintf "Fragment spread '%s' refers to a non-existent fragment definition in the document." spread.Name, path)
 
-    let validateFragmentSpreadTargetDefined (ctx : ValidationContext) =
+    let internal validateFragmentSpreadTargetDefined (ctx : ValidationContext) =
         let fragmentDefinitionNames = ctx.FragmentDefinitions |> List.choose (fun def -> def.Name)
         ctx.Document.Definitions
         |> List.fold (fun acc def ->
@@ -596,7 +591,7 @@ module Ast =
                 | Some frag -> checkFragmentMustNotHaveCycles acc fragmentDefinitions visited frag
                 | None -> acc
 
-    let validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
+    let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
         fragmentDefinitions |> List.fold (fun acc def -> checkFragmentMustNotHaveCycles acc fragmentDefinitions (ref []) def) Success
 
@@ -615,7 +610,7 @@ module Ast =
                 | _ -> acc
             getFragmentAndParentTypes acc tail
 
-    let validateFragmentSpreadIsPossible (ctx : ValidationContext) =
+    let internal validateFragmentSpreadIsPossible (ctx : ValidationContext) =
         ctx.Definitions
         |> List.fold (fun acc def ->
             def.SelectionSet
@@ -693,7 +688,7 @@ module Ast =
             | Some argumentTypeRef -> acc @ (checkIsCoercible argumentTypeRef arg.Name arg.Value)
             | None -> acc) acc
 
-    let validateInputValues (ctx : ValidationContext) =
+    let internal validateInputValues (ctx : ValidationContext) =
         ctx.Definitions
         |> List.choose (function
             | OperationDefinitionInfo odef -> Some (Some odef.Definition.VariableDefinitions, odef.SelectionSet)
@@ -715,7 +710,7 @@ module Ast =
         let selectionSetDirectives = frag.SelectionSet |> List.collect (getDistinctDirectiveNamesInSelection path)
         fragDirectives |> List.append selectionSetDirectives
 
-    let validateDirectivesDefined (ctx : ValidationContext) =
+    let internal validateDirectivesDefined (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
@@ -797,7 +792,7 @@ module Ast =
                 | None -> acc) acc
         operation.SelectionSet |> List.fold (fun acc selection -> checkDirectivesInValidLocationOnSelection acc schemaInfo fragmentDefinitions path selection) acc
 
-    let validateDirectivesAreInValidLocations (ctx : ValidationContext) =
+    let internal validateDirectivesAreInValidLocations (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
         ctx.Document.Definitions
         |> List.fold (fun acc def ->
@@ -821,7 +816,7 @@ module Ast =
         let selectionSetDirectives = frag.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
         fragDirectives |> List.append selectionSetDirectives
 
-    let validateUniqueDirectivesPerLocation (ctx : ValidationContext) =
+    let internal validateUniqueDirectivesPerLocation (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
@@ -834,7 +829,7 @@ module Ast =
             |> List.filter (fun (_, length) -> length > 1)
             |> List.fold (fun acc (name, length) -> acc @ Error.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name length, path)) acc) Success
 
-    let validateVariableUniqueness (ctx : ValidationContext) =
+    let internal validateVariableUniqueness (ctx : ValidationContext) =
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, vars) ->
@@ -847,7 +842,7 @@ module Ast =
                 | Some operationName -> acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName length)
                 | None -> acc @ Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName length)) acc) Success
 
-    let validateVariablesAsInputTypes (ctx : ValidationContext) =
+    let internal validateVariablesAsInputTypes (ctx : ValidationContext) =
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, vars) ->
@@ -893,6 +888,7 @@ module Ast =
             if List.contains spread.Name !visitedFragments
             then acc
             else
+                visitedFragments := spread.Name :: !visitedFragments
                 let acc =
                     match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
                     | Some frag -> 
@@ -905,14 +901,13 @@ module Ast =
                 spread.Directives
                 |> List.fold (fun acc directive -> checkVariablesDefinedInDirective acc variableDefinitions path directive) acc
 
-    let validateVariablesUsesDefined (ctx : ValidationContext) =
+    let internal validateVariablesUsesDefined (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, selectionSet, varDefs) ->
             let path = match operationName with | Some name -> [name] | None -> []
-            selectionSet
-            |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions (ref []) varDefs path selection) acc) Success
+            selectionSet |> List.fold (fun acc selection -> checkVariablesDefinedInSelection acc fragmentDefinitions (ref []) varDefs path selection) acc) Success
 
     let rec private variableIsUsedInDirective (name : string) (directive : Directive) =
         let validArgNames = directive.Arguments |> List.choose (fun x -> match x.Value with | Variable varName -> Some varName | _ -> None)
@@ -942,7 +937,7 @@ module Ast =
                     | None -> false
                 spread.Directives |> List.fold (fun acc directive -> acc || variableIsUsedInDirective name directive) acc
 
-    let validateAllVariablesUsed (ctx : ValidationContext) =
+    let internal validateAllVariablesUsed (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.SelectionSet, def.VariableDefinitions) | _ -> None)
@@ -1008,7 +1003,7 @@ module Ast =
                 |> List.fold (fun acc directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments acc fieldType inputs varNamesAndTypeRefs selection.Path) acc
             | None -> acc
 
-    let validateVariableUsagesAllowed (ctx : ValidationContext) =
+    let internal validateVariableUsagesAllowed (ctx : ValidationContext) =
         ctx.OperationDefinitions
         |> List.map (function def -> def.SelectionSet, def.Definition.VariableDefinitions)
         |> List.map (fun (selectionSet, varDefs) -> 
@@ -1019,3 +1014,35 @@ module Ast =
             selectionSet, varNamesAndTypeRefs)
         |> List.fold (fun acc (selectionSet, varNamesAndTypeRefs) ->
             selectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs (ref []) selection) acc) Success
+
+    let private allValidations =
+        [ validateFragmentsMustNotFormCycles
+          validateOperationNameUniqueness
+          validateLoneAnonymousOperation
+          validateSubscriptionSingleRootField
+          validateSelectionFieldTypes
+          validateFieldSelectionMerging
+          validateLeafFieldSelections
+          validateArgumentNames
+          validateArgumentUniqueness
+          validateRequiredArguments
+          validateFragmentNameUniqueness
+          validateFragmentTypeExistence
+          validateFragmentsOnCompositeTypes
+          validateFragmentsMustBeUsed
+          validateFragmentSpreadTargetDefined
+          validateFragmentSpreadIsPossible
+          validateInputValues
+          validateDirectivesDefined
+          validateDirectivesAreInValidLocations
+          validateUniqueDirectivesPerLocation
+          validateVariableUniqueness
+          validateVariablesAsInputTypes
+          validateVariablesUsesDefined
+          validateAllVariablesUsed
+          validateVariableUsagesAllowed ]
+
+    let validateDocument (schema : IntrospectionSchema) (ast : Document) =
+        let schemaInfo = SchemaInfo.FromIntrospectionSchema(schema)
+        let context = getValidationContext schemaInfo ast
+        allValidations |> List.fold (fun acc validate -> acc @ (validate context)) Success

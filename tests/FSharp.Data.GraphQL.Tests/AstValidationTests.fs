@@ -3,7 +3,6 @@
 module FSharp.Data.GraphQL.Tests.AstValidationTests
 
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Validation
 open Xunit
 open FSharp.Data.GraphQL.Types
 
@@ -985,41 +984,41 @@ fragment isHousetrainedFragment on Dog {
 
 [<Fact>]
 let ``Validation should grant that all variables can be used`` () =
-//    let query1 =
-//        """query intCannotGoIntoBoolean($intArg: Int) {
-//        arguments {
-//          booleanArgField(booleanArg: $intArg)
-//        }
-//}
+    let query1 =
+        """query intCannotGoIntoBoolean($intArg: Int) {
+        arguments {
+          booleanArgField(booleanArg: $intArg)
+        }
+}
 
-//query booleanListCannotGoIntoBoolean($booleanListArg: [Boolean]) {
-//        arguments {
-//          booleanArgField(booleanArg: $booleanListArg)
-//        }
-//}
+query booleanListCannotGoIntoBoolean($booleanListArg: [Boolean]) {
+        arguments {
+          booleanArgField(booleanArg: $booleanListArg)
+        }
+}
 
-//query booleanArgQuery($booleanArg: Boolean) {
-//        arguments {
-//          nonNullBooleanArgField(nonNullBooleanArg: $booleanArg)
-//        }
-//}
+query booleanArgQuery($booleanArg: Boolean) {
+        arguments {
+          nonNullBooleanArgField(nonNullBooleanArg: $booleanArg)
+        }
+}
 
-//query listToNonNullList($booleanList: [Boolean]) {
-//        arguments {
-//          nonNullBooleanListField(nonNullBooleanListArg: $booleanList)
-//        }
-//}"""
-//    let expectedFailureResult =
-//        Error [ { Message = "Variable 'intArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
-//                  Path = Some ["intCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
-//                { Message = "Variable 'booleanListArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
-//                  Path = Some ["booleanListCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
-//                { Message = "Variable 'booleanArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
-//                  Path = Some ["booleanArgQuery"; "arguments"; "nonNullBooleanArgField"] }
-//                { Message = "Variable 'booleanList' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
-//                  Path = Some ["listToNonNullList"; "arguments"; "nonNullBooleanListField"] } ]
-//    let shouldFail = getContext query1 |> Validation.Ast.validateVariableUsagesAllowed
-//    shouldFail |> equals expectedFailureResult
+query listToNonNullList($booleanList: [Boolean]) {
+        arguments {
+          nonNullBooleanListField(nonNullBooleanListArg: $booleanList)
+        }
+}"""
+    let expectedFailureResult =
+        Error [ { Message = "Variable 'intArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                  Path = Some ["intCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
+                { Message = "Variable 'booleanListArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                  Path = Some ["booleanListCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
+                { Message = "Variable 'booleanArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                  Path = Some ["booleanArgQuery"; "arguments"; "nonNullBooleanArgField"] }
+                { Message = "Variable 'booleanList' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                  Path = Some ["listToNonNullList"; "arguments"; "nonNullBooleanListField"] } ]
+    let shouldFail = getContext query1 |> Validation.Ast.validateVariableUsagesAllowed
+    shouldFail |> equals expectedFailureResult
     let query2 =
         """query nonNullListToList($nonNullBooleanList: [Boolean]!) {
   arguments {
@@ -1040,3 +1039,61 @@ query booleanArgQueryWithDefault($booleanArg: Boolean = true) {
 }"""
     let shouldPass = getContext query2 |> Validation.Ast.validateVariableUsagesAllowed
     shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation be able to run all validations in a cyclyc reference document`` () =
+    let query1 =
+        """{
+  dog {
+    ...nameFragment
+  }
+}
+
+fragment nameFragment on Dog {
+  name
+  ...barkVolumeFragment
+}
+
+fragment barkVolumeFragment on Dog {
+  barkVolume
+  ...nameFragment
+}"""
+    let query2 =
+        """{
+  dog {
+    ...dogFragment
+  }
+}
+
+fragment dogFragment on Dog {
+  name
+  owner {
+    ...ownerFragment
+  }
+}
+
+fragment ownerFragment on Dog {
+  name
+  pets {
+    ...dogFragment
+  }
+}"""
+    let expectedFailureResult =
+        Error [ { Message = "Fragment 'nameFragment' is making a cyclic reference."
+                  Path = None }
+                { Message = "Fragment 'barkVolumeFragment' is making a cyclic reference."
+                  Path = None }
+                { Message = "Field 'dog' is not defined in schema type 'Root'."
+                  Path = Some ["dog"] }
+                { Message = "Fragment 'dogFragment' is making a cyclic reference."
+                  Path = None }
+                { Message = "Fragment 'ownerFragment' is making a cyclic reference."
+                  Path = None }
+                { Message = "Field 'dog' is not defined in schema type 'Root'."
+                  Path = Some ["dog"] }
+                { Message = "Field 'owner' is not defined in schema type 'Dog'."
+                  Path = Some ["dogFragment"; "owner"] }
+                { Message = "Field 'pets' is not defined in schema type 'Dog'."
+                  Path = Some ["ownerFragment"; "pets"] } ]
+    let shouldFail = [query1;query2] |> List.map (Parser.parse >> Validation.Ast.validateDocument schema.Introspected) |> List.reduce (@)
+    shouldFail |> equals expectedFailureResult
