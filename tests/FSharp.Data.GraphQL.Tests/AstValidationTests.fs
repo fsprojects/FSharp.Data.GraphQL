@@ -155,6 +155,7 @@ let Arguments =
               Define.Field("booleanArgField", Nullable Boolean, [ Define.Input("booleanArg", Nullable Boolean) ], fun ctx _ -> ctx.Arg("booleanArg"))
               Define.Field("floatArgField", Nullable Float, [ Define.Input("floatArg", Nullable Float) ], fun ctx _ -> ctx.Arg("floatArg"))
               Define.Field("intArgField", Nullable Int, [ Define.Input("intArg", Nullable Int) ], fun ctx _ -> ctx.Arg("intArg"))
+              Define.Field("nonNullBooleanListField", ListOf Boolean, [ Define.Input("nonNullBooleanListArg", ListOf Boolean) ], fun ctx _ -> ctx.Arg("nonNullBooleanListArg"))
               Define.Field("nonNullBooleanArgField", Boolean, [ Define.Input("nonNullBooleanArg", Boolean) ], fun ctx _ -> ctx.Arg("nonNullBooleanArg"))
               Define.Field("booleanListArgField", Nullable (ListOf (Nullable Boolean)), [ Define.Input("booleanListArg", ListOf (Nullable Boolean)) ], fun ctx _ -> ctx.Arg("booleanListArg") |> Some)
               Define.Field("optionalNonNullBooleanArgField", Boolean, [ Define.Input("optionalBooleanArg", Boolean, false) ], fun ctx _ -> ctx.Arg("optionalBooleanArg")) ])
@@ -980,4 +981,62 @@ fragment isHousetrainedFragment on Dog {
   isHousetrained(atOtherHomes: $atOtherHomes)
 }"""
     let shouldPass = getContext query4 |> Validation.Ast.validateAllVariablesUsed
+    shouldPass |> equals Success
+
+[<Fact>]
+let ``Validation should grant that all variables can be used`` () =
+//    let query1 =
+//        """query intCannotGoIntoBoolean($intArg: Int) {
+//        arguments {
+//          booleanArgField(booleanArg: $intArg)
+//        }
+//}
+
+//query booleanListCannotGoIntoBoolean($booleanListArg: [Boolean]) {
+//        arguments {
+//          booleanArgField(booleanArg: $booleanListArg)
+//        }
+//}
+
+//query booleanArgQuery($booleanArg: Boolean) {
+//        arguments {
+//          nonNullBooleanArgField(nonNullBooleanArg: $booleanArg)
+//        }
+//}
+
+//query listToNonNullList($booleanList: [Boolean]) {
+//        arguments {
+//          nonNullBooleanListField(nonNullBooleanListArg: $booleanList)
+//        }
+//}"""
+//    let expectedFailureResult =
+//        Error [ { Message = "Variable 'intArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+//                  Path = Some ["intCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
+//                { Message = "Variable 'booleanListArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+//                  Path = Some ["booleanListCannotGoIntoBoolean"; "arguments"; "booleanArgField"] }
+//                { Message = "Variable 'booleanArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+//                  Path = Some ["booleanArgQuery"; "arguments"; "nonNullBooleanArgField"] }
+//                { Message = "Variable 'booleanList' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+//                  Path = Some ["listToNonNullList"; "arguments"; "nonNullBooleanListField"] } ]
+//    let shouldFail = getContext query1 |> Validation.Ast.validateVariableUsagesAllowed
+//    shouldFail |> equals expectedFailureResult
+    let query2 =
+        """query nonNullListToList($nonNullBooleanList: [Boolean]!) {
+  arguments {
+    booleanListArgField(booleanListArg: $nonNullBooleanList)
+  }
+}
+
+query booleanArgQueryWithDefault($booleanArg: Boolean) {
+  arguments {
+    optionalNonNullBooleanArgField(optionalBooleanArg: $booleanArg)
+  }
+}
+
+query booleanArgQueryWithDefault($booleanArg: Boolean = true) {
+  arguments {
+    nonNullBooleanArgField(nonNullBooleanArg: $booleanArg)
+  }
+}"""
+    let shouldPass = getContext query2 |> Validation.Ast.validateVariableUsagesAllowed
     shouldPass |> equals Success

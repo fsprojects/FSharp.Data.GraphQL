@@ -189,8 +189,12 @@ module Ast =
             let selectionSet = 
                 match fragmentSpreadName with
                 | Some fragName when (!visitedFragments).ContainsKey(fragName) -> (!visitedFragments).[fragName]
-                | _ -> 
-                    let selection = getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet
+                | _ ->
+                    let parentType = fieldType |> Option.bind schemaInfo.TryGetTypeByRef
+                    let selection =
+                        parentType 
+                        |> Option.map (fun parentType -> getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet)
+                        |> Option.defaultValue []
                     fragmentSpreadName |> Option.iter (fun fragName -> visitedFragments := (!visitedFragments).Add(fragName, selection))
                     selection
             [ { Field = field
@@ -950,3 +954,68 @@ module Ast =
                 | Some operationName, _ -> acc @ Error.AsResult(sprintf "Variable definition '%s' is not used in operation '%s'. Every variable must be used." varName operationName)
                 | None, _ -> acc @ Error.AsResult(sprintf "Variable definition '%s' is not used in operation. Every variable must be used." varName))
                 acc) Success
+
+    let rec private areTypesCompatible (variableTypeRef : IntrospectionTypeRef) (locationTypeRef : IntrospectionTypeRef) =
+        if locationTypeRef.Kind = TypeKind.NON_NULL && locationTypeRef.OfType.IsSome
+        then
+            if variableTypeRef.Kind <> TypeKind.NON_NULL
+            then false
+            elif variableTypeRef.OfType.IsSome then areTypesCompatible variableTypeRef.OfType.Value locationTypeRef.OfType.Value
+            else false
+        elif variableTypeRef.Kind = TypeKind.NON_NULL && variableTypeRef.OfType.IsSome then areTypesCompatible variableTypeRef.OfType.Value locationTypeRef
+        elif locationTypeRef.Kind = TypeKind.LIST && locationTypeRef.OfType.IsSome
+        then
+            if variableTypeRef.Kind <> TypeKind.LIST
+            then false
+            elif variableTypeRef.OfType.IsSome then areTypesCompatible variableTypeRef.OfType.Value locationTypeRef.OfType.Value
+            else false
+        elif variableTypeRef.Kind = TypeKind.LIST then false
+        else variableTypeRef = locationTypeRef
+
+    let private checkVariableUsageAllowedOnArguments (acc : ValidationResult) (locationTypeRef : IntrospectionTypeRef) (inputs : IntrospectionInputVal []) (varNamesAndTypeRefs : Map<string, VariableDefinition *  IntrospectionTypeRef>) (path : Path) (args : Argument list) =
+        args
+        |> List.choose (fun arg -> match arg.Value with | Variable varName -> Some (arg.Name, varName) | _ -> None)
+        |> List.fold (fun acc (argName, varName) ->
+            match varNamesAndTypeRefs.TryFind(varName) with
+            | Some (varDef, variableTypeRef) ->
+                let err = Error.AsResult(sprintf "Variable '%s' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference." varName, path)
+                if locationTypeRef.Kind = TypeKind.NON_NULL && locationTypeRef.OfType.IsSome && variableTypeRef.Kind <> TypeKind.NON_NULL
+                then
+                    let hasNonNullVariableDefaultValue = varDef.DefaultValue.IsSome
+                    let input = inputs |> Array.tryFind (fun x -> x.Name = argName)
+                    let hasLocationDefaultValue = input |> Option.bind (fun x -> x.DefaultValue) |> Option.isSome
+                    if not hasNonNullVariableDefaultValue && not hasLocationDefaultValue
+                    then acc @ err
+                    else
+                        let nullableLocationType = locationTypeRef.OfType.Value
+                        if not (areTypesCompatible variableTypeRef nullableLocationType)
+                        then acc @ err else acc
+                elif not (areTypesCompatible variableTypeRef locationTypeRef)
+                then acc @ err else acc
+            | None -> acc) acc
+
+    let rec private checkVariableUsageAllowedOnSelection (acc : ValidationResult) (varNamesAndTypeRefs : Map<string, VariableDefinition * IntrospectionTypeRef>) (visitedFragments : string list ref) (selection : SelectionInfo) =
+        let inputs = Option.defaultValue [||] selection.InputValues
+        match selection.FragmentSpreadName with
+        | Some spreadName when List.contains spreadName !visitedFragments -> acc
+        | _ ->
+            if selection.FragmentSpreadName.IsSome then visitedFragments := selection.FragmentSpreadName.Value :: !visitedFragments
+            match selection.FieldType with
+            | Some fieldType ->
+                let acc = selection.Field.Arguments |> checkVariableUsageAllowedOnArguments acc fieldType inputs varNamesAndTypeRefs selection.Path
+                let acc = selection.SelectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs visitedFragments selection) acc
+                selection.Field.Directives
+                |> List.fold (fun acc directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments acc fieldType inputs varNamesAndTypeRefs selection.Path) acc
+            | None -> acc
+
+    let validateVariableUsagesAllowed (ctx : ValidationContext) =
+        ctx.OperationDefinitions
+        |> List.map (function def -> def.SelectionSet, def.Definition.VariableDefinitions)
+        |> List.map (fun (selectionSet, varDefs) -> 
+            let varNamesAndTypeRefs = 
+                varDefs 
+                |> List.choose (fun varDef -> ctx.Schema.TryGetInputType(varDef.Type) |> Option.map (fun t -> varDef.VariableName, (varDef, t)))
+                |> Map.ofList
+            selectionSet, varNamesAndTypeRefs)
+        |> List.fold (fun acc (selectionSet, varNamesAndTypeRefs) ->
+            selectionSet |> List.fold (fun acc selection -> checkVariableUsageAllowedOnSelection acc varNamesAndTypeRefs (ref []) selection) acc) Success
