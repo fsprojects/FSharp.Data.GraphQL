@@ -44,6 +44,8 @@ module HttpHandlers =
         let rec parseVariables (schema : ISchema) (defs : VariableDefinition list) (variables : obj) =
             let casted =
                 match variables with
+                | null -> Map.empty
+                | :? string as x when System.String.IsNullOrWhiteSpace(x) -> Map.empty
                 | :? Map<string, obj> as x -> x
                 | :? JToken as x -> x.ToObject<Map<string, obj>>(jsonSerializer)
                 | :? string as x -> JsonConvert.DeserializeObject<Map<string, obj>>(x, jsonSettings)
