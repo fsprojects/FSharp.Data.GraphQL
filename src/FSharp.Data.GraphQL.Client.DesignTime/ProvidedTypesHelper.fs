@@ -630,8 +630,7 @@ module internal Provider =
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
               ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
-        let validateAst (schema : IntrospectionSchema) (queryAst : Document) =
-            let validationResult = Validation.Ast.validateDocument schema queryAst
+        let throwExceptionIfValidationFailed (validationResult : Validation.Ast.ValidationResult) =
             let rec formatValidationExceptionMessage (acc : string) (errors : Validation.Ast.Error list) =
                 let rec formatPath (acc : string) (path : Validation.Ast.Path) =
                     match path with
@@ -717,8 +716,10 @@ module internal Provider =
                                     | String query -> query
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
-                                if clientQueryValidation
-                                then validateAst schema queryAst
+                                if clientQueryValidation then
+                                    (fun () -> Validation.Ast.validateDocument schema queryAst)
+                                    |> QueryValidationDesignTimeCache.getOrAdd query
+                                    |> throwExceptionIfValidationFailed
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
                                     | null | "" -> 
@@ -764,17 +765,9 @@ module internal Provider =
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
-                                    | Some name, _ -> 
-                                        name.FirstCharUpper()
-                                    | None, Some name -> 
-                                        name.FirstCharUpper()
-                                    | None, None ->   
-                                        let hash = 
-                                            Encoding.UTF8.GetBytes(actualQuery)
-                                            |> MD5.Create().ComputeHash
-                                            |> Array.map (fun x -> x.ToString("x2"))
-                                            |> Array.reduce (+)
-                                        "Operation" + hash
+                                    | Some name, _ -> name.FirstCharUpper()
+                                    | None, Some name -> name.FirstCharUpper()
+                                    | None, None -> "Operation" + actualQuery.MD5Hash()
                                 let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
@@ -873,5 +866,5 @@ module internal Provider =
                   UploadInputTypeName = uploadInputTypeName
                   ResolutionFolder = resolutionFolder
                   ClientQueryValidation = clientQueryValidation }
-            DesignTimeCache.getOrAdd providerKey maker.Force)
+            ProviderDesignTimeCache.getOrAdd providerKey maker.Force)
         generator
