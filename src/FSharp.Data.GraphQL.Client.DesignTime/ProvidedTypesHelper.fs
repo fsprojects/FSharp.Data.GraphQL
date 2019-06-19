@@ -689,6 +689,26 @@ module internal Provider =
                                     | String query -> query
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
+                                let validationResult = Validation.Ast.validateDocument schema queryAst
+                                let rec formatValidationExceptionMessage (acc : string) (errors : Validation.Ast.Error list) =
+                                    let rec formatPath (acc : string) (path : Validation.Ast.Path) =
+                                        match path with
+                                        | [] -> acc
+                                        | [last] -> sprintf "%s, %s" acc last
+                                        | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
+                                    match errors with
+                                    | [] -> acc
+                                    | [last] ->
+                                        match last.Path with
+                                        | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
+                                        | None -> sprintf "%s\n%s." acc last.Message
+                                    | actual :: remaining ->
+                                        match actual.Path with
+                                        | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
+                                        | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
+                                match validationResult with
+                                | Validation.Ast.Error msgs -> failwith (formatValidationExceptionMessage "" msgs)
+                                | Validation.Ast.Success -> ()
                                 let operationName : OperationName option = 
                                     match args.[2] :?> string with
                                     | null | "" -> 
