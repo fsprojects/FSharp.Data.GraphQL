@@ -58,9 +58,7 @@ module Types =
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let validateTypeMap (namedTypes: TypeMap) : ValidationResult =
-        namedTypes.ToSeq()
-        |> Seq.map snd
-        |> Seq.fold (fun acc namedDef -> acc @ validateType namedDef) Success
+        namedTypes.ToSeq() |> Seq.fold (fun acc (_, namedDef) -> acc @ validateType namedDef) Success
 
 module Ast =
     type Path = string list
@@ -426,9 +424,7 @@ module Ast =
             checkArgumentUniqueness acc tail
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
-        ctx.Definitions
-        |> List.map (fun def -> def.SelectionSet)
-        |> List.fold (fun acc selectionSet -> checkArgumentUniqueness acc selectionSet) Success
+        ctx.Definitions |> List.fold (fun acc def -> checkArgumentUniqueness acc def.SelectionSet) Success
 
     let private checkRequiredArguments (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let acc =
@@ -461,10 +457,17 @@ module Ast =
 
     let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
         ctx.FragmentDefinitions
-        |> List.filter (fun f -> f.Definition.Name.IsSome)
-        |> List.groupBy (fun f -> f.Definition.Name.Value)
-        |> List.choose (fun (name, frags) -> if frags.Length > 1 then Some (name, frags.Length) else None)
-        |> List.fold (fun acc (name, length) -> acc @ Error.AsResult(sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name)) Success
+        |> List.fold (fun (acc : Map<string, int>) frag ->
+            match frag.Definition.Name with
+            | Some fragName ->
+                match acc.TryFind(fragName) with
+                | Some count -> acc.Add(fragName, count + 1)
+                | None -> acc.Add(fragName, 1)
+            | None -> acc) Map.empty
+        |> Map.fold (fun acc name length ->
+            if length > 1
+            then acc @ Error.AsResult(sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name)
+            else acc) Success
 
     let rec private checkFragmentTypeExistence (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) (frag : FragmentDefinition) =
         let acc =
@@ -517,18 +520,19 @@ module Ast =
         |> List.fold (fun acc selection -> checkFragmentOnCompositeType acc selection) Success
 
     let internal validateFragmentsMustBeUsed (ctx : ValidationContext) =
-        let rec getSpreadNames (acc : string list) =
+        let rec getSpreadNames (acc : Set<string>) =
             function
-            | Field field -> field.SelectionSet |> List.collect (getSpreadNames acc)
-            | InlineFragment frag -> frag.SelectionSet |> List.collect (getSpreadNames acc)
-            | FragmentSpread spread -> spread.Name :: acc
+            | Field field -> field.SelectionSet |> Set.ofList |> Set.collect (getSpreadNames acc)
+            | InlineFragment frag -> frag.SelectionSet |> Set.ofList |> Set.collect (getSpreadNames acc)
+            | FragmentSpread spread -> acc.Add spread.Name
         let fragmentSpreadNames =
-            ctx.Document.Definitions
-            |> List.collect (fun def -> def.SelectionSet |> List.collect (getSpreadNames []))
-            |> List.distinct
+            Set.ofList ctx.Document.Definitions
+            |> Set.collect (fun def -> 
+                Set.ofList def.SelectionSet
+                |> Set.collect (getSpreadNames Set.empty))
         getFragmentDefinitions ctx.Document
         |> List.fold (fun acc def ->
-            if def.Name.IsSome && List.contains def.Name.Value fragmentSpreadNames
+            if def.Name.IsSome && Set.contains def.Name.Value fragmentSpreadNames
             then acc
             else acc @ Error.AsResult(sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value)) Success
 
@@ -697,18 +701,18 @@ module Ast =
             | FragmentDefinitionInfo fdef -> Some (None, fdef.SelectionSet))
         |> List.fold (fun acc (vars, selectionSet) -> selectionSet |> List.fold (fun acc selection -> checkInputValue acc ctx.Schema vars selection) acc) Success
 
-    let rec private getDistinctDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * string list) list =
+    let rec private getDistinctDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * Set<string>) list =
         match selection with
         | Field field ->
             let path = field.AliasOrName :: path
-            let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
+            let fieldDirectives = [ path, field.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
             let selectionSetDirectives = field.SelectionSet |> List.collect (getDistinctDirectiveNamesInSelection path)
             fieldDirectives |> List.append selectionSetDirectives
         | InlineFragment frag -> getDistinctDirectiveNamesInDefinition path (FragmentDefinition frag)
-        | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
+        | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
 
-    and private getDistinctDirectiveNamesInDefinition (path : Path) (frag : Definition) : (Path * string list) list =
-        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> List.distinct ]
+    and private getDistinctDirectiveNamesInDefinition (path : Path) (frag : Definition) : (Path * Set<string>) list =
+        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
         let selectionSetDirectives = frag.SelectionSet |> List.collect (getDistinctDirectiveNamesInSelection path)
         fragDirectives |> List.append selectionSetDirectives
 
@@ -718,7 +722,7 @@ module Ast =
             let path = match def.Name with | Some name -> [name] | None -> []
             getDistinctDirectiveNamesInDefinition path def.Definition)
         |> List.fold (fun acc (path, names) ->
-            names |> List.fold (fun acc name ->
+            names |> Set.fold (fun acc name ->
                 if ctx.Schema.Directives |> Array.exists (fun x -> x.Name = name)
                 then acc
                 else acc @ Error.AsResult(sprintf "Directive '%s' is not defined in the schema." name, path)) acc) Success
@@ -836,12 +840,10 @@ module Ast =
         ctx.Document.Definitions
         |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
         |> List.fold (fun acc (operationName, vars) ->
-            vars
-            |> List.groupBy id
-            |> List.map (fun (k, v) -> k, v.Length)
-            |> List.filter (fun (_, length) -> length > 1)
+            List.countBy id vars
             |> List.fold (fun acc (var, length) ->
                 match operationName with
+                | _ when length < 2 -> acc
                 | Some operationName -> acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName length)
                 | None -> acc @ Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName length)) acc) Success
 

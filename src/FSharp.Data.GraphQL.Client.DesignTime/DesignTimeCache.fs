@@ -71,9 +71,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
             member __.GetEnumerator () = getEnumerator () :> Collections.IEnumerator }
     
     let checkExpiration () =
-        store
-        |> Seq.choose (fun entry -> if CacheExpiration.isExpired entry then Some entry.Key else None)
-        |> Seq.iter store.Remove
+        store |> Seq.iter (fun entry -> if CacheExpiration.isExpired entry then store.Remove entry.Key)
 
     let newCacheEntry key value =
         { Key = key

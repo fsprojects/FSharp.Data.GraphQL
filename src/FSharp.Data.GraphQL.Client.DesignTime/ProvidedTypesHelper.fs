@@ -179,9 +179,10 @@ module internal ProvidedRecord =
                         let properties =
                             let baseConstructorArgs =
                                 let coercedArgs = 
-                                    List.zip constructorPropertyTypes args
-                                    |> List.map (fun (t, arg) -> t, Expr.Coerce(arg, typeof<obj>))
-                                    |> List.map (fun (t, arg) -> if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
+                                    (constructorPropertyTypes, args)
+                                    ||> List.map2 (fun t arg ->
+                                        let arg = Expr.Coerce(arg, typeof<obj>)
+                                        if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
                                 let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
                                 List.zip propertyNames (coercedArgs @ nullValuedArgs)
                                 |> List.map (fun (name, value) -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
@@ -279,8 +280,8 @@ module internal ProvidedOperation =
                         let name, t = mapVariable variableName itype
                         name, Types.unwrapOption t
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-            let mapVariablesExpr (varNames : string list) (args : Expr list) =
-                let mapVariableExpr (name : string, value : Expr) =
+            let buildVariablesExprFromArgs (varNames : string list) (args : Expr list) =
+                let mapVariableExpr (name : string) (value : Expr) =
                     let value = Expr.Coerce(value, typeof<obj>)
                     <@@ let rec mapVariableValue (value : obj) =
                             match value with
@@ -293,8 +294,8 @@ module internal ProvidedOperation =
                             | v -> v
                         (name, mapVariableValue %%value) @@>
                 let args =
-                    let args = List.skip (args.Length - variables.Length) args
-                    List.zip varNames args |> List.map mapVariableExpr
+                    let varArgs = List.skip (args.Length - variables.Length) args
+                    (varNames, varArgs) ||> List.map2 mapVariableExpr
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
                 match contextInfo with
@@ -344,7 +345,7 @@ module internal ProvidedOperation =
                             if argsWithoutInstance.Length - variableNames.Length = 1
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
-                        let variables = mapVariablesExpr variableNames variableArgs
+                        let variables = buildVariablesExprFromArgs variableNames variableArgs
                         <@@ 
                             let context = %%context : GraphQLProviderRuntimeContext
                             let request =
@@ -377,7 +378,7 @@ module internal ProvidedOperation =
                             if argsWithoutInstance.Length - variableNames.Length = 1
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
-                        let variables = mapVariablesExpr variableNames variableArgs
+                        let variables = buildVariablesExprFromArgs variableNames variableArgs
                         <@@ let context = %%context : GraphQLProviderRuntimeContext
                             let request =
                                 { ServerUrl = context.ServerUrl
