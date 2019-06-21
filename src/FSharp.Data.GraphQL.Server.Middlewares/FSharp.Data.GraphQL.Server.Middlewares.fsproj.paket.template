@@ -12,6 +12,7 @@ summary
 description
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 references
+	FSharp.Data.GraphQL.Server.Middlewares.dll
     FSharp.Data.GraphQL.Shared.dll
 dependencies
 	framework: net461
