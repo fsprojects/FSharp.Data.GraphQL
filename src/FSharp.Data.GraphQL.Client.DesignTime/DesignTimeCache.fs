@@ -12,6 +12,7 @@ open System.Timers
 open FSharp.Data.GraphQL.Client
 open ProviderImplementation.ProvidedTypes
 open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL.Validation.Ast
 
 // Cache implementation based on http://www.fssnip.net/7UT/title/Threadsafe-Generic-MemoryCache-and-Memoize-Function
 
@@ -144,8 +145,8 @@ module internal ProviderDesignTimeCache =
 
 module internal QueryValidationDesignTimeCache =
     let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
-    let private cache = MemoryCache<string, Ast.ValidationResult>(expiration)
-    let getOrAdd (query : string) (validationResultMaker : unit -> Ast.ValidationResult) =
+    let private cache = MemoryCache<string, ValidationResult<Error>>(expiration)
+    let getOrAdd (query : string) (validationResultMaker : unit -> ValidationResult<Error>) =
         let key = query.MD5Hash()
         cache.GetOrAddResult key validationResultMaker
 

@@ -63,5 +63,5 @@ module Dictionary =
 
     let addWith (f : 'V -> 'V -> 'V) (key : 'K) (value : 'V) (dict : Dictionary<'K, 'V>) : unit =
         match dict.TryGetValue(key) with
-        | true, v -> dict.[key] <- f v value
+        | true, v -> dict.[key] <- f value v
         | false, _ -> dict.Add(key, value)

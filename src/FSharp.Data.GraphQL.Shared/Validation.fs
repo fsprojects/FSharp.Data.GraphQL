@@ -16,17 +16,17 @@ open FSharp.Data.GraphQL.Types.Introspection
 module ValidationResult =
     type ValidationResult<'Err> =
         | Success
-        | Error of 'Err list
+        | ValidationError of 'Err list
 
-    let (@) (res1 : ValidationResult<'Err>) (res2 : ValidationResult<'Err>) : ValidationResult<'Err> =
+    let (@@) (res1 : ValidationResult<'Err>) (res2 : ValidationResult<'Err>) : ValidationResult<'Err> =
         match res1, res2 with
         | Success, Success -> Success
         | Success, _ -> res2
         | _, Success -> res1
-        | Error e1, Error e2 -> Error (e1 @ e2)
+        | ValidationError e1, ValidationError e2 -> ValidationError (e1 @ e2)
 
     let collectResults (f : 'T -> ValidationResult<'Err>) (xs : 'T seq) : ValidationResult<'Err> =
-        Seq.fold (fun acc t -> acc @ (f t)) Success xs
+        Seq.fold (fun acc t -> acc @@ (f t)) Success xs
 
 module Types =
 
@@ -42,31 +42,31 @@ module Types =
                 | Some _ -> (sprintf "'%s.%s' field signature does not match it's definition in interface %s" objdef.Name f.Name idef.Name)::acc) []
         match errors with
         | [] -> Success
-        | err -> Error err
+        | err -> ValidationError err
 
     let validateType typedef =
         match typedef with
         | Scalar _ -> Success
         | Object objdef ->
-            let nonEmptyResult = if objdef.Fields.Count > 0 then Success else Error [ objdef.Name + " must have at least one field defined" ]
+            let nonEmptyResult = if objdef.Fields.Count > 0 then Success else ValidationError [ objdef.Name + " must have at least one field defined" ]
             let implementsResult = objdef.Implements |> collectResults (validateImplements objdef)
-            nonEmptyResult @ implementsResult
+            nonEmptyResult @@ implementsResult
         | InputObject indef ->
-            let nonEmptyResult = if indef.Fields.Length > 0 then Success else Error [ indef.Name + " must have at least one field defined" ]
+            let nonEmptyResult = if indef.Fields.Length > 0 then Success else ValidationError [ indef.Name + " must have at least one field defined" ]
             nonEmptyResult
         | Union uniondef ->
-            let nonEmptyResult = if uniondef.Options.Length > 0 then Success else Error [ uniondef.Name + " must have at least one type definition option" ]
+            let nonEmptyResult = if uniondef.Options.Length > 0 then Success else ValidationError [ uniondef.Name + " must have at least one type definition option" ]
             nonEmptyResult
         | Enum enumdef ->
-            let nonEmptyResult = if enumdef.Options.Length > 0 then Success else Error [ enumdef.Name + " must have at least one enum value defined" ]
+            let nonEmptyResult = if enumdef.Options.Length > 0 then Success else ValidationError [ enumdef.Name + " must have at least one enum value defined" ]
             nonEmptyResult
         | Interface idef ->
-            let nonEmptyResult = if idef.Fields.Length > 0 then Success else Error [ idef.Name + " must have at least one field defined" ]
+            let nonEmptyResult = if idef.Fields.Length > 0 then Success else ValidationError [ idef.Name + " must have at least one field defined" ]
             nonEmptyResult
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
     let validateTypeMap (namedTypes: TypeMap) : ValidationResult<string> =
-        namedTypes.ToSeq() |> Seq.fold (fun acc (_, namedDef) -> acc @ validateType namedDef) Success
+        namedTypes.ToSeq() |> Seq.fold (fun acc (_, namedDef) -> acc @@ validateType namedDef) Success
 
 module Ast =
     type Path = string list
@@ -76,7 +76,7 @@ module Ast =
           Path : Path option }
         static member AsResult(message : string, ?path : Path) =
             [ { Message = message; Path = path |> Option.map List.rev } ]
-            |> ValidationResult.Error
+            |> ValidationResult.ValidationError
 
     type SchemaInfo =
         { SchemaTypes : Map<string, IntrospectionType>
@@ -106,13 +106,13 @@ module Ast =
             x.SchemaTypes.TryFind(name)
         member x.TryGetInputType(input : InputType) =
             match input with
-            | NamedType name -> 
+            | NamedType name ->
                 x.TryGetTypeByName(name)
                 |> Option.bind (fun x -> match x.Kind with | TypeKind.INPUT_OBJECT | TypeKind.SCALAR -> Some x | _ -> None)
                 |> Option.map IntrospectionTypeRef.Named
             | ListType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.List
             | NonNullType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.NonNull
-    
+
     type SelectionInfo =
         { Field : Field
           SelectionSet : SelectionInfo list
@@ -124,12 +124,12 @@ module Ast =
           Path : Path }
         member x.AliasOrName = x.Field.AliasOrName
         member x.FragmentOrParentType = x.FragmentType |> Option.defaultValue x.ParentType
-    
+
     type OperationDefinitionInfo =
         { Definition : OperationDefinition
           SelectionSet : SelectionInfo list }
         member x.Name = x.Definition.Name
-    
+
     type FragmentDefinitionInfo =
         { Definition : FragmentDefinition
           SelectionSet : SelectionInfo list }
@@ -151,7 +151,7 @@ module Ast =
             match x with
             | OperationDefinitionInfo x -> x.Definition.Directives
             | FragmentDefinitionInfo x -> x.Definition.Directives
-    
+
     type ValidationContext =
         { Definitions : DefinitionInfo list
           Schema : SchemaInfo
@@ -174,20 +174,20 @@ module Ast =
                 fragSelection
         selectionSet |> List.collect (function
         | Field field ->
-            let ifield = 
+            let ifield =
                 match parentType.Fields |> Option.bind (Array.tryFind (fun f -> f.Name = field.Name)), fragmentType with
                 | None, Some fragType -> fragType.Fields |> Option.bind (Array.tryFind (fun f -> f.Name = field.Name))
                 | x, _ -> x
             let inputValues = ifield |> Option.map (fun f -> f.Args)
             let fieldType = ifield |> Option.map (fun f -> f.Type)
             let path = field.AliasOrName :: path
-            let selectionSet = 
+            let selectionSet =
                 match fragmentSpreadName with
                 | Some fragName when (!visitedFragments).ContainsKey(fragName) -> (!visitedFragments).[fragName]
                 | _ ->
                     let parentType = fieldType |> Option.bind schemaInfo.TryGetTypeByRef
                     let selection =
-                        parentType 
+                        parentType
                         |> Option.map (fun parentType -> getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet)
                         |> Option.defaultValue []
                     fragmentSpreadName |> Option.iter (fun fragName -> visitedFragments := (!visitedFragments).Add(fragName, selection))
@@ -206,7 +206,7 @@ module Ast =
             | Some fragSelection -> fragSelection
             | None ->
                 match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
-                | Some frag -> 
+                | Some frag ->
                     let fragSelection = getFragSelectionInfo frag
                     visitedFragments := (!visitedFragments).Add(spread.Name, fragSelection)
                     fragSelection
@@ -218,7 +218,7 @@ module Ast =
 
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
-        let fragmentInfos = 
+        let fragmentInfos =
             fragmentDefinitions
             |> List.choose (fun def ->
                 def.TypeCondition
@@ -226,18 +226,16 @@ module Ast =
                     schemaInfo.TryGetTypeByName(typeCondition)
                     |> Option.map (fun parentType ->
                         let path = match def.Name with | Some name -> [name] | None -> []
-                        { Definition = def
-                          SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType def.Name (Some parentType) path (ref Map.empty) def.SelectionSet  })))
-            |> List.map FragmentDefinitionInfo
+                        FragmentDefinitionInfo { Definition = def
+                                                 SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType def.Name (Some parentType) path (ref Map.empty) def.SelectionSet  })))
         let operationInfos =
             getOperationDefinitions ast
             |> List.choose (fun def ->
                 schemaInfo.TryGetOperationType(def.OperationType)
                 |> Option.map (fun parentType ->
                     let path = match def.Name with | Some name -> [name] | None -> []
-                    { OperationDefinitionInfo.Definition = def
-                      SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType None None path (ref Map.empty) def.SelectionSet }))
-            |> List.map OperationDefinitionInfo
+                    OperationDefinitionInfo { OperationDefinitionInfo.Definition = def
+                                              SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType None None path (ref Map.empty) def.SelectionSet }))
         { Definitions = List.append operationInfos fragmentInfos
           Schema = schemaInfo
           Document = ast }
@@ -247,8 +245,10 @@ module Ast =
         names
         |> List.map (fun name -> name, names |> List.filter (fun x -> x = name) |> List.length)
         |> List.distinctBy fst
-        |> List.filter (fun (_, count) -> count > 1)
-        |> List.fold (fun acc (name, count) -> acc @ Error.AsResult(sprintf "Operation '%s' has %i definitions. Each operation name must be unique." name count)) Success
+        |> collectResults(fun (name, count) ->
+            if count <= 1
+            then Success
+            else Error.AsResult(sprintf "Operation '%s' has %i definitions. Each operation name must be unique." name count))
 
     let internal validateLoneAnonymousOperation (ctx : ValidationContext) =
         let operations = ctx.OperationDefinitions |> List.map (fun x -> x.Definition)
@@ -325,11 +325,11 @@ module Ast =
     let rec private sameResponseShape (fieldA : SelectionInfo, fieldB : SelectionInfo) =
         if fieldA.FieldType = fieldB.FieldType
         then
-            // FIXME: Check algorithm
-            let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
-            let fieldsForName = mergedSet |> List.groupBy (fun x -> x.AliasOrName)
+            let fieldsForName = Dictionary<string, SelectionInfo list>()
+            fieldA.SelectionSet |> List.iter(fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
+            fieldB.SelectionSet |> List.iter(fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
             fieldsForName
-            |> collectResults(fun (_, selectionSet) ->
+            |> collectResults(fun (KeyValue(_, selectionSet)) ->
                 if selectionSet.Length < 2
                 then Success
                 else List.pairwise selectionSet |> collectResults sameResponseShape)
@@ -347,15 +347,14 @@ module Ast =
                     let hasSameShape = sameResponseShape (fieldA, fieldB)
                     if fieldA.FragmentOrParentType = fieldB.FragmentOrParentType || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
                     then
-                        if fieldA.Field.Name <> fieldB.Field.Name then hasSameShape @ Error.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
-                        else if fieldA.Field.Arguments <> fieldB.Field.Arguments then hasSameShape @ Error.AsResult(sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Field.Name, fieldA.Path)
+                        if fieldA.Field.Name <> fieldB.Field.Name then hasSameShape @@ Error.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
+                        else if fieldA.Field.Arguments <> fieldB.Field.Arguments then hasSameShape @@ Error.AsResult(sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Field.Name, fieldA.Path)
                         else
                             let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
-                            hasSameShape @ (fieldsInSetCanMerge mergedSet)
+                            hasSameShape @@ (fieldsInSetCanMerge mergedSet)
                     else hasSameShape))
 
-    let internal validateFieldSelectionMerging (ctx : ValidationContext) = 
-        // ctx.Definitions |> List.fold (fun acc def -> acc @ (fieldsInSetCanMerge def.SelectionSet)) Success
+    let internal validateFieldSelectionMerging (ctx : ValidationContext) =
         ctx.Definitions |> collectResults (fun def -> fieldsInSetCanMerge def.SelectionSet)
 
     let rec private checkLeafFieldSelection (selection : SelectionInfo) =
@@ -373,7 +372,7 @@ module Ast =
             | Some fieldType -> validateByKind fieldType selection.SelectionSet.Length
             | None -> Success
         validKind
-        @ (selection.SelectionSet |> collectResults checkLeafFieldSelection)
+        @@ (selection.SelectionSet |> collectResults checkLeafFieldSelection)
 
     let internal validateLeafFieldSelections (ctx : ValidationContext) =
         ctx.Definitions
@@ -397,14 +396,12 @@ module Ast =
                         | Some _ -> Success
                         | _ -> Error.AsResult(sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path))
                 | None -> Success)
-        argumentsValid @ directivesValid
+        argumentsValid @@ directivesValid
 
     let internal validateArgumentNames (ctx : ValidationContext) =
         ctx.Definitions
         |> collectResults (fun def -> def.SelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
-        // |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkFieldArgumentNames acc ctx.Schema selection) acc) Success
 
-    // FIXME: Fishy algo
     let rec private checkArgumentUniqueness (selectionSet : SelectionInfo list) =
         selectionSet
         |> collectResults(fun selection ->
@@ -415,12 +412,11 @@ module Ast =
                     if length > 1
                     then Error.AsResult(sprintf "There are %i arguments with name '%s' defined in field '%s'. Field arguments must be unique." length name selection.Field.Name, selection.Path)
                     else Success)
-            argsValid @ (selection.SelectionSet |> checkArgumentUniqueness))
+            argsValid @@ (selection.SelectionSet |> checkArgumentUniqueness))
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
         ctx.Definitions
         |> collectResults(fun def -> checkArgumentUniqueness def.SelectionSet)
-        // |> List.fold (fun acc def -> checkArgumentUniqueness acc def.SelectionSet) Success
 
     let private checkRequiredArguments (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let inputsValid =
@@ -447,7 +443,7 @@ module Ast =
                             | _ -> Error.AsResult(sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
                         | _ -> Success)
                 | None -> Success)
-        inputsValid @ directivesValid
+        inputsValid @@ directivesValid
 
     let internal validateRequiredArguments (ctx : ValidationContext) =
         ctx.Definitions
@@ -470,10 +466,7 @@ module Ast =
             | Some _ -> Success
             | None when frag.Name.IsSome -> Error.AsResult(sprintf "Fragment '%s' has type condition '%s', but that type does not exist in the schema." frag.Name.Value frag.TypeCondition.Value)
             | None -> Error.AsResult(sprintf "Inline fragment has type condition '%s', but that type does not exist in the schema." frag.TypeCondition.Value, path)
-        typeConditionsValid @ (frag.SelectionSet |> collectResults (checkFragmentTypeExistenceInSelection fragmentDefinitions schemaInfo path))
-        // match frag.SelectionSet with
-        // | [] -> acc
-        // | selectionSet -> selectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo path) |> List.reduce (@)
+        typeConditionsValid @@ (frag.SelectionSet |> collectResults (checkFragmentTypeExistenceInSelection fragmentDefinitions schemaInfo path))
 
     and private checkFragmentTypeExistenceInSelection (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) =
         function
@@ -505,7 +498,7 @@ module Ast =
                 | _ when selection.FragmentSpreadName.IsSome -> Error.AsResult(sprintf "Fragment '%s' has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." selection.FragmentSpreadName.Value (fragType.Kind.ToString()), selection.Path)
                 | _ -> Error.AsResult(sprintf "Inline fragment has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." (fragType.Kind.ToString()), selection.Path)
             | None -> Success
-        fragmentTypeValid @ (selection.SelectionSet |> collectResults checkFragmentOnCompositeType)
+        fragmentTypeValid @@ (selection.SelectionSet |> collectResults checkFragmentOnCompositeType)
 
     let internal validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
         ctx.Definitions
@@ -520,14 +513,14 @@ module Ast =
             | FragmentSpread spread -> acc.Add spread.Name
         let fragmentSpreadNames =
             Set.ofList ctx.Document.Definitions
-            |> Set.collect (fun def -> 
+            |> Set.collect (fun def ->
                 Set.ofList def.SelectionSet
                 |> Set.collect (getSpreadNames Set.empty))
         getFragmentDefinitions ctx.Document
-        |> List.fold (fun acc def ->
+        |> collectResults(fun def ->
             if def.Name.IsSome && Set.contains def.Name.Value fragmentSpreadNames
-            then acc
-            else acc @ Error.AsResult(sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value)) Success
+            then Success
+            else Error.AsResult(sprintf "Fragment '%s' is not used in any operation in the document. Fragments must be used in at least one operation." def.Name.Value))
 
     let rec private fragmentSpreadTargetDefinedInSelection (fragmentDefinitionNames : string list) (path : Path) =
         function
@@ -566,7 +559,6 @@ module Ast =
                     Error.AsResult(sprintf "Fragment '%s' is making a cyclic reference." name)
                 else Success
             else
-                // FIXME: Use a Dictionary instead
                 visited := name :: !visited
                 frag.SelectionSet
                 |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited validated))
@@ -609,11 +601,10 @@ module Ast =
             |> collectResults(checkFragmentSpreadIsPossibleInSelection))
 
     let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
-        // FIXME: Use a fold
-        let rec getFieldMap (acc : Map<string, IntrospectionTypeRef>) (fields : (string * IntrospectionTypeRef) list) : Map<string, IntrospectionTypeRef> =
-            match fields with
-            | [] -> acc
-            | (name, tref) :: fields -> getFieldMap (acc.Add(name, tref)) fields
+        let rec getFieldMap (fields : (string * IntrospectionTypeRef) seq) : Map<string, IntrospectionTypeRef> =
+            (Map.empty, fields)
+            ||> Seq.fold (fun acc (name, tref) -> Map.add name tref acc)
+
         let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : Value) =
             let canNotCoerce = Error.AsResult(sprintf "Argument field or value named '%s' can not be coerced. It does not match a valid literal representation for the type." argName, selection.Path)
             match value with
@@ -650,8 +641,7 @@ module Ast =
                 | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.INPUT_OBJECT when tref.Name.IsSome ->
                     match schemaInfo.TryGetTypeByRef(tref) with
                     | Some itype ->
-                        // FIXME: Use a dictionary?
-                        let fieldMap = itype.InputFields |> Option.defaultValue [||] |> Array.map (fun x -> x.Name, x.Type) |> List.ofArray |> getFieldMap Map.empty
+                        let fieldMap = itype.InputFields |> Option.defaultValue [||] |> Array.map (fun x -> x.Name, x.Type) |> getFieldMap
                         let canCoerceFields =
                             fieldMap
                             |> collectResults(fun kvp ->
@@ -664,7 +654,7 @@ module Ast =
                                 match Map.tryFind kvp.Key fieldMap with
                                 | Some fieldTypeRef -> checkIsCoercible fieldTypeRef kvp.Key kvp.Value
                                 | None -> Error.AsResult(sprintf "Can not coerce argument '%s'. The field '%s' is not a valid field in the argument definition." argName kvp.Key, selection.Path))
-                        canCoerceFields @ canCoerceProps
+                        canCoerceFields @@ canCoerceProps
                     | None -> canNotCoerce
                 | _ -> canNotCoerce
             | Variable varName ->
@@ -712,11 +702,12 @@ module Ast =
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
             getDistinctDirectiveNamesInDefinition path def.Definition)
-        |> List.fold (fun acc (path, names) ->
-            names |> Set.fold (fun acc name ->
+        |> collectResults(fun (path, names) ->
+            names
+            |> collectResults(fun name ->
                 if ctx.Schema.Directives |> Array.exists (fun x -> x.Name = name)
-                then acc
-                else acc @ Error.AsResult(sprintf "Directive '%s' is not defined in the schema." name, path)) acc) Success
+                then Success
+                else Error.AsResult(sprintf "Directive '%s' is not defined in the schema." name, path)))
 
     let private validateDirective (schemaInfo : SchemaInfo) (path : Path) (location : DirectiveLocation) (onError : Directive -> string) (directive : Directive) : ValidationResult<Error> =
         schemaInfo.Directives
@@ -743,10 +734,9 @@ module Ast =
                 | Some fragName -> sprintf "Fragment definition '%s' has a directive '%s', but this directive location is not supported by the schema definition." fragName d.Name
                 | None -> sprintf "An inline fragment has a directive '%s', but this directive location is not supported by the schema definition." d.Name))
 
-        // FIXME: Could be buggy
         match frag.Name with
         | Some fragName when List.contains fragName !visitedFragments -> directivesValid
-        | _ -> checkDirectivesInSelectionSet schemaInfo fragmentDefinitions path visitedFragments frag.SelectionSet
+        | _ -> directivesValid @@ checkDirectivesInSelectionSet schemaInfo fragmentDefinitions path visitedFragments frag.SelectionSet
 
     and private checkDirectivesInValidLocationOnSelection (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (path : Path) (visitedFragments : string list ref) =
         function
@@ -756,7 +746,7 @@ module Ast =
                 field.Directives
                 |> collectResults(validateDirective schemaInfo path DirectiveLocation.FIELD (fun directiveDef ->
                     sprintf "Field or alias '%s' has a directive '%s', but this directive location is not supported by the schema definition." field.AliasOrName directiveDef.Name))
-            directivesValid @ (checkDirectivesInSelectionSet schemaInfo fragmentDefinitions path visitedFragments field.SelectionSet)
+            directivesValid @@ (checkDirectivesInSelectionSet schemaInfo fragmentDefinitions path visitedFragments field.SelectionSet)
         | InlineFragment frag -> checkDirectivesInFragment schemaInfo fragmentDefinitions path visitedFragments frag
         | FragmentSpread spread ->
             spread.Directives
@@ -769,14 +759,16 @@ module Ast =
             | Query -> DirectiveLocation.QUERY
             | Mutation -> DirectiveLocation.MUTATION
             | Subscription -> DirectiveLocation.SUBSCRIPTION
-        let acc =
+        let directivesValid =
             operation.Directives
             |> collectResults(validateDirective schemaInfo path expectedLocation (fun directiveDef ->
                 match operation.Name with
                 | Some operationName -> sprintf "%s operation '%s' has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) operationName directiveDef.Name
                 | None -> sprintf "This %s operation has a directive '%s', but this directive location is not supported by the schema definition." (operation.OperationType.ToString()) directiveDef.Name))
-        operation.SelectionSet
-        |> collectResults(checkDirectivesInValidLocationOnSelection schemaInfo fragmentDefinitions path visitedFragments)
+        let operationsValid =
+            operation.SelectionSet
+            |> collectResults(checkDirectivesInValidLocationOnSelection schemaInfo fragmentDefinitions path visitedFragments)
+        directivesValid @@ operationsValid
 
     let internal validateDirectivesAreInValidLocations (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun x -> x.Definition)
@@ -805,53 +797,57 @@ module Ast =
 
     let internal validateUniqueDirectivesPerLocation (ctx : ValidationContext) =
         ctx.Definitions
-        // FIXME: Better algorithm
         |> List.collect (fun def ->
             let path = match def.Name with | Some name -> [name] | None -> []
             let defDirectives = path, def.Directives |> List.map (fun x -> x.Name)
             let selectionSetDirectives = def.Definition.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
             defDirectives :: selectionSetDirectives)
-        |> List.map (fun (path, directives) -> path, directives |> List.groupBy id |> List.map (fun (k, v) -> k, v.Length))
-        |> List.fold (fun acc (path, directives) ->
-            directives 
-            |> List.filter (fun (_, length) -> length > 1)
-            |> List.fold (fun acc (name, length) -> acc @ Error.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name length, path)) acc) Success
+        |> collectResults(fun (path, directives) ->
+            directives
+            |> List.countBy id
+            |> collectResults (fun (name, count) ->
+                if count <= 1
+                then Success
+                else Error.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name count, path)))
 
     let internal validateVariableUniqueness (ctx : ValidationContext) =
         ctx.Document.Definitions
-        |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
-        |> List.fold (fun acc (operationName, vars) ->
-            List.countBy id vars
-            |> List.fold (fun acc (var, length) ->
-                match operationName with
-                | _ when length < 2 -> acc
-                | Some operationName -> acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName length)
-                | None -> acc @ Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName length)) acc) Success
+        |> collectResults (function
+            | OperationDefinition def ->
+                def.VariableDefinitions
+                |> List.countBy id
+                |> collectResults(fun (var, count) ->
+                    match def.Name with
+                    | _ when count < 2 -> Success
+                    | Some operationName -> Error.AsResult(sprintf "Variable '%s' in operation '%s' is declared %i times. Variables must be unique in their operations." var.VariableName operationName count)
+                    | None -> Error.AsResult(sprintf "Variable '%s' is declared %i times in the operation. Variables must be unique in their operations." var.VariableName count))
+            | _ -> Success)
 
     let internal validateVariablesAsInputTypes (ctx : ValidationContext) =
         ctx.Document.Definitions
-        |> List.choose (function OperationDefinition def -> Some (def.Name, def.VariableDefinitions) | _ -> None)
-        |> List.fold (fun acc (operationName, vars) ->
-            vars |> List.fold (fun acc var ->
-                match operationName, ctx.Schema.TryGetInputType(var.Type) with
-                | Some operationName, None -> 
-                    acc @ Error.AsResult(sprintf "Variable '%s' in operation '%s' has a type that is not an input type defined by the schema (%s)." var.VariableName operationName (var.Type.ToString()))
-                | None, None ->
-                    acc @ Error.AsResult(sprintf "Variable '%s' has a type is not an input type defined by the schema (%s)." var.VariableName (var.Type.ToString()))
-                | _ -> acc) acc) Success
+        |> collectResults (function
+            | OperationDefinition def ->
+                def.VariableDefinitions
+                |> collectResults(fun var ->
+                    match def.Name, ctx.Schema.TryGetInputType(var.Type) with
+                    | Some operationName, None ->
+                        Error.AsResult(sprintf "Variable '%s' in operation '%s' has a type that is not an input type defined by the schema (%s)." var.VariableName operationName (var.Type.ToString()))
+                    | None, None ->
+                        Error.AsResult(sprintf "Variable '%s' has a type is not an input type defined by the schema (%s)." var.VariableName (var.Type.ToString()))
+                    | _ -> Success)
+            | _ -> Success)
 
-    let private checkVariablesDefinedInDirective (variableDefinitions : VariableDefinition list) (path : Path) (directive : Directive) =
+    let private checkVariablesDefinedInDirective (variableDefinitions : Set<string>) (path : Path) (directive : Directive) =
         directive.Arguments
         |> collectResults(fun arg ->
             match arg.Value with
             | Variable varName ->
-                // FIXME: Use a set
-                match variableDefinitions |> List.tryFind (fun x -> x.VariableName = varName) with
-                | Some _ -> Success
-                | None -> Error.AsResult(sprintf "A variable '%s' is referenced in an argument '%s' of directive '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name directive.Name path.Head, path)
+                if variableDefinitions |> Set.contains varName
+                then Success
+                else Error.AsResult(sprintf "A variable '%s' is referenced in an argument '%s' of directive '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name directive.Name path.Head, path)
             | _ -> Success)
 
-    let rec private checkVariablesDefinedInSelection (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) (variableDefinitions : VariableDefinition list) (path : Path) =
+    let rec private checkVariablesDefinedInSelection (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) (variableDefinitions : Set<string>) (path : Path) =
         function
         | Field field ->
             let path = field.AliasOrName :: path
@@ -860,33 +856,32 @@ module Ast =
                 |> collectResults(fun arg ->
                     match arg.Value with
                     | Variable varName ->
-                        match variableDefinitions |> List.tryFind (fun x -> x.VariableName = varName) with
-                        | Some _ -> Success
-                        | None -> Error.AsResult(sprintf "A variable '%s' is referenced in argument '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name field.AliasOrName)
+                        if variableDefinitions |> Set.contains varName
+                        then Success
+                        else Error.AsResult(sprintf "A variable '%s' is referenced in argument '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name field.AliasOrName)
                     | _ -> Success)
             variablesValid
-            @ (field.SelectionSet |> collectResults(checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path))
-            @ (field.Directives |> collectResults(checkVariablesDefinedInDirective variableDefinitions path))
+            @@ (field.SelectionSet |> collectResults(checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path))
+            @@ (field.Directives |> collectResults(checkVariablesDefinedInDirective variableDefinitions path))
         | InlineFragment frag ->
             let variablesValid =
                 frag.SelectionSet
                 |> collectResults(checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path)
-            variablesValid @ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
+            variablesValid @@ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
         | FragmentSpread spread ->
             if List.contains spread.Name !visitedFragments
             then Success
             else
                 visitedFragments := spread.Name :: !visitedFragments
                 let spreadValid =
-                    // FIXME: Use a map?
                     match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
                     | Some frag ->
                         let variablesValid =
                             frag.SelectionSet
                             |> collectResults(checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path)
-                        variablesValid @ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
+                        variablesValid @@ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
                     | None -> Success
-                spreadValid @ (spread.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
+                spreadValid @@ (spread.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
 
     let internal validateVariablesUsesDefined (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
@@ -895,7 +890,8 @@ module Ast =
         |> collectResults(function
             | OperationDefinition def ->
                 let path = Option.toList def.Name
-                def.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments def.VariableDefinitions path)
+                let varNames = def.VariableDefinitions |> List.map(fun x -> x.VariableName) |> Set.ofList
+                def.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments varNames path)
             | _ -> Success)
 
     let rec private argumentsContains (name : string) (args : Argument list) =
@@ -913,7 +909,6 @@ module Ast =
                 let usedInSelection = frag.SelectionSet |> List.exists (variableIsUsedInSelection name fragmentDefinitions visitedFragments)
                 usedInSelection || (frag.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
         | FragmentSpread spread ->
-            // FIXME: Is this buggy?
             if List.contains spread.Name !visitedFragments
             then false
             else
@@ -958,7 +953,6 @@ module Ast =
         else variableTypeRef.Name = locationTypeRef.Name && variableTypeRef.Kind = locationTypeRef.Kind
 
     let private checkVariableUsageAllowedOnArguments (inputs : IntrospectionInputVal []) (varNamesAndTypeRefs : Map<string, VariableDefinition *  IntrospectionTypeRef>) (path : Path) (args : Argument list) =
-        // FIXME: Refactor this
         args
         |> collectResults(fun arg ->
             match arg.Value with
@@ -996,8 +990,8 @@ module Ast =
                 let argumentsValid = selection.Field.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path
                 let selectionValid = selection.SelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments)
                 argumentsValid
-                @ selectionValid
-                @ (selection.Field.Directives |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path))
+                @@ selectionValid
+                @@ (selection.Field.Directives |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path))
             | None -> Success
 
     let internal validateVariableUsagesAllowed (ctx : ValidationContext) =
