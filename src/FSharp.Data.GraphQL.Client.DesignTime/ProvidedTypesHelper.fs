@@ -184,8 +184,8 @@ module internal ProvidedRecord =
                                         let arg = Expr.Coerce(arg, typeof<obj>)
                                         if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
                                 let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
-                                List.zip propertyNames (coercedArgs @ nullValuedArgs)
-                                |> List.map (fun (name, value) -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
+                                (propertyNames, (coercedArgs @ nullValuedArgs))
+                                ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
                             Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
                         Expr.NewObject(ctor, [Expr.Value(name); properties])
                     let constructorParams = 

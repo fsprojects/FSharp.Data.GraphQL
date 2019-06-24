@@ -449,7 +449,7 @@ let ``Validation should grant that arguments passed to fields are unique between
   doesKnowCommand(dogCommand: SIT, dogCommand: CLEAN_UP_HOUSE)
 }"""
     let expectedFailureResult =
-        Error [ { Message = "More than one argument named 'dogCommand' was defined in field 'doesKnowCommand'. Field arguments must be unique."
+        Error [ { Message = "There are 2 arguments with name 'dogCommand' defined in field 'doesKnowCommand'. Field arguments must be unique."
                   Path = Some ["duplicatedArgs"; "doesKnowCommand"] } ]
     let shouldFail = getContext query |> Validation.Ast.validateArgumentUniqueness
     shouldFail |> equals expectedFailureResult

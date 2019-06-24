@@ -125,25 +125,22 @@ module GraphQLClient =
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             let content = new MultipartContent("form-data", boundary)
             let files = 
-                let rec chooseFileValues (name: string, value : obj) =
+                let rec tryMapFileVariable (name: string, value : obj) =
                     match value with
                     | null | :? string -> None
                     | :? Upload as x -> Some [|name, x|]
-                    | OptionValue x -> x |> Option.bind (fun x -> chooseFileValues (name, x))
+                    | OptionValue x -> 
+                        x |> Option.bind (fun x -> tryMapFileVariable (name, x))
                     | :? IDictionary<string, obj> as x ->
-                        x |> Seq.choose (fun kvp -> chooseFileValues (name + "." + (kvp.Key.FirstCharLower()), kvp.Value))
-                          |> Seq.collect id
+                        x |> Seq.collect (fun kvp -> tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower()), kvp.Value) |> Option.defaultValue [||])
                           |> Array.ofSeq
                           |> Some
                     | EnumerableValue x -> 
-                        x |> Array.mapi (fun ix x -> chooseFileValues (name + "." + (ix.ToString()), x))
-                          |> Array.choose id // We can't choose directly above because we need to know the original index for each item
-                          |> Array.collect id
+                        x |> Array.mapi (fun ix x -> tryMapFileVariable (name + "." + (ix.ToString()), x))
+                          |> Array.collect (Option.defaultValue [||])
                           |> Some
                     | _ -> None
-                request.Variables
-                |> Array.choose chooseFileValues
-                |> Array.collect id
+                request.Variables |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
             let operationContent = 
                 let variables = 
                     match request.Variables with

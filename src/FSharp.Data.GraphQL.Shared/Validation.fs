@@ -353,8 +353,8 @@ module Ast =
             then acc
             else
                 List.pairwise selectionSet
-                |> List.map (fun pairs -> pairs, sameResponseShape acc pairs)
-                |> List.map (fun ((fieldA, fieldB), acc) ->
+                |> List.fold (fun acc (fieldA, fieldB) ->
+                    let acc = sameResponseShape acc (fieldA, fieldB)
                     if fieldA.FragmentOrParentType = fieldB.FragmentOrParentType || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
                     then
                         if fieldA.Field.Name <> fieldB.Field.Name then acc @ Error.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
@@ -362,8 +362,7 @@ module Ast =
                         else
                             let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
                             acc @ (fieldsInSetCanMerge mergedSet)
-                    else acc)
-                |> List.reduce (@)) Success
+                    else acc) acc) Success
 
     let internal validateFieldSelectionMerging (ctx : ValidationContext) = 
         ctx.Definitions |> List.fold (fun acc def -> acc @ (fieldsInSetCanMerge def.SelectionSet)) Success
@@ -414,11 +413,10 @@ module Ast =
         | selection :: tail ->
             let acc =
                 selection.Field.Arguments
-                |> List.groupBy (fun x -> x.Name)
-                |> List.map (fun (name, args) -> name, args.Length)
+                |> List.countBy (fun x -> x.Name)
                 |> List.fold (fun acc (name, length) ->
                     if length > 1
-                    then acc @ Error.AsResult(sprintf "More than one argument named '%s' was defined in field '%s'. Field arguments must be unique." name selection.Field.Name, selection.Path)
+                    then acc @ Error.AsResult(sprintf "There are %i arguments with name '%s' defined in field '%s'. Field arguments must be unique." length name selection.Field.Name, selection.Path)
                     else acc) acc
             let acc = selection.SelectionSet |> checkArgumentUniqueness acc
             checkArgumentUniqueness acc tail
@@ -453,7 +451,9 @@ module Ast =
 
     let internal validateRequiredArguments (ctx : ValidationContext) =
         ctx.Definitions
-        |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkRequiredArguments acc ctx.Schema selection) acc) Success
+        |> List.fold (fun acc def -> 
+            def.SelectionSet 
+            |> List.fold (fun acc selection -> checkRequiredArguments acc ctx.Schema selection) acc) Success
 
     let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
         ctx.FragmentDefinitions
