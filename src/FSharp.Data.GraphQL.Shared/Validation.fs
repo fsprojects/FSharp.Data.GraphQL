@@ -3,22 +3,32 @@
 
 module FSharp.Data.GraphQL.Validation
 
+open System
+open System.Collections.Generic
+
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types.Introspection
 
-module Types =
-    type ValidationResult =
+[<AutoOpen>]
+module ValidationResult =
+    type ValidationResult<'Err> =
         | Success
-        | Error of string list
-    
-    let (@) res1 res2 =
+        | Error of 'Err list
+
+    let (@) (res1 : ValidationResult<'Err>) (res2 : ValidationResult<'Err>) : ValidationResult<'Err> =
         match res1, res2 with
         | Success, Success -> Success
         | Success, _ -> res2
         | _, Success -> res1
         | Error e1, Error e2 -> Error (e1 @ e2)
+
+    let collectResults (f : 'T -> ValidationResult<'Err>) (xs : 'T seq) : ValidationResult<'Err> =
+        Seq.fold (fun acc t -> acc @ (f t)) Success xs
+
+module Types =
 
     let validateImplements (objdef: ObjectDef) (idef: InterfaceDef) =
         let objectFields =
@@ -33,56 +43,40 @@ module Types =
         match errors with
         | [] -> Success
         | err -> Error err
-            
+
     let validateType typedef =
         match typedef with
         | Scalar _ -> Success
-        | Object objdef -> 
+        | Object objdef ->
             let nonEmptyResult = if objdef.Fields.Count > 0 then Success else Error [ objdef.Name + " must have at least one field defined" ]
-            let implementsResult =
-                objdef.Implements
-                |> Array.fold (fun acc i -> acc @ validateImplements objdef i) Success
+            let implementsResult = objdef.Implements |> collectResults (validateImplements objdef)
             nonEmptyResult @ implementsResult
-        | InputObject indef -> 
+        | InputObject indef ->
             let nonEmptyResult = if indef.Fields.Length > 0 then Success else Error [ indef.Name + " must have at least one field defined" ]
             nonEmptyResult
         | Union uniondef ->
             let nonEmptyResult = if uniondef.Options.Length > 0 then Success else Error [ uniondef.Name + " must have at least one type definition option" ]
             nonEmptyResult
-        | Enum enumdef -> 
+        | Enum enumdef ->
             let nonEmptyResult = if enumdef.Options.Length > 0 then Success else Error [ enumdef.Name + " must have at least one enum value defined" ]
             nonEmptyResult
-        | Interface idef -> 
+        | Interface idef ->
             let nonEmptyResult = if idef.Fields.Length > 0 then Success else Error [ idef.Name + " must have at least one field defined" ]
             nonEmptyResult
         | _ -> failwithf "Unexpected value of typedef: %O" typedef
 
-    let validateTypeMap (namedTypes: TypeMap) : ValidationResult =
+    let validateTypeMap (namedTypes: TypeMap) : ValidationResult<string> =
         namedTypes.ToSeq() |> Seq.fold (fun acc (_, namedDef) -> acc @ validateType namedDef) Success
 
 module Ast =
     type Path = string list
 
-    type Error = 
+    type Error =
         { Message : string
           Path : Path option }
         static member AsResult(message : string, ?path : Path) =
             [ { Message = message; Path = path |> Option.map List.rev } ]
             |> ValidationResult.Error
-
-    and ValidationResult =
-        | Success
-        | Error of Error list
-    
-    let (@) res1 res2 =
-        match res1, res2 with
-        | Success, Success -> Success
-        | Success, _ -> res2
-        | _, Success -> res1
-        | Error e1, Error e2 -> Error (e1 @ e2)
-
-    let collectResults (f : 'T -> ValidationResult) (xs : 'T seq) : ValidationResult =
-        Seq.fold (fun acc t -> acc @ (f t)) Success xs
 
     type SchemaInfo =
         { SchemaTypes : Map<string, IntrospectionType>
@@ -266,68 +260,61 @@ module Ast =
 
     let internal validateSubscriptionSingleRootField (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
-        let rec getFieldNames (acc : string list) (selectionSet : Selection list) =
-            match selectionSet with
-            | [] -> acc
-            | selection :: tail ->
-                let acc =
-                    match selection with
-                    | Field field -> field.AliasOrName :: acc
-                    | InlineFragment frag -> getFieldNames acc frag.SelectionSet
-                    | FragmentSpread spread ->
-                        let frag = fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
-                        match frag with
-                        | Some frag -> getFieldNames acc frag.SelectionSet
-                        | None -> acc
-                getFieldNames acc tail
-        let validate (acc : ValidationResult) (operationName : string option) (fieldNames : string list) =
+        let rec getFieldNames (selectionSet : Selection list) =
+            ([], selectionSet)
+            ||> List.fold (fun acc -> function
+                | Field field -> field.AliasOrName :: acc
+                | InlineFragment frag -> List.append (getFieldNames frag.SelectionSet) acc
+                | FragmentSpread spread ->
+                    fragmentDefinitions
+                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> Option.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
+        let validate (operationName : string option) (fieldNames : string list) =
             if fieldNames.Length <= 1
-            then acc
+            then Success
             else
-                let rec fieldNamesToString (acc : string) (fieldNames : string list) =
-                    match fieldNames with
-                    | [] -> acc
-                    | [last] -> acc + " " + last
-                    | fieldName :: tail -> fieldNamesToString (acc + fieldName + ", ") tail
-                let fieldNamesAsString = fieldNamesToString "" fieldNames
+                let fieldNamesAsString = System.String.Join(", ", fieldNames)
                 match operationName with
-                | Some operationName -> acc @ Error.AsResult(sprintf "Subscription operations should have only one root field. Operation '%s' has %i fields (%s)." operationName fieldNames.Length fieldNamesAsString)
-                | None -> acc @ Error.AsResult(sprintf "Subscription operations should have only one root field. Operation has %i fields (%s)." fieldNames.Length fieldNamesAsString)
+                | Some operationName -> Error.AsResult(sprintf "Subscription operations should have only one root field. Operation '%s' has %i fields (%s)." operationName fieldNames.Length fieldNamesAsString)
+                | None -> Error.AsResult(sprintf "Subscription operations should have only one root field. Operation has %i fields (%s)." fieldNames.Length fieldNamesAsString)
         ctx.Document.Definitions
-        |> List.choose (function 
-            | OperationDefinition x -> if x.OperationType = Subscription then Some (x.Name, getFieldNames [] x.SelectionSet) else None 
-            | _ -> None)
-        |> List.fold (fun acc (name, fieldNames) -> validate acc name fieldNames) Success
+        |> collectResults(function
+            | OperationDefinition def when def.OperationType = Subscription ->
+                let fieldNames = getFieldNames def.SelectionSet
+                if fieldNames.Length <= 1
+                then Success
+                else
+                    let fieldNamesAsString = System.String.Join(", ", fieldNames)
+                    match def.Name with
+                    | Some operationName -> Error.AsResult(sprintf "Subscription operations should have only one root field. Operation '%s' has %i fields (%s)." operationName fieldNames.Length fieldNamesAsString)
+                    | None -> Error.AsResult(sprintf "Subscription operations should have only one root field. Operation has %i fields (%s)." fieldNames.Length fieldNamesAsString)
+            | _ -> Success)
 
     let internal validateSelectionFieldTypes (ctx : ValidationContext) =
-        let rec validateFragmentDefinition (acc : ValidationResult) (frag : FragmentDefinitionInfo)  =
+        let rec validateFragmentDefinition (frag : FragmentDefinitionInfo)  =
            let fdef = frag.Definition
            match fdef.TypeCondition with
            | Some typeCondition ->
                match ctx.Schema.TryGetTypeByName typeCondition with
-               | Some fragType -> checkFieldsOfType acc frag.SelectionSet fragType
-               | None when fdef.Name.IsSome -> acc @ Error.AsResult(sprintf "Fragment '%s' has type condition '%s', but that type does not exist in schema definition." fdef.Name.Value typeCondition)
-               | None -> acc @ Error.AsResult(sprintf "A fragment has type condition '%s', but that type does not exist in schema definition." typeCondition)
-           | None -> acc
-        and checkFieldsOfType (acc : ValidationResult) (selectionSet : SelectionInfo list) (objectType : IntrospectionType) =
-            match selectionSet with
-            | [] -> acc
-            | selection :: tail ->
-                let acc =
-                    let exists = objectType.Fields |> Option.map (Array.exists (fun f -> f.Name = selection.Field.Name)) |> Option.defaultValue false
-                    if not exists
-                    then acc @ Error.AsResult(sprintf "Field '%s' is not defined in schema type '%s'." selection.Field.Name objectType.Name, selection.Path)
-                    else acc
-                checkFieldsOfType acc tail objectType
+               | Some fragType -> checkFieldsOfType frag.SelectionSet fragType
+               | None when fdef.Name.IsSome -> Error.AsResult(sprintf "Fragment '%s' has type condition '%s', but that type does not exist in schema definition." fdef.Name.Value typeCondition)
+               | None -> Error.AsResult(sprintf "A fragment has type condition '%s', but that type does not exist in schema definition." typeCondition)
+           | None -> Success
+        and checkFieldsOfType (selectionSet : SelectionInfo list) (objectType : IntrospectionType) =
+            selectionSet
+            |> collectResults (fun selection ->
+                let exists = objectType.Fields |> Option.map(Array.exists(fun f -> f.Name = selection.Field.Name)) |> Option.defaultValue false
+                if not exists
+                then Error.AsResult(sprintf "Field '%s' is not defined in schema type '%s'." selection.Field.Name objectType.Name, selection.Path)
+                else Success)
         ctx.Definitions
-        |> List.fold (fun acc def ->
-            match def with
+        |> collectResults(function
             | OperationDefinitionInfo odef ->
                 match ctx.Schema.TryGetOperationType(odef.Definition.OperationType) with
-                | Some otype -> checkFieldsOfType acc odef.SelectionSet otype
-                | None when odef.Definition.Name.IsNone -> acc @ Error.AsResult("Could not find an operation type in the schema.")
-                | None -> acc @ Error.AsResult(sprintf "Could not find operation '%s' in the schema." odef.Definition.Name.Value)
-            | FragmentDefinitionInfo frag -> validateFragmentDefinition acc frag) Success
+                | Some otype -> checkFieldsOfType odef.SelectionSet otype
+                | None when odef.Definition.Name.IsNone -> Error.AsResult("Could not find an operation type in the schema.")
+                | None -> Error.AsResult(sprintf "Could not find operation '%s' in the schema." odef.Definition.Name.Value)
+            | FragmentDefinitionInfo frag -> validateFragmentDefinition frag)
 
     let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
         let parentPossibleTypes = parentType.PossibleTypes |> Option.defaultValue [||] |> Array.choose (fun x -> x.Name) |> Array.append [|parentType.Name|] |> Set.ofArray
@@ -335,192 +322,195 @@ module Ast =
         let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
         applicableTypes.Count > 0
 
-    let rec private sameResponseShape (acc : ValidationResult) (fieldA : SelectionInfo, fieldB : SelectionInfo) =
+    let rec private sameResponseShape (fieldA : SelectionInfo, fieldB : SelectionInfo) =
         if fieldA.FieldType = fieldB.FieldType
         then
+            // FIXME: Check algorithm
             let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
             let fieldsForName = mergedSet |> List.groupBy (fun x -> x.AliasOrName)
             fieldsForName
-            |> List.map snd
-            |> List.fold (fun acc selectionSet ->
+            |> collectResults(fun (_, selectionSet) ->
                 if selectionSet.Length < 2
-                then acc
-                else List.pairwise selectionSet |> List.fold (fun acc pairs -> sameResponseShape acc pairs) acc) acc
-        else acc @ Error.AsResult(sprintf "Field name or alias '%s' appears two times, but they do not have the same return types in the scope of the parent type." fieldA.AliasOrName, fieldA.Path)
+                then Success
+                else List.pairwise selectionSet |> collectResults sameResponseShape)
+        else Error.AsResult(sprintf "Field name or alias '%s' appears two times, but they do not have the same return types in the scope of the parent type." fieldA.AliasOrName, fieldA.Path)
 
     let rec private fieldsInSetCanMerge (set : SelectionInfo list) =
         let fieldsForName = set |> List.groupBy (fun x -> x.AliasOrName)
         fieldsForName
-        |> List.fold (fun acc (aliasOrName, selectionSet) ->
+        |> collectResults(fun (aliasOrName, selectionSet) ->
             if selectionSet.Length < 2
-            then acc
+            then Success
             else
                 List.pairwise selectionSet
-                |> List.fold (fun acc (fieldA, fieldB) ->
-                    let acc = sameResponseShape acc (fieldA, fieldB)
+                |> collectResults(fun (fieldA, fieldB) ->
+                    let hasSameShape = sameResponseShape (fieldA, fieldB)
                     if fieldA.FragmentOrParentType = fieldB.FragmentOrParentType || fieldA.FragmentOrParentType.Kind <> TypeKind.OBJECT || fieldB.FragmentOrParentType.Kind <> TypeKind.OBJECT
                     then
-                        if fieldA.Field.Name <> fieldB.Field.Name then acc @ Error.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
-                        else if fieldA.Field.Arguments <> fieldB.Field.Arguments then acc @ Error.AsResult(sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Field.Name, fieldA.Path)
+                        if fieldA.Field.Name <> fieldB.Field.Name then hasSameShape @ Error.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
+                        else if fieldA.Field.Arguments <> fieldB.Field.Arguments then hasSameShape @ Error.AsResult(sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Field.Name, fieldA.Path)
                         else
                             let mergedSet = fieldA.SelectionSet |> List.append fieldB.SelectionSet
-                            acc @ (fieldsInSetCanMerge mergedSet)
-                    else acc) acc) Success
+                            hasSameShape @ (fieldsInSetCanMerge mergedSet)
+                    else hasSameShape))
 
     let internal validateFieldSelectionMerging (ctx : ValidationContext) = 
-        ctx.Definitions |> List.fold (fun acc def -> acc @ (fieldsInSetCanMerge def.SelectionSet)) Success
+        // ctx.Definitions |> List.fold (fun acc def -> acc @ (fieldsInSetCanMerge def.SelectionSet)) Success
+        ctx.Definitions |> collectResults (fun def -> fieldsInSetCanMerge def.SelectionSet)
 
-    let rec private checkLeafFieldSelection (acc : ValidationResult) (selection : SelectionInfo) =
-        let rec validateByKind (acc : ValidationResult) (fieldType : IntrospectionTypeRef) (selectionSetLength : int) =
+    let rec private checkLeafFieldSelection (selection : SelectionInfo) =
+        let rec validateByKind (fieldType : IntrospectionTypeRef) (selectionSetLength : int) =
             match fieldType.Kind with
-            | TypeKind.NON_NULL | TypeKind.LIST when fieldType.OfType.IsSome -> 
-                validateByKind acc fieldType.OfType.Value selectionSetLength
+            | TypeKind.NON_NULL | TypeKind.LIST when fieldType.OfType.IsSome ->
+                validateByKind fieldType.OfType.Value selectionSetLength
             | TypeKind.SCALAR | TypeKind.ENUM when selectionSetLength > 0 ->
-                acc @ Error.AsResult(sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should not contain inner fields in its selection." selection.Field.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()), selection.Path)
+                Error.AsResult(sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should not contain inner fields in its selection." selection.Field.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()), selection.Path)
             | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.OBJECT when selectionSetLength = 0 ->
-                acc @ Error.AsResult(sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Field.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()), selection.Path)
-            | _ -> acc
-        let acc =
+                Error.AsResult(sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Field.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()), selection.Path)
+            | _ -> Success
+        let validKind =
             match selection.FieldType with
-            | Some fieldType -> validateByKind acc fieldType selection.SelectionSet.Length
-            | None -> acc
-        selection.SelectionSet |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc
+            | Some fieldType -> validateByKind fieldType selection.SelectionSet.Length
+            | None -> Success
+        validKind
+        @ (selection.SelectionSet |> collectResults checkLeafFieldSelection)
 
     let internal validateLeafFieldSelections (ctx : ValidationContext) =
-        ctx.Definitions |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkLeafFieldSelection acc selection) acc) Success
+        ctx.Definitions
+        |> collectResults(fun def -> def.SelectionSet |> collectResults checkLeafFieldSelection)
 
-    let private checkFieldArgumentNames (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
-        let acc =
+    let private checkFieldArgumentNames (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
+        let argumentsValid =
             selection.Field.Arguments
-            |> List.fold (fun acc arg ->
-                match selection.InputValues |> Option.map (Array.tryFind (fun d -> d.Name = arg.Name)) |> Option.flatten with
-                | Some _ -> acc
-                | None -> acc @ Error.AsResult(sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path)) acc
-        selection.Field.Directives
-        |> List.fold (fun acc directive ->
-            match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
-            | Some directiveType ->
-                directive.Arguments
-                |> List.fold (fun acc arg ->
-                    match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
-                    | Some _ -> acc
-                    | None -> acc @ Error.AsResult(sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path)) acc
-            | None -> acc) acc
+            |> collectResults(fun arg ->
+                match selection.InputValues |> Option.bind(Array.tryFind (fun d -> d.Name = arg.Name)) with
+                | Some _ -> Success
+                | None -> Error.AsResult(sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path))
+        let directivesValid =
+            selection.Field.Directives
+            |> collectResults(fun directive ->
+                match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+                | Some directiveType ->
+                    directive.Arguments
+                    |> collectResults(fun arg ->
+                        match directiveType.Args |> Array.tryFind (fun argt -> argt.Name = arg.Name) with
+                        | Some _ -> Success
+                        | _ -> Error.AsResult(sprintf "Directive '%s' of field '%s' of type '%s' does not have an argument named '%s' in its definition." directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path))
+                | None -> Success)
+        argumentsValid @ directivesValid
 
     let internal validateArgumentNames (ctx : ValidationContext) =
-        ctx.Definitions |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkFieldArgumentNames acc ctx.Schema selection) acc) Success
+        ctx.Definitions
+        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
+        // |> List.fold (fun acc def -> def.SelectionSet |> List.fold (fun acc selection -> checkFieldArgumentNames acc ctx.Schema selection) acc) Success
 
-    let rec private checkArgumentUniqueness (acc : ValidationResult) (selectionSet : SelectionInfo list) =
-        match selectionSet with
-        | [] -> acc
-        | selection :: tail ->
-            let acc =
+    // FIXME: Fishy algo
+    let rec private checkArgumentUniqueness (selectionSet : SelectionInfo list) =
+        selectionSet
+        |> collectResults(fun selection ->
+            let argsValid =
                 selection.Field.Arguments
-                |> List.countBy (fun x -> x.Name)
-                |> List.fold (fun acc (name, length) ->
+                |> List.countBy(fun x -> x.Name)
+                |> collectResults(fun (name, length) ->
                     if length > 1
-                    then acc @ Error.AsResult(sprintf "There are %i arguments with name '%s' defined in field '%s'. Field arguments must be unique." length name selection.Field.Name, selection.Path)
-                    else acc) acc
-            let acc = selection.SelectionSet |> checkArgumentUniqueness acc
-            checkArgumentUniqueness acc tail
+                    then Error.AsResult(sprintf "There are %i arguments with name '%s' defined in field '%s'. Field arguments must be unique." length name selection.Field.Name, selection.Path)
+                    else Success)
+            argsValid @ (selection.SelectionSet |> checkArgumentUniqueness))
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
-        ctx.Definitions |> List.fold (fun acc def -> checkArgumentUniqueness acc def.SelectionSet) Success
+        ctx.Definitions
+        |> collectResults(fun def -> checkArgumentUniqueness def.SelectionSet)
+        // |> List.fold (fun acc def -> checkArgumentUniqueness acc def.SelectionSet) Success
 
-    let private checkRequiredArguments (acc : ValidationResult) (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
-        let acc =
+    let private checkRequiredArguments (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
+        let inputsValid =
             selection.InputValues
-            |> Option.map (Array.fold (fun acc argDef ->
+            |> Option.map(collectResults (fun argDef ->
                 match argDef.Type.Kind with
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match selection.Field.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
-                    | Some arg when arg.Value <> EnumValue "null" -> acc // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
-                    | _ -> acc @ Error.AsResult(sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
-                | _ -> acc) acc)
-            |> Option.defaultValue acc
-        selection.Field.Directives
-        |> List.fold (fun acc directive ->
-            match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
-            | Some directiveType ->
-                directiveType.Args
-                |> Array.fold (fun acc argDef ->
-                    match argDef.Type.Kind with
-                    | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
-                        match selection.Field.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
-                        | Some arg when arg.Value <> EnumValue "null" -> acc // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
-                        | _ -> acc @ Error.AsResult(sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
-                    | _ -> acc) acc
-            | None -> acc) acc
+                    | Some arg when arg.Value <> EnumValue "null" -> Success // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
+                    | _ -> Error.AsResult(sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
+                | _ -> Success))
+            |> Option.defaultValue Success
+        let directivesValid =
+            selection.Field.Directives
+            |> collectResults(fun directive ->
+                match schemaInfo.Directives |> Array.tryFind (fun d -> d.Name = directive.Name) with
+                | Some directiveType ->
+                    directiveType.Args
+                    |> collectResults(fun argDef ->
+                        match argDef.Type.Kind with
+                        | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
+                            match selection.Field.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
+                            | Some arg when arg.Value <> EnumValue "null" -> Success // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
+                            | _ -> Error.AsResult(sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
+                        | _ -> Success)
+                | None -> Success)
+        inputsValid @ directivesValid
 
     let internal validateRequiredArguments (ctx : ValidationContext) =
         ctx.Definitions
-        |> List.fold (fun acc def -> 
-            def.SelectionSet 
-            |> List.fold (fun acc selection -> checkRequiredArguments acc ctx.Schema selection) acc) Success
+        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkRequiredArguments ctx.Schema))
 
     let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
+        let counts = Dictionary<string, int>()
         ctx.FragmentDefinitions
-        |> List.fold (fun (acc : Map<string, int>) frag ->
-            match frag.Definition.Name with
-            | Some fragName ->
-                match acc.TryFind(fragName) with
-                | Some count -> acc.Add(fragName, count + 1)
-                | None -> acc.Add(fragName, 1)
-            | None -> acc) Map.empty
-        |> Map.fold (fun acc name length ->
+        |> List.iter(fun frag -> frag.Definition.Name |> Option.iter(fun name -> Dictionary.addWith (+) name 1 counts))
+
+        counts
+        |> collectResults (fun (KeyValue(name, length)) ->
             if length > 1
-            then acc @ Error.AsResult(sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name)
-            else acc) Success
+            then Error.AsResult(sprintf "There are %i fragments with name '%s' in the document. Fragment definitions must have unique names." length name)
+            else Success)
 
-    let rec private checkFragmentTypeExistence (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) (frag : FragmentDefinition) =
-        let acc =
-            match frag.TypeCondition |> Option.map schemaInfo.TryGetTypeByName |> Option.flatten with
-            | Some _ -> acc
-            | None when frag.Name.IsSome -> acc @ Error.AsResult(sprintf "Fragment '%s' has type condition '%s', but that type does not exist in the schema." frag.Name.Value frag.TypeCondition.Value)
-            | None -> acc @ Error.AsResult(sprintf "Inline fragment has type condition '%s', but that type does not exist in the schema." frag.TypeCondition.Value, path)
-        match frag.SelectionSet with
-        | [] -> acc
-        | selectionSet -> selectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo path) |> List.reduce (@)
+    let rec private checkFragmentTypeExistence (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) (frag : FragmentDefinition) =
+        let typeConditionsValid =
+            match frag.TypeCondition |> Option.bind schemaInfo.TryGetTypeByName with
+            | Some _ -> Success
+            | None when frag.Name.IsSome -> Error.AsResult(sprintf "Fragment '%s' has type condition '%s', but that type does not exist in the schema." frag.Name.Value frag.TypeCondition.Value)
+            | None -> Error.AsResult(sprintf "Inline fragment has type condition '%s', but that type does not exist in the schema." frag.TypeCondition.Value, path)
+        typeConditionsValid @ (frag.SelectionSet |> collectResults (checkFragmentTypeExistenceInSelection fragmentDefinitions schemaInfo path))
+        // match frag.SelectionSet with
+        // | [] -> acc
+        // | selectionSet -> selectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo path) |> List.reduce (@)
 
-    and private checkFragmentTypeExistenceInSelection (acc : ValidationResult) (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) =
+    and private checkFragmentTypeExistenceInSelection (fragmentDefinitions : FragmentDefinition list) (schemaInfo : SchemaInfo) (path : Path) =
         function
-        | Field field -> 
+        | Field field ->
             let path = field.AliasOrName :: path
-            match field.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions schemaInfo path) with
-            | [] -> acc
-            | results -> List.reduce (@) results
-        | InlineFragment frag -> checkFragmentTypeExistence acc fragmentDefinitions schemaInfo path frag
-        | _ -> acc
-       
+            field.SelectionSet
+            |> collectResults (checkFragmentTypeExistenceInSelection fragmentDefinitions schemaInfo path)
+        | InlineFragment frag -> checkFragmentTypeExistence fragmentDefinitions schemaInfo path frag
+        | _ -> Success
+
     let internal validateFragmentTypeExistence (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
         ctx.Document.Definitions
-        |> List.fold (fun acc def ->
-            match def with
-            | FragmentDefinition frag -> 
-                let path = match frag.Name with | Some name -> [name] | None -> []
-                checkFragmentTypeExistence acc fragmentDefinitions ctx.Schema path frag
-            | OperationDefinition odef -> 
-                let path = match odef.Name with | Some name -> [name] | None -> []
-                match odef.SelectionSet |> List.map (checkFragmentTypeExistenceInSelection acc fragmentDefinitions ctx.Schema path) with
-                | [] -> acc
-                | results -> List.reduce (@) results) Success
+        |> collectResults(function
+            | FragmentDefinition frag ->
+                let path = frag.Name |> Option.toList
+                checkFragmentTypeExistence fragmentDefinitions ctx.Schema path frag
+            | OperationDefinition odef ->
+                let path = odef.Name |> Option.toList
+                odef.SelectionSet
+                |> collectResults(checkFragmentTypeExistenceInSelection fragmentDefinitions ctx.Schema path))
 
-    let rec private checkFragmentOnCompositeType (acc : ValidationResult) (selection : SelectionInfo) =
-        let acc =
+    let rec private checkFragmentOnCompositeType (selection : SelectionInfo) =
+        let fragmentTypeValid =
             match selection.FragmentType with
             | Some fragType ->
                 match fragType.Kind with
-                | TypeKind.UNION | TypeKind.OBJECT | TypeKind.INTERFACE -> acc
-                | _ when selection.FragmentSpreadName.IsSome -> acc @ Error.AsResult(sprintf "Fragment '%s' has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." selection.FragmentSpreadName.Value (fragType.Kind.ToString()), selection.Path)
-                | _ -> acc @ Error.AsResult(sprintf "Inline fragment has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." (fragType.Kind.ToString()), selection.Path)
-            | None -> acc
-        selection.SelectionSet |> List.fold (fun acc selection -> checkFragmentOnCompositeType acc selection) acc
+                | TypeKind.UNION | TypeKind.OBJECT | TypeKind.INTERFACE -> Success
+                | _ when selection.FragmentSpreadName.IsSome -> Error.AsResult(sprintf "Fragment '%s' has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." selection.FragmentSpreadName.Value (fragType.Kind.ToString()), selection.Path)
+                | _ -> Error.AsResult(sprintf "Inline fragment has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." (fragType.Kind.ToString()), selection.Path)
+            | None -> Success
+        fragmentTypeValid @ (selection.SelectionSet |> collectResults checkFragmentOnCompositeType)
 
     let internal validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
         ctx.Definitions
         |> List.collect (fun def -> def.SelectionSet)
-        |> List.fold (fun acc selection -> checkFragmentOnCompositeType acc selection) Success
+        |> collectResults checkFragmentOnCompositeType
 
     let internal validateFragmentsMustBeUsed (ctx : ValidationContext) =
         let rec getSpreadNames (acc : Set<string>) =
@@ -604,16 +594,12 @@ module Ast =
         then Error.AsResult(sprintf "Fragment type condition '%s' is not applicable to the parent type of the field '%s'." fragmentType.Name parentType.Name, path)
         else Success
 
-    // FIXME: Use a fold
     let rec private getFragmentAndParentTypes (acc : (Path * IntrospectionType * IntrospectionType) list) (set : SelectionInfo list) =
-        match set with
-        | [] -> acc
-        | selection :: tail ->
-            let acc =
-                match selection.FragmentType with
-                | Some fragType when fragType.Name <> selection.ParentType.Name -> (selection.Path, selection.ParentType, fragType) :: acc
-                | _ -> acc
-            getFragmentAndParentTypes acc tail
+        ([], set)
+        ||> List.fold(fun acc selection ->
+            match selection.FragmentType with
+            | Some fragType when fragType.Name <> selection.ParentType.Name -> (selection.Path, selection.ParentType, fragType) :: acc
+            | _ -> acc)
 
     let internal validateFragmentSpreadIsPossible (ctx : ValidationContext) =
         ctx.Definitions
@@ -621,10 +607,6 @@ module Ast =
             def.SelectionSet
             |> getFragmentAndParentTypes []
             |> collectResults(checkFragmentSpreadIsPossibleInSelection))
-        // |> List.fold (fun acc def ->
-        //     def.SelectionSet
-        //     |> getFragmentAndParentTypes []
-        //     |> List.fold (fun acc types -> checkFragmentSpreadIsPossibleInSelection acc types) acc) Success
 
     let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
         // FIXME: Use a fold
@@ -736,7 +718,7 @@ module Ast =
                 then acc
                 else acc @ Error.AsResult(sprintf "Directive '%s' is not defined in the schema." name, path)) acc) Success
 
-    let private validateDirective (schemaInfo : SchemaInfo) (path : Path) (location : DirectiveLocation) (onError : Directive -> string) (directive : Directive) : ValidationResult =
+    let private validateDirective (schemaInfo : SchemaInfo) (path : Path) (location : DirectiveLocation) (onError : Directive -> string) (directive : Directive) : ValidationResult<Error> =
         schemaInfo.Directives
         |> collectResults(fun d ->
             if d.Name = directive.Name

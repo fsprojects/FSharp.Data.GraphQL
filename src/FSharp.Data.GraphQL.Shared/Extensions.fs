@@ -4,6 +4,7 @@
 module internal FSharp.Data.GraphQL.Extensions
 
 open System.Reflection
+open System.Collections.Generic
 
 type TypeInfo with
     /// If no property is found with the specified name, it will try changing the case of the first letter
@@ -38,6 +39,11 @@ module Option =
         | _, Some b -> Some b
         | _, _ -> None
 
+    let unwrap (defaultValue : 'U) (onSome : 'T -> 'U) (o : 'T option) : 'U =
+        match o with
+        | Some t -> onSome t
+        | None -> defaultValue
+
 module Result =
     let catchError (handle : 'Err -> 'T) (r : Result<'T, 'Err>) : 'T =
         match r with
@@ -48,3 +54,14 @@ module Result =
         match o with
         | Some x -> Ok x
         | None -> Error errValue
+
+module Dictionary =
+    let adjust (f : 'V -> 'V) (key : 'K) (dict : Dictionary<'K, 'V>) : unit =
+        match dict.TryGetValue(key) with
+        | true, v -> dict.[key] <- f v
+        | false, _ -> ()
+
+    let addWith (f : 'V -> 'V -> 'V) (key : 'K) (value : 'V) (dict : Dictionary<'K, 'V>) : unit =
+        match dict.TryGetValue(key) with
+        | true, v -> dict.[key] <- f v value
+        | false, _ -> dict.Add(key, value)
