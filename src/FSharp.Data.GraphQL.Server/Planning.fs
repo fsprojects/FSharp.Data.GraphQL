@@ -348,7 +348,8 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
           RootDef = ctx.Schema.Query
           Strategy = Parallel
           Variables = variables
-          Metadata = ctx.Metadata }
+          Metadata = ctx.Metadata
+          ValidationResult = ctx.ValidationResult }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
@@ -358,7 +359,8 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               RootDef = mutationDef
               Strategy = Sequential 
               Variables = variables
-              Metadata = ctx.Metadata }
+              Metadata = ctx.Metadata
+              ValidationResult = ctx.ValidationResult }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
     | Subscription ->
@@ -370,6 +372,7 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
               RootDef = subscriptionDef
               Strategy = Sequential 
               Variables = variables
-              Metadata = ctx.Metadata }
+              Metadata = ctx.Metadata
+              ValidationResult = ctx.ValidationResult }
         | None -> 
             raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no mutation type defined")

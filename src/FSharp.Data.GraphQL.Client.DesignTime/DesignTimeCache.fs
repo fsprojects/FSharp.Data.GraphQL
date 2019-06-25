@@ -9,7 +9,6 @@ open System
 open FSharp.Data.GraphQL.Client
 open ProviderImplementation.ProvidedTypes
 open FSharp.Data.GraphQL.Validation
-open FSharp.Data.GraphQL.Validation.Ast
 
 type internal ProviderKey =
     { IntrospectionLocation : IntrospectionLocation
@@ -25,10 +24,8 @@ module internal ProviderDesignTimeCache =
         cache.GetOrAddResult key defMaker
 
 module internal QueryValidationDesignTimeCache =
-    let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
-    let private cache = MemoryCache<string, ValidationResult<Error>>(expiration)
-    let getOrAdd (query : string) (validationResultMaker : unit -> ValidationResult<Error>) =
-        let key = query.MD5Hash()
-        cache.GetOrAddResult key validationResultMaker
+    let cache : IValidationResultCache = upcast MemoryValidationResultCache()
+    let getOrAdd (key : ValidationResultKey) (resMaker : unit -> ValidationResult<AstError>) =
+        cache.GetOrAdd resMaker key
 
 #endif

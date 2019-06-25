@@ -55,7 +55,11 @@ type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
 /// The standard schema executor.
 /// It compiles the schema and offers an interface for planning and executing queries.
 /// The execution process can be customized through usage of middlewares.
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq) =
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, ?validationCache : IValidationResultCache) =
+    let validationCache = defaultArg validationCache (upcast MemoryValidationResultCache())
+
+    let schemaId = schema.Introspected.GetHashCode()
+
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
     // FIXME: for some reason static do or do invocation in module doesn't work
@@ -87,7 +91,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
-    let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
+    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
         let prepareOutput res =
             let prepareData data (errs: Error list) =
                 let parsedErrors =
@@ -101,27 +105,34 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             | Deferred (data, errors, deferred) -> GQLResponse.Deferred(prepareData data errors, errors, deferred, res.Metadata)
             | Stream (stream) -> GQLResponse.Stream(stream, res.Metadata)
         async {
-            try
-                let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
-                let root = data |> Option.map box |> Option.toObj
-                let variables = coerceVariables executionPlan.Variables variables
-                let executionCtx = 
-                    { Schema = schema
-                      ExecutionPlan = executionPlan
-                      RootValue = root
-                      Variables = variables
-                      Errors = errors
-                      FieldExecuteMap = fieldExecuteMap
-                      Metadata = executionPlan.Metadata }
-                let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation
-                return prepareOutput res
-            with
-            | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), executionPlan.Metadata))
+            match executionPlan.ValidationResult with
+            | Validation.Success ->
+                try
+                    let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
+                    let root = data |> Option.map box |> Option.toObj
+                    let variables = coerceVariables executionPlan.Variables variables
+                    let executionCtx = 
+                        { Schema = schema
+                          ExecutionPlan = executionPlan
+                          RootValue = root
+                          Variables = variables
+                          Errors = errors
+                          FieldExecuteMap = fieldExecuteMap
+                          Metadata = executionPlan.Metadata }
+                    let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation
+                    return prepareOutput res
+                with
+                | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), executionPlan.Metadata))
+            | Validation.ValidationError errors ->
+                let errors = errors |> List.map (fun err ->
+                    let path = err.Path |> Option.defaultValue [] |> List.map box
+                    err.Message, path)
+                return GQLResponse.Invalid(errors, executionPlan.Metadata)
         }
 
     let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
         let variables = defaultArg variables Map.empty
-        eval(executionPlan, data, variables)
+        eval (executionPlan, data, variables)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
         match findOperation ast operationName with
@@ -137,13 +148,19 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     match schema.Subscription with
                     | Some s -> upcast s
                     | None -> raise (GraphQLException "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema") 
+            let documentId = ast.GetHashCode()
+            let validationResult =
+                let key = { DocumentId = documentId; SchemaId = schemaId }
+                let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
+                validationCache.GetOrAdd producer key
             let planningCtx = 
                 { Schema = schema
                   RootDef = rootDef
                   Document = ast
                   Metadata = meta
                   Operation = operation
-                  DocumentId = ast.GetHashCode() }
+                  DocumentId = documentId
+                  ValidationResult = validationResult }
             runMiddlewares (fun x -> x.PlanOperation) planningCtx planOperation
         | None -> raise (GraphQLException "No operation with specified name has been found for provided document")
 
@@ -153,22 +170,21 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed 
     /// and cached using `documentId` as an identifier.
     /// Returned value is a readonly dictionary consisting of following top level entries:
-    /// - `documentId`: unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well
-    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
-    /// - `errors (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
+    /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
-    /// <param name="ast">Parsed GraphQL query string.</param>
+    /// <param name="executionPlan">Execution plan for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
-    /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
         execute (executionPlan, data, variables)
     
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// - `documentId`: unique identifier of current document's AST
-    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
-    /// - `errors` (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
+    /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
     /// <param name="ast">Parsed GraphQL query string.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
@@ -182,11 +198,11 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
-    /// - `documentId`: unique identifier of current document's AST
-    /// - `data`: GraphQL response matching the structure provided in GraphQL query string
-    /// - `errors (oprional): contains a list of errors that occurred while executing a GraphQL operation
+    /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
+    /// 'data' (GraphQL response matching the structure provided in GraphQL query string), and
+    /// 'errors' (optional, contains a list of errors that occurred while executing a GraphQL operation).
     /// </summary>
-    /// <param name="ast">Parsed GraphQL query string.</param>
+    /// <param name="queryOrMutation">GraphQL query string.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
@@ -201,6 +217,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// <param name="ast">The parsed GraphQL query string.</param>
+    /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
     member __.CreateExecutionPlan(ast: Document, ?operationName: string, ?meta : Metadata): ExecutionPlan =
         let meta = defaultArg meta Metadata.Empty
@@ -210,6 +228,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// executing it. This is useful in cases when you have the same query executed 
     /// multiple times with different parameters. In that case, query can be used 
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
+    /// <param name="queryOrMutation">The GraphQL query string.</param>
+    /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution plan customizations.</param>
     member __.CreateExecutionPlan(queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
         let meta = defaultArg meta Metadata.Empty

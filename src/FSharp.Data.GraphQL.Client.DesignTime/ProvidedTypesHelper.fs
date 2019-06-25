@@ -633,9 +633,9 @@ module internal Provider =
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
               ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
-        let throwExceptionIfValidationFailed (validationResult : ValidationResult<Error>) =
-            let rec formatValidationExceptionMessage (acc : string) (errors : Error list) =
-                let rec formatPath (acc : string) (path : Validation.Ast.Path) =
+        let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
+            let rec formatValidationExceptionMessage (acc : string) (errors : AstError list) =
+                let rec formatPath (acc : string) (path : Validation.Path) =
                     match path with
                     | [] -> "path: " + acc
                     | [last] when acc = "" -> last
@@ -720,10 +720,11 @@ module internal Provider =
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
                                 #if IS_DESIGNTIME
-                                let validationResultMaker = lazy Validation.Ast.validateDocument schema queryAst
+                                let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
+                                let refMaker = lazy Validation.Ast.validateDocument schema queryAst
                                 if clientQueryValidation then
-                                    validationResultMaker.Force
-                                    |> QueryValidationDesignTimeCache.getOrAdd query
+                                    refMaker.Force
+                                    |> QueryValidationDesignTimeCache.getOrAdd key
                                     |> throwExceptionIfValidationFailed
                                 #endif
                                 let operationName : OperationName option = 
