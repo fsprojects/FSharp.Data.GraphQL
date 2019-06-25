@@ -1,23 +1,22 @@
 ﻿/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
-module FSharp.Data.GraphQL.Validation
+namespace FSharp.Data.GraphQL.Validation
 
-open System
 open System.Collections.Generic
-
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types.Introspection
+
+type ValidationResult<'Err> =
+    | Success
+    | ValidationError of 'Err list
 
 [<AutoOpen>]
 module ValidationResult =
-    type ValidationResult<'Err> =
-        | Success
-        | ValidationError of 'Err list
-
     let (@@) (res1 : ValidationResult<'Err>) (res2 : ValidationResult<'Err>) : ValidationResult<'Err> =
         match res1, res2 with
         | Success, Success -> Success
@@ -29,7 +28,6 @@ module ValidationResult =
         Seq.fold (fun acc t -> acc @@ (f t)) Success xs
 
 module Types =
-
     let validateImplements (objdef: ObjectDef) (idef: InterfaceDef) =
         let objectFields =
             objdef.Fields
@@ -115,7 +113,7 @@ module Ast =
 
     type SelectionInfo =
         { Field : Field
-          SelectionSet : SelectionInfo list
+          mutable SelectionSet : SelectionInfo list
           FieldType : IntrospectionTypeRef option
           ParentType : IntrospectionType
           FragmentType : IntrospectionType option
@@ -159,10 +157,10 @@ module Ast =
         member x.OperationDefinitions = x.Definitions |> List.choose (function | OperationDefinitionInfo x -> Some x | _ -> None)
         member x.FragmentDefinitions = x.Definitions |> List.choose (function | FragmentDefinitionInfo x -> Some x | _ -> None)
 
-    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentSpreadName : string option) (fragmentType : IntrospectionType option) (path : Path) (visitedFragments : Map<string, SelectionInfo list> ref) (selectionSet : Selection list) =
+    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentSpreadName : string option) (fragmentType : IntrospectionType option) (path : Path) (visitedFragments : Dictionary<string, SelectionInfo list>) (selectionSet : Selection list) =
         let getFragSelectionInfo (frag : FragmentDefinition) =
             match frag.Name with
-            | Some fragName when (!visitedFragments).ContainsKey(fragName) -> (!visitedFragments).[fragName]
+            | Some fragName when visitedFragments.ContainsKey(fragName) -> visitedFragments.[fragName]
             | _ ->
                 let parentType =
                     match fragmentType with
@@ -170,7 +168,7 @@ module Ast =
                     | None -> parentType
                 let fragmentType = frag.TypeCondition |> Option.bind schemaInfo.TryGetTypeByName
                 let fragSelection = getSelectionSetInfo schemaInfo fragmentDefinitions parentType frag.Name fragmentType path visitedFragments frag.SelectionSet
-                frag.Name |> Option.iter (fun fragName -> visitedFragments := (!visitedFragments).Add(fragName, fragSelection))
+                frag.Name |> Option.iter (fun fragName -> if not (visitedFragments.ContainsKey(fragName)) then visitedFragments.Add(fragName, fragSelection))
                 fragSelection
         selectionSet |> List.collect (function
         | Field field ->
@@ -181,34 +179,34 @@ module Ast =
             let inputValues = ifield |> Option.map (fun f -> f.Args)
             let fieldType = ifield |> Option.map (fun f -> f.Type)
             let path = field.AliasOrName :: path
-            let selectionSet =
-                match fragmentSpreadName with
-                | Some fragName when (!visitedFragments).ContainsKey(fragName) -> (!visitedFragments).[fragName]
-                | _ ->
-                    let parentType = fieldType |> Option.bind schemaInfo.TryGetTypeByRef
-                    let selection =
-                        parentType
-                        |> Option.map (fun parentType -> getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet)
-                        |> Option.defaultValue []
-                    fragmentSpreadName |> Option.iter (fun fragName -> visitedFragments := (!visitedFragments).Add(fragName, selection))
-                    selection
-            [ { Field = field
-                SelectionSet = selectionSet
-                FieldType = fieldType
-                ParentType = parentType
-                FragmentType = fragmentType
-                FragmentSpreadName = fragmentSpreadName
-                InputValues = inputValues
-                Path = path } ]
+            let fieldSelectionInfo =
+                { Field = field
+                  SelectionSet = []
+                  FieldType = fieldType
+                  ParentType = parentType
+                  FragmentType = fragmentType
+                  FragmentSpreadName = fragmentSpreadName
+                  InputValues = inputValues
+                  Path = path }
+            fragmentSpreadName 
+            |> Option.iter (fun fragName ->
+                if visitedFragments.ContainsKey(fragName)
+                then visitedFragments.[fragName] <- visitedFragments.[fragName] @ [fieldSelectionInfo]
+                else visitedFragments.Add(fragName, [fieldSelectionInfo]))
+            fieldType
+            |> Option.bind schemaInfo.TryGetTypeByRef
+            |> Option.map (fun parentType -> getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet)
+            |> Option.iter (fun fieldSelectionSet -> fieldSelectionInfo.SelectionSet <- fieldSelectionSet)
+            [fieldSelectionInfo]
         | InlineFragment frag -> getFragSelectionInfo frag
         | FragmentSpread spread ->
-            match (!visitedFragments).TryFind(spread.Name) with
+            match visitedFragments.TryFind(spread.Name) with
             | Some fragSelection -> fragSelection
             | None ->
                 match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
                 | Some frag ->
                     let fragSelection = getFragSelectionInfo frag
-                    visitedFragments := (!visitedFragments).Add(spread.Name, fragSelection)
+                    if not (visitedFragments.ContainsKey(spread.Name)) then visitedFragments.Add(spread.Name, fragSelection)
                     fragSelection
                 | None -> [])
 
@@ -227,7 +225,7 @@ module Ast =
                     |> Option.map (fun parentType ->
                         let path = match def.Name with | Some name -> [name] | None -> []
                         FragmentDefinitionInfo { Definition = def
-                                                 SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType def.Name (Some parentType) path (ref Map.empty) def.SelectionSet  })))
+                                                 SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType def.Name (Some parentType) path (Dictionary()) def.SelectionSet  })))
         let operationInfos =
             getOperationDefinitions ast
             |> List.choose (fun def ->
@@ -235,7 +233,7 @@ module Ast =
                 |> Option.map (fun parentType ->
                     let path = match def.Name with | Some name -> [name] | None -> []
                     OperationDefinitionInfo { OperationDefinitionInfo.Definition = def
-                                              SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType None None path (ref Map.empty) def.SelectionSet }))
+                                              SelectionSet = getSelectionSetInfo schemaInfo fragmentDefinitions parentType None None path (Dictionary()) def.SelectionSet }))
         { Definitions = List.append operationInfos fragmentInfos
           Schema = schemaInfo
           Document = ast }
@@ -586,7 +584,7 @@ module Ast =
         then Error.AsResult(sprintf "Fragment type condition '%s' is not applicable to the parent type of the field '%s'." fragmentType.Name parentType.Name, path)
         else Success
 
-    let rec private getFragmentAndParentTypes (acc : (Path * IntrospectionType * IntrospectionType) list) (set : SelectionInfo list) =
+    let rec private getFragmentAndParentTypes (set : SelectionInfo list) =
         ([], set)
         ||> List.fold(fun acc selection ->
             match selection.FragmentType with
@@ -597,7 +595,7 @@ module Ast =
         ctx.Definitions
         |> collectResults(fun def ->
             def.SelectionSet
-            |> getFragmentAndParentTypes []
+            |> getFragmentAndParentTypes
             |> collectResults(checkFragmentSpreadIsPossibleInSelection))
 
     let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
@@ -986,7 +984,7 @@ module Ast =
         | _ ->
             if selection.FragmentSpreadName.IsSome then visitedFragments := selection.FragmentSpreadName.Value :: !visitedFragments
             match selection.FieldType with
-            | Some fieldType ->
+            | Some _ ->
                 let argumentsValid = selection.Field.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path
                 let selectionValid = selection.SelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments)
                 argumentsValid

@@ -6,6 +6,12 @@ module internal FSharp.Data.GraphQL.Extensions
 open System.Reflection
 open System.Collections.Generic
 
+type IDictionary<'TKey, 'TValue> with
+    member x.TryFind(key : 'TKey) =
+        match x.TryGetValue(key) with
+        | (true, value) -> Some value
+        | _ -> None
+
 type TypeInfo with
     /// If no property is found with the specified name, it will try changing the case of the first letter
     member x.GetDeclaredProperty(propertyName: string, ignoreCase: bool) =
