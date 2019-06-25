@@ -3,6 +3,7 @@
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
 
@@ -83,8 +84,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
         runMiddlewares (fun x -> x.PostCompileSchema) (upcast schema) ignore
         match Validation.Types.validateTypeMap schema.TypeMap with
-        | Validation.Types.Success -> ()
-        | Validation.Types.Error errors -> raise (GraphQLException (System.String.Join("\n", errors)))
+        | Success -> ()
+        | ValidationError errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
     let eval(executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
         let prepareOutput res =
