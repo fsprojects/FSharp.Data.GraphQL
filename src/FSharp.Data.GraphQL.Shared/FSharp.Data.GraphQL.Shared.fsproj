@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
   </PropertyGroup>
@@ -7,6 +7,7 @@
     <Compile Include="Diagnostics.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Prolog.fs" />
+    <Compile Include="InMemoryCache.fs" />
     <Compile Include="Ast.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />

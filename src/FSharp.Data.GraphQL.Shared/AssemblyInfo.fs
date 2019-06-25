@@ -10,6 +10,7 @@ open System.Runtime.CompilerServices
 [<assembly: AssemblyFileVersionAttribute("1.0.0")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Server")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Client")>]
+[<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Client.DesignTime")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Tests")>]
 do ()
 
@@ -21,4 +22,5 @@ module internal AssemblyVersionInformation =
     let [<Literal>] AssemblyFileVersion = "1.0.0"
     let [<Literal>] InternalsVisibleTo = "FSharp.Data.GraphQL.Server"
     let [<Literal>] InternalsVisibleTo_1 = "FSharp.Data.GraphQL.Client"
-    let [<Literal>] InternalsVisibleTo_2 = "FSharp.Data.GraphQL.Tests"
+    let [<Literal>] InternalsVisibleTo_2 = "FSharp.Data.GraphQL.Client.DesignTime"
+    let [<Literal>] InternalsVisibleTo_3 = "FSharp.Data.GraphQL.Tests"
