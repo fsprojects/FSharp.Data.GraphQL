@@ -830,16 +830,10 @@ let ``Validation should grant that directives are unique in their locations`` ()
         """query q($foo: Boolean = true, $bar: Boolean = false) {
   field @skip(if: $foo) @skip(if: $bar)
 }"""
-    let query2 =
-        """query q($foo: Boolean = true, $bar: Boolean = false) {
-        field @skip(if: $foo) @include(if: $bar)
-}"""
     let expectedFailureResult =
         ValidationError [ { Message = "Directive 'skip' appears 2 times in the location it is used. Directives must be unique in their locations."
-                            Path = Some ["q"; "field"] }
-                          { Message = "Directives 'include' and 'skip' can not be used on the same location at the same time."
                             Path = Some ["q"; "field"] } ]
-    let shouldFail = [query1;query2] |> List.map (getContext >> Validation.Ast.validateUniqueDirectivesPerLocation) |> List.reduce (@@)
+    let shouldFail = query1 |> getContext |> Validation.Ast.validateUniqueDirectivesPerLocation
     shouldFail |> equals expectedFailureResult
     let query2 =
         """query q($foo: Boolean = true, $bar: Boolean = false) {
