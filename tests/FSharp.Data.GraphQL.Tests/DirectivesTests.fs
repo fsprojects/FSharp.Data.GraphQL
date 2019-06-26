@@ -106,9 +106,6 @@ let ``Execute with include works on inline fragments: if true, includes inline f
           ... on TestType @include(if: true) {
             b
           }
-        }
-        fragment Frag on TestType {
-          b
         }""" 
         (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
 
@@ -120,9 +117,6 @@ let ``Execute with include works on inline fragments: if false, excludes inline 
           ... on TestType @include(if: false) {
             b
           }
-        }
-        fragment Frag on TestType {
-          b
         }""" 
         (NameValueLookup.ofList [("a", "a" :> obj)])
     
@@ -134,9 +128,6 @@ let ``Execute with skip works on inline fragments: if false, includes inline fra
           ... on TestType @skip(if: false) {
             b
           }
-        }
-        fragment Frag on TestType {
-          b
         }""" 
         (NameValueLookup.ofList [("a", "a" :> obj); ("b", upcast "b")])
     
@@ -148,9 +139,6 @@ let ``Execute with skip works on inline fragments: if true, excludes inline frag
           ... on TestType @skip(if: true) {
             b
           }
-        }
-        fragment Frag on TestType {
-          b
         }""" 
         (NameValueLookup.ofList [("a", "a" :> obj)])
     

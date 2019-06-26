@@ -76,8 +76,10 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
 let ``Node with global ID gets correct record - Defer`` () =
     let query1 = """query ExampleQuery {
         node(id: "cGVyc29uOjE=") {
-            name @defer,
-            age
+            ...on Person {
+                name @defer,
+                age
+            }
         }
     }"""
     let expectedDirect1 =
@@ -91,7 +93,9 @@ let ``Node with global ID gets correct record - Defer`` () =
     execAndValidateNode query1 expectedDirect1 expectedDeferred1
     let query2 = """query ExampleQuery {
         node(id: "Y2FyOjE=") {
-            model @defer
+            ...on Car {
+                model @defer
+            }
         }
     }"""
     let expectedDirect2 =    
@@ -107,8 +111,10 @@ let ``Node with global ID gets correct record - Defer`` () =
 let ``Node with global ID gets correct record`` () =
     let query1 = """query ExampleQuery {
         node(id: "cGVyc29uOjE=") {
-            name,
-            age
+            ...on Person {
+                name,
+                age
+            }
         }
     }"""
     let expected1 =
@@ -118,7 +124,9 @@ let ``Node with global ID gets correct record`` () =
     execAndValidateNode query1 expected1 None
     let query2 = """query ExampleQuery {
         node(id: "Y2FyOjE=") {
-            model
+            ...on Car {
+                model
+            }
         }
     }"""
     let expected2 =    

@@ -604,8 +604,8 @@ fragment nameFragment on Dog {
 }
 
 fragment barkVolumeFragment on Dog {
-  barkVolume
-  ...nameFragment
+barkVolume
+...nameFragment
 }"""
     let query2 =
         """{
@@ -759,9 +759,9 @@ fragment nullRequiredBooleanArg on Arguments {
   findDog(complex: { favoriteCookieFlavor: "Bacon" })
 }"""
     let expectedFailureResult =
-       ValidationError [ { Message = "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["badComplexValue"; "findDog"] }
-                         { Message = "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["stringIntoInt"; "intArgField"] }
+       ValidationError [ { Message = "Argument field or value named 'intArg' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["stringIntoInt"; "intArgField"] }
                          { Message = "Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value."; Path = Some ["nullRequiredBooleanArg"; "nonNullBooleanArgField"] }
+                         { Message = "Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type."; Path = Some ["badComplexValue"; "findDog"] }
                          { Message = "Can not coerce argument 'complex'. The field 'favoriteCookieFlavor' is not a valid field in the argument definition."; Path = Some ["findDog"] } ]
     let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateInputValues)
     shouldFail |> equals expectedFailureResult
@@ -1091,11 +1091,11 @@ fragment ownerFragment on Dog {
                             Path = None }
                           { Message = "Fragment 'ownerFragment' is making a cyclic reference."
                             Path = None }
-                          { Message = "Field 'dog' is not defined in schema type 'Root'."
-                            Path = Some ["dog"] }
                           { Message = "Field 'owner' is not defined in schema type 'Dog'."
                             Path = Some ["dogFragment"; "owner"] }
                           { Message = "Field 'pets' is not defined in schema type 'Dog'."
-                            Path = Some ["ownerFragment"; "pets"] } ]
-    let shouldFail = [query1;query2] |> collectResults(Parser.parse >> Validation.Ast.validateDocument schema.Introspected)
+                            Path = Some ["ownerFragment"; "pets"] }
+                          { Message = "Field 'dog' is not defined in schema type 'Root'."
+                            Path = Some ["dog"] } ]
+    let shouldFail = [query1; query2] |> collectResults(Parser.parse >> Validation.Ast.validateDocument schema.Introspected)
     shouldFail |> equals expectedFailureResult
