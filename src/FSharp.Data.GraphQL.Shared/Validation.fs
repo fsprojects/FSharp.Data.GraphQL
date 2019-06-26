@@ -786,12 +786,20 @@ module Ast =
             let selectionSetDirectives = def.Definition.SelectionSet |> List.collect (getDirectiveNamesInSelection path)
             defDirectives :: selectionSetDirectives)
         |> collectResults (fun (path, directives) ->
-            directives
-            |> List.countBy id
-            |> collectResults (fun (name, count) ->
-                if count <= 1
-                then Success
-                else AstError.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name count, path)))
+            let directivesValid =
+                directives
+                |> List.countBy id
+                |> collectResults (fun (name, count) ->
+                    if count <= 1
+                    then Success
+                    else AstError.AsResult(sprintf "Directive '%s' appears %i times in the location it is used. Directives must be unique in their locations." name count, path))
+            let skipAndIncludeDontCoexist =
+                let existsSkip = directives |> List.exists (fun x -> x = "skip")
+                let existsInclude = directives |> List.exists (fun x -> x = "include")
+                if existsInclude && existsSkip
+                then AstError.AsResult("Directives 'include' and 'skip' can not be used on the same location at the same time.", path)
+                else Success
+            directivesValid @@ skipAndIncludeDontCoexist)
 
     let internal validateVariableUniqueness (ctx : ValidationContext) =
         ctx.Document.Definitions
