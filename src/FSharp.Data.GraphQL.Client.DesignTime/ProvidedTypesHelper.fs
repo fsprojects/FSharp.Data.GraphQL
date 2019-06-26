@@ -4,7 +4,6 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Security.Cryptography
 open FSharp.Core
 open System.Reflection
 open FSharp.Data.GraphQL
@@ -12,13 +11,11 @@ open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
-open FSharp.Data.GraphQL.Validation.Ast
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Ast.Extensions
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
-open System.Text
 open Microsoft.FSharp.Reflection
 open System.Collections
 
@@ -476,14 +473,18 @@ module internal Provider =
                         astFields
                         |> List.choose (function FragmentField f when f.TypeCondition <> tref.Name.Value -> Some f | _ -> None)
                         |> List.groupBy (fun field -> field.TypeCondition)
-                        |> List.map (fun (typeCondition, fields) -> typeCondition, List.map (getPropertyMetadata typeCondition) (List.map FragmentField fields))
+                        |> List.map (fun (typeCondition, fields) ->
+                            let conditionFields = fields |> List.distinctBy (fun x -> x.AliasOrName) |> List.map FragmentField
+                            typeCondition, List.map (getPropertyMetadata typeCondition) conditionFields)
                     let baseProperties =
                         astFields 
                         |> List.choose (fun x ->
                             match x with
-                            | TypeField _ -> Some (getPropertyMetadata tref.Name.Value x)
-                            | FragmentField f when f.TypeCondition = tref.Name.Value -> Some (getPropertyMetadata tref.Name.Value x)
+                            | TypeField _ -> Some x
+                            | FragmentField f when f.TypeCondition = tref.Name.Value -> Some x
                             | _ -> None)
+                        |> List.distinctBy (fun x -> x.AliasOrName)
+                        |> List.map (getPropertyMetadata tref.Name.Value)
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
