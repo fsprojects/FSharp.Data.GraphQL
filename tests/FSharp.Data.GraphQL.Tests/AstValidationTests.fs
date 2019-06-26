@@ -422,12 +422,14 @@ let ``Validation should grant that arguments passed to fields exists in their de
 }"""
     let query2 =
         """fragment invalidArgName on Dog {
-  isHouseTrained(atOtherHomes: true) @include(unless: false)
+  isHouseTrained(atOtherHomes: true) @include(unless: false) @skip (jaca: false)
 }"""
     let expectedFailureResult =
         ValidationError [ { Message = "Field 'doesKnowCommand' of type 'Dog' does not have an input named 'command' in its definition."
                             Path = Some ["invalidArgName"; "doesKnowCommand"] }
                           { Message = "Directive 'include' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'unless' in its definition."
+                            Path = Some ["invalidArgName"; "isHouseTrained"] }
+                          { Message = "Directive 'skip' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'jaca' in its definition."
                             Path = Some ["invalidArgName"; "isHouseTrained"] } ]
     let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateArgumentNames)
     shouldFail |> equals expectedFailureResult
