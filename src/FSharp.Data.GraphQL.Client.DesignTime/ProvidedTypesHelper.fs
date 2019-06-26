@@ -633,31 +633,6 @@ module internal Provider =
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
               ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
-        let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-            let rec formatValidationExceptionMessage (acc : string) (errors : AstError list) =
-                let rec formatPath (acc : string) (path : Validation.Path) =
-                    match path with
-                    | [] -> "path: " + acc
-                    | [last] when acc = "" -> last
-                    | [last] -> sprintf "%s, %s" acc last
-                    | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
-                match errors with
-                | [] -> acc
-                | [last] when acc = "" ->
-                    match last.Path with
-                    | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
-                    | None -> sprintf "%s" last.Message
-                | [last] ->
-                    match last.Path with
-                    | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
-                    | None -> sprintf "%s\n%s" acc last.Message
-                | actual :: remaining ->
-                    match actual.Path with
-                    | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
-                    | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
-            match validationResult with
-            | ValidationError msgs -> failwith (formatValidationExceptionMessage "" msgs)
-            | Success -> ()
         generator.DefineStaticParameters(staticParams, fun tname args ->
             let clientQueryValidation : bool = downcast args.[4]
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
@@ -720,6 +695,31 @@ module internal Provider =
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
                                 #if IS_DESIGNTIME
+                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
+                                    let rec formatValidationExceptionMessage (acc : string) (errors : AstError list) =
+                                        let rec formatPath (acc : string) (path : Validation.Path) =
+                                            match path with
+                                            | [] -> "path: " + acc
+                                            | [last] when acc = "" -> last
+                                            | [last] -> sprintf "%s, %s" acc last
+                                            | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
+                                        match errors with
+                                        | [] -> acc
+                                        | [last] when acc = "" ->
+                                            match last.Path with
+                                            | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
+                                            | None -> sprintf "%s" last.Message
+                                        | [last] ->
+                                            match last.Path with
+                                            | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
+                                            | None -> sprintf "%s\n%s" acc last.Message
+                                        | actual :: remaining ->
+                                            match actual.Path with
+                                            | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
+                                            | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
+                                    match validationResult with
+                                    | ValidationError msgs -> failwith (formatValidationExceptionMessage "" msgs)
+                                    | Success -> ()
                                 let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
                                 let refMaker = lazy Validation.Ast.validateDocument schema queryAst
                                 if clientQueryValidation then
