@@ -180,8 +180,6 @@ let schemaInfo = Validation.Ast.SchemaInfo.FromIntrospectionSchema(schema.Intros
 
 let getContext = Parser.parse >> Validation.Ast.getValidationContext schemaInfo
 
-open FSharp.Data.GraphQL.Validation.Ast
-
 [<Fact>]
 let ``Validation should grant that each operation name is unique in the document`` () =
     let query =
@@ -445,15 +443,21 @@ fragment argOnOptional on Dog {
     shouldPass |> equals Success
 
 [<Fact>]
-let ``Validation should grant that arguments passed to fields are unique between themselves`` () =
-    let query =
+let ``Validation should grant that arguments passed to fields and directives are unique between themselves`` () =
+    let query1 =
         """fragment duplicatedArgs on Dog {
   doesKnowCommand(dogCommand: SIT, dogCommand: CLEAN_UP_HOUSE)
 }"""
+    let query2 =
+        """fragment invalidArgName on Dog {
+        isHousetrained(atOtherHomes: true) @include(if : true, if: false)
+}"""  
     let expectedFailureResult =
-        ValidationError [ { Message = "There are 2 arguments with name 'dogCommand' defined in field 'doesKnowCommand'. Field arguments must be unique."
-                            Path = Some ["duplicatedArgs"; "doesKnowCommand"] } ]
-    let shouldFail = getContext query |> validateArgumentUniqueness
+        ValidationError [ { Message = "There are 2 arguments with name 'dogCommand' defined in alias or field 'doesKnowCommand'. Field arguments must be unique."
+                            Path = Some ["duplicatedArgs"; "doesKnowCommand"] }
+                          { Message = "There are 2 arguments with name 'if' defined in directive 'include'. Field arguments must be unique."
+                            Path = Some ["invalidArgName"; "isHousetrained"] } ]
+    let shouldFail = [query1; query2] |> List.map(getContext >> validateArgumentUniqueness) |> List.reduce (@@)
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]

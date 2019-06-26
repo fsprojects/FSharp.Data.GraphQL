@@ -384,16 +384,19 @@ module Ast =
         |> collectResults (fun def -> def.SelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
 
     let rec private checkArgumentUniqueness (selectionSet : SelectionInfo list) =
+        let validateArgs (fieldOrDirective : string) (path : Path) (args : Argument list) =
+            args
+            |> List.countBy(fun x -> x.Name)
+            |> collectResults (fun (name, length) ->
+                if length > 1
+                then AstError.AsResult(sprintf "There are %i arguments with name '%s' defined in %s. Field arguments must be unique." length name fieldOrDirective, path)
+                else Success)
         selectionSet
         |> collectResults (fun selection ->
-            let argsValid =
-                selection.Field.Arguments
-                |> List.countBy(fun x -> x.Name)
-                |> collectResults (fun (name, length) ->
-                    if length > 1
-                    then AstError.AsResult(sprintf "There are %i arguments with name '%s' defined in field '%s'. Field arguments must be unique." length name selection.Field.Name, selection.Path)
-                    else Success)
-            argsValid @@ (selection.SelectionSet |> checkArgumentUniqueness))
+            let argsValid = validateArgs (sprintf "alias or field '%s'" selection.AliasOrName) selection.Path selection.Field.Arguments
+            let directiveArgsValid = selection.Field.Directives |> collectResults (fun directive -> validateArgs (sprintf "directive '%s'" directive.Name) selection.Path directive.Arguments)
+            let innerArgsValid = checkArgumentUniqueness selection.SelectionSet
+            argsValid @@ directiveArgsValid @@ innerArgsValid)
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
         ctx.Definitions
