@@ -238,6 +238,10 @@ module Ast =
             getSelectionSetInfo visitedFragments fragCtx
             
     and private getSelectionSetInfo (visitedFragments : string list ref) (ctx : SelectionInfoContext) : SelectionInfoKind list =
+        // When building the selection info, we should not raise any error when a type referred by the document
+        // is not found in the schema. Not found types are validated in another validation, without the need of the
+        // selection info to do it. Info types are helpers to validate against their schema types when the match is found.
+        // Because of that, whenever a field or fragment type does not have a matching type in the schema, we skip the selection production.
         ctx.SelectionSet |> List.collect (function
             | Field field ->
                 let introspectionField = ctx.FragmentOrParentType.Fields |> tryFindInArrayOption (fun f -> f.Name = field.Name)
@@ -247,10 +251,10 @@ module Ast =
                 let fieldSelectionSet =
                     fieldTypeRef 
                     |> Option.bind ctx.Schema.TryGetTypeByRef
-                    |> Option.map (fun parentType ->
+                    |> Option.map (fun fieldType ->
                         let fieldCtx =
                             { ctx with 
-                                ParentType = parentType
+                                ParentType = fieldType
                                 FragmentType = None
                                 Path = fieldPath
                                 SelectionSet = field.SelectionSet }
@@ -628,14 +632,14 @@ module Ast =
         let fragmentDefinitionNames = ctx.FragmentDefinitions |> List.choose (fun def -> def.Name)
         ctx.Document.Definitions
         |> collectResults (function
-                          | FragmentDefinition frag ->
-                              let path = Option.toList frag.Name
-                              frag.SelectionSet
-                              |> collectResults (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path)
-                          | OperationDefinition odef ->
-                              let path = Option.toList odef.Name
-                              odef.SelectionSet
-                              |> collectResults (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path))
+            | FragmentDefinition frag ->
+                let path = Option.toList frag.Name
+                frag.SelectionSet
+                |> collectResults (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path)
+            | OperationDefinition odef ->
+                let path = Option.toList odef.Name
+                odef.SelectionSet
+                |> collectResults (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path))
 
     let rec private checkFragmentMustNotHaveCycles (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (validated : string list ref) (frag : FragmentDefinition) =
         frag.Name
