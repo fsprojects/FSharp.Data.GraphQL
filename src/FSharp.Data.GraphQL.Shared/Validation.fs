@@ -640,34 +640,33 @@ module Ast =
                 odef.SelectionSet
                 |> collectResults (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path))
 
-    let rec private checkFragmentMustNotHaveCycles (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (validated : string list ref) (fragName : string) (fragSelectionSet : Selection list) =
-        if List.contains fragName !visited
+    let rec private checkFragmentMustNotHaveCycles (fragmentDefinitions : FragmentDefinition list) (visited : string list) (fragName : string) (fragSelectionSet : Selection list) =
+        let visitCount = visited |> List.filter (fun x -> x = fragName) |> List.length
+        if visitCount > 1
         then
-            if not (List.contains fragName !validated) then
-                validated := fragName :: !validated
-                AstError.AsResult(sprintf "Fragment '%s' is making a cyclic reference." fragName)
-            else Success
+            AstError.AsResult(sprintf "Fragment '%s' is making a cyclic reference." fragName)
         else
-            visited := fragName :: !visited
             fragSelectionSet
-            |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions (ref !visited) (ref !validated))
+            |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions (fragName :: visited))
 
-    and private checkFragmentsMustNotHaveCyclesInSelection (fragmentDefinitions : FragmentDefinition list) (visited : string list ref) (validated : string list ref) =
+    and private checkFragmentsMustNotHaveCyclesInSelection (fragmentDefinitions : FragmentDefinition list) (visited : string list) =
         function
         | Field field ->
             field.SelectionSet
-            |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions (ref !visited) (ref !validated))
-        | FragmentSpread spread ->
+            |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited)
+        | InlineFragment inlineFrag ->
+            inlineFrag.SelectionSet
+            |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited)
+        | FragmentSpread spread -> 
             match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
-            | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited validated spread.Name frag.SelectionSet
+            | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
             | None -> Success
-        | _ -> Success
 
     let internal validateFragmentsMustNotFormCycles (ctx : ValidationContext) =
         let fragmentDefinitions = ctx.FragmentDefinitions |> List.map (fun frag -> frag.Definition)
         let fragNamesAndSelections = fragmentDefinitions |> List.choose (fun frag -> frag.Name |> Option.map (fun x -> x, frag.SelectionSet))
         fragNamesAndSelections
-        |> collectResults (fun (name, selectionSet) -> checkFragmentMustNotHaveCycles fragmentDefinitions (ref []) (ref []) name selectionSet)
+        |> collectResults (fun (name, selectionSet) -> checkFragmentMustNotHaveCycles fragmentDefinitions [] name selectionSet)
 
     let private checkFragmentSpreadIsPossibleInSelection (path : Path, parentType : IntrospectionType, fragmentType : IntrospectionType) =
         if not (typesAreApplicable (parentType, fragmentType))
@@ -1003,7 +1002,19 @@ module Ast =
     let rec private argumentsContains (name : string) (args : Argument list) =
         args |> List.exists (fun x -> match x.Value with | Variable varName -> varName = name | _ -> false)
 
-    let rec private variableIsUsedInSelection (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) =
+    let rec private variableIsUsedInFragmentSpread (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list) (spread : FragmentSpread) =
+        if List.contains spread.Name visitedFragments
+        then false
+        else
+            let usedInSpread =
+                match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
+                | Some frag ->
+                    let usedInSelection = frag.SelectionSet |> List.exists (variableIsUsedInSelection name fragmentDefinitions (spread.Name :: visitedFragments))
+                    usedInSelection || (frag.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
+                | None -> false
+            usedInSpread || (spread.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
+
+    and private variableIsUsedInSelection (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list) =
         function
         | Field field ->
             if argumentsContains name field.Arguments
@@ -1014,27 +1025,16 @@ module Ast =
         | InlineFragment frag ->
                 let usedInSelection = frag.SelectionSet |> List.exists (variableIsUsedInSelection name fragmentDefinitions visitedFragments)
                 usedInSelection || (frag.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-        | FragmentSpread spread ->
-            if List.contains spread.Name !visitedFragments
-            then false
-            else
-                let usedInSpread =
-                    match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
-                    | Some frag ->
-                        let usedInSelection = frag.SelectionSet |> List.exists (variableIsUsedInSelection name fragmentDefinitions visitedFragments)
-                        usedInSelection || (frag.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
-                    | None -> false
-                usedInSpread || (spread.Directives |> List.exists (fun directive -> argumentsContains name directive.Arguments))
+        | FragmentSpread spread -> variableIsUsedInFragmentSpread name fragmentDefinitions visitedFragments spread
 
     let internal validateAllVariablesUsed (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
-        let visitedFragments = ref  []
         ctx.Document.Definitions
         |> collectResults (function
             | OperationDefinition def ->
                 def.VariableDefinitions
                 |> collectResults (fun varDef ->
-                        let isUsed = def.SelectionSet |> List.exists (variableIsUsedInSelection varDef.VariableName fragmentDefinitions visitedFragments)
+                        let isUsed = def.SelectionSet |> List.exists (variableIsUsedInSelection varDef.VariableName fragmentDefinitions [])
                         match def.Name, isUsed with
                         | _, true -> Success
                         | Some operationName, _ -> AstError.AsResult(sprintf "Variable definition '%s' is not used in operation '%s'. Every variable must be used." varDef.VariableName operationName)
@@ -1085,12 +1085,15 @@ module Ast =
                 | None -> Success
             | _ -> Success)
 
-    let rec private checkVariableUsageAllowedOnSelection (varNamesAndTypeRefs : Map<string, VariableDefinition * IntrospectionTypeRef>) (visitedFragments : string list ref) (selection : SelectionInfo) =
+    let rec private checkVariableUsageAllowedOnSelection (varNamesAndTypeRefs : Map<string, VariableDefinition * IntrospectionTypeRef>) (visitedFragments : string list) (selection : SelectionInfo) =
         let inputs = Option.defaultValue [||] selection.InputValues
         match selection.FragmentSpreadName with
-        | Some spreadName when List.contains spreadName !visitedFragments -> Success
+        | Some spreadName when List.contains spreadName visitedFragments -> Success
         | _ ->
-            if selection.FragmentSpreadName.IsSome then visitedFragments := selection.FragmentSpreadName.Value :: !visitedFragments
+            let visitedFragments =
+                match selection.FragmentSpreadName with
+                | Some _ -> selection.FragmentSpreadName.Value :: visitedFragments
+                | None -> visitedFragments
             match selection.FieldType with
             | Some _ ->
                 let argumentsValid = 
@@ -1099,20 +1102,20 @@ module Ast =
                 let selectionValid = 
                     selection.NonCyclicSelectionSet 
                     |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments)
-                argumentsValid
-                @@ selectionValid
-                @@ (selection.Field.Directives |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path))
+                let directivesValid =
+                    selection.Field.Directives 
+                    |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path)
+                argumentsValid @@ selectionValid @@ directivesValid
             | None -> Success
 
     let internal validateVariableUsagesAllowed (ctx : ValidationContext) =
-        let visitedFragments = ref []
         ctx.OperationDefinitions
         |> collectResults (fun def ->
             let varNamesAndTypeRefs =
                 def.Definition.VariableDefinitions
                 |> List.choose (fun varDef -> ctx.Schema.TryGetInputType(varDef.Type) |> Option.map(fun t -> varDef.VariableName, (varDef, t)))
                 |> Map.ofList
-            def.NonCyclicSelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments))
+            def.NonCyclicSelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs []))
 
     let private allValidations =
         [ validateFragmentsMustNotFormCycles

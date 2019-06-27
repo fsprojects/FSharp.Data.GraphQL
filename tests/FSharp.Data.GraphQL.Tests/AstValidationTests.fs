@@ -1029,11 +1029,26 @@ query queryWithExtraVar($atOtherHomes: Boolean, $extra: Int) {
 fragment isHousetrainedFragment on Dog {
   isHousetrained(atOtherHomes: $atOtherHomes)
 }"""
+    let query4 =
+        """query unusedCyclic($extra: Int) {
+  dog {
+      ...isHousetrainedFragment
+  }
+}
+
+fragment isHousetrainedFragment on Dog {
+  ...isHouseTrainedCyclic
+}
+
+fragment isHouseTrainedCyclic on Dog {
+  ...isHousetrainedFragment
+}""" 
     let expectedFailureResult =
         ValidationError [ { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableUnused'. Every variable must be used."; Path = None }
                           { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableNotUsedWithinFragment'. Every variable must be used."; Path = None }
-                          { Message = "Variable definition 'extra' is not used in operation 'queryWithExtraVar'. Every variable must be used."; Path = None } ]
-    let shouldFail = [query1; query2; query3] |> collectResults (getContext >> Validation.Ast.validateAllVariablesUsed)
+                          { Message = "Variable definition 'extra' is not used in operation 'queryWithExtraVar'. Every variable must be used."; Path = None }
+                          { Message = "Variable definition 'extra' is not used in operation 'unusedCyclic'. Every variable must be used."; Path = None } ]
+    let shouldFail = [query1; query2; query3; query4] |> collectResults (getContext >> Validation.Ast.validateAllVariablesUsed)
     shouldFail |> equals expectedFailureResult
     let query4 =
         """query variableUsedInFragment($atOtherHomes: Boolean) {
