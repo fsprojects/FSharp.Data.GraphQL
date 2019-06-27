@@ -161,7 +161,7 @@ let Arguments =
               Define.Field("booleanListArgField", Nullable (ListOf (Nullable Boolean)), [ Define.Input("booleanListArg", ListOf (Nullable Boolean)) ], fun ctx _ -> ctx.Arg("booleanListArg") |> Some)
               Define.Field("optionalNonNullBooleanArgField", Boolean, [ Define.Input("optionalBooleanArg", Boolean, false) ], fun ctx _ -> ctx.Arg("optionalBooleanArg")) ])
 
-let Root = 
+let Query = 
     Define.Object<Root>(
         name = "Root", 
         fields =
@@ -174,7 +174,30 @@ let Root =
               Define.Field("findDog", Nullable Dog, [ Define.Input("complex", ComplexInput) ], fun ctx (r : Root) -> r.FindDog(ctx.Arg("complex")))
               Define.Field("booleanList", Nullable Boolean, [ Define.Input("booleanListArg", Nullable (ListOf Boolean)) ], fun ctx (r : Root) -> r.BooleanList(ctx.Arg("booleanListArg"))) ])
 
-let schema : ISchema = upcast Schema(Root)
+let Mutation =
+    Define.Object<Root>(
+        name = "Mutation",
+        fields =
+            [ Define.Field("convert", String, [ Define.Input("value", Int) ], fun ctx _ -> ctx.Arg<int>("value").ToString()) ])
+
+let Subscription =
+    Define.SubscriptionObject<Root>(
+        name = "Subscription",
+        fields = [ Define.SubscriptionField("ping", Query, String, filter = fun _ _ _ -> Some "pong") ])
+
+let directives =
+    [ { Name = "queryOnly"; Description = None; Locations = DirectiveLocation.QUERY; Args = [||] }
+      { Name = "mutationOnly"; Description = None; Locations = DirectiveLocation.MUTATION; Args = [||] }
+      { Name = "subscriptionOnly"; Description = None; Locations = DirectiveLocation.SUBSCRIPTION; Args = [||] }
+      { Name = "fragSpreadOnly"; Description = None; Locations = DirectiveLocation.FRAGMENT_SPREAD; Args = [||] }
+      { Name = "inlineFragOnly"; Description = None; Locations = DirectiveLocation.INLINE_FRAGMENT; Args = [||] }
+      { Name = "fieldOnly"; Description = None; Locations = DirectiveLocation.FIELD; Args = [||] } ]
+    |> List.append SchemaConfig.Default.Directives
+
+let schemaConfig =
+    { SchemaConfig.Default with Directives = directives }
+
+let schema : ISchema = upcast Schema(Query, Mutation, Subscription, schemaConfig)
 
 let schemaInfo = Validation.Ast.SchemaInfo.FromIntrospectionSchema(schema.Introspected)
 
@@ -816,13 +839,48 @@ dog @include(if: true) {
 
 [<Fact>]
 let ``Validation should grant that directives are in valid locations`` () =
-    let query =
+    let query1 =
         """query myQuery @skip(if: $foo) {
-  field
+  field @queryOnly
 }"""
-    let shouldFail = getContext query |> Validation.Ast.validateDirectivesAreInValidLocations
-    shouldFail |> equals (ValidationError [ { Message = "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition."
-                                              Path = Some ["myQuery"] } ])
+    let query2 =
+        """mutation myMutation @skip(if: $foo) {
+  convert(value: 2)
+}"""
+    let query3 =
+        """subscription mySubscription @skip(if: $foo) {
+  ping
+}"""
+    let query4 =
+        """fragment HouseTrainedFragment on Root @skip(if: $foo) {
+  dog {
+    isHousetrained(atOtherHomes: $atOtherHomes)
+  }
+}"""
+    let query5 =
+        """fragment safeDifferingFields on Pet {
+  ... on Dog @queryOnly {
+    volume: barkVolume
+  }
+  ... on Cat @mutationOnly {
+    volume: meowVolume
+  }
+}"""
+    let expectedFailureResult =
+        ValidationError[ { Message = "Query operation 'myQuery' has a directive 'skip', but this directive location is not supported by the schema definition."
+                           Path = Some ["myQuery"] }
+                         { Message = "Field or alias 'field' has a directive 'queryOnly', but this directive location is not supported by the schema definition."
+                           Path = Some ["myQuery"; "field"] }
+                         { Message = "Mutation operation 'myMutation' has a directive 'skip', but this directive location is not supported by the schema definition."
+                           Path = Some ["myMutation"] }
+                         { Message = "Subscription operation 'mySubscription' has a directive 'skip', but this directive location is not supported by the schema definition."
+                           Path = Some ["mySubscription"] }
+                         { Message = "An inline fragment has a directive 'queryOnly', but this directive location is not supported by the schema definition."
+                           Path = Some ["safeDifferingFields"] }
+                         { Message = "An inline fragment has a directive 'mutationOnly', but this directive location is not supported by the schema definition."
+                           Path = Some ["safeDifferingFields"] } ]
+    let shouldFail = [query1;query2;query3;query4;query5] |> List.map (getContext >> Validation.Ast.validateDirectivesAreInValidLocations) |> List.reduce (@@)
+    shouldFail |> equals expectedFailureResult
 
 [<Fact>]
 let ``Validation should grant that directives are unique in their locations`` () =

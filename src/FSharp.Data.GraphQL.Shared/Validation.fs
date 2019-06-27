@@ -967,7 +967,7 @@ module Ast =
                 else AstError.AsResult(sprintf "A variable '%s' is referenced in an argument '%s' of directive '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name directive.Name path.Head, path)
             | _ -> Success)
 
-    let rec private checkVariablesDefinedInSelection (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list ref) (variableDefinitions : Set<string>) (path : Path) =
+    let rec private checkVariablesDefinedInSelection (fragmentDefinitions : FragmentDefinition list) (variableDefinitions : Set<string>) (path : Path) =
         function
         | Field field ->
             let path = field.AliasOrName :: path
@@ -981,37 +981,23 @@ module Ast =
                         else AstError.AsResult(sprintf "A variable '%s' is referenced in argument '%s' of field with alias or name '%s', but that variable is not defined in the operation." varName arg.Name field.AliasOrName)
                     | _ -> Success)
             variablesValid
-            @@ (field.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path))
+            @@ (field.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions variableDefinitions path))
             @@ (field.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
         | InlineFragment frag ->
             let variablesValid =
                 frag.SelectionSet
-                |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path)
+                |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions variableDefinitions path)
             variablesValid @@ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
-        | FragmentSpread spread ->
-            if List.contains spread.Name !visitedFragments
-            then Success
-            else
-                visitedFragments := spread.Name :: !visitedFragments
-                let spreadValid =
-                    match fragmentDefinitions |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name) with
-                    | Some frag ->
-                        let variablesValid =
-                            frag.SelectionSet
-                            |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments variableDefinitions path)
-                        variablesValid @@ (frag.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
-                    | None -> Success
-                spreadValid @@ (spread.Directives |> collectResults (checkVariablesDefinedInDirective variableDefinitions path))
+        | _ -> Success // Spreads can't have variable definitions
 
     let internal validateVariablesUsesDefined (ctx : ValidationContext) =
         let fragmentDefinitions = getFragmentDefinitions ctx.Document
-        let visitedFragments = ref []
         ctx.Document.Definitions
         |> collectResults (function
             | OperationDefinition def ->
                 let path = Option.toList def.Name
                 let varNames = def.VariableDefinitions |> List.map(fun x -> x.VariableName) |> Set.ofList
-                def.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions visitedFragments varNames path)
+                def.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions varNames path)
             | _ -> Success)
 
     let rec private argumentsContains (name : string) (args : Argument list) =
