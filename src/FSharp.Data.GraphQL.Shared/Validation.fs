@@ -51,10 +51,15 @@ module Types =
         namedTypes.ToSeq() |> Seq.fold (fun acc (_, namedDef) -> acc @@ validateType namedDef) Success
 
 module Ast =
+    type MetaTypeFieldInfo =
+        { Name : string
+          ArgumentNames : string [] }
+
     let private metaTypeFields = 
-        [| "__type", [|"name"|] 
-           "__schema", [||]
-           "__typename", [||] |]
+        [| { Name = "__type"; ArgumentNames = [|"name"|] }
+           { Name = "__schema"; ArgumentNames = [||] }
+           { Name = "__typename"; ArgumentNames = [||] } |]
+        |> Array.map (fun x -> x.Name, x)
         |> Map.ofArray
 
     type SchemaInfo =
@@ -96,7 +101,7 @@ module Ast =
     type SelectionInfo =
         { /// Contains the information about the field inside the selection.
           Field : Field
-          /// Contains the selection of the field (in case the field is an Object, Interface, or Union type.
+          /// Contains the selection of the field (in case the field is an Object, Interface, or Union type).
           mutable SelectionSet : SelectionInfo list
           /// Contains the reference to tye field type in the schema.
           FieldType : IntrospectionTypeRef option
@@ -224,9 +229,13 @@ module Ast =
                     fragSelection
                 | None -> [])
 
-    let private getOperationDefinitions (ast : Document) = ast.Definitions |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
+    let private getOperationDefinitions (ast : Document) = 
+        ast.Definitions
+        |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
 
-    let private getFragmentDefinitions (ast : Document) = ast.Definitions |> List.choose (function | FragmentDefinition x -> Some x | _ -> None)
+    let private getFragmentDefinitions (ast : Document) = 
+        ast.Definitions 
+        |> List.choose (function | FragmentDefinition x -> Some x | _ -> None)
 
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
@@ -384,10 +393,11 @@ module Ast =
         let argumentsValid =
             selection.Field.Arguments
             |> collectResults (fun arg ->
-                let args =
+                let schemaArgumentNames =
                     metaTypeFields.TryFind(selection.Field.Name)
+                    |> Option.map (fun x -> x.ArgumentNames)
                     |> Option.orElseWith (fun () -> selection.InputValues |> Option.map (Array.map (fun x -> x.Name)))
-                match args |> Option.bind (Array.tryFind (fun x -> x = arg.Name)) with
+                match schemaArgumentNames |> Option.bind (Array.tryFind (fun x -> x = arg.Name)) with
                 | Some _ -> Success
                 | None -> AstError.AsResult(sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path))
         let directivesValid =
