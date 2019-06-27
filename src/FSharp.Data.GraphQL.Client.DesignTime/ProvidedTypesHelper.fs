@@ -697,29 +697,18 @@ module internal Provider =
                                 let queryAst = Parser.parse query
                                 #if IS_DESIGNTIME
                                 let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-                                    let rec formatValidationExceptionMessage (acc : string) (errors : AstError list) =
-                                        let rec formatPath (acc : string) (path : Validation.Path) =
-                                            match path with
-                                            | [] -> "path: " + acc
-                                            | [last] when acc = "" -> last
-                                            | [last] -> sprintf "%s, %s" acc last
-                                            | actual :: remaining -> sprintf "%s, %s, %s" acc actual (formatPath "" remaining)
+                                    let rec formatValidationExceptionMessage(errors : AstError list) =
                                         match errors with
-                                        | [] -> acc
-                                        | [last] when acc = "" ->
-                                            match last.Path with
-                                            | Some path -> sprintf "%s (%s)" last.Message (formatPath "" path)
-                                            | None -> sprintf "%s" last.Message
-                                        | [last] ->
-                                            match last.Path with
-                                            | Some path -> sprintf "%s\n%s (%s)" acc last.Message (formatPath "" path)
-                                            | None -> sprintf "%s\n%s" acc last.Message
-                                        | actual :: remaining ->
-                                            match actual.Path with
-                                            | Some path -> sprintf "%s\n%s (%s)\n%s" acc actual.Message (formatPath "" path) (formatValidationExceptionMessage "" remaining)
-                                            | None -> sprintf "%s\n%s\n%s" acc actual.Message (formatValidationExceptionMessage "" remaining)
+                                        | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
+                                        | errors ->
+                                            errors
+                                            |> List.map (fun err ->
+                                                match err.Path with
+                                                | Some path -> sprintf "%s Path: %A" err.Message path
+                                                | None -> err.Message)
+                                            |> List.reduce (fun x y -> x + Environment.NewLine + y)
                                     match validationResult with
-                                    | ValidationError msgs -> failwith (formatValidationExceptionMessage "" msgs)
+                                    | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
                                     | Success -> ()
                                 let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
                                 let refMaker = lazy Validation.Ast.validateDocument schema queryAst
