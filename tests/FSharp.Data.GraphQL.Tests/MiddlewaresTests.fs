@@ -418,27 +418,44 @@ let ``Inline fragment query : Should pass when below threshold``() =
 let ``Inline fragment query : Should not pass when above threshold``() =
     let query = 
         parse """query testQuery {
-            A (id : 1) {
-                id
-                value
-                subjects {
-                    ... on A {
-                        id
-                        value
-                    }
-                    ... on B {
-                        id
-                        subjects {
+                A (id : 1) {
+                    id
+                    value
+                    subjects {
+                        ... on A {
                             id
                             value
-                            subjects {
-                                id
-                                value
-                            }
                         }
-                    }
-                }                
-            }
+                        ... on B {
+                            id
+                            subjects { ...Inner }
+                        }
+                    }                
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }
+
+        fragment Inner on Subject {
+                ...on A {
+                    id
+                    value
+                    subjects { ... Value }
+                }
+                ... on B {
+                    id
+                    value
+                    subjects { ...Value }
+                }
         }"""
     let result = execute query
     ensureDirect result <| fun data errors ->

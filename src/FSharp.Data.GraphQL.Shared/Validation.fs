@@ -92,66 +92,98 @@ module Ast =
             | ListType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.List
             | NonNullType inner -> x.TryGetInputType(inner) |> Option.map IntrospectionTypeRef.NonNull
 
-
+    /// Contains information about the selection in a field or a fragment, with related GraphQL schema type information.
     type SelectionInfo =
-        { Field : Field
+        { /// Contains the information about the field inside the selection.
+          Field : Field
+          /// Contains the selection of the field (in case the field is an Object, Interface, or Union type.
           mutable SelectionSet : SelectionInfo list
+          /// Contains the reference to tye field type in the schema.
           FieldType : IntrospectionTypeRef option
+          /// Contains the reference to the parent type of the current field in the schema.
           ParentType : IntrospectionType
+          /// Contains the reference to the fragment type of the current field in the schema.
           FragmentType : IntrospectionType option
+          /// In case this field is part of a selection of a fragment spread, gets the name of the fragment spread.
           FragmentSpreadName : string option
+          /// Contains information about the input values of the field in the schema.
           InputValues : IntrospectionInputVal [] option
+          /// Contains the path of the field in the document.
           Path : Path }
+        /// If the field has an alias, return its alias. Otherwise, returns its name.
         member x.AliasOrName = x.Field.AliasOrName
+        /// If the field is inside a selection of a fragment definition, returns the fragment type containing the field.
+        /// Otherwise, return the parent type in the schema definition.
         member x.FragmentOrParentType = x.FragmentType |> Option.defaultValue x.ParentType
 
+    /// Contains information about an operation definition in the document, with related GraphQL schema type information.
     type OperationDefinitionInfo =
-        { Definition : OperationDefinition
+        { /// Returns the definition from the parsed document.
+          Definition : OperationDefinition
+          /// Returns the selection information about the operation, with related GraphQL schema type information.
           SelectionSet : SelectionInfo list }
+        /// Returns the name of the operation definition, if it does have a name.
         member x.Name = x.Definition.Name
 
+    /// Contains information about a fragment definition in the document, with related GraphQL schema type information.
     type FragmentDefinitionInfo =
-        { Definition : FragmentDefinition
+        { /// Returns the definition from the parsed document.
+          Definition : FragmentDefinition
+          /// Returns the selection information about the fragment, with related GraphQL schema type information.
           SelectionSet : SelectionInfo list }
+        /// Returns the name of the fragment definition, if it does have a name.
         member x.Name = x.Definition.Name
 
+    /// Contains information about a definition in the document, with related GraphQL schema type information.
     type DefinitionInfo =
         | OperationDefinitionInfo of OperationDefinitionInfo
         | FragmentDefinitionInfo of FragmentDefinitionInfo
+        /// Returns the definition from the parsed definition in the document.
         member x.Definition =
             match x with
             | OperationDefinitionInfo x -> OperationDefinition x.Definition
             | FragmentDefinitionInfo x -> FragmentDefinition x.Definition
+        /// Returns the name of the definition, if it does have a name.
         member x.Name = x.Definition.Name
+        /// Returns the selection information about the definition, with related GraphQL schema type information.
         member x.SelectionSet =
             match x with
             | OperationDefinitionInfo x -> x.SelectionSet
             | FragmentDefinitionInfo x -> x.SelectionSet
+        /// Returns the directives from the parsed definition in the document.
         member x.Directives =
             match x with
             | OperationDefinitionInfo x -> x.Definition.Directives
             | FragmentDefinitionInfo x -> x.Definition.Directives
-
+    
+    /// The validation  context used to run validations against a parsed document.
+    /// It should have the schema type information, the original document and the definition information about the original document.
     type ValidationContext =
-        { Definitions : DefinitionInfo list
+        { /// Gets information about all definitions in the original document, including related GraphQL schema type information for them.
+          Definitions : DefinitionInfo list
+          /// Gets information about the schema which the document is validated against.
           Schema : SchemaInfo
+          /// Gets the document that is being validated.
           Document : Document }
+        /// Gets the information about all the operations in the original document, including related GraphQL schema type information for them.
         member x.OperationDefinitions = x.Definitions |> List.choose (function | OperationDefinitionInfo x -> Some x | _ -> None)
+        /// Gets the information about all the fragments in the original document, including related GraphQL schema type information for them.
         member x.FragmentDefinitions = x.Definitions |> List.choose (function | FragmentDefinitionInfo x -> Some x | _ -> None)
 
-    let rec private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentSpreadName : string option) (fragmentType : IntrospectionType option) (path : Path) (visitedFragments : Dictionary<string, SelectionInfo list>) (selectionSet : Selection list) =
-        let getFragSelectionInfo (frag : FragmentDefinition) =
-            match frag.Name with
-            | Some fragName when visitedFragments.ContainsKey(fragName) -> visitedFragments.[fragName]
-            | _ ->
-                let parentType =
-                    match fragmentType with
-                    | Some outerFragmentType -> outerFragmentType
-                    | None -> parentType
-                let fragmentType = frag.TypeCondition |> Option.bind schemaInfo.TryGetTypeByName
-                let fragSelection = getSelectionSetInfo schemaInfo fragmentDefinitions parentType frag.Name fragmentType path visitedFragments frag.SelectionSet
-                frag.Name |> Option.iter (fun fragName -> if not (visitedFragments.ContainsKey(fragName)) then visitedFragments.Add(fragName, fragSelection))
-                fragSelection
+    let rec private getFragSelectionInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentType : IntrospectionType option) (path : Path) (visitedFragments : Dictionary<string, SelectionInfo list>) (frag : FragmentDefinition) =
+        match frag.Name with
+        | Some fragName when visitedFragments.ContainsKey(fragName) -> visitedFragments.[fragName]
+        | _ ->
+            let parentType =
+                match fragmentType with
+                | Some outerFragmentType -> outerFragmentType
+                | None -> parentType
+            let fragmentType = frag.TypeCondition |> Option.bind schemaInfo.TryGetTypeByName
+            let fragSelection = getSelectionSetInfo schemaInfo fragmentDefinitions parentType frag.Name fragmentType path visitedFragments frag.SelectionSet
+            frag.Name |> Option.iter (fun fragName -> if not (visitedFragments.ContainsKey(fragName)) then visitedFragments.Add(fragName, fragSelection))
+            fragSelection
+
+    and private getSelectionSetInfo (schemaInfo : SchemaInfo) (fragmentDefinitions : FragmentDefinition list) (parentType : IntrospectionType) (fragmentSpreadName : string option) (fragmentType : IntrospectionType option) (path : Path) (visitedFragments : Dictionary<string, SelectionInfo list>) (selectionSet : Selection list) =
         selectionSet |> List.collect (function
         | Field field ->
             let ifield =
@@ -180,14 +212,14 @@ module Ast =
             |> Option.map (fun parentType -> getSelectionSetInfo schemaInfo fragmentDefinitions parentType fragmentSpreadName fragmentType path visitedFragments field.SelectionSet)
             |> Option.iter (fun fieldSelectionSet -> fieldSelectionInfo.SelectionSet <- fieldSelectionSet)
             [fieldSelectionInfo]
-        | InlineFragment frag -> getFragSelectionInfo frag
+        | InlineFragment frag -> getFragSelectionInfo schemaInfo fragmentDefinitions parentType fragmentType path visitedFragments frag
         | FragmentSpread spread ->
             match visitedFragments.TryFind(spread.Name) with
             | Some fragSelection -> fragSelection
             | None ->
                 match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
                 | Some frag ->
-                    let fragSelection = getFragSelectionInfo frag
+                    let fragSelection = getFragSelectionInfo schemaInfo fragmentDefinitions parentType fragmentType path visitedFragments frag
                     if not (visitedFragments.ContainsKey(spread.Name)) then visitedFragments.Add(spread.Name, fragSelection)
                     fragSelection
                 | None -> [])
@@ -249,14 +281,6 @@ module Ast =
                     fragmentDefinitions
                     |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
                     |> Option.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
-        let validate (operationName : string option) (fieldNames : string list) =
-            if fieldNames.Length <= 1
-            then Success
-            else
-                let fieldNamesAsString = System.String.Join(", ", fieldNames)
-                match operationName with
-                | Some operationName -> AstError.AsResult(sprintf "Subscription operations should have only one root field. Operation '%s' has %i fields (%s)." operationName fieldNames.Length fieldNamesAsString)
-                | None -> AstError.AsResult(sprintf "Subscription operations should have only one root field. Operation has %i fields (%s)." fieldNames.Length fieldNamesAsString)
         ctx.Document.Definitions
         |> collectResults (function
             | OperationDefinition def when def.OperationType = Subscription ->
