@@ -270,7 +270,7 @@ module internal Internal =
     let operationType = 
       (stoken_ws "query" >>% Query) <|> (stoken_ws "mutation" >>% Mutation) <|> (stoken_ws "subscription" >>% Subscription)
       
-    let namedOperationDefinition = 
+    let operationDefinition = 
       let variableDefinition =
         pipe2 (pairBetween ':' variable inputType) (whitespaces >>. opt((ctoken_ws '=') >>. inputValue))
           (fun (variableName, variableType) defaultVal ->
@@ -279,21 +279,21 @@ module internal Internal =
       let variableDefinitions =
         betweenCharsMany '(' ')' variableDefinition
       
-      pipe5 operationType (token_ws name) (opt(token_ws variableDefinitions)) (opt(token_ws directives)) (token_ws selectionSet)
+      pipe5 operationType (opt(token_ws name)) (opt(token_ws variableDefinitions)) (opt(token_ws directives)) (token_ws selectionSet)
         (fun  otype name ovars directives selection ->
-          { OperationType = otype; Name = Some name; SelectionSet = selection
+          { OperationType = otype; Name = name; SelectionSet = selection
             VariableDefinitions = someOrEmpty ovars; Directives = someOrEmpty directives })
     
     // Short hand format where operation defaults to a Query
-    let anonymousOperationDefinition =
+    let shortHandQueryDefinition =
       selectionSet |>> (fun selectionSet -> 
                          { OperationType = Query; SelectionSet = selectionSet; 
                            VariableDefinitions = []; Directives = []; Name = None })
     
     // SelectionSet |
-    //(OperationType (Name opt) (VariableDefinitions opt) (Directives opt) SelectionSet) 
+    // (OperationType (Name opt) (VariableDefinitions opt) (Directives opt) SelectionSet) 
     let operationDefinition =
-      anonymousOperationDefinition <|> namedOperationDefinition |>> OperationDefinition  
+      shortHandQueryDefinition <|> operationDefinition |>> OperationDefinition  
     
     let fragmentDefinition =
       pipe4 ((stoken_ws "fragment") >>. token_ws name .>> (stoken_ws "on")) (token_ws name) directives selectionSet

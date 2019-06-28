@@ -104,6 +104,14 @@ let ``parser should parse simple query with single field``() =
     test expected """{uri}"""
 
 [<Fact>]
+let ``parser should parse simple query with operation identifier, but no operation name``() =
+    let expected =
+        field "uri"
+        |> queryWithSelection
+        |> doc1
+    test expected """query {uri}"""
+
+[<Fact>]
 let ``parser should parse simple query with single field with whitespace``() =
     let expected =
         field "uri"
