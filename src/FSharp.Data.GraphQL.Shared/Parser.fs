@@ -142,8 +142,10 @@ module internal Internal =
       pipe3 integerPart fractionPart exponentPart 
         (fun integer fraction exponent -> integer + fraction + exponent ) ] |>> float
 
+  // 2.9.5 Null Value
+  let nullValue = stoken "null" >>% NullValue
 
-  // 2.9.5 EnumValue
+  // 2.9.6 Enum Value
   //   Name but not true or false or null
   //   (boolean parser is run first)
   let enumValue = name
@@ -154,24 +156,26 @@ module internal Internal =
   let variable = pchar '$' >>. name 
 
 
-  // 2.9.7 Input Object Values
+  // 2.9.8 Input Object Values
   let inputObject =
     betweenCharsMany '{' '}' (pairBetween ':' name inputValue <?> "ObjectField") 
     |>> Map.ofList 
   
+  // 2.9.7 List Value
   let listValue =
     betweenCharsMany '[' ']' (token_ws inputValue <?> "Value") 
      
 
   // 2.9 Value 
   //   Variable|IntValue|FloatValue|StringValue|
-  //   BooleanValue|EnumValue|ListValue|ObjectValue
+  //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
   inputValueRef :=
     choice [ variable |>> Variable <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
              stringValue |>> StringValue <?> "String"
              (attempt booleanValue) |>> BooleanValue <?> "Boolean"
+             nullValue
              enumValue |>> EnumValue  <?> "Enum"
              inputObject |>> ObjectValue  <?> "InputObject"
              listValue |>> ListValue <?> "ListValue" ]  
@@ -266,7 +270,7 @@ module internal Internal =
     let operationType = 
       (stoken_ws "query" >>% Query) <|> (stoken_ws "mutation" >>% Mutation) <|> (stoken_ws "subscription" >>% Subscription)
       
-    let namedOperationDefinition = 
+    let operationDefinition = 
       let variableDefinition =
         pipe2 (pairBetween ':' variable inputType) (whitespaces >>. opt((ctoken_ws '=') >>. inputValue))
           (fun (variableName, variableType) defaultVal ->
@@ -275,21 +279,21 @@ module internal Internal =
       let variableDefinitions =
         betweenCharsMany '(' ')' variableDefinition
       
-      pipe5 operationType (token_ws name) (opt(token_ws variableDefinitions)) (opt(token_ws directives)) (token_ws selectionSet)
+      pipe5 operationType (opt(token_ws name)) (opt(token_ws variableDefinitions)) (opt(token_ws directives)) (token_ws selectionSet)
         (fun  otype name ovars directives selection ->
-          { OperationType = otype; Name = Some name; SelectionSet = selection
+          { OperationType = otype; Name = name; SelectionSet = selection
             VariableDefinitions = someOrEmpty ovars; Directives = someOrEmpty directives })
     
     // Short hand format where operation defaults to a Query
-    let anonymousOperationDefinition =
+    let shortHandQueryDefinition =
       selectionSet |>> (fun selectionSet -> 
                          { OperationType = Query; SelectionSet = selectionSet; 
                            VariableDefinitions = []; Directives = []; Name = None })
     
     // SelectionSet |
-    //(OperationType (Name opt) (VariableDefinitions opt) (Directives opt) SelectionSet) 
+    // (OperationType (Name opt) (VariableDefinitions opt) (Directives opt) SelectionSet) 
     let operationDefinition =
-      anonymousOperationDefinition <|> namedOperationDefinition |>> OperationDefinition  
+      shortHandQueryDefinition <|> operationDefinition |>> OperationDefinition  
     
     let fragmentDefinition =
       pipe4 ((stoken_ws "fragment") >>. token_ws name .>> (stoken_ws "on")) (token_ws name) directives selectionSet

@@ -100,6 +100,7 @@ type Document with
             | BooleanValue x -> sb.Append(if x then "true" else "false")
             | StringValue x -> sb.Append(withQuotes x)
             | EnumValue x -> sb.Append(x)
+            | NullValue -> sb.Append("null")
             | ListValue x ->
                 if x.Length > 0 then sb.Append("[ ")
                 match x with
