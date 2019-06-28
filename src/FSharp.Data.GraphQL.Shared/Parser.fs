@@ -142,8 +142,10 @@ module internal Internal =
       pipe3 integerPart fractionPart exponentPart 
         (fun integer fraction exponent -> integer + fraction + exponent ) ] |>> float
 
+  // 2.9.5 Null Value
+  let nullValue = stoken "null" >>% NullValue
 
-  // 2.9.5 EnumValue
+  // 2.9.6 Enum Value
   //   Name but not true or false or null
   //   (boolean parser is run first)
   let enumValue = name
@@ -154,24 +156,26 @@ module internal Internal =
   let variable = pchar '$' >>. name 
 
 
-  // 2.9.7 Input Object Values
+  // 2.9.8 Input Object Values
   let inputObject =
     betweenCharsMany '{' '}' (pairBetween ':' name inputValue <?> "ObjectField") 
     |>> Map.ofList 
   
+  // 2.9.7 List Value
   let listValue =
     betweenCharsMany '[' ']' (token_ws inputValue <?> "Value") 
      
 
   // 2.9 Value 
   //   Variable|IntValue|FloatValue|StringValue|
-  //   BooleanValue|EnumValue|ListValue|ObjectValue
+  //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
   inputValueRef :=
     choice [ variable |>> Variable <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
              stringValue |>> StringValue <?> "String"
              (attempt booleanValue) |>> BooleanValue <?> "Boolean"
+             nullValue
              enumValue |>> EnumValue  <?> "Enum"
              inputObject |>> ObjectValue  <?> "InputObject"
              listValue |>> ListValue <?> "ListValue" ]  
