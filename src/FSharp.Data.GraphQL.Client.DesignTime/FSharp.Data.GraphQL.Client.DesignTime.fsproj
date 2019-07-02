@@ -26,6 +26,7 @@
     <Compile Include="..\FSharp.Data.GraphQL.Client\Schema.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\ReflectionPatterns.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Serialization.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Subscriptions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />

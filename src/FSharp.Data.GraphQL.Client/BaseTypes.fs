@@ -10,8 +10,9 @@ open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
-open FSharp.Data.GraphQL.Ast.Extensions
 open System.ComponentModel
+open System.Collections
+open System.Collections.Generic
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
@@ -24,6 +25,31 @@ type SchemaFieldInfo =
 
 /// A type alias to represent a Type name.
 type TypeName = string
+
+/// A representation of a Path item.
+type PathItem =
+    /// Indicates that this path item refers to an index of another item inside a list field.
+    | Index of int
+    /// Indicates that this path item refers to a field or type name.
+    | Name of string
+
+/// A representation for a path field type inside a GraphQL deferred result.
+type Path (items : PathItem seq) =
+    let items = Array.ofSeq items
+
+    new (items : obj seq) =
+        let mapper (x : obj) =
+            match x with
+            | :? int as x -> Index x
+            | :? string as x -> Name x
+            | _ -> failwith "Error mapping item array to path. One of the items is neither a System.Int32 or a System.String."
+        Path(Seq.map mapper items)
+
+    interface IEnumerable<PathItem> with
+        member __.GetEnumerator() = (items :> IEnumerable<PathItem>).GetEnumerator()
+
+    interface IEnumerable with
+        member __.GetEnumerator() = items.GetEnumerator()
 
 /// Contains data about a GQL operation error.
 type OperationError =
@@ -368,7 +394,17 @@ module internal JsonValueHelper =
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
 
+    let getResponsePath (responseJson : JsonValue) =
+        match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "path") with
+        | Some (_, path) ->
+            match path with
+            | JsonValue.Array items -> Some items
+            | JsonValue.Null -> None
+            | _ -> failwithf "Expected path field of root to be a Record type, but type is %A." path
+        | None -> None
+
 /// The base type for all GraphQLProvider operation result provided types.
+[<NoEquality; NoComparison>]
 type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
     let rawData = 
         let data = JsonValueHelper.getResponseDataFields responseJson
@@ -389,8 +425,6 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
         JsonValueHelper.getResponseCustomFields responseJson
         |> Serialization.deserializeMap
 
-    member private __.ResponseJson = responseJson
-
     /// [omit]
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
@@ -402,17 +436,34 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
     /// Gets all the custom data returned by the operation on server as a map of names and values.
     member __.CustomData = customData
 
-    member x.Equals(other : OperationResultBase) =
-        x.ResponseJson = other.ResponseJson
-
-    override x.Equals(other : obj) =
-        match other with
-        | :? OperationResultBase as other -> x.Equals(other)
-        | _ -> false
-
-    override x.GetHashCode() = x.ResponseJson.GetHashCode()
-
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
     member __.Query = query
+
+/// The base type for all GraphQLProvider deferred operation result provided types.
+[<NoEquality; NoComparison>]
+type DeferredResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+    inherit OperationResultBase (responseJson, operationFields, operationTypeName)
+    
+    let path = 
+        let path = JsonValueHelper.getResponsePath responseJson
+        let mapper (x : JsonValue) =
+            match x with
+            | JsonValue.Integer x -> Index x
+            | JsonValue.String x -> Name x
+            | _ -> failwith "Error parsing response path. One of the path items is neither an Integer value or a String value."
+        match path with
+        | Some [||] | None -> None
+        | Some path -> path |> Array.map mapper |> Path |> Some
+
+    /// Gets the path referring to the current deferred result.
+    member __.Path = path
+
+/// The base type for all GraphQLProvider subscription result provided types.
+[<NoEquality; NoComparison>]
+type SubscriptionResultBase (responseJson : JsonValue, deferredResponseJson : IObservable<JsonValue>, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+    inherit OperationResultBase (responseJson, operationFields, operationTypeName)
+
+    /// Gets the deferred results of the subscription operation as an observable.
+    member __.RawDeferred = deferredResponseJson |> Observable.map (fun responseJson -> DeferredResultBase(responseJson, operationFields, operationTypeName))

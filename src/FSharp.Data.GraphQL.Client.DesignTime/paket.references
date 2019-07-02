@@ -1,4 +1,5 @@
 group Common
 FSharp.Core
+System.Reactive
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs

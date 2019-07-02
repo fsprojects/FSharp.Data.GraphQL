@@ -19,6 +19,7 @@
     <Compile Include="GraphQLClient.fs" />
     <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="Locations.fs" />
+    <Compile Include="Subscriptions.fs" />
     <Compile Include="BaseTypes.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
