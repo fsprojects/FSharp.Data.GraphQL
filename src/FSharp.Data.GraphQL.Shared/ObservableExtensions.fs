@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL
+﻿namespace FSharp.Data.GraphQL
 
 open System
 open System.Reactive.Linq

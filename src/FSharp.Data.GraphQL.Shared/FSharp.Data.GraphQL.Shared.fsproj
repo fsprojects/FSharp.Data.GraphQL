@@ -9,6 +9,7 @@
     <Compile Include="Prolog.fs" />
     <Compile Include="Ast.fs" />
     <Compile Include="AsyncVal.fs" />
+    <Compile Include="ObservableExtensions.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Validation.fs" />
     <Compile Include="Introspection.fs" />

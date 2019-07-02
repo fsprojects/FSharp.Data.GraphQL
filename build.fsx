@@ -151,6 +151,7 @@ Target.create "AssemblyInfo" (fun _ ->
         | f when f.EndsWith "FSharp.Data.GraphQL.Shared.fsproj" -> 
             [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
+              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client.DesignTime"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
         | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" -> 
             [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
