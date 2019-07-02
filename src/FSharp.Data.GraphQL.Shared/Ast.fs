@@ -86,23 +86,25 @@ and FragmentDefinition = {
     SelectionSet: Selection list
 }
 
-/// 2.2.7 Input Values
+/// 2.9 Input Values
 and Value = 
-    /// 2.2.7.1 Int Value
+    /// 2.9.1 Int Value
     | IntValue of int64
-    /// 2.2.7.2 Float Value
+    /// 2.9.2 Float Value
     | FloatValue of double
-    /// 2.2.7.3 Boolean Value
+    /// 2.9.3 Boolean Value
     | BooleanValue of bool
-    /// 2.2.7.4 String Value
+    /// 2.9.4 String Value
     | StringValue of string
-    /// 2.2.7.5 Enum Value
+    /// 2.9.5 Null Value
+    | NullValue
+    /// 2.9.6 Enum Value
     | EnumValue of string
-    /// 2.2.7.6 List Value
+    /// 2.9.7 List Value
     | ListValue of Value list
-    /// 2.2.7.7 Input Object Values
+    /// 2.9.8 Input Object Values
     | ObjectValue of Map<string, Value>
-    /// 2.2.8 Variables
+    /// 2.10 Variables
     | Variable of string
 
 /// 2.2.8 Variables

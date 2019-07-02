@@ -36,6 +36,7 @@ let queryWithSelection selection = queryWithSelections [ selection ]
 
 let arg name value = { Argument.Name = name; Value = value }
 let argInt name value = arg name (IntValue (int64 value))
+let argNull name = arg name NullValue
 let fieldWithNameAndArgsAndSelections name arguments selections =
     Field { Name = name
             Alias = None
@@ -101,6 +102,14 @@ let ``parser should parse simple query with single field``() =
         |> queryWithSelection
         |> doc1
     test expected """{uri}"""
+
+[<Fact>]
+let ``parser should parse simple query with operation identifier, but no operation name``() =
+    let expected =
+        field "uri"
+        |> queryWithSelection
+        |> doc1
+    test expected """query {uri}"""
 
 [<Fact>]
 let ``parser should parse simple query with single field with whitespace``() =
@@ -267,6 +276,19 @@ let ``parser should parse GraphQL``() =
         width,
         height
       }
+    }
+  }"""
+  
+[<Fact>]
+let ``parser should parse query with null arguments``() =
+    let expected =
+        [ field "name" ]
+        |> fieldWithNameAndArgsAndSelections "user" [ argNull "id" ]
+        |> queryWithSelection
+        |> doc1
+    test expected """{
+    user(id: null) {
+      name
     }
   }"""
 

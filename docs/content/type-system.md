@@ -7,12 +7,12 @@ Each schema definition requires to have something called *root query* - it's a G
 
 GraphQL type system categorizes several custom types, that can be defined by programmer, including:
 
-- [Objects](#defining-an-object)
-- [Interfaces](#defining-an-interface)
-- [Unions](#defining-an-union)
-- [Enums](#defining-an-enum)
-- [Scalars](#defining-a-scalar)
-- [InputObjects](#defining-an-input-object)
+- [Objects](#Defining-an-Object)
+- [Interfaces](#Defining-an-Interface)
+- [Unions](#Defining-a-Union)
+- [Enums](#Defining-an-Enum)
+- [Scalars](#Defining-a-Scalar)
+- [InputObjects](#Defining-an-Input-Object)
 
 Beside them, FSharp.Data.GraphQL defines two others:
 
@@ -107,7 +107,7 @@ What's worth noticing here is that GraphQL interface definitions are not necessa
 
 Once you've defined a schema, you can retrieve all definitions implementing target interface, by calling `schema.GetPossibleTypes(Animal)`.
 
-## Defining an Union
+## Defining a Union
 
 GraphQL unions are basically enumerations of one of the object definitions. Unlike F# discriminated unions, they work on existing object types, that can be used on their own. This makes them initially heavy to work with.
 
