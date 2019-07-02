@@ -4,6 +4,7 @@ nuget NuGet.CommandLine
 
 # This group is needed for packages that are not needed or don't work on Mono.
 group NetCoreAndStandard
+  source https://api.nuget.org/v3/index.json
   frameworks: netcoreapp2.0, netstandard2.0
 
   # System.Net.Http is broken on Mono (see https://github.com/dotnet/corefx/issues/19914).
