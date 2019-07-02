@@ -516,7 +516,7 @@ module Ast =
                 match argDef.Type.Kind with
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match selection.Field.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
-                    | Some arg when arg.Value <> EnumValue "null" -> Success // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
+                    | Some arg when arg.Value <> NullValue -> Success
                     | _ -> AstError.AsResult(sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
                 | _ -> Success))
             |> Option.defaultValue Success
@@ -530,7 +530,7 @@ module Ast =
                         match argDef.Type.Kind with
                         | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                             match directive.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
-                            | Some arg when arg.Value <> EnumValue "null" -> Success // TODO: null values are being mapped into an enum value! Isn't it better to have a case for null values?
+                            | Some arg when arg.Value <> NullValue -> Success
                             | _ -> AstError.AsResult(sprintf "Argument '%s' of directive '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name directiveType.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
                         | _ -> Success)
                 | None -> Success)
@@ -695,9 +695,8 @@ module Ast =
         let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : Value) =
             let canNotCoerce = AstError.AsResult(sprintf "Argument field or value named '%s' can not be coerced. It does not match a valid literal representation for the type." argName, selection.Path)
             match value with
-            // TODO: null values are being parsed as an Enum. Isn't it better to make an option for null values?
-            | EnumValue "null" when tref.Kind = TypeKind.NON_NULL -> AstError.AsResult(sprintf "Argument '%s' value can not be coerced. It's type is non-nullable but the argument has a null value." argName, selection.Path)
-            | EnumValue "null" -> Success
+            | NullValue when tref.Kind = TypeKind.NON_NULL -> AstError.AsResult(sprintf "Argument '%s' value can not be coerced. It's type is non-nullable but the argument has a null value." argName, selection.Path)
+            | NullValue -> Success
             | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
