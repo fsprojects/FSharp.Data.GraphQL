@@ -207,7 +207,7 @@ module Ast =
 
     let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<AstError>) =
         let rec traverseSelections selection = (onSelection selection) @@ (selection.SelectionSet |> collectResults traverseSelections)
-        ctx.Definitions |> collectResults(fun def -> def.SelectionSet |> collectResults traverseSelections)
+        ctx.Definitions |> collectResults (fun def -> def.SelectionSet |> collectResults traverseSelections)
 
     let rec private getFragSelectionSetInfo (visitedFragments : string list) (fragmentTypeInfo : FragmentTypeInfo) (fragmentSelectionSet : Selection list) (parentCtx : SelectionInfoContext) =
         match fragmentTypeInfo with
@@ -427,16 +427,12 @@ module Ast =
             | TypeKind.INTERFACE | TypeKind.UNION | TypeKind.OBJECT when selectionSetLength = 0 ->
                 AstError.AsResult(sprintf "Field '%s' of '%s' type is of type kind %s, and therefore should have inner fields in its selection." selection.Field.Name selection.FragmentOrParentType.Name (fieldType.Kind.ToString()), selection.Path)
             | _ -> Success
-        let validKind =
-            match selection.FieldType with
-            | Some fieldType -> validateByKind fieldType selection.SelectionSet.Length
-            | None -> Success
-        validKind
-        @@ (selection.SelectionSet |> collectResults checkLeafFieldSelection)
+        match selection.FieldType with
+        | Some fieldType -> validateByKind fieldType selection.SelectionSet.Length
+        | None -> Success
 
     let internal validateLeafFieldSelections (ctx : ValidationContext) =
-        ctx.Definitions
-        |> collectResults (fun def -> def.SelectionSet |> collectResults checkLeafFieldSelection)
+        onAllSelections ctx checkLeafFieldSelection
 
     let private checkFieldArgumentNames (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let argumentsValid =
@@ -463,10 +459,9 @@ module Ast =
         argumentsValid @@ directivesValid
 
     let internal validateArgumentNames (ctx : ValidationContext) =
-        ctx.Definitions
-        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
+        onAllSelections ctx (checkFieldArgumentNames ctx.Schema)
 
-    let rec private checkArgumentUniqueness (selectionSet : SelectionInfo list) =
+    let rec private validateArgumentUniquenessInSelection (selection : SelectionInfo) =
         let validateArgs (fieldOrDirective : string) (path : Path) (args : Argument list) =
             args
             |> List.countBy(fun x -> x.Name)
@@ -474,16 +469,12 @@ module Ast =
                 if length > 1
                 then AstError.AsResult(sprintf "There are %i arguments with name '%s' defined in %s. Field arguments must be unique." length name fieldOrDirective, path)
                 else Success)
-        selectionSet
-        |> collectResults (fun selection ->
-            let argsValid = validateArgs (sprintf "alias or field '%s'" selection.AliasOrName) selection.Path selection.Field.Arguments
-            let directiveArgsValid = selection.Field.Directives |> collectResults (fun directive -> validateArgs (sprintf "directive '%s'" directive.Name) selection.Path directive.Arguments)
-            let innerArgsValid = checkArgumentUniqueness selection.SelectionSet
-            argsValid @@ directiveArgsValid @@ innerArgsValid)
+        let argsValid = validateArgs (sprintf "alias or field '%s'" selection.AliasOrName) selection.Path selection.Field.Arguments
+        let directiveArgsValid = selection.Field.Directives |> collectResults (fun directive -> validateArgs (sprintf "directive '%s'" directive.Name) selection.Path directive.Arguments)
+        argsValid @@ directiveArgsValid
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
-        ctx.Definitions
-        |> collectResults (fun def -> checkArgumentUniqueness def.SelectionSet)
+        onAllSelections ctx validateArgumentUniquenessInSelection
 
     let private checkRequiredArguments (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let inputsValid =
@@ -512,14 +503,12 @@ module Ast =
         inputsValid @@ directivesValid
 
     let internal validateRequiredArguments (ctx : ValidationContext) =
-        ctx.Definitions
-        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkRequiredArguments ctx.Schema))
+        onAllSelections ctx (checkRequiredArguments ctx.Schema)
 
     let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
         let counts = Dictionary<string, int>()
         ctx.FragmentDefinitions
         |> List.iter(fun frag -> frag.Definition.Name |> Option.iter(fun name -> Dictionary.addWith (+) name 1 counts))
-
         counts
         |> collectResults (fun (KeyValue(name, length)) ->
             if length > 1
@@ -567,9 +556,7 @@ module Ast =
         fragmentTypeValid @@ (selection.SelectionSet |> collectResults checkFragmentOnCompositeType)
 
     let internal validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
-        ctx.Definitions
-        |> List.collect (fun def -> def.SelectionSet)
-        |> collectResults checkFragmentOnCompositeType
+        onAllSelections ctx checkFragmentOnCompositeType
 
     let internal validateFragmentsMustBeUsed (ctx : ValidationContext) =
         let rec getSpreadNames (acc : Set<string>) =
@@ -650,7 +637,7 @@ module Ast =
 
     let rec private getFragmentAndParentTypes (set : SelectionInfo list) =
         ([], set)
-        ||> List.fold(fun acc selection ->
+        ||> List.fold (fun acc selection ->
             match selection.FragmentType with
             | Some fragType when fragType.Name <> selection.ParentType.Name -> (selection.Path, selection.ParentType, fragType) :: acc
             | _ -> acc)
