@@ -205,6 +205,10 @@ module Ast =
 
     let private tryFindInArrayOption (finder : 'T -> bool) = Option.bind (Array.tryFind finder)
 
+    let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<AstError>) =
+        let rec traverseSelections selection = (onSelection selection) @@ (selection.SelectionSet |> collectResults traverseSelections)
+        ctx.Definitions |> collectResults(fun def -> def.SelectionSet |> collectResults traverseSelections)
+
     let rec private getFragSelectionSetInfo (visitedFragments : string list) (fragmentTypeInfo : FragmentTypeInfo) (fragmentSelectionSet : Selection list) (parentCtx : SelectionInfoContext) =
         match fragmentTypeInfo with
         | Inline fragType ->
@@ -361,28 +365,14 @@ module Ast =
             | _ -> Success)
 
     let internal validateSelectionFieldTypes (ctx : ValidationContext) =
-        let rec checkFieldsOfType (visitedFragments : string list) (selectionSet : SelectionInfo list) =
-            selectionSet
-            |> collectResults (fun selection ->
-                match selection.FragmentSpreadName with
-                | Some spreadName when List.contains spreadName visitedFragments -> Success
-                | _ ->
-                    let selectionIsValid =
-                        if metaTypeFields.ContainsKey(selection.Field.Name)
-                        then Success
-                        else
-                            let exists = selection.FragmentOrParentType.Fields |> Option.map (Array.exists(fun f -> f.Name = selection.Field.Name)) |> Option.defaultValue false
-                            if not exists
-                            then AstError.AsResult(sprintf "Field '%s' is not defined in schema type '%s'." selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
-                            else Success
-                    let visitedFragments =
-                        match selection.FragmentSpreadName with
-                        | Some spreadName -> spreadName :: visitedFragments
-                        | None -> visitedFragments
-                    let innerSelectionIsValid = checkFieldsOfType visitedFragments selection.SelectionSet
-                    selectionIsValid @@ innerSelectionIsValid)
-        ctx.Definitions
-        |> collectResults (function def -> checkFieldsOfType [] def.SelectionSet)
+        onAllSelections ctx (fun selection ->
+            if metaTypeFields.ContainsKey(selection.Field.Name)
+            then Success
+            else
+                let exists = selection.FragmentOrParentType.Fields |> Option.map (Array.exists(fun f -> f.Name = selection.Field.Name)) |> Option.defaultValue false
+                if not exists
+                then AstError.AsResult(sprintf "Field '%s' is not defined in schema type '%s'." selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
+                else Success)
 
     let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
         let parentPossibleTypes = parentType.PossibleTypes |> Option.defaultValue [||] |> Array.choose (fun x -> x.Name) |> Array.append [|parentType.Name|] |> Set.ofArray
