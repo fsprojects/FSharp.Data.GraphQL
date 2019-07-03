@@ -40,4 +40,4 @@ dependencies
 	framework: netstandard2.0
 		FSharp.Core >= LOCKEDVERSION-Common
 		FParsec = LOCKEDVERSION-Common
-        System.Net.Http = LOCKEDVERSION-Common
+        System.Net.Http = LOCKEDVERSION-NetCoreAndStandard
