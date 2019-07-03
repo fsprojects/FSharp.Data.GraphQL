@@ -111,9 +111,9 @@ module Ast =
           /// In case this field is part of a selection of a fragment spread, gets the name of the fragment spread.
           FragmentSpreadName : string option
           /// Contains the selection info of this field, if it is an Object, Interface or Union type.
-          SelectionSet : SelectionInfoKind list
+          SelectionSet : SelectionInfo list
           /// In case the schema definition fo this field has input values, gets information about the input values of the field in the schema.
-          InputValues : IntrospectionInputVal [] option
+          InputValues : IntrospectionInputVal []
           /// Contains the path of the field in the document.
           Path : Path }
         /// If the field has an alias, return its alias. Otherwise, returns its name.
@@ -121,34 +121,24 @@ module Ast =
         /// If the field is inside a selection of a fragment definition, returns the fragment type containing the field.
         /// Otherwise, return the parent type in the schema definition.
         member x.FragmentOrParentType = x.FragmentType |> Option.defaultValue x.ParentType
-        /// Gets the selection set that does not make cyclic references to a specific Fragment.
-        member x.NonCyclicSelectionSet = x.SelectionSet |> List.choose (function SelectionField x -> Some x | _ -> None)
-
-    and SelectionInfoKind =
-        | SelectionField of SelectionInfo
-        | CyclicReferenceToFragment of fragmentName : string
 
     /// Contains information about an operation definition in the document, with related GraphQL schema type information.
     type OperationDefinitionInfo =
         { /// Returns the definition from the parsed document.
           Definition : OperationDefinition
           /// Returns the selection information about the operation, with related GraphQL schema type information.
-          SelectionSet : SelectionInfoKind list }
+          SelectionSet : SelectionInfo list }
         /// Returns the name of the operation definition, if it does have a name.
         member x.Name = x.Definition.Name
-        /// Gets the selection set that does not make cyclic references to a specific Fragment.
-        member x.NonCyclicSelectionSet = x.SelectionSet |> List.choose (function SelectionField x -> Some x | _ -> None)
 
     /// Contains information about a fragment definition in the document, with related GraphQL schema type information.
     type FragmentDefinitionInfo =
         { /// Returns the definition from the parsed document.
           Definition : FragmentDefinition
           /// Returns the selection information about the fragment, with related GraphQL schema type information.
-          SelectionSet : SelectionInfoKind list }
+          SelectionSet : SelectionInfo list }
         /// Returns the name of the fragment definition, if it does have a name.
         member x.Name = x.Definition.Name
-        /// Gets the selection set that does not make cyclic references to a specific Fragment.
-        member x.NonCyclicSelectionSet = x.SelectionSet |> List.choose (function SelectionField x -> Some x | _ -> None)
 
     /// Contains information about a definition in the document, with related GraphQL schema type information.
     type DefinitionInfo =
@@ -171,8 +161,6 @@ module Ast =
             match x with
             | OperationDefinitionInfo x -> x.Definition.Directives
             | FragmentDefinitionInfo x -> x.Definition.Directives
-        /// Gets the selection set that does not make cyclic references to a specific Fragment.
-        member x.NonCyclicSelectionSet = x.SelectionSet |> List.choose (function SelectionField x -> Some x | _ -> None)
     
     /// The validation  context used to run validations against a parsed document.
     /// It should have the schema type information, the original document and the definition information about the original document.
@@ -226,8 +214,7 @@ module Ast =
                     FragmentType = Some (Inline fragType)
                     SelectionSet = fragmentSelectionSet }
             getSelectionSetInfo visitedFragments fragCtx
-        | Spread (fragName, _, _) when List.contains fragName visitedFragments ->
-            CyclicReferenceToFragment fragName |> List.singleton
+        | Spread (fragName, _, _) when List.contains fragName visitedFragments -> []
         | Spread (fragName, directives, fragType) ->
             let fragCtx =
                 { parentCtx with
@@ -236,7 +223,7 @@ module Ast =
                     SelectionSet = fragmentSelectionSet }
             getSelectionSetInfo (fragName :: visitedFragments) fragCtx
             
-    and private getSelectionSetInfo (visitedFragments : string list) (ctx : SelectionInfoContext) : SelectionInfoKind list =
+    and private getSelectionSetInfo (visitedFragments : string list) (ctx : SelectionInfoContext) : SelectionInfo list =
         // When building the selection info, we should not raise any error when a type referred by the document
         // is not found in the schema. Not found types are validated in another validation, without the need of the
         // selection info to do it. Info types are helpers to validate against their schema types when the match is found.
@@ -265,9 +252,8 @@ module Ast =
                   ParentType = ctx.ParentType
                   FragmentType = ctx.FragmentType |> Option.map (fun x -> x.TypeCondition)
                   FragmentSpreadName = ctx.FragmentType |> Option.bind (fun x -> x.Name)
-                  InputValues = inputValues
+                  InputValues = inputValues |> Option.defaultValue [||]
                   Path = fieldPath }
-                |> SelectionField
                 |> List.singleton
             | InlineFragment inlineFrag -> 
                 inlineFrag.TypeCondition
@@ -393,10 +379,10 @@ module Ast =
                         match selection.FragmentSpreadName with
                         | Some spreadName -> spreadName :: visitedFragments
                         | None -> visitedFragments
-                    let innerSelectionIsValid = checkFieldsOfType visitedFragments selection.NonCyclicSelectionSet
+                    let innerSelectionIsValid = checkFieldsOfType visitedFragments selection.SelectionSet
                     selectionIsValid @@ innerSelectionIsValid)
         ctx.Definitions
-        |> collectResults (function def -> checkFieldsOfType [] def.NonCyclicSelectionSet)
+        |> collectResults (function def -> checkFieldsOfType [] def.SelectionSet)
 
     let private typesAreApplicable (parentType : IntrospectionType, fragmentType : IntrospectionType) =
         let parentPossibleTypes = parentType.PossibleTypes |> Option.defaultValue [||] |> Array.choose (fun x -> x.Name) |> Array.append [|parentType.Name|] |> Set.ofArray
@@ -408,9 +394,9 @@ module Ast =
         if fieldA.FieldType = fieldB.FieldType
         then
             let fieldsForName = Dictionary<string, SelectionInfo list>()
-            fieldA.NonCyclicSelectionSet 
+            fieldA.SelectionSet 
             |> List.iter (fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
-            fieldB.NonCyclicSelectionSet 
+            fieldB.SelectionSet 
             |> List.iter (fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
             fieldsForName
             |> collectResults (fun (KeyValue (_, selectionSet)) ->
@@ -434,12 +420,12 @@ module Ast =
                         if fieldA.Field.Name <> fieldB.Field.Name then hasSameShape @@ AstError.AsResult(sprintf "Field name or alias '%s' is referring to fields '%s' and '%s', but they are different fields in the scope of the parent type." aliasOrName fieldA.Field.Name fieldB.Field.Name, fieldA.Path)
                         else if fieldA.Field.Arguments <> fieldB.Field.Arguments then hasSameShape @@ AstError.AsResult(sprintf "Field name or alias '%s' refers to field '%s' two times, but each reference has different argument sets." aliasOrName fieldA.Field.Name, fieldA.Path)
                         else
-                            let mergedSet = fieldA.NonCyclicSelectionSet @ fieldB.NonCyclicSelectionSet
+                            let mergedSet = fieldA.SelectionSet @ fieldB.SelectionSet
                             hasSameShape @@ (fieldsInSetCanMerge mergedSet)
                     else hasSameShape))
 
     let internal validateFieldSelectionMerging (ctx : ValidationContext) =
-        ctx.Definitions |> collectResults (fun def -> fieldsInSetCanMerge def.NonCyclicSelectionSet)
+        ctx.Definitions |> collectResults (fun def -> fieldsInSetCanMerge def.SelectionSet)
 
     let rec private checkLeafFieldSelection (selection : SelectionInfo) =
         let rec validateByKind (fieldType : IntrospectionTypeRef) (selectionSetLength : int) =
@@ -456,11 +442,11 @@ module Ast =
             | Some fieldType -> validateByKind fieldType selection.SelectionSet.Length
             | None -> Success
         validKind
-        @@ (selection.NonCyclicSelectionSet |> collectResults checkLeafFieldSelection)
+        @@ (selection.SelectionSet |> collectResults checkLeafFieldSelection)
 
     let internal validateLeafFieldSelections (ctx : ValidationContext) =
         ctx.Definitions
-        |> collectResults (fun def -> def.NonCyclicSelectionSet |> collectResults checkLeafFieldSelection)
+        |> collectResults (fun def -> def.SelectionSet |> collectResults checkLeafFieldSelection)
 
     let private checkFieldArgumentNames (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let argumentsValid =
@@ -469,8 +455,8 @@ module Ast =
                 let schemaArgumentNames =
                     metaTypeFields.TryFind(selection.Field.Name)
                     |> Option.map (fun x -> x.ArgumentNames)
-                    |> Option.orElseWith (fun () -> selection.InputValues |> Option.map (Array.map (fun x -> x.Name)))
-                match schemaArgumentNames |> tryFindInArrayOption (fun x -> x = arg.Name) with
+                    |> Option.defaultValue (selection.InputValues |> Array.map (fun x -> x.Name))
+                match schemaArgumentNames |> Array.tryFind (fun x -> x = arg.Name) with
                 | Some _ -> Success
                 | None -> AstError.AsResult(sprintf "Field '%s' of type '%s' does not have an input named '%s' in its definition." selection.Field.Name selection.FragmentOrParentType.Name arg.Name, selection.Path))
         let directivesValid =
@@ -488,7 +474,7 @@ module Ast =
 
     let internal validateArgumentNames (ctx : ValidationContext) =
         ctx.Definitions
-        |> collectResults (fun def -> def.NonCyclicSelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
+        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkFieldArgumentNames ctx.Schema))
 
     let rec private checkArgumentUniqueness (selectionSet : SelectionInfo list) =
         let validateArgs (fieldOrDirective : string) (path : Path) (args : Argument list) =
@@ -502,24 +488,23 @@ module Ast =
         |> collectResults (fun selection ->
             let argsValid = validateArgs (sprintf "alias or field '%s'" selection.AliasOrName) selection.Path selection.Field.Arguments
             let directiveArgsValid = selection.Field.Directives |> collectResults (fun directive -> validateArgs (sprintf "directive '%s'" directive.Name) selection.Path directive.Arguments)
-            let innerArgsValid = checkArgumentUniqueness selection.NonCyclicSelectionSet
+            let innerArgsValid = checkArgumentUniqueness selection.SelectionSet
             argsValid @@ directiveArgsValid @@ innerArgsValid)
 
     let internal validateArgumentUniqueness (ctx : ValidationContext) =
         ctx.Definitions
-        |> collectResults (fun def -> checkArgumentUniqueness def.NonCyclicSelectionSet)
+        |> collectResults (fun def -> checkArgumentUniqueness def.SelectionSet)
 
     let private checkRequiredArguments (schemaInfo : SchemaInfo) (selection : SelectionInfo) =
         let inputsValid =
             selection.InputValues
-            |> Option.map(collectResults (fun argDef ->
+            |> collectResults (fun argDef ->
                 match argDef.Type.Kind with
                 | TypeKind.NON_NULL when argDef.DefaultValue.IsNone ->
                     match selection.Field.Arguments |> List.tryFind (fun arg -> arg.Name = argDef.Name) with
                     | Some arg when arg.Value <> NullValue -> Success
                     | _ -> AstError.AsResult(sprintf "Argument '%s' of field '%s' of type '%s' is required and does not have a default value." argDef.Name selection.Field.Name selection.FragmentOrParentType.Name, selection.Path)
-                | _ -> Success))
-            |> Option.defaultValue Success
+                | _ -> Success)
         let directivesValid =
             selection.Field.Directives
             |> collectResults (fun directive ->
@@ -538,7 +523,7 @@ module Ast =
 
     let internal validateRequiredArguments (ctx : ValidationContext) =
         ctx.Definitions
-        |> collectResults (fun def -> def.NonCyclicSelectionSet |> collectResults (checkRequiredArguments ctx.Schema))
+        |> collectResults (fun def -> def.SelectionSet |> collectResults (checkRequiredArguments ctx.Schema))
 
     let internal validateFragmentNameUniqueness (ctx : ValidationContext) =
         let counts = Dictionary<string, int>()
@@ -589,11 +574,11 @@ module Ast =
                 | _ when selection.FragmentSpreadName.IsSome -> AstError.AsResult(sprintf "Fragment '%s' has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." selection.FragmentSpreadName.Value (fragType.Kind.ToString()), selection.Path)
                 | _ -> AstError.AsResult(sprintf "Inline fragment has type kind %s, but fragments can only be defined in UNION, OBJECT or INTERFACE types." (fragType.Kind.ToString()), selection.Path)
             | None -> Success
-        fragmentTypeValid @@ (selection.NonCyclicSelectionSet |> collectResults checkFragmentOnCompositeType)
+        fragmentTypeValid @@ (selection.SelectionSet |> collectResults checkFragmentOnCompositeType)
 
     let internal validateFragmentsOnCompositeTypes (ctx : ValidationContext) =
         ctx.Definitions
-        |> List.collect (fun def -> def.NonCyclicSelectionSet)
+        |> List.collect (fun def -> def.SelectionSet)
         |> collectResults checkFragmentOnCompositeType
 
     let internal validateFragmentsMustBeUsed (ctx : ValidationContext) =
@@ -683,7 +668,7 @@ module Ast =
     let internal validateFragmentSpreadIsPossible (ctx : ValidationContext) =
         ctx.Definitions
         |> collectResults (fun def ->
-            def.NonCyclicSelectionSet
+            def.SelectionSet
             |> getFragmentAndParentTypes
             |> collectResults (checkFragmentSpreadIsPossibleInSelection))
 
@@ -755,7 +740,7 @@ module Ast =
                 | _ -> Success
         selection.Field.Arguments
         |> collectResults (fun arg ->
-            let argumentTypeRef = selection.InputValues |> Option.defaultValue [||] |> Array.tryPick (fun x -> if x.Name = arg.Name then Some x.Type else None)
+            let argumentTypeRef = selection.InputValues |> Array.tryPick (fun x -> if x.Name = arg.Name then Some x.Type else None)
             match argumentTypeRef with
             | Some argumentTypeRef -> checkIsCoercible argumentTypeRef arg.Name arg.Value
             | None -> Success)
@@ -765,8 +750,8 @@ module Ast =
         |> collectResults (fun def ->
             let (vars, selectionSet) =
                 match def with
-                | OperationDefinitionInfo odef -> (Some odef.Definition.VariableDefinitions, odef.NonCyclicSelectionSet)
-                | FragmentDefinitionInfo fdef -> (None, fdef.NonCyclicSelectionSet)
+                | OperationDefinitionInfo odef -> (Some odef.Definition.VariableDefinitions, odef.SelectionSet)
+                | FragmentDefinitionInfo fdef -> (None, fdef.SelectionSet)
             selectionSet |> collectResults (checkInputValue ctx.Schema vars))
 
     let rec private getDistinctDirectiveNamesInSelection (path : Path) (selection : Selection) : (Path * Set<string>) list =
@@ -1085,7 +1070,6 @@ module Ast =
             | _ -> Success)
 
     let rec private checkVariableUsageAllowedOnSelection (varNamesAndTypeRefs : Map<string, VariableDefinition * IntrospectionTypeRef>) (visitedFragments : string list) (selection : SelectionInfo) =
-        let inputs = Option.defaultValue [||] selection.InputValues
         match selection.FragmentSpreadName with
         | Some spreadName when List.contains spreadName visitedFragments -> Success
         | _ ->
@@ -1097,13 +1081,13 @@ module Ast =
             | Some _ ->
                 let argumentsValid = 
                     selection.Field.Arguments 
-                    |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path
+                    |> checkVariableUsageAllowedOnArguments selection.InputValues varNamesAndTypeRefs selection.Path
                 let selectionValid = 
-                    selection.NonCyclicSelectionSet 
+                    selection.SelectionSet 
                     |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments)
                 let directivesValid =
                     selection.Field.Directives 
-                    |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments inputs varNamesAndTypeRefs selection.Path)
+                    |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments selection.InputValues varNamesAndTypeRefs selection.Path)
                 argumentsValid @@ selectionValid @@ directivesValid
             | None -> Success
 
@@ -1114,7 +1098,7 @@ module Ast =
                 def.Definition.VariableDefinitions
                 |> List.choose (fun varDef -> ctx.Schema.TryGetInputType(varDef.Type) |> Option.map(fun t -> varDef.VariableName, (varDef, t)))
                 |> Map.ofList
-            def.NonCyclicSelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs []))
+            def.SelectionSet |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs []))
 
     let private allValidations =
         [ validateFragmentsMustNotFormCycles
