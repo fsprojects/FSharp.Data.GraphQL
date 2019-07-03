@@ -1977,9 +1977,12 @@ and TypeMap() =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         let toSeq map = map |> Map.toSeq |> Seq.map snd
         let map (f : FieldDef<'Val>) =
-            match f.TypeDef with
-            | :? ListOfDef<'Res, 'Res seq> -> Some f
-            | _ -> None
+            let rec isList (fieldTypeDef : TypeDef) =
+                match fieldTypeDef with
+                | :? NullableDef as x -> isList x.OfType
+                | :? ListOfDef<'Res, 'Res seq> -> true
+                | _ -> false
+            if isList f.TypeDef then Some f else None
         this.OfType<ObjectDef<'Val>>(includeDefaultTypes)
         |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
         |> List.ofSeq
