@@ -58,8 +58,6 @@ type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
 type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, ?validationCache : IValidationResultCache) =
     let validationCache = defaultArg validationCache (upcast MemoryValidationResultCache())
 
-    let schemaId = schema.Introspected.GetHashCode()
-
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
     // FIXME: for some reason static do or do invocation in module doesn't work
@@ -83,6 +81,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 | Some f -> f ctx (fun ctx' -> go ctx' ms)
                 | None -> go ctx ms
         go initialCtx middlewaresList
+
     do
         let compileCtx = { Schema = schema; TypeMap = schema.TypeMap; FieldExecuteMap = fieldExecuteMap }
         runMiddlewares (fun x -> x.CompileSchema) compileCtx compileSchema
@@ -150,6 +149,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     | None -> raise (GraphQLException "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema") 
             let documentId = ast.GetHashCode()
             let validationResult =
+                let schemaId = schema.Introspected.GetHashCode()
                 let key = { DocumentId = documentId; SchemaId = schemaId }
                 let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
                 validationCache.GetOrAdd producer key
