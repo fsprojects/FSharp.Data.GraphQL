@@ -33,7 +33,7 @@ type OperationExecutionMiddleware =
     ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
 
 /// An interface to implement Executor middlewares.
-/// A middleware can have one to three sub-middleware, one for each phase of the query execution.
+/// A middleware can have one to three sub-middlewares, one for each phase of the query execution.
 type IExecutorMiddleware =
     /// Defines the sub-middleware that intercepts the schema compile process of the Executor.
     abstract CompileSchema : SchemaCompileMiddleware option
