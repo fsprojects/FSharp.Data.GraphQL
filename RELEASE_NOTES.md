@@ -126,3 +126,4 @@
 * Client component can optionally disable query validation
 * Updating parser to support unamed operations alongside short handed queries
 * Adding null value support for the AST Input Values (it was previously parsed as an Enum Value)
+* **Breaking Change** Renaming `FSharp.Data.GraphQL.Server.Middlewares` package to `FSharp.Data.GraphQL.Server.Middleware`
