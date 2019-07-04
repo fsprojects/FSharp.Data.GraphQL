@@ -114,3 +114,15 @@
 * Adding support for file uploads through [GraphQL Multipart Request Spec](https://github.com/jaydenseric/graphql-multipart-request-spec)
 * Changing variable parameters of Run/AsyncRun methods to work as overloaded methods instead of one having optional parameters
 * Minor bug fixes
+
+### 1.0.0 - July 4 2019
+* Changing the internal client of the Type provider (`System.Http.HttpClient`)
+* Fixing several minor bugs of the file upload system in the client provider
+* Limiting the upload type of the client provider to be a scalar type (provider fails if it is not)
+* If an upload type is specified and it is not used in a query, client provider defaults to standard HTTP protocol instead of the multipart request
+* Implementing a validation system for queries based on the [GraphQL Spec](https://graphql.github.io/graphql-spec/June2018/#sec-Validation)
+* Making validation mandatory on the server component
+* Implemented a cache system for query validation on both server and client components
+* Client component can optionally disable query validation
+* Updating parser to support unamed operations alongside short handed queries
+* Adding null value support for the AST Input Values (it was previously parsed as an Enum Value)
