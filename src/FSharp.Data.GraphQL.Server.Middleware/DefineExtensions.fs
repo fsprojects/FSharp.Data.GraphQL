@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Server.Middlewares
+namespace FSharp.Data.GraphQL.Server.Middleware
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL

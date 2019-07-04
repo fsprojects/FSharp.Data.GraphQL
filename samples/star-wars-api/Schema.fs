@@ -2,7 +2,7 @@
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Server.Middleware
 
 #nowarn "40"
 

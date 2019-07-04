@@ -17,7 +17,7 @@
     <Compile Include="AsyncValBenchmark.fs" />
     <Compile Include="ParsingBenchmark.fs" />
     <Compile Include="ExecutionBenchmark.fs" />
-    <Compile Include="MiddlewaresBenchmark.fs" />
+    <Compile Include="MiddlewareBenchmark.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup>
@@ -26,7 +26,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
   <Import Project="..\..\netfx.props" />
   <Import Project="..\..\.paket\Paket.Restore.targets" />

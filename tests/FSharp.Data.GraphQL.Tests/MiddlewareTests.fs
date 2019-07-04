@@ -1,9 +1,9 @@
-module FSharp.Data.GraphQL.Tests.MiddlewaresTests
+module FSharp.Data.GraphQL.Tests.MiddlewareTests
 
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Server.Middleware
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
@@ -78,11 +78,11 @@ let executor =
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
-    let middlewares = 
+    let middleware = 
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<A, Subject option>(true)
           Define.ObjectListFilterMiddleware<B, Subject option>(true) ]
-    Executor(schema, middlewares)
+    Executor(schema, middleware)
 
 let execute (query : Document) =
     executor.AsyncExecute(query) |> sync

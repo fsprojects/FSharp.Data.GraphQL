@@ -93,7 +93,7 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BEFD8748-2467-45F9-A4AD-B450B12D5F78}"
 EndProject
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middlewares", "src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middleware", "src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}"
 EndProject

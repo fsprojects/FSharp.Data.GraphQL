@@ -570,8 +570,8 @@ Target.create "PublishClient" (fun _ ->
     publishPackage "Client"
 )
 
-Target.create "PublishMiddlewares" (fun _ ->
-    publishPackage "Server.Middlewares"
+Target.create "PublishMiddleware" (fun _ ->
+    publishPackage "Server.Middleware"
 )
 
 Target.create "PackServer" (fun _ ->
@@ -582,8 +582,8 @@ Target.create "PackClient" (fun _ ->
     pack "Client"
 )
 
-Target.create "PackMiddlewares" (fun _ ->
-    pack "Server.Middlewares"
+Target.create "PackMiddleware" (fun _ ->
+    pack "Server.Middleware"
 )
 
 Target.create "PublishNpm" (fun _ ->

@@ -15,7 +15,7 @@
 
 ### 0.0.4-beta - May 31 2018
 * Introduced support for middlewares in the execution pipeline.
-* Introduced new package, named FSharp.Data.GraphQL.Server.Middlewares, with generic, built-in middlewares.
+* Introduced new package, named FSharp.Data.GraphQL.Server.Middleware, with generic, built-in middlewares.
 * Introduced QueryWeightMiddleware, a generic execution middleware to measure query complexity and optionally block qurey execution with a threshold.
 * Introduced ObjectListFilterMiddleware, a generic schema compile middleware to add filter options to list fields of specific objects.
 * Changed GQLResponse object to be a Record, which supports a Metadata bag object, that can be used to hold custom information per query request.

@@ -39,7 +39,7 @@
     <Compile Include="PropertyTrackerTests.fs" />
     <Compile Include="LinqTests.fs" />
     <Compile Include="DeferredTests.fs" />
-    <Compile Include="MiddlewaresTests.fs" />
+    <Compile Include="MiddlewareTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
     <Compile Include="AstExtensionsTests.fs" />
@@ -55,7 +55,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
   <ItemGroup Condition="$(OS) == Unix">
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />

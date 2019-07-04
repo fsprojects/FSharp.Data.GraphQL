@@ -300,7 +300,7 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
 
 ### Built-in middlewares
 
-There are some built-in middlewares inside `FSharp.Data.GraphQL.Server.Middlewares` package:
+There are some built-in middlewares inside `FSharp.Data.GraphQL.Server.Middleware` package:
 
 #### QueryWeightMiddleware
 

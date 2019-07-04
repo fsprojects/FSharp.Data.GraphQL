@@ -9,7 +9,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open BenchmarkDotNet.Attributes
 open FSharp.Data.GraphQL.Benchmarks
-open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Server.Middleware
 
 [<Config(typeof<GraphQLBenchConfig>); MonoJob; CoreJob>]
 type SimpleExecutionWithMiddlewaresBenchmark() = 
