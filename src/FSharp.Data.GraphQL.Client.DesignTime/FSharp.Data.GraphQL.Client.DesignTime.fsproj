@@ -4,7 +4,7 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFrameworks>netstandard2.0;netcoreapp2.0;net461</TargetFrameworks>
-    <DefineConstants>NO_GENERATIVE;$(DefineConstants)</DefineConstants>
+    <DefineConstants>IS_DESIGNTIME; NO_GENERATIVE;$(DefineConstants)</DefineConstants>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
     <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
@@ -20,16 +20,18 @@
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
+    <Compile Include="..\FSharp.Data.GraphQL.Client\MimeTypes.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Extensions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Schema.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\ReflectionPatterns.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\Upload.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Serialization.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\BaseTypes.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
     <Compile Include="DesignTimeCache.fs" />
     <Compile Include="ProvidedTypesHelper.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />
@@ -38,6 +40,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="System.Net.Primitives" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
   <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

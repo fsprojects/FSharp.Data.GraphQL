@@ -1,4 +1,4 @@
-.paket\paket.bootstrapper.exe 5.201.1
+.paket\paket.bootstrapper.exe
 
 if errorlevel 1 (
   exit /b %errorlevel%

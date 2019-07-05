@@ -93,7 +93,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This test does not pass anymore since the literal representation of the argument does not match the input type.")>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
     let ast = parse """{ fieldWithObjectInput(input: {a: "foo", b: "bar", c: "baz"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
@@ -104,7 +104,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This test can not pass anymore since validation does not allow inputs of incorrect type.")>]
 let ``Execute handles objects and nullability using inline structs and doesn't use incorrect value`` () =
     let ast = parse """{ fieldWithObjectInput(input: ["foo", "bar", "baz"]) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
@@ -117,9 +117,9 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
     
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and proprely coerces complex scalar types`` () =
-    let ast = parse """{ fieldWithObjectInput(input: {a: "foo", d: "SerializedValue"}) }"""
+    let ast = parse """{ fieldWithObjectInput(input: {c: "foo", d: "SerializedValue"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":null,"c":null,"d":"DeserializedValue"}"""]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":null,"b":null,"c":"foo","d":"DeserializedValue"}"""]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -225,7 +225,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This test does not pass anymore, since validation requires variables to be defined in the operation.")>]
 let ``Execute handles variables and allows nullable inputs to be omitted in an unlisted variable`` () =
     let ast = parse """query SetsNullable {
         fieldWithNullableStringInput(input: $value)
@@ -310,7 +310,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This test can not pass anymore, since validation does not allow to omit non nullable arguments with no default value.")>]
 let ``Execute handles non-nullable scalars and passes along null for non-nullable inputs if explcitly set in the query`` () =
     let ast = parse """{ fieldWithNonNullableStringInput }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
@@ -518,7 +518,7 @@ let ``Execute uses argument default value when nullable variable provided`` () =
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This test does not pass anymore since validation requires that literal representations of input types match their types.")>]
 let ``Execute uses argument default value when argument provided cannot be parsed`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue(input: WRONG_TYPE) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
@@ -532,7 +532,7 @@ let ``Execute uses argument default value when argument provided cannot be parse
 
 [<Fact>]
 let ``Execute handles enum input as variable`` () =
-    let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType) {
+    let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType!) {
         fieldWithEnumInput(input: $enumVar)
       }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", "Foo" :> obj ])

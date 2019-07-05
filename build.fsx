@@ -151,6 +151,7 @@ Target.create "AssemblyInfo" (fun _ ->
         | f when f.EndsWith "FSharp.Data.GraphQL.Shared.fsproj" -> 
             [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
+              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client.DesignTime"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
         | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" -> 
             [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
@@ -238,19 +239,22 @@ Target.create "RunTests" (fun _ ->
                 Configuration = DotNet.BuildConfiguration.Release
                 Common = { options.Common with
                             CustomParams = Some "--no-build -v=normal" } }) project
-    let startTestServer () =
+    let startServer serverProject =
         use waiter = new ManualResetEvent(false)
+        let serverProjectDir = Path.GetDirectoryName(serverProject)
+        let projectName = Path.GetFileNameWithoutExtension(serverProject)
+        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> (projectName + ".dll")
         let stdHandler (msg : string) =
             let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
             if msg.ToLowerInvariant().Contains(expectedMessage)
             then waiter.Set() |> ignore
         let errHandler (msg : string) =
-            failwithf "Error while starting Giraffe server. %s" msg
-        let serverProjectDir = "samples" </> "star-wars-api"
-        let serverProject = serverProjectDir </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
-        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.dll"
+            failwithf "Error while starting %s server. %s" msg projectName
         restore serverProject
         build serverProject
+        // The server executable must be run instead of the project.
+        // "dotnet run" command (used to run projects instead of the dll) spawns additional dotnet processes
+        // that are not handled as child processes, so FAKE will not be able to track and kill them after the tests are done.
         CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]
         |> CreateProcess.withWorkingDirectory serverProjectDir
         |> CreateProcess.redirectOutput
@@ -258,9 +262,10 @@ Target.create "RunTests" (fun _ ->
         |> Proc.start
         |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
         if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
-        then failwith "Timeout while waiting for Giraffe server to run. Can not run integration tests."
-    //runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    startTestServer ()
+        then failwithf "Timeout while waiting for %s server to run. Can not run integration tests." projectName
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    startServer ("samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj")
+    startServer ("tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj")
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
 
 // --------------------------------------------------------------------------------------
@@ -565,8 +570,8 @@ Target.create "PublishClient" (fun _ ->
     publishPackage "Client"
 )
 
-Target.create "PublishMiddlewares" (fun _ ->
-    publishPackage "Server.Middlewares"
+Target.create "PublishMiddleware" (fun _ ->
+    publishPackage "Server.Middleware"
 )
 
 Target.create "PackServer" (fun _ ->
@@ -577,8 +582,8 @@ Target.create "PackClient" (fun _ ->
     pack "Client"
 )
 
-Target.create "PackMiddlewares" (fun _ ->
-    pack "Server.Middlewares"
+Target.create "PackMiddleware" (fun _ ->
+    pack "Server.Middleware"
 )
 
 Target.create "PublishNpm" (fun _ ->

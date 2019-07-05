@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Server.Middlewares
+namespace FSharp.Data.GraphQL.Server.Middleware
 
 /// A filter definition for a field value.
 type FieldFilter<'Val> =

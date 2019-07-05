@@ -144,7 +144,7 @@ let ``Execute can introspect on union and intersection types`` () =
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
-[<Fact>]
+[<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes union types`` () =
     // NOTE: This is an *invalid* query, but it should be an *executable* query.
     let ast = parse """{
@@ -215,7 +215,7 @@ let ``Executes union types with inline fragments`` () =
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
     
-[<Fact>]
+[<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
     // NOTE: This is an *invalid* query, but it should be an *executable* query.
     let ast = parse """{

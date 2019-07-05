@@ -2,7 +2,7 @@
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.Middlewares
+open FSharp.Data.GraphQL.Server.Middleware
 
 #nowarn "40"
 
@@ -224,7 +224,7 @@ module Schema =
                             schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                             x))])
 
-    let schema = Schema(Query, Mutation, Subscription, schemaConfig)
+    let schema : ISchema<Root> = upcast Schema(Query, Mutation, Subscription, schemaConfig)
 
     let middlewares = 
         [ Define.QueryWeightMiddleware(2.0, true)

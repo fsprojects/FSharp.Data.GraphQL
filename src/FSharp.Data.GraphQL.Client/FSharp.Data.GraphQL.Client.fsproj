@@ -10,19 +10,25 @@
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
+    <Compile Include="MimeTypes.fs" />
     <Compile Include="TextConversions.fs" />
     <Compile Include="JsonValue.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="ReflectionPatterns.fs" />
+    <Compile Include="Upload.fs" />
     <Compile Include="Serialization.fs" />
-    <Compile Include="GraphQLClient.fs" />
-    <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="Locations.fs" />
     <Compile Include="BaseTypes.fs" />
+    <Compile Include="GraphQLClient.fs" />
+    <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <None Include="paket.references" />
+  </ItemGroup>
+  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
+    <Reference Include="System.Net.Primitives" />
+    <Reference Include="System.Net.Http" />
   </ItemGroup>
   <Target Name="BeforeBuild">
     <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Restore" />

@@ -1,11 +1,11 @@
-﻿module FSharp.Data.GraphQL.IntegrationTests.RemoteProviderTests
+﻿module FSharp.Data.GraphQL.IntegrationTests.SwapiRemoteProviderTests
 
-open System
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
 
 type Provider = GraphQLProvider<"http://localhost:8084">
+
 type Episode = Provider.Types.Episode
 
 module SimpleOperation =
@@ -36,11 +36,11 @@ module SimpleOperation =
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+          [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data
@@ -79,13 +79,13 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     friends 
     |> Array.choose (fun x -> x.TryAsHuman()) 
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo")
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
     friends
     |> Array.choose (fun x -> x.TryAsDroid())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
     try
       friends |> Array.map (fun x -> x.AsDroid()) |> ignore
       failwith "Expected exception when trying to get all friends as droids!"
@@ -98,14 +98,14 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     |> Array.filter (fun x -> x.IsHuman())
     |> Array.map (fun x -> x.AsHuman())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Han Solo")
-        SimpleOperation.Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo")
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
     friends
     |> Array.filter (fun x -> x.IsDroid())
     |> Array.map (fun x -> x.AsDroid())
     |> equals [|
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol")
-        SimpleOperation.Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
+        SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
   
 module MutationOperation =
     let operation =
@@ -149,11 +149,11 @@ module FileOperation =
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.Hero.Friends.Character> [] = 
-          [| Some (upcast Operation.Types.Hero.Friends.Human(name = "Han Solo"))
-             Some (upcast Operation.Types.Hero.Friends.Human(name = "Leia Organa", homePlanet = "Alderaan"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "C-3PO", primaryFunction = "Protocol"))
-             Some (upcast Operation.Types.Hero.Friends.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+          [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))
+             Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
         let actual = normalize <| sprintf "%A" result.Data

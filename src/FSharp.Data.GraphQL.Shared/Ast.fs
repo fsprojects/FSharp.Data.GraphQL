@@ -12,11 +12,18 @@ type Document = {
 and Definition =
     | OperationDefinition of OperationDefinition
     | FragmentDefinition of FragmentDefinition
-    member x.Name
-      with get () =
+    member x.Name =
         match x with 
         | OperationDefinition op -> op.Name
         | FragmentDefinition frag -> frag.Name
+    member x.Directives =
+        match x with
+        | OperationDefinition op -> op.Directives
+        | FragmentDefinition frag -> frag.Directives
+    member x.SelectionSet =
+        match x with
+        | OperationDefinition op -> op.SelectionSet
+        | FragmentDefinition frag -> frag.SelectionSet
 
 /// 2.2.1 Operations
 and OperationDefinition = {
