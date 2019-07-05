@@ -1,17 +1,18 @@
 type project
-id FSharp.Data.GraphQL.Server.Middlewares
+id FSharp.Data.GraphQL.Server.Middleware
 authors Bazinga Technologies Inc
 projectUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL
 licenseUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/dev/LICENSE.txt
 requireLicenseAcceptance false
 copyright Copyright (c) 2016 Bazinga Technologies Inc
 tags
-    FSharp GraphQL Relay React Middlewares
+    FSharp GraphQL Relay React Middleware
 summary
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 description
     Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
 references
+	FSharp.Data.GraphQL.Server.Middleware.dll
     FSharp.Data.GraphQL.Shared.dll
 dependencies
 	framework: net461
@@ -23,7 +24,7 @@ dependencies
 		FSharp.Core >= LOCKEDVERSION-Common
 		FSharp.Data.GraphQL.Server >= CURRENTVERSION
 files
-	bin/Release/net461/FSharp.Data.GraphQL.Server.Middlewares.dll ==> lib/net461
-	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.Middlewares.dll ==> lib/netstandard2.0
+	bin/Release/net461/FSharp.Data.GraphQL.Server.Middleware.dll ==> lib/net461
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.Middleware.dll ==> lib/netstandard2.0
 	bin/Release/net461/FSharp.Data.GraphQL.Shared.dll ==> lib/net461
 	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0

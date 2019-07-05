@@ -8,6 +8,7 @@ open System.Collections
 open System.Collections.Concurrent
 open System.Collections.Generic
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Quotations
@@ -620,7 +621,8 @@ and PlanningContext =
       Document : Document
       Operation : OperationDefinition
       DocumentId : int
-      Metadata : Metadata }
+      Metadata : Metadata
+      ValidationResult : ValidationResult<AstError> }
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
@@ -834,7 +836,9 @@ and ExecutionPlan =
       /// List of variables defined within executed query.
       Variables : VarDef list
       /// A dictionary of metadata associated with custom operations on the planning of this plan.
-      Metadata : Metadata }
+      Metadata : Metadata
+      /// The validation result for the document being processed.
+      ValidationResult : ValidationResult<AstError> }
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full
@@ -1973,9 +1977,12 @@ and TypeMap() =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         let toSeq map = map |> Map.toSeq |> Seq.map snd
         let map (f : FieldDef<'Val>) =
-            match f.TypeDef with
-            | :? ListOfDef<'Res, 'Res seq> -> Some f
-            | _ -> None
+            let rec isList (fieldTypeDef : TypeDef) =
+                match fieldTypeDef with
+                | :? NullableDef as x -> isList x.OfType
+                | :? ListOfDef<'Res, 'Res seq> -> true
+                | _ -> false
+            if isList f.TypeDef then Some f else None
         this.OfType<ObjectDef<'Val>>(includeDefaultTypes)
         |> Seq.map (fun x -> x, (x.Fields |> toSeq |> Seq.map map |> Seq.choose id |> List.ofSeq))
         |> List.ofSeq

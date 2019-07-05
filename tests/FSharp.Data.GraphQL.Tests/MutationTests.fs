@@ -121,7 +121,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 
 [<Fact>]
 let ``Execute handles mutation with multiple arguments`` () =
-    let query = """mutation M ($arg1: Int!, $arg2: Int!) {
+    let query = """mutation M ($arg2: Int!) {
       immediatelyChangeTheNumber(newNumber: $arg2) {
         theNumber
       }

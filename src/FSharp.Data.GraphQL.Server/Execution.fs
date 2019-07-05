@@ -30,9 +30,11 @@ type GQLResponse =
         { Content = Stream data
           Metadata = meta }
     static member Empty(meta) =
-        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [], meta)
+        GQLResponse.Direct(Map.empty, [], meta)
     static member Error(msg, meta) =
-        GQLResponse.Direct(new Dictionary<string, obj>() :> Output, [ msg, [] ], meta)
+        GQLResponse.Direct(Map.empty, [ msg, [] ], meta)
+    static member Invalid(errors, meta) =
+        GQLResponse.Direct(Map.empty, errors, meta)
     static member ErrorAsync(msg, meta) =
         asyncVal { return GQLResponse.Error(msg, meta) }
 

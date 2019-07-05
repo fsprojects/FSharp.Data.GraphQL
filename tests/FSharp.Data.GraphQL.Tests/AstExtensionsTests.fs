@@ -7,9 +7,6 @@ open Xunit
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
 
-// TODO: By GraphQL language spec, query operations don't need to have "query" token or a query name.
-// at the moment, parser is requiring both.
-
 /// Converts line breaks to a single standard to avoid different SO line break termination issues.
 let normalize (str : string) = str.Replace("\r\n", "\n")
 

@@ -1,9 +1,10 @@
 ﻿/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
-module FSharp.Data.GraphQL.Tests.ValidationTests
+module FSharp.Data.GraphQL.Tests.TypeValidationTests
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL.Validation.Types
 open FSharp.Data.GraphQL.Types
 open Xunit
 
@@ -33,7 +34,7 @@ let ``Validation should inform about not implemented fields``() =
             (name = "TestData", fields = [ Define.Field("property", String, (fun _ d -> d.TestProperty)) ], 
              interfaces = [ TestInterface ])
     let expected = 
-        Error [ "'method' field is defined by interface TestInterface, but not implemented in object TestData" ]
+        ValidationError [ "'method' field is defined by interface TestInterface, but not implemented in object TestData" ]
     let result = validateImplements TestData TestInterface
     equals expected result
 
@@ -47,7 +48,7 @@ let ``Validation should inform about fields with not matching signatures``() =
              interfaces = [ TestInterface ])
     
     let expected = 
-        Error 
+        ValidationError 
             [ "'TestData.method' field signature does not match it's definition in interface TestInterface"; 
               "'TestData.property' field signature does not match it's definition in interface TestInterface" ]
     let result = validateImplements TestData TestInterface
@@ -64,4 +65,3 @@ let ``Validation should succeed if object implements interface correctly``() =
     
     let result = validateImplements TestData TestInterface
     equals Success result
-    

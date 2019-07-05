@@ -22,7 +22,8 @@
     <Compile Include="Relay\MutationTests.fs" />
     <Compile Include="AbstractionTests.fs" />
     <Compile Include="DirectivesTests.fs" />
-    <Compile Include="ValidationTests.fs" />
+    <Compile Include="TypeValidationTests.fs" />
+    <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
     <Compile Include="CoercionTests.fs" />
@@ -38,10 +39,9 @@
     <Compile Include="PropertyTrackerTests.fs" />
     <Compile Include="LinqTests.fs" />
     <Compile Include="DeferredTests.fs" />
-    <Compile Include="MiddlewaresTests.fs" />
+    <Compile Include="MiddlewareTests.fs" />
     <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
-    <!-- <Compile Include="SerializationTests.fs" /> -->
     <Compile Include="AstExtensionsTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -55,7 +55,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middlewares\FSharp.Data.GraphQL.Server.Middlewares.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
   <ItemGroup Condition="$(OS) == Unix">
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />

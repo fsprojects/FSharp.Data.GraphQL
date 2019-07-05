@@ -12,10 +12,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
 module Serialization =
-    let private isoDateFormat = "yyyy-MM-dd" 
-    let private isoDateTimeFormat = "O"
-    let isoDateTimeFormats = [|isoDateTimeFormat; isoDateFormat|]
-
     let private makeOption t (value : obj) =
         let otype = typedefof<_ option>
         let cases = FSharpType.GetUnionCases(otype.MakeGenericType([|t|]))
@@ -36,6 +32,7 @@ module Serialization =
     let private isStringType = isType typeof<string>
     let private isDateTimeType = isType typeof<DateTime>
     let private isDateTimeOffsetType = isType typeof<DateTimeOffset>
+    let private isUriType = isType typeof<Uri>
     let private isGuidType = isType typeof<Guid>
     let private isBooleanType = isType typeof<bool>
     let private isEnumType = function (Option t | t) when t.IsEnum -> true | _ -> false
@@ -43,12 +40,16 @@ module Serialization =
     let private downcastString (t : Type) (s : string) =
         match t with
         | t when isStringType t -> downcastType t s
+        | t when isUriType t ->
+            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
+            | (true, uri) -> downcastType t uri
+            | _ -> failwithf "Error parsing JSON value: %O is an URI type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeType t ->
-            match DateTime.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date type, but parsing of value \"%s\" failed." t s
         | t when isDateTimeOffsetType t ->
-            match DateTimeOffset.TryParseExact(s, isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+            match DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
             | _ -> failwithf "Error parsing JSON value: %O is a date time offset type, but parsing of value \"%s\" failed." t s
         | t when isGuidType t ->
@@ -150,6 +151,9 @@ module Serialization =
         Tracer.runAndMeasureExecutionTime "Deserialized JSON Record into FSharp Map" (fun _ ->
             helper values |> Map.ofArray)
 
+    let private isoDateFormat = "yyyy-MM-dd" 
+    let private isoDateTimeFormat = "O"
+
     let rec toJsonValue (x : obj) : JsonValue =
         if isNull x 
         then JsonValue.Null
@@ -167,9 +171,11 @@ module Serialization =
                 | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
                 | :? bool as x -> JsonValue.Boolean x
+                | :? Uri as x -> JsonValue.String (x.ToString())
+                | :? Upload -> JsonValue.Null
                 | :? IDictionary<string, obj> as items ->
                     items
-                    |> Seq.map (fun (KeyValue (k, v)) -> k, toJsonValue v)
+                    |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
                     |> Seq.toArray
                     |> JsonValue.Record
                 | EnumerableValue items -> 
@@ -179,9 +185,8 @@ module Serialization =
                 | OptionValue (Some x) -> toJsonValue x
                 | EnumValue x -> JsonValue.String x
                 | _ ->
-                    let xtype = t
-                    let xprops = xtype.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-                    let items = xprops |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
+                    let props = t.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
+                    let items = props |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
                     JsonValue.Record items)
 
     let serializeRecord (x : obj) =

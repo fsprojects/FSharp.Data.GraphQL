@@ -10,7 +10,6 @@ open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
 open System.Text
-open FSharp.Data.GraphQL.Ast.Extensions
 open System.ComponentModel
 
 /// Contains information about a field on the query.
@@ -112,16 +111,23 @@ type RecordBase (name : string, properties : RecordProperty seq) =
     /// Gets a list of this provided record properties.
     member __.GetProperties() = properties
     
-    /// Produces a dictionary containing all the properties and names of this provided record type.
+    /// Produces a dictionary containing all the properties of this provided record type.
     member x.ToDictionary() =
-        let rec mapper (v : obj) =
+        let rec mapDictionaryValue (v : obj) =
             match v with
             | null -> null
+            | :? string -> v // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
             | :? EnumBase as v -> v.GetValue() |> box
             | :? RecordBase as v -> box (v.ToDictionary())
-            | OptionValue v -> v |> Option.map mapper |> Option.toObj
+            | OptionValue v -> v |> Option.map mapDictionaryValue |> Option.toObj
+            | EnumerableValue v -> v |> Array.map mapDictionaryValue |> box
             | _ -> v
-        x.GetProperties() |> Seq.map (fun p -> p.Name, mapper p.Value) |> dict
+        x.GetProperties()
+        |> Seq.choose (fun p -> 
+            if not (isNull p.Value)
+            then Some (p.Name, mapDictionaryValue p.Value)
+            else None)
+        |> dict
 
     override x.ToString() =
         let getPropValue (prop : RecordProperty) = sprintf "%A" prop.Value
@@ -176,9 +182,20 @@ module internal Types =
         let isIntrospectionType (name : string) =
             schemaTypeNames |> Array.contains name
         introspection.Types
-        |> Array.filter (fun t -> not (isIntrospectionType t.Name) && not (isScalarType t.Name))
-        |> Array.map (fun t -> t.Name, t)
+        |> Array.choose (fun t ->
+            if not (isIntrospectionType t.Name) && not (isScalarType t.Name)
+            then Some(t.Name, t)
+            else None)
         |> Map.ofArray
+
+    let mapScalarType uploadInputTypeName tname =
+        match uploadInputTypeName with
+        | Some uploadInputTypeName when uploadInputTypeName = tname -> typeof<Upload>
+        | _ ->
+            // Unknown scalar types will be mapped to a string type.
+            if scalar.ContainsKey(tname)
+            then scalar.[tname]
+            else typeof<string>
 
     let makeOption (t : Type) = typedefof<_ option>.MakeGenericType(t)
 
@@ -245,51 +262,54 @@ module internal JsonValueHelper =
         let rec helper (useOption : bool) (schemaField : SchemaFieldInfo) (fieldValue : JsonValue) : obj =
             let makeSomeIfNeeded value =
                 match schemaField.SchemaTypeRef.Kind with
-                | TypeKind.NON_NULL | TypeKind.LIST -> value
+                | TypeKind.NON_NULL -> value
                 | _ when useOption -> makeSome value
                 | _ -> value
             let makeNoneIfNeeded (t : Type) =
                 match schemaField.SchemaTypeRef.Kind with
-                | TypeKind.NON_NULL | TypeKind.LIST -> null
+                | TypeKind.NON_NULL -> null
                 | _ when useOption -> makeNone t
                 | _ -> null
             match fieldValue with
             | JsonValue.Array items ->
-                let schemaFieldType =
-                    match schemaField.SchemaTypeRef.Kind with
-                    | TypeKind.LIST -> schemaField.SchemaTypeRef.OfType
-                    | TypeKind.NON_NULL ->
-                        match schemaField.SchemaTypeRef.OfType with
-                        | Some t when t.Kind = TypeKind.LIST && t.OfType.IsSome -> t.OfType
-                        | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
-                    | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef
-                let itemType =
-                    match schemaFieldType with
-                    | Some t -> t
-                    | None -> failwith "Schema type is a list type, but no underlying type was specified."
-                let schemaField = { schemaField with SchemaTypeRef = itemType }
-                let items = items |> Array.map (helper false schemaField)
-                match itemType.Kind with
-                | TypeKind.NON_NULL -> 
-                    match itemType.OfType with
-                    | Some itemType ->
-                        match itemType.Kind with
-                        | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
-                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeArray typeof<RecordBase> items
-                        | TypeKind.ENUM -> makeArray typeof<EnumBase> items
-                        | TypeKind.SCALAR -> makeArray (getScalarType itemType) items
-                        | kind -> failwithf "Unsupported type kind \"%A\"." kind
-                    | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
-                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items |> makeSomeIfNeeded
-                | TypeKind.ENUM -> makeOptionArray typeof<EnumBase> items |> makeSomeIfNeeded
-                | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items |> makeSomeIfNeeded
-                | kind -> failwithf "Unsupported type kind \"%A\"." kind
+                let items =
+                    let itemType =
+                        let tref =
+                            match schemaField.SchemaTypeRef.Kind with
+                            | TypeKind.LIST -> schemaField.SchemaTypeRef.OfType
+                            | TypeKind.NON_NULL ->
+                                match schemaField.SchemaTypeRef.OfType with
+                                | Some t when t.Kind = TypeKind.LIST -> t.OfType
+                                | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef.OfType
+                            | _ -> failwithf "Expected field to be a list type with an underlying item, but it is %A." schemaField.SchemaTypeRef
+                        match tref with
+                        | Some t -> t
+                        | None -> failwith "Schema type is a list type, but no underlying type was specified."
+                    let items = 
+                        let schemaField = { schemaField with SchemaTypeRef = itemType }
+                        items |> Array.map (helper false schemaField)
+                    match itemType.Kind with
+                    | TypeKind.NON_NULL -> 
+                        match itemType.OfType with
+                        | Some itemType ->
+                            match itemType.Kind with
+                            | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
+                            | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeArray typeof<RecordBase> items
+                            | TypeKind.ENUM -> makeArray typeof<EnumBase> items
+                            | TypeKind.SCALAR -> makeArray (getScalarType itemType) items
+                            | kind -> failwithf "Unsupported type kind \"%A\"." kind
+                        | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
+                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION -> makeOptionArray typeof<RecordBase> items
+                    | TypeKind.ENUM -> makeOptionArray typeof<EnumBase> items
+                    | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items
+                    | kind -> failwithf "Unsupported type kind \"%A\"." kind
+                makeSomeIfNeeded items
             | JsonValue.Record props -> 
                 let typeName =
                     match getTypeName props with
                     | Some typeName -> typeName
                     | None -> failwith "Expected type to have a \"__typename\" field, but it was not found."
-                let mapper (aliasOrName : string, value : JsonValue) =
+                let mapRecordProperty (aliasOrName : string, value : JsonValue) =
                     let schemaField =
                         match schemaField.Fields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
                         | Some f -> f
@@ -299,7 +319,7 @@ module internal JsonValueHelper =
                 let props =
                     props
                     |> removeTypeNameField
-                    |> Array.map (firstUpper >> mapper)
+                    |> Array.map (firstUpper >> mapRecordProperty)
                 RecordBase(typeName, props) |> makeSomeIfNeeded
             | JsonValue.Boolean b -> makeSomeIfNeeded b
             | JsonValue.Float f -> makeSomeIfNeeded f
@@ -322,9 +342,9 @@ module internal JsonValueHelper =
                         | TypeKind.SCALAR -> 
                             match itemType.Name with
                             | Some "String" | Some "ID" -> box s
-                            | Some "URI" -> Uri(s) |> box
+                            | Some "URI" -> System.Uri(s) |> box
                             | Some "Date" -> 
-                                match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                                match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
                                 | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                             | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
@@ -334,9 +354,9 @@ module internal JsonValueHelper =
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
                     | Some "String" -> makeSomeIfNeeded s
-                    | Some "URI" -> Uri(s) |> makeSomeIfNeeded
+                    | Some "URI" -> System.Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
-                        match DateTime.TryParseExact(s, Serialization.isoDateTimeFormats, CultureInfo.InvariantCulture, DateTimeStyles.None) with
+                        match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d
                         | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
@@ -345,14 +365,14 @@ module internal JsonValueHelper =
         fieldName, (helper true schemaField fieldValue)
 
     let getFieldValues (schemaTypeName : string) (schemaFields : SchemaFieldInfo []) (dataFields : (string * JsonValue) []) =
-        let mapper (aliasOrName : string, value : JsonValue) =
+        let mapFieldValue (aliasOrName : string, value : JsonValue) =
             let schemaField =
                 match schemaFields |> Array.tryFind (fun f -> f.AliasOrName = aliasOrName) with
                 | Some f -> f
                 | None -> failwithf "Expected to find field information for field with alias or name \"%s\" of type \"%s\" but it was not found." aliasOrName schemaTypeName
             getFieldValue schemaField (aliasOrName, value)
         removeTypeNameField dataFields
-        |> Array.map (firstUpper >> mapper)
+        |> Array.map (firstUpper >> mapFieldValue)
 
     let getErrors (errors : JsonValue []) =
         let errorMapper = function

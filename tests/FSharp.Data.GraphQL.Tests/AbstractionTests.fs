@@ -155,6 +155,7 @@ type User =
        Name: string;
        Widgets: Widget list }
 
+// TODO: should not this test have a better name? Is it an abstraction test?
 [<Fact>]
 let ``inner types `` () = 
     let viewer = {
@@ -214,7 +215,7 @@ let ``inner types `` () =
     let schemaProcessor = Executor(schema)
 
     let query = "{
-                    viewer {name}, widgets { edges }
+                    viewer {name}, widgets { edges { cursor } }
                 }"
     let result = sync <| schemaProcessor.AsyncExecute(parse query)
     match result with
