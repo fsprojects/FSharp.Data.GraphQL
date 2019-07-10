@@ -127,3 +127,6 @@
 * Updating parser to support unamed operations alongside short handed queries
 * Adding null value support for the AST Input Values (it was previously parsed as an Enum Value)
 * **Breaking Change** Renaming `FSharp.Data.GraphQL.Server.Middlewares` package to `FSharp.Data.GraphQL.Server.Middleware`
+
+### 1.0.1 - July 5 2019
+* Adjusting package dependencies (`FParsec`, `System.Net.Http`, and `FSharp.Data.GraphQL.Server` are not locked anymore)

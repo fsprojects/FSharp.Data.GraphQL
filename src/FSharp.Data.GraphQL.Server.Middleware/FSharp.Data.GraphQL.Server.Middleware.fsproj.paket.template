@@ -18,11 +18,11 @@ dependencies
 	framework: net461
 		FParsec >= LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
-		FSharp.Data.GraphQL.Server = CURRENTVERSION
+		FSharp.Data.GraphQL.Server >= CURRENTVERSION
 	framework: netstandard2.0
 		FParsec >= LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
-		FSharp.Data.GraphQL.Server = CURRENTVERSION
+		FSharp.Data.GraphQL.Server >= CURRENTVERSION
 files
 	bin/Release/net461/FSharp.Data.GraphQL.Server.Middleware.dll ==> lib/net461
 	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.Middleware.dll ==> lib/netstandard2.0

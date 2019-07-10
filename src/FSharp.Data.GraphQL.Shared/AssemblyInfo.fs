@@ -6,8 +6,8 @@ open System.Runtime.CompilerServices
 [<assembly: AssemblyTitleAttribute("FSharp.Data.GraphQL.Shared")>]
 [<assembly: AssemblyProductAttribute("FSharp.Data.GraphQL")>]
 [<assembly: AssemblyDescriptionAttribute("FSharp implementation of Facebook GraphQL query language")>]
-[<assembly: AssemblyVersionAttribute("1.0.0")>]
-[<assembly: AssemblyFileVersionAttribute("1.0.0")>]
+[<assembly: AssemblyVersionAttribute("1.0.1")>]
+[<assembly: AssemblyFileVersionAttribute("1.0.1")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Server")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Client")>]
 [<assembly: InternalsVisibleToAttribute("FSharp.Data.GraphQL.Client.DesignTime")>]
@@ -18,8 +18,8 @@ module internal AssemblyVersionInformation =
     let [<Literal>] AssemblyTitle = "FSharp.Data.GraphQL.Shared"
     let [<Literal>] AssemblyProduct = "FSharp.Data.GraphQL"
     let [<Literal>] AssemblyDescription = "FSharp implementation of Facebook GraphQL query language"
-    let [<Literal>] AssemblyVersion = "1.0.0"
-    let [<Literal>] AssemblyFileVersion = "1.0.0"
+    let [<Literal>] AssemblyVersion = "1.0.1"
+    let [<Literal>] AssemblyFileVersion = "1.0.1"
     let [<Literal>] InternalsVisibleTo = "FSharp.Data.GraphQL.Server"
     let [<Literal>] InternalsVisibleTo_1 = "FSharp.Data.GraphQL.Client"
     let [<Literal>] InternalsVisibleTo_2 = "FSharp.Data.GraphQL.Client.DesignTime"
