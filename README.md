@@ -39,7 +39,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### GraphiQL client
 
-Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run the [Star Wars API sample project](samples/star-wars-api) on Debug settings - this will create a Giraffe server compatible with GraphQL spec, running on port 8084. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
+Go to the [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run the [Star Wars API sample project](samples/star-wars-api) with Debug settings - this will create a Giraffe server compatible with the GraphQL spec, running on port 8084. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
 
 ```graphql
 {
@@ -64,13 +64,13 @@ Go to [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.
 
 A [second sample](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/relay-starter-kit) is a F#-backed version of of popular Relay Starter Kit - an example application using React.js + Relay with Relay-compatible server API.
 
-To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on [http://localhost:8083/](http://localhost:8083/) .
+To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start a relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on [http://localhost:8083/](http://localhost:8083/) .
 
-In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is introspection query result from current F# server) into *data/schema.json*.
+In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is the introspection query result from the current F# server) into *data/schema.json*.
 
 ## Stream features
 
-Stream directive now has additional features, like batching (buffering) by interval and/or batch size. To make it work, a custom stream directive must be placed inside the `SchemaConfig.Directives` list, this custom directive containing two optional arguments called `interval` and `preferredBatchSize`:
+The `stream` directive now has additional features, like batching (buffering) by interval and/or batch size. To make it work, a custom stream directive must be placed inside the `SchemaConfig.Directives` list, this custom directive containing two optional arguments called `interval` and `preferredBatchSize`:
 
 ```fsharp
 let customStreamDirective =
@@ -107,7 +107,7 @@ let schemaConfig =
 
 ## Live queries
 
-Live directive is now supported by the server component. To support live queries, each field of each type of the schema needs to be configured as a live field. This is done by using `ILiveFieldSubscription` and `ILiveQuerySubscriptionProvider`, which can be configured in the `SchemaConfig`:
+The `live` directive is now supported by the server component. To support live queries, each field of each type of the schema needs to be configured as a live field. This is done by using `ILiveFieldSubscription` and `ILiveQuerySubscriptionProvider`, which can be configured in the `SchemaConfig`:
 
 ```fsharp
 type ILiveFieldSubscription =
@@ -134,7 +134,7 @@ and ILiveFieldSubscriptionProvider =
     end
 ```
 
-To set a field as a live field, call `Register` extension method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
+To set a field as a live field, call the `Register` extension method. Each subscription needs to know an object identity, so it must be configured on the Identity function of the `ILiveFieldSubscription`. Also, the name of the Type and the field inside the `ObjectDef` needs to be passed along:
 
 ```fsharp
 let schemaConfig = SchemaConfig.Default
@@ -147,7 +147,7 @@ let subscription =
 schemaConfig.LiveFieldSubscriptionProvider.Register subscription
 ```
 
-With that, the field name of the hero is now able to go live, being updated to clients whenever is queried with live directive. To push updates to subscribers, just call Publish method, passing along the type name, the field name and the updated object:
+With that, the field name of the hero is now able to go live, being updated to clients whenever it is queried with the `live` directive. To push updates to subscribers, just call Publish method, passing along the type name, the field name and the updated object:
 
 ```fsharp
 let updatedHero = { hero with Name = "Han Solo - Test" }
@@ -158,7 +158,7 @@ schemaConfig.LiveFieldSubscriptionProvider.Publish "Hero" "name" updatedHero
 
 Our client library now has a completely redesigned type provider. To start using it, you will first need access to the introspection schema for the server you are trying to connect. This can be done with the provider in one of two ways:
 
-1. Provide an URL to the desired GraphQL server (without any custom HTTP headers required). The provider will access the server, send an Introspection Query, and use the schema to provide the types used to make queries.
+1. Provide the URL to the desired GraphQL server (without any custom HTTP headers required). The provider will access the server, send an Introspection Query, and use the schema to provide the types used to make queries.
 
 ```fsharp
 type MyProvider = GraphQLProvider<"http://some.graphqlserver.development.org">
@@ -224,19 +224,19 @@ printfn "Custom data: %A\n" result.CustomData
 
 For more information about how to use the client provider, see the [examples folder](samples/client-provider).
 
-## Middlewares
+## Middleware
 
-You can create and use middlewares on top of the `Executor<'Root>` object.
+You can create and use middleware on top of the `Executor<'Root>` object.
 
 The query execution process through the use of the Executor involves three phases:
 
-- *Schema compile phase:* this phase happens when the `Executor<'Root>` class is instantiated. In this phase, the Schema map of types is used to build a field execute map, which contains all field definitions alongside their field resolution functions. This map is used later on the planning and execution phases to retrieve the values of the queried fields of the schema.
+- *Schema compile phase:* this phase happens when the `Executor<'Root>` class is instantiated. In this phase, the Schema map of types is used to build a field execute map, which contains all field definitions alongside their field resolution functions. This map is used later on in the planning and execution phases to retrieve the values of the queried fields of the schema.
 
-- *Operation planning phase:* this phase happens before running a query that has no execution plan. This phase is responsible to analyze the AST document generated by the query, and build an ExecutionPlan to execute it.
+- *Operation planning phase:* this phase happens before running a query that has no execution plan. This phase is responsible for analyzing the AST document generated by the query, and building an ExecutionPlan to execute it.
 
-- *Operation execution phase:* this phase is actually the phase that executes the query itself. It needs an execution plan, so, it commonly happens after the operation planning phase.
+- *Operation execution phase:* this phase is the phase that executes the query. It needs an execution plan, so, it commonly happens after the operation planning phase.
 
-All those phases wraps needed data to do the phase job inside an Context object. They are expressed internally by functions:
+All the phases wrap the needed data to do the phase job inside a context object. They are expressed internally by functions:
 
 ```fsharp
 let internal compileSchema (ctx : SchemaCompileContext) : unit =
@@ -249,9 +249,9 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
   // ...
 ```
 
-That way, in the compile schema phase, the Schema is modified and execution maps are generated inside the `SchemaCompileContext` object. On the operation planning phase, values of the `PlanningContext` object are used to generate an execution plan, and finally, this plan is passed alongside other values in the `ExecutionContext` object to the operation execution phase, wich finally uses them to execute the query and generate a `GQLResponse`.
+That way, in the compile schema phase, the schema is modified and execution maps are generated inside the `SchemaCompileContext` object. During the operation planning phase, values of the `PlanningContext` object are used to generate an execution plan, and finally, this plan is passed alongside other values in the `ExecutionContext` object to the operation execution phase, wich finally uses them to execute the query and generate a `GQLResponse`.
 
-With that being said, a middleware can be used to intercept each of those phases, and make customizations to them, modifying operations as needed. Each middleware must be implemented as a function with specific signature, and wrapped inside an `IExecutorMiddleware` interface:
+With that being said, a middleware can be used to intercept each phase and customize them as necessary. Each middleware must be implemented as a function with a specific signature, and wrapped inside an `IExecutorMiddleware` interface:
 
 ```fsharp
 type SchemaCompileMiddleware =
@@ -279,14 +279,14 @@ type ExecutorMiddleware(?compile, ?plan, ?execute) =
         member __.ExecuteOperationAsync = execute
 ```
 
-Each of the middleware functions acts like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
+Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
 
 ```fsharp
-let middlewares = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
-let executor = Executor(schema, middlewares)
+let middleware = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
+let executor = Executor(schema, middleware)
 ```
 
-A simple example of a practical middleware can be one that measures the time needed to plan a query, and returns it on the Metadata of the planning context. The metadata object is a `Map<string, obj>` implementation that acts like a bag of information to be passed through each phase, until it is returned inside the `GQLResponse` object. You can use it to thread custom information through middlewares:
+A simple example of a practical middleware can be one that measures the time needed to plan a query. The results of which get returned as part of the `Metadata` of the planning context. The `Metadata` object is a `Map<string, obj>` implementation that acts like a bag of information to be passed through each phase, until it is returned inside the `GQLResponse` object. You can use it to thread custom information through middlewares:
 
 ```fsharp
 let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
@@ -298,13 +298,13 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     { result with Metadata = metadata }
 ```
 
-### Built-in middlewares
+### Built-in middleware
 
-There are some built-in middlewares inside `FSharp.Data.GraphQL.Server.Middleware` package:
+There are some built-in middleware inside `FSharp.Data.GraphQL.Server.Middleware` package:
 
 #### QueryWeightMiddleware
 
-This middleware can be used to place weights on fields of the schema. Those weightened fields can now be used to protect the server from complex queries that otherwise could be used to create things like a DDoS attack.
+This middleware can be used to place weights on fields of the schema. Those weightened fields can now be used to protect the server from complex queries that could otherwise be used in DDOS attacks.
 
 When defining a field, we use the extension method `WithQueryWeight` to place a weight on it:
 
@@ -370,7 +370,7 @@ type ObjectListFilter =
     | FilterField of FieldFilter<ObjectListFilter>
 ```
 
-And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easy access it, you can use the extension method `Filter`, wich returns an `ObjectListFilter option` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter on the query).
+And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, wich returns an `ObjectListFilter option` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
 
 ```fsharp
 Define.Field("friends", ListOf (Nullable CharacterType),
@@ -379,7 +379,7 @@ Define.Field("friends", ListOf (Nullable CharacterType),
         d.Friends |> List.map getCharacter |> List.toSeq)
 ```
 
-By retrieving this filter on the field resolution context, it is possible to use client code to customize the query against a database, for example, and extend your GraphQL API features.
+By retrieving this filter from the field resolution context, it is possible to use client code to customize the query to run against a database, for example, and extend your GraphQL API features.
 
 ### LiveQueryMiddleware
 
@@ -402,11 +402,11 @@ let executor = Executor(schema, middlewares)
 
 The `IdentityNameResolver` is optional, though. If no resolver function is provided, this default implementation of is used. Also, notifications to subscribers must be done via `Publish` of `ILiveFieldSubscriptionProvider`, like explained above.
 
-### Using extensions to build your own middlewares
+### Using extensions to build your own middleware
 
 You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` package to help building your own middlewares. When making a middleware, often you will need to modify schema definitions to add features to the schema defined by the user code. The `ObjectListFilter` middleware is an example, where all fields that implements lists of a certain type needs to be modified, by accepting an argument called `filter`.
 
-As field definitions are immutable by default, generating copies of them with improved features can be a hard work sometimes. This is where the extension methods can help: for example, if you need to add an argument to an already defined field inside the schema compile phase, you can use the method `WithArgs` of the `FieldDef<'Val>` interface:
+As field definitions are immutable by default, generating copies of them with improved features can be hard work sometimes. This is where the extension methods can help: for example, if you need to add an argument to an already defined field inside the schema compile phase, you can use the method `WithArgs` of the `FieldDef<'Val>` interface:
 
 ```fsharp
 let field : FieldDef<'Val> = // Search for field inside ISchema
@@ -414,4 +414,4 @@ let arg : Define.Input("id", String)
 let fieldWithArg = field.WithArgs([ arg ])
 ```
 
-To see the complete list of extensions used for improve definitions, you can take a look at the `TypeSystemExtensions` module of the `FSharp.Data.GraphQL.Shared` package.
+To see the complete list of extensions used to augment definitions, you can take a look at the `TypeSystemExtensions` module contained in the `FSharp.Data.GraphQL.Shared` package.
