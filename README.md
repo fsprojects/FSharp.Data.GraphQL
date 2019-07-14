@@ -286,7 +286,7 @@ let middleware = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
 let executor = Executor(schema, middleware)
 ```
 
-A simple example of a practical middleware can be one that measures the time needed to plan a query. The results of which get returned as part of the `Metadata` of the planning context. The `Metadata` object is a `Map<string, obj>` implementation that acts like a bag of information to be passed through each phase, until it is returned inside the `GQLResponse` object. You can use it to thread custom information through middlewares:
+A simple example of a practical middleware can be one that measures the time needed to plan a query. The results of which get returned as part of the `Metadata` of the planning context. The `Metadata` object is a `Map<string, obj>` implementation that acts like a bag of information to be passed through each phase, until it is returned inside the `GQLResponse` object. You can use it to thread custom information through middleware:
 
 ```fsharp
 let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> ExecutionPlan) =
@@ -320,7 +320,7 @@ let field =
 Then we define the threshold middleware for the Executor. If we execute a query that ask for "friends of friends" in a recursive way, the executor will only accept nesting them 4 times before the query exceeds the weight threshold of 2.0:
 
 ```fsharp
-let middlewares = [ Define.QueryWeightMiddleware(2.0) ]
+let middleware = [ Define.QueryWeightMiddleware(2.0) ]
 ```
 
 #### ObjectListFilterMiddleware
@@ -330,7 +330,7 @@ This middleware can be used to automatically generate a filter for list fields i
 For example, we can create a middleware for filtering list fields of an `Human` object, that are of the type `Character option`:
 
 ```fsharp
-let middlewares = [ Define.ObjectListFilterMiddleware<Human, Character option>() ]
+let middleware = [ Define.ObjectListFilterMiddleware<Human, Character option>() ]
 ```
 
 The filter argument is an object that is mapped through a JSON definition inside an `filter` argument on the field. A simple example would be filtering friends of a hero that have their names starting with the letter A:
@@ -395,16 +395,16 @@ For example, if all of our schema objects have an identity field named `Id`, we 
 ```fsharp
 let schema = Schema(query = queryType)
 
-let middlewares = [ Define.LiveQueryMiddleware(fun _ -> "Id") ]
+let middleware = [ Define.LiveQueryMiddleware(fun _ -> "Id") ]
 
-let executor = Executor(schema, middlewares)
+let executor = Executor(schema, middleware)
 ```
 
 The `IdentityNameResolver` is optional, though. If no resolver function is provided, this default implementation of is used. Also, notifications to subscribers must be done via `Publish` of `ILiveFieldSubscriptionProvider`, like explained above.
 
 ### Using extensions to build your own middleware
 
-You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` package to help building your own middlewares. When making a middleware, often you will need to modify schema definitions to add features to the schema defined by the user code. The `ObjectListFilter` middleware is an example, where all fields that implements lists of a certain type needs to be modified, by accepting an argument called `filter`.
+You can use extension methods provided by the `FSharp.Data.GraphQL.Shared` package to help building your own middleware. When making a middleware, often you will need to modify schema definitions to add features to the schema defined by the user code. The `ObjectListFilter` middleware is an example, where all fields that implements lists of a certain type needs to be modified, by accepting an argument called `filter`.
 
 As field definitions are immutable by default, generating copies of them with improved features can be hard work sometimes. This is where the extension methods can help: for example, if you need to add an argument to an already defined field inside the schema compile phase, you can use the method `WithArgs` of the `FieldDef<'Val>` interface:
 
