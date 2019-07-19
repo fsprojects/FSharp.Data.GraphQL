@@ -46,6 +46,7 @@ type QueryTreeOperation =
 
 type QueryTree =
     { Operation : QueryTreeOperation
+      // TODO: how should we best encode variables for serialization?
       Variables : Map<string, obj> }
 
 module QueryTree =
