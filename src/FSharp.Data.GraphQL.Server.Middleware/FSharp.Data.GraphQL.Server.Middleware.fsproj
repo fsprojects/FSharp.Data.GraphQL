@@ -10,6 +10,7 @@
   <ItemGroup>
     <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ObjectListFilter.fs" />
+    <Compile Include="QueryTree.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />

@@ -156,3 +156,11 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
         member __.PostCompileSchema = None
         member __.PlanOperation = None
         member __.ExecuteOperationAsync = None
+
+/// TODO: How to deal with orleans on the execute operation middleware?
+type internal QueryTreeMiddleware() =
+    interface IExecutorMiddleware with
+        member __.CompileSchema = None
+        member __.PostCompileSchema = None
+        member __.PlanOperation = None
+        member __.ExecuteOperationAsync = None
