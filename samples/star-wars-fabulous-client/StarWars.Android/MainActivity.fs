@@ -21,13 +21,10 @@ type MainActivity() =
         base.OnCreate (bundle)
 
         Xamarin.Essentials.Platform.Init(this, bundle)
-
         Xamarin.Forms.Forms.Init (this, bundle)
 
-        let graphqlInfo =
-                 { new StarWars.IGraphQLInfo with
-                    member x.GetSchemeUrl () = "http://10.0.2.2:8084" }
-        let appcore  = new StarWars.App(graphqlInfo)
+        let url = "http://10.0.2.2:8084"
+        let appcore  = new StarWars.App(url)
         this.LoadApplication (appcore)
 
     override this.OnRequestPermissionsResult(requestCode: int, permissions: string[], [<GeneratedEnum>] grantResults: Android.Content.PM.Permission[]) =

@@ -144,7 +144,7 @@
       <HintPath>..\packages/Xamarin.Forms.4.0.0.425677/lib/MonoAndroid81/Xamarin.Forms.Xaml.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Core">
-      <HintPath>..\packages/FSharp.Core.4.5.2/lib/netstandard1.6/FSharp.Core.dll</HintPath>
+      <HintPath>..\packages\FSharp.Core.4.6.2\lib\netstandard1.6\FSharp.Core.dll</HintPath>
     </Reference>
     <Reference Include="Fabulous.Core">
       <HintPath>..\packages/Fabulous.Core.0.35.0/lib/netstandard2.0/Fabulous.Core.dll</HintPath>
@@ -170,10 +170,10 @@
       <HintPath>..\packages\FParsec.1.0.3\lib\netstandard1.6\FParsecCS.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.GraphQL.Client">
-      <HintPath>..\packages\FSharp.Data.GraphQL.Client.1.0.0-beta94\lib\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
+      <HintPath>..\packages\FSharp.Data.GraphQL.Client.1.0.1\lib\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
     </Reference>
     <Reference Include="FSharp.Data.GraphQL.Shared">
-      <HintPath>..\packages\FSharp.Data.GraphQL.Client.1.0.0-beta94\lib\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
+      <HintPath>..\packages\FSharp.Data.GraphQL.Client.1.0.1\lib\netstandard2.0\FSharp.Data.GraphQL.Shared.dll</HintPath>
     </Reference>
   </ItemGroup>
   <ItemGroup>

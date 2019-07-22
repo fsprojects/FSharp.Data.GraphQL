@@ -1,9 +1,11 @@
 > This is a sample with the library FSharp.Data.GraphQL.Client + Fabulous on Xamarin
 
-![how to use](img/howtouse.gif)
+| Main Page | Details Page |
+| --------- | ----------- |
+| ![main page](img/1.png) | ![details page](img/2.png) |
 
 ### Dependencies
-- dotnet Core SDK `>= 2.1.401`
+- dotnet Core SDK `>= 2.2.300`
 - Xamarin _// this project was only tested on VS for Mac_
 - [Fabulous](https://fsprojects.github.io/Fabulous/)
 - FSharp.Data.GraphQL.Client
@@ -23,3 +25,6 @@ The API used on this project can be found is the sample of API in the folder [st
 
 _Obs.: this project will only work if the API is running on port 8084, so if you setup a different port, you will have to modify files AppDelegate.fs, MainActivity.fs and Common.fs_
 
+### Example of Usage
+
+![how to use](img/howtouse.gif)

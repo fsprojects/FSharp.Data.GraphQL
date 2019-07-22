@@ -85,10 +85,10 @@ module App =
     let program ctx =
         Program.mkProgram (init ctx) update view
 
-type App (ctx : IGraphQLInfo) as app = 
+type App (url : string) as app =
     inherit Application ()
 
     let runner =
-        GraphQLApi.GetContext(serverUrl=(ctx.GetSchemeUrl()))
+        GraphQLApi.GetContext(serverUrl=url)
         |> (fun runtimeCtx -> App.program runtimeCtx)
         |> Program.runWithDynamicView app

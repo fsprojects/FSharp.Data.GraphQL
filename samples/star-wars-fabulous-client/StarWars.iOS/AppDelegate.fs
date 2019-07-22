@@ -14,10 +14,8 @@ type AppDelegate () =
 
     override this.FinishedLaunching (app, options) =
         Forms.Init()
-        let graphqlInfo =
-                 { new IGraphQLInfo with
-                    member x.GetSchemeUrl () = "http://127.0.0.1:8084" }
-        let appcore = new App(graphqlInfo)
+        let url = "http://127.0.0.1:8084"
+        let appcore = new App(url)
         this.LoadApplication (appcore)
         base.FinishedLaunching(app, options)
 

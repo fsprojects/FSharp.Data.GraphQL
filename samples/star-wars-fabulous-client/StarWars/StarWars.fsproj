@@ -23,9 +23,9 @@
     <PackageReference Include="Fabulous.Core" Version="0.35.0" />
     <PackageReference Include="Fabulous.CustomControls" Version="0.35.0" />
     <PackageReference Include="Fabulous.LiveUpdate" Version="0.35.0" />
-    <PackageReference Include="FSharp.Core" Version="4.5.2" />
+    <PackageReference Include="FSharp.Core" Version="4.6.2" />
     <PackageReference Include="Newtonsoft.Json" Version="11.0.2" />
-    <PackageReference Include="FSharp.Data.GraphQL.Client" Version="1.0.0-beta94" />
+    <PackageReference Include="FSharp.Data.GraphQL.Client" Version="1.0.1" />
     <Compile Include="CharacterDetailPage.fs" />
     <Compile Include="MainPage.fs" />
     <Compile Include="StarWars.fs" />
