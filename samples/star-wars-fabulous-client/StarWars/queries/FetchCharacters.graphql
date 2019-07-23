@@ -1,0 +1,16 @@
+﻿query FetchCharacters {
+  characters {
+    ... on Human {
+      id
+      name
+      homePlanet
+      appearsIn
+    }
+    ... on Droid {
+      id
+      name
+      primaryFunction
+      appearsIn
+    }
+  }
+}
