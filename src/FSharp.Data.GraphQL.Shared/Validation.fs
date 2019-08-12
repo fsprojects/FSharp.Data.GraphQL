@@ -960,8 +960,12 @@ module Ast =
                 def.SelectionSet |> collectResults (checkVariablesDefinedInSelection fragmentDefinitions varNames path)
             | _ -> Success)
 
-    let rec private argumentsContains (name : string) (args : Argument list) =
-        args |> List.exists (fun x -> match x.Value with | Variable varName -> varName = name | _ -> false)
+    let private argumentsContains (name : string) (args : Argument list) =
+        let rec go xs = xs |> List.exists (function
+            | Variable varName -> varName = name
+            | ObjectValue obj -> go (Map.toList obj |> List.map snd)
+            | _ -> false) 
+        go (args |> List.map (fun x -> x.Value))        
 
     let rec private variableIsUsedInFragmentSpread (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list) (spread : FragmentSpread) =
         if List.contains spread.Name visitedFragments
