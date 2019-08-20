@@ -130,3 +130,6 @@
 
 ### 1.0.1 - July 5 2019
 * Adjusting package dependencies (`FParsec`, `System.Net.Http`, and `FSharp.Data.GraphQL.Server` are not locked anymore)
+
+### 1.0.2 - August 19 2019
+* fixed false positive validation errors related to variable usage.
