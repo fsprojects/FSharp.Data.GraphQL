@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL
 
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection

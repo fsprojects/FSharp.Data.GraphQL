@@ -4,6 +4,7 @@ module FSharp.Data.GraphQL.Tests.AstValidationTests
 
 open Xunit
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.Ast
 open FSharp.Data.GraphQL.Validation.ValidationResult

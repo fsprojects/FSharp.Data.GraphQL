@@ -1,12 +1,12 @@
-// The MIT License (MIT)
+﻿/// The MIT License (MIT)
 /// Copyright (c) 2015-Mar 2016 Kevin Thompson @kthompson
-// Copyright (c) 2016 Bazinga Technologies Inc
+/// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Parser
 
+open FSharp.Data.GraphQL.Ast
 open System
 open FParsec
-open FSharp.Data.GraphQL.Ast
 
 [<AutoOpen>]
 module internal Internal =
@@ -87,16 +87,9 @@ module internal Internal =
           (hex2int h3)*4096 + (hex2int h2)*256 + (hex2int h1)*16 + hex2int h0 |> char)
       pchar '\\' >>. (escaped <|> unicode)
 
-    let normalCharacter =
-      noneOf
-        [| '\u000A'
-           '\u000D'
-           '\u2028'
-           '\u2029'
-           '"' |]
+    let normalCharacter = noneOf [|'\u000A';'\u000D';'\u2028';'\u2029';'"';'\''|]
     let quote =  pchar '"'
-
-    between quote quote (manyChars (escapedCharacter <|> normalCharacter))
+    between quote quote (manyChars (normalCharacter <|> escapedCharacter))
 
 
   // 2.9.3 Boolean value
@@ -176,8 +169,8 @@ module internal Internal =
   // 2.9 Value
   //   Variable|IntValue|FloatValue|StringValue|
   //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
-  inputValueRef.Value <-
-    choice [ variable |>> VariableName <?> "Variable"
+  inputValueRef :=
+    choice [ variable |>> Variable <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
              stringValue |>> StringValue <?> "String"
@@ -222,7 +215,7 @@ module internal Internal =
   let nonNullType =
     (listType <|> namedType) .>> pchar '!'
     |>> NonNullType <?> "NonNullType"
-  inputTypeRef.Value <-
+  inputTypeRef :=
     choice [ attempt nonNullType
              namedType
              listType ]
@@ -264,10 +257,10 @@ module internal Internal =
 
     pstring "..." .>> whitespaces >>. (inlineFragment <|> fragmentSpread)  <?> "Fragment"
 
-  selectionRef.Value <-
+  selectionRef :=
     field <|> selectionFragment  <?> "Selection"
 
-  selectionSetRef.Value <-
+  selectionSetRef :=
     betweenCharsMany1 '{' '}' selection <?> "SelectionSet"
 
 
@@ -314,7 +307,7 @@ module internal Internal =
 
 
   // 2.2 Document
-  //   Definitionlist
+  //   DefinitionList
   let documents =
     whitespaces >>. definitions .>> (skipMany ignored <|> eof)
     |>> (fun definitions -> { Document.Definitions = definitions })
@@ -325,9 +318,3 @@ let parse query =
   match run documents query with
   | Success(result, _, _) -> result
   | Failure(errorMsg, _, _) -> raise (System.FormatException(errorMsg))
-
-/// Parses a GraphQL Document. Throws exception on invalid formats.
-let tryParse query =
-  match run documents query with
-  | Success(result, _, _) -> Result.Ok result
-  | Failure(errorMsg, _, _) -> Result.Error errorMsg
