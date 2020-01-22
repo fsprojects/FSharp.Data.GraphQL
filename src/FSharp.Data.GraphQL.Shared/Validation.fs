@@ -964,6 +964,7 @@ module Ast =
         let rec go xs = xs |> List.exists (function
             | Variable varName -> varName = name
             | ObjectValue obj -> go (Map.toList obj |> List.map snd)
+            | ListValue xs -> go xs
             | _ -> false) 
         go (args |> List.map (fun x -> x.Value))        
 
