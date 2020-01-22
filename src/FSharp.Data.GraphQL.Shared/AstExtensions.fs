@@ -91,9 +91,19 @@ type Document with
         let withQuotes (s : string) = "\"" + s + "\""
         let rec printValue x =
             let printObjectValue (name, value) =
-                sb.Append(withQuotes name)
+                sb.Append(name)
                 sb.Append(": ")
                 printValue value
+            let printOne f n ov =
+                match n with
+                | 0 -> f ov
+                | _ -> sb.Append(", "); f ov
+            let printCompound braces f xs =
+                match xs with
+                | [] -> sb.Append(braces)
+                | xs -> sb.Append(braces.Substring(0, 1) + " ")
+                        List.iteri (printOne f) xs
+                        sb.Append(" " + braces.Substring(1, 1))
             match x with
             | IntValue x -> sb.Append(x.ToString(CultureInfo.InvariantCulture))
             | FloatValue x -> sb.Append(x.ToString(CultureInfo.InvariantCulture))
@@ -101,18 +111,8 @@ type Document with
             | StringValue x -> sb.Append(withQuotes x)
             | EnumValue x -> sb.Append(x)
             | NullValue -> sb.Append("null")
-            | ListValue x ->
-                if x.Length > 0 then sb.Append("[ ")
-                match x with
-                | [] -> sb.Append("[]")
-                | [x] -> printValue x; sb.Append(" ]")
-                | x :: xs -> printValue x; sb.Append(", "); List.iter printValue xs
-            | ObjectValue x ->
-                if x.Count > 0 then sb.Append("{ ")
-                match Map.toList x with
-                | [] -> sb.Append("null")
-                | [x] -> printObjectValue x; sb.Append(" }")
-                | x :: xs -> printObjectValue x; sb.Append(", "); List.iter printObjectValue xs
+            | ListValue x -> printCompound "[]" printValue x
+            | ObjectValue x -> printCompound "{}" printObjectValue (Map.toList x)
             | Variable x -> sb.Append("$" + x)
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
