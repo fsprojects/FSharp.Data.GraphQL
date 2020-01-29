@@ -92,6 +92,22 @@ fragment friend on Character {
 }"""
 
 [<Fact>]
+let ``Should be able to print a short hand format query`` () =
+    printAndAssert """{
+  field1
+  field2
+}"""
+
+[<Fact>]
+let ``Should not print query without name in short hand format`` () =
+    printAndAssert """query ($rId: Int) {
+  answer(id: $rId) {
+    id
+    answer
+  }
+}"""
+
+[<Fact>]
 let ``Should be able to print a query with inline fragments`` () =
     printAndAssert """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {

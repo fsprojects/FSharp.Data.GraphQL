@@ -26,13 +26,16 @@ and Definition =
         | FragmentDefinition frag -> frag.SelectionSet
 
 /// 2.2.1 Operations
-and OperationDefinition = {
-    OperationType: OperationType
-    Name: string option
-    VariableDefinitions: VariableDefinition list 
-    Directives: Directive list
-    SelectionSet: Selection list
-}
+and OperationDefinition =
+    {
+        OperationType: OperationType
+        Name: string option
+        VariableDefinitions: VariableDefinition list
+        Directives: Directive list
+        SelectionSet: Selection list
+    }
+    member x.IsShortHandQuery =
+        x.OperationType = Query && x.Name.IsNone && x.VariableDefinitions.IsEmpty && x.Directives.IsEmpty
 
 and OperationType = 
     | Query
