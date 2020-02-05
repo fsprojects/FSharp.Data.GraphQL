@@ -353,7 +353,7 @@ module internal JsonValueHelper =
                     | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
-                    | Some "String" -> makeSomeIfNeeded s
+                    | Some "String" | Some "ID" -> makeSomeIfNeeded s
                     | Some "URI" -> System.Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
                         match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
