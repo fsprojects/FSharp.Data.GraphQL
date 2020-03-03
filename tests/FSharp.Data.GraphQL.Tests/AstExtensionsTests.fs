@@ -46,6 +46,34 @@ let ``Should be able to print a query with variables`` () =
 }"""
 
 [<Fact>]
+let ``Should be able to parse a query with an object input in the internal method`` () =
+    printAndAssert """mutation q($id: String!, $name: String!) {
+  addHero(input: { id: $id, label: $name })
+}"""
+
+[<Fact>]
+let ``Should be able to parse a query with an object having array properties input in the internal method`` () =
+    printAndAssert """mutation q($id: String!, $name: String!, $friend1: String!) {
+  addHero(input: { friends: [ $friend1 ], id: $id, label: $name })
+}"""
+
+[<Fact>]
+let ``Should be able to parse a query with an object having multi-element array input in the internal method`` () =
+    printAndAssert """mutation q($id: String!, $name: String!) {
+  addHero(input: { friends: [ 7, 5, -3 ], id: $id, label: $name })
+}"""
+
+[<Fact>]
+let ``Should be able print ObjectValue names properly`` () =
+    printAndAssert """query GetCampaigns {
+  campaigns(params: { limit: 100, offset: 0 }) {
+    campaigns {
+      code
+    }
+  }
+}"""
+
+[<Fact>]
 let ``Should be able to print a query with aliases`` () =
     printAndAssert """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
