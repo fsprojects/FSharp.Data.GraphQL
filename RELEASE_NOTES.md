@@ -133,3 +133,9 @@
 
 ### 1.0.2 - August 19 2019
 * fixed false positive validation errors related to variable usage.
+
+### 1.0.3 - March 3 2020
+* Correct printing of queries without names
+* Correct printing of ListValue and ObjectValue 
+* Traverse list values in argument lists
+* Added test cases for object inputs for graphql functions 
