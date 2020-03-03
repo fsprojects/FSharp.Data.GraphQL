@@ -1077,6 +1077,17 @@ query nestedVariables($name: String) {
     |> equals Success
 
 [<Fact>]
+let ``Validation should look for variable being used in list values in arguments`` () =
+    let query1 =
+        """query houseTrainedQuery($atOtherHomes: Boolean) {
+  dog(input: { metafields: [ { namespace: "gss", key: $atOtherHomes } ] }) {
+    isHousetrained(atOtherHomes: true)
+  }
+}"""
+    let shouldPass = getContext query1 |> Validation.Ast.validateAllVariablesUsed
+    shouldPass |> equals Success
+
+[<Fact>]
 let ``Validation should grant that all variables can be used`` () =
     let query1 =
         """query intCannotGoIntoBoolean($intArg: Int) {
