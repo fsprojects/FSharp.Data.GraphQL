@@ -192,7 +192,8 @@ type Document with
             let printDefinition = function
                 | OperationDefinition odef ->
                     match odef.OperationType with
-                    | Query -> if odef.Name.IsSome then sb.Append("query ")
+                    | Query when odef.IsShortHandQuery -> ()
+                    | Query -> sb.Append("query ")
                     | Mutation -> sb.Append("mutation ")
                     | Subscription -> sb.Append("subscription ")
                     odef.Name 
