@@ -9,6 +9,10 @@ Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Shared"
 EndProject
 Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{2767CDCE-EA89-4A3F-862D-301A02470C9B}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{685D5312-4D09-4D27-9459-5C159A494032}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Tests", "tests\FSharp.Data.GraphQL.Tests\FSharp.Data.GraphQL.Tests.fsproj", "{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -46,9 +50,22 @@ Global
 		{2767CDCE-EA89-4A3F-862D-301A02470C9B}.Release|x64.Build.0 = Release|Any CPU
 		{2767CDCE-EA89-4A3F-862D-301A02470C9B}.Release|x86.ActiveCfg = Release|Any CPU
 		{2767CDCE-EA89-4A3F-862D-301A02470C9B}.Release|x86.Build.0 = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|x64.Build.0 = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Debug|x86.Build.0 = Debug|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|Any CPU.Build.0 = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|x64.ActiveCfg = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|x64.Build.0 = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|x86.ActiveCfg = Release|Any CPU
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{BD7766E3-AAC9-450B-9C8E-942778F3EFEF} = {EBE654DB-EDA8-4601-8E65-15D7C56E6661}
 		{2767CDCE-EA89-4A3F-862D-301A02470C9B} = {EBE654DB-EDA8-4601-8E65-15D7C56E6661}
+		{0BE8BC95-0A14-4A40-9BB0-B42FF8C16473} = {685D5312-4D09-4D27-9459-5C159A494032}
 	EndGlobalSection
 EndGlobal
