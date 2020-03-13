@@ -6,13 +6,17 @@ nuget FSharp.Core ~> 4.7.0
 nuget FParsec ~> 1.1.1
   
   # FParsec needs to be explicit for the client provider design time reference.
-  # This should not be a problem since FParsec almost never gets a new release.
-  # nuget FParsec 1.0.3
 
   # Those are needed for the client type provider.
   # nuget NETStandard.Library.NETFramework
   # github fsprojects/FSharp.TypeProviders.SDK:c8fc89b0e8bac34e321372b004de76d600651cda src/ProvidedTypes.fsi
   # github fsprojects/FSharp.TypeProviders.SDK:c8fc89b0e8bac34e321372b004de76d600651cda src/ProvidedTypes.fs
+github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fsi
+github fsprojects/FSharp.TypeProviders.SDK src/ProvidedTypes.fs
+
+
+group TypeProviders
+
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
