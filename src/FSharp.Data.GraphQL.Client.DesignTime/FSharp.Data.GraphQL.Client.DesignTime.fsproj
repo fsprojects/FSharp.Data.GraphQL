@@ -6,16 +6,14 @@
     <DefineConstants>IS_DESIGNTIME; NO_GENERATIVE;$(DefineConstants)</DefineConstants>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
-    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
-    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
   </PropertyGroup>
   <ItemGroup>
-    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
+    <Compile Include="..\..\paket-files\typeproviders\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fsi</Link>
     </Compile>
-    <Compile Include="..\..\paket-files\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
+    <Compile Include="..\..\paket-files\typeproviders\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>

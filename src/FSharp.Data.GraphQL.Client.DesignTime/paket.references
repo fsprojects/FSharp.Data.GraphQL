@@ -1,4 +1,7 @@
+FSharp.Core
+
+group TypeProviders
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs
 
-FSharp.Core
+
