@@ -30,6 +30,7 @@ group TestsAndSamples
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
   nuget FSharp.Data.TypeProviders
+  nuget Microsoft.NETFramework.ReferenceAssemblies
 
 group Build
   source https://api.nuget.org/v3/index.json
