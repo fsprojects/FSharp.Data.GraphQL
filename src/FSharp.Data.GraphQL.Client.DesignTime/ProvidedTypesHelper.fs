@@ -19,8 +19,8 @@ open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
 open System.Collections
 
-module internal QuotationHelpers = 
-    let rec coerceValues fieldTypeLookup fields = 
+module internal QuotationHelpers =
+    let rec coerceValues fieldTypeLookup fields =
         let arrayExpr (arrayType : Type) (v : obj) =
             let typ = arrayType.GetElementType()
             let instance =
@@ -36,7 +36,7 @@ module internal QuotationHelpers =
             let exprs = coerceValues fieldTypeLookup fields
             Expr.NewTuple(exprs)
         Array.mapi (fun i v ->
-                let expr = 
+                let expr =
                     if isNull v then simpleTypeExpr v
                     else
                         let tpy = v.GetType()
@@ -47,16 +47,16 @@ module internal QuotationHelpers =
                         else simpleTypeExpr v
                 Expr.Coerce(expr, fieldTypeLookup i)
         ) fields |> List.ofArray
-    
+
     and simpleTypeExpr instance = Expr.Value(instance)
 
-    and unionExpr instance = 
-        let caseInfo, fields = FSharpValue.GetUnionFields(instance, instance.GetType())    
+    and unionExpr instance =
+        let caseInfo, fields = FSharpValue.GetUnionFields(instance, instance.GetType())
         let fieldInfo = caseInfo.GetFields()
         let fieldTypeLookup indx = fieldInfo.[indx].PropertyType
         caseInfo.DeclaringType, Expr.NewUnionCase(caseInfo, coerceValues fieldTypeLookup fields)
 
-    and recordExpr instance = 
+    and recordExpr instance =
         let typ = instance.GetType()
         let fields = FSharpValue.GetRecordFields(instance)
         let fieldInfo = FSharpType.GetRecordFields(typ)
@@ -69,21 +69,26 @@ module internal QuotationHelpers =
         let exprs = coerceValues (fun _ -> typ) (instance |> Array.map box)
         arrayType, Expr.NewArray(typ, exprs)
 
-    let createLetExpr varType instance body args = 
-        let var = Var("instance", varType)  
+    let createLetExpr varType instance body args =
+        let var = Var("instance", varType)
         Expr.Let(var, instance, body args (Expr.Var(var)))
 
-    let quoteUnion instance = 
+    let quoteUnion instance =
         let func instance = unionExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted union type" (fun _ -> func instance)
 
-    let quoteRecord instance = 
+    let quoteRecord instance =
         let func instance = recordExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted record type" (fun _ -> func instance)
 
-    let quoteArray instance = 
+    let quoteArray instance =
         let func instance = arrayExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
+
+module internal ProvidedScalar =
+    let makeProvidedType(name) =
+        let tdef = ProvidedTypeDefinition(name, Some typeof<String>, nonNullable = false, isErased = true, isSealed = true)
+        tdef
 
 module internal ProvidedEnum =
     let ctor = typeof<EnumBase>.GetConstructors().[0]
@@ -140,7 +145,7 @@ module internal ProvidedRecord =
 
     let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
         let name = tdef.Name
-        tdef.AddMembersDelayed(fun _ -> 
+        tdef.AddMembersDelayed(fun _ ->
             properties |> List.map (fun metadata ->
                 let pname = metadata.AliasOrName.FirstCharUpper()
                 let getterCode (args : Expr list) =
@@ -164,9 +169,9 @@ module internal ProvidedRecord =
                 // in the type provider SDK. They require a default value, and if the type is not nullable
                 // it provides the type default value for it.
                 let properties = propertiesGetter()
-                let optionalProperties, requiredProperties = 
-                    properties 
-                    |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t) 
+                let optionalProperties, requiredProperties =
+                    properties
+                    |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t)
                     |> List.partition (fun (_, t) -> isOption t)
                 List.combinations optionalProperties
                 |> List.map (fun (optionalProperties, nullValuedProperties) ->
@@ -177,7 +182,7 @@ module internal ProvidedRecord =
                     let invoker (args : Expr list) =
                         let properties =
                             let baseConstructorArgs =
-                                let coercedArgs = 
+                                let coercedArgs =
                                     (constructorPropertyTypes, args)
                                     ||> List.map2 (fun t arg ->
                                         let arg = Expr.Coerce(arg, typeof<obj>)
@@ -187,7 +192,7 @@ module internal ProvidedRecord =
                                 ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
                             Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
                         Expr.NewObject(ctor, [Expr.Value(name); properties])
-                    let constructorParams = 
+                    let constructorParams =
                         constructorProperties
                         |> List.map (fun (name, t) ->
                             match t with
@@ -197,7 +202,7 @@ module internal ProvidedRecord =
         match tdef.BaseType with
         | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->
-                let asType = 
+                let asType =
                     let invoker (args : Expr list) =
                         <@@ let this = %%args.[0] : RecordBase
                             if this.GetName() = name then this
@@ -218,7 +223,7 @@ module internal ProvidedRecord =
                 members)
             let propertiesGetter() = bdef.GetRecordProperties() @ properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
-        | _ -> 
+        | _ ->
             let propertiesGetter() = properties |> List.map (fun p -> p.Name, p.Alias, p.Type)
             addConstructorDelayed propertiesGetter
         tdef.SetRecordProperties(properties)
@@ -263,7 +268,7 @@ module internal ProvidedOperation =
                     match variableType with
                     | NamedType typeName ->
                         match uploadInputTypeName with
-                        | Some uploadInputTypeName when typeName = uploadInputTypeName -> 
+                        | Some uploadInputTypeName when typeName = uploadInputTypeName ->
                             variableName, Types.makeOption typeof<Upload>
                         | _ ->
                             match Types.scalar.TryFind(typeName) with
@@ -272,10 +277,10 @@ module internal ProvidedOperation =
                                 match schemaProvidedTypes.TryFind(typeName) with
                                 | Some t -> variableName, Types.makeOption t
                                 | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
-                    | ListType itype -> 
+                    | ListType itype ->
                         let name, t = mapVariable variableName itype
                         name, t |> Types.makeArray |> Types.makeOption
-                    | NonNullType itype -> 
+                    | NonNullType itype ->
                         let name, t = mapVariable variableName itype
                         name, Types.unwrapOption t
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
@@ -296,9 +301,9 @@ module internal ProvidedOperation =
                     let varArgs = List.skip (args.Length - variables.Length) args
                     (varNames, varArgs) ||> List.map2 mapVariableExpr
                 Expr.NewArray(typeof<string * obj>, args)
-            let defaultContextExpr = 
+            let defaultContextExpr =
                 match contextInfo with
-                | Some info -> 
+                | Some info ->
                     let serverUrl = info.ServerUrl
                     let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
@@ -310,13 +315,13 @@ module internal ProvidedOperation =
             // if no default context is provided.
             let methodOverloadDefinitions =
                 let overloadsWithoutContext =
-                    let optionalVariables, requiredVariables = 
+                    let optionalVariables, requiredVariables =
                         variables |> List.partition (fun (_, t) -> isOption t)
-                    List.combinations optionalVariables 
+                    List.combinations optionalVariables
                     |> List.map (fun (optionalVariables, _) ->
                         let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
                         requiredVariables @ optionalVariables)
-                let overloadsWithContext = 
+                let overloadsWithContext =
                     overloadsWithoutContext
                     |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
                 match contextInfo with
@@ -332,7 +337,7 @@ module internal ProvidedOperation =
                     | Array t -> existsUploadType foundTypes t
                     | _ -> t = typeof<Upload>
                 variables |> Seq.exists (snd >> existsUploadType [])
-            let runMethodOverloads : MemberInfo list = 
+            let runMethodOverloads : MemberInfo list =
                 let operationName = Option.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
                     let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
@@ -340,12 +345,12 @@ module internal ProvidedOperation =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
                         let argsWithoutInstance = args.Tail
-                        let variableArgs, isDefaultContext, context = 
+                        let variableArgs, isDefaultContext, context =
                             if argsWithoutInstance.Length - variableNames.Length = 1
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
-                        <@@ 
+                        <@@
                             let context = %%context : GraphQLProviderRuntimeContext
                             let request =
                                 { ServerUrl = context.ServerUrl
@@ -353,7 +358,7 @@ module internal ProvidedOperation =
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
                                   Variables = %%variables }
-                            let response = 
+                            let response =
                                 if shouldUseMultipartRequest
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                                 else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
@@ -365,7 +370,7 @@ module internal ProvidedOperation =
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                     upcast methodDef)
-            let asyncRunMethodOverloads : MemberInfo list = 
+            let asyncRunMethodOverloads : MemberInfo list =
                 let operationName = Option.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
                     let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
@@ -373,7 +378,7 @@ module internal ProvidedOperation =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
                         let argsWithoutInstance = args.Tail
-                        let variableArgs, isDefaultContext, context = 
+                        let variableArgs, isDefaultContext, context =
                             if argsWithoutInstance.Length - variableNames.Length = 1
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
@@ -386,7 +391,7 @@ module internal ProvidedOperation =
                                   Query = actualQuery
                                   Variables = %%variables }
                             async {
-                                let! response = 
+                                let! response =
                                     if shouldUseMultipartRequest
                                     then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
                                     else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
@@ -416,7 +421,7 @@ type internal ProvidedOperationMetadata =
 
 module internal Provider =
     let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
-        let generateWrapper name = 
+        let generateWrapper name =
             let rec resolveWrapperName actual =
                 if schemaTypes.ContainsKey(actual)
                 then resolveWrapperName (actual + "Fields")
@@ -477,7 +482,7 @@ module internal Provider =
                             let conditionFields = fields |> List.distinctBy (fun x -> x.AliasOrName) |> List.map FragmentField
                             typeCondition, List.map (getPropertyMetadata typeCondition) conditionFields)
                     let baseProperties =
-                        astFields 
+                        astFields
                         |> List.choose (fun x ->
                             match x with
                             | TypeField _ -> Some x
@@ -577,10 +582,14 @@ module internal Provider =
             else
                 let metadata = { Name = itype.Name; Description = itype.Description }
                 match itype.Kind with
+                | TypeKind.SCALAR ->
+                    let tdef = ProvidedScalar.makeProvidedType(itype.Name)
+                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
+                    tdef
                 | TypeKind.OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
-                    let properties = 
+                    let properties =
                         itype.Fields
                         |> Option.defaultValue [||]
                         |> Array.map resolveFieldMetadata
@@ -589,7 +598,7 @@ module internal Provider =
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
-                    let properties = 
+                    let properties =
                         itype.InputFields
                         |> Option.defaultValue [||]
                         |> Array.map resolveInputFieldMetadata
@@ -608,7 +617,7 @@ module internal Provider =
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
                     tdef
                 | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
-        let ignoredKinds = [TypeKind.SCALAR; TypeKind.LIST; TypeKind.NON_NULL]
+        let ignoredKinds = [TypeKind.LIST; TypeKind.NON_NULL]
         schemaTypes |> Map.iter (fun _ itype -> if not (List.contains itype.Kind ignoredKinds) then resolveProvidedType itype |> ignore)
         let possibleTypes (itype : IntrospectionType) =
             match itype.PossibleTypes with
@@ -628,9 +637,9 @@ module internal Provider =
 
     let makeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
-        let staticParams = 
+        let staticParams =
             [ ProvidedStaticParameter("introspection", typeof<string>)
-              ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
+              ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
               ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
               ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
@@ -638,7 +647,7 @@ module internal Provider =
             let clientQueryValidation : bool = downcast args.[4]
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
-            let uploadInputTypeName = 
+            let uploadInputTypeName =
                 let name : string = unbox args.[3]
                 match name with
                 | null | "" -> None
@@ -651,7 +660,7 @@ module internal Provider =
                         let httpHeaders = HttpHeaders.load httpHeadersLocation
                         let schemaJson =
                             match introspectionLocation with
-                            | Uri serverUrl -> 
+                            | Uri serverUrl ->
                                 use connection = new GraphQLClientConnection()
                                 GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
                             | IntrospectionFile path ->
@@ -682,7 +691,7 @@ module internal Provider =
                                     { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
-                            let staticParams = 
+                            let staticParams =
                                 [ ProvidedStaticParameter("query", typeof<string>)
                                   ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
                                   ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
@@ -690,7 +699,7 @@ module internal Provider =
                             let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
                             let instanceBuilder (methodName : string) (args : obj []) =
                                 let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
-                                let query = 
+                                let query =
                                     match queryLocation with
                                     | String query -> query
                                     | File path -> System.IO.File.ReadAllText(path)
@@ -717,18 +726,18 @@ module internal Provider =
                                     |> QueryValidationDesignTimeCache.getOrAdd key
                                     |> throwExceptionIfValidationFailed
                                 #endif
-                                let operationName : OperationName option = 
+                                let operationName : OperationName option =
                                     match args.[2] :?> string with
-                                    | null | "" -> 
+                                    | null | "" ->
                                         let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
                                         match operationDefinitions with
                                         | opdef :: _ -> opdef.Name
                                         | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
                                     | x -> Some x
-                                let explicitOperationTypeName : TypeName option = 
+                                let explicitOperationTypeName : TypeName option =
                                     match args.[3] :?> string with
-                                    | null | "" -> None   
-                                    | x -> Some x    
+                                    | null | "" -> None
+                                    | x -> Some x
                                 let operationDefinition =
                                     queryAst.Definitions
                                     |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
@@ -742,11 +751,11 @@ module internal Provider =
                                     let tref =
                                         match operationDefinition.OperationType with
                                         | Query -> schema.QueryType
-                                        | Mutation -> 
+                                        | Mutation ->
                                             match schema.MutationType with
                                             | Some tref -> tref
                                             | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-                                        | Subscription -> 
+                                        | Subscription ->
                                             match schema.SubscriptionType with
                                             | Some tref -> tref
                                             | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
@@ -801,7 +810,7 @@ module internal Provider =
                                                     match field with
                                                     | FragmentField fragf ->
                                                         let fragmentType =
-                                                            let tref = 
+                                                            let tref =
                                                                 Option.defaultValue [||] introspectionType.PossibleTypes
                                                                 |> Array.map getIntrospectionType
                                                                 |> Array.append [|introspectionType|]
@@ -811,20 +820,20 @@ module internal Provider =
                                                             | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
                                                         let field =
                                                             fragmentType.Fields
-                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name)) 
+                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
                                                             |> Option.flatten
                                                         match field with
                                                         | Some f -> f.Type
                                                         | None -> throw fragmentType.Name
                                                     | TypeField typef ->
                                                         let field =
-                                                            introspectionType.Fields 
+                                                            introspectionType.Fields
                                                             |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
                                                             |> Option.flatten
                                                         match field with
                                                         | Some f -> f.Type
                                                         | None -> throw introspectionType.Name
-                                                let fields = 
+                                                let fields =
                                                     match getKind tref with
                                                     | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
                                                         let schemaType = getIntrospectionType tref
@@ -851,14 +860,14 @@ module internal Provider =
                                 methodDef
                             staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
                             staticMethodDef
-                        let schemaPropertyDef = 
+                        let schemaPropertyDef =
                             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
                         let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
                         members)
                     tdef
             #if IS_DESIGNTIME
-            let providerKey = 
+            let providerKey =
                 { IntrospectionLocation = introspectionLocation
                   CustomHttpHeadersLocation = httpHeadersLocation
                   UploadInputTypeName = uploadInputTypeName
