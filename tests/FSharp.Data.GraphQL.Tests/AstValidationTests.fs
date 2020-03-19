@@ -2,11 +2,12 @@
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.AstValidationTests
 
+open System
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.Ast
 open Xunit
-open FSharp.Data.GraphQL.Types
 
 type Command =
     | SIT = 1
@@ -30,7 +31,7 @@ type Alien =
     interface ISentient with
         member x.Name = x.Name
 
-type Dog = 
+type Dog =
     { Name : string
       BarkVolume : int
       Nickname : string
@@ -46,7 +47,7 @@ type ComplexInput =
     { Name : string option
       Owner : string option }
 
-type Cat = 
+type Cat =
     { Name : string
       MeowVolume : int
       Nickname : string
@@ -67,20 +68,33 @@ type DogOrHuman =
     | Dog of Dog
     | Human of Human
 
+[<Struct>]
+type ISBN = ISBN of string
+
+type Book =
+    { Id: Guid
+      ISBN : ISBN
+      Title : String
+      Authors : String list
+      Summary : String
+      ImageURL : Uri }
+
 type Root =
     { CatOrDog : CatOrDog
       HumanOrAlien : HumanOrAlien
       DogOrHuman : DogOrHuman
       Pet : IPet
       Sentient : ISentient
-      Human : Human }
+      Human : Human
+      Book : Book }
     member __.FindDog(_ : ComplexInput) : Dog option = None
+    member __.FindBook(_ : ISBN) : Book option = None
     member __.BooleanList(_ : bool list option) : bool option = None
 
 let Command =
     Define.Enum<Command>(
         name = "Command",
-        options = 
+        options =
             [ Define.EnumValue("SIT", Command.SIT)
               Define.EnumValue("HEEL", Command.HEEL)
               Define.EnumValue("JUMP", Command.JUMP) ])
@@ -94,25 +108,25 @@ let ComplexInput =
         name = "ComplexInput",
         fields = [ Define.Input("name", Nullable String); Define.Input("owner", Nullable String) ])
 
-let Dog = 
+let Dog =
     Define.Object<Dog>(
-        name = "Dog", 
-        fields = 
+        name = "Dog",
+        fields =
             [ Define.AutoField("name", String)
               Define.AutoField("barkVolume", Int)
               Define.AutoField("nickname", String)
               Define.Field("doesKnowCommand", Boolean, [ Define.Input("dogCommand", Command) ], fun ctx (dog : Dog) -> dog.DoesKnowCommand(ctx.Arg("dogCommand")))
-              Define.Field("isHouseTrained", Boolean, [ Define.Input("atOtherHomes", Boolean) ], fun ctx (dog : Dog) -> dog.IsHouseTrained(ctx.Arg("atOtherHomes"))) ], 
+              Define.Field("isHouseTrained", Boolean, [ Define.Input("atOtherHomes", Boolean) ], fun ctx (dog : Dog) -> dog.IsHouseTrained(ctx.Arg("atOtherHomes"))) ],
         interfaces = [ Pet ])
 
-let Cat = 
+let Cat =
     Define.Object<Cat>(
-        name = "Cat", 
-        fields = 
+        name = "Cat",
+        fields =
             [ Define.AutoField("name", String)
               Define.AutoField("meowVolume", Int)
               Define.AutoField("nickname", String)
-              Define.Field("doesKnowCommand", Boolean, [ Define.Input("catCommand", Command) ], fun ctx (dog : Cat) -> dog.DoesKnowCommand(ctx.Arg("catCommand")))], 
+              Define.Field("doesKnowCommand", Boolean, [ Define.Input("catCommand", Command) ], fun ctx (dog : Cat) -> dog.DoesKnowCommand(ctx.Arg("catCommand")))],
         interfaces = [ Pet ])
 
 let CatOrDog =
@@ -148,6 +162,27 @@ let DogOrHuman =
         resolveValue = (function | DogOrHuman.Human h -> box h | DogOrHuman.Dog d -> upcast d),
         resolveType = (function | DogOrHuman.Human _ -> upcast Human | DogOrHuman.Dog _ -> upcast Dog))
 
+open FSharp.Data.GraphQL.Ast
+
+let ``ISBN Type`` =
+    Define.Scalar
+        (name = "ISBN",
+         coerceInput = (fun (StringValue s) -> s |> ISBN |> Some),
+         coerceValue = (fun v -> match v with :? ISBN as isbn -> Some isbn | _ -> None))
+
+let Book =
+    Define.Object<Book>
+        (name = "Registri", description = "A book definition, not a physcial copy",
+         isTypeOf = (fun o -> o :? Book),
+         fields =
+             [ Define.Field ("id", ID, "ID of the book definition", (fun _ (r : Book) -> r.Id))
+               Define.Field ("isbn", ``ISBN Type``, "ISBN of the book", (fun _ r -> r.ISBN))
+               Define.Field ("title", String, "Title of the book", (fun _ r -> r.Title ))
+               Define.Field ("authors", ListOf(String), "Authors of the book", (fun _ r -> r.Authors))
+               Define.Field ("summary", String, "Summary of the book", (fun _ r -> r.Summary))
+               Define.Field ("imageurl", Uri, "URL of the book image", (fun _ r -> (r.ImageURL))) ])
+
+
 let Arguments =
     Define.Object<obj>(
         name = "Arguments",
@@ -161,17 +196,19 @@ let Arguments =
               Define.Field("booleanListArgField", Nullable (ListOf (Nullable Boolean)), [ Define.Input("booleanListArg", ListOf (Nullable Boolean)) ], fun ctx _ -> ctx.Arg("booleanListArg") |> Some)
               Define.Field("optionalNonNullBooleanArgField", Boolean, [ Define.Input("optionalBooleanArg", Boolean, false) ], fun ctx _ -> ctx.Arg("optionalBooleanArg")) ])
 
-let Query = 
+let Query =
     Define.Object<Root>(
-        name = "Root", 
+        name = "Root",
         fields =
             [ Define.AutoField("catOrDog", CatOrDog)
               Define.AutoField("humanOrAlien", HumanOrAlien)
               Define.AutoField("dogOrHuman", DogOrHuman)
               Define.AutoField("pet", Pet)
               Define.AutoField("human", Human)
+              Define.AutoField("book", Book)
               Define.Field("arguments", Arguments)
               Define.Field("findDog", Nullable Dog, [ Define.Input("complex", ComplexInput) ], fun ctx (r : Root) -> r.FindDog(ctx.Arg("complex")))
+              Define.Field("findBook", Nullable Book, [ Define.Input("isbn", ``ISBN Type``) ], fun ctx (r : Root) -> r.FindBook(ctx.Arg("isbn")))
               Define.Field("booleanList", Nullable Boolean, [ Define.Input("booleanListArg", Nullable (ListOf Boolean)) ], fun ctx (r : Root) -> r.BooleanList(ctx.Arg("booleanListArg"))) ])
 
 let Mutation =
@@ -343,7 +380,7 @@ fragment differingArgs on Dog {
     someValue: meowVolume
   }
 }"""
-    let expectedFailureResult = 
+    let expectedFailureResult =
         ValidationError [ { Message = "Field name or alias 'name' is referring to fields 'nickname' and 'name', but they are different fields in the scope of the parent type."
                             Path = Some ["conflictingBecauseAlias"; "name"] }
                           { Message = "Field name or alias 'doesKnowCommand' refers to field 'doesKnowCommand' two times, but each reference has different argument sets."
@@ -398,7 +435,7 @@ fragment safeDifferingArgs on Pet {
 }"""
     let shouldPass = [query4; query5; query6] |> collectResults (getContext >> Validation.Ast.validateFieldSelectionMerging)
     shouldPass |> equals Success
-    
+
 [<Fact>]
 let ``Validation should grant that leaf fields have sub fields when necessary, and do not have if they are scalar or enums`` () =
     let query1 =
@@ -419,7 +456,7 @@ query directQueryOnInterfaceWithoutSubFields {
 query directQueryOnUnionWithoutSubFields {
   catOrDog
 }"""
-    let expectedFailureResult = 
+    let expectedFailureResult =
         ValidationError [ { Message = "Field 'barkVolume' of 'Dog' type is of type kind SCALAR, and therefore should not contain inner fields in its selection."
                             Path = Some ["scalarSelectionsNotAllowedOnInt"; "barkVolume"] }
                           { Message = "Field 'human' of 'Root' type is of type kind OBJECT, and therefore should have inner fields in its selection."
@@ -476,7 +513,7 @@ let ``Validation should grant that arguments passed to fields and directives are
     let query2 =
         """fragment invalidArgName on Dog {
         isHousetrained(atOtherHomes: true) @include(if : true, if: false)
-}"""  
+}"""
     let expectedFailureResult =
         ValidationError [ { Message = "There are 2 arguments with name 'dogCommand' defined in alias or field 'doesKnowCommand'. Field arguments must be unique."
                             Path = Some ["duplicatedArgs"; "doesKnowCommand"] }
@@ -978,7 +1015,7 @@ query TakesListOfBooleanBang($booleans: [Boolean!]) {
 
 [<Fact>]
 let ``Validation should grant that all referenced variables are defined variables`` () =
-    let query1 = 
+    let query1 =
         """query variableIsNotDefined {
   dog {
     isHousetrained(atOtherHomes: $atOtherHomes)
@@ -1042,7 +1079,7 @@ fragment isHousetrainedFragment on Dog {
 
 fragment isHouseTrainedCyclic on Dog {
   ...isHousetrainedFragment
-}""" 
+}"""
     let expectedFailureResult =
         ValidationError [ { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableUnused'. Every variable must be used."; Path = None }
                           { Message = "Variable definition 'atOtherHomes' is not used in operation 'variableNotUsedWithinFragment'. Every variable must be used."; Path = None }
