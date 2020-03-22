@@ -249,6 +249,7 @@ module internal ProvidedOperation =
                          operationDefinition : OperationDefinition,
                          operationTypeName : string,
                          operationFieldsExpr : Expr,
+                         schemaTypes: Map<string,IntrospectionType>,
                          schemaProvidedTypes : Map<string, ProvidedTypeDefinition>,
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
@@ -258,6 +259,10 @@ module internal ProvidedOperation =
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
             let operationResultDef = ProvidedOperationResult.makeProvidedType(operationType)
+            let isScalar (typeName: string) =
+                match schemaTypes.TryFind typeName with
+                | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
+                | None -> false
             let variables =
                 let rec mapVariable (variableName : string) (variableType : InputType) =
                     match variableType with
@@ -268,6 +273,7 @@ module internal ProvidedOperation =
                         | _ ->
                             match Types.scalar.TryFind(typeName) with
                             | Some t -> variableName, Types.makeOption t
+                            | None when isScalar typeName -> variableName, typeof<string option>
                             | None ->
                                 match schemaProvidedTypes.TryFind(typeName) with
                                 | Some t -> variableName, Types.makeOption t
@@ -841,7 +847,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
+                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
                                 operationDef.AddMember(metadata.TypeWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)

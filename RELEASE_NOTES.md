@@ -136,6 +136,11 @@
 
 ### 1.0.3 - March 3 2020
 * Correct printing of queries without names
-* Correct printing of ListValue and ObjectValue 
+* Correct printing of ListValue and ObjectValue
 * Traverse list values in argument lists
-* Added test cases for object inputs for graphql functions 
+* Added test cases for object inputs for graphql functions
+
+
+### 1.0.4 - March 22 2020
+* TypeProvider now treats custom scalars as strings
+* The Guid scalar was mapped to a DateTime
