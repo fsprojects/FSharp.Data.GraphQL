@@ -104,21 +104,21 @@ let ``Should be able to execute a query using context, sending an empty input fi
 
 [<Fact>]
 let ``Should be able to execute a query sending an input field with single field``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
     let input = Input(single)
     SimpleOperation.operation.Run(input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with single field``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"),  Guid.Empty)
     let input = Input(single)
     SimpleOperation.operation.Run(context, input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query without sending an an input field with single field asynchornously``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"),  Guid.Empty)
     let input = Input(single)
     SimpleOperation.operation.AsyncRun(input)
     |> Async.RunSynchronously
@@ -126,7 +126,7 @@ let ``Should be able to execute a query without sending an an input field with s
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with single field, asynchronously``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
     let input = Input(single)
     SimpleOperation.operation.AsyncRun(context, input)
     |> Async.RunSynchronously
@@ -134,21 +134,21 @@ let ``Should be able to execute a query using context, sending an an input field
 
 [<Fact>]
 let ``Should be able to execute a query sending an input field with list field``() =
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(list)
     SimpleOperation.operation.Run(input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with list field``() =
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(list)
     SimpleOperation.operation.Run(context, input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query without sending an an input field with list field asynchornously``() =
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"),  Guid.Empty)|]
     let input = Input(list)
     SimpleOperation.operation.AsyncRun(input)
     |> Async.RunSynchronously
@@ -156,7 +156,7 @@ let ``Should be able to execute a query without sending an an input field with l
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with list field, asynchronously``() =
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(list)
     SimpleOperation.operation.AsyncRun(context, input)
     |> Async.RunSynchronously
@@ -164,24 +164,24 @@ let ``Should be able to execute a query using context, sending an an input field
 
 [<Fact>]
 let ``Should be able to execute a query sending an input field with single and list fields``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(single, list)
     SimpleOperation.operation.Run(input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with single and list fields``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321", Guid.Empty))|]
     let input = Input(single, list)
     SimpleOperation.operation.Run(context, input)
     |> SimpleOperation.validateResult (Some input)
 
 [<Fact>]
 let ``Should be able to execute a query without sending an an input field with single and list fields asynchornously``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(single, list)
     SimpleOperation.operation.AsyncRun(input)
     |> Async.RunSynchronously
@@ -189,8 +189,8 @@ let ``Should be able to execute a query without sending an an input field with s
 
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with single and list fields, asynchronously``() =
-    let single = InputField("A", 2, System.Uri("http://localhost:1234"))
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"))|]
+    let single = InputField("A", 2, System.Uri("http://localhost:1234"), Guid.Empty)
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), Guid.Empty)|]
     let input = Input(single, list)
     SimpleOperation.operation.AsyncRun(context, input)
     |> Async.RunSynchronously
