@@ -34,6 +34,7 @@ module SimpleOperation =
             intOption
             uri
             deprecated
+            guid
           }""">()
 
     type Operation = Provider.Operations.Q
@@ -46,13 +47,13 @@ module SimpleOperation =
             result.Data.Value.Echo.IsSome |> equals true
             input.List |> Option.iter (fun list ->
                 result.Data.Value.Echo.Value.List.IsSome |> equals true
-                let input = list |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
-                let output = result.Data.Value.Echo.Value.List.Value |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
+                let input = list |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri, x.Guid.ToString())
+                let output = result.Data.Value.Echo.Value.List.Value |> Array.map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri, x.Guid)
                 input |> equals output)
             input.Single |> Option.iter (fun single ->
                 result.Data.Value.Echo.Value.Single.IsSome |> equals true
-                let input = single.Int, single.IntOption, single.String, single.StringOption, single.Uri
-                let output = result.Data.Value.Echo.Value.Single.Value |> map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri)
+                let input = single.Int, single.IntOption, single.String, single.StringOption, single.Uri, single.Guid.ToString()
+                let output = result.Data.Value.Echo.Value.Single.Value |> map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri, x.Guid)
                 input |> equals output))
 
 [<Fact>]
