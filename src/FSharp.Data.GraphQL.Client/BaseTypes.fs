@@ -255,7 +255,7 @@ module internal JsonValueHelper =
             let getType (typeName : string) =
                 match Map.tryFind typeName Types.scalar with
                 | Some t -> t
-                | None -> failwithf "Unsupported scalar type \"%s\"." typeName
+                | None -> typeof<string>
             match typeRef.Name with
             | Some name -> getType name
             | None -> failwith "Expected scalar type to have a name, but it does not have one."
@@ -341,24 +341,28 @@ module internal JsonValueHelper =
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
                         | TypeKind.SCALAR -> 
                             match itemType.Name with
-                            | Some "String" | Some "ID" -> box s
-                            | Some "URI" -> System.Uri(s) |> box
+                            | Some "URI" -> 
+                                System.Uri(s) |> box
                             | Some "Date" -> 
                                 match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                                 | (true, d) -> box d
                                 | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
+                            | Some _ ->
+                                box s
                             | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
                         | TypeKind.ENUM when itemType.Name.IsSome -> EnumBase(itemType.Name.Value, s) |> box
                         | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string or an enum type."
                     | None -> failwith "Item type is a non null type, but no underlying type exists on the schema definition of the type."
                 | TypeKind.SCALAR ->
                     match schemaField.SchemaTypeRef.Name with
-                    | Some "String" -> makeSomeIfNeeded s
-                    | Some "URI" -> System.Uri(s) |> makeSomeIfNeeded
+                    | Some "URI" -> 
+                        System.Uri(s) |> makeSomeIfNeeded
                     | Some "Date" -> 
                         match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
                         | (true, d) -> makeSomeIfNeeded d
                         | _ -> failwith "A string was received in the query response, and the schema recognizes it as a date and time sring, but the conversion failed."
+                    | Some _ ->
+                        makeSomeIfNeeded s
                     | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type."
                 | TypeKind.ENUM when schemaField.SchemaTypeRef.Name.IsSome -> EnumBase(schemaField.SchemaTypeRef.Name.Value, s) |> makeSomeIfNeeded
                 | _ -> failwith "A string type was received in the query response item, but the matching schema field is not a string based type or an enum type."
