@@ -66,6 +66,7 @@ module Schema =
                   Define.AutoField("stringOption", Nullable String, description = "A string option value.")
                   Define.AutoField("intOption", Nullable Int, description = "An integer option value.")
                   Define.AutoField("uri", Uri, description = "An URI value.")
+                  Define.AutoField("guid", Guid, description = "A Guid value.")
                   Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
 
     let UploadedFileType =
