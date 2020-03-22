@@ -175,7 +175,7 @@ let ``Should be able to execute a query sending an input field with single and l
 [<Fact>]
 let ``Should be able to execute a query using context, sending an an input field with single and list fields``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
-    let list = [|InputField("A", 2, System.Uri("http://localhost:4321", EmptyGuidAsString))|]
+    let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(single, list)
     SimpleOperation.operation.Run(context, input)
     |> SimpleOperation.validateResult (Some input)
