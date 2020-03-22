@@ -2609,7 +2609,7 @@ module SchemaDefinitions =
 
     /// GraphQL type for System.Guid
     let Guid : ScalarDefinition<Guid> =
-        { Name = "Date"
+        { Name = "Guid"
           Description =
               Some
                   "The `Guid` scalar type represents a Globaly Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
