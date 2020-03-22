@@ -5,6 +5,7 @@ open Helpers
 open FSharp.Data.GraphQL
 
 let [<Literal>] ServerUrl = "http://localhost:8085"
+let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
 type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
 
@@ -36,7 +37,7 @@ module SimpleOperation =
           }""">()
 
     type Operation = Provider.Operations.Q
-    let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
+
     let validateResult (input : Input option) (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("requestType") |> equals true
         result.CustomData.["requestType"] |> equals (box "Classic")
