@@ -149,3 +149,4 @@
 ### 1.0.5 - March 23 2020
 * Support opening static classes
 * Add additional case in client to support failed requests that don't return a path.
+
