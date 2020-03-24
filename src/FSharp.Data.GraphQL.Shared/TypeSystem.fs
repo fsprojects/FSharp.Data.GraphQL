@@ -2678,7 +2678,8 @@ module SchemaDefinitions =
     let inline internal strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
 
     /// Common space for all definition helper methods.
-    type Define private () =
+    [<AbstractClass; Sealed>]
+    type Define =
 
         /// <summary>
         /// Creates GraphQL type definition for user defined scalars.
