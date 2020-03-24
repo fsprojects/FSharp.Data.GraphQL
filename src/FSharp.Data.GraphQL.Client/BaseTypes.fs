@@ -388,6 +388,8 @@ module internal JsonValueHelper =
                         | JsonValue.Integer x -> box x
                         | _ -> failwith "Error parsing response errors. A item in the path is neither a String or a Number."
                     { Message = message; Path = Array.map pathMapper path }
+                | Some (_, JsonValue.String message), None->
+                    { Message = message; Path = [||]}
                 | _ -> failwith "Error parsing response errors. Unsupported errors field format."
             | other -> failwithf "Error parsing response errors. Expected error to be a Record type, but it is %s." (other.ToString())
         Array.map errorMapper errors
