@@ -17,18 +17,18 @@
       <Paket>True</Paket>
       <Link>paket-files/ProvidedTypes.fs</Link>
     </Compile>
-    <Compile Include="..\FSharp.Data.GraphQL.Client\MimeTypes.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\Extensions.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\Schema.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\ReflectionPatterns.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\Upload.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\Serialization.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\BaseTypes.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
-    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
+    <Compile Include="MimeTypes.fs" />
+    <Compile Include="TextConversions.fs" />
+    <Compile Include="JsonValue.fs" />
+    <Compile Include="Extensions.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="ReflectionPatterns.fs" />
+    <Compile Include="Upload.fs" />
+    <Compile Include="Serialization.fs" />
+    <Compile Include="Locations.fs" />
+    <Compile Include="BaseTypes.fs" />
+    <Compile Include="GraphQLClient.fs" />
+    <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="DesignTimeCache.fs" />
     <Compile Include="ProvidedTypesHelper.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />

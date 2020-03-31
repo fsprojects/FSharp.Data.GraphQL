@@ -7,7 +7,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
+    <!-- <Compile Include="AssemblyInfo.fs" />
     <Compile Include="MimeTypes.fs" />
     <Compile Include="TextConversions.fs" />
     <Compile Include="JsonValue.fs" />
@@ -18,7 +18,7 @@
     <Compile Include="Serialization.fs" />
     <Compile Include="Locations.fs" />
     <Compile Include="BaseTypes.fs" />
-    <Compile Include="GraphQLClient.fs" />
+    <Compile Include="GraphQLClient.fs" /> -->
     <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
