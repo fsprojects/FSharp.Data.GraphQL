@@ -24,6 +24,7 @@ x64/
 build/
 [Bb]in/
 [Oo]bj/
+*.binlog
 
 # MSTest test Results
 [Tt]est[Rr]esult*/
@@ -199,3 +200,4 @@ project.lock.json
 
 # Ionide folder
 .ionide
+.fake
