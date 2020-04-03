@@ -3,19 +3,23 @@
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
+open System.Net.Http
+open System
 
 let [<Literal>] ServerUrl = "http://localhost:8085"
 let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
 type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
 
-let context = Provider.GetContext(ServerUrl)
+let client = new HttpClient (BaseAddress = Uri ServerUrl)
+
+let context = Provider.GetContext(upcast client)
 
 type Input = Provider.Types.Input
 type InputField = Provider.Types.InputField
 
 module SimpleOperation =
-    let operation = 
+    let operation =
         Provider.Operation<"""query Q($input: Input) {
             echo(input: $input) {
               single {
@@ -300,7 +304,7 @@ module RequiredMultipleUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple required upload``() =
-    let files = 
+    let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     RequiredMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
@@ -308,7 +312,7 @@ let ``Should be able to execute a multiple required upload``() =
 
 [<Fact>]
 let ``Should be able to execute a multiple required upload asynchronously``() =
-    let files = 
+    let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     RequiredMultipleUploadOperation.operation.AsyncRun(files |> Array.map (fun f -> f.MakeUpload()))
@@ -338,7 +342,7 @@ module OptionalMultipleUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple upload``() =
-    let files = 
+    let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     OptionalMultipleUploadOperation.operation.Run(files |> Array.map (fun f -> f.MakeUpload()))
@@ -346,7 +350,7 @@ let ``Should be able to execute a multiple upload``() =
 
 [<Fact>]
 let ``Should be able to execute a multiple upload asynchronously``() =
-    let files = 
+    let files =
         [| { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     OptionalMultipleUploadOperation.operation.AsyncRun(files |> Array.map (fun f -> f.MakeUpload()))
@@ -387,7 +391,7 @@ module OptionalMultipleOptionalUploadOperation =
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload``() =
-    let files = 
+    let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     OptionalMultipleOptionalUploadOperation.operation.Run(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
@@ -395,7 +399,7 @@ let ``Should be able to execute a multiple optional upload``() =
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously``() =
-    let files = 
+    let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" } |]
     OptionalMultipleOptionalUploadOperation.operation.AsyncRun(files |> Array.map (Option.map (fun f -> f.MakeUpload())))
@@ -415,7 +419,7 @@ let ``Should be able to execute a multiple optional upload asynchronously by sen
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload by sending some uploads``() =
-    let files = 
+    let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            None
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
@@ -425,7 +429,7 @@ let ``Should be able to execute a multiple optional upload by sending some uploa
 
 [<Fact>]
 let ``Should be able to execute a multiple optional upload asynchronously by sending some uploads``() =
-    let files = 
+    let files =
         [| Some { Name = "file1.txt"; ContentType = "text/plain"; Content = "Sample text file contents 1" }
            None
            Some { Name = "file2.txt"; ContentType = "text/plain"; Content = "Sample text file contents 2" }
@@ -476,15 +480,15 @@ module UploadRequestOperation =
 let ``Should be able to upload files inside another input type``() =
     let request =
         { Single = { Name = "single.txt"; ContentType = "text/plain"; Content = "Single file content" }
-          Multiple = 
+          Multiple =
             [| { Name = "multiple1.txt"; ContentType = "text/plain"; Content = "Multiple files first file content" }
                { Name = "multiple2.txt"; ContentType = "text/plain"; Content = "Multiple files second file content" } |]
           NullableMultiple = Some [| { Name = "multiple3.txt"; ContentType = "text/plain"; Content = "Multiple files third file content" } |]
-          NullableMultipleNullable = 
+          NullableMultipleNullable =
             Some [| Some { Name = "multiple4.txt"; ContentType = "text/plain"; Content = "Multiple files fourth file content" }; None |] }
-    let input = 
+    let input =
         let makeUpload (x : File) = x.MakeUpload()
-        UploadRequestOperation.Request(single = makeUpload request.Single, 
+        UploadRequestOperation.Request(single = makeUpload request.Single,
                                        multiple = Array.map makeUpload request.Multiple,
                                        nullableMultiple = Array.map makeUpload request.NullableMultiple.Value,
                                        nullableMultipleNullable = Array.map (Option.map makeUpload) request.NullableMultipleNullable.Value)

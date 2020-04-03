@@ -131,10 +131,10 @@ module Serialization =
             | JsonValue.Array items -> items |> getArrayValue t convert
             | JsonValue.Boolean b -> downcastBoolean t b)
 
-    let deserializeRecord<'T> (json : string) : 'T =
+    let deserializeRecord<'T> (stream) : 'T =
         let t = typeof<'T>
         Tracer.runAndMeasureExecutionTime (sprintf "Deserialized JSON string to record type %s." (t.ToString())) (fun _ ->
-        downcast (JsonValue.Parse(json) |> convert t))
+        downcast (JsonValue.Parse(stream) |> convert t))
 
     let deserializeMap values =
         let rec helper (values : (string * JsonValue) []) =
@@ -193,9 +193,9 @@ module Serialization =
         Tracer.runAndMeasureExecutionTime (sprintf "Serialized object type %s to a JSON string" (x.GetType().ToString())) (fun _ ->
             (toJsonValue x).ToString())
 
-    let deserializeSchema (json : string) =
+    let deserializeSchema (stream) =
         Tracer.runAndMeasureExecutionTime "Deserialized schema" (fun _ ->
-            let result = deserializeRecord<GraphQLResponse<IntrospectionResult>> json
+            let result = deserializeRecord<GraphQLResponse<IntrospectionResult>> stream
             match result.Errors with
             | None -> result.Data.__schema
             | Some errors -> String.concat "\n" errors |> failwithf "%s")

@@ -18,6 +18,7 @@ open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
 open System.Collections
+open System.Net.Http
 
 module internal QuotationHelpers = 
     let rec coerceValues fieldTypeLookup fields = 
@@ -304,11 +305,9 @@ module internal ProvidedOperation =
                 Expr.NewArray(typeof<string * obj>, args)
             let defaultContextExpr = 
                 match contextInfo with
-                | Some info -> 
-                    let serverUrl = info.ServerUrl
-                    let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
-                    let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
-                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
+                | Some info ->
+                    let client = info.Client
+                    <@@ { Client = client } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
             // The strategy follows the same principle with ProvidedRecord constructor overloads,
@@ -354,18 +353,18 @@ module internal ProvidedOperation =
                         <@@ 
                             let context = %%context : GraphQLProviderRuntimeContext
                             let request =
-                                { ServerUrl = context.ServerUrl
-                                  HttpHeaders = context.HttpHeaders
+                                { HttpHeaders = Seq.empty
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
                                   Variables = %%variables }
                             let response = 
                                 if shouldUseMultipartRequest
-                                then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
-                                else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                                then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Client request)
+                                else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Client request)
+                            let stream = response.Content.ReadAsStreamAsync().Result
+                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse stream)
                             // If the user does not provide a context, we should dispose the default one after running the query
-                            if isDefaultContext then (context :> IDisposable).Dispose()
+                            if isDefaultContext then (context.Client :> IDisposable).Dispose()
                             OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
                     let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
@@ -386,19 +385,19 @@ module internal ProvidedOperation =
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
                         <@@ let context = %%context : GraphQLProviderRuntimeContext
                             let request =
-                                { ServerUrl = context.ServerUrl
-                                  HttpHeaders = context.HttpHeaders
+                                { HttpHeaders = Seq.empty
                                   OperationName = Option.ofObj operationName
                                   Query = actualQuery
                                   Variables = %%variables }
                             async {
                                 let! response = 
                                     if shouldUseMultipartRequest
-                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
-                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
-                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Client request)
+                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Client request)
+                                let! stream = response.Content.ReadAsStreamAsync () |> Async.AwaitTask
+                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse stream)
                                 // If the user does not provide a context, we should dispose the default one after running the query
-                                if isDefaultContext then (context :> IDisposable).Dispose()
+                                if isDefaultContext then (context.Client :> IDisposable).Dispose()
                                 return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                             } @@>
                     let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t))
@@ -655,14 +654,15 @@ module internal Provider =
                     tdef.AddXmlDoc("A type provider for GraphQL operations.")
                     tdef.AddMembersDelayed (fun _ ->
                         let httpHeaders = HttpHeaders.load httpHeadersLocation
-                        let schemaJson =
+                        let schemaJsonStream =
                             match introspectionLocation with
                             | Uri serverUrl -> 
-                                use connection = new GraphQLClientConnection()
-                                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
+                                use client = new HttpClient (BaseAddress = System.Uri serverUrl)
+                                let response = GraphQLClient.sendIntrospectionRequest client httpHeaders
+                                response.Content.ReadAsStreamAsync().Result
                             | IntrospectionFile path ->
-                                System.IO.File.ReadAllText path
-                        let schema = Serialization.deserializeSchema schemaJson
+                                upcast System.IO.File.OpenRead path
+                        let schema = Serialization.deserializeSchema schemaJsonStream
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
@@ -680,12 +680,8 @@ module internal Provider =
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
                                 Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
                             let invoker (args : Expr list) =
-                                let serverUrl = args.[0]
-                                <@@ let httpHeaders =
-                                        match %%args.[1] : seq<string * string> with
-                                        | null -> %%defaultHttpHeadersExpr
-                                        | argHeaders -> argHeaders
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
+                                let client = args.[0]
+                                <@@ { Client = (%%client : HttpMessageInvoker) } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams = 
@@ -845,7 +841,10 @@ module internal Provider =
                                 let operationFieldsExpr = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
                                 let contextInfo : GraphQLRuntimeContextInfo option =
                                     match introspectionLocation with
-                                    | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
+                                    | Uri serverUrl ->
+                                        let client = new HttpClient (BaseAddress = System.Uri serverUrl)
+                                        GraphQLClient.addHeaders httpHeaders client.DefaultRequestHeaders
+                                        Some { Client = client }
                                     | _ -> None
                                 let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
                                 operationDef.AddMember(metadata.TypeWrapper)

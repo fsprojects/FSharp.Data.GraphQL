@@ -284,10 +284,13 @@ type private JsonParser(jsonText:string) =
         value
 
 type JsonValue with
-  /// Parses the specified JSON string.
-  static member Parse(text) = JsonParser(text).Parse()
-
-  /// Attempts to parse the specified JSON string.
-  static member TryParse(text) =
-    try Some <| JsonParser(text).Parse()
-    with _ -> None
+    /// Parses the specified JSON string.
+    static member Parse(stream : Stream) =
+         // TODO: Refactor to System.Text.Json 
+        use reader = new StreamReader (stream)
+        JsonParser(reader.ReadToEnd ()).Parse()
+    
+    /// Attempts to parse the specified JSON string.
+    static member TryParse(text) =
+        try Some <| JsonParser(text).Parse()
+        with _ -> None
