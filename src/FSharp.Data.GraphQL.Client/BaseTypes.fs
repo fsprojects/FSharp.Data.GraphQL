@@ -38,7 +38,7 @@ module HttpHeaders =
     /// organized in a HTTP request (each header in a line, names and values separated by commas).
     let ofString (headers : string) : seq<string * string> =
         upcast (headers.Replace("\r\n", "\n").Split('\n')
-                |> Array.map (fun header -> 
+                |> Array.map (fun header ->
                     let separatorIndex = header.IndexOf(':')
                     if separatorIndex = -1
                     then failwithf "Header \"%s\" has an invalid header format. Must provide a name and a value, both separated by a comma." header
@@ -46,7 +46,7 @@ module HttpHeaders =
                         let name = header.Substring(0, separatorIndex).Trim()
                         let value = header.Substring(separatorIndex + 1).Trim()
                         (name, value)))
-        
+
     /// Builds a sequence of HTTP headers as a sequence from a header file.
     /// The input file should be a file containing headers in the same way they are
     /// organized in a HTTP request (each header in a line, names and values separated by commas).
@@ -100,7 +100,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             if distinctCount <> Seq.length properties
             then failwith "Duplicated property names were found. Record can not be created, because each property name must be distinct."
 
-    let properties = 
+    let properties =
         if not (isNull properties)
         then properties |> Seq.sortBy (fun x -> x.Name) |> List.ofSeq
         else []
@@ -110,7 +110,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
 
     /// Gets a list of this provided record properties.
     member __.GetProperties() = properties
-    
+
     /// Produces a dictionary containing all the properties of this provided record type.
     member x.ToDictionary() =
         let rec mapDictionaryValue (v : obj) =
@@ -123,7 +123,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
             | EnumerableValue v -> v |> Array.map mapDictionaryValue |> box
             | _ -> v
         x.GetProperties()
-        |> Seq.choose (fun p -> 
+        |> Seq.choose (fun p ->
             if not (isNull p.Value)
             then Some (p.Name, mapDictionaryValue p.Value)
             else None)
@@ -142,7 +142,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         sb.Append("}") |> ignore
         sb.ToString()
 
-    member x.Equals(other : RecordBase) = 
+    member x.Equals(other : RecordBase) =
         x.GetName() = other.GetName() && x.GetProperties() = other.GetProperties()
 
     override x.Equals(other : obj) =
@@ -150,7 +150,7 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         | :? RecordBase as other -> x.Equals(other)
         | _ -> false
 
-    override x.GetHashCode() = 
+    override x.GetHashCode() =
         x.GetName().GetHashCode() ^^^ x.GetProperties().GetHashCode()
 
     interface IEquatable<RecordBase> with
@@ -201,7 +201,7 @@ module internal Types =
 
     let makeArray (t : Type) = t.MakeArrayType()
 
-    let unwrapOption (t : Type) = 
+    let unwrapOption (t : Type) =
         if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
         then t.GetGenericArguments().[0]
         else failwithf "Expected type to be an Option type, but it is %s." t.Name
@@ -216,7 +216,7 @@ module internal JsonValueHelper =
 
     let getResponseDataFields (responseJson : JsonValue) =
         match getResponseFields responseJson |> Array.tryFind (fun (name, _) -> name = "data") with
-        | Some (_, data) -> 
+        | Some (_, data) ->
             match data with
             | JsonValue.Record fields -> Some fields
             | JsonValue.Null -> None
@@ -285,11 +285,11 @@ module internal JsonValueHelper =
                         match tref with
                         | Some t -> t
                         | None -> failwith "Schema type is a list type, but no underlying type was specified."
-                    let items = 
+                    let items =
                         let schemaField = { schemaField with SchemaTypeRef = itemType }
                         items |> Array.map (helper false schemaField)
                     match itemType.Kind with
-                    | TypeKind.NON_NULL -> 
+                    | TypeKind.NON_NULL ->
                         match itemType.OfType with
                         | Some itemType ->
                             match itemType.Kind with
@@ -304,7 +304,7 @@ module internal JsonValueHelper =
                     | TypeKind.SCALAR -> makeOptionArray (getScalarType itemType) items
                     | kind -> failwithf "Unsupported type kind \"%A\"." kind
                 makeSomeIfNeeded items
-            | JsonValue.Record props -> 
+            | JsonValue.Record props ->
                 let typeName =
                     match getTypeName props with
                     | Some typeName -> typeName
@@ -332,14 +332,14 @@ module internal JsonValueHelper =
                 | TypeKind.LIST -> null
                 | kind -> failwithf "Unsupported type kind \"%A\"." kind
             | JsonValue.Integer n -> makeSomeIfNeeded n
-            | JsonValue.String s -> 
+            | JsonValue.String s ->
                 match schemaField.SchemaTypeRef.Kind with
                 | TypeKind.NON_NULL ->
                     match schemaField.SchemaTypeRef.OfType with
                     | Some itemType ->
                         match itemType.Kind with
                         | TypeKind.NON_NULL -> failwith "Schema definition is not supported: a non null type of a non null type was specified."
-                        | TypeKind.SCALAR -> 
+                        | TypeKind.SCALAR ->
                             match itemType.Name with
                             | Some "URI" -> 
                                 System.Uri(s) |> box
@@ -396,7 +396,7 @@ module internal JsonValueHelper =
 
 /// The base type for all GraphQLProvider operation result provided types.
 type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
-    let rawData = 
+    let rawData =
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
         | Some [||] | None -> None
@@ -411,7 +411,7 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
         | None -> [||]
         | Some errors -> JsonValueHelper.getErrors errors
 
-    let customData = 
+    let customData =
         JsonValueHelper.getResponseCustomFields responseJson
         |> Serialization.deserializeMap
 
@@ -424,7 +424,7 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
 
     /// Gets all the errors returned by the operation on the server.
     member __.Errors = errors
-    
+
     /// Gets all the custom data returned by the operation on server as a map of names and values.
     member __.CustomData = customData
 

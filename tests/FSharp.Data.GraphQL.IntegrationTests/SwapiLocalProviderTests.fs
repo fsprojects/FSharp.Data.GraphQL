@@ -3,17 +3,21 @@
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
+open System.Net.Http
+open System
 
 // Local provider should be able to be created from local introspection json file.
 type Provider = GraphQLProvider<"introspection.json">
 
 // As we are not using a connection to a server to get the introspection, we need a runtime context.
 let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084")
+//let client = new HttpClient (BaseAddress = Uri "http://localhost:8085")
+//let getContext() = Provider.GetContext(upcast client)
 
 type Episode = Provider.Types.Episode
 
 module SimpleOperation =
-    let operation = 
+    let operation =
         Provider.Operation<"""query Q {
             hero (id: "1000") {
               name
@@ -40,7 +44,7 @@ module SimpleOperation =
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] =
           [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))
@@ -83,8 +87,8 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     result.Data.IsSome |> equals true
     result.Data.Value.Hero.IsSome |> equals true
     let friends = result.Data.Value.Hero.Value.Friends |> Array.choose id
-    friends 
-    |> Array.choose (fun x -> x.TryAsHuman()) 
+    friends
+    |> Array.choose (fun x -> x.TryAsHuman())
     |> equals [|
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo")
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
@@ -113,7 +117,7 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     |> equals [|
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
-  
+
 module MutationOperation =
     let operation =
         Provider.Operation<"""mutation M {
@@ -157,7 +161,7 @@ module FileOperation =
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] =
           [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))
