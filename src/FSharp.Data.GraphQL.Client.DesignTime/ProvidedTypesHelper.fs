@@ -631,6 +631,15 @@ module internal Provider =
                 ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         !providedTypes
 
+    let private getContextMethodDef<'TClient when 'TClient :> HttpMessageInvoker>=
+        let methodParameters =
+            let httpClient = ProvidedParameter("httpClient", typeof<'TClient>)
+            [httpClient]
+        let invoker (args : Expr list) =
+            let client = args.[0]
+            <@@ { Client = (%%client : 'TClient) } @@>
+        ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
+
     let makeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let staticParams = 
@@ -667,22 +676,6 @@ module internal Provider =
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
-                        let getContextMethodDef =
-                            let methodParameters =
-                                let serverUrl =
-                                    match introspectionLocation with
-                                    | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
-                                    | _ -> ProvidedParameter("serverUrl", typeof<string>)
-                                let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                [serverUrl; httpHeaders]
-                            let defaultHttpHeadersExpr =
-                                let names = httpHeaders |> Seq.map fst |> Array.ofSeq
-                                let values = httpHeaders |> Seq.map snd |> Array.ofSeq
-                                Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
-                            let invoker (args : Expr list) =
-                                let client = args.[0]
-                                <@@ { Client = (%%client : HttpMessageInvoker) } @@>
-                            ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams = 
                                 [ ProvidedStaticParameter("query", typeof<string>)
@@ -859,7 +852,13 @@ module internal Provider =
                         let schemaPropertyDef = 
                             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
+                        let members : MemberInfo list =
+                            [ typeWrapper;
+                              operationWrapper;
+                              getContextMethodDef<HttpMessageInvoker>;
+                              getContextMethodDef<HttpClient>;
+                              operationMethodDef;
+                              schemaPropertyDef]
                         members)
                     tdef
             #if IS_DESIGNTIME

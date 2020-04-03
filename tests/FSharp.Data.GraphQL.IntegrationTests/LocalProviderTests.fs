@@ -13,7 +13,7 @@ type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
 
 let client = new HttpClient (BaseAddress = Uri ServerUrl)
 
-let context = Provider.GetContext(upcast client)
+let context = Provider.GetContext(client)
 
 type Input = Provider.Types.Input
 type InputField = Provider.Types.InputField
