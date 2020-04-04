@@ -676,7 +676,7 @@ module internal Provider =
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
-                        let getContextMethodDef =
+                        let getContextMethodDefWithParameters =
                             let methodParameters =
                                 let serverUrl =
                                     match introspectionLocation with
@@ -698,6 +698,24 @@ module internal Provider =
                                         let client = new HttpClient (BaseAddress = System.Uri %%serverUrl)
                                         GraphQLClient.addHeaders httpHeaders client.DefaultRequestHeaders
                                         client :> HttpMessageInvoker
+                                    new GraphQLProviderRuntimeContext (factory) @@>
+                            ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
+                        let getContextMethodDefWithInvokerFactory =
+                            let methodParameters =
+                                let httpClientFactory =
+                                    ProvidedParameter("httpClientFactory", typeof<unit -> HttpMessageInvoker>)
+                                [httpClientFactory]
+                            let invoker (args : Expr list) =
+                                <@@ let factory = %%args.[0]
+                                    new GraphQLProviderRuntimeContext (factory) @@>
+                            ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
+                        let getContextMethodDefWithClientFactory =
+                            let methodParameters =
+                                let httpClientFactory =
+                                    ProvidedParameter("httpClientFactory", typeof<unit -> HttpClient>)
+                                [httpClientFactory]
+                            let invoker (args : Expr list) =
+                                <@@ let factory = %%args.[0]
                                     new GraphQLProviderRuntimeContext (factory) @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
@@ -873,7 +891,14 @@ module internal Provider =
                         let schemaPropertyDef =
                             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
                             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
+                        let members : MemberInfo list =
+                            [ typeWrapper;
+                              operationWrapper;
+                              getContextMethodDefWithParameters;
+                              getContextMethodDefWithInvokerFactory;
+                              getContextMethodDefWithClientFactory;
+                              operationMethodDef;
+                              schemaPropertyDef ]
                         members)
                     tdef
             #if IS_DESIGNTIME

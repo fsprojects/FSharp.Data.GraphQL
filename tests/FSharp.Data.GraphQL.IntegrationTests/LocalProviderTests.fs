@@ -12,9 +12,9 @@ let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
 
 let context = Provider.GetContext(ServerUrl)
-//let client = new HttpClient (BaseAddress = Uri ServerUrl)
 
-//let context = Provider.GetContext(upcast client)
+let client = new HttpClient (BaseAddress = Uri ServerUrl)
+let context = Provider.GetContext(fun () -> client :> HttpMessageInvoker)
 
 type Input = Provider.Types.Input
 type InputField = Provider.Types.InputField
