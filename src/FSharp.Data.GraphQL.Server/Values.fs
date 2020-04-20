@@ -147,7 +147,8 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
         match input with
         | :? string as s ->
             ReflectionHelper.parseUnion enumdef.Type s
-        | _ -> 
+        | o when Enum.IsDefined(enumdef.Type, o) -> o
+        | _ ->
             raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType()) enumdef.Name))
     | _ -> raise (GraphQLException <| errMsg + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions.")
 
