@@ -674,24 +674,23 @@ module internal Provider =
                                     | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                let connection = ProvidedParameter("connection", typeof<GraphQLClientConnection>, optionalValue = null)
-                                [serverUrl; httpHeaders; connection]
+                                let connectionFactory = ProvidedParameter("connectionFactory", typeof<unit -> GraphQLClientConnection>, optionalValue = null)
+                                [serverUrl; httpHeaders; connectionFactory]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
                                 Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
-                            let defaultConnectionExpr = <@@ new GraphQLClientConnection() @@>
                             let invoker (args : Expr list) =
                                 let serverUrl = args.[0]
                                 <@@ let httpHeaders =
                                         match %%args.[1] : seq<string * string> with
                                         | null -> %%defaultHttpHeadersExpr
                                         | argHeaders -> argHeaders
-                                    let connection =
-                                        match %%args.[2] : GraphQLClientConnection with
-                                        | null -> %%defaultConnectionExpr
-                                        | argConnection -> argConnection
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connection } @@>
+                                    let connectionFactory = 
+                                        match %%args.[2] : unit -> GraphQLClientConnection with
+                                        | argHeaders when obj.Equals(argHeaders, null) -> fun () -> new GraphQLClientConnection()
+                                        | argHeaders -> argHeaders
+                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams = 

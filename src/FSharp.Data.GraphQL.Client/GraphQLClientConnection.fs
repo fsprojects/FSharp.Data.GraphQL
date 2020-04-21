@@ -8,19 +8,12 @@ open System.Net.Http
 
 /// The connection component for GraphQL client operations.
 [<AllowNullLiteral>]
-type GraphQLClientConnection() =
-    let client = new HttpClient()
-    let mutable disposed = false
+type GraphQLClientConnection(client : HttpClient, ownsClient : bool) =
+    new(client) = new GraphQLClientConnection(client, false)
 
-    member internal __.Client = 
-        if not disposed
-        then client
-        else raise <| ObjectDisposedException("GraphQLClientConnection")
+    new() = new GraphQLClientConnection(new HttpClient(), true)
+
+    member internal __.Client = client
     
-    member internal __.Disposed = disposed
-
     interface IDisposable with
-        member __.Dispose() =
-            if not disposed then
-                disposed <- true
-                client.Dispose()
+        member __.Dispose() = if ownsClient then client.Dispose()
