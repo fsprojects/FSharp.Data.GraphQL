@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
 open ReflectionPatterns
+open System.Threading
 
 /// A requrest object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest  =
@@ -36,19 +37,20 @@ module GraphQLClient =
         if not (isNull httpHeaders)
         then httpHeaders |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add(name, value))
 
-    let private postAsync (client : HttpClient) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) =
+    let private postAsync (invoker : HttpMessageInvoker) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) =
         async {
             use requestMessage = new HttpRequestMessage(HttpMethod.Post, serverUrl)
             requestMessage.Content <- content
             addHeaders httpHeaders requestMessage
-            let! response = client.SendAsync(requestMessage) |> Async.AwaitTask |> ensureSuccessCode
+            let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             return content
         }
 
-    let private getAsync (client : HttpClient) (serverUrl : string) =
+    let private getAsync (invoker : HttpMessageInvoker) (serverUrl : string) =
         async {
-            let! response = client.GetAsync(serverUrl) |> Async.AwaitTask |> ensureSuccessCode
+            use requestMessage = new HttpRequestMessage(HttpMethod.Get, serverUrl)
+            let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             return content
         }
@@ -56,7 +58,7 @@ module GraphQLClient =
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
-            let client = connection.Client
+            let invoker = connection.Invoker
             let variables = 
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
@@ -71,7 +73,7 @@ module GraphQLClient =
                    "variables", variables |]
                 |> JsonValue.Record
             let content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
-            return! postAsync client request.ServerUrl request.HttpHeaders content
+            return! postAsync invoker request.ServerUrl request.HttpHeaders content
         }
     
     /// Sends a request to a GraphQL server.
@@ -81,7 +83,7 @@ module GraphQLClient =
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
     let sendIntrospectionRequestAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
-        let sendGet() = async { return! getAsync connection.Client serverUrl }
+        let sendGet() = async { return! getAsync connection.Invoker serverUrl }
         let rethrow (exns : exn list) =
             let rec mapper (acc : string) (exns : exn list) =
                 let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)
@@ -113,7 +115,7 @@ module GraphQLClient =
     /// Executes a multipart request to a GraphQL server asynchronously.
     let sendMultipartRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
-            let client = connection.Client
+            let invoker = connection.Invoker
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             let content = new MultipartContent("form-data", boundary)
             let files = 
@@ -168,7 +170,7 @@ module GraphQLClient =
                     content.Headers.Add("Content-Type", value.ContentType)
                     content)
             fileContents |> Array.iter content.Add
-            let! result = postAsync client request.ServerUrl request.HttpHeaders content
+            let! result = postAsync invoker request.ServerUrl request.HttpHeaders content
             return result
         }
 
