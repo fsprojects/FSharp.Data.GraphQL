@@ -54,6 +54,10 @@ let operation =
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
 let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
 
+// You can recycle a connection object between all contexts if desired.
+//let connection = new GraphQLClientConnection()
+//let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084", connection = connection)
+
 // To run an operation, you just need to call the Run or AsyncRun method.
 let result = operation.Run(runtimeContext)
 //let result = operation.AsyncRun() |> Async.RunSynchronously

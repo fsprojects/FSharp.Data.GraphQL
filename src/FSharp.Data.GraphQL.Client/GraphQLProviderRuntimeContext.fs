@@ -15,8 +15,8 @@ type GraphQLProviderRuntimeContext =
       /// Gets the URL of the server that this context refers to.
     { ServerUrl : string
       /// Gets the HTTP headers used for calls to the server that this context refers to.
-      HttpHeaders : seq<string * string> }
-    /// Gets the connection component used to make calls to the server.
-    member __.Connection = new GraphQLClientConnection()
+      HttpHeaders : seq<string * string> 
+      /// Gets the connection component used to make calls to the server.
+      Connection : GraphQLClientConnection }
     interface IDisposable with
         member x.Dispose() = (x.Connection :> IDisposable).Dispose()

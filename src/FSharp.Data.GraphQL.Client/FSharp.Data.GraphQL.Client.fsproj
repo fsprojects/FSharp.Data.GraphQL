@@ -20,6 +20,7 @@
     <Compile Include="Serialization.fs" />
     <Compile Include="Locations.fs" />
     <Compile Include="BaseTypes.fs" />
+    <Compile Include="GraphQLClientConnection.fs" />
     <Compile Include="GraphQLClient.fs" />
     <Compile Include="GraphQLProviderRuntimeContext.fs" />
     <Compile Include="GraphQLProvider.Runtime.fs" />

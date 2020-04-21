@@ -9,15 +9,7 @@ open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
-open System.Reflection
 open ReflectionPatterns
-
-/// The connection component for GraphQLClient module.
-type GraphQLClientConnection() =
-    let client = new HttpClient()
-    member internal __.Client = client
-    interface IDisposable with
-        member __.Dispose() = client.Dispose()
 
 /// A requrest object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest  =

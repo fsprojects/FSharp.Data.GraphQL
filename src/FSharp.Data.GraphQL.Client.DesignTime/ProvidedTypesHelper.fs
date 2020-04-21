@@ -308,7 +308,7 @@ module internal ProvidedOperation =
                     let serverUrl = info.ServerUrl
                     let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
-                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues } @@>
+                    <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection() } @@>
                 | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
             // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
             // The strategy follows the same principle with ProvidedRecord constructor overloads,
@@ -674,18 +674,24 @@ module internal Provider =
                                     | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
                                     | _ -> ProvidedParameter("serverUrl", typeof<string>)
                                 let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                [serverUrl; httpHeaders]
+                                let connection = ProvidedParameter("connection", typeof<GraphQLClientConnection>, optionalValue = null)
+                                [serverUrl; httpHeaders; connection]
                             let defaultHttpHeadersExpr =
                                 let names = httpHeaders |> Seq.map fst |> Array.ofSeq
                                 let values = httpHeaders |> Seq.map snd |> Array.ofSeq
                                 Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
+                            let defaultConnectionExpr = <@@ new GraphQLClientConnection() @@>
                             let invoker (args : Expr list) =
                                 let serverUrl = args.[0]
                                 <@@ let httpHeaders =
                                         match %%args.[1] : seq<string * string> with
                                         | null -> %%defaultHttpHeadersExpr
                                         | argHeaders -> argHeaders
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders } @@>
+                                    let connection =
+                                        match %%args.[2] : GraphQLClientConnection with
+                                        | null -> %%defaultConnectionExpr
+                                        | argConnection -> argConnection
+                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connection } @@>
                             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
                         let operationMethodDef =
                             let staticParams = 
