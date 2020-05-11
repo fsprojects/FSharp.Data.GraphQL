@@ -30,6 +30,7 @@
     <Compile Include="..\FSharp.Data.GraphQL.Client\Serialization.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\Locations.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\BaseTypes.fs" />
+    <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClientConnection.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLClient.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\GraphQLProviderRuntimeContext.fs" />
     <Compile Include="DesignTimeCache.fs" />

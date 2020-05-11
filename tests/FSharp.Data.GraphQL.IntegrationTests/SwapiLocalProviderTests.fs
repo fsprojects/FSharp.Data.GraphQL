@@ -3,12 +3,16 @@
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
+open System.Net.Http
 
 // Local provider should be able to be created from local introspection json file.
 type Provider = GraphQLProvider<"introspection.json">
 
+// We are going to re-use the same HttpClient through all requests.
+let connection = new GraphQLClientConnection(new HttpClient())
+
 // As we are not using a connection to a server to get the introspection, we need a runtime context.
-let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084")
+let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084", connectionFactory = fun () -> connection)
 
 type Episode = Provider.Types.Episode
 

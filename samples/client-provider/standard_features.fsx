@@ -1,6 +1,6 @@
 // Uncomment those to use build script client assembly
-//#r "../../bin/FSharp.Data.GraphQL.Client/net47/FSharp.Data.GraphQL.Client.dll"
-//#r "../../bin/FSharp.Data.GraphQL.Shared/net47/FSharp.Data.GraphQL.Shared.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/net461/FSharp.Data.GraphQL.Client.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Shared/net461/FSharp.Data.GraphQL.Shared.dll"
 
 // Uncomment those to use build script client assembly using netstandard2.0
 //#r "../../bin/FSharp.Data.GraphQL.Shared/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
@@ -8,8 +8,8 @@
 //#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 // Uncomment those to use dotnet build command for the client assembly
-// #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
-// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net47/FSharp.Data.GraphQL.Client.dll"
+// #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net461/FSharp.Data.GraphQL.Shared.dll"
+// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Client.dll"
 
 //Uncomment those to use dotnet build command for the client assembly using netstandard2.0
 #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
@@ -52,7 +52,11 @@ let operation =
     }""">()
 
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
-let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
+//let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
+
+// You can specify a connection factory to manage your connection lifecycle if you want.
+let connection = new GraphQLClientConnection()
+let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084", connectionFactory = fun () -> connection)
 
 // To run an operation, you just need to call the Run or AsyncRun method.
 let result = operation.Run(runtimeContext)
