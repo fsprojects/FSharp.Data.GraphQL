@@ -1,6 +1,7 @@
 {
   "sdk": {
-    "version" : "2.1.401"
+    "version" : "2.1.401",
+    "rollForward": "latestFeature"
   },
   "projects": [ "src", "tests" ]
 }
