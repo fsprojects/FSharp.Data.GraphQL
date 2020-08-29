@@ -60,7 +60,7 @@ module HttpHandlers =
         
         let readStream (s : Stream) =
             use ms = new MemoryStream(4096)
-            s.CopyTo(ms)
+            s.CopyToAsync(ms) |> Async.AwaitTask |> ignore
             ms.ToArray()
         
         let data = Encoding.UTF8.GetString(readStream ctx.Request.Body) |> deserialize
