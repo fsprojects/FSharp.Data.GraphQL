@@ -8,6 +8,9 @@ F# implementation of Facebook [GraphQL query language specification](https://fac
 ## Quick start
 
 ```fsharp
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Types
+
 type Person =
     { FirstName: string
       LastName: string }
@@ -29,7 +32,7 @@ let executor = Executor(schema)
 
 // Retrieve person data
 let johnSnow = { FirstName = "John"; LastName = "Snow" }
-let reply = executor.AsyncExecute(parse "{ firstName, lastName }", johnSnow) |> Async.RunSynchronously
+let reply = executor.AsyncExecute(Parser.parse "{ firstName, lastName }", johnSnow) |> Async.RunSynchronously
 // #> { data: { "firstName", "John", "lastName", "Snow" } } 
 ```
 
