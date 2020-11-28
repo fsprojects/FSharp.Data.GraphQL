@@ -33,12 +33,11 @@ group Common
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
-  frameworks: net47, netcoreapp2.1, netstandard2.0
+  frameworks: net47, netcoreapp3.1, netstandard2.0
   
   nuget FSharp.Core
   nuget Newtonsoft.Json
   nuget Suave
-  nuget Microsoft.AspNetCore.All 2.1.6
   nuget Giraffe
   nuget Microsoft.NET.Test.Sdk
   nuget xunit 
@@ -47,20 +46,3 @@ group TestsAndSamples
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
   nuget FSharp.Data.TypeProviders
-
-group Build
-  source https://api.nuget.org/v3/index.json
-
-  nuget FAKE
-  nuget Fake.DotNet.Cli
-  nuget Fake.IO.FileSystem
-  nuget Fake.Core.Target
-  nuget Fake.Tools.Git
-  nuget Fake.DotNet.AssemblyInfoFile
-  nuget Fake.Core.ReleaseNotes
-  nuget Fake.Core.UserInput
-  nuget Fake.DotNet.MSBuild
-  nuget Fake.DotNet.Fsc
-  nuget Fake.Api.GitHub
-  nuget Fake.DotNet.Paket
-  nuget Octokit

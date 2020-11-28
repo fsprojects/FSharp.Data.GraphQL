@@ -1,5 +1,3 @@
 group TestsAndSamples
-Microsoft.AspNetCore.All
 FSharp.Core
 Giraffe
-Microsoft.AspNetCore.WebSockets
