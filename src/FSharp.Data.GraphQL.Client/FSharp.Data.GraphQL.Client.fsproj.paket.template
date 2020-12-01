@@ -37,7 +37,9 @@ dependencies
 	framework: net461
 		FSharp.Core >= LOCKEDVERSION-Common
 		FParsec >= LOCKEDVERSION-Common
+        Microsoft.Extensions.Http >= LOCKEDVERSION-Common
 	framework: netstandard2.0
 		FSharp.Core >= LOCKEDVERSION-Common
 		FParsec >= LOCKEDVERSION-Common
         System.Net.Http >= LOCKEDVERSION-NetCoreAndStandard
+        Microsoft.Extensions.Http >= LOCKEDVERSION-Common

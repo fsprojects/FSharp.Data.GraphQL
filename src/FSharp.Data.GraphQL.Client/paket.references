@@ -1,5 +1,6 @@
 group Common
 FSharp.Core
+Microsoft.Extensions.Http
 
 group NetCoreAndStandard
 System.Net.Http
