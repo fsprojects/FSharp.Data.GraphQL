@@ -27,18 +27,20 @@ group Common
   nuget FParsec 1.0.3
 
   # Those are needed for the client type provider.
+  nuget Microsoft.Extensions.Http 5
   nuget NETStandard.Library.NETFramework
   github fsprojects/FSharp.TypeProviders.SDK:c8fc89b0e8bac34e321372b004de76d600651cda src/ProvidedTypes.fsi
   github fsprojects/FSharp.TypeProviders.SDK:c8fc89b0e8bac34e321372b004de76d600651cda src/ProvidedTypes.fs
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
-  frameworks: net47, netcoreapp2.1, netstandard2.0
+  frameworks: net47, netcoreapp3.1, netstandard2.0
   
+  nuget Microsoft.Extensions.Http 5
+  nuget System.Net.Http 4.3.4
   nuget FSharp.Core
   nuget Newtonsoft.Json
   nuget Suave
-  nuget Microsoft.AspNetCore.All 2.1.6
   nuget Giraffe
   nuget Microsoft.NET.Test.Sdk
   nuget xunit 
@@ -47,20 +49,3 @@ group TestsAndSamples
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
   nuget FSharp.Data.TypeProviders
-
-group Build
-  source https://api.nuget.org/v3/index.json
-
-  nuget FAKE
-  nuget Fake.DotNet.Cli
-  nuget Fake.IO.FileSystem
-  nuget Fake.Core.Target
-  nuget Fake.Tools.Git
-  nuget Fake.DotNet.AssemblyInfoFile
-  nuget Fake.Core.ReleaseNotes
-  nuget Fake.Core.UserInput
-  nuget Fake.DotNet.MSBuild
-  nuget Fake.DotNet.Fsc
-  nuget Fake.Api.GitHub
-  nuget Fake.DotNet.Paket
-  nuget Octokit

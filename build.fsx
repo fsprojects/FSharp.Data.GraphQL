@@ -10,7 +10,8 @@ nuget Fake.IO.FileSystem
 nuget Fake.DotNet.Fsc
 nuget Fake.Api.GitHub
 nuget Fake.DotNet.Paket
-nuget Octokit //"
+nuget Octokit
+nuget FSharp.Core 4.7 //"
 
 #load ".fake/build.fsx/intellisense.fsx"
 
@@ -243,7 +244,7 @@ Target.create "RunTests" (fun _ ->
         use waiter = new ManualResetEvent(false)
         let serverProjectDir = Path.GetDirectoryName(serverProject)
         let projectName = Path.GetFileNameWithoutExtension(serverProject)
-        let serverExe = "bin" </> "Release" </> "netcoreapp2.1" </> (projectName + ".dll")
+        let serverExe = "bin" </> "Release" </> "netcoreapp3.1" </> (projectName + ".dll")
         let stdHandler (msg : string) =
             let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
             if msg.ToLowerInvariant().Contains(expectedMessage)

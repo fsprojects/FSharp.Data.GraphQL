@@ -1,10 +1,9 @@
 language: csharp
-
 sudo: required 
-dotnet: 2.1.401
+dotnet: 5.0.100
+dist: xenial
 before_install:
   - chmod +x build.sh
- 
 script: 
   - export FrameworkPathOverride=/usr/lib/mono/4.6.1-api/ && ./build.sh
 dist: trusty

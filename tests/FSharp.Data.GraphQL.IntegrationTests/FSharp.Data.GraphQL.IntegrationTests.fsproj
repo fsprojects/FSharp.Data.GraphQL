@@ -5,7 +5,7 @@
   <Import Project="..\..\fsc.props" />
   <PropertyGroup>
     <OutputType>Exe</OutputType>
-    <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
+    <TargetFrameworks>netcoreapp3.1;net47</TargetFrameworks>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
   </PropertyGroup>
@@ -32,7 +32,7 @@
   <ItemGroup Condition="$(OS) == Unix">
     <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp2.1' ">
+  <ItemGroup Condition=" '$(TargetFramework)' == 'netcoreapp3.1' ">
     <Reference Include="FSharp.Data.GraphQL.Client">
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Debug\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>
       <HintPath Condition="Exists('..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Client.dll')">..\..\src\FSharp.Data.GraphQL.Client\bin\Release\netstandard2.0\FSharp.Data.GraphQL.Client.dll</HintPath>

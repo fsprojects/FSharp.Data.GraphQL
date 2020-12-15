@@ -30,6 +30,9 @@ files
     bin/Release/typeproviders/fsharp41/netstandard2.0/FParsecCS.dll ==> typeproviders/fsharp41/netstandard2.0
     bin/Release/typeproviders/fsharp41/netcoreapp2.0/FParsecCS.dll ==> typeproviders/fsharp41/netcoreapp2.0
     bin/Release/typeproviders/fsharp41/net461/FParsecCS.dll ==> typeproviders/fsharp41/net461
+    bin/Release/typeproviders/fsharp41/netstandard2.0/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netcoreapp2.0/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/netcoreapp2.0
+    bin/Release/typeproviders/fsharp41/net461/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/net461
 references
     FSharp.Data.GraphQL.Client.dll
     FSharp.Data.GraphQL.Shared.dll
@@ -37,7 +40,9 @@ dependencies
 	framework: net461
 		FSharp.Core >= LOCKEDVERSION-Common
 		FParsec >= LOCKEDVERSION-Common
+        Microsoft.Extensions.Http >= LOCKEDVERSION-Common
 	framework: netstandard2.0
 		FSharp.Core >= LOCKEDVERSION-Common
 		FParsec >= LOCKEDVERSION-Common
         System.Net.Http >= LOCKEDVERSION-NetCoreAndStandard
+        Microsoft.Extensions.Http >= LOCKEDVERSION-Common

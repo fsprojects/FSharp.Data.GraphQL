@@ -2,6 +2,7 @@ group Common
 FSharp.Core
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs
+Microsoft.Extensions.Http
 
 group NetCoreAndStandard
 System.Net.Http
