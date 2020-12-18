@@ -154,26 +154,24 @@ module internal ProvidedRecord =
                 pdef))
         let addConstructorDelayed (propertiesGetter : unit -> (string * string option * Type) list) =
             tdef.AddMembersDelayed(fun _ ->
-                // We need to build a constructor overload for each optional property.
-                // Since RecordBase needs to know each property information in its own constructor,
-                // We also need to know beforehanded each property that was not filled in the current
-                // used overload. So we make combinations of all possible overloads, and for each one,
-                // we map the user's provided values and we fill the others with a null value.
-                // This way we can construct the RecordBase type providing all needed properties.
+                // We need to build a constructor that takes all optional properties wrapped in another option.
                 // We need to do this because optional parameters have issues with non-nullable types
                 // in the type provider SDK. They require a default value, and if the type is not nullable
-                // it provides the type default value for it.
+                // it provides the type default value for it. So basically, what's needed is three-valued behavior
+                // so we can differentiate between no value and null/None.
+                //
+                // I.e. to not send a value the optional parameter can either be set implicitly (by not providing an
+                // argument) or explicitly (`?parameterName = Some None` or `parameterName = None`).
+                // To set a value it has to be wrapped in an option: `parameterName = Some argumentValue`.
                 let properties = propertiesGetter()
                 let optionalProperties, requiredProperties = 
                     properties 
                     |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t) 
                     |> List.partition (fun (_, t) -> isOption t)
-                List.combinations optionalProperties
-                |> List.map (fun (optionalProperties, nullValuedProperties) ->
+                let constructor =
                     let constructorProperties = requiredProperties @ optionalProperties
-                    let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                    let propertyNames = constructorProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
                     let constructorPropertyTypes = constructorProperties |> List.map snd
-                    let nullValuedPropertyTypes = nullValuedProperties |> List.map snd
                     let invoker (args : Expr list) =
                         let properties =
                             let baseConstructorArgs =
@@ -181,19 +179,18 @@ module internal ProvidedRecord =
                                     (constructorPropertyTypes, args)
                                     ||> List.map2 (fun t arg ->
                                         let arg = Expr.Coerce(arg, typeof<obj>)
-                                        if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
-                                let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
-                                (propertyNames, (coercedArgs @ nullValuedArgs))
+                                        match t with
+                                        | Option (Option t) -> <@@ makeValue t %%arg @@>
+                                        | _ -> <@@ %%arg @@>)
+                                (propertyNames, coercedArgs)
                                 ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
                             Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
                         Expr.NewObject(ctor, [Expr.Value(name); properties])
                     let constructorParams = 
                         constructorProperties
-                        |> List.map (fun (name, t) ->
-                            match t with
-                            | Option t -> ProvidedParameter(name, t)
-                            | _ -> ProvidedParameter(name, t))
-                    ProvidedConstructor(constructorParams, invoker)))
+                        |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
+                    ProvidedConstructor(constructorParams, invoker)
+                [constructor])
         match tdef.BaseType with
         | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->
