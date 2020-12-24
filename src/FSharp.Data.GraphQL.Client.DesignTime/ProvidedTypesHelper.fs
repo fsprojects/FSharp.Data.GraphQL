@@ -286,7 +286,8 @@ module internal ProvidedOperation =
                          operationType : Type,
                          contextInfo : GraphQLRuntimeContextInfo option,
                          uploadInputTypeName : string option,
-                         className : string) =
+                         className : string,
+                         explicitOptionalParameters: bool) =
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
@@ -350,10 +351,13 @@ module internal ProvidedOperation =
                 let overloadsWithoutContext =
                     let optionalVariables, requiredVariables = 
                         variables |> List.partition (fun (_, t) -> isOption t)
-                    List.combinations optionalVariables 
-                    |> List.map (fun (optionalVariables, _) ->
-                        let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
-                        requiredVariables @ optionalVariables)
+                    if explicitOptionalParameters then
+                        [requiredVariables @ optionalVariables]
+                    else
+                        List.combinations optionalVariables 
+                        |> List.map (fun (optionalVariables, _) ->
+                            let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (Types.unwrapOption t))
+                            requiredVariables @ optionalVariables)
                 let overloadsWithContext = 
                     overloadsWithoutContext
                     |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
@@ -383,8 +387,16 @@ module internal ProvidedOperation =
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
-                        <@@ 
-                            let context = %%context : GraphQLProviderRuntimeContext
+                        let variables =
+                            if explicitOptionalParameters then
+                                <@@ (%%variables: (string * obj) [])
+                                    |> Array.filter (fun (_, value) ->
+                                        match value with
+                                        | :? Option<obj> as option -> option.IsSome
+                                        | _ -> true) @@>
+                            else
+                                variables
+                        <@@ let context = %%context : GraphQLProviderRuntimeContext
                             let request =
                                 { ServerUrl = context.ServerUrl
                                   HttpHeaders = context.HttpHeaders
@@ -399,7 +411,7 @@ module internal ProvidedOperation =
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
                             OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
-                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                     upcast methodDef)
@@ -416,6 +428,15 @@ module internal ProvidedOperation =
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
+                        let variables =
+                            if explicitOptionalParameters then
+                                <@@ (%%variables: (string * obj) [])
+                                    |> Array.filter (fun (_, value) ->
+                                        match value with
+                                        | :? Option<obj> as option -> option.IsSome
+                                        | _ -> true) @@>
+                            else
+                                variables
                         <@@ let context = %%context : GraphQLProviderRuntimeContext
                             let request =
                                 { ServerUrl = context.ServerUrl
@@ -433,7 +454,7 @@ module internal ProvidedOperation =
                                 if isDefaultContext then (context :> IDisposable).Dispose()
                                 return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
                             } @@>
-                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t))
+                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("AsyncRun", methodParameters, Types.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
@@ -886,7 +907,7 @@ module internal Provider =
                                     match introspectionLocation with
                                     | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
                                     | _ -> None
-                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className)
+                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, explicitOptionalParameters)
                                 operationDef.AddMember(metadata.TypeWrapper)
                                 let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
                                 let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)
