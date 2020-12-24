@@ -15,7 +15,8 @@ type internal ProviderKey =
       CustomHttpHeadersLocation : StringLocation
       UploadInputTypeName : string option
       ResolutionFolder : string
-      ClientQueryValidation: bool }
+      ClientQueryValidation: bool
+      ExplicitOptionalParameters: bool }
 
 module internal ProviderDesignTimeCache =
     let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)

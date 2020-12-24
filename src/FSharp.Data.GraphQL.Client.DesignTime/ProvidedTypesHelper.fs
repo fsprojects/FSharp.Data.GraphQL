@@ -138,7 +138,7 @@ module internal Failures =
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
 
-    let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list) =
+    let makeProvidedType(tdef : ProvidedRecordTypeDefinition, properties : RecordPropertyMetadata list, explicitOptionalParameters: bool) =
         let name = tdef.Name
         tdef.AddMembersDelayed(fun _ -> 
             properties |> List.map (fun metadata ->
@@ -162,13 +162,22 @@ module internal ProvidedRecord =
                 //
                 // I.e. to not send a value the optional parameter can either be set implicitly (by not providing an
                 // argument) or explicitly (`?parameterName = Some None` or `parameterName = None`).
-                // To set a value it has to be wrapped in an option: `parameterName = Some argumentValue`.
+                // To set a value it has to be wrapped in an option: `parameterName = Some argumentValue`
+                // (or `?parameterName = Some (Some argumentValue)`).
+                //
+                // To keep backwards compatibility this constructor is only created if a flag is turned on. Otherwise
+                // we keep the previous behavior: We build a constructor overload for each optional property.
+                // Since RecordBase needs to know each property information in its own constructor,
+                // we also need to know each property that was not filled in the currently used overload. So we make
+                // combinations of all possible overloads, and for each one we map the user's provided values and
+                // fill the others with a null value. This way we can construct the RecordBase type providing all
+                // needed properties.
                 let properties = propertiesGetter()
                 let optionalProperties, requiredProperties = 
                     properties 
                     |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t) 
                     |> List.partition (fun (_, t) -> isOption t)
-                let constructor =
+                if explicitOptionalParameters then
                     let constructorProperties = requiredProperties @ optionalProperties
                     let propertyNames = constructorProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
                     let constructorPropertyTypes = constructorProperties |> List.map snd
@@ -189,8 +198,34 @@ module internal ProvidedRecord =
                     let constructorParams = 
                         constructorProperties
                         |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
-                    ProvidedConstructor(constructorParams, invoker)
-                [constructor])
+                    [ProvidedConstructor(constructorParams, invoker)]
+                else
+                    List.combinations optionalProperties
+                    |> List.map (fun (optionalProperties, nullValuedProperties) ->
+                        let constructorProperties = requiredProperties @ optionalProperties
+                        let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                        let constructorPropertyTypes = constructorProperties |> List.map snd
+                        let nullValuedPropertyTypes = nullValuedProperties |> List.map snd
+                        let invoker (args : Expr list) =
+                            let properties =
+                                let baseConstructorArgs =
+                                    let coercedArgs = 
+                                        (constructorPropertyTypes, args)
+                                        ||> List.map2 (fun t arg ->
+                                            let arg = Expr.Coerce(arg, typeof<obj>)
+                                            if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
+                                    let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
+                                    (propertyNames, (coercedArgs @ nullValuedArgs))
+                                    ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
+                                Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
+                            Expr.NewObject(ctor, [Expr.Value(name); properties])
+                        let constructorParams = 
+                            constructorProperties
+                            |> List.map (fun (name, t) ->
+                                match t with
+                                | Option t -> ProvidedParameter(name, t)
+                                | _ -> ProvidedParameter(name, t))
+                        ProvidedConstructor(constructorParams, invoker)))
         match tdef.BaseType with
         | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed(fun _ ->
@@ -418,7 +453,7 @@ type internal ProvidedOperationMetadata =
       TypeWrapper : ProvidedTypeDefinition }
 
 module internal Provider =
-    let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef) =
+    let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef, explicitOptionalParameters: bool) =
         let generateWrapper name = 
             let rec resolveWrapperName actual =
                 if schemaTypes.ContainsKey(actual)
@@ -493,7 +528,7 @@ module internal Provider =
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                         providedTypes.Add((path, tref.Name.Value), tdef)
                         includeType path tdef
-                        ProvidedRecord.makeProvidedType(tdef, baseProperties)
+                        ProvidedRecord.makeProvidedType(tdef, baseProperties, explicitOptionalParameters)
                     let createFragmentType (typeName, properties) =
                         let itype =
                             if schemaTypes.ContainsKey(typeName)
@@ -503,7 +538,7 @@ module internal Provider =
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
                         providedTypes.Add((path, typeName), tdef)
                         includeType path tdef
-                        ProvidedRecord.makeProvidedType(tdef, properties) |> ignore
+                        ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters) |> ignore
                     fragmentProperties |> List.iter createFragmentType
                     Types.makeOption baseType
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
@@ -512,7 +547,7 @@ module internal Provider =
           UploadInputTypeName = uploadInputTypeName
           TypeWrapper = rootWrapper }
 
-    let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option) =
+    let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : string option, explicitOptionalParameters: bool) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = Types.getSchemaTypes schema
         let getSchemaType (tref : IntrospectionTypeRef) =
@@ -588,7 +623,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveFieldMetadata
                         |> List.ofArray
-                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
                     providedTypes := (!providedTypes).Add(itype.Name, tdef)
@@ -597,7 +632,7 @@ module internal Provider =
                         |> Option.defaultValue [||]
                         |> Array.map resolveInputFieldMetadata
                         |> List.ofArray
-                    upcast ProvidedRecord.makeProvidedType(tdef, properties)
+                    upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = ProvidedInterface.makeProvidedType(metadata)
                     providedTypes := (!providedTypes).Add(itype.Name, bdef)
@@ -636,9 +671,11 @@ module internal Provider =
               ProvidedStaticParameter("httpHeaders", typeof<string>, parameterDefaultValue = "")  
               ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
               ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
-              ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true) ]
+              ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true)
+              ProvidedStaticParameter("explicitOptionalParameters", typeof<bool>, parameterDefaultValue = false) ]
         generator.DefineStaticParameters(staticParams, fun tname args ->
             let clientQueryValidation : bool = downcast args.[4]
+            let explicitOptionalParameters : bool = downcast args.[5]
             let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
             let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
             let uploadInputTypeName = 
@@ -660,7 +697,7 @@ module internal Provider =
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
-                        let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName)
+                        let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
                         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
@@ -773,7 +810,7 @@ module internal Provider =
                                     | Some name, _ -> name.FirstCharUpper()
                                     | None, Some name -> name.FirstCharUpper()
                                     | None, None -> "Operation" + actualQuery.MD5Hash()
-                                let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef)
+                                let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, explicitOptionalParameters)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with
                                     | Some name -> name
@@ -871,7 +908,8 @@ module internal Provider =
                   CustomHttpHeadersLocation = httpHeadersLocation
                   UploadInputTypeName = uploadInputTypeName
                   ResolutionFolder = resolutionFolder
-                  ClientQueryValidation = clientQueryValidation }
+                  ClientQueryValidation = clientQueryValidation
+                  ExplicitOptionalParameters = explicitOptionalParameters }
             ProviderDesignTimeCache.getOrAdd providerKey maker.Force)
             #else
             maker.Force())
