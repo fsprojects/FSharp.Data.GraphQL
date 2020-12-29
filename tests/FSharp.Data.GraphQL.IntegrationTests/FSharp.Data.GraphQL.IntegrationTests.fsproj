@@ -16,6 +16,7 @@
   <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
+    <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
     <Compile Include="SwapiLocalProviderTests.fs" />
     <Compile Include="SwapiRemoteProviderTests.fs" />
   </ItemGroup>
