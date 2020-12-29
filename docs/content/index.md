@@ -47,7 +47,9 @@ let schema = Schema(QueryRoot)
 With schema create we are now able to respond to any incoming GraphQL queries:
 
 ```fsharp
-open FSharp.Data.GraphQL.Execution
+// Create an Exector for the schema
+let executor = Executor(schema)
+
 let query = """
     query Example {
         people {
@@ -55,8 +57,9 @@ let query = """
         }
     }
     """
+    
 async {
-    let! response = schema.AsyncExecute(query)
+    let! response = executor.AsyncExecute(query)
     printf "%A" response
 }
 
