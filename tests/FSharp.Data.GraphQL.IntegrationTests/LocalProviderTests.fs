@@ -1,4 +1,4 @@
-﻿module FSharp.Data.GraphQL.IntegrationTests.LocalProviderTests
+module FSharp.Data.GraphQL.IntegrationTests.LocalProviderTests
 
 open Xunit
 open Helpers
@@ -7,7 +7,7 @@ open FSharp.Data.GraphQL
 let [<Literal>] ServerUrl = "http://localhost:8085"
 let [<Literal>] EmptyGuidAsString = "00000000-0000-0000-0000-000000000000"
 
-type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload">
+type Provider = GraphQLProvider<ServerUrl, uploadInputTypeName = "Upload", explicitOptionalParameters = false>
 
 let context = Provider.GetContext(ServerUrl)
 
