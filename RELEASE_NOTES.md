@@ -150,3 +150,8 @@
 * Support opening static classes
 * Add additional case in client to support failed requests that don't return a path.
 
+### 1.0.6 - December 15 2020
+* TypeProvider accepts IHttpClientFactory as input
+
+### 1.0.7 - December 30 2020
+* Add static TypeProvider parameter `explicitOptionalParameters`.
