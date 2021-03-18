@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
 open System.Threading.Tasks
+open Microsoft.AspNetCore.Authorization
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
@@ -11,6 +12,7 @@ open Microsoft.Extensions.Hosting
 open Oxpecker
 open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.Oxpecker
+open FSharp.Data.GraphQL.Samples.StarWarsApi.Authorization
 
 type Startup private () =
 
@@ -28,6 +30,12 @@ type Startup private () =
 
     member _.ConfigureServices (services : IServiceCollection) : unit =
         services
+            .AddAuthorization(fun options ->
+                options.AddPolicy (
+                    Policies.CanSetMoon,
+                    (fun policy -> policy.Requirements.Add (IsCharacterRequierment (List.singleton "droid"))))
+                )
+            .AddScoped<IAuthorizationHandler, IsCharacterHandler>()
             .AddOxpecker()
             .AddGraphQL<Root> (Schema.executor, rootFactory, configure = configure)
         |> ignore
