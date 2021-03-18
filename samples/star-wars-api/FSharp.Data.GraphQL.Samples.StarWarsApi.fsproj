@@ -14,6 +14,9 @@
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="Root.fs" />
+    <Compile Include="Policies.fs" />
+    <Compile Include="AuthorizationMiddleware.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="WebSocketMessages.fs" />
     <Compile Include="JsonConverters.fs" />
