@@ -1,11 +1,9 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
-open System.Buffers.Text
+open System
 open System.Collections.Generic
 open System.Text.Json
 open System.Text.Json.Serialization
-open Microsoft.FSharp.Reflection
-open Dahomey.Json.Util
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -63,7 +61,7 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
                             match jval.Type with
                             | JTokenType.Null -> null
                             | JTokenType.String -> jval.ToString() :> obj
-                            | _ -> jval.ToObject(vdef.TypeDef.Type, serializer)
+                            | _ -> JsonSerializer.Deserialize(jval.ToString(), vdef.TypeDef.Type, options)
                         Map.add (vdef.Name) v acc
                     | false, _  ->
                         match vdef.DefaultValue, vdef.TypeDef with
@@ -76,11 +74,9 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
 type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter<WebSocketClientMessage>()
 
-    override __.CanWrite = false
-
     override __.CanConvert(t) = t = typeof<WebSocketClientMessage>
 
-    override __.Write(_, _, _) = failwith "Not supported"
+    override __.Write(writer, query, options) = failwith "Not supported"
 
     override __.Read(reader, _, options) =
         if reader.TokenType <> JsonTokenType.StartObject then raise <| JsonException ()
@@ -98,8 +94,8 @@ type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: 
 
         let typ = properties.["type"]
         match typ with
-        | "connection_init" -> upcast ConnectionInit
-        | "connection_terminate" -> upcast ConnectionTerminate
+        | "connection_init" -> ConnectionInit
+        | "connection_terminate" -> ConnectionTerminate
         | "start" ->
             let id =
                 match properties.TryGetValue "id" with
@@ -112,55 +108,56 @@ type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: 
             match id, payload with
             | ValueSome id, ValueSome payload ->
                 try
-                    // TODO:
-                    //let settings = JsonSerializerSettings()
-                    //let queryConverter =
-                    //    match meta with
-                    //    | Some meta -> GraphQLQueryConverter(executor, replacements, meta) :> JsonConverter
-                    //    | None -> GraphQLQueryConverter(executor, replacements) :> JsonConverter
-                    //let optionConverter = OptionConverter() :> JsonConverter
-                    //settings.Converters <- [| optionConverter; queryConverter |]
-                    //settings.ContractResolver <- Newtonsoft.Json.Serialization.CamelCasePropertyNamesContractResolver()
-                    //let req = JsonConvert.DeserializeObject<GraphQLQuery>(payload, settings)
-                    //upcast Start(id, req)
-                with e -> upcast ParseError(Some id, "Parse Failed with Exception: " + e.Message)
-            | ValueNone, _ -> upcast ParseError(None, "Malformed GQL_START message, expected id field but found none")
-            | _, ValueNone -> upcast ParseError(None, "Malformed GQL_START message, expected payload field but found none")
+                    let queryConverter =
+                        match meta with
+                        | Some meta -> GraphQLQueryConverter(executor, replacements, meta) :> JsonConverter
+                        | None -> GraphQLQueryConverter(executor, replacements) :> JsonConverter
+                    let options' = Json.getSerializerOptions ([|queryConverter|])
+                    let req = JsonSerializer.Deserialize<GraphQLQuery>(payload, options')
+                    Start(id, req)
+                with e -> ParseError(Some id, "Parse Failed with Exception: " + e.Message)
+            | ValueNone, _ -> ParseError(None, "Malformed GQL_START message, expected id field but found none")
+            | _, ValueNone -> ParseError(None, "Malformed GQL_START message, expected payload field but found none")
         | "stop" ->
             match properties.TryGetValue "id" with
-            | true, value -> upcast Stop(id)
-            | false, _ -> upcast ParseError(None, "Malformed GQL_STOP message, expected id field but found none")
-        | typ -> upcast ParseError(None, "Message Type " + typ + " is not supported!")
+            | true, id -> Stop(id)
+            | false, _ -> ParseError(None, "Malformed GQL_STOP message, expected id field but found none")
+        | typ -> ParseError(None, "Message Type " + typ + " is not supported!")
 
 [<Sealed>]
 type WebSocketServerMessageConverter() =
     inherit JsonConverter<WebSocketServerMessage>()
 
-    override __.CanRead = false
-
     override __.CanConvert(t) = t = typedefof<WebSocketServerMessage> || t.DeclaringType = typedefof<WebSocketServerMessage>
 
+    override __.Read(_, _, _) = raise <| NotSupportedException()
+
     override __.Write(writer, value, options) =
-        let jobj = JObject()
+        writer.WriteStartObject()
         match value with
         | ConnectionAck ->
-            jobj.Add(JProperty("type", "connection_ack"))
+            writer.WriteString("type", "connection_ack")
         | ConnectionError(err) ->
-            let errObj = JObject()
-            errObj.Add(JProperty("error", err))
-            jobj.Add(JProperty("type", "connection_error"))
-            jobj.Add(JProperty("payload", errObj))
+            writer.WriteString("type", "connection_error")
+            writer.WritePropertyName("payload")
+            writer.WriteStartObject()
+            writer.WriteString("error", err)
+            writer.WriteEndObject()
         | Error(id, err) ->
-            let errObj = JObject()
-            errObj.Add(JProperty("error", err))
-            jobj.Add(JProperty("type", "error"))
-            jobj.Add(JProperty("payload", errObj))
-            jobj.Add(JProperty("id", id))
+            writer.WriteString("type", "error")
+            writer.WritePropertyName("payload")
+            writer.WriteStartObject()
+            writer.WriteString("error", err)
+            writer.WriteEndObject()
+            match id with
+            | Some id -> writer.WriteString ("id", id)
+            | None -> writer.WriteNull("id")
         | Data(id, result) ->
-            jobj.Add(JProperty("type", "data"))
-            jobj.Add(JProperty("id", id))
-            jobj.Add(JProperty("payload", JObject.FromObject(result)))
+            writer.WriteString("type", "data")
+            writer.WriteString("id", id)
+            writer.WritePropertyName("payload")
+            JsonSerializer.Serialize(writer, result, options)
         | Complete(id) ->
-            jobj.Add(JProperty("type", "complete"))
-            jobj.Add(JProperty("id", id))
-        jobj.WriteTo(writer)
+            writer.WriteString("type", "complete")
+            writer.WriteString("id", id)
+        writer.WriteEndObject()

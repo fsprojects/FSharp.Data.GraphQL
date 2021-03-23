@@ -13,8 +13,8 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="WebSocketMessages.fs" />
-    <Compile Include="JsonConverters.fs" />
     <Compile Include="JSON.fs" />
+    <Compile Include="JsonConverters.fs" />
     <Compile Include="WebSocketMiddleware.fs" />
     <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />

@@ -1,19 +1,21 @@
 ﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
-open System.Text
-open Giraffe
-open Microsoft.AspNetCore.Http
-open Newtonsoft.Json
-open FSharp.Data.GraphQL.Execution
 open System.IO
+open System.Text
+open System.Text.Json
+open Microsoft.AspNetCore.Http
+open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Control.Tasks
+open Giraffe
 open Newtonsoft.Json.Linq
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+
+    let private jsonOptions = Json.getSerializerOptions (Array.empty)
 
     let internalServerError : HttpHandler = setStatusCode 500
 
@@ -27,7 +29,7 @@ module HttpHandlers =
         setHttpHeader "Content-Type" "application/json"
 
     let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
+        let serialize d = JsonSerializer.Serialize(d, jsonOptions) // JsonConvert.SerializeObject(d, jsonOptions)
 
         let deserialize (data : string) =
             let getMap (token : JToken) =
@@ -46,10 +48,10 @@ module HttpHandlers =
         let json =
             function
             | Direct (data, _) ->
-                JsonConvert.SerializeObject(data, jsonSettings)
+                JsonSerializer.Serialize(data, jsonOptions)
             | Deferred (data, _, deferred) ->
                 deferred |> Observable.add(fun d -> printfn "Deferred: %s" (serialize d))
-                JsonConvert.SerializeObject(data, jsonSettings)
+                JsonSerializer.Serialize(data, jsonOptions)
             | Stream data ->
                 data |> Observable.add(fun d -> printfn "Subscription data: %s" (serialize d))
                 "{}"
