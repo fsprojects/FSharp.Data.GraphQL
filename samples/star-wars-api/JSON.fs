@@ -33,6 +33,5 @@ let getSerializerOptions ([<ParamArray>] additionalConverters: JsonConverter arr
                         ||| JsonUnionEncoding.UnwrapSingleCaseUnions
                         ||| JsonUnionEncoding.UnwrapRecordCases
                         ||| JsonUnionEncoding.UnwrapOption))
-    options.SetupExtensions() |> ignore // Use Dahomey.Json
     additionalConverters |> Array.iter converters.Add
-    options
+    options.SetupExtensions() // Use Dahomey.Json
