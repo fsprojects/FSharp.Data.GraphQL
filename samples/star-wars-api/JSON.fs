@@ -17,10 +17,10 @@ let getJsonSerializer (converters : JsonConverter seq) =
         Seq.iter c.Converters.Add converters
         c.ContractResolver <- CamelCasePropertyNamesContractResolver())
 
+open System
 open System.Text.Json
 open System.Text.Json.Serialization
 open Dahomey.Json
-open System
 
 #nowarn "0058"
 let getSerializerOptions ([<ParamArray>] additionalConverters: JsonConverter array) =

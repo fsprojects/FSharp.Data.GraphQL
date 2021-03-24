@@ -3,19 +3,22 @@
 open System.IO
 open System.Text
 open System.Text.Json
+open System.Text.Json.Serialization
 open Microsoft.AspNetCore.Http
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Control.Tasks
 open Giraffe
-open Newtonsoft.Json.Linq
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
 
-    let private jsonOptions = Json.getSerializerOptions (Array.empty)
+    let private jsonOptions =
+        NameValueLookupConverter() :> JsonConverter
+        |> Array.singleton
+        |> Json.getSerializerOptions
 
     let internalServerError : HttpHandler = setStatusCode 500
 
@@ -29,21 +32,8 @@ module HttpHandlers =
         setHttpHeader "Content-Type" "application/json"
 
     let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let serialize d = JsonSerializer.Serialize(d, jsonOptions) // JsonConvert.SerializeObject(d, jsonOptions)
 
-        let deserialize (data : string) =
-            let getMap (token : JToken) =
-                let rec mapper (name : string) (token : JToken) =
-                    match name, token.Type with
-                    | "variables", JTokenType.Object -> token.Children<JProperty>() |> Seq.map (fun x -> x.Name, mapper x.Name x.Value) |> Map.ofSeq |> box
-                    | name, JTokenType.Array -> token |> Seq.map (fun x -> mapper name x) |> Array.ofSeq |> box
-                    | _ -> (token :?> JValue).Value
-                token.Children<JProperty>()
-                |> Seq.map (fun x -> x.Name, mapper x.Name x.Value)
-                |> Map.ofSeq
-            if System.String.IsNullOrWhiteSpace(data)
-            then None
-            else data |> JToken.Parse |> getMap |> Some
+        let serialize d = JsonSerializer.Serialize(d, jsonOptions)
 
         let json =
             function
@@ -58,49 +48,68 @@ module HttpHandlers =
 
         let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace("\r\n", " ")
 
-        let readStream (s : Stream) =
-            use ms = new MemoryStream(4096)
-            s.CopyTo(ms)
-            ms.ToArray()
+        //let asycnReadStream (s : Stream) = async {
+        //    let ms = new MemoryStream(4096)
+        //    do! s.CopyToAsync(ms) |> Async.AwaitTask
+        //     ms.Seek(0L, SeekOrigin.Begin) |> ignore
+        //    return ms
+        //}
 
-        let data = Encoding.UTF8.GetString(readStream ctx.Request.Body) |> deserialize
+        //use! stream = asycnReadStream ctx.Request.Body
+        //let! data = async {
+        //    if stream.Length > 0L
+        //    then
+        //        let! document = JsonDocument.ParseAsync(stream) |> Async.AwaitTask
+        //        return document.RootElement |> ValueSome
+        //    else
+        //        return ValueNone
+        //}
+
+        let readStream (s : Stream) =
+            let ms = new MemoryStream(4096)
+            do s.CopyTo(ms)
+            ms.Seek(0L, SeekOrigin.Begin) |> ignore
+            ms
+
+        use stream = readStream ctx.Request.Body
+        let data =
+            if stream.Length > 0L
+            then
+                let document = JsonDocument.Parse(stream)
+                document.RootElement |> ValueSome
+            else
+                ValueNone
 
         let query =
-            data |> Option.bind (fun data ->
-                if data.ContainsKey("query")
-                then
-                    match data.["query"] with
-                    | :? string as x -> Some x
-                    | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
-                else None)
+            data |> ValueOption.bind (fun data ->
+                match data.TryGetProperty FIELD_Query with
+                | true, query -> query.GetString() |> ValueSome
+                | _ -> ValueNone)
 
         let variables =
-            data |> Option.bind (fun data ->
-                if data.ContainsKey("variables")
-                then
-                    match data.["variables"] with
-                    | null -> None
-                    | :? string as x -> deserialize x
-                    | :? Map<string, obj> as x -> Some x
-                    | _ -> failwith "Failure deserializing response. Could not read variables - it is not a object in the request."
-                else None)
+            data |> ValueOption.map (fun data ->
+                match data.TryGetProperty FIELD_Variables with
+                | true, variables when variables.ValueKind <> JsonValueKind.Null ->
+                    variables.EnumerateObject () |> Seq.map (fun v -> v.Name, v.Value) |> Map.ofSeq
+                | _ -> Map.empty) |> ValueOption.defaultValue Map.empty
 
-        match query, variables  with
-        | Some query, Some variables ->
+        match query with
+        | ValueSome query ->
             printfn "Received query: %s" query
-            printfn "Received variables: %A" variables
+            if not variables.IsEmpty then printfn "Received variables: %A" variables
             let query = removeWhitespacesAndLineBreaks query
             let root = { RequestId = System.Guid.NewGuid().ToString() }
-            let result = Schema.executor.AsyncExecute(query, root, variables) |> Async.RunSynchronously
+            let plan = Schema.executor.CreateExecutionPlan(query)
+            let variables =
+                plan.Variables
+                |> Seq.choose (fun v ->
+                    variables.TryFind v.Name
+                    |> Option.map (fun j -> v.Name, JsonSerializer.Deserialize(j.GetRawText(), v.TypeDef.Type, jsonOptions)))
+                |> Map.ofSeq
+            let result = Schema.executor.AsyncExecute(plan, root, variables) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx
-        | Some query, None ->
-            printfn "Received query: %s" query
-            let query = removeWhitespacesAndLineBreaks query
-            let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-        | None, _ ->
+        | ValueNone ->
             let result = Schema.executor.AsyncExecute(Introspection.IntrospectionQuery) |> Async.RunSynchronously
             printfn "Result metadata: %A" result.Metadata
             return! okWithStr (json result) next ctx

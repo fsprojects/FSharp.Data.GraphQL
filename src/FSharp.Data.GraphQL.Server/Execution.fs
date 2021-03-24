@@ -54,8 +54,8 @@ let (|Direct|Deferred|Stream|) (response : GQLResponse) =
 /// can be set, but no new entry can be added or removed, once lookup
 /// has been initialized.
 /// This dicitionay implements structural equality.
-type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
-    let kvals = keyValues |> Array.distinctBy (fun kv -> kv.Key)
+type NameValueLookup(keyValues: KeyValuePair<string, obj> seq) =
+    let kvals = keyValues |> Seq.distinctBy (fun kv -> kv.Key) |> Seq.toArray
     let setValue key value =
         let mutable i = 0
         while i < kvals.Length do
@@ -116,6 +116,9 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     member __.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
     member __.Count = kvals.Length
+    member __.Item
+        with get (key) = getValue key
+        and  set (key) value = setValue key value
     /// Updates an entry's value under given key. It will throw an exception
     /// if provided key cannot be found in provided lookup.
     member __.Update key value = setValue key value
