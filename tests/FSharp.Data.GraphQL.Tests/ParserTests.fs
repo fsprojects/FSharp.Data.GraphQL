@@ -36,6 +36,7 @@ let queryWithSelection selection = queryWithSelections [ selection ]
 
 let arg name value = { Argument.Name = name; Value = value }
 let argInt name value = arg name (IntValue (int64 value))
+let argString name value = arg name (StringValue value)
 let argNull name = arg name NullValue
 let fieldWithNameAndArgsAndSelections name arguments selections =
     Field { Name = name
@@ -278,7 +279,7 @@ let ``parser should parse GraphQL``() =
       }
     }
   }"""
-  
+
 [<Fact>]
 let ``parser should parse query with null arguments``() =
     let expected =
@@ -289,6 +290,19 @@ let ``parser should parse query with null arguments``() =
     test expected """{
     user(id: null) {
       name
+    }
+  }"""
+
+[<Fact>]
+let ``parser should parse query with quoted arguments``() =
+    let expected =
+        [ field "id" ]
+        |> fieldWithNameAndArgsAndSelections "search" [ argString "query" "the cow said \"moo\"!" ]
+        |> queryWithSelection
+        |> doc1
+    test expected """{
+    search(query: "the cow said \"moo\"!") {
+      id
     }
   }"""
 
