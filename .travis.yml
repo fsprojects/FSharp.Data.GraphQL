@@ -1,9 +1,8 @@
 language: csharp
-sudo: required 
+sudo: required
 dotnet: 5.0.100
 dist: xenial
 before_install:
   - chmod +x build.sh
-script: 
+script:
   - ./build.sh
-dist: focal
