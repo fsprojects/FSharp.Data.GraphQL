@@ -189,6 +189,7 @@ release.sh
 localpackages/
 paket-files
 .ionide
+.idea
 *.orig
 .paket/paket.exe
 docs/content/license.md
