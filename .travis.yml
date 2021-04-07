@@ -6,4 +6,4 @@ before_install:
   - chmod +x build.sh
 script: 
   - ./build.sh
-dist: trusty
+dist: focal
