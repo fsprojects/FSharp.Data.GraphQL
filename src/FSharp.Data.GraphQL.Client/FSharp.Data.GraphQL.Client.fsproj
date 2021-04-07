@@ -2,10 +2,9 @@
 <Project>
   <!-- See https://stackoverflow.com/questions/43921992/how-can-i-use-beforebuild-and-afterbuild-targets-with-visual-studio-2017 -->
   <Import Project="Sdk.props" Sdk="Microsoft.NET.Sdk" />
-  <Import Project="..\..\netfx.props" />
   <PropertyGroup>
     <OutputType>Library</OutputType>
-    <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
   <Import Project="Sdk.targets" Sdk="Microsoft.NET.Sdk" />
   <ItemGroup>
@@ -27,25 +26,11 @@
     <None Include="FSharp.Data.GraphQL.Client.fsproj.paket.template" />
     <None Include="paket.references" />
   </ItemGroup>
-  <ItemGroup Condition="'$(TargetFramework)' == 'net461'">
-    <Reference Include="System.Net.Primitives" />
-    <Reference Include="System.Net.Http" />
-  </ItemGroup>
   <Target Name="BeforeBuild">
     <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Restore" />
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netcoreapp2.0" />
     <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=netstandard2.0" />
-    <MSBuild Projects="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj" Targets="Build" Properties="Configuration=$(Configuration);TargetFramework=net461" />
   </Target>
   <Target Name="AfterBuild">
-    <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netcoreapp2.0\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netcoreapp2.0\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries1" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries1)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/netcoreapp2.0" />
-    <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\net461\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\net461\*.pdb">
-      <Output TaskParameter="Include" ItemName="DesignTimeBinaries2" />
-    </CreateItem>
-    <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)/../typeproviders/fsharp41/net461" />
     <Copy SourceFiles="@(DesignTimeBinaries2)" DestinationFolder="$(OutputPath)" />
     <CreateItem Include="..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netstandard2.0\*.dll;..\FSharp.Data.GraphQL.Client.DesignTime\bin\$(Configuration)\netstandard2.0\*.pdb">
       <Output TaskParameter="Include" ItemName="DesignTimeBinaries3" />

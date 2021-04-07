@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="ContentModelStore">
+    <e p="$USER_HOME$/.nuget/packages/microsoft.diagnostics.tracing.traceevent/2.0.62/lib/netstandard1.6/Dia2Lib.dll" t="Include" />
+    <e p="$USER_HOME$/.nuget/packages/microsoft.diagnostics.tracing.traceevent/2.0.62/lib/netstandard1.6/OSExtensions.dll" t="Include" />
+    <e p="$USER_HOME$/.nuget/packages/microsoft.diagnostics.tracing.traceevent/2.0.62/lib/netstandard1.6/TraceReloggerLib.dll" t="Include" />
+    <e p="$USER_HOME$/.nuget/packages/xunit.runner.visualstudio/2.4.3/build/netcoreapp2.1/xunit.runner.reporters.netcoreapp10.dll" t="Include" />
+    <e p="$USER_HOME$/.nuget/packages/xunit.runner.visualstudio/2.4.3/build/netcoreapp2.1/xunit.runner.utility.netcoreapp10.dll" t="Include" />
+    <e p="$USER_HOME$/.nuget/packages/xunit.runner.visualstudio/2.4.3/build/netcoreapp2.1/xunit.runner.visualstudio.dotnetcore.testadapter.dll" t="Include" />
+    <e p="$USER_HOME$/Library/Caches/JetBrains/Rider2020.3/extResources" t="IncludeRecursive" />
+    <e p="$USER_HOME$/Library/Caches/JetBrains/Rider2020.3/javascript/typings/react-dom/15.5.12/node_modules/@types/react" t="IncludeRecursive" />
+    <e p="$USER_HOME$/Library/Caches/JetBrains/Rider2020.3/javascript/typings/react-dom/15.5.12/node_modules/@types/react-dom" t="IncludeRecursive" />
+    <e p="$USER_HOME$/Library/Caches/JetBrains/Rider2020.3/resharper-host/local/Transient/Rider/v203/SolutionCaches/_FSharp.Data.GraphQL.1456560412.00" t="ExcludeRecursive" />
+    <e p="$PROJECT_DIR$" t="IncludeFlat">
+      <e p=".paket" t="Include" />
+      <e p="build.fsx" t="Include" />
+      <e p="docs" t="Include">
+        <e p="content" t="Include">
+          <e p="execution-pipeline.md" t="Include" />
+          <e p="index.md" t="Include" />
+          <e p="linq.md" t="Include" />
+          <e p="type-system.md" t="Include" />
+        </e>
+        <e p="files" t="Include">
+          <e p="img" t="Include">
+            <e p="logo-template.pdn" t="Include" />
+            <e p="logo.png" t="Include" />
+          </e>
+          <e p="introspection_query.graphql" t="Include" />
+        </e>
+        <e p="tools" t="Include">
+          <e p="generate.fsx" t="Include" />
+          <e p="templates/template.cshtml" t="Include" />
+        </e>
+      </e>
+      <e p="FSharp.Data.GraphQL.sln" t="IncludeFlat" />
+      <e p="packages" t="ExcludeRecursive" />
+      <e p="paket-files/common/fsprojects/FSharp.TypeProviders.SDK/src/ProvidedTypes.fs" t="Include" />
+      <e p="paket-files/common/fsprojects/FSharp.TypeProviders.SDK/src/ProvidedTypes.fsi" t="Include" />
+      <e p="paket.dependencies" t="Include" />
+      <e p="paket.lock" t="Include" />
+      <e p="project" t="Include" />
+      <e p="README.md" t="Include" />
+      <e p="RELEASE_NOTES.md" t="Include" />
+      <e p="samples" t="Include">
+        <e p="client-provider" t="Include">
+          <e p="field_aliases.fsx" t="Include" />
+          <e p="file-upload" t="Include">
+            <e p="multiple_files_upload.fsx" t="Include" />
+            <e p="png_file.png" t="Include" />
+            <e p="README.md" t="Include" />
+            <e p="server" t="Include">
+              <e p=".env" t="Include" />
+              <e p=".gitignore" t="Include" />
+              <e p="package-lock.json" t="Include" />
+              <e p="package.json" t="Include" />
+              <e p="resolvers.mjs" t="Include" />
+              <e p="server.mjs" t="Include" />
+              <e p="types.mjs" t="Include" />
+            </e>
+            <e p="single_file_upload.fsx" t="Include" />
+            <e p="txt_file.txt" t="Include" />
+            <e p="uploaded_files.fsx" t="Include" />
+          </e>
+          <e p="github_access.fsx" t="Include" />
+          <e p="github_authorization_headers.headerfile" t="Include" />
+          <e p="github_schema.json" t="Include" />
+          <e p="graphql_client.fsx" t="Include" />
+          <e p="http_headers1.headerfile" t="Include" />
+          <e p="http_headers2.headerfile" t="Include" />
+          <e p="http_headers_introspection.fsx" t="Include" />
+          <e p="mutations.fsx" t="Include" />
+          <e p="operation.graphql" t="Include" />
+          <e p="parameters.fsx" t="Include" />
+          <e p="short_hand_query.fsx" t="Include" />
+          <e p="standard_features.fsx" t="Include" />
+          <e p="swapi_schema.json" t="Include" />
+          <e p="using_query_file.fsx" t="Include" />
+        </e>
+        <e p="graphiql-client" t="Include">
+          <e p=".babelrc" t="Include" />
+          <e p="index.html" t="Include" />
+          <e p="index.jsx" t="Include" />
+          <e p="package-lock.json" t="Include" />
+          <e p="package.json" t="Include" />
+          <e p="webpack.config.js" t="Include" />
+        </e>
+        <e p="relay-starter-kit" t="Include">
+          <e p=".babelrc" t="Include" />
+          <e p="build" t="Include">
+            <e p="babelRelayPlugin.js" t="Include" />
+          </e>
+          <e p="data" t="Include">
+            <e p="schema.json" t="Include" />
+          </e>
+          <e p="index.html" t="Include" />
+          <e p="index.jsx" t="Include" />
+          <e p="package.json" t="Include" />
+          <e p="server.fsx" t="Include" />
+          <e p="webpack.config.js" t="Include" />
+        </e>
+        <e p="star-wars-api" t="IncludeRecursive">
+          <e p="ApplicationInsights.config" t="Include" />
+          <e p="appsettings.json" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj" t="IncludeRecursive" />
+          <e p="Helpers.fs" t="Include" />
+          <e p="HttpHandlers.fs" t="Include" />
+          <e p="JsonConverters.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="paket.references" t="Include" />
+          <e p="Program.fs" t="Include" />
+          <e p="Properties" t="Include">
+            <e p="launchSettings.json" t="Include" />
+          </e>
+          <e p="Schema.fs" t="Include" />
+          <e p="Startup.fs" t="Include" />
+          <e p="WebSocketMessages.fs" t="Include" />
+          <e p="WebSocketMiddleware.fs" t="Include" />
+        </e>
+      </e>
+      <e p="src" t="Include">
+        <e p="FSharp.Data.GraphQL.Client" t="IncludeRecursive">
+          <e p="AssemblyInfo.fs" t="Include" />
+          <e p="BaseTypes.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="Extensions.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Client.fsproj" t="IncludeRecursive" />
+          <e p="FSharp.Data.GraphQL.Client.fsproj.paket.template" t="Include" />
+          <e p="GraphQLClient.fs" t="Include" />
+          <e p="GraphQLClientConnection.fs" t="Include" />
+          <e p="GraphQLProvider.Runtime.fs" t="Include" />
+          <e p="GraphQLProviderRuntimeContext.fs" t="Include" />
+          <e p="JsonValue.fs" t="Include" />
+          <e p="Locations.fs" t="Include" />
+          <e p="MimeTypes.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="paket.references" t="Include" />
+          <e p="ReflectionPatterns.fs" t="Include" />
+          <e p="Schema.fs" t="Include" />
+          <e p="Serialization.fs" t="Include" />
+          <e p="TextConversions.fs" t="Include" />
+          <e p="Upload.fs" t="Include" />
+        </e>
+        <e p="FSharp.Data.GraphQL.Client.DesignTime" t="IncludeRecursive">
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="DesignTimeCache.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Client.DesignTime.fsproj" t="IncludeRecursive" />
+          <e p="GraphQLProvider.DesignTime.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="paket-files" t="Include" />
+          <e p="paket.references" t="Include" />
+          <e p="ProvidedTypesHelper.fs" t="Include" />
+        </e>
+        <e p="FSharp.Data.GraphQL.Server" t="IncludeRecursive">
+          <e p="AssemblyInfo.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="DefineExtensions.fs" t="Include" />
+          <e p="Execution.fs" t="Include" />
+          <e p="Executor.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Server.fsproj" t="IncludeRecursive" />
+          <e p="FSharp.Data.GraphQL.Server.fsproj.paket.template" t="Include" />
+          <e p="Linq.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="ObservableExtensions.fs" t="Include" />
+          <e p="paket.references" t="Include" />
+          <e p="Planning.fs" t="Include" />
+          <e p="ReflectionHelper.fs" t="Include" />
+          <e p="Relay" t="Include">
+            <e p="Connections.fs" t="Include" />
+            <e p="Node.fs" t="Include" />
+          </e>
+          <e p="Schema.fs" t="Include" />
+          <e p="Values.fs" t="Include" />
+        </e>
+        <e p="FSharp.Data.GraphQL.Server.Middleware" t="IncludeRecursive">
+          <e p="AssemblyInfo.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="DefineExtensions.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Server.Middleware.fsproj" t="IncludeRecursive" />
+          <e p="FSharp.Data.GraphQL.Server.Middleware.fsproj.paket.template" t="Include" />
+          <e p="MiddlewareDefinitions.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="ObjectListFilter.fs" t="Include" />
+          <e p="paket.references" t="Include" />
+          <e p="SchemaDefinitions.fs" t="Include" />
+          <e p="TypeSystemExtensions.fs" t="Include" />
+        </e>
+        <e p="FSharp.Data.GraphQL.Shared" t="IncludeRecursive">
+          <e p="AssemblyInfo.fs" t="Include" />
+          <e p="Ast.fs" t="Include" />
+          <e p="AstExtensions.fs" t="Include" />
+          <e p="AsyncVal.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="Diagnostics.fs" t="Include" />
+          <e p="Extensions.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Shared.fsproj" t="IncludeRecursive" />
+          <e p="Introspection.fs" t="Include" />
+          <e p="MemoryCache.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="paket.references" t="Include" />
+          <e p="Parser.fs" t="Include" />
+          <e p="Prolog.fs" t="Include" />
+          <e p="TypeSystem.fs" t="Include" />
+          <e p="TypeSystemExtensions.fs" t="Include" />
+          <e p="Validation.fs" t="Include" />
+          <e p="ValidationResultCache.fs" t="Include" />
+          <e p="ValidationTypes.fs" t="Include" />
+        </e>
+      </e>
+      <e p="tests" t="Include">
+        <e p="FSharp.Data.GraphQL.Benchmarks" t="IncludeRecursive">
+          <e p="AsyncSchema.fs" t="Include" />
+          <e p="AsyncValBenchmark.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="ExecutionBenchmark.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Benchmarks.fsproj" t="IncludeRecursive" />
+          <e p="MiddlewareBenchmark.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="paket.references" t="Include" />
+          <e p="ParsingBenchmark.fs" t="Include" />
+          <e p="Program.fs" t="Include" />
+          <e p="Prolog.fs" t="Include" />
+          <e p="Schema.fs" t="Include" />
+        </e>
+        <e p="FSharp.Data.GraphQL.Tests" t="IncludeRecursive">
+          <e p="AbstractionTests.fs" t="Include" />
+          <e p="App.config" t="Include" />
+          <e p="AssemblyInfo.fs" t="Include" />
+          <e p="AstExtensionsTests.fs" t="Include" />
+          <e p="AstValidationTests.fs" t="Include" />
+          <e p="AsyncValTests.fs" t="Include" />
+          <e p="bin" t="ExcludeRecursive" />
+          <e p="CoercionTests.fs" t="Include" />
+          <e p="DeferredTests.fs" t="Include" />
+          <e p="DirectivesTests.fs" t="Include" />
+          <e p="ExecutionTests.fs" t="Include" />
+          <e p="ExecutorMiddlewareTests.fs" t="Include" />
+          <e p="FSharp.Data.GraphQL.Tests.fsproj" t="IncludeRecursive" />
+          <e p="Helpers.fs" t="Include" />
+          <e p="IntrospectionTests.fs" t="Include" />
+          <e p="LinqTests.fs" t="Include" />
+          <e p="Literals.fs" t="Include" />
+          <e p="MiddlewareTests.fs" t="Include" />
+          <e p="MutationTests.fs" t="Include" />
+          <e p="NameValueLookupTests.fs" t="Include" />
+          <e p="obj" t="ExcludeRecursive" />
+          <e p="ObservableExtensionsTests.fs" t="Include" />
+          <e p="paket.references" t="Include" />
+          <e p="ParserTests.fs" t="Include" />
+          <e p="PlanningTests.fs" t="Include" />
+          <e p="Program.fs" t="Include" />
+          <e p="PropertyTrackerTests.fs" t="Include" />
+          <e p="PropertyTrackingTests.fs" t="Include" />
+          <e p="Relay" t="Include">
+            <e p="ConnectionTests.fs" t="Include" />
+            <e p="MutationTests.fs" t="Include" />
+            <e p="NodeTests.fs" t="Include" />
+          </e>
+          <e p="ResolveTests.fs" t="Include" />
+          <e p="SchemaTests.fs" t="Include" />
+          <e p="SubscriptionTests.fs" t="Include" />
+          <e p="TypeValidationTests.fs" t="Include" />
+          <e p="UnionInterfaceTests.fs" t="Include" />
+          <e p="VariablesTests.fs" t="Include" />
+          <e p="xunit.runner.json" t="Include" />
+        </e>
+      </e>
+    </e>
+  </component>
+</project>

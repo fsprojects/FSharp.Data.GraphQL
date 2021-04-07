@@ -2,19 +2,9 @@ source https://api.nuget.org/v3/index.json
 
 nuget NuGet.CommandLine
 
-# This group is needed for packages that are not needed or don't work on Mono.
-group NetCoreAndStandard
-  source https://api.nuget.org/v3/index.json
-  frameworks: netcoreapp2.0, netstandard2.0
-
-  # System.Net.Http is broken on Mono (see https://github.com/dotnet/corefx/issues/19914).
-  # Mono hijacks its calls to its own version of System.Net.Http, so we should not reference or include the assembly
-  # in mono releases.
-  nuget System.Net.Http 4.3.4
-
 group Common
   source https://api.nuget.org/v3/index.json
-  frameworks: net461, netcoreapp2.0, netstandard2.0
+  frameworks: netcoreapp3.1, netstandard2.0
 
   nuget System.Reactive
 
@@ -34,7 +24,7 @@ group Common
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
-  frameworks: net47, netcoreapp3.1, netstandard2.0
+  frameworks: netcoreapp3.1, netstandard2.0
   
   nuget Microsoft.Extensions.Http 5
   nuget System.Net.Http 4.3.4

@@ -46,7 +46,7 @@ open Octokit
 
 let project = "FSharp.Data.GraphQL"
 let summary = "FSharp implementation of Facebook GraphQL query language"
-let gitOwner = "bazingatechnologies"
+let gitOwner = "fsprojects"
 let gitHome = "https://github.com/" + gitOwner
 let gitName = "FSharp.Data.GraphQL"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
