@@ -191,7 +191,7 @@ paket-files
 .ionide
 .idea
 *.orig
-.paket/paket.exe
+.paket/
 docs/content/license.md
 docs/content/release-notes.md
 .fake

@@ -5,6 +5,7 @@ on:
   push:
     branches:
     - master
+    - remove-desktop-build
     - dev
   pull_request:
     branches:
