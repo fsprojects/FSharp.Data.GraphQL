@@ -15,11 +15,6 @@ nuget FSharp.Core 4.7 //"
 
 #load ".fake/build.fsx/intellisense.fsx"
 
-#if !FAKE
-  #r "netstandard"
-  #r "Facades/netstandard"
-#endif
-
 open System
 open System.IO
 open System.Collections.Generic
