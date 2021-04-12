@@ -6,7 +6,7 @@ open Microsoft.AspNetCore.Hosting
 module Program =
     let exitCode = 0
 
-    let [<Literal>] BaseAddress = "localhost:8084"
+    let [<Literal>] BaseAddress = "localhost:8086"
 
     let buildWebHost args =
         WebHost

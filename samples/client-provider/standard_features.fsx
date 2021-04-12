@@ -20,7 +20,7 @@ open FSharp.Data.GraphQL
 
 // The URL here is for design time purposes.
 // It connects to the server to be able to map its schema.
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:8086">
 
 // You can also provide the introspection schema yourself if you can't access the server
 // at design time. Just provide a file in the path of the project or a literal containing
@@ -52,11 +52,11 @@ let operation =
     }""">()
 
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
-//let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
+//let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8086")
 
 // You can specify a connection factory to manage your connection lifecycle if you want.
 let connection = new GraphQLClientConnection()
-let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084", connectionFactory = fun () -> connection)
+let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8086", connectionFactory = fun () -> connection)
 
 // To run an operation, you just need to call the Run or AsyncRun method.
 let result = operation.Run(runtimeContext)

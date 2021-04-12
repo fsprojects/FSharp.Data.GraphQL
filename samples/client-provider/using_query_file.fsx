@@ -18,7 +18,7 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:8086">
 
 // If you pass a query file, it will load the query from it.
 let operation = MyProvider.Operation<"operation.graphql">()

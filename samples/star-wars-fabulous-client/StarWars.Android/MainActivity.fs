@@ -23,7 +23,7 @@ type MainActivity() =
         Xamarin.Essentials.Platform.Init(this, bundle)
         Xamarin.Forms.Forms.Init (this, bundle)
 
-        let url = "http://10.0.2.2:8084"
+        let url = "http://10.0.2.2:8086"
         let appcore  = new StarWars.App(url)
         this.LoadApplication (appcore)
 

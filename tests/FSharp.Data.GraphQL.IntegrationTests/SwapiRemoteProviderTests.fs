@@ -4,7 +4,7 @@ open Xunit
 open Helpers
 open FSharp.Data.GraphQL
 
-type Provider = GraphQLProvider<"http://localhost:8084">
+type Provider = GraphQLProvider<"http://localhost:8086">
 
 type Episode = Provider.Types.Episode
 
