@@ -64,7 +64,7 @@ Target.create "AssemblyInfo" (fun _ ->
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client.DesignTime"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
-        | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" -> 
+        | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" ->
             [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
               AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
         | _ -> []
@@ -112,54 +112,68 @@ Target.create "Build" <| fun _ ->
     |>  DotNet.build (fun o ->
             { o with Configuration = DotNet.BuildConfiguration.Release })
 
-/// The path to the .NET CLI executable.
-let dotNetCliExe = DotNet.Options.Create().DotNetCliPath
+let startGraphQLServer (project: string) (streamRef: DataRef<Stream>) =
+    DotNet.build (fun options ->
+        { options with
+            Configuration = DotNet.BuildConfiguration.Release}) project
 
-Target.create "RunTests" (fun _ ->
-    let restore =
-        DotNet.restore id
-    let build =
-        DotNet.build (fun options ->
-        { options with 
+    let projectName = Path.GetFileNameWithoutExtension(project)
+    let projectPath = Path.GetDirectoryName(project)
+    let serverExe = projectPath </> "bin" </> "Release" </> "net5.0" </> (projectName + ".dll")
+
+    CreateProcess.fromRawCommandLine "dotnet" serverExe
+    |> CreateProcess.withStandardInput (CreatePipe streamRef)
+    |> Proc.start
+    |> ignore
+
+    System.Threading.Thread.Sleep(2000)
+
+let runTests (project : string) =
+    DotNet.build (fun options ->
+        { options with
+            Configuration = DotNet.BuildConfiguration.Release} ) project
+    DotNet.test (fun options ->
+        { options with
             Configuration = DotNet.BuildConfiguration.Release
-            Common = { options.Common with 
-                        CustomParams = Some "--no-restore" } })
-    let runTests (project : string) =
-        restore project
-        build project
-        DotNet.test (fun options ->
-            { options with
-                Configuration = DotNet.BuildConfiguration.Release
-                Common = { options.Common with
-                            CustomParams = Some "--no-build -v=normal" } }) project
-    let startServer (serverProject:string) =
-        use waiter = new ManualResetEvent(false)
-        let serverProjectDir = Path.GetDirectoryName(serverProject)
-        let projectName = Path.GetFileNameWithoutExtension(serverProject)
-        let serverExe = "bin" </> "Release" </> "net5.0" </> (projectName + ".dll")
-        let stdHandler (msg : string) =
-            let expectedMessage = "Application started. Press Ctrl+C to shut down.".ToLowerInvariant()
-            if msg.ToLowerInvariant().Contains(expectedMessage)
-            then waiter.Set() |> ignore
-        let errHandler (msg : string) =
-            failwithf "Error while starting %s server. %s" msg projectName
-        restore serverProject
-        build serverProject
-        // The server executable must be run instead of the project.
-        // "dotnet run" command (used to run projects instead of the dll) spawns additional dotnet processes
-        // that are not handled as child processes, so FAKE will not be able to track and kill them after the tests are done.
-        CreateProcess.fromRawCommand dotNetCliExe [| serverExe |]
-        |> CreateProcess.withWorkingDirectory serverProjectDir
-        |> CreateProcess.redirectOutput
-        |> CreateProcess.withOutputEventsNotNull stdHandler errHandler
-        |> Proc.start
-        |> ignore // FAKE automatically kills all started processes at the end of the script, so we don't need to worry about finishing them
-        if not (waiter.WaitOne(TimeSpan.FromMinutes(float 2)))
-        then failwithf "Timeout while waiting for %s server to run. Can not run integration tests." projectName
+            Common = { options.Common with
+                        CustomParams = Some "--no-build -v=normal" } }) project
+
+let starWarsServerStream = StreamRef.Empty
+Target.create "StartStarWarsServer" (fun _ ->
+    Target.activateFinal "StopStarWarsServer"
+    let project = "samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
+    startGraphQLServer project starWarsServerStream
+)
+
+Target.createFinal "StopStarWarsServer" (fun _ ->
+    try
+        starWarsServerStream.Value.Write([|0uy|],0,1)
+    with
+    | e -> printfn "%s" e.Message
+)
+
+
+let integrationServerStream = StreamRef.Empty
+Target.create "StartIntegrationServer" (fun _ ->
+    Target.activateFinal "StopIntegrationServer"
+    let project = "tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj"
+    startGraphQLServer project integrationServerStream
+)
+
+Target.createFinal "StopIntegrationServer" (fun _ ->
+    try
+        integrationServerStream.Value.Write([|0uy|],0,1)
+    with
+    | e -> printfn "%s" e.Message
+)
+
+Target.create "RunUnitTests" (fun _ ->
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-    startServer ("samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj")
-    startServer ("tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj")
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj")
+)
+
+Target.create "RunIntegrationTests" (fun _ ->
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+)
 
 // --------------------------------------------------------------------------------------
 // Generate the documentation
@@ -291,9 +305,9 @@ let makeRelease draft owner project version prerelease (notes:seq<string>) (clie
             DraftRelease = draft }
     }
 
-let createDraft owner project version prerelease notes client = 
+let createDraft owner project version prerelease notes client =
     makeRelease true owner project version prerelease notes client
-    
+
 let releaseDraft (draft : Async<Draft>) =
     retryWithArg 5 draft <| fun draft' -> async {
         let update = draft'.DraftRelease.ToUpdate()
@@ -303,7 +317,7 @@ let releaseDraft (draft : Async<Draft>) =
     }
 
 Target.create "Release" (fun _ ->
-    let user = 
+    let user =
         match Environment.environVarOrDefault "github-user" System.String.Empty with
         | s when not (String.IsNullOrWhiteSpace s) -> s
         | _ -> UserInput.getUserInput "Username: "
@@ -389,7 +403,10 @@ Target.create "All" ignore
   ==> "Restore"
   =?> ("AssemblyInfo", BuildServer.isLocalBuild)
   ==> "Build"
-  ==> "RunTests"
+  ==> "RunUnitTests"
+  ==> "StartStarWarsServer"
+  ==> "StartIntegrationServer"
+  ==> "RunIntegrationTests"
   ==> "All"
   =?> ("GenerateReferenceDocs", Environment.environVar "APPVEYOR" = "True")
   =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
