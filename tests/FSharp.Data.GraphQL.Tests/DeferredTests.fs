@@ -1437,7 +1437,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         |> itemEquals 1 expectedDeferred2
         |> ignore
 
-[<Fact>]
+[<Fact(Skip="Flaky test")>]
 let ``Each deferred result of a list should be sent as soon as it is computed`` () =
     let expectedDirect =
         NameValueLookup.ofList [
