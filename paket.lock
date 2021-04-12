@@ -59,8 +59,8 @@ NUGET
       System.Runtime.CompilerServices.Unsafe (>= 4.5.3) - restriction: || (&& (== net50) (>= net461)) (&& (== net50) (< netcoreapp2.1)) (&& (== net50) (< netstandard1.0)) (&& (== net50) (< netstandard2.0)) (&& (== net50) (>= wp8)) (== netstandard2.0)
 GITHUB
   remote: fsprojects/FSharp.TypeProviders.SDK
-    src/ProvidedTypes.fs (c8fc89b0e8bac34e321372b004de76d600651cda)
-    src/ProvidedTypes.fsi (c8fc89b0e8bac34e321372b004de76d600651cda)
+    src/ProvidedTypes.fs (377d56321ad062985ed5aa19f205c1c4f04ef328)
+    src/ProvidedTypes.fsi (377d56321ad062985ed5aa19f205c1c4f04ef328)
 GROUP TestsAndSamples
 RESTRICTION: || (== net50) (== netstandard2.0)
 NUGET

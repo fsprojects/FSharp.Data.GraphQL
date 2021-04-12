@@ -12,17 +12,13 @@ summary
 description
     FSharp implementation of Facebook GraphQL query language (Client)
 files
-    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll ==> lib/netstandard2.0
-    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0
-    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> lib/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FParsec.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FParsecCS.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/netstandard2.0
+    bin/Release/netstandard2.0/*.* ==> lib/netstandard2.0
+    bin/Release/typeproviders/fsharp41/netstandard2.0/*.* ==> typeproviders/fsharp41/netstandard2.0
+
 references
-    FSharp.Data.GraphQL.Client.dll
     FSharp.Data.GraphQL.Shared.dll
+    FSharp.Data.GraphQL.Client.dll
+
 dependencies
 	framework: netstandard2.0
 		FSharp.Core >= LOCKEDVERSION-Common

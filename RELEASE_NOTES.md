@@ -155,3 +155,7 @@
 
 ### 1.0.7 - December 30 2020
 * Add static TypeProvider parameter `explicitOptionalParameters`.
+
+### 1.0.8 - April 09 2021
+* Remove Desktop build
+* Fix build scripts
