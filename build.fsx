@@ -381,6 +381,10 @@ Target.create "PublishMiddleware" (fun _ ->
     publishPackage "Server.Middleware"
 )
 
+Target.create "PackShared" (fun _ ->
+    pack "Shared"
+)
+
 Target.create "PackServer" (fun _ ->
     pack "Server"
 )
@@ -398,6 +402,7 @@ Target.create "PackMiddleware" (fun _ ->
 // Run all targets by default. Invoke 'build -t <Target>' to override
 
 Target.create "All" ignore
+Target.create "PackAll" ignore
 
 "Clean"
   ==> "Restore"
@@ -425,5 +430,11 @@ Target.create "All" ignore
 
 "ReleaseDocs"
   ==> "Release"
+
+"PackShared"
+  ==> "PackServer"
+  ==> "PackClient"
+  ==> "PackMiddleware"
+  ==> "PackAll"
 
 Target.runOrDefault "All"

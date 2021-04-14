@@ -159,3 +159,9 @@
 ### 1.0.8 - April 09 2021
 * Remove Desktop build
 * Fix build scripts
+
+### 1.0.9 - April 09 2021
+* TP Bugfixes
+
+### 1.0.10 - April 09 2021
+* TP Bugfixes
