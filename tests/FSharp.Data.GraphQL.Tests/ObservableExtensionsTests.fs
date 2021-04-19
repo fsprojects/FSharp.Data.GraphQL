@@ -63,7 +63,7 @@ let ``ofSeq on an empty sequence should call OnComplete and return items in expe
 
 [<Fact>]
 let ``ofAsyncSeq should call OnComplete and return items in expected order`` () =
-    let source = seq { 
+    let source = seq {
         yield delay 300 2
         yield delay 100 1
         yield delay 200 3 }
@@ -74,7 +74,7 @@ let ``ofAsyncSeq should call OnComplete and return items in expected order`` () 
 
 [<Fact>]
 let ``ofAsyncValSeq should call OnComplete and return items in expected order`` () =
-    let source = seq { 
+    let source = seq {
         yield delay 300 2 |> AsyncVal.ofAsync
         yield delay 100 1 |> AsyncVal.ofAsync
         yield delay 200 3 |> AsyncVal.ofAsync }
@@ -85,7 +85,7 @@ let ``ofAsyncValSeq should call OnComplete and return items in expected order`` 
 
 [<Fact>]
 let ``bufferByTiming should call OnComplete and return items in expected order`` () =
-    let source = seq { 
+    let source = seq {
         yield delay 400 2
         yield delay 100 1
         yield delay 200 3 }
@@ -96,7 +96,7 @@ let ``bufferByTiming should call OnComplete and return items in expected order``
 
 [<Fact>]
 let ``bufferByElementCount should call OnComplete and return items in expected order`` () =
-    let source = seq { 
+    let source = seq {
         yield delay 400 2
         yield delay 100 1
         yield delay 200 3 }
@@ -107,7 +107,7 @@ let ``bufferByElementCount should call OnComplete and return items in expected o
 
 [<Fact>]
 let ``bufferByTimingAndElementCount should call OnComplete and return items in expected order`` () =
-    let source = seq { 
+    let source = seq {
         yield delay 500 2
         yield delay 50 1
         yield delay 100 3
@@ -122,10 +122,10 @@ type IndexException(index : int) =
     member __.Index = index
 
 [<Fact>]
-let ``catch should call OnComplete and return items in expected order`` () =   
+let ``catch should call OnComplete and return items in expected order`` () =
     let source : int seq = seq { for x in 1 .. 5 do yield raise <| IndexException(x) }
-    let obs = 
-        Observable.ofSeq source 
+    let obs =
+        Observable.ofSeq source
         |> Observable.catch (fun (ex : IndexException) -> ex.Index |> Observable.singleton)
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
@@ -134,7 +134,7 @@ let ``catch should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``choose should cal OnComplete`` () =
     let source = seq { for x in 1 .. 5 do yield x }
-    let obs = 
+    let obs =
         Observable.ofSeq source
         |> Observable.choose (fun x -> match x % 2 with | 0 -> Some x | _ -> None)
     use sub = Observer.create obs
@@ -143,7 +143,7 @@ let ``choose should cal OnComplete`` () =
 
 [<Fact>]
 let ``concat should call OnComplete and return items in expected order`` () =
-    let source1 = seq { 
+    let source1 = seq {
         yield delay 500 2
         yield delay 100 1
         yield delay 200 3 }
@@ -161,7 +161,7 @@ let ``concat should call OnComplete and return items in expected order`` () =
 
 [<Fact>]
 let ``concat2 should call OnComplete and return items in expected order`` () =
-    let source1 = seq { 
+    let source1 = seq {
         yield delay 500 2
         yield delay 100 1
         yield delay 200 3 }
@@ -177,7 +177,7 @@ let ``concat2 should call OnComplete and return items in expected order`` () =
 
 [<Fact>]
 let ``merge should call OnComplete and return items in expected order`` () =
-    let source1 = seq { 
+    let source1 = seq {
         yield delay 500 2
         yield delay 100 1
         yield delay 200 3 }
@@ -195,7 +195,7 @@ let ``merge should call OnComplete and return items in expected order`` () =
 
 [<Fact>]
 let ``merge2 should call OnComplete and return items in expected order`` () =
-    let source1 = seq { 
+    let source1 = seq {
         yield delay 500 2
         yield delay 100 1
         yield delay 200 3 }

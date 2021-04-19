@@ -93,7 +93,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             if lookup.Count > 0 then
                 sb.Append("{ ") |> ignore
                 lookup.Buffer
-                |> Array.iter (fun kv -> 
+                |> Array.iter (fun kv ->
                     sb.Append(kv.Key).Append(": ") |> ignore
                     stringify sb (deep+1) kv.Value
                     sb.Append(",\r\n") |> ignore
@@ -103,7 +103,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             sb.Append("\"").Append(s).Append("\"") |> ignore
         | :? System.Collections.IEnumerable as s ->
             sb.Append("[") |> ignore
-            for i in s do 
+            for i in s do
                 stringify sb (deep + 1) i
                 sb.Append(", ") |> ignore
             sb.Append("]") |> ignore
@@ -233,8 +233,8 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
-      Variables = ctx.Variables }         
-                
+      Variables = ctx.Variables }
+
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
     then
@@ -460,7 +460,7 @@ and private live (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (v
         match filter with
         | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate
         | None -> failwithf "No live provider for %s:%s" typeName name
-  
+
     executeResolvers ctx path parent (value |> Some |> AsyncVal.wrap)
     |> AsyncVal.map(Result.map(fun (data, deferred, errs) -> (data, Some <| Option.fold Observable.merge2 updates deferred, errs)))
 
@@ -528,7 +528,7 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
         | Ok(kvps, def, errs) -> return Ok (KeyValuePair(objName, box <| NameValueLookup(kvps)), def, errs)
     }
 
-let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
+let internal compileSubscriptionField (subfield: SubscriptionFieldDef) =
     match subfield.Resolve with
     | Resolve.BoxedFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> AsyncVal.wrap |> AsyncVal.toAsync
     | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> filter

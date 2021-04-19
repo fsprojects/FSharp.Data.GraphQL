@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Client
 /// The base type for all GraphQLProvider upload types.
 /// Upload types are used in GraphQL multipart request spec, mostly for file uploading features.
 type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStream : bool) =
-    new(bytes : byte [], fileName, ?contentType) = 
+    new(bytes : byte [], fileName, ?contentType) =
         let stream = new MemoryStream(bytes)
         match contentType with
         | Some ct -> new Upload(stream, fileName, ct, true)
@@ -28,7 +28,7 @@ type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStr
             match MimeTypes.dict.Force().TryGetValue(ext) with
             | (true, mime) -> mime
             | _ -> "application/octet-stream"
-        
+
     /// Gets the name of the file which contained on the stream.
     member __.FileName = fileName
 

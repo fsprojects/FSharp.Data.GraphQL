@@ -10,20 +10,20 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Linq
 open FSharp.Data.GraphQL.Execution
 
-type Contact = 
+type Contact =
     { Email : string }
 
-type Person = 
+type Person =
     { ID : int
       FirstName : string
       LastName : string
       Contact : Contact
       Friends : Contact list }
-      
+
 let Contact = Define.Object("Contact", [ Define.Field("email", String, fun _ x -> x.Email) ])
 
-let Person = 
-    Define.Object<Person>("Person", 
+let Person =
+    Define.Object<Person>("Person",
                           [ Define.Field("id", ID, fun _ x -> x.ID)
                             Define.AutoField("firstName", String)
                             Define.Field("lastName", String, fun _ x -> x.LastName)
@@ -32,12 +32,12 @@ let Person =
                             Define.Field("email", String, fun _ x -> x.Contact.Email)
                             Define.Field("friends", ListOf Contact, fun _ x -> x.Friends) ])
 
-let data = 
+let data =
     [ { ID = 4
         FirstName = "Ben"
         LastName = "Adams"
         Contact = { Email = "b.adams@gmail.com" }
-        Friends = 
+        Friends =
             [ { Email = "j.abrams@gmail.com" }
               { Email = "l.trif@gmail.com" } ] }
       { ID = 2
@@ -53,13 +53,13 @@ let data =
 
 let undefined<'t> = Unchecked.defaultof<'t>
 
-let resolveRoot ctx () = 
+let resolveRoot ctx () =
     let info = ctx.ExecutionInfo
     let queryable = data.AsQueryable()
     let result = queryable.Apply(info) |> Seq.toList
     result
 
-let linqArgs = 
+let linqArgs =
     [ Define.Input("id", ID<int>)
       Define.Input("skip", Int)
       Define.Input("take", Int)
@@ -70,10 +70,10 @@ let linqArgs =
       Define.Input("before", String)
       Define.Input("after", String) ]
 
-let schema = 
-    Schema(Define.Object("RootQuery", 
-                         [ Define.Field("people", ListOf Person, "", linqArgs, 
-                                        fun ctx () -> 
+let schema =
+    Schema(Define.Object("RootQuery",
+                         [ Define.Field("people", ListOf Person, "", linqArgs,
+                                        fun ctx () ->
                                             let info = ctx.ExecutionInfo
                                             let queryable = data.AsQueryable()
                                             let result = queryable.Apply(info) |> Seq.toList
@@ -82,7 +82,7 @@ let schema =
 let schemaProcessor = Executor(schema)
 
 [<Fact>]
-let ``LINQ interpreter works with auto-fields``() = 
+let ``LINQ interpreter works with auto-fields``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people {
@@ -100,7 +100,7 @@ let ``LINQ interpreter works with auto-fields``() =
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with fields with defined resolvers``() = 
+let ``LINQ interpreter works with fields with defined resolvers``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people {
@@ -118,7 +118,7 @@ let ``LINQ interpreter works with fields with defined resolvers``() =
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with fields referring to nested property resolver``() = 
+let ``LINQ interpreter works with fields referring to nested property resolver``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people {
@@ -136,7 +136,7 @@ let ``LINQ interpreter works with fields referring to nested property resolver``
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with nested collections``() = 
+let ``LINQ interpreter works with nested collections``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people {
@@ -194,7 +194,7 @@ let ``LINQ interpreter resolves multiple properties from complex resolvers``() =
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with id arg``() = 
+let ``LINQ interpreter works with id arg``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people(id: 2) {
@@ -214,7 +214,7 @@ let ``LINQ interpreter works with id arg``() =
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with skip arg``() = 
+let ``LINQ interpreter works with skip arg``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people(skip: 2) {
@@ -234,7 +234,7 @@ let ``LINQ interpreter works with skip arg``() =
     result.Friends |> equals undefined
 
 [<Fact>]
-let ``LINQ interpreter works with take arg``() = 
+let ``LINQ interpreter works with take arg``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people(take: 2) {
@@ -251,7 +251,7 @@ let ``LINQ interpreter works with take arg``() =
                        (2, "Jonathan") ]
 
 [<Fact>]
-let ``LINQ interpreter works with orderBy arg``() = 
+let ``LINQ interpreter works with orderBy arg``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people(orderBy: "firstName") {
@@ -269,7 +269,7 @@ let ``LINQ interpreter works with orderBy arg``() =
                        (2, "Jonathan") ]
 
 [<Fact>]
-let ``LINQ interpreter works with orderByDesc arg``() = 
+let ``LINQ interpreter works with orderByDesc arg``() =
     let plan = schemaProcessor.CreateExecutionPlan """
     query Example {
         people(orderByDesc: "firstName") {

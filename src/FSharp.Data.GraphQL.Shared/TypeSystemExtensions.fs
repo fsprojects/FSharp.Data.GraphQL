@@ -12,9 +12,9 @@ type FieldResolveMiddleware<'Val, 'Res> =
     ResolveFieldContext -> 'Val -> (ResolveFieldContext -> 'Val -> 'Res) -> 'Res
 
 type internal CustomFieldsObjectDefinition<'Val>(source : ObjectDef<'Val>, fields: FieldDef<'Val> seq) =
-    let exists fname = 
+    let exists fname =
         fields |> Seq.exists (fun x -> x.Name = fname)
-    let fields = 
+    let fields =
         source.Fields
         |> Map.toSeq
         |> Seq.filter (fun (n, _) -> not (exists n))
@@ -47,9 +47,9 @@ type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, 
         member __.Args = source.Args
         member __.Metadata = source.Metadata
         member __.Resolve =
-            let changeResolver expr = 
+            let changeResolver expr =
                 let expr =
-                    match expr with 
+                    match expr with
                     | WithValue (_, _, e) -> e
                     | _ -> failwith "Unexpected resolver expression."
                 let resolver = <@ fun ctx input -> middleware ctx input %%expr @>

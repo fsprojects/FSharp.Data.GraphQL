@@ -18,11 +18,11 @@ type Root =
 
 let ValueType =
     Define.Object<Value>(
-        name = "Value", 
-        fieldsFn = fun () -> 
+        name = "Value",
+        fieldsFn = fun () ->
         [
             Define.Field("id", Int, (fun _ d -> d.Id))
-            Define.Field("data", String, (fun _ d -> d.Data)) 
+            Define.Field("data", String, (fun _ d -> d.Data))
         ])
 
 let RootType =
@@ -38,18 +38,18 @@ let values = [ { Id = 1; Data = "Value 1" }; { Id = 2; Data = "Value 2" } ]
 let getValue id =
     values |> Seq.tryFind (fun x -> x.Id = id)
 
-let Query = 
+let Query =
     Define.Object<Root>(
         name = "Query",
         fieldsFn = fun () -> [ Define.Field("values", ListOf ValueType, (fun _ _ -> values)) ] )
 
 let SubscriptionField =
     Define.SubscriptionField(
-        "watchData", 
-        RootType, 
-        ValueType, 
-        "Get's updated data", 
-        [ Define.Input("id", Int) ], 
+        "watchData",
+        RootType,
+        ValueType,
+        "Get's updated data",
+        [ Define.Input("id", Int) ],
         fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None)
 
 let TaggedSubscriptionField =
@@ -58,17 +58,17 @@ let TaggedSubscriptionField =
         RootType,
         ValueType,
         "Get's updated data if key is correct",
-        [ Define.Input("id", Int); Define.Input("key", String) ], 
+        [ Define.Input("id", Int); Define.Input("key", String) ],
         (fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None),
         tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 
 let AsyncSubscriptionField =
     Define.AsyncSubscriptionField(
-        "watchDataAsync", 
-        RootType, 
-        ValueType, 
-        "Get's updated data asynchronously on the server", 
-        [ Define.Input("id", Int) ], 
+        "watchDataAsync",
+        RootType,
+        ValueType,
+        "Get's updated data asynchronously on the server",
+        [ Define.Input("id", Int) ],
         fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) })
 
 let AsyncTaggedSubscriptionField =
@@ -77,7 +77,7 @@ let AsyncTaggedSubscriptionField =
         RootType,
         ValueType,
         "Get's updated data asynchronously on the server if key is correct",
-        [ Define.Input("id", Int); Define.Input("key", String) ], 
+        [ Define.Input("id", Int); Define.Input("key", String) ],
         (fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) }),
         tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 

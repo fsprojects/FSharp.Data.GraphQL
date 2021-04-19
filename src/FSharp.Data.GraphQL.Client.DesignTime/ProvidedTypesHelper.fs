@@ -718,7 +718,7 @@ module internal Provider =
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
-                       
+
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)

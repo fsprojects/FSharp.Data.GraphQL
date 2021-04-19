@@ -21,7 +21,7 @@ module ReflectionPatterns =
            typeof<byte>
            typeof<sbyte> |]
 
-    let isOption (t : Type) = 
+    let isOption (t : Type) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
     let isMap (t : Type) =

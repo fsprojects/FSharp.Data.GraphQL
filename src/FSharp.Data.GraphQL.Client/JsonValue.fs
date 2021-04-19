@@ -38,7 +38,7 @@ type JsonValue =
   | Record of properties:(string * JsonValue)[]
   | Array of elements:JsonValue[]
   | Boolean of bool
-  | Null  
+  | Null
 
   ///  <exclude />
   [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
@@ -70,11 +70,11 @@ type JsonValue =
           JsonValue.JsonStringEncodeTo w s
           w.Write "\""
       | Record properties ->
-          w.Write "{"                      
+          w.Write "{"
           for i = 0 to properties.Length - 1 do
             let k,v = properties.[i]
             if i > 0 then w.Write ","
-            newLine indentation 2            
+            newLine indentation 2
             w.Write "\""
             JsonValue.JsonStringEncodeTo w k
             w.Write propSep
@@ -90,17 +90,17 @@ type JsonValue =
           if elements.Length > 0 then
             newLine indentation 0
           w.Write "]"
-    serialize 0 x 
+    serialize 0 x
 
   static member internal JsonStringEncodeTo (w:TextWriter) (value:string) =
     if String.IsNullOrEmpty value then ()
-    else 
+    else
       for i = 0 to value.Length - 1 do
         let c = value.[i]
         let ci = int c
         if ci >= 0 && ci <= 7 || ci = 11 || ci >= 14 && ci <= 31 then
           w.Write("\\u{0:x4}", ci) |> ignore
-        else 
+        else
           match c with
           | '\b' -> w.Write "\\b"
           | '\t' -> w.Write "\\t"
@@ -133,7 +133,7 @@ type private JsonParser(jsonText:string) =
     let throw() =
       let msg =
         sprintf
-          "Invalid JSON starting at character %d, snippet = \n----\n%s\n-----\njson = \n------\n%s\n-------" 
+          "Invalid JSON starting at character %d, snippet = \n----\n%s\n-----\njson = \n------\n%s\n-------"
           i (jsonText.[(max 0 (i-10))..(min (jsonText.Length-1) (i+10))]) (if jsonText.Length > 1000 then jsonText.Substring(0, 1000) else jsonText)
       failwith msg
     let ensure cond =
@@ -194,7 +194,7 @@ type private JsonParser(jsonText:string) =
                     let unicodeChar (s:string) =
                         if s.Length <> 8 then failwith "unicodeChar";
                         if s.[0..1] <> "00" then failwith "unicodeChar";
-                        UnicodeHelper.getUnicodeSurrogatePair <| System.UInt32.Parse(s, NumberStyles.HexNumber) 
+                        UnicodeHelper.getUnicodeSurrogatePair <| System.UInt32.Parse(s, NumberStyles.HexNumber)
                     let lead, trail = unicodeChar (s.Substring(i+2, 8))
                     buf.Append(lead) |> ignore
                     buf.Append(trail) |> ignore

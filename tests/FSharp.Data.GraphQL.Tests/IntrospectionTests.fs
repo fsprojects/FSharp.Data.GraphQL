@@ -38,16 +38,16 @@ let inputFieldQuery = """{
 
 [<Fact>]
 let ``Input field should be marked as nullable when defaultValue is provided`` () =
-    let root = Define.Object("Query", [ 
-        Define.Field("onlyField", String, "The only field", [ 
-            Define.Input("in", String, defaultValue = "1") 
-        ], fun _ _ -> "Only value") 
+    let root = Define.Object("Query", [
+        Define.Field("onlyField", String, "The only field", [
+            Define.Input("in", String, defaultValue = "1")
+        ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
     let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
-            "fields", upcast [ 
+            "fields", upcast [
                 NameValueLookup.ofList [
                     "name", upcast "onlyField"
                     "args", upcast [
@@ -60,7 +60,7 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
                             "defaultValue", upcast "1"
                         ]
                     ]
-                ] 
+                ]
             ]
         ]
     ]
@@ -72,16 +72,16 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
 
 [<Fact>]
 let ``Input field should be marked as non-nullable when defaultValue is not provided`` () =
-    let root = Define.Object("Query", [ 
-        Define.Field("onlyField", String, "The only field", [ 
-            Define.Input("in", String) 
-        ], fun _ _ -> "Only value") 
+    let root = Define.Object("Query", [
+        Define.Field("onlyField", String, "The only field", [
+            Define.Input("in", String)
+        ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
     let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
-            "fields", upcast [ 
+            "fields", upcast [
                 NameValueLookup.ofList [
                     "name", upcast "onlyField"
                     "args", upcast [
@@ -94,7 +94,7 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
                             "defaultValue", null
                         ]
                     ]
-                ] 
+                ]
             ]
         ]
     ]
@@ -106,16 +106,16 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
 
 [<Fact>]
 let ``Input field should be marked as nullable when its type is nullable`` () =
-    let root = Define.Object("Query", [ 
-        Define.Field("onlyField", String, "The only field", [ 
-            Define.Input("in", Nullable String) 
-        ], fun _ _ -> "Only value") 
+    let root = Define.Object("Query", [
+        Define.Field("onlyField", String, "The only field", [
+            Define.Input("in", Nullable String)
+        ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
     let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
-            "fields", upcast [ 
+            "fields", upcast [
                 NameValueLookup.ofList [
                     "name", upcast "onlyField"
                     "args", upcast [
@@ -128,7 +128,7 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
                             "defaultValue", null
                         ]
                     ]
-                ] 
+                ]
             ]
         ]
     ]
@@ -140,16 +140,16 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
 
 [<Fact>]
 let ``Input field should be marked as nullable when its type is nullable and have default value provided`` () =
-    let root = Define.Object("Query", [ 
-        Define.Field("onlyField", String, "The only field", [ 
-            Define.Input("in", Nullable String, defaultValue = Some "1") 
-        ], fun _ _ -> "Only value") 
+    let root = Define.Object("Query", [
+        Define.Field("onlyField", String, "The only field", [
+            Define.Input("in", Nullable String, defaultValue = Some "1")
+        ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
     let result = sync <| Executor(schema).AsyncExecute(inputFieldQuery)
     let expected = NameValueLookup.ofList [
         "__type", upcast NameValueLookup.ofList [
-            "fields", upcast [ 
+            "fields", upcast [
                 NameValueLookup.ofList [
                     "name", upcast "onlyField"
                     "args", upcast [
@@ -162,7 +162,7 @@ let ``Input field should be marked as nullable when its type is nullable and hav
                             "defaultValue", upcast "1"
                         ]
                     ]
-                ] 
+                ]
             ]
         ]
     ]
@@ -178,29 +178,29 @@ let ``Introspection schema should be serializable back and forth using json`` ()
     let schema = Schema(root)
     let query = """query IntrospectionQuery {
       __schema {
-        queryType { 
+        queryType {
           kind
           name
           description
           ofType {
             ...FullType
-          } 
+          }
         }
-        mutationType { 
+        mutationType {
           kind
           name
           description
           ofType {
             ...FullType
-          } 
+          }
         }
-        subscriptionType { 
+        subscriptionType {
           kind
           name
-          description 
+          description
           ofType {
             ...FullType
-          } 
+          }
         }
         types {
           ...FullType
@@ -324,22 +324,22 @@ type UserInput = { Name: string }
 
 [<Fact>]
 let ``Introspection works with query and mutation sharing same generic param`` =
-    let user = 
-        Define.Object<User>("User", 
+    let user =
+        Define.Object<User>("User",
             [ Define.AutoField("firstName", String)
               Define.AutoField("lastName", String) ])
-    let userInput = 
-        Define.InputObject<UserInput>("UserInput", 
+    let userInput =
+        Define.InputObject<UserInput>("UserInput",
             [ Define.Input("name", String) ])
-    let query = 
-        Define.Object<User list>("Query", 
+    let query =
+        Define.Object<User list>("Query",
             [ Define.Field("users", ListOf user, "Query object", [ Define.Input("input", userInput) ], fun _ u -> u) ])
-    let mutation = 
-        Define.Object<User list>("Mutation", 
+    let mutation =
+        Define.Object<User list>("Mutation",
             [ Define.Field("addUser", user, "Adds an user", [ Define.Input("input", userInput) ], fun _ u -> u |> List.head)])
     let schema = Schema(query, mutation)
     Executor(schema).AsyncExecute(Introspection.IntrospectionQuery) |> sync |> ignore
-    
+
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
@@ -384,7 +384,7 @@ let ``Default field type definitions are considered non-null`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", Nullable String) ])
@@ -426,7 +426,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Int) ], fun _ () -> null) ])
@@ -713,7 +713,7 @@ let ``Introspection executes an introspection query`` () =
                                               "ofType", upcast NameValueLookup.ofList [
                                                       "kind", upcast "LIST"
                                                       "name", null
-                                                      "ofType", upcast NameValueLookup.ofList [ 
+                                                      "ofType", upcast NameValueLookup.ofList [
                                                             "kind", upcast "NON_NULL"
                                                             "name", null
                                                             "ofType", upcast NameValueLookup.ofList [

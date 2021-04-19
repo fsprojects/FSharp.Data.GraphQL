@@ -147,14 +147,14 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     let mre = new ManualResetEvent(false)
     let mutable subscription = Unchecked.defaultof<IDisposable>
     do subscription <- obs.Subscribe(this)
-    member __.Received 
+    member __.Received
         with get() = received.AsEnumerable()
     member __.WaitCompleted(?expectedItemCount, ?timeout) =
         let ms = defaultArg timeout 30
         if TimeSpan.FromSeconds(float ms) |> mre.WaitOne |> not
         then fail "Timeout waiting for OnCompleted"
         match expectedItemCount with
-        | Some x -> 
+        | Some x ->
             if received.Count < x
             then failwithf "Expected to receive %i items, but received %i\nItems: %A" x received.Count received
         | None -> ()
@@ -162,24 +162,24 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
         let errorMsg = sprintf "Expected to receive least %i items, but received %i\nItems: %A" expectedItemCount received.Count received
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
     member x.WaitForItem() = x.WaitForItems(1)
-    member __.IsCompleted 
+    member __.IsCompleted
         with get() = isCompleted
     interface IObserver<'T> with
-        member __.OnCompleted() = 
+        member __.OnCompleted() =
             isCompleted <- true
             mre.Set() |> ignore
         member __.OnError(error) = raise error
-        member __.OnNext(value) = 
+        member __.OnNext(value) =
             received.Add(value)
             onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
-        member __.Dispose() = 
+        member __.Dispose() =
             subscription.Dispose()
             mre.Dispose()
 
 [<RequireQualifiedAccess>]
 module Observer =
-    let create (sub : IObservable<'T>) = 
+    let create (sub : IObservable<'T>) =
         new TestObserver<'T>(sub)
 
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =

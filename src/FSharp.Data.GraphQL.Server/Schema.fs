@@ -22,9 +22,9 @@ type private ChannelBag() =
         untagged.Add(channel)
         let adder tag =
             match tagged.TryGetValue(tag) with
-            | true, channels -> 
+            | true, channels ->
                 channels.Add(channel)
-            | false, _ -> 
+            | false, _ ->
                 let channels = List<Channel>()
                 channels.Add(channel)
                 tagged.Add(tag, channels)
@@ -72,7 +72,7 @@ type SchemaConfig =
             member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
                 let tags = subdef.TagsResolver ctx
                 match subscriptionManager.TryGet(subdef.Name) with
-                | Some (sub, channels) -> 
+                | Some (sub, channels) ->
                     channels.AddNew(tags)
                     |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
                     |> Observable.choose id
@@ -82,7 +82,7 @@ type SchemaConfig =
                 match subscriptionManager.TryGet(name) with
                 | Some (_, channels) -> channels.GetAll() |> Seq.iter (fun channel -> channel.OnNext(value))
                 | None -> () }
-                
+
             member __.AsyncPublishTag<'T> (name: string) (tag : Tag) (value: 'T) = async {
                 match subscriptionManager.TryGet(name) with
                 | Some (_, channels) -> channels.GetByTag(tag) |> Seq.iter (fun channel -> channel.OnNext(value))
@@ -138,15 +138,15 @@ type SchemaConfig =
         let streamDirective =
             let args = [|
                 Define.Input(
-                    "interval", 
-                    Nullable Int, 
+                    "interval",
+                    Nullable Int,
                     defaultValue = streamOptions.Interval,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered for milliseconds equal to the value, then sent to the client. " +
                         "After that, starts buffering again until all results are streamed.")
                 Define.Input(
-                    "preferredBatchSize", 
-                    Nullable Int, 
+                    "preferredBatchSize",
+                    Nullable Int,
                     defaultValue = streamOptions.PreferredBatchSize,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered until item count reaches this value, then sent to the client. " +
@@ -214,7 +214,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         // We need this so a default value that is an option is not printed as "Some"
-        let stringify = 
+        let stringify =
             function
             | ObjectOption x -> string x
             | x -> string x
@@ -234,7 +234,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
         { Name = subdef.Name
           Description = subdef.Description
-          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Args = subdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes subdef.OutputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
