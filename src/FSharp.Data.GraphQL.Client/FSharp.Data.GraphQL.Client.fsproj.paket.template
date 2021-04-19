@@ -20,4 +20,5 @@ dependencies
 	framework: netstandard2.0
         FSharp.Core >= LOCKEDVERSION-Common
         FParsec >= LOCKEDVERSION-Common
+        Microsoft.Extensions.Http >= LOCKEDVERSION-Common
         FSharp.Data.GraphQL.Shared >= CURRENTVERSION

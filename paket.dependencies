@@ -16,6 +16,8 @@ group Common
   # This should not be a problem since FParsec almost never gets a new release.
   nuget FParsec 1.1.1
 
+  nuget Microsoft.Extensions.Http 5
+
   # Those are needed for the client type provider.
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fsi
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fs
