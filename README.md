@@ -2,8 +2,7 @@
 
 F# implementation of Facebook [GraphQL query language specification](https://facebook.github.io/graphql).
 
-[![Build Status](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL.svg?branch=dev)](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL)
-[![Build status](https://ci.appveyor.com/api/projects/status/qnra6sshi2ywrbig/branch/dev?svg=true)](https://ci.appveyor.com/project/bazingatechnologies/fsharp-data-graphql-tx31m/branch/dev) [![Join the chat at https://gitter.im/FSharp-Data-GraphQL/community](https://badges.gitter.im/FSharp-Data-GraphQL/community.svg)](https://gitter.im/FSharp-Data-GraphQL/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL.svg?branch=dev)](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/dotnetcore.yml/badge.svg)
 
 ## Quick start
 
