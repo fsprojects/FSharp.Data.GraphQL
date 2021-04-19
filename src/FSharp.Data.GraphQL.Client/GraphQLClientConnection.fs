@@ -29,6 +29,6 @@ type GraphQLClientConnection(invoker : HttpMessageInvoker, ownsInvoker : bool) =
 
     /// The System.Net.Http.HttpMessageInvoker used by this connection.
     member __.Invoker = invoker
-    
+
     interface IDisposable with
         member __.Dispose() = if ownsInvoker then invoker.Dispose()

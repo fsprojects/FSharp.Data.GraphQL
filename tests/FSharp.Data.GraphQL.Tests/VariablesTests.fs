@@ -19,7 +19,7 @@ let TestComplexScalar =
     coerceInput = (fun (StringValue value) -> if value = "SerializedValue" then Some "DeserializedValue" else None),
     coerceValue = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
-type TestInput = { 
+type TestInput = {
     a: string option
     b: string option seq option
     c: string
@@ -55,7 +55,7 @@ let stringifyInput = stringifyArg "input"
 
 type EnumTestType = Foo | Bar
 
-let EnumTestType = 
+let EnumTestType =
   Define.Enum
     ("EnumTestType"
       , [ Define.EnumValue("Foo", EnumTestType.Foo)
@@ -92,7 +92,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This test does not pass anymore since the literal representation of the argument does not match the input type.")>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
     let ast = parse """{ fieldWithObjectInput(input: {a: "foo", b: "bar", c: "baz"}) }"""
@@ -103,7 +103,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This test can not pass anymore since validation does not allow inputs of incorrect type.")>]
 let ``Execute handles objects and nullability using inline structs and doesn't use incorrect value`` () =
     let ast = parse """{ fieldWithObjectInput(input: ["foo", "bar", "baz"]) }"""
@@ -114,7 +114,7 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and proprely coerces complex scalar types`` () =
     let ast = parse """{ fieldWithObjectInput(input: {c: "foo", d: "SerializedValue"}) }"""
@@ -125,7 +125,7 @@ let ``Execute handles objects and nullability using inline structs and proprely 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables with complex inputs`` () =
     let ast = parse """query q($input: TestInputObject) {
@@ -140,7 +140,7 @@ let ``Execute handles variables with complex inputs`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables with default value when no value was provided`` () =
     let ast = parse """query q($input: TestInputObject = {a: "foo", b: ["bar"], c: "baz"}) {
@@ -153,7 +153,7 @@ let ``Execute handles variables with default value when no value was provided`` 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-        
+
 [<Fact>]
 let ``Execute handles variables and errors on null for nested non-nulls`` () =
     let ast = parse """query q($input: TestInputObject) {
@@ -170,7 +170,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     | Direct(data, errors) ->
         hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and errors on incorrect type`` () =
     let ast = parse """query q($input: TestInputObject) {
@@ -183,7 +183,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
     | Direct(data, errors) ->
         hasError errMsg errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and errors on omission of nested non-nulls`` () =
     let ast = parse """query q($input: TestInputObject) {
@@ -197,7 +197,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
     | Direct(data, errors) ->
-        List.length errors |> equals 1 
+        List.length errors |> equals 1
         hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -211,7 +211,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted in a variable`` () =
     let ast = parse """query SetsNullable($value: String) {
@@ -224,7 +224,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This test does not pass anymore, since validation requires variables to be defined in the operation.")>]
 let ``Execute handles variables and allows nullable inputs to be omitted in an unlisted variable`` () =
     let ast = parse """query SetsNullable {
@@ -237,7 +237,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in an u
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to null in a variable`` () =
     let ast = parse """query SetsNullable($value: String) {
@@ -250,7 +250,7 @@ let ``Execute handles variables and allows nullable inputs to be set to null in 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value in a variable`` () =
     let ast = parse """query SetsNullable($value: String) {
@@ -263,7 +263,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value directly`` () =
     let ast = parse """{ fieldWithNullableStringInput(input: "a") }"""
@@ -285,7 +285,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     | Direct(data, errors) ->
         hasError "Variable '$value': expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value in a variable`` () =
     let ast = parse """query SetsNonNullable($value: String!) {
@@ -298,7 +298,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value directly`` () =
     let ast = parse """{ fieldWithNonNullableStringInput(input: "a") }"""
@@ -309,7 +309,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This test can not pass anymore, since validation does not allow to omit non nullable arguments with no default value.")>]
 let ``Execute handles non-nullable scalars and passes along null for non-nullable inputs if explcitly set in the query`` () =
     let ast = parse """{ fieldWithNonNullableStringInput }"""
@@ -320,7 +320,7 @@ let ``Execute handles non-nullable scalars and passes along null for non-nullabl
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to be null`` () =
     let ast = parse """query q($input: [String]) {
@@ -333,7 +333,7 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain values`` () =
     let ast = parse """query q($input: [String]) {
@@ -347,7 +347,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain null`` () =
     let ast = parse """query q($input: [String]) {
@@ -360,7 +360,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists to be null`` () =
     let ast = parse """query q($input: [String]!) {
@@ -371,7 +371,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     | Direct(data, errors) ->
         hasError "Variable '$input': expected value of type [String]!, but no value was found" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain values`` () =
     let ast = parse """query q($input: [String]!) {
@@ -384,7 +384,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain null`` () =
     let ast = parse """query q($input: [String]!) {
@@ -397,7 +397,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to be null`` () =
     let ast = parse """query q($input: [String!]) {
@@ -410,7 +410,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to contain values`` () =
     let ast = parse """query q($input: [String!]) {
@@ -423,7 +423,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow lists of non-nulls to contain null`` () =
     let ast = parse """query q($input: [String!]) {
@@ -434,7 +434,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     | Direct(data, errors) ->
         hasError "Variable '$input': list element expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
     let ast = parse """query q($input: [String!]!) {
@@ -445,7 +445,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     | Direct(data, errors) ->
         hasError "Variable '$input': expected value of type [String!]!, but no value was found" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain values`` () =
     let ast = parse """query q($input: [String!]!) {
@@ -458,7 +458,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain null`` () =
     let ast = parse """query q($input: [String!]!) {
@@ -469,7 +469,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     | Direct(data, errors) ->
         hasError "Variable '$input': list element expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow invalid types to be used as values`` () =
     let ast = parse """query q($input: TestType!) {
@@ -479,9 +479,9 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
     let e = throws<MalformedQueryException> (fun () ->
         Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, "B" :> obj ] :> obj ])
         |> sync
-        |> ignore)        
+        |> ignore)
     e.Message |> equals "GraphQL query defined variable '$input' of type 'TestType!' which is not an input type definition"
-    
+
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow unknown types to be used as values`` () =
     let ast = parse """query q($input: UnknownType!) {
@@ -489,11 +489,11 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
         }"""
     // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
     let e = throws<MalformedQueryException> (fun () ->
-        Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ]) 
+        Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ])
         |> sync
         |> ignore)
     e.Message |> equals "GraphQL query defined variable '$input' of type 'UnknownType!' which is not known in the current schema"
-    
+
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue }"""
@@ -504,7 +504,7 @@ let ``Execute uses argument default value when no argument was provided`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execute uses argument default value when nullable variable provided`` () =
     let ast = parse """query optionalVariable($optional: String) {
@@ -517,12 +517,12 @@ let ``Execute uses argument default value when nullable variable provided`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This test does not pass anymore since validation requires that literal representations of input types match their types.")>]
 let ``Execute uses argument default value when argument provided cannot be parsed`` () =
     let ast = parse """{ fieldWithDefaultArgumentValue(input: WRONG_TYPE) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "\"hello world\"" ]    
+    let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "\"hello world\"" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -536,7 +536,7 @@ let ``Execute handles enum input as variable`` () =
         fieldWithEnumInput(input: $enumVar)
       }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", "Foo" :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Foo\"}" ]    
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Foo\"}" ]
     match actual with
     | Direct(data, errors) ->
       empty errors

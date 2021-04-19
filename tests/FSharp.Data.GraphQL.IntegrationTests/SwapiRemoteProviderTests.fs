@@ -9,7 +9,7 @@ type Provider = GraphQLProvider<"http://localhost:8086">
 type Episode = Provider.Types.Episode
 
 module SimpleOperation =
-    let operation = 
+    let operation =
         Provider.Operation<"""query Q {
             hero (id: "1000") {
               name
@@ -29,14 +29,14 @@ module SimpleOperation =
           }""">()
 
     type Operation = Provider.Operations.Q
-    
+
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true
         result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] =
           [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))
@@ -76,8 +76,8 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     result.Data.IsSome |> equals true
     result.Data.Value.Hero.IsSome |> equals true
     let friends = result.Data.Value.Hero.Value.Friends |> Array.choose id
-    friends 
-    |> Array.choose (fun x -> x.TryAsHuman()) 
+    friends
+    |> Array.choose (fun x -> x.TryAsHuman())
     |> equals [|
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo")
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan") |]
@@ -106,7 +106,7 @@ let ``Should be able to use pattern matching methods on an union type`` () =
     |> equals [|
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol")
         SimpleOperation.Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech") |]
-  
+
 module MutationOperation =
     let operation =
         Provider.Operation<"""mutation M {
@@ -142,14 +142,14 @@ let ``Should be able to run a mutation asynchronously`` () =
 module FileOperation =
     let fileOp = Provider.Operation<"operation.graphql">()
     type Operation = Provider.Operations.FileOp
-    
+
     let validateResult (result : Operation.OperationResult) =
         result.CustomData.ContainsKey("documentId") |> equals true
         result.Errors |> equals [||]
         result.Data.IsSome |> equals true
         result.Data.Value.Hero.IsSome |> equals true
         result.Data.Value.Hero.Value.AppearsIn |> equals [| Episode.NewHope; Episode.Empire; Episode.Jedi |]
-        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] = 
+        let expectedFriends : Option<Operation.Types.HeroFields.FriendsFields.Character> [] =
           [| Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Han Solo"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Human(name = "Leia Organa", homePlanet = "Alderaan"))
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "C-3PO", primaryFunction = "Protocol"))

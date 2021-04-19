@@ -6,7 +6,7 @@ open FSharp.Data.GraphQL.Ast
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
 module SchemaDefinitions =
-    let rec private coerceObjectListFilterInput x = 
+    let rec private coerceObjectListFilterInput x =
         let (|EndsWith|StartsWith|GreaterThan|LessThan|Contains|Equals|) (s : string) =
             let s = s.ToLowerInvariant()
             let prefix (suffix : string) (s : string) = s.Substring(0, s.Length - suffix.Length)
@@ -40,18 +40,18 @@ module SchemaDefinitions =
             let rec build acc x =
                 match x with
                 | [] -> acc
-                | x :: xs -> 
-                    match acc with 
-                    | Some acc -> build (Some (And (acc, x))) xs 
+                | x :: xs ->
+                    match acc with
+                    | Some acc -> build (Some (And (acc, x))) xs
                     | None -> build (Some x) xs
             build None x
         let buildOr x =
             let rec build acc x =
                 match x with
                 | [] -> acc
-                | x :: xs -> 
-                    match acc with 
-                    | Some acc -> build (Some (Or (acc, x))) xs 
+                | x :: xs ->
+                    match acc with
+                    | Some acc -> build (Some (Or (acc, x))) xs
                     | None -> build (Some x) xs
             build None x
         let rec mapFilter (name : string, value : Value) =
@@ -59,16 +59,16 @@ module SchemaDefinitions =
             match name, value with
             | Equals "and", ListValue fields -> fields |> mapFilters |> buildAnd
             | Equals "or", ListValue fields -> fields |> mapFilters |> buildOr
-            | Equals "not", ObjectValue value -> 
+            | Equals "not", ObjectValue value ->
                 match mapInput value with
                 | Some filter -> Some (Not filter)
                 | None -> None
             | EndsWith fname, StringValue value -> Some (EndsWith { FieldName = fname; Value = value })
             | StartsWith fname, StringValue value -> Some (StartsWith { FieldName = fname; Value = value })
             | Contains fname, StringValue value -> Some (Contains { FieldName = fname; Value = value })
-            | Equals fname, ObjectValue value -> 
-                match mapInput value with 
-                | Some filter -> Some (FilterField { FieldName = fname; Value = filter }) 
+            | Equals fname, ObjectValue value ->
+                match mapInput value with
+                | Some filter -> Some (FilterField { FieldName = fname; Value = filter })
                 | None -> None
             | Equals fname, EquatableValue value -> Some (Equals { FieldName = fname; Value = value })
             | GreaterThan fname, ComparableValue value -> Some (GreaterThan { FieldName = fname; Value = value })
@@ -79,10 +79,10 @@ module SchemaDefinitions =
             if filters |> Seq.contains None then None
             else filters |> Seq.choose id |> List.ofSeq |> buildAnd
         match x with
-        | ObjectValue x -> 
+        | ObjectValue x ->
             mapInput x
         | _ -> None
-    
+
     let private coerceObjectListFilterValue (x : obj) : ObjectListFilter option =
         match x with
         | :? ObjectListFilter as x -> Some x
@@ -91,8 +91,8 @@ module SchemaDefinitions =
     /// Defines an object list filter for use as an argument for filter list of object fields.
     let ObjectListFilter : ScalarDefinition<ObjectListFilter> =
         { Name = "ObjectListFilter"
-          Description = 
-              Some 
+          Description =
+              Some
                   "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
           CoerceInput = coerceObjectListFilterInput
           CoerceValue = coerceObjectListFilterValue }

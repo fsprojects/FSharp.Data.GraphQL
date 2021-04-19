@@ -5,14 +5,14 @@ namespace FSharp.Data.GraphQL.Benchmarks
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middleware
 
-type Person = 
+type Person =
     { Id : string
       Name : string option
       Friends : string list
       HomePlanet : string option }
 
 module SchemaDefinition =
-  let humans = 
+  let humans =
       [ { Id = "1000"
           Name = Some "Luke Skywalker"
           Friends = [ "1002"; "1003" ]
@@ -36,63 +36,63 @@ module SchemaDefinition =
 
   let getPerson id = humans |> List.tryFind (fun h -> h.Id = id)
 
-  let rec Person = 
-      Define.Object(name = "Person", isTypeOf = (fun o -> o :? Person), 
-                    fieldsFn = fun () -> 
+  let rec Person =
+      Define.Object(name = "Person", isTypeOf = (fun o -> o :? Person),
+                    fieldsFn = fun () ->
                         [ Define.Field("id", String, resolve = fun _ person -> person.Id)
                           Define.Field("name", Nullable String, resolve = fun _ person -> person.Name)
-                          Define.Field("friends", Nullable(ListOf(Nullable Person)), 
-                                       resolve = fun _ person -> 
+                          Define.Field("friends", Nullable(ListOf(Nullable Person)),
+                                       resolve = fun _ person ->
                                            person.Friends
                                            |> List.map getPerson
                                            |> List.toSeq
                                            |> Some).WithQueryWeight(1.0)
                           Define.Field("homePlanet", String) ])
 
-  let Query = 
+  let Query =
       Define.Object
-          (name = "Query", 
+          (name = "Query",
            fields = [ Define.Field
-                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", String) ], 
+                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", String) ],
                            fun ctx () -> getPerson (ctx.Arg("id"))) ])
 
 module QueryStrings =
-    let simple = """{ 
-        hero(id: "1000") { 
+    let simple = """{
+        hero(id: "1000") {
             id
-        } 
+        }
     }"""
-    let flat = """{ 
-        hero(id: "1000") { 
+    let flat = """{
+        hero(id: "1000") {
             id,
-            name, 
+            name,
             homePlanet
-        } 
+        }
     }"""
-    let nested = """{ 
-        hero(id: "1000") { 
-            id, 
-            name, 
-            friends { 
-                id, 
-                name, 
-                friends { 
-                    id, 
-                    name, 
-                    friends { 
-                        id, 
-                        name 
-                    } 
-                } 
-            } 
-        } 
+    let nested = """{
+        hero(id: "1000") {
+            id,
+            name,
+            friends {
+                id,
+                name,
+                friends {
+                    id,
+                    name,
+                    friends {
+                        id,
+                        name
+                    }
+                }
+            }
+        }
     }"""
     let filtered = """{
         hero(id: "1000") {
             id,
             name,
             friends (filter : { id : "1002" }) {
-                id, 
+                id,
                 name
             }
         }

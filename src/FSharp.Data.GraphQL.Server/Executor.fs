@@ -11,7 +11,7 @@ open FSharp.Data.GraphQL.Planning
 /// I takes two arguments: A schema compile context, containing all the data used for the
 /// compilation phase, and another function that can be called to pass
 /// the execution for the next middleware.
-type SchemaCompileMiddleware = 
+type SchemaCompileMiddleware =
     SchemaCompileContext -> (SchemaCompileContext -> unit) -> unit
 
 /// A function signature that represents a middleware for the post-schema compilation phase.
@@ -22,7 +22,7 @@ type SchemaPostCompileMiddleware =
 /// I takes two arguments: A planning context, containing all the data used for the
 /// planning phase, and another function that can be called to pass
 /// the execution for the next middleware.
-type OperationPlanningMiddleware = 
+type OperationPlanningMiddleware =
     PlanningContext -> (PlanningContext -> ExecutionPlan) -> ExecutionPlan
 
 /// A function signature that represents a middleware for query execution phase.
@@ -110,7 +110,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                     let root = data |> Option.map box |> Option.toObj
                     let variables = coerceVariables executionPlan.Variables variables
-                    let executionCtx = 
+                    let executionCtx =
                         { Schema = schema
                           ExecutionPlan = executionPlan
                           RootValue = root
@@ -135,25 +135,25 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
         match findOperation ast operationName with
-        | Some operation -> 
-            let rootDef = 
+        | Some operation ->
+            let rootDef =
                 match operation.OperationType with
                 | Query -> schema.Query
-                | Mutation -> 
+                | Mutation ->
                     match schema.Mutation with
                     | Some m -> m
                     | None -> raise (GraphQLException "Operation to be executed is of type mutation, but no mutation root object was defined in current schema")
                 | Subscription ->
                     match schema.Subscription with
                     | Some s -> upcast s
-                    | None -> raise (GraphQLException "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema") 
+                    | None -> raise (GraphQLException "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema")
             let documentId = ast.GetHashCode()
             let validationResult =
                 let schemaId = schema.Introspected.GetHashCode()
                 let key = { DocumentId = documentId; SchemaId = schemaId }
                 let producer = fun () -> Validation.Ast.validateDocument schema.Introspected ast
                 validationCache.GetOrAdd producer key
-            let planningCtx = 
+            let planningCtx =
                 { Schema = schema
                   RootDef = rootDef
                   Document = ast
@@ -167,7 +167,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     new(schema) = Executor(schema, middlewares = Seq.empty)
 
     /// <summary>
-    /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed 
+    /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed
     /// and cached using `documentId` as an identifier.
     /// Returned value is a readonly dictionary consisting of following top level entries:
     /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
@@ -179,7 +179,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
         execute (executionPlan, data, variables)
-    
+
     /// <summary>
     /// Asynchronously executes parsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
     /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
@@ -195,7 +195,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let meta = defaultArg meta Metadata.Empty
         let executionPlan = createExecutionPlan (ast, operationName, meta)
         execute (executionPlan, data, variables)
-        
+
     /// <summary>
     /// Asynchronously executes unparsed GraphQL query AST. Returned value is a readonly dictionary consisting of following top level entries:
     /// 'documentId' (unique identifier of current document's AST, it can be used as a key/identifier of ExecutionPlan as well),
@@ -213,9 +213,9 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let executionPlan = createExecutionPlan (ast, operationName, meta)
         execute (executionPlan, data, variables)
 
-    /// Creates an execution plan for provided GraphQL document AST without 
-    /// executing it. This is useful in cases when you have the same query executed 
-    /// multiple times with different parameters. In that case, query can be used 
+    /// Creates an execution plan for provided GraphQL document AST without
+    /// executing it. This is useful in cases when you have the same query executed
+    /// multiple times with different parameters. In that case, query can be used
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
     /// <param name="ast">The parsed GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>
@@ -223,10 +223,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     member __.CreateExecutionPlan(ast: Document, ?operationName: string, ?meta : Metadata): ExecutionPlan =
         let meta = defaultArg meta Metadata.Empty
         createExecutionPlan (ast, operationName, meta)
-        
-    /// Creates an execution plan for provided GraphQL query string without 
-    /// executing it. This is useful in cases when you have the same query executed 
-    /// multiple times with different parameters. In that case, query can be used 
+
+    /// Creates an execution plan for provided GraphQL query string without
+    /// executing it. This is useful in cases when you have the same query executed
+    /// multiple times with different parameters. In that case, query can be used
     /// to construct execution plan, which then is cached (using DocumentId as a key) and reused when needed.
     /// <param name="queryOrMutation">The GraphQL query string.</param>
     /// <param name="operationName">The name of the operation that should be executed on the parsed document.</param>

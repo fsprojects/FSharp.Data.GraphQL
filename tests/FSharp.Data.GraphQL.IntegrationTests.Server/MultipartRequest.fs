@@ -47,7 +47,7 @@ module MultipartRequest =
         let mapOperation (operationIndex : int option) (operation : Operation) =
             let findFile (varName : string) (varValue : obj) =
                 let tryPickMultipleFilesFromMap (length : int) (varName : string) =
-                    Seq.init length (fun ix -> 
+                    Seq.init length (fun ix ->
                         match map.TryGetValue(sprintf "%s.%i" varName ix) with
                         | (true, v) -> Some v
                         | _ -> None)
@@ -68,7 +68,7 @@ module MultipartRequest =
                     | [x] -> Some x
                     | _ -> None
                 let pickSingleFileFromMap varName =
-                    map 
+                    map
                     |> Seq.choose (fun kvp -> if kvp.Key = varName then Some files.[kvp.Value] else None)
                     |> Seq.exactlyOne
                 let pickFileRequestFromMap (request : UploadRequest) varName =
@@ -81,7 +81,7 @@ module MultipartRequest =
                     | NamedType tname -> tname = "Upload" || tname = "UploadRequest"
                     | ListType t | NonNullType t -> isUpload t
                 let ast = Parser.parse operation.Query
-                let vardefs = 
+                let vardefs =
                     ast.Definitions
                     |> List.choose (function OperationDefinition def -> Some def.VariableDefinitions | _ -> None)
                     |> List.collect id
@@ -119,7 +119,7 @@ module MultipartRequest =
         | operations -> operations |> List.mapi (fun ix operation -> mapOperation (Some ix) operation)
 
     /// Reads a GraphQL multipart request from a MultipartReader.
-    let read (reader : MultipartReader) = 
+    let read (reader : MultipartReader) =
         async {
             let mutable section : GraphQLMultipartSection option = None
             let readNextSection () =
@@ -136,9 +136,9 @@ module MultipartRequest =
                 | Form section ->
                     let! value = section.GetValueAsync() |> Async.AwaitTask
                     match section.Name with
-                    | "operations" -> 
+                    | "operations" ->
                         operations <- value
-                    | "map" -> 
+                    | "map" ->
                         map <- JsonConvert.DeserializeObject<Map<string, string list>>(value)
                                |> Seq.map (fun kvp -> kvp.Value.Head, kvp.Key)
                                |> Map.ofSeq

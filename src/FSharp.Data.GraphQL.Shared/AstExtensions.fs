@@ -17,7 +17,7 @@ type AstTypeFieldInfo =
 
 and AstFragmentFieldInfo =
     { Name : string
-      Alias : string option 
+      Alias : string option
       TypeCondition : string
       Fields : AstFieldInfo list }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
@@ -196,10 +196,10 @@ type Document with
                     | Query -> sb.Append("query ")
                     | Mutation -> sb.Append("mutation ")
                     | Subscription -> sb.Append("subscription ")
-                    odef.Name 
-                    |> Option.iter (fun name -> 
-                        if odef.VariableDefinitions.Length = 0 
-                        then sb.Append(name + " ") 
+                    odef.Name
+                    |> Option.iter (fun name ->
+                        if odef.VariableDefinitions.Length = 0
+                        then sb.Append(name + " ")
                         else sb.Append(name))
                     printVariables odef.VariableDefinitions
                     printDirectives odef.Directives
@@ -216,12 +216,12 @@ type Document with
                 | def :: tail -> printDefinition def; sb.AppendLine(); sb.AppendLine(); printDefinitions tail
         printDefinitions x.Definitions
         sb.ToString()
-    
+
     /// <summary>
     /// Gets a map containing general information for this Document.
     /// </summary>
     member this.GetInfoMap() : Map<OperationName option, AstFieldInfo list> =
-        let fragments = 
+        let fragments =
             this.Definitions
             |> List.choose (function | OperationDefinition _ -> None | FragmentDefinition def -> Some def)
             |> List.map (fun def -> def.Name.Value, def)
@@ -239,9 +239,9 @@ type Document with
                 match selectionSet with
                 | [] -> acc
                 | selection :: tail ->
-                    let acc = 
+                    let acc =
                         match selection with
-                        | Field f -> 
+                        | Field f ->
                             let finfo = AstSelectionInfo.Create(typeCondition, path, f.Name, f.Alias)
                             let fields = helper [] None (f.AliasOrName :: path) f.SelectionSet
                             finfo.SetFields(fields)
@@ -249,7 +249,7 @@ type Document with
                         | FragmentSpread f ->
                             let fdef = findFragment f.Name
                             helper acc fdef.TypeCondition path fdef.SelectionSet
-                        | InlineFragment fdef -> 
+                        | InlineFragment fdef ->
                             helper acc fdef.TypeCondition path fdef.SelectionSet
                     helper acc typeCondition path tail
             helper [] None [] selectionSet

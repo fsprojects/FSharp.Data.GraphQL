@@ -41,7 +41,7 @@ type internal IMemoryCacheStore<'key, 'value> =
 
 type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     let policy = defaultArg cacheExpirationPolicy NoExpiration
-    let store = 
+    let store =
         let entries = ConcurrentDictionary<'key, CacheEntry<'key, 'value>>()
         let getEnumerator =
             let values = entries |> Seq.map (fun kvp -> kvp.Value)
@@ -51,7 +51,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
             member __.GetOrAdd key getValue = entries.GetOrAdd(key, getValue)
             member __.Remove key = entries.TryRemove key |> ignore
             member __.Contains key = entries.ContainsKey key
-            member __.Update key update = 
+            member __.Update key update =
                 match entries.TryGetValue(key) with
                 | (true, entry) -> entries.AddOrUpdate(key, entry, fun _ entry -> update entry) |> ignore
                 | _ -> ()
@@ -61,7 +61,7 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
                 | _ -> None
             member __.GetEnumerator () = getEnumerator ()
             member __.GetEnumerator () = getEnumerator () :> Collections.IEnumerator }
-    
+
     let checkExpiration () =
         store |> Seq.iter (fun entry -> if CacheExpiration.isExpired entry then store.Remove entry.Key)
 
@@ -79,14 +79,14 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
         then store.Update key (fun entry -> {entry with Value = value; LastUsage = DateTime.UtcNow})
         else store.Add <| newCacheEntry key value
 
-    let remove key = 
+    let remove key =
         store.Remove key
 
     let get key =
         store.TryFind key |> Option.bind (fun entry -> Some entry.Value)
 
-    let getOrAdd key value = 
-        store.GetOrAdd key (fun _ -> newCacheEntry key value) 
+    let getOrAdd key value =
+        store.GetOrAdd key (fun _ -> newCacheEntry key value)
         |> fun entry -> entry.Value
 
     let getOrAddResult key f =
@@ -96,20 +96,20 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     let getTimer (expiration: TimeSpan) =
         if expiration.TotalSeconds < 1.0
         then TimeSpan.FromMilliseconds 100.0
-        elif expiration.TotalMinutes < 1.0 
-        then TimeSpan.FromSeconds 1.0 
+        elif expiration.TotalMinutes < 1.0
+        then TimeSpan.FromSeconds 1.0
         else TimeSpan.FromMinutes 1.0
         |> fun interval -> new Timer(interval.TotalMilliseconds)
 
-    let timer = 
+    let timer =
        match policy with
        | NoExpiration -> None
        | AbsoluteExpiration time -> time |> getTimer |> Some
-       | SlidingExpiration time -> time |> getTimer |> Some    
+       | SlidingExpiration time -> time |> getTimer |> Some
 
     let _observer =
         match timer with
-        | Some t -> 
+        | Some t ->
             let disposable = t.Elapsed |> Observable.subscribe (fun _ -> checkExpiration())
             t.Start()
             Some disposable
@@ -118,5 +118,5 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     member __.Add key value = add key value
     member __.Remove key = remove key
     member __.Get key = get key
-    member __.GetOrAdd key value = getOrAdd key value    
+    member __.GetOrAdd key value = getOrAdd key value
     member __.GetOrAddResult key f = getOrAddResult key f

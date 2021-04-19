@@ -59,7 +59,7 @@ module GraphQLClient =
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let invoker = connection.Invoker
-            let variables = 
+            let variables =
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
                 | _ -> Map.ofArray request.Variables |> Serialization.toJsonValue
@@ -67,7 +67,7 @@ module GraphQLClient =
                 match request.OperationName with
                 | Some x -> JsonValue.String x
                 | None -> JsonValue.Null
-            let requestJson =         
+            let requestJson =
                 [| "operationName", operationName
                    "query", JsonValue.String request.Query
                    "variables", variables |]
@@ -75,7 +75,7 @@ module GraphQLClient =
             let content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
             return! postAsync invoker request.ServerUrl request.HttpHeaders content
         }
-    
+
     /// Sends a request to a GraphQL server.
     let sendRequest client request =
         sendRequestAsync client request
@@ -108,7 +108,7 @@ module GraphQLClient =
         }
 
     /// Executes an introspection schema request to a GraphQL server.
-    let sendIntrospectionRequest client serverUrl httpHeaders = 
+    let sendIntrospectionRequest client serverUrl httpHeaders =
         sendIntrospectionRequestAsync client serverUrl httpHeaders
         |> Async.RunSynchronously
 
@@ -118,25 +118,25 @@ module GraphQLClient =
             let invoker = connection.Invoker
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             let content = new MultipartContent("form-data", boundary)
-            let files = 
+            let files =
                 let rec tryMapFileVariable (name: string, value : obj) =
                     match value with
                     | null | :? string -> None
                     | :? Upload as x -> Some [|name, x|]
-                    | OptionValue x -> 
+                    | OptionValue x ->
                         x |> Option.bind (fun x -> tryMapFileVariable (name, x))
                     | :? IDictionary<string, obj> as x ->
                         x |> Seq.collect (fun kvp -> tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower()), kvp.Value) |> Option.defaultValue [||])
                           |> Array.ofSeq
                           |> Some
-                    | EnumerableValue x -> 
+                    | EnumerableValue x ->
                         x |> Array.mapi (fun ix x -> tryMapFileVariable (name + "." + (ix.ToString()), x))
                           |> Array.collect (Option.defaultValue [||])
                           |> Some
                     | _ -> None
                 request.Variables |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
-            let operationContent = 
-                let variables = 
+            let operationContent =
+                let variables =
                     match request.Variables with
                     | null | [||] -> JsonValue.Null
                     | _ -> request.Variables |> Map.ofArray |> Serialization.toJsonValue

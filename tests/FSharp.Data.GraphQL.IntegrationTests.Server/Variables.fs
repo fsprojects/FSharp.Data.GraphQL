@@ -23,7 +23,7 @@ let read (schema : ISchema) (vardefs : VariableDefinition list) (variables : Map
         schema.TypeMap.ToSeq()
         |> Seq.choose (fun (name, def) -> match def with | :? InputDef as idef -> Some (name, idef.Type) | _ -> None)
         |> Map.ofSeq
-    let unwrapOption (t : Type) = 
+    let unwrapOption (t : Type) =
         if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
         then t.GetGenericArguments().[0]
         else failwithf "Expected type to be an Option type, but it is %s." t.Name
@@ -44,8 +44,8 @@ let read (schema : ISchema) (vardefs : VariableDefinition list) (variables : Map
         | _ -> value
     variables
     |> Seq.map (|KeyValue|)
-    |> Seq.choose (fun (key, value) -> 
-        vardefs 
-        |> List.tryFind (fun def -> def.VariableName = key) 
+    |> Seq.choose (fun (key, value) ->
+        vardefs
+        |> List.tryFind (fun def -> def.VariableName = key)
         |> Option.map (fun def -> key, resolveVariableValue (resolveVariableType def.Type) value))
     |> Map.ofSeq

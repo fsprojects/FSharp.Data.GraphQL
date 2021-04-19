@@ -8,10 +8,10 @@ open BenchmarkDotNet
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 
-let simpleQueryString = """{ 
-    hero(id: "1000") { 
+let simpleQueryString = """{
+    hero(id: "1000") {
         id
-    } 
+    }
 }"""
 
 let complexQuery = """query IntrospectionQuery {
@@ -94,7 +94,7 @@ let complexQuery = """query IntrospectionQuery {
 open BenchmarkDotNet.Attributes
 
 [<Config(typeof<GraphQLBenchConfig>)>]
-type ParsingBenchmark() = 
+type ParsingBenchmark() =
     [<GlobalSetup>] member x.Setup () = ()
     [<Benchmark>] member x.ParseSimpleQuery () =  parse simpleQueryString
     [<Benchmark>] member x.ParseComplexQuery () = parse complexQuery

@@ -18,7 +18,7 @@ type File =
 module SchemaDefinitions =
     let private coerceUploadInput (_ : Value) : File option =
         failwith "Can not coerce upload input. The type `Upload` can only be passed as a variable through a multipart request."
-    
+
     let private coerceUploadValue (value : obj) =
         match value with
         | :? File as file -> Some file
