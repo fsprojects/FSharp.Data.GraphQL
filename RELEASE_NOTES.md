@@ -156,12 +156,11 @@
 ### 1.0.7 - December 30 2020
 * Add static TypeProvider parameter `explicitOptionalParameters`.
 
-### 1.0.8 - April 09 2021
+### 1.0.8 - April 18 2021
 * Remove Desktop build
-* Fix build scripts
-
-### 1.0.9 - April 09 2021
-* TP Bugfixes
-
-### 1.0.10 - April 09 2021
-* TP Bugfixes
+* Update documentation and build tools
+* Upgrade build scripts
+* Migrate from netcoreapp2.0 to net5.0 for tests and samples
+* Target netstandard2.0 exclusively for Type Providers
+* Make FSharp.Data.GraphQL.Shared a Nuget package
+* Fix parser bug. Thanks to @njlr

@@ -44,10 +44,9 @@ open Octokit
 
 let project = "FSharp.Data.GraphQL"
 let summary = "FSharp implementation of Facebook GraphQL query language"
-let gitOwner = "fsprojects"
-let gitHome = "https://github.com/" + gitOwner
 let gitName = "FSharp.Data.GraphQL"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
+let projectRepo = "https://github.com/fsprojects/FSharp.Data.GraphQL.git"
 
 // Generate assembly info files with the right version & up-to-date information
 Target.create "AssemblyInfo" (fun _ ->
@@ -78,7 +77,7 @@ Target.create "AssemblyInfo" (fun _ ->
         )
 
     !! "src/**/*.fsproj"
-    -- "src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj"
+    //-- "src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj"
     |> Seq.map getProjectDetails
     |> Seq.iter (fun (projFileName, _, folderName, attributes) ->
          AssemblyInfoFile.createFSharp (folderName </> "AssemblyInfo.fs") (attributes @ internalsVisibility projFileName)
@@ -175,179 +174,36 @@ Target.create "RunIntegrationTests" (fun _ ->
     runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
 )
 
-// --------------------------------------------------------------------------------------
-// Generate the documentation
+let prepareDocGen () =
+    Shell.rm "docs/release-notes.md"
+    Shell.cp "RELEASE_NOTES.md" "docs/RELEASE_NOTES.md"
+    Shell.rename "docs/release-notes.md" "docs/RELEASE_NOTES.md"
 
-// Documentation
-let buildDocumentationTarget fsiargs target =
-    // TODO:
-    ()
+    Shell.rm "docs/license.md"
+    Shell.cp "LICENSE.txt" "docs/LICENSE.txt"
+    Shell.rename "docs/license.md" "docs/LICENSE.txt"
 
-Target.create "GenerateReferenceDocs" (fun _ ->
-    buildDocumentationTarget "-d:RELEASE -d:REFERENCE" "Default"
+    Shell.cleanDir ".fsdocs"
+
+Target.create "GenerateDocs" (fun _ ->
+    prepareDocGen ()
+    DotNet.exec id "fsdocs" "build --clean" |> ignore
 )
 
-let generateHelp' fail debug =
-    let args =
-        if debug then "--define:HELP"
-        else "--define:RELEASE --define:HELP"
-    try
-        buildDocumentationTarget args "Default"
-        Trace.traceImportant "Help generated"
-    with
-    | _ when not fail ->
-        Trace.traceImportant "generating help documentation failed"
-
-let generateHelp fail =
-    generateHelp' fail false
-
-Target.create "GenerateHelp" (fun _ ->
-    Shell.rm "docs/content/release-notes.md"
-    Shell.cp "docs/content/" "RELEASE_NOTES.md"
-    Shell.rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
-
-    Shell.rm "docs/content/license.md"
-    Shell.cp "docs/content/" "LICENSE.txt"
-    Shell.rename "docs/content/license.md" "docs/content/LICENSE.txt"
-
-    generateHelp true
-)
-
-Target.create "GenerateHelpDebug" (fun _ ->
-    Shell.rm "docs/content/release-notes.md"
-    Shell.cp "docs/content/" "RELEASE_NOTES.md"
-    Shell.rename "docs/content/release-notes.md" "docs/content/RELEASE_NOTES.md"
-
-    Shell.rm "docs/content/license.md"
-    Shell.cp "docs/content/" "LICENSE.txt"
-    Shell.rename "docs/content/license.md" "docs/content/LICENSE.txt"
-
-    generateHelp' true true
-)
-
-Target.create "KeepRunning" (fun _ ->
-    use watcher = !! "docs/content/**/*.*" |> ChangeWatcher.run (fun _ ->
-         generateHelp' true true
-    )
-
-    Trace.traceImportant "Waiting for help edits. Press any key to stop."
-
+Target.create "GenerateDocsWatch" (fun _ ->
+    prepareDocGen ()
+    DotNet.exec id "fsdocs" "watch --clean" |> ignore
     System.Console.ReadKey() |> ignore
-
-    watcher.Dispose()
 )
-
-Target.create "GenerateDocs" ignore
 
 Target.create "ReleaseDocs" (fun _ ->
-    let tempDocsDir = "temp/gh-pages"
-    Shell.cleanDir tempDocsDir
-    Repository.cloneSingleBranch "" (gitHome + "/" + gitName + ".git") "gh-pages" tempDocsDir
-
-    Shell.copyRecursive "docs/output" tempDocsDir true |> Trace.tracefn "%A"
-    Git.Staging.stageAll tempDocsDir
-    Git.Commit.exec tempDocsDir (sprintf "Update generated documentation for version %s" release.NugetVersion)
-    Branches.push tempDocsDir
-)
-
-let captureAndReraise ex =
-    System.Runtime.ExceptionServices.ExceptionDispatchInfo.Capture(ex).Throw()
-    Unchecked.defaultof<_>
-
-let rec retry count asyncF =
-    // This retry logic causes an exception on Mono:
-    // https://github.com/fsharp/fsharp/issues/440
-    if not (isNull (System.Type.GetType("Mono.Runtime"))) then
-        asyncF
-    else
-        async {
-            try
-                return! asyncF
-            with ex ->
-                return!
-                    match (ex, ex.InnerException) with
-                    | (:? AggregateException, (:? AuthorizationException as ex)) -> captureAndReraise ex
-                    | _ when count > 0 -> retry (count - 1) asyncF
-                    | (ex, _) -> captureAndReraise ex
-        }
-
-let retryWithArg count input asycnF =
-    async {
-        let! choice = input |> Async.Catch
-        match choice with
-        | Choice1Of2 input' ->
-            return! (asycnF input') |> retry count
-        | Choice2Of2 ex ->
-            return captureAndReraise ex
-    }
-
-[<NoComparison>]
-type Draft =
-    { Client : GitHubClient
-      Owner : string
-      Project : string
-      DraftRelease : Release }
-
-let makeRelease draft owner project version prerelease (notes:seq<string>) (client : Async<GitHubClient>) =
-    retryWithArg 5 client <| fun client' -> async {
-        let data = NewRelease(version)
-        data.Name <- version
-        data.Body <- String.Join(Environment.NewLine, notes)
-        data.Draft <- draft
-        data.Prerelease <- prerelease
-        let! draft = Async.AwaitTask <| client'.Repository.Release.Create(owner, project, data)
-        let draftWord = if data.Draft then " draft" else ""
-        printfn "Created%s release id %d" draftWord draft.Id
-        return {
-            Client = client'
-            Owner = owner
-            Project = project
-            DraftRelease = draft }
-    }
-
-let createDraft owner project version prerelease notes client =
-    makeRelease true owner project version prerelease notes client
-
-let releaseDraft (draft : Async<Draft>) =
-    retryWithArg 5 draft <| fun draft' -> async {
-        let update = draft'.DraftRelease.ToUpdate()
-        update.Draft <- Nullable<bool>(false)
-        let! released = Async.AwaitTask <| draft'.Client.Repository.Release.Edit(draft'.Owner, draft'.Project, draft'.DraftRelease.Id, update)
-        printfn "Released %d on github" released.Id
-    }
-
-Target.create "Release" (fun _ ->
-    let user =
-        match Environment.environVarOrDefault "github-user" System.String.Empty with
-        | s when not (String.IsNullOrWhiteSpace s) -> s
-        | _ -> UserInput.getUserInput "Username: "
-    let pw =
-        match Environment.environVarOrDefault "github-pw" System.String.Empty with
-        | s when not (String.IsNullOrWhiteSpace s) -> s
-        | _ -> UserInput.getUserPassword "Password: "
-    let remote =
-        Git.CommandHelper.getGitResult "" "remote -v"
-        |> Seq.filter (fun (s: string) -> s.EndsWith("(push)"))
-        |> Seq.tryFind (fun (s: string) -> s.Contains(gitOwner + "/" + gitName))
-        |> function None -> gitHome + "/" + gitName | Some (s: string) -> s.Split().[0]
-
-    Git.Staging.stageAll ""
-    Git.Commit.exec "" (sprintf "Bump version to %s" release.NugetVersion)
-    Git.Branches.pushBranch "" remote (Information.getBranchName "")
-
-    Git.Branches.tag "" release.NugetVersion
-    Git.Branches.pushTag "" remote release.NugetVersion
-
-    GitHub.createClient user pw
-    |> createDraft gitOwner gitName release.NugetVersion (release.SemVer.PreRelease <> None) release.Notes
-    |> releaseDraft
-    |> Async.RunSynchronously
-)
-
-Target.create "AdHocBuild" (fun _ ->
-    !! "src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj"
-    |> MSBuild.runRelease id "bin/FSharp.Data.GraphQL.Client" "Build"
-    |> Trace.logItems "Output: "
+    Git.Repository.clone "" projectRepo "temp/gh-pages"
+    Git.Branches.checkoutBranch "temp/gh-pages" "gh-pages"
+    Shell.copyRecursive "output" "temp/gh-pages" true |> printfn "%A"
+    Git.CommandHelper.runSimpleGitCommand "temp/gh-pages" "add ." |> printfn "%s"
+    let cmd = sprintf """commit -a -m "Update generated documentation for version %s""" release.NugetVersion
+    Git.CommandHelper.runSimpleGitCommand "temp/gh-pages" cmd |> printfn "%s"
+    Git.Branches.push "temp/gh-pages"
 )
 
 let pack id =
@@ -413,23 +269,10 @@ Target.create "PackAll" ignore
   ==> "StartIntegrationServer"
   ==> "RunIntegrationTests"
   ==> "All"
-  =?> ("GenerateReferenceDocs", Environment.environVar "APPVEYOR" = "True")
   =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
-  =?> ("ReleaseDocs",BuildServer.isLocalBuild)
 
 "CleanDocs"
-  ==> "GenerateHelp"
-  ==> "GenerateReferenceDocs"
   ==> "GenerateDocs"
-
-"CleanDocs"
-  ==> "GenerateHelpDebug"
-
-"GenerateHelpDebug"
-  ==> "KeepRunning"
-
-"ReleaseDocs"
-  ==> "Release"
 
 "PackShared"
   ==> "PackServer"

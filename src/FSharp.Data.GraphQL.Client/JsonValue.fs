@@ -40,7 +40,7 @@ type JsonValue =
   | Boolean of bool
   | Null  
 
-  /// [omit]
+  ///  <exclude />
   [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
   [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
   member x._Print =

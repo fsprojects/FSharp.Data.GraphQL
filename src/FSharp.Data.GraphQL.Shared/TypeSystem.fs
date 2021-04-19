@@ -1957,7 +1957,6 @@ and TypeMap() =
 
     /// <summary>
     /// Tries to find a FieldDef inside an ObjectDef by its type, the object name and the field name.
-    /// If the map has no ObjectDef types, it won't find anything.
     /// </summary>
     /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
     /// <param name="fname">The name of the FieldDef to be searched for.</param>
@@ -1970,7 +1969,7 @@ and TypeMap() =
         | _ -> None
 
     /// <summary>
-    /// Tries to find ObjectDef<'Val> types inside the map, that have fields that are lists of 'Res type.
+    /// Tries to find ObjectDef&lt;&apos;Val&gt; types inside the map, that have fields that are lists of &apos;Res type.
     /// </summary>
     /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
     member this.GetTypesWithListFields<'Val, 'Res>(?includeDefaultTypes : bool) =

@@ -17,7 +17,7 @@ type GraphQLClientConnection(invoker : HttpMessageInvoker, ownsInvoker : bool) =
 
     /// Creates a new instance of GraphQLClientConnection, using a provided System.Net.Http.IHttpClientFactory to generate a System.Net.Http.HttpClient instance.
     /// The provided System.Net.Http.HttpMessageInvoker is owned by the connection, being disposed when the connection is disposed.
-    new(factory : IHttpClientFactory) = new GraphQLClientConnection(factory.CreateClient(), true)
+    //new(factory : IHttpClientFactory) = new GraphQLClientConnection(factory.CreateClient(), true)
 
     /// Creates a new instance of GraphQLClientConnection, using a provided System.Net.Http.HttpClient as a System.Net.Http.HttpMessageInvoker to be wrapped inside.
     /// The provided System.Net.Http.HttpMessageInvoker is not owned by the connection, so it must be disposed when it is not necessary anymore.

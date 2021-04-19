@@ -169,7 +169,7 @@ $RECYCLE.BIN/
 packages/
 
 # Generated documentation folder
-docs/output/
+/output/
 
 # Temp folder used for publishing docs
 temp/

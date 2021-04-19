@@ -1,5 +1,5 @@
 group Common
 FSharp.Core
+FParsec
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs
-Microsoft.Extensions.Http
