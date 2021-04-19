@@ -1,9 +1,9 @@
-Working with GraphQL type system
+Working with the GraphQL type system
 ========================
 
 A central point of each GraphQL service is its schema. Schema defines a namespace for type definitions exposed to service consumers, that can be used later to generate things such as documentation, introspection queries and finally to execute and validate incoming GraphQL queries and mutations.
 
-Each schema definition requires to have something called *root query* - it's a GraphQL object definition, which exposes all top level fields to be requested by the user. Aside of it there are also separate roots for mutations (queries are readonly requests) and subscriptions (which is an experimental feature, at the moment of v0.2-beta is not yet supported by Fsharp.Data.GraphQL).
+Each schema definition requires to have something called *root query* - it's a GraphQL object definition, which exposes all top level fields to be requested by the user. Aside of it there are also separate roots for mutations (queries are readonly requests) and subscriptions.
 
 GraphQL type system categorizes several custom types, that can be defined by programmer, including:
 

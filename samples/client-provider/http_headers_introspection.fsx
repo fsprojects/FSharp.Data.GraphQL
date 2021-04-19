@@ -23,8 +23,8 @@ open FSharp.Data.GraphQL
 // The format is similar to how headers are encoded in an HTTP request (one header per line, names and values separated by a comma).
 // Those headers will go on to the query run methods as well. Unless you provide different headers when acutally calling Operation.Run.
 // Other headers can be provided in the same format as here.
-//type MyProvider = GraphQLProvider<"http://localhost:8084", "http_headers1.headerfile">
-type MyProvider = GraphQLProvider<"http://localhost:8084", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
+//type MyProvider = GraphQLProvider<"http://localhost:8086", "http_headers1.headerfile">
+type MyProvider = GraphQLProvider<"http://localhost:8086", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
 
 let operation = 
     MyProvider.Operation<"""query q {

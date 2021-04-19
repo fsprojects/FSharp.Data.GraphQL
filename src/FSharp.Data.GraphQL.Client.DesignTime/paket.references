@@ -1,8 +1,6 @@
 group Common
 FSharp.Core
+FParsec
+Microsoft.Extensions.Http
 File:ProvidedTypes.fsi
 File:ProvidedTypes.fs
-Microsoft.Extensions.Http
-
-group NetCoreAndStandard
-System.Net.Http

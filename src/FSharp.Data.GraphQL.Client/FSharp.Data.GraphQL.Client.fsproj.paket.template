@@ -1,8 +1,8 @@
 type project
 id FSharp.Data.GraphQL.Client
 authors Bazinga Technologies Inc
-projectUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL
-licenseUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/dev/LICENSE.txt
+projectUrl https://github.com/fsprojects/FSharp.Data.GraphQL
+licenseUrl https://github.com/fsprojects/FSharp.Data.GraphQL/blob/dev/LICENSE.txt
 requireLicenseAcceptance false
 copyright Copyright (c) 2016 Bazinga Technologies Inc
 tags
@@ -12,37 +12,13 @@ summary
 description
     FSharp implementation of Facebook GraphQL query language (Client)
 files
-    bin/Release/net461/FSharp.Data.GraphQL.Client.dll ==> lib/net461
-    bin/Release/net461/FSharp.Data.GraphQL.Shared.dll ==> lib/net461
-    bin/Release/net461/FSharp.Data.GraphQL.Client.DesignTime.dll ==> lib/net461
     bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.dll ==> lib/netstandard2.0
-    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0
-    bin/Release/netstandard2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> lib/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp2.0/FSharp.Data.GraphQL.Shared.dll ==> typeproviders/fsharp41/netcoreapp2.0
-    bin/Release/typeproviders/fsharp41/net461/FSharp.Data.GraphQL.Shared.dll ==> typeproviders/fsharp41/net461
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp2.0/FSharp.Data.GraphQL.Client.DesignTime.dll ==> typeproviders/fsharp41/netcoreapp2.0
-    bin/Release/typeproviders/fsharp41/net461/FSharp.Data.GraphQL.Client.DesignTime.dll ==> typeproviders/fsharp41/net461
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FParsec.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp2.0/FParsec.dll ==> typeproviders/fsharp41/netcoreapp2.0
-    bin/Release/typeproviders/fsharp41/net461/FParsec.dll ==> typeproviders/fsharp41/net461
-    bin/Release/typeproviders/fsharp41/netstandard2.0/FParsecCS.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp2.0/FParsecCS.dll ==> typeproviders/fsharp41/netcoreapp2.0
-    bin/Release/typeproviders/fsharp41/net461/FParsecCS.dll ==> typeproviders/fsharp41/net461
-    bin/Release/typeproviders/fsharp41/netstandard2.0/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/netstandard2.0
-    bin/Release/typeproviders/fsharp41/netcoreapp2.0/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/netcoreapp2.0
-    bin/Release/typeproviders/fsharp41/net461/Microsoft.Extensions.Http.dll ==> typeproviders/fsharp41/net461
+    bin/Release/typeproviders/fsharp41/netstandard2.0/*.dll ==> typeproviders/fsharp41/netstandard2.0
 references
     FSharp.Data.GraphQL.Client.dll
-    FSharp.Data.GraphQL.Shared.dll
 dependencies
-	framework: net461
-		FSharp.Core >= LOCKEDVERSION-Common
-		FParsec >= LOCKEDVERSION-Common
-        Microsoft.Extensions.Http >= LOCKEDVERSION-Common
 	framework: netstandard2.0
-		FSharp.Core >= LOCKEDVERSION-Common
-		FParsec >= LOCKEDVERSION-Common
-        System.Net.Http >= LOCKEDVERSION-NetCoreAndStandard
+        FSharp.Core >= LOCKEDVERSION-Common
+        FParsec >= LOCKEDVERSION-Common
         Microsoft.Extensions.Http >= LOCKEDVERSION-Common
+        FSharp.Data.GraphQL.Shared >= CURRENTVERSION

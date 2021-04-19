@@ -13,7 +13,7 @@
 
 //Uncomment those to use dotnet build command for the client assembly using netstandard2.0
 #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
-#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/netstandard.dll"
+//#r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/netstandard.dll"
 #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 open FSharp.Data.GraphQL
@@ -41,7 +41,7 @@ let operation =
       }
     }""">()
 
-let ctx = MyProvider.GetContext(serverUrl = "http://localhost:8084")
+let ctx = MyProvider.GetContext(serverUrl = "http://localhost:8086")
 
 let result = operation.Run(ctx)
 

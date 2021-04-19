@@ -1,6 +1,4 @@
 group Common
 FSharp.Core
+FParsec
 Microsoft.Extensions.Http
-
-group NetCoreAndStandard
-System.Net.Http

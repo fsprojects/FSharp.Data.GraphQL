@@ -1,5 +1,5 @@
 type project
-id FSharp.Data.GraphQL.Server.Middleware
+id FSharp.Data.GraphQL.Shared
 authors Bazinga Technologies Inc
 projectUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL
 licenseUrl https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/dev/LICENSE.txt
@@ -8,13 +8,14 @@ copyright Copyright (c) 2016 Bazinga Technologies Inc
 tags
     FSharp GraphQL Relay React Middleware
 summary
-    Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
+    Shared library for FSharp.Data.GraphQL.Server and FSharp.Data.GraphQL.Cient
 description
-    Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor
+    Shared library for FSharp.Data.GraphQL.Server and FSharp.Data.GraphQL.Cient
 dependencies
 	framework: netstandard2.0
 		FParsec >= LOCKEDVERSION-Common
 		FSharp.Core >= LOCKEDVERSION-Common
-        FSharp.Data.GraphQL.Shared >= CURRENTVERSION
+references
+	FSharp.Data.GraphQL.Shared.dll
 files
-	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Server.Middleware.dll ==> lib/netstandard2.0
+	bin/Release/netstandard2.0/FSharp.Data.GraphQL.Shared.dll ==> lib/netstandard2.0

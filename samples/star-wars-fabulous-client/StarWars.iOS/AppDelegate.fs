@@ -14,7 +14,7 @@ type AppDelegate () =
 
     override this.FinishedLaunching (app, options) =
         Forms.Init()
-        let url = "http://127.0.0.1:8084"
+        let url = "http://127.0.0.1:8086"
         let appcore = new App(url)
         this.LoadApplication (appcore)
         base.FinishedLaunching(app, options)

@@ -18,7 +18,7 @@
 
 open FSharp.Data.GraphQL
 
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:8086">
 
 let operation = 
     MyProvider.Operation<"""mutation m {

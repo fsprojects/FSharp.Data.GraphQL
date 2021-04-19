@@ -2,8 +2,9 @@
 
 F# implementation of Facebook [GraphQL query language specification](https://facebook.github.io/graphql).
 
-[![Build Status](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL.svg?branch=dev)](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL)
-[![Build status](https://ci.appveyor.com/api/projects/status/qnra6sshi2ywrbig/branch/dev?svg=true)](https://ci.appveyor.com/project/bazingatechnologies/fsharp-data-graphql-tx31m/branch/dev) [![Join the chat at https://gitter.im/FSharp-Data-GraphQL/community](https://badges.gitter.im/FSharp-Data-GraphQL/community.svg)](https://gitter.im/FSharp-Data-GraphQL/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+[![Build Status](https://travis-ci.org/fsprojects/FSharp.Data.GraphQL.svg?branch=dev)](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/dotnetcore.yml/badge.svg)
+
+[![Join the chat at https://gitter.im/FSharp-Data-GraphQL/community](https://badges.gitter.im/FSharp-Data-GraphQL/community.svg)](https://gitter.im/FSharp-Data-GraphQL/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 ## Quick start
 
@@ -42,7 +43,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### GraphiQL client
 
-Go to the [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run the [Star Wars API sample project](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/star-wars-api) with Debug settings - this will create a Giraffe server compatible with the GraphQL spec, running on port 8084. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
+Go to the [GraphiQL sample directory](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/graphiql-client). In order to run it, build and run the [Star Wars API sample project](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/star-wars-api) with Debug settings - this will create a Giraffe server compatible with the GraphQL spec, running on port 8086. Then what you need is to run node.js graphiql frontend. To do so, run `npm i` to get all dependencies, and then run `npm run serve | npm run dev` - this will start a webpack server running on [http://localhost:8090/](http://localhost:8090/) . Visit this link, and GraphiQL editor should appear. You may try it by applying following query:
 
 ```graphql
 {

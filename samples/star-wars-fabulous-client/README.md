@@ -23,7 +23,7 @@ The API used on this project can be found is the sample of API in the folder [st
 - Select platform (Android or iOS)
 - Run project through the tool
 
-_Obs.: this project will only work if the API is running on port 8084, so if you setup a different port, you will have to modify files AppDelegate.fs, MainActivity.fs and Common.fs_
+_Obs.: this project will only work if the API is running on port 8086, so if you setup a different port, you will have to modify files AppDelegate.fs, MainActivity.fs and Common.fs_
 
 ### Example of Usage
 

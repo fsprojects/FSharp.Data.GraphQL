@@ -9,8 +9,8 @@ formed way. The core idea is to define web service in context of its capabilitie
 
 The FSharp.Data.GraphQL library can be installed from NuGet on the [server](https://www.nuget.org/packages/FSharp.Data.GraphQL.Server) or a [client](https://www.nuget.org/packages/FSharp.Data.GraphQL.Client):
     
-    PM> Install-Package FSharp.Data.GraphQL.Server -Pre
-    PM> Install-Package FSharp.Data.GraphQL.Client -Pre
+    PM> Install-Package FSharp.Data.GraphQL.Server
+    PM> Install-Package FSharp.Data.GraphQL.Client
     
 ## Quick start
 
@@ -67,11 +67,10 @@ async {
 
 ## More examples
 
-For more examples, clone [FSharp.Data.GraphQL github repository](https://github.com/bazingatechnologies/FSharp.Data.GraphQL) and see the **samples** folder. There, your can find:
+For more examples, clone [FSharp.Data.GraphQL github repository](https://github.com/fsprojects/FSharp.Data.GraphQL) and see the **samples** folder. There, your can find:
 
 - A mandatory Star Wars schema introduction using [GraphiQL](https://github.com/graphql/graphiql) client.
 - An example using [RelayJS](https://facebook.github.io/relay/) data structures (which this library supports).
-- A client example, using type providers to operate on any GraphQL schema available - worth noticing: it's compatbile with [Fable](https://fable-compiler.github.io/) compiler!
 
 Contributing and copyright
 --------------------------
@@ -85,9 +84,9 @@ The library is available under Public Domain license, which allows modification 
 redistribution for both commercial and non-commercial purposes. For more information see the 
 [License file][license] in the GitHub repository. 
 
-  [content]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/master/docs/content
-  [gh]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL
-  [issues]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/issues
-  [readme]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/master/README.md
-  [license]: https://github.com/bazingatechnologies/FSharp.Data.GraphQL/blob/master/LICENSE.txt
+  [content]: https://github.com/fsprojects/FSharp.Data.GraphQL/tree/master/docs/content
+  [gh]: https://github.com/fsprojects/FSharp.Data.GraphQL
+  [issues]: https://github.com/fsprojects/FSharp.Data.GraphQL/issues
+  [readme]: https://github.com/fsprojects/FSharp.Data.GraphQL/blob/master/README.md
+  [license]: https://github.com/fsprojects/FSharp.Data.GraphQL/blob/master/LICENSE.txt
 

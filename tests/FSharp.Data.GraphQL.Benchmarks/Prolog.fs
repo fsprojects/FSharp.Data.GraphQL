@@ -11,8 +11,10 @@ open BenchmarkDotNet.Exporters
 
 type GraphQLBenchConfig() as this= 
     inherit ManualConfig()
-    do
-        this.Add(MemoryDiagnoser.Default)
-        this.Add(StatisticColumn.Mean, StatisticColumn.Min, StatisticColumn.Max, StatisticColumn.OperationsPerSecond)
-        this.Add(MarkdownExporter.GitHub)
-        this.Add(Csv.CsvExporter(Csv.CsvSeparator.Comma))
+    do  this.AddDiagnoser(MemoryDiagnoser.Default)
+            .AddColumn(StatisticColumn.Mean)
+            .AddColumn(StatisticColumn.Min)
+            .AddColumn(StatisticColumn.Max)
+            .AddColumn(StatisticColumn.OperationsPerSecond) 
+            .AddExporter(MarkdownExporter.GitHub)
+            .AddExporter(Csv.CsvExporter(Csv.CsvSeparator.Comma)) |> ignore

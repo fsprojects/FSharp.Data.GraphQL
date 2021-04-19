@@ -105,9 +105,6 @@ publish/
 # Publish Web Output
 *.Publish.xml
 
-# Enable nuget.exe in the .nuget folder (though normally executables are not tracked)
-!.nuget/NuGet.exe
-
 # Windows Azure Build Output
 csx
 *.build.csdef
@@ -172,10 +169,11 @@ $RECYCLE.BIN/
 packages/
 
 # Generated documentation folder
-docs/output/
+/output/
 
 # Temp folder used for publishing docs
 temp/
+tmp/
 
 # Test results produced by build
 *TestResults.html
@@ -189,13 +187,15 @@ release.sh
 localpackages/
 paket-files
 .ionide
+.idea
 *.orig
-.paket/paket.exe
+.paket/
 docs/content/license.md
 docs/content/release-notes.md
 .fake
 docs/tools/FSharp.Formatting.svclog
 project.lock.json
+.fsdocs
 
 # Ionide folder
 .ionide

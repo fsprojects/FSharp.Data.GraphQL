@@ -12,7 +12,7 @@ type Provider = GraphQLProvider<"introspection.json">
 let connection = new GraphQLClientConnection(new HttpClient())
 
 // As we are not using a connection to a server to get the introspection, we need a runtime context.
-let getContext() = Provider.GetContext(serverUrl = "http://localhost:8084", connectionFactory = fun () -> connection)
+let getContext() = Provider.GetContext(serverUrl = "http://localhost:8086", connectionFactory = fun () -> connection)
 
 type Episode = Provider.Types.Episode
 
