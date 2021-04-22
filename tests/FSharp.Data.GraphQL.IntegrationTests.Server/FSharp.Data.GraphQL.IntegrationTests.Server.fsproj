@@ -7,16 +7,10 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.AspNet\FSharp.Data.GraphQL.AspNet.fsproj" />
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="JsonConverters.fs" />
-    <Compile Include="Helpers.fs" />
-    <Compile Include="CustomSchemaTypes.fs" />
     <Compile Include="Schema.fs" />
-    <Compile Include="MultipartRequest.fs" />
-    <Compile Include="Variables.fs" />
-    <Compile Include="HttpHandlers.fs" />
-    <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
     <None Include="paket.references" />
     <None Include="ApplicationInsights.config" />

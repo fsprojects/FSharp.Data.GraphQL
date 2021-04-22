@@ -142,7 +142,7 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
-                Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
+                Define.Field("friends", SeqOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
                     fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
@@ -157,7 +157,7 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the droid.", fun _ (d : Droid) -> d.Id)
                 Define.Field("name", Nullable String, "The name of the Droid.", fun _ (d : Droid) -> d.Name)
-                Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
+                Define.Field("friends", SeqOf (Nullable CharacterType), "The friends of the Droid, or an empty list if they have none.",
                     fun _ (d : Droid) -> d.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ d -> d.AppearsIn)
                 Define.Field("primaryFunction", Nullable String, "The primary function of the droid.", fun _ d -> d.PrimaryFunction)
@@ -224,13 +224,8 @@ module Schema =
                             schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
                             schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                             x))])
-
-    let schema : ISchema<Root> = upcast Schema(Query, Mutation, Subscription, schemaConfig)
-
-    let middlewares = 
+    let middlewares =
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
           Define.ObjectListFilterMiddleware<Droid, Character option>(true)
           Define.LiveQueryMiddleware() ]
-
-    let executor = Executor(schema, middlewares)

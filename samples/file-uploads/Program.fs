@@ -1,5 +1,4 @@
-﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
-
+namespace FSharp.Data.GraphQL.Samples.FileUpload
 
 open Microsoft.AspNetCore
 open Microsoft.AspNetCore.Hosting
@@ -16,9 +15,9 @@ open FSharp.Data.GraphQL.AspNet
 
 module Program =
     let configureApp (app : IApplicationBuilder) =
-        let schema = Schema(Schema.QueryType, Schema.MutationType)
+        let schema = Schema(Schema.Query, Schema.Mutation)
         let executor = Executor(schema)
-        let buildRoot ctx = async { return { RequestId = Guid.NewGuid().ToString() } }
+        let buildRoot ctx = async { return () }
         app.UseGraphQL(executor, buildRoot, path="/") |> ignore
 
     let configureServices (services : IServiceCollection) =
@@ -42,7 +41,7 @@ module Program =
             .ConfigureServices(configureServices)
             .ConfigureLogging(configureLogging)
             .UseKestrel(fun options ->
-                options.ListenAnyIP(8085)
+                options.ListenAnyIP(8080)
                 options.Limits.MaxRequestBodySize <- Nullable 2147483648L
                 options.Limits.MaxRequestBufferSize <- Nullable 2147483648L
             )

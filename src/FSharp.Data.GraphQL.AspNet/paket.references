@@ -1,4 +1,4 @@
-nuget Common
+group Common
 FSharp.Core
 
 group AspNetLib

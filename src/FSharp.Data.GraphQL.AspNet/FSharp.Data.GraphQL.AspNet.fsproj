@@ -4,6 +4,7 @@
     <LangVersion>preview</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <Compile Include="Types.fs" />
     <Compile Include="GraphQL.fs" />
   </ItemGroup>
   <ItemGroup>
