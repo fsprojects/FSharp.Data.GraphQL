@@ -48,7 +48,7 @@ module Schema =
         Object<Root>(
             name = "Query",
             fields = [
-                Field("Message", String, "A list of the employees", fun ctx _ -> "Hello World")
+                Field("Message", String, "A greeting", fun ctx _ -> "Hello World")
             ]
         )
 
