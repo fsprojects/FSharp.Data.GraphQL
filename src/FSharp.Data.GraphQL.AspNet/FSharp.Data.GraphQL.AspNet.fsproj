@@ -5,6 +5,7 @@
   </PropertyGroup>
   <ItemGroup>
     <Compile Include="Types.fs" />
+    <Compile Include="Json.fs" />
     <Compile Include="GraphQL.fs" />
   </ItemGroup>
   <ItemGroup>

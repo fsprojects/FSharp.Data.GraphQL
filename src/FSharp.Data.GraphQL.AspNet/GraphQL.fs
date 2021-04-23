@@ -3,18 +3,12 @@ namespace FSharp.Data.GraphQL.AspNet
 open System
 open System.IO
 open System.Net
-open System.Reflection
 open System.Text.Json
-open System.Text.Json.Serialization
 open System.Threading.Tasks
 open System.Security.Cryptography
-open System.Collections.Concurrent
 
-open FSharp.Reflection
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Types.Patterns
 
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
@@ -22,70 +16,6 @@ open Microsoft.Net.Http.Headers
 open Microsoft.Extensions.Primitives
 open Microsoft.AspNetCore.WebUtilities
 open Microsoft.AspNetCore.Http.Extensions
-open Microsoft.AspNetCore.Http.Features
-
-type GraphQLQuery =
-    { ExecutionPlan : ExecutionPlan
-      Variables : Map<string, obj> }
-
-type GraphQLQueryRequest =
-    | Single of GraphQLQuery
-    | Batch of GraphQLQuery list
-
-type WebSocketClientMessage =
-    | ConnectionInit of token : string option * session : string option * scheme : string option
-    | ConnectionTerminate
-    | Start of id : string * payload : GraphQLQuery
-    | Stop of id : string
-    | ParseError of id : string option * err : string
-
-type WebSocketServerMessage =
-    | ConnectionAck
-    | ConnectionError of err : string
-    | Data of id : string * payload : Output
-    | Error of id : string option * err : string
-    | Complete of id : string
-
-[<AutoOpen>]
-module Constants =
-    let [<Literal>] QueryJsonKey = "query"
-    let [<Literal>] VariablesJsonKey = "variables"
-    let [<Literal>] DataJsonKey = "data"
-
-type NameValueLookupConverter () =
-    inherit JsonConverter<NameValueLookup>()
-    override _.Read(reader: byref<Utf8JsonReader>, typeToConvert: System.Type, options: JsonSerializerOptions) =
-        invalidOp "deserialization not supported"
-
-    override _.Write(writer: Utf8JsonWriter, value: NameValueLookup, options: JsonSerializerOptions) =
-        writer.WriteStartObject()
-        for (KeyValue(key, data)) in value do
-            writer.WritePropertyName(key)
-            if isNull data then
-                writer.WriteNullValue()
-            else
-                JsonSerializer.Serialize(writer, data, data.GetType(), options)
-        writer.WriteEndObject()
-
-type GQLResponseConverter () =
-    inherit JsonConverter<GQLResponse>()
-
-    override _.Read(reader: byref<Utf8JsonReader>, typeToConvert: System.Type, options: JsonSerializerOptions) =
-        invalidOp "deserialization not supported"
-
-    override _.Write(writer: Utf8JsonWriter, value: GQLResponse, options: JsonSerializerOptions) =
-        match value with
-        | Direct(data, errors) ->
-            JsonSerializer.Serialize(writer, data, typeof<NameValueLookup>, options)
-        | _ ->
-            writer.WriteNull(DataJsonKey)
-
-type IJsonVariableReader =
-    abstract IsNullable : bool
-    abstract Read : replacements: Map<string, FileUpload> * path: string * element: JsonElement -> obj
-
-type TypeReaderCache = ConcurrentDictionary<InputDef, IJsonVariableReader>
-
 
 [<AutoOpen>]
 module private MultipartRequest =
@@ -104,221 +34,12 @@ module private MultipartRequest =
     let (|FormContent|FileContent|NoContent|) (section: MultipartSection) =
         match ContentDispositionHeaderValue.TryParse(StringSegment section.ContentDisposition) with
         | true, contentDisposition when not(isNull contentDisposition) ->
-            if contentDisposition.IsFormDisposition() then
-                FormContent contentDisposition
-            else
-                FileContent contentDisposition
+            if contentDisposition.IsFormDisposition()
+            then FormContent contentDisposition
+            else FileContent contentDisposition
         | _ ->
             NoContent
 
-module private JsonReader =
-
-    let (|SpecificTypeDef|_|) (def: TypeDef) (value: TypeDef) =
-        if def = value then Some() else None
-
-    let combinePath (left: string) (right: string) =
-        sprintf "%s.%s" left right
-
-    let toCamelCase (value: string) =
-        JsonNamingPolicy.CamelCase.ConvertName value
-
-    let getOptionCtors (optionInnerType: Type) =
-        let optionType = typedefof<option<_>>
-        let cases = FSharpType.GetUnionCases(optionType.MakeGenericType(optionInnerType))
-        let none = FSharpValue.PreComputeUnionConstructor cases.[0]
-        let some = FSharpValue.PreComputeUnionConstructor cases.[1]
-        some, none
-
-    let private getCallInfo = function
-        | Quotations.Patterns.Call(_, info, _) -> info
-        | q -> failwithf "Unexpected Quotation! %A" q
-
-    let convertArray (items: seq<obj>) : 'T array=
-        items
-        |> Seq.cast<'T>
-        |> Array.ofSeq
-
-    let convertList (items: seq<obj>) : 'T list =
-        items
-        |> Seq.cast<'T>
-        |> List.ofSeq
-
-    let convertSet (items: seq<obj>) : 'T Set =
-        items
-        |> Seq.cast<'T>
-        |> Set.ofSeq
-
-    let convertSeq (items: seq<obj>) : 'T seq =
-        items
-        |> Seq.cast<'T>
-
-
-    let rec getJsonReaderAux (input: InputDef) (cache: TypeReaderCache) =
-        match input with
-        | Nullable (Input(innerDef)) -> getNullableReader innerDef cache
-        | Scalar scalarDef -> getScalarReader scalarDef
-        | Enum enumDef -> getEnumReader enumDef
-        | List(Input(elementDef)) -> getListReader input elementDef cache
-        | InputObject inputObjectDef -> getInputObjectReader inputObjectDef cache
-        | typeDef -> raise(invalidOp(sprintf "Invalid input definition '%s'" typeDef.Type.Name))
-    and getJsonReader (input: InputDef) (cache: ConcurrentDictionary<InputDef, IJsonVariableReader>) =
-        match cache.TryGetValue input with
-        | true, value ->
-            value
-        | false, _ ->
-            let readerFunc = lazy getJsonReaderAux input cache
-            let isNullable = input :? NullableDef
-            cache.GetOrAdd(input, (fun input ->
-                { new IJsonVariableReader with
-                    member _.IsNullable = isNullable
-                    member _.Read (replacements, path, element) =
-                        readerFunc.Value replacements path element }))
-    and getNullableReader (innerDef: InputDef) (cache: TypeReaderCache) =
-        let innerReader = getJsonReader innerDef cache
-        let someCtor, noneCtor =  getOptionCtors innerDef.Type
-        fun replacements path (element: JsonElement) ->
-            match element.ValueKind with
-            | JsonValueKind.Null ->
-                match Map.tryFind path replacements with
-                | Some file -> someCtor [| file :> obj |]
-                | None -> noneCtor [||]
-            | _ ->
-                someCtor [| innerReader.Read(replacements, path, element) |]
-    and getScalarReader (scalarDef: ScalarDef) =
-        match scalarDef with
-        | SpecificTypeDef SchemaDefinitions.Date ->
-            fun _ _ (element: JsonElement) -> element.GetDateTime() :> _
-        | SpecificTypeDef SchemaDefinitions.Guid ->
-            fun _ _ (element: JsonElement) -> element.GetGuid() :> _
-        | SpecificTypeDef SchemaDefinitions.Uri ->
-            fun _ _ (element: JsonElement) -> System.Uri(element.GetString()) :> _
-        | SpecificTypeDef SchemaDefinitions.Boolean ->
-            fun _ _ (element: JsonElement) -> element.GetBoolean() :> _
-        | SpecificTypeDef SchemaDefinitions.Float ->
-            fun _ _ (element: JsonElement) -> element.GetDouble() :> _
-        | SpecificTypeDef SchemaDefinitions.Int ->
-            fun _ _ (element: JsonElement) -> element.GetInt32() :> _
-        | SpecificTypeDef SchemaDefinitions.FileUpload ->
-            fun replacements path (element: JsonElement) ->
-                match Map.tryFind path replacements with
-                | Some file -> file :> _
-                | None -> failwithf "Expected file upload at %s" path
-        | _ ->
-            fun _ _ (element: JsonElement) -> element.GetString() :> _
-    and getEnumReader (enumDef: EnumDef) =
-        if enumDef.Type.IsEnum then
-            fun _ _ element ->
-               let value = element.GetString()
-               Enum.Parse(enumDef.Type, value, ignoreCase=true)
-        else
-            let flags = BindingFlags.NonPublic ||| BindingFlags.Public
-            let cases = FSharpType.GetUnionCases(enumDef.Type, flags)
-            let ctors =
-                cases
-                |> Seq.map(fun case -> case.Name.ToLowerInvariant(), FSharpValue.PreComputeUnionConstructor case)
-                |> Map.ofSeq
-            fun _ _ element ->
-                let value = element.GetString()
-                match Map.tryFind (value.ToLowerInvariant()) ctors with
-                | Some ctor -> ctor [||]
-                | None -> failwithf "Case '%s' does not match any Union constructors in '%s'" value enumDef.Type.Name
-    and getListReader (listDef: InputDef) (elementDef: InputDef) (cache: TypeReaderCache) =
-        if listDef.Type.IsGenericType then
-            let elementReader = getJsonReader elementDef cache
-            let genericType = listDef.Type.GetGenericTypeDefinition()
-            let collectionConverterMethInfo =
-                if genericType = typedefof<list<_>> then getCallInfo <@ convertList Seq.empty @>
-                elif genericType = typedefof<array<_>> then getCallInfo <@  convertArray Seq.empty @>
-                elif genericType = typedefof<Set<_>> then getCallInfo <@ convertSet Seq.empty @>
-                else getCallInfo <@ convertSeq Seq.empty @>
-            let genericMethInfo = collectionConverterMethInfo.GetGenericMethodDefinition()
-            let methInfo = genericMethInfo.MakeGenericMethod([|elementDef.Type|])
-            let convertF v = methInfo.Invoke(null, [|v|])
-            fun replacements path element ->
-                match element.ValueKind with
-                | JsonValueKind.Array ->
-                    use enumerator = element.EnumerateArray()
-                    enumerator
-                    |> Seq.mapi(fun i value ->
-                        let elementPath = combinePath path (i.ToString())
-                        elementReader.Read(replacements, elementPath, value) )
-                    |> convertF
-                | otherElement ->
-                    failwithf "Expected array element but received '%A'" otherElement
-        else
-            failwithf "Unsupported GraphQL 'List' type '%s'"  listDef.Type.Name
-    and getInputObjectReader (inputObject: InputObjectDef) (cache: TypeReaderCache) =
-        if FSharpType.IsRecord inputObject.Type then
-            let inputFieldReaders =
-                inputObject.Fields
-                |> Array.map (fun field -> field.Name.ToLowerInvariant(), (field, toCamelCase field.Name, getJsonReader field.TypeDef cache))
-                |> Map.ofArray
-            let fieldReaders =
-                [ for field in FSharpType.GetRecordFields(inputObject.Type, true) do
-                    let fieldName = field.Name.ToLowerInvariant()
-                    match Map.tryFind fieldName inputFieldReaders with
-                    | Some fieldReader -> fieldReader
-                    | None -> failwithf "field '%s' exists on Record '%s' but not InputObject '%s'" field.Name inputObject.Type.Name inputObject.Name ]
-            let ctor = FSharpValue.PreComputeRecordConstructor(inputObject.Type, true)
-            fun replacements path element ->
-                match element.ValueKind with
-                | JsonValueKind.Object ->
-                    let values =
-                        [| for (field, name, reader) in fieldReaders do
-                             let elementPath = combinePath path name
-                             match Map.tryFind elementPath replacements with
-                             | Some value ->
-                                 box value
-                             | None ->
-                                match element.TryGetProperty name, field.DefaultValue with
-                                | (true, value), _ ->
-                                    reader.Read(replacements, elementPath, value)
-                                | (false, _), Some(defaultValue) ->
-                                    box defaultValue
-                                | (false, _), None when reader.IsNullable ->
-                                    match field.TypeDef with
-                                    | Nullable(Input(innerDef)) ->
-                                        let _, noneCtor =  getOptionCtors innerDef.Type
-                                        noneCtor [||]
-                                    | _ ->
-                                        failwithf "Expected field '%s' to be a nullable type" field.Name
-                                | (false, _), None ->
-                                    failwithf "Field '%s' is required, but not present in json object" field.Name |]
-                    ctor values
-                | fieldKind ->
-                    failwithf "Expected Json Object for InputObject '%s' but received '%A'" inputObject.Name fieldKind
-        else
-            failwithf "InputObject '%s' must be a Record type." inputObject.Type.Name
-
-    let readVariables (replacements: Map<string, FileUpload>) (index: int option) (variablesJson: JsonElement option) (vars: list<VarDef>) =
-        let readerCache = ConcurrentDictionary()
-        let basePath =
-            match index with
-            | Some idx -> combinePath (idx.ToString()) VariablesJsonKey
-            | None -> VariablesJsonKey
-        let tryReadProperty =
-            match variablesJson with
-            | Some variables ->
-                fun (name: string) ->
-                    match variables.TryGetProperty(name) with
-                    | true, value -> Some value
-                    | false, _ -> None
-            | None ->
-                fun _ -> None
-        Map.ofList [
-            for var in vars do
-                match tryReadProperty var.Name with
-                | Some element ->
-                    let path = combinePath basePath var.Name
-                    let reader = getJsonReader var.TypeDef readerCache
-                    let variableValue = reader.Read(replacements, path, element)
-                    (var.Name, variableValue)
-                | None ->
-                    match var.DefaultValue, var.TypeDef with
-                    | Some _, _ -> ()
-                    | _, Nullable _ -> ()
-                    | _  -> failwithf "Variable '%s' is missing and there is no default value" var.Name
-        ]
 
 module private ExecutionHandler =
     // crypto stream that doesn't close underlying stream
@@ -409,37 +130,35 @@ module private ExecutionHandler =
             let message = sprintf "Expected PropertyName or EndObject for property mapping but received json token '%A'" invalidToken
             raise <| invalidOp message
 
-    let readOperation (executor: Executor<'T>) (element: JsonElement) (replacements:  Map<string, FileUpload>) (index: int option) =
+    let readOperation (cache: Json.TypeReaderCache) (executor: Executor<'T>) (element: JsonElement) (replacements:  Map<string, FileUpload>) (index: int option) =
         match element.ValueKind with
         | JsonValueKind.Object ->
             let queryText =
-                match element.TryGetProperty(QueryJsonKey) with
+                match element.TryGetProperty("query") with
                 | true, queryElement -> queryElement.GetString()
                 | false, _ -> Introspection.IntrospectionQuery
-
             let variablesElement =
-                match element.TryGetProperty(VariablesJsonKey) with
+                match element.TryGetProperty("variables") with
                 | true, value when value.ValueKind <> JsonValueKind.Null -> Some value
                 |  _ -> None
             let plan = executor.CreateExecutionPlan(queryText)
-            printfn "\nQuery: %s\nVariables: %A\nFiles: %A" queryText variablesElement replacements
-            let variables = JsonReader.readVariables replacements index variablesElement plan.Variables
+            let variables = Json.readVariables cache replacements index variablesElement plan.Variables
             { ExecutionPlan = plan; Variables = variables }
         | invalidElementKind ->
             let message = sprintf "Expected 'Object' element kind but received '%A'" invalidElementKind
             raise <| invalidOp message
 
-    let readOperations (executor: Executor<'T>) (json: string) (replacements: Map<string, FileUpload>) =
+    let readOperations (cache: Json.TypeReaderCache) (executor: Executor<'T>) (json: string) (replacements: Map<string, FileUpload>) =
         use document = JsonDocument.Parse(json)
         match document.RootElement.ValueKind with
         | JsonValueKind.Array ->
             let operations =
                 document.RootElement.EnumerateArray()
-                |> Seq.mapi(fun i operation -> readOperation executor operation replacements (Some i))
+                |> Seq.mapi(fun i operation -> readOperation cache executor operation replacements (Some i))
                 |> Seq.toList
             Batch operations
         | _ ->
-            let operation = readOperation executor document.RootElement replacements None
+            let operation = readOperation cache executor document.RootElement replacements None
             Single operation
 
     let serializeResponse (ctx: HttpContext) (serializerOptions: JsonSerializerOptions) (body: 'T) = async {
@@ -447,7 +166,7 @@ module private ExecutionHandler =
         do! JsonSerializer.SerializeAsync(outputStream, body, serializerOptions) |> Async.AwaitTask
     }
 
-    let processMultipartQuery (executor: Executor<'T>) (root: 'T) (ctx: HttpContext) (serializerOptions: JsonSerializerOptions) = async {
+    let processMultipartQuery (cache: Json.TypeReaderCache) (executor: Executor<'T>) (root: 'T) (ctx: HttpContext) (serializerOptions: JsonSerializerOptions) = async {
         let boundary = ctx.Request.GetMultipartBoundary()
         let reader = MultipartReader(boundary, ctx.Request.Body)
         let! operationPart = tryReadForm reader
@@ -458,10 +177,9 @@ module private ExecutionHandler =
             match operationPart with
             | Some("operations", operationsJson) ->
                 let replacements = readMapping mappingJson fileParts
-                match readOperations executor operationsJson replacements with
+                match readOperations cache executor operationsJson replacements with
                 | Single request ->
                     let! response = executor.AsyncExecute(request.ExecutionPlan, data = root, variables = request.Variables)
-                    printfn "%A" response
                     do! serializeResponse ctx serializerOptions response
                 | Batch requests ->
                     let hasMutation = requests |> List.exists (fun req -> req.ExecutionPlan.Operation.OperationType = Ast.OperationType.Mutation)
@@ -481,7 +199,7 @@ module private ExecutionHandler =
         return! reader.ReadToEndAsync() |> Async.AwaitTask
     }
 
-    let processQuery (executor: Executor<'T>) (root: 'T) (ctx: HttpContext) (serializerOptions: JsonSerializerOptions) = async {
+    let processQuery (cache: Json.TypeReaderCache) (executor: Executor<'T>) (root: 'T) (ctx: HttpContext) (serializerOptions: JsonSerializerOptions) = async {
         let! body  = readBody ctx
         let! response =
             if System.String.IsNullOrWhiteSpace body then
@@ -489,19 +207,17 @@ module private ExecutionHandler =
             else
                 async {
                     use document = JsonDocument.Parse(body)
-                    let request = readOperation executor document.RootElement Map.empty None
-                    let! result = executor.AsyncExecute(request.ExecutionPlan, data = root, variables = request.Variables)
-                    printfn "%A" result
-                    return result
+                    let request = readOperation cache executor document.RootElement Map.empty None
+                    return! executor.AsyncExecute(request.ExecutionPlan, data = root, variables = request.Variables)
                 }
         let outputStream = ctx.Response.Body
         do! JsonSerializer.SerializeAsync(outputStream, response, serializerOptions) |> Async.AwaitTask
     }
 
-    let queryHandler (buildArguments: HttpContext -> Async<'T>) (executor: Executor<'T>) =
+    let queryHandler (buildArguments: HttpContext -> Async<'T>) (executor: Executor<'T>) (readerCache: Json.TypeReaderCache) =
         let graphQLSerializationOptions = JsonSerializerOptions()
-        graphQLSerializationOptions.Converters.Add(GQLResponseConverter())
-        graphQLSerializationOptions.Converters.Add(NameValueLookupConverter())
+        graphQLSerializationOptions.Converters.Add(Json.GQLResponseConverter())
+        graphQLSerializationOptions.Converters.Add(Json.NameValueLookupConverter())
         fun (ctx: HttpContext) ->
             async {
                 ctx.Response.Headers.Add("Content-Type", StringValues("application/json"))
@@ -510,7 +226,7 @@ module private ExecutionHandler =
                     if isMultipartContentType ctx.Request.ContentType
                     then processMultipartQuery
                     else processQuery
-                do! execute executor root ctx graphQLSerializationOptions
+                do! execute readerCache executor root ctx graphQLSerializationOptions
               } |> Async.StartAsTask :> Task
 
 [<AutoOpen>]
@@ -518,6 +234,7 @@ module ApplicationBuilderExtensions =
     type IApplicationBuilder with
         member builder.UseGraphQL(executor: Executor<'T>, buildArguments: HttpContext -> Async<'T>, ?path: string) =
             let urlPath = defaultArg path "/graphql"
-            let graphQLHandler = ExecutionHandler.queryHandler buildArguments executor
+            let readerCache = Json.TypeReaderCache()
+            let graphQLHandler = ExecutionHandler.queryHandler buildArguments executor readerCache
             builder.Map(PathString(urlPath.TrimEnd('/')), (fun (builder:IApplicationBuilder) ->
                 builder.Run(RequestDelegate(graphQLHandler))))

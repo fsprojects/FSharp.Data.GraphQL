@@ -4,30 +4,43 @@ open FSharp.Data.GraphQL.Types
 open type FSharp.Data.GraphQL.Types.SchemaDefinitions.Define
 open FSharp.Data.GraphQL.AspNet
 
-type Uploads =
-  { Files : FSharp.Data.GraphQL.AspNet.FileUpload list option }
+type UploadsInput =
+  { Files : FileUpload list }
+
+type FileInfo =
+    { Hash: string
+      Path: string
+      FileName: string
+      ContentType: string }
 
 type Root = unit
 
 module Schema =
-    let UploadType =
-        Scalar<FileUpload>(
-            name = "Upload",
-            description = "The `Upload` scalar type represents a file upload.",
-            coerceValue = (fun value ->
-                match value with
-                | :? FileUpload as upload -> Some upload
-                | _ -> None),
-            coerceInput = fun value ->
-                raise <| invalidOp("Upload cannot be coerced from an AST input.")
-        )
+    let mkFileInfo (upload: FileUpload) =
+        { Hash = upload.Hash
+          Path = upload.Path
+          FileName = upload.Name
+          ContentType = upload.ContentType }
+
 
     let UploadsType =
-        InputObject<Uploads>(
+        InputObject<UploadsInput>(
             name = "Uploads",
             description = "The `Upload` scalar type represents a file upload.",
             fields = [
-                Input("files", Nullable(ListOf UploadType))
+                Input("files", ListOf FileUpload)
+            ]
+        )
+
+    let FileInfoType =
+        Object<FileInfo>(
+            name = "FileInfo",
+            description = "The `FileInfo` type represents info about an upload",
+            fields = [
+                AutoField("hash", String)
+                AutoField("path", String)
+                AutoField("fileName", String)
+                AutoField("contentType", String)
             ]
         )
 
@@ -39,28 +52,24 @@ module Schema =
             ]
         )
 
-
     let Mutation =
         Object<Root>(
             name = "Mutation",
             fields = [
-                AsyncField("singleUpload", Boolean, "upload a single file", [Input("file", UploadType)],
-                    fun ctx _ -> async {
+                Field("singleUpload", FileInfoType, "upload a single file", [Input("file", FileUpload)],
+                    fun ctx _ ->
                         let file = ctx.Arg("file")
-                        printfn $"File: {file}"
-                        return  true
-                    })
-                AsyncField("multiUpload", Boolean, "upload a single file", [Input("files", ListOf UploadType)],
-                    fun ctx _ -> async {
+                        mkFileInfo file
+                    )
+                Field("multiUpload", ListOf FileInfoType, "upload a single file", [Input("files", ListOf FileUpload)],
+                    fun ctx _ ->
                         let files = ctx.Arg("files")
-                        printfn $"Files: {files}"
-                        return  true
-                    })
-                AsyncField("multiUploadRecord", Boolean, "upload a single file", [Input("files", UploadsType)],
-                    fun ctx _ -> async {
+                        files |> List.map mkFileInfo
+                    )
+                Field("multiUploadRecord", ListOf FileInfoType, "upload a single file", [Input("files", UploadsType)],
+                    fun ctx _ ->
                         let files = ctx.Arg("files")
-                        printfn $"Files: {files}"
-                        return  true
-                    })
+                        files.Files |> List.map mkFileInfo
+                    )
             ]
         )
