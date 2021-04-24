@@ -267,6 +267,74 @@ let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstErr
     | Success -> ()
 #endif
 
+let rec private getKind (tref : IntrospectionTypeRef) =
+    match tref.Kind with
+    | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
+    | _ -> tref.Kind
+
+let rec private getTypeName (tref: IntrospectionTypeRef) =
+    match tref.Kind with
+    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
+    | _ ->
+        match tref.Name with
+        | Some tname -> tname
+        | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+
+let rec private getIntrospectionType (schemaTypes: Map<string,IntrospectionType>) (tref: IntrospectionTypeRef) =
+    match tref.Kind with
+    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType schemaTypes tref.OfType.Value
+    | _ ->
+        let typeName = getTypeName tref
+        match schemaTypes.TryFind(typeName) with
+        | Some t -> t
+        | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
+
+let private getOperationFields (schemaTypes: Map<string,IntrospectionType>) (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
+    let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
+        match introspectionType.Kind with
+        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+            match astFields with
+            | [] -> acc
+            | field :: tail ->
+                let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
+                let tref =
+                    match field with
+                    | FragmentField fragf ->
+                        let fragmentType =
+                            let tref =
+                                Option.defaultValue [||] introspectionType.PossibleTypes
+                                |> Array.map (getIntrospectionType schemaTypes)
+                                |> Array.append [|introspectionType|]
+                                |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
+                            match tref with
+                            | Some t -> t
+                            | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
+                        let field =
+                            fragmentType.Fields
+                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
+                            |> Option.flatten
+                        match field with
+                        | Some f -> f.Type
+                        | None -> throw fragmentType.Name
+                    | TypeField typef ->
+                        let field =
+                            introspectionType.Fields
+                            |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
+                            |> Option.flatten
+                        match field with
+                        | Some f -> f.Type
+                        | None -> throw introspectionType.Name
+                let fields =
+                    match getKind tref with
+                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                        let schemaType = getIntrospectionType schemaTypes tref
+                        helper [] field.Fields schemaType
+                    | _ -> []
+                let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
+                helper (info :: acc) tail introspectionType
+        | _ -> []
+    helper [] operationAstFields operationType |> Array.ofList
+
 let private makeOperationMethodDef
     (providerSettings: ProviderSettings) (schema: IntrospectionSchema)
     (schemaProvidedTypes: Map<TypeName, ProvidedTypeDefinition>)
@@ -345,74 +413,13 @@ let private makeOperationMethodDef
             match operationTypeRef.Name with
             | Some name -> name
             | None -> failwith "Error parsing query. Operation type does not have a name."
-        let rec getKind (tref : IntrospectionTypeRef) =
-            match tref.Kind with
-            | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
-            | _ -> tref.Kind
-        let rec getTypeName (tref : IntrospectionTypeRef) =
-            match tref.Kind with
-            | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
-            | _ ->
-                match tref.Name with
-                | Some tname -> tname
-                | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
-        let rec getIntrospectionType (tref : IntrospectionTypeRef) =
-            match tref.Kind with
-            | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
-            | _ ->
-                let typeName = getTypeName tref
-                match schemaTypes.TryFind(typeName) with
-                | Some t -> t
-                | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
-        let getOperationFields (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
-            let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
-                match introspectionType.Kind with
-                | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                    match astFields with
-                    | [] -> acc
-                    | field :: tail ->
-                        let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
-                        let tref =
-                            match field with
-                            | FragmentField fragf ->
-                                let fragmentType =
-                                    let tref =
-                                        Option.defaultValue [||] introspectionType.PossibleTypes
-                                        |> Array.map getIntrospectionType
-                                        |> Array.append [|introspectionType|]
-                                        |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
-                                    match tref with
-                                    | Some t -> t
-                                    | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
-                                let field =
-                                    fragmentType.Fields
-                                    |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
-                                    |> Option.flatten
-                                match field with
-                                | Some f -> f.Type
-                                | None -> throw fragmentType.Name
-                            | TypeField typef ->
-                                let field =
-                                    introspectionType.Fields
-                                    |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
-                                    |> Option.flatten
-                                match field with
-                                | Some f -> f.Type
-                                | None -> throw introspectionType.Name
-                        let fields =
-                            match getKind tref with
-                            | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                                let schemaType = getIntrospectionType tref
-                                helper [] field.Fields schemaType
-                            | _ -> []
-                        let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
-                        helper (info :: acc) tail introspectionType
-                | _ -> []
-            helper [] operationAstFields operationType |> Array.ofList
 
         // Every time we run the query, we will need the schema types information as an expression.
         // To avoid creating the type map expression every time we call Run method, we cache it here.
-        let operationFieldsExpr = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
+        let introspectionType = getIntrospectionType schemaTypes operationTypeRef
+        let operationFieldsExpr =
+            let fields = getOperationFields schemaTypes operationAstFields introspectionType
+            fields |> QuotationHelpers.arrayExpr |> snd
         let contextInfo : GraphQLRuntimeContextInfo option =
             match providerSettings.IntrospectionLocation with
             | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
