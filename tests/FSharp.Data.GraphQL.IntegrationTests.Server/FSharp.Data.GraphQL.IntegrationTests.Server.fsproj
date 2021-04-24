@@ -7,7 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.AspNet\FSharp.Data.GraphQL.AspNet.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNet\FSharp.Data.GraphQL.Server.AspNet.fsproj" />
   </ItemGroup>
   <ItemGroup>
     <Compile Include="Schema.fs" />

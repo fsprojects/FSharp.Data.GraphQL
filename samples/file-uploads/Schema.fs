@@ -1,7 +1,7 @@
 ﻿namespace FSharp.Data.GraphQL.Samples.FileUpload
 
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.AspNet
+open FSharp.Data.GraphQL.Server.AspNet
 open type FSharp.Data.GraphQL.Types.SchemaDefinitions.Define
 
 type UploadsInput =

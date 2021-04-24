@@ -11,7 +11,7 @@ open Microsoft.Extensions.Logging
 open Microsoft.Extensions.DependencyInjection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server
-open FSharp.Data.GraphQL.AspNet
+open FSharp.Data.GraphQL.Server.AspNet
 
 module Program =
     let configureApp (app : IApplicationBuilder) =

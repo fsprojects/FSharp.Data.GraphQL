@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.AspNet
+namespace FSharp.Data.GraphQL.Server.AspNet
 
 open System
 open System.IO

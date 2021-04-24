@@ -137,7 +137,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{9D5C46
 		samples\client-provider\file-upload\server\types.mjs = samples\client-provider\file-upload\server\types.mjs
 	EndProjectSection
 EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.AspNet", "src\FSharp.Data.GraphQL.AspNet\FSharp.Data.GraphQL.AspNet.fsproj", "{F5640838-93AB-4903-822B-D31D4D0FEBE2}"
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server.AspNet", "src\FSharp.Data.GraphQL.Server.AspNet\FSharp.Data.GraphQL.Server.AspNet.fsproj", "{F5640838-93AB-4903-822B-D31D4D0FEBE2}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution

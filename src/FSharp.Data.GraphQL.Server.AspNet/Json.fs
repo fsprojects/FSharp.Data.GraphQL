@@ -1,4 +1,4 @@
-module internal FSharp.Data.GraphQL.AspNet.Json
+module internal FSharp.Data.GraphQL.Server.AspNet.Json
 
 open System
 open System.Reflection
