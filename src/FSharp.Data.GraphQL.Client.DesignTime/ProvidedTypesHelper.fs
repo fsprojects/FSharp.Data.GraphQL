@@ -685,7 +685,230 @@ module internal Provider =
                 ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
         !providedTypes
 
-    let makeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
+    let loadSchema (introspectionLocation: IntrospectionLocation) (httpHeaders: seq<string * string>)=
+        let schemaJson =
+            match introspectionLocation with
+            | Uri serverUrl ->
+                use connection = new GraphQLClientConnection()
+                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
+            | IntrospectionFile path ->
+                System.IO.File.ReadAllText path
+        Serialization.deserializeSchema schemaJson
+
+    let makeRootType (asm: Assembly) (ns:string) (tname:string) (providerSettings: ProviderSettings) =
+        let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
+        tdef.AddXmlDoc("A type provider for GraphQL operations.")
+        tdef.AddMembersDelayed (fun _ ->
+            let httpHeaders = HttpHeaders.load providerSettings.CustomHttpHeadersLocation
+            let schema = loadSchema providerSettings.IntrospectionLocation httpHeaders
+            let schemaProvidedTypes = getSchemaProvidedTypes(schema, providerSettings.UploadInputTypeName, providerSettings.ExplicitOptionalParameters)
+            let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
+            typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+            let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
+            let getContextMethodDef =
+                let methodParameters =
+                    let serverUrl =
+                        match providerSettings.IntrospectionLocation with
+                        | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
+                        | _ -> ProvidedParameter("serverUrl", typeof<string>)
+                    let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
+                    let connectionFactory = ProvidedParameter("connectionFactory", typeof<unit -> GraphQLClientConnection>, optionalValue = null)
+                    [serverUrl; httpHeaders; connectionFactory]
+                let defaultHttpHeadersExpr =
+                    let names = httpHeaders |> Seq.map fst |> Array.ofSeq
+                    let values = httpHeaders |> Seq.map snd |> Array.ofSeq
+                    Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
+                let invoker (args : Expr list) =
+                    let serverUrl = args.[0]
+                    <@@ let httpHeaders =
+                            match %%args.[1] : seq<string * string> with
+                            | null -> %%defaultHttpHeadersExpr
+                            | argHeaders -> argHeaders
+                        let connectionFactory =
+                            match %%args.[2] : unit -> GraphQLClientConnection with
+                            | argHeaders when obj.Equals(argHeaders, null) -> fun () -> new GraphQLClientConnection()
+                            | argHeaders -> argHeaders
+                        { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
+                ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
+            let operationMethodDef =
+                let staticParams =
+                    [ ProvidedStaticParameter("query", typeof<string>)
+                      ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = providerSettings.ResolutionFolder)
+                      ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
+                      ProvidedStaticParameter("typeName", typeof<string>, parameterDefaultValue = "") ]
+                let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
+                let instanceBuilder (methodName : string) (args : obj []) =
+                    let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
+                    let query =
+                        match queryLocation with
+                        | String query -> query
+                        | File path -> System.IO.File.ReadAllText(path)
+                    let queryAst = Parser.parse query
+                    #if IS_DESIGNTIME
+                    let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
+                        let rec formatValidationExceptionMessage(errors : AstError list) =
+                            match errors with
+                            | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
+                            | errors ->
+                                errors
+                                |> List.map (fun err ->
+                                    match err.Path with
+                                    | Some path -> sprintf "%s Path: %A" err.Message path
+                                    | None -> err.Message)
+                                |> List.reduce (fun x y -> x + Environment.NewLine + y)
+                        match validationResult with
+                        | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
+                        | Success -> ()
+                    let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
+                    let refMaker = lazy Validation.Ast.validateDocument schema queryAst
+                    if providerSettings.ClientQueryValidation then
+                        refMaker.Force
+                        |> QueryValidationDesignTimeCache.getOrAdd key
+                        |> throwExceptionIfValidationFailed
+                    #endif
+                    let operationName : OperationName option =
+                        match args.[2] :?> string with
+                        | null | "" ->
+                            let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
+                            match operationDefinitions with
+                            | opdef :: _ -> opdef.Name
+                            | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
+                        | x -> Some x
+                    let explicitOperationTypeName : TypeName option =
+                        match args.[3] :?> string with
+                        | null | "" -> None
+                        | x -> Some x
+                    let operationDefinition =
+                        queryAst.Definitions
+                        |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
+                        |> List.find (fun d -> d.Name = operationName)
+                    let operationAstFields =
+                        let infoMap = queryAst.GetInfoMap()
+                        match infoMap.TryFind(operationName) with
+                        | Some fields -> fields
+                        | None -> failwith "Error parsing query. Could not find field information for requested operation."
+                    let operationTypeRef =
+                        let tref =
+                            match operationDefinition.OperationType with
+                            | Query -> schema.QueryType
+                            | Mutation ->
+                                match schema.MutationType with
+                                | Some tref -> tref
+                                | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+                            | Subscription ->
+                                match schema.SubscriptionType with
+                                | Some tref -> tref
+                                | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+                        let tinst =
+                            match tref.Name with
+                            | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
+                            | None -> None
+                        match tinst with
+                        | Some t -> { tref with Kind = t.Kind }
+                        | None -> failwith "The operation was found in the schema, but it does not have a name."
+                    let schemaTypes = TypeMapping.getSchemaTypes schema
+                    let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
+                    let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
+                    let className =
+                        match explicitOperationTypeName, operationDefinition.Name with
+                        | Some name, _ -> name.FirstCharUpper()
+                        | None, Some name -> name.FirstCharUpper()
+                        | None, None -> "Operation" + actualQuery.MD5Hash()
+                    let metadata = getOperationMetadata(schemaTypes, providerSettings.UploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, providerSettings.ExplicitOptionalParameters)
+                    let operationTypeName : TypeName =
+                        match operationTypeRef.Name with
+                        | Some name -> name
+                        | None -> failwith "Error parsing query. Operation type does not have a name."
+                    let rec getKind (tref : IntrospectionTypeRef) =
+                        match tref.Kind with
+                        | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
+                        | _ -> tref.Kind
+                    let rec getTypeName (tref : IntrospectionTypeRef) =
+                        match tref.Kind with
+                        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
+                        | _ ->
+                            match tref.Name with
+                            | Some tname -> tname
+                            | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+                    let rec getIntrospectionType (tref : IntrospectionTypeRef) =
+                        match tref.Kind with
+                        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
+                        | _ ->
+                            let typeName = getTypeName tref
+                            match schemaTypes.TryFind(typeName) with
+                            | Some t -> t
+                            | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
+                    let getOperationFields (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
+                        let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
+                            match introspectionType.Kind with
+                            | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                match astFields with
+                                | [] -> acc
+                                | field :: tail ->
+                                    let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
+                                    let tref =
+                                        match field with
+                                        | FragmentField fragf ->
+                                            let fragmentType =
+                                                let tref =
+                                                    Option.defaultValue [||] introspectionType.PossibleTypes
+                                                    |> Array.map getIntrospectionType
+                                                    |> Array.append [|introspectionType|]
+                                                    |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
+                                                match tref with
+                                                | Some t -> t
+                                                | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
+                                            let field =
+                                                fragmentType.Fields
+                                                |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
+                                                |> Option.flatten
+                                            match field with
+                                            | Some f -> f.Type
+                                            | None -> throw fragmentType.Name
+                                        | TypeField typef ->
+                                            let field =
+                                                introspectionType.Fields
+                                                |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
+                                                |> Option.flatten
+                                            match field with
+                                            | Some f -> f.Type
+                                            | None -> throw introspectionType.Name
+                                    let fields =
+                                        match getKind tref with
+                                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
+                                            let schemaType = getIntrospectionType tref
+                                            helper [] field.Fields schemaType
+                                        | _ -> []
+                                    let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
+                                    helper (info :: acc) tail introspectionType
+                            | _ -> []
+                        helper [] operationAstFields operationType |> Array.ofList
+
+                    // Every time we run the query, we will need the schema types information as an expression.
+                    // To avoid creating the type map expression every time we call Run method, we cache it here.
+                    let operationFieldsExpr = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
+                    let contextInfo : GraphQLRuntimeContextInfo option =
+                        match providerSettings.IntrospectionLocation with
+                        | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
+                        | _ -> None
+                    let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, providerSettings.ExplicitOptionalParameters)
+                    operationDef.AddMember(metadata.TypeWrapper)
+                    let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
+                    let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)
+                    methodDef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
+                    operationWrapper.AddMember(operationDef)
+                    operationDef.AddMember(methodDef)
+                    methodDef
+                staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
+                staticMethodDef
+            let schemaPropertyDef =
+                let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
+                ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
+            let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
+            members)
+        tdef
+
+    let makeGraphQLProvider(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
         let staticParams =
             [ ProvidedStaticParameter("introspection", typeof<string>)
@@ -704,237 +927,18 @@ module internal Provider =
                 match name with
                 | null | "" -> None
                 | _ -> Some name
-            let maker =
-                lazy
-                    let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
-                    tdef.AddXmlDoc("A type provider for GraphQL operations.")
-                    tdef.AddMembersDelayed (fun _ ->
-                        let httpHeaders = HttpHeaders.load httpHeadersLocation
-                        let schemaJson =
-                            match introspectionLocation with
-                            | Uri serverUrl ->
-                                use connection = new GraphQLClientConnection()
-                                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
-                            | IntrospectionFile path ->
-                                System.IO.File.ReadAllText path
-                        let schema = Serialization.deserializeSchema schemaJson
-
-                        let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
-                        let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
-                        typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
-                        let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
-                        let getContextMethodDef =
-                            let methodParameters =
-                                let serverUrl =
-                                    match introspectionLocation with
-                                    | Uri serverUrl -> ProvidedParameter("serverUrl", typeof<string>, optionalValue = serverUrl)
-                                    | _ -> ProvidedParameter("serverUrl", typeof<string>)
-                                let httpHeaders = ProvidedParameter("httpHeaders", typeof<seq<string * string>>, optionalValue = null)
-                                let connectionFactory = ProvidedParameter("connectionFactory", typeof<unit -> GraphQLClientConnection>, optionalValue = null)
-                                [serverUrl; httpHeaders; connectionFactory]
-                            let defaultHttpHeadersExpr =
-                                let names = httpHeaders |> Seq.map fst |> Array.ofSeq
-                                let values = httpHeaders |> Seq.map snd |> Array.ofSeq
-                                Expr.Coerce(<@@ Array.zip names values @@>, typeof<seq<string * string>>)
-                            let invoker (args : Expr list) =
-                                let serverUrl = args.[0]
-                                <@@ let httpHeaders =
-                                        match %%args.[1] : seq<string * string> with
-                                        | null -> %%defaultHttpHeadersExpr
-                                        | argHeaders -> argHeaders
-                                    let connectionFactory =
-                                        match %%args.[2] : unit -> GraphQLClientConnection with
-                                        | argHeaders when obj.Equals(argHeaders, null) -> fun () -> new GraphQLClientConnection()
-                                        | argHeaders -> argHeaders
-                                    { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
-                            ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
-                        let operationMethodDef =
-                            let staticParams =
-                                [ ProvidedStaticParameter("query", typeof<string>)
-                                  ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
-                                  ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
-                                  ProvidedStaticParameter("typeName", typeof<string>, parameterDefaultValue = "") ]
-                            let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
-                            let instanceBuilder (methodName : string) (args : obj []) =
-                                let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
-                                let query =
-                                    match queryLocation with
-                                    | String query -> query
-                                    | File path -> System.IO.File.ReadAllText(path)
-                                let queryAst = Parser.parse query
-                                #if IS_DESIGNTIME
-                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-                                    let rec formatValidationExceptionMessage(errors : AstError list) =
-                                        match errors with
-                                        | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
-                                        | errors ->
-                                            errors
-                                            |> List.map (fun err ->
-                                                match err.Path with
-                                                | Some path -> sprintf "%s Path: %A" err.Message path
-                                                | None -> err.Message)
-                                            |> List.reduce (fun x y -> x + Environment.NewLine + y)
-                                    match validationResult with
-                                    | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
-                                    | Success -> ()
-                                let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
-                                let refMaker = lazy Validation.Ast.validateDocument schema queryAst
-                                if clientQueryValidation then
-                                    refMaker.Force
-                                    |> QueryValidationDesignTimeCache.getOrAdd key
-                                    |> throwExceptionIfValidationFailed
-                                #endif
-                                let operationName : OperationName option =
-                                    match args.[2] :?> string with
-                                    | null | "" ->
-                                        let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
-                                        match operationDefinitions with
-                                        | opdef :: _ -> opdef.Name
-                                        | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
-                                    | x -> Some x
-                                let explicitOperationTypeName : TypeName option =
-                                    match args.[3] :?> string with
-                                    | null | "" -> None
-                                    | x -> Some x
-                                let operationDefinition =
-                                    queryAst.Definitions
-                                    |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
-                                    |> List.find (fun d -> d.Name = operationName)
-                                let operationAstFields =
-                                    let infoMap = queryAst.GetInfoMap()
-                                    match infoMap.TryFind(operationName) with
-                                    | Some fields -> fields
-                                    | None -> failwith "Error parsing query. Could not find field information for requested operation."
-                                let operationTypeRef =
-                                    let tref =
-                                        match operationDefinition.OperationType with
-                                        | Query -> schema.QueryType
-                                        | Mutation ->
-                                            match schema.MutationType with
-                                            | Some tref -> tref
-                                            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-                                        | Subscription ->
-                                            match schema.SubscriptionType with
-                                            | Some tref -> tref
-                                            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
-                                    let tinst =
-                                        match tref.Name with
-                                        | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
-                                        | None -> None
-                                    match tinst with
-                                    | Some t -> { tref with Kind = t.Kind }
-                                    | None -> failwith "The operation was found in the schema, but it does not have a name."
-                                let schemaTypes = TypeMapping.getSchemaTypes schema
-                                let enumProvidedTypes = schemaProvidedTypes |> Map.filter (fun _ t -> t.BaseType = typeof<EnumBase>)
-                                let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
-                                let className =
-                                    match explicitOperationTypeName, operationDefinition.Name with
-                                    | Some name, _ -> name.FirstCharUpper()
-                                    | None, Some name -> name.FirstCharUpper()
-                                    | None, None -> "Operation" + actualQuery.MD5Hash()
-                                let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, explicitOptionalParameters)
-                                let operationTypeName : TypeName =
-                                    match operationTypeRef.Name with
-                                    | Some name -> name
-                                    | None -> failwith "Error parsing query. Operation type does not have a name."
-                                let rec getKind (tref : IntrospectionTypeRef) =
-                                    match tref.Kind with
-                                    | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
-                                    | _ -> tref.Kind
-                                let rec getTypeName (tref : IntrospectionTypeRef) =
-                                    match tref.Kind with
-                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
-                                    | _ ->
-                                        match tref.Name with
-                                        | Some tname -> tname
-                                        | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
-                                let rec getIntrospectionType (tref : IntrospectionTypeRef) =
-                                    match tref.Kind with
-                                    | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType tref.OfType.Value
-                                    | _ ->
-                                        let typeName = getTypeName tref
-                                        match schemaTypes.TryFind(typeName) with
-                                        | Some t -> t
-                                        | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
-                                let getOperationFields (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
-                                    let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
-                                        match introspectionType.Kind with
-                                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                                            match astFields with
-                                            | [] -> acc
-                                            | field :: tail ->
-                                                let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
-                                                let tref =
-                                                    match field with
-                                                    | FragmentField fragf ->
-                                                        let fragmentType =
-                                                            let tref =
-                                                                Option.defaultValue [||] introspectionType.PossibleTypes
-                                                                |> Array.map getIntrospectionType
-                                                                |> Array.append [|introspectionType|]
-                                                                |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
-                                                            match tref with
-                                                            | Some t -> t
-                                                            | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
-                                                        let field =
-                                                            fragmentType.Fields
-                                                            |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
-                                                            |> Option.flatten
-                                                        match field with
-                                                        | Some f -> f.Type
-                                                        | None -> throw fragmentType.Name
-                                                    | TypeField typef ->
-                                                        let field =
-                                                            introspectionType.Fields
-                                                            |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
-                                                            |> Option.flatten
-                                                        match field with
-                                                        | Some f -> f.Type
-                                                        | None -> throw introspectionType.Name
-                                                let fields =
-                                                    match getKind tref with
-                                                    | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                                                        let schemaType = getIntrospectionType tref
-                                                        helper [] field.Fields schemaType
-                                                    | _ -> []
-                                                let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
-                                                helper (info :: acc) tail introspectionType
-                                        | _ -> []
-                                    helper [] operationAstFields operationType |> Array.ofList
-
-                                // Every time we run the query, we will need the schema types information as an expression.
-                                // To avoid creating the type map expression every time we call Run method, we cache it here.
-                                let operationFieldsExpr = getOperationFields operationAstFields (getIntrospectionType operationTypeRef) |> QuotationHelpers.arrayExpr |> snd
-                                let contextInfo : GraphQLRuntimeContextInfo option =
-                                    match introspectionLocation with
-                                    | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
-                                    | _ -> None
-                                let operationDef = ProvidedOperation.makeProvidedType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, explicitOptionalParameters)
-                                operationDef.AddMember(metadata.TypeWrapper)
-                                let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
-                                let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)
-                                methodDef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
-                                operationWrapper.AddMember(operationDef)
-                                operationDef.AddMember(methodDef)
-                                methodDef
-                            staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
-                            staticMethodDef
-                        let schemaPropertyDef =
-                            let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
-                            ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
-                        let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
-                        members)
-                    tdef
-            #if IS_DESIGNTIME
-            let providerKey =
+            let providerSettings =
                 { IntrospectionLocation = introspectionLocation
                   CustomHttpHeadersLocation = httpHeadersLocation
                   UploadInputTypeName = uploadInputTypeName
                   ResolutionFolder = resolutionFolder
                   ClientQueryValidation = clientQueryValidation
                   ExplicitOptionalParameters = explicitOptionalParameters }
-            ProviderDesignTimeCache.getOrAdd providerKey maker.Force)
-            #else
-            maker.Force())
-            #endif
+            let maker = lazy makeRootType asm ns tname providerSettings
+#if IS_DESIGNTIME
+            ProviderDesignTimeCache.getOrAdd providerSettings maker.Force
+#else
+            maker.Force()
+#endif
+        )
         generator

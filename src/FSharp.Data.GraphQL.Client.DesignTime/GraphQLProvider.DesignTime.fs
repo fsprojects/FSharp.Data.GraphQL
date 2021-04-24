@@ -19,7 +19,7 @@ type GraphQLTypeProvider (config) as this =
     let ns = "FSharp.Data.GraphQL"
     let asm = Assembly.GetExecutingAssembly()
 
-    do this.AddNamespace(ns, [Provider.makeProvidedType(asm, ns, config.ResolutionFolder)])
+    do this.AddNamespace(ns, [Provider.makeGraphQLProvider(asm, ns, config.ResolutionFolder)])
 
 [<assembly:TypeProviderAssembly>]
 do()
