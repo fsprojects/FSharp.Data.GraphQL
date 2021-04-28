@@ -4,6 +4,8 @@
 module FSharp.Data.GraphQL.Provider
 
 open System
+open System.IO
+open System.Text.RegularExpressions
 open FSharp.Core
 open System.Reflection
 open FSharp.Data.GraphQL
@@ -35,7 +37,7 @@ let private getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>
             if schemaTypes.ContainsKey(actual)
             then resolveWrapperName (actual + "Fields")
             else actual
-        ProvidedTypeDefinition(resolveWrapperName name, None, isSealed = true)
+        ProvidedTypeDefinition(resolveWrapperName name, Some typeof<obj>, isSealed = true)
     let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
     let rootWrapper = generateWrapper "Types"
     wrappersByPath.Add([], rootWrapper)
@@ -222,22 +224,28 @@ let getSchemaProvidedTypes(schema : IntrospectionSchema, uploadInputTypeName : s
                 providedTypes := (!providedTypes).Add(itype.Name, tdef)
                 tdef
             | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
-    let ignoredKinds = [TypeKind.SCALAR; TypeKind.LIST; TypeKind.NON_NULL]
-    schemaTypes |> Map.iter (fun _ itype -> if not (List.contains itype.Kind ignoredKinds) then resolveProvidedType itype |> ignore)
-    let possibleTypes (itype : IntrospectionType) =
-        match itype.PossibleTypes with
-        | Some trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
-        | None -> [||]
-    let getProvidedType typeName =
-        match (!providedTypes).TryFind(typeName) with
-        | Some ptype -> ptype
-        | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
-    schemaTypes
-    |> Seq.iter (fun kvp ->
-        if kvp.Value.Kind = TypeKind.INTERFACE || kvp.Value.Kind = TypeKind.UNION then
-            let itype = getProvidedType kvp.Value.Name
-            let ptypes = possibleTypes kvp.Value
-            ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
+    for KeyValue(_, schemaType) in schemaTypes do
+        let ignoredType =
+            schemaType.Kind = TypeKind.NON_NULL ||
+            schemaType.Kind = TypeKind.SCALAR ||
+            schemaType.Kind = TypeKind.LIST
+        if not ignoredType then
+            resolveProvidedType schemaType |> ignore
+
+        let isAbstract =
+            schemaType.Kind = TypeKind.INTERFACE ||
+            schemaType.Kind = TypeKind.UNION
+        if isAbstract then
+            let itype =
+                match (!providedTypes).TryFind(schemaType.Name) with
+                | Some ptype -> ptype
+                | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." schemaType.Name
+            let possibleTypes =
+                match schemaType.PossibleTypes with
+                | Some trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
+                | None -> [||]
+            for possibleType in possibleTypes do
+                possibleType.AddInterfaceImplementation(itype)
     !providedTypes
 
 let private loadSchema (introspectionLocation: IntrospectionLocation) (httpHeaders: seq<string * string>)=
@@ -435,15 +443,92 @@ let private makeOperationMethodDef
     staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
     staticMethodDef
 
-let private makeRootType (asm: Assembly) (ns:string) (tname:string) (providerSettings: ProviderSettings) =
-    let tdef = ProvidedTypeDefinition(asm, ns, tname, None)
+
+let importsRegex = Regex(@"^\s*#import\s+(?<file>.*)",  RegexOptions.Compiled ||| RegexOptions.Multiline)
+let parseImports (query: string) =
+    let matches = importsRegex.Matches(query)
+    [ for import in matches do
+         let file = import.Groups.["file"]
+         file.Value.Trim(' ', '\'', '"') ]
+
+let loadFragmentFromPath (file: string) =
+    if File.Exists file then
+        let content = File.ReadAllText file
+        let imports = parseImports content
+        let document = Parser.parse content
+        imports, document
+    else
+        failwithf "Fragment file does not exist on disk %s" file
+
+type ProvidedFragmentMetadata = unit
+
+let rec makeFragmentInterface
+    (file: string) (schema: IntrospectionSchema)
+    (schemaProvidedTypes: Map<TypeName, ProvidedTypeDefinition>)
+    (fragmentWrapper: ProvidedTypeDefinition)
+    (cache: Map<string, ProvidedFragmentMetadata>) =
+    let imports, document = loadFragmentFromPath file
+    [ for node in document.Definitions do
+        match node with
+        | FragmentDefinition definition ->
+            match definition.Name, definition.TypeCondition with
+            | Some name, Some typeCondition ->
+                let fragmentInterface = ProvidedTypeDefinition(name, None, isInterface=true, isSealed=false)
+                let providedType =
+                    match schemaProvidedTypes.TryFind typeCondition with
+                    | Some providedType -> providedType
+                    | None -> failwithf "Fragment \"%s\" defined in \"%s\" refers to a type \"%s\" that does not exist in the introspection schema." name file typeCondition
+                for selection in definition.SelectionSet do
+                    match selection with
+                    | Selection.InlineFragment fragment ->
+                        match fragment.TypeCondition with
+                        | Some typeCondition ->
+                            let subFragmentInterface = ProvidedTypeDefinition(typeCondition, Some(fragmentInterface :> _), isInterface=true)
+                            fragmentInterface.AddMember subFragmentInterface
+                        | None ->
+                            ()
+                    | Selection.Field field ->
+                        let property = providedType.GetProperty(field.Name.FirstCharUpper())
+                        ()
+                        //fragmentInterface.AddMember(ProvidedProperty("Foo", typeof<string>, isStatic=false))
+                        //.AddMember(ProvidedProperty(property.Name, property.PropertyType))
+                    | Selection.FragmentSpread _ ->
+                        ()
+                fragmentWrapper.AddMember(fragmentInterface)
+            | _, _ ->
+                ()
+        | OperationDefinition op ->
+            ()
+    ]
+
+let private makeFragmentInterfaces
+    (schema: IntrospectionSchema)
+    (schemaProvidedTypes: Map<TypeName, ProvidedTypeDefinition>)
+    (fragmentWrapper: ProvidedTypeDefinition)
+    (providerSettings: ProviderSettings) =
+    match providerSettings.FragmentsFolder with
+    | Some folder ->
+        let fragmentFiles = Directory.GetFiles(folder, "*.graphql")
+        for file in fragmentFiles do
+            makeFragmentInterface file schema schemaProvidedTypes fragmentWrapper Map.empty |> ignore
+    | None ->
+        ()
+
+let private makeRootType (asm: Assembly) (ns: string) (tname: string) (providerSettings: ProviderSettings) =
+    let tdef = ProvidedTypeDefinition(asm, ns, tname, Some typeof<obj>)
     tdef.AddXmlDoc("A type provider for GraphQL operations.")
-    tdef.AddMembersDelayed (fun _ ->
+    tdef.AddMembersDelayed (fun () ->
         let httpHeaders = HttpHeaders.load providerSettings.CustomHttpHeadersLocation
         let schema = loadSchema providerSettings.IntrospectionLocation httpHeaders
         let schemaProvidedTypes = getSchemaProvidedTypes(schema, providerSettings.UploadInputTypeName, providerSettings.ExplicitOptionalParameters)
-        let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
-        typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
+        let schemaProvidedTypesList = schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq
+        let typeWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
+        typeWrapper.AddMembers schemaProvidedTypesList
+
+
+        let fragmentsWrapper = ProvidedTypeDefinition("Fragments", None, isSealed = true)
+        //makeFragmentInterfaces schema schemaProvidedTypes fragmentsWrapper providerSettings
+
         let operationWrapper = ProvidedTypeDefinition("Operations", None, isSealed = true)
         let getContextMethodDef =
             let methodParameters =
@@ -475,7 +560,7 @@ let private makeRootType (asm: Assembly) (ns:string) (tname:string) (providerSet
         let schemaPropertyDef =
             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
-        let members : MemberInfo list = [typeWrapper; operationWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
+        let members : MemberInfo list = [typeWrapper; operationWrapper; fragmentsWrapper; getContextMethodDef; operationMethodDef; schemaPropertyDef]
         members)
     tdef
 
@@ -487,24 +572,32 @@ let makeGraphQLProvider(asm : Assembly, ns : string, resolutionFolder : string) 
           ProvidedStaticParameter("resolutionFolder", typeof<string>, parameterDefaultValue = resolutionFolder)
           ProvidedStaticParameter("uploadInputTypeName", typeof<string>, parameterDefaultValue = "")
           ProvidedStaticParameter("clientQueryValidation", typeof<bool>, parameterDefaultValue = true)
-          ProvidedStaticParameter("explicitOptionalParameters", typeof<bool>, parameterDefaultValue = false) ]
+          ProvidedStaticParameter("explicitOptionalParameters", typeof<bool>, parameterDefaultValue = false)
+          ProvidedStaticParameter("fragmentsFolder", typeof<string>, parameterDefaultValue="") ]
     generator.DefineStaticParameters(staticParams, fun tname args ->
         let clientQueryValidation : bool = downcast args.[4]
         let explicitOptionalParameters : bool = downcast args.[5]
         let introspectionLocation = IntrospectionLocation.Create(downcast args.[0], downcast args.[2])
         let httpHeadersLocation = StringLocation.Create(downcast args.[1], resolutionFolder)
         let uploadInputTypeName =
-            let name : string = unbox args.[3]
-            match name with
-            | null | "" -> None
-            | _ -> Some name
+            match args.[3] with
+            | :? string as name
+                when not(String.IsNullOrEmpty name) -> Some name
+            | _ -> None
+        let fragmentsFolder =
+            match args.[6] with
+            | :? string as folder
+                when not(String.IsNullOrEmpty folder) ->
+                    Some(Path.Combine(resolutionFolder, folder))
+            | _ -> None
         let providerSettings =
             { IntrospectionLocation = introspectionLocation
               CustomHttpHeadersLocation = httpHeadersLocation
               UploadInputTypeName = uploadInputTypeName
               ResolutionFolder = resolutionFolder
               ClientQueryValidation = clientQueryValidation
-              ExplicitOptionalParameters = explicitOptionalParameters }
+              ExplicitOptionalParameters = explicitOptionalParameters
+              FragmentsFolder = fragmentsFolder }
         let maker = lazy makeRootType asm ns tname providerSettings
 #if IS_DESIGNTIME
         ProviderDesignTimeCache.getOrAdd providerSettings maker.Force

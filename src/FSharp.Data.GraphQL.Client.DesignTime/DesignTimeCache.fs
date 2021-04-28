@@ -16,7 +16,8 @@ type internal ProviderSettings =
       UploadInputTypeName : string option
       ResolutionFolder : string
       ClientQueryValidation: bool
-      ExplicitOptionalParameters: bool }
+      ExplicitOptionalParameters: bool
+      FragmentsFolder: string option }
 
 module internal ProviderDesignTimeCache =
     let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
