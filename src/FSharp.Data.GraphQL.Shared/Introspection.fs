@@ -7,11 +7,6 @@ module FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Extensions
-open System.Reflection
-
-let internal getFieldValue name o =
-    let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
-    if isNull property then null else property.GetValue(o, null)
 
 /// Common GraphQL query that may be used to retrieve overall data
 /// about schema type system itself.

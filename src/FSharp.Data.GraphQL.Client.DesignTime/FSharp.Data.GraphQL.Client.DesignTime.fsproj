@@ -37,7 +37,8 @@
     <Compile Include="DesignTimeCache.fs" />
     <Compile Include="QuotationHelpers.fs" />
     <Compile Include="ProvidedSchema.fs" />
-    <Compile Include="ProvidedOperation.fs" />
+    <Compile Include="SchemaGenerator.fs" />
+    <Compile Include="OperationGenerator.fs" />
     <Compile Include="Provider.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />
     <None Include="paket.references" />

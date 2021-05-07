@@ -7,11 +7,12 @@ open FSharp.Data.GraphQL
 // Some GraphQL API's gives access to their schema via GET method, whithout need to anthenticate via headers.
 // The provider automatically tries to get the schema via GET method first. If it does not work,
 // The classical way via POST is done.
-type MyProvider = GraphQLProvider<"github_schema.json">
+let [<Literal>] Schema = __SOURCE_DIRECTORY__ + "/github_schema.json"
+type MyProvider = GraphQLProvider<Schema>
 
 let operation = MyProvider.Operation<"""query q { viewer { login } }""">()
 
-let headers = HttpHeaders.ofFile "github_authorization_headers.headerfile"
+let headers = HttpHeaders.ofFile (__SOURCE_DIRECTORY__ + "/github_authorization_headers.headerfile")
 
 let run () =
     // Dispose runtime context after using it.
