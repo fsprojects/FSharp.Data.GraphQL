@@ -100,9 +100,7 @@ let private makeFragmentInterfaces
     | None ->
         ()
 
-let private makeOperationMethodDef
-    (providerSettings: ProviderSettings) (schema: IntrospectionSchema)
-    (schemaProvidedTypes: IDictionary<TypeName, ProvidedTypeDefinition>)
+let private makeOperationMethodDef (providerSettings: ProviderSettings) (schemaGenerator: SchemaGenerator)
     (httpHeaders: seq<string * string>) (operationWrapper: ProvidedTypeDefinition) =
     let staticParams =
         [ ProvidedStaticParameter("query", typeof<string>)
@@ -110,96 +108,31 @@ let private makeOperationMethodDef
           ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
           ProvidedStaticParameter("typeName", typeof<string>, parameterDefaultValue = "") ]
     let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
+    let opGen = OperationGenerator(schemaGenerator, httpHeaders, operationWrapper)
     let instanceBuilder (methodName : string) (args : obj []) =
-        let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
-        let query =
-            match queryLocation with
-            | String query -> query
-            | File path -> System.IO.File.ReadAllText(path)
-        let queryAst = Parser.parse query
-#if IS_DESIGNTIME
-        let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
-        let refMaker = lazy Validation.Ast.validateDocument schema queryAst
-        if providerSettings.ClientQueryValidation then
-            refMaker.Force
-            |> QueryValidationDesignTimeCache.getOrAdd key
-            |> throwExceptionIfValidationFailed
-#endif
-        let operationName : OperationName option =
-            match args.[2] :?> string with
-            | null | "" ->
-                let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
-                match operationDefinitions with
-                | opdef :: _ -> opdef.Name
-                | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
-            | x -> Some x
-        let explicitOperationTypeName : TypeName option =
-            match args.[3] :?> string with
-            | null | "" -> None
-            | x -> Some x
-        let operationDefinition =
-            queryAst.Definitions
-            |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
-            |> List.find (fun d -> d.Name = operationName)
-        let operationAstFields =
-            let infoMap = queryAst.GetInfoMap()
-            match infoMap.TryFind(operationName) with
-            | Some fields -> fields
-            | None -> failwith "Error parsing query. Could not find field information for requested operation."
-        let operationTypeRef =
-            let tref =
-                match operationDefinition.OperationType with
-                | Query -> schema.QueryType
-                | Mutation ->
-                    match schema.MutationType with
-                    | Some tref -> tref
-                    | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-                | Subscription ->
-                    match schema.SubscriptionType with
-                    | Some tref -> tref
-                    | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
-            let tinst =
-                match tref.Name with
-                | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
-                | None -> None
-            match tinst with
-            | Some t -> { tref with Kind = t.Kind }
-            | None -> failwith "The operation was found in the schema, but it does not have a name."
-        let schemaTypes = TypeMapping.getSchemaTypes schema
-        let enumProvidedTypes =
-            dict [ for KeyValue(name, providedType) in schemaProvidedTypes do
-                    if providedType.BaseType = typeof<EnumBase> then
-                        name, providedType ]
-
-        let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
-        let className =
-            match explicitOperationTypeName, operationDefinition.Name with
-            | Some name, _ -> name.FirstCharUpper()
-            | None, Some name -> name.FirstCharUpper()
-            | None, None -> "Operation" + actualQuery.MD5Hash()
-        let metadata = getOperationMetadata(schemaTypes, providerSettings.UploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, providerSettings.ExplicitOptionalParameters)
-        let operationTypeName : TypeName =
-            match operationTypeRef.Name with
-            | Some name -> name
-            | None -> failwith "Error parsing query. Operation type does not have a name."
-
-        // Every time we run the query, we will need the schema types information as an expression.
-        // To avoid creating the type map expression every time we call Run method, we cache it here.
-        let introspectionType = getIntrospectionType schemaTypes operationTypeRef
-        let operationFieldsExpr =
-            let fields = getOperationFields schemaTypes operationAstFields introspectionType
-            fields |> QuotationHelpers.arrayExpr |> snd
-        let contextInfo : GraphQLRuntimeContextInfo option =
-            match providerSettings.IntrospectionLocation with
-            | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
+        let queryOrPath =
+            match args.[0] with
+            | :? string as s -> s
+            | _ -> invalidArg "query" "Invalid queryString argument"
+        let resolutionFolder =
+            match args.[1] with
+            | :? string as s -> s
+            | _ -> providerSettings.ResolutionFolder
+        let operationName =
+            match args.[2] with
+            | :? string as s when not(String.IsNullOrEmpty s) -> Some s
             | _ -> None
-        let operationDef = makeProvidedOperationType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, providerSettings.ExplicitOptionalParameters)
-        operationDef.AddMember(metadata.TypeWrapper)
+        let typeName =
+            match args.[2] with
+            | :? string as s when not(String.IsNullOrEmpty s) -> Some s
+            | _ -> None
+        let op = opGen.Generate(queryOrPath, resolutionFolder, ?operationName=operationName, ?typeName=typeName)
+        let query = op.Query
         let invoker (_ : Expr list) = <@@ OperationBase(query) @@>
-        let methodDef = ProvidedMethod(methodName, [], operationDef, invoker, isStatic = true)
+        let methodDef = ProvidedMethod(methodName, [], op.OperationType, invoker, isStatic = true)
         methodDef.AddXmlDoc("Creates an operation to be executed on the server and provide its return types.")
-        operationWrapper.AddMember(operationDef)
-        operationDef.AddMember(methodDef)
+        operationWrapper.AddMember(op.OperationType)
+        op.OperationType.AddMember(methodDef)
         methodDef
     staticMethodDef.DefineStaticParameters(staticParams, instanceBuilder)
     staticMethodDef
@@ -211,10 +144,10 @@ let private makeRootType (asm: Assembly) (ns: string) (tname: string) (providerS
     tdef.AddMembersDelayed (fun () ->
         let httpHeaders = HttpHeaders.load providerSettings.CustomHttpHeadersLocation
         let schema = loadSchema providerSettings.IntrospectionLocation httpHeaders
-        let schemaCompiler = SchemaGenerator(schema,
+        let schemaGen = SchemaGenerator(schema,
                                 ?uploadInputTypeName = providerSettings.UploadInputTypeName,
                                 explicitOptionalParameters = providerSettings.ExplicitOptionalParameters)
-        let schemaProvidedTypes = schemaCompiler.GetProvidedTypes()
+        let schemaProvidedTypes = schemaGen.GetProvidedTypes()
         let schemaProvidedTypesList = schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq
         let typeWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
         typeWrapper.AddMembers schemaProvidedTypesList
@@ -249,8 +182,7 @@ let private makeRootType (asm: Assembly) (ns: string) (tname: string) (providerS
                         | argHeaders -> argHeaders
                     { ServerUrl = %%serverUrl; HttpHeaders = httpHeaders; Connection = connectionFactory() } @@>
             ProvidedMethod("GetContext", methodParameters, typeof<GraphQLProviderRuntimeContext>, invoker, isStatic = true)
-        let operationMethodDef =
-            makeOperationMethodDef providerSettings schema schemaProvidedTypes httpHeaders operationWrapper
+        let operationMethodDef = makeOperationMethodDef providerSettings schemaGen httpHeaders operationWrapper
         let schemaPropertyDef =
             let getter = QuotationHelpers.quoteRecord schema (fun (_ : Expr list) schema -> schema)
             ProvidedProperty("Schema", typeof<IntrospectionSchema>, getter, isStatic = true)
