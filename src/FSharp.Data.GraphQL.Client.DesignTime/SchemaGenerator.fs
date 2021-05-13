@@ -151,5 +151,6 @@ type internal SchemaGenerator (schema: IntrospectionSchema, ?uploadInputTypeName
                 for possibleType in possibleTypes do
                     possibleType.AddInterfaceImplementation(itype)
 
+    member _.Introspection = schema
     member _.GetProvidedTypes () =
         providedTypes :> IDictionary<_,_>

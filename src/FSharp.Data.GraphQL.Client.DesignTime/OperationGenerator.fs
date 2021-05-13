@@ -320,26 +320,11 @@ module private Operations =
           TypeWrapper = rootWrapper }
 
 
-    #if IS_DESIGNTIME
-    let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-        let rec formatValidationExceptionMessage(errors : AstError list) =
-            match errors with
-            | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
-            | errors ->
-                errors
-                |> List.map (fun err ->
-                    match err.Path with
-                    | Some path -> sprintf "%s Path: %A" err.Message path
-                    | None -> err.Message)
-                |> List.reduce (fun x y -> x + Environment.NewLine + y)
-        match validationResult with
-        | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
-        | Success -> ()
-    #endif
+
 
     let rec private getKind (tref : IntrospectionTypeRef) =
         match tref.Kind with
-        | TypeKind.NON_NULL | TypeKind.LIST  when tref.OfType.IsSome -> getKind tref.OfType.Value
+        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getKind tref.OfType.Value
         | _ -> tref.Kind
 
     let rec private getTypeName (tref: IntrospectionTypeRef) =
@@ -499,24 +484,11 @@ type GeneratedOperation =
       OperationType: ProvidedTypeDefinition }
 
 
-type internal OperationGenerator (schemaGenerator: SchemaGenerator, httpHeaders: seq<string * string>, operationWrapper: ProvidedTypeDefinition) =
+type internal OperationGenerator (providerSettings: ProviderSettings, schemaGenerator: SchemaGenerator, httpHeaders: seq<string * string>, operationWrapper: ProvidedTypeDefinition) =
     (***
     let makeOperation () =
 
-        let queryLocation = StringLocation.Create(downcast args.[0], downcast args.[1])
-        let query =
-            match queryLocation with
-            | String query -> query
-            | File path -> System.IO.File.ReadAllText(path)
-        let queryAst = Parser.parse query
-#if IS_DESIGNTIME
-        let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
-        let refMaker = lazy Validation.Ast.validateDocument schema queryAst
-        if providerSettings.ClientQueryValidation then
-            refMaker.Force
-            |> QueryValidationDesignTimeCache.getOrAdd key
-            |> throwExceptionIfValidationFailed
-#endif
+
         let operationName : OperationName option =
             match args.[2] :?> string with
             | null | "" ->
@@ -588,7 +560,57 @@ type internal OperationGenerator (schemaGenerator: SchemaGenerator, httpHeaders:
         let operationDef = makeProvidedOperationType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, providerSettings.ExplicitOptionalParameters)
         operationDef.AddMember(metadata.TypeWrapper)
 **)
+
+#if IS_DESIGNTIME
+    let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
+        let rec formatValidationExceptionMessage(errors : AstError list) =
+            match errors with
+            | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
+            | errors ->
+                errors
+                |> List.map (fun err ->
+                    match err.Path with
+                    | Some path -> sprintf "%s Path: %A" err.Message path
+                    | None -> err.Message)
+                |> List.reduce (fun x y -> x + Environment.NewLine + y)
+        match validationResult with
+        | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)
+        | Success -> ()
+#endif
+
+    let pickOperation (selectedOperationName: string option) =
+        List.tryPick(fun definition ->
+            match definition with
+            | OperationDefinition op when op.Name = selectedOperationName ->
+                Some op
+            | _ ->
+                None
+        )
+
     member _.Generate (queryOrPath: string, resolutionFolder: string, ?operationName: string, ?typeName: string) : GeneratedOperation =
+        let queryLocation = StringLocation.Create(queryOrPath, resolutionFolder)
+        let query =
+            match queryLocation with
+            | String query -> query
+            | File path -> System.IO.File.ReadAllText(path)
+        let queryAst = Parser.parse query
+        let schema = schemaGenerator.Introspection
+#if IS_DESIGNTIME
+        let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
+        if providerSettings.ClientQueryValidation then
+            fun () -> Ast.validateDocument schema queryAst
+            |> QueryValidationDesignTimeCache.getOrAdd key
+            |> throwExceptionIfValidationFailed
+#endif
+
+        let operationDefinition =
+            queryAst.Definitions
+            |> List.tryPick(fun node ->
+                match node with
+                | OperationDefinition op when op.Name = operationName ->
+                    Some op
+            )
+            
         { ActualQuery = ""
           Query = ""
           OperationType = Unchecked.defaultof<ProvidedTypeDefinition> }
