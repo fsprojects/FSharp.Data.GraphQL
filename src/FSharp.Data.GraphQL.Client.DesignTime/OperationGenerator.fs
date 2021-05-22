@@ -19,6 +19,7 @@ open FSharp.Quotations
 
 #nowarn "10001"
 
+[<AutoOpen>]
 module private Operations =
     type internal ProvidedOperationMetadata =
         { OperationType : Type
@@ -225,17 +226,19 @@ module private Operations =
             members)
         tdef
 
-    let private getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : IDictionary<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef, explicitOptionalParameters: bool) =
+    let getWrapper (schemaTypes: SchemaTypes) (path: string list) =
         let generateWrapper name =
             let rec resolveWrapperName actual =
-                if schemaTypes.ContainsKey(actual)
+                if schemaTypes.ContainsType actual
                 then resolveWrapperName (actual + "Fields")
                 else actual
             ProvidedTypeDefinition(resolveWrapperName name, Some typeof<obj>, isSealed = true)
+
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
-        let rec getWrapper (path : string list) =
+
+        let rec getWrapperForPath (path : string list) =
             if wrappersByPath.ContainsKey path
             then wrappersByPath.[path]
             else
@@ -244,13 +247,18 @@ module private Operations =
                     let path = path.Tail
                     if wrappersByPath.ContainsKey(path)
                     then wrappersByPath.[path]
-                    else getWrapper path
+                    else getWrapperForPath path
                 upperWrapper.AddMember(wrapper)
                 wrappersByPath.Add(path, wrapper)
                 wrapper
+        getWrapperForPath path
+
+    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
+
         let includeType (path : string list) (t : ProvidedTypeDefinition) =
-            let wrapper = getWrapper path
+            let wrapper = getWrapper schemaGenerator.SchemaTypes path
             wrapper.AddMember(t)
+
         let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
         let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
@@ -478,13 +486,7 @@ module private Operations =
         operationDef.AddMember(metadata.TypeWrapper)
 **)
 
-type GeneratedOperation =
-    { Query: string
-      ActualQuery: string
-      OperationType: ProvidedTypeDefinition }
 
-
-type internal OperationGenerator (providerSettings: ProviderSettings, schemaGenerator: SchemaGenerator, httpHeaders: seq<string * string>, operationWrapper: ProvidedTypeDefinition) =
     (***
     let makeOperation () =
 
@@ -561,6 +563,13 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
         operationDef.AddMember(metadata.TypeWrapper)
 **)
 
+type GeneratedOperation =
+    { Query: string
+      ActualQuery: string
+      OperationType: ProvidedTypeDefinition }
+
+type internal OperationGenerator (providerSettings: ProviderSettings, schemaGenerator: SchemaGenerator, httpHeaders: seq<string * string>, operationWrapper: ProvidedTypeDefinition) =
+
 #if IS_DESIGNTIME
     let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
         let rec formatValidationExceptionMessage(errors : AstError list) =
@@ -578,7 +587,7 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
         | Success -> ()
 #endif
 
-    let pickOperation (selectedOperationName: string option) =
+    let tryPickOperation (selectedOperationName: string option) =
         List.tryPick(fun definition ->
             match definition with
             | OperationDefinition op when op.Name = selectedOperationName ->
@@ -587,7 +596,55 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
                 None
         )
 
-    member _.Generate (queryOrPath: string, resolutionFolder: string, ?operationName: string, ?typeName: string) : GeneratedOperation =
+    let getRootType (schema: IntrospectionSchema) (operation: OperationDefinition) =
+        match operation.OperationType with
+        | Query -> schema.QueryType
+        | Mutation ->
+            match schema.MutationType with
+            | Some tref -> tref
+            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+        | Subscription ->
+            match schema.SubscriptionType with
+            | Some tref -> tref
+            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+
+    let generateOperationDefinition (schema: IntrospectionSchema) (queryAst: Document) (operation: OperationDefinition) (explicitOperationTypeName: string option) =
+        let astFields =
+            let infoMap = queryAst.GetInfoMap()
+            match infoMap.TryFind(operation.Name) with
+            | Some fields -> fields
+            | None -> failwith "Error parsing query. Could not find field information for requested operation."
+        let rootType = getRootType schema operation
+
+        let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
+        let className =
+            match explicitOperationTypeName, operation.Name with
+            | Some name, _ -> name.FirstCharUpper()
+            | None, Some name -> name.FirstCharUpper()
+            | None, None -> "Operation" + actualQuery.MD5Hash()
+        let metadata = getOperationMetadata(schemaGenerator.SchemaTypes, providerSettings.UploadInputTypeName, enumProvidedTypes, astFields, operationTypeRef, providerSettings.ExplicitOptionalParameters)
+        let operationTypeName : TypeName =
+            match operationTypeRef.Name with
+            | Some name -> name
+            | None -> failwith "Error parsing query. Operation type does not have a name."
+
+        // Every time we run the query, we will need the schema types information as an expression.
+        // To avoid creating the type map expression every time we call Run method, we cache it here.
+        let introspectionType = getIntrospectionType schemaTypes operationTypeRef
+        let operationFieldsExpr =
+            let fields = getOperationFields schemaTypes operationAstFields introspectionType
+            fields |> QuotationHelpers.arrayExpr |> snd
+        let contextInfo : GraphQLRuntimeContextInfo option =
+            match providerSettings.IntrospectionLocation with
+            | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
+            | _ -> None
+        let operationDef = makeProvidedOperationType(actualQuery, operationDefinition, operationTypeName, operationFieldsExpr, schemaTypes, schemaProvidedTypes, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, providerSettings.ExplicitOptionalParameters)
+        operationDef.AddMember(metadata.TypeWrapper)
+        { Query = ""
+          ActualQuery = actualQuery
+          OperationType = Unchecked.defaultof<ProvidedTypeDefinition> }
+
+    member _.Generate (queryOrPath: string, resolutionFolder: string, ?operationName: string, ?typeName: string): GeneratedOperation =
         let queryLocation = StringLocation.Create(queryOrPath, resolutionFolder)
         let query =
             match queryLocation with
@@ -596,21 +653,15 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
         let queryAst = Parser.parse query
         let schema = schemaGenerator.Introspection
 #if IS_DESIGNTIME
-        let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
         if providerSettings.ClientQueryValidation then
+            let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
             fun () -> Ast.validateDocument schema queryAst
             |> QueryValidationDesignTimeCache.getOrAdd key
             |> throwExceptionIfValidationFailed
 #endif
-
-        let operationDefinition =
-            queryAst.Definitions
-            |> List.tryPick(fun node ->
-                match node with
-                | OperationDefinition op when op.Name = operationName ->
-                    Some op
-            )
-            
-        { ActualQuery = ""
-          Query = ""
-          OperationType = Unchecked.defaultof<ProvidedTypeDefinition> }
+        let operationDefinition = tryPickOperation operationName queryAst.Definitions
+        match operationDefinition with
+        | Some operation ->
+            generateOperationDefinition schema queryAst operation typeName
+        | None ->
+            failwith "Expected an operation definition"

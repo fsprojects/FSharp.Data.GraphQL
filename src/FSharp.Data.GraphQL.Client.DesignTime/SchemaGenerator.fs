@@ -23,7 +23,7 @@ module private Helper =
         | None, Some innerType -> ContainerTypeRef(x.Kind, innerType)
         | _, _ -> failwithf "Invalid introspection type ref. Expected named or container type %A" x
 
-type private SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: string) =
+type internal SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: string) =
     let schemaTypes = TypeMapping.getSchemaTypes schema
     let uploadInputType =
         uploadInputTypeName
@@ -37,6 +37,11 @@ type private SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: str
     member _.UploadInputType = uploadInputType
 
     member _.Types = schemaTypes
+
+    member _.Introspection = schema
+
+    member _.ContainsType (name: string) =
+        schemaTypes.ContainsKey(name)
 
     member _.FindType(name: string) =
         match schemaTypes.TryFind(name) with
@@ -150,7 +155,11 @@ type internal SchemaGenerator (schema: IntrospectionSchema, ?uploadInputTypeName
                     | None -> [||]
                 for possibleType in possibleTypes do
                     possibleType.AddInterfaceImplementation(itype)
+    let enumProvidedTypes =
+        dict [ for KeyValue(name, providedType) in providedTypes do
+                if providedType.BaseType = typeof<EnumBase> then
+                    name, providedType ]
 
-    member _.Introspection = schema
-    member _.GetProvidedTypes () =
-        providedTypes :> IDictionary<_,_>
+    member _.SchemaTypes = schemaTypes
+    member _.ProvidedTypes = providedTypes :> IDictionary<_,_>
+    member _.EnumProvidedTypes = enumProvidedTypes
