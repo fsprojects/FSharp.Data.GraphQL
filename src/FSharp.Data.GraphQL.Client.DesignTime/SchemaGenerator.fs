@@ -1,6 +1,5 @@
 namespace FSharp.Data.GraphQL
 
-open ProviderImplementation.ProvidedTypes
 
 open System
 open System.Reflection
@@ -13,15 +12,8 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.ProvidedSchema
+open ProviderImplementation.ProvidedTypes
 
-
-[<AutoOpen>]
-module private Helper =
-    let (|NamedTypeRef|ContainerTypeRef|) (x: IntrospectionTypeRef) =
-        match x.Name, x.OfType with
-        | Some name, None -> NamedTypeRef(x.Kind, name)
-        | None, Some innerType -> ContainerTypeRef(x.Kind, innerType)
-        | _, _ -> failwithf "Invalid introspection type ref. Expected named or container type %A" x
 
 type internal SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: string) =
     let schemaTypes = TypeMapping.getSchemaTypes schema
@@ -42,6 +34,9 @@ type internal SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: st
 
     member _.ContainsType (name: string) =
         schemaTypes.ContainsKey(name)
+
+    member _.TryFindType(name: string) =
+        schemaTypes.TryFind(name)
 
     member _.FindType(name: string) =
         match schemaTypes.TryFind(name) with

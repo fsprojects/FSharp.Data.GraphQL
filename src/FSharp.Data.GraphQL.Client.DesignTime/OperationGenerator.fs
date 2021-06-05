@@ -21,6 +21,7 @@ open FSharp.Quotations
 
 [<AutoOpen>]
 module private Operations =
+
     type internal ProvidedOperationMetadata =
         { OperationType : Type
           UploadInputTypeName : string option
@@ -233,11 +234,9 @@ module private Operations =
                 then resolveWrapperName (actual + "Fields")
                 else actual
             ProvidedTypeDefinition(resolveWrapperName name, Some typeof<obj>, isSealed = true)
-
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
-
         let rec getWrapperForPath (path : string list) =
             if wrappersByPath.ContainsKey path
             then wrappersByPath.[path]
@@ -253,31 +252,37 @@ module private Operations =
                 wrapper
         getWrapperForPath path
 
-    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
-
-        let includeType (path : string list) (t : ProvidedTypeDefinition) =
+    let makeProvidedType (schemaGenerator: SchemaGenerator) (rootAstFields: AstFieldInfo list) (rootTypeRef: IntrospectionTypeRef) (explicitOptionalParameters: bool): Type =
+        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
+        let includeType (path: string list) (t: ProvidedTypeDefinition) =
             let wrapper = getWrapper schemaGenerator.SchemaTypes path
             wrapper.AddMember(t)
-
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
-        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
-            match tref.Kind with
-            | TypeKind.SCALAR when tref.Name.IsSome -> TypeMapping.mapScalarType uploadInputTypeName tref.Name.Value |> TypeMapping.makeOption
-            | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
-            | TypeKind.NON_NULL when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> TypeMapping.unwrapOption
-            | TypeKind.LIST when tref.Name.IsNone && tref.OfType.IsSome -> getProvidedType providedTypes schemaTypes path astFields tref.OfType.Value |> TypeMapping.makeArray |> TypeMapping.makeOption
-            | TypeKind.ENUM when tref.Name.IsSome ->
-                match enumProvidedTypes.TryGetValue(tref.Name.Value) with
-                | true, providedEnum -> TypeMapping.makeOption providedEnum
+        let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map(fun n -> n.Name)
+        let rec makeType (path: Path) (astFields: AstFieldInfo list) (tref: IntrospectionTypeRef) (isNullable: bool) =
+            match tref with
+            | NamedTypeRef(TypeKind.SCALAR, name) ->
+                let scalarType = TypeMapping.mapScalarType uploadInputTypeName name
+                if isNullable
+                then TypeMapping.makeOption scalarType
+                else scalarType
+            | NamedTypeRef(TypeKind.ENUM, name) ->
+                match schemaGenerator.EnumProvidedTypes.TryGetValue(name) with
+                | true, enumType ->
+                    if isNullable
+                    then TypeMapping.makeOption enumType
+                    else enumType :> Type
                 | false, _ -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
-            | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
-                if providedTypes.ContainsKey(path, tref.Name.Value)
-                then TypeMapping.makeOption providedTypes.[path, tref.Name.Value]
-                else
+            | NamedTypeRef((TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION), name) ->
+                match providedTypes.TryGetValue ((path, name)) with
+                | true, providedType ->
+                    if isNullable
+                    then TypeMapping.makeOption providedType
+                    else providedType :> Type
+                | false, _ ->
                     let getIntrospectionFields typeName =
-                        if schemaTypes.ContainsKey(typeName)
-                        then schemaTypes.[typeName].Fields |> Option.defaultValue [||]
-                        else failwithf "Could not find a schema type based on a type reference. The reference is to a \"%s\" type, but that type was not found in the schema types." typeName
+                        match schemaGenerator.SchemaTypes.TryFindType(typeName) with
+                        | Some def -> Option.defaultValue [||] def.Fields
+                        | None -> failwithf "Could not find a schema type based on a type reference. The reference is to a \"%s\" type, but that type was not found in the schema types." typeName
                     let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
                         let ifield =
                             match getIntrospectionFields typeName |> Array.tryFind(fun f -> f.Name = info.Name) with
@@ -285,7 +290,7 @@ module private Operations =
                             | None -> failwithf "Could not find field \"%s\" of type \"%s\". The schema type does not have a field with the specified name." info.Name tref.Name.Value
                         let path = info.AliasOrName :: path
                         let astFields = info.Fields
-                        let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
+                        let ftype = makeType path astFields ifield.Type true
                         { Name = info.Name; Alias = info.Alias; Description = ifield.Description; DeprecationReason = ifield.DeprecationReason; Type = ftype }
                     let fragmentProperties =
                         astFields
@@ -309,26 +314,39 @@ module private Operations =
                         providedTypes.Add((path, tref.Name.Value), tdef)
                         includeType path tdef
                         makeProvidedRecordType(tdef, baseProperties, explicitOptionalParameters)
-                    let createFragmentType (typeName, properties) =
-                        let itype =
-                            if schemaTypes.ContainsKey(typeName)
-                            then schemaTypes.[typeName]
-                            else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
-                        let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
-                        let tdef = preBuildProvidedRecordType(metadata, Some (upcast baseType))
-                        providedTypes.Add((path, typeName), tdef)
-                        includeType path tdef
-                        makeProvidedRecordType(tdef, properties, explicitOptionalParameters) |> ignore
-                    fragmentProperties |> List.iter createFragmentType
-                    TypeMapping.makeOption baseType
-            | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
-        let operationType = getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef
+
+                    for (typeName, properties) in fragmentProperties do
+                        match schemaGenerator.SchemaTypes.TryFindType(typeName) with
+                        | Some tp ->
+                            let metadata = { Name = tp.Name; Description = tp.Description }
+                            let tdef = preBuildProvidedRecordType(metadata, Some (upcast baseType))
+                            providedTypes.Add((path, typeName), tdef)
+                            includeType path tdef
+                            makeProvidedRecordType(tdef, properties, explicitOptionalParameters) |> ignore
+                        | None ->
+                            failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
+
+                    if isNullable
+                    then TypeMapping.makeOption baseType
+                    else baseType :> Type
+            | ContainerTypeRef(TypeKind.LIST, innerTypeRef) ->
+                let elementType = makeType path astFields innerTypeRef true
+                let arrayType = TypeMapping.makeArray elementType
+                if isNullable
+                then TypeMapping.makeOption arrayType
+                else arrayType
+            | ContainerTypeRef(TypeKind.NON_NULL, innerTypeRef) ->
+                makeType path astFields innerTypeRef false
+            | typeRef ->
+                failwithf "Unsupported Type ref in introspection Schema '%A'" typeRef.Name
+        makeType [] rootAstFields rootTypeRef true
+
+    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
+        let operationType = makeProvidedType schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
+        let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
         { OperationType = operationType
           UploadInputTypeName = uploadInputTypeName
           TypeWrapper = rootWrapper }
-
-
-
 
     let rec private getKind (tref : IntrospectionTypeRef) =
         match tref.Kind with
@@ -622,9 +640,9 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             | Some name, _ -> name.FirstCharUpper()
             | None, Some name -> name.FirstCharUpper()
             | None, None -> "Operation" + actualQuery.MD5Hash()
-        let metadata = getOperationMetadata(schemaGenerator.SchemaTypes, providerSettings.UploadInputTypeName, enumProvidedTypes, astFields, operationTypeRef, providerSettings.ExplicitOptionalParameters)
+        let metadata = getOperationMetadata schemaGenerator providerSettings.UploadInputTypeName enumProvidedTypes astFields operationTypeRef providerSettings.ExplicitOptionalParameters
         let operationTypeName : TypeName =
-            match operationTypeRef.Name with
+            match rootType.Name with
             | Some name -> name
             | None -> failwith "Error parsing query. Operation type does not have a name."
 
@@ -651,7 +669,7 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             | String query -> query
             | File path -> System.IO.File.ReadAllText(path)
         let queryAst = Parser.parse query
-        let schema = schemaGenerator.Introspection
+        let schema = schemaGenerator.SchemaTypes.Introspection
 #if IS_DESIGNTIME
         if providerSettings.ClientQueryValidation then
             let key = { DocumentId = queryAst.GetHashCode(); SchemaId = schema.GetHashCode() }
