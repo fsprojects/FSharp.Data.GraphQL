@@ -224,7 +224,7 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
+let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : obj list) =
     let fdef = info.Definition
     let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
     { ExecutionInfo = info
@@ -233,7 +233,8 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
-      Variables = ctx.Variables }
+      Variables = ctx.Variables
+      Path = path }
 
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
@@ -515,8 +516,8 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
         let executeField field =
             let argDefs = ctx.Context.FieldExecuteMap.GetArgs(objDef.Name, field.Definition.Name)
             let resolver = ctx.Context.FieldExecuteMap.GetExecute(objDef.Name, field.Definition.Name)
-            let fieldCtx = createFieldContext objDef argDefs ctx field
             let fieldPath = (field.Identifier :> obj :: path)
+            let fieldCtx = createFieldContext objDef argDefs ctx field fieldPath
             executeResolvers fieldCtx fieldPath value (resolveField resolver fieldCtx value)
         let! res =
             fields
@@ -572,7 +573,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               ParentType = objdef
               Schema = ctx.Schema
               Args = args
-              Variables = ctx.Variables }
+              Variables = ctx.Variables
+              Path = path }
         let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
         asyncVal {
             let! result =
@@ -597,6 +599,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
     let subdef = info.Definition :?> SubscriptionFieldDef
     let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
     let returnType = subdef.OutputTypeDef
+    let fieldPath = [ info.Identifier :> obj ]
     let fieldCtx =
         { ExecutionInfo = info
           Context = ctx
@@ -604,9 +607,10 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           ParentType = objdef
           Schema = ctx.Schema
           Args = args
-          Variables = ctx.Variables }
+          Variables = ctx.Variables
+          Path = fieldPath }
     let onValue v = asyncVal {
-            match! executeResolvers fieldCtx [ info.Identifier ] value (toOption v |> AsyncVal.wrap) with
+            match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
             | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
             | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
