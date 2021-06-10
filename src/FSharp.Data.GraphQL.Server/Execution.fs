@@ -234,7 +234,7 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : 
       Schema = ctx.Schema
       Args = args
       Variables = ctx.Variables
-      Path = path }
+      Path = path |> List.rev }
 
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
@@ -574,7 +574,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               Schema = ctx.Schema
               Args = args
               Variables = ctx.Variables
-              Path = path }
+              Path = path |> List.rev }
         let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
         asyncVal {
             let! result =
@@ -608,7 +608,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables
-          Path = fieldPath }
+          Path = fieldPath |> List.rev }
     let onValue v = asyncVal {
             match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
