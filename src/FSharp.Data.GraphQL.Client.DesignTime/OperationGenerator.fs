@@ -227,33 +227,39 @@ module private Operations =
             members)
         tdef
 
-    let getWrapper (schemaTypes: SchemaTypes) (path: string list) =
-        let generateWrapper name =
+    let getWrapper =
+        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+        let rootWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
+        fun (schemaTypes: SchemaTypes) (path: string list) ->
             let rec resolveWrapperName actual =
                 if schemaTypes.ContainsType actual
                 then resolveWrapperName (actual + "Fields")
                 else actual
-            ProvidedTypeDefinition(resolveWrapperName name, Some typeof<obj>, isSealed = true)
-        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-        let rootWrapper = generateWrapper "Types"
-        wrappersByPath.Add([], rootWrapper)
-        let rec getWrapperForPath (path : string list) =
-            if wrappersByPath.ContainsKey path
-            then wrappersByPath.[path]
-            else
-                let wrapper = generateWrapper (path.Head.FirstCharUpper() + "Fields")
-                let upperWrapper =
-                    let path = path.Tail
-                    if wrappersByPath.ContainsKey(path)
-                    then wrappersByPath.[path]
-                    else getWrapperForPath path
-                upperWrapper.AddMember(wrapper)
-                wrappersByPath.Add(path, wrapper)
-                wrapper
-        getWrapperForPath path
+            let rec getWrapperForPath (path : string list) =
+                match wrappersByPath.TryGetValue(path) with
+                | true, wrapper ->
+                    wrapper
+                | false, _ ->
+                    match path with
+                    | hd::tail ->
+                        let typeName = hd.FirstCharUpper() + "Fields"
+                        let wrapper = ProvidedTypeDefinition(resolveWrapperName typeName, Some typeof<obj>, isSealed = true)
+                        let upperWrapper: ProvidedTypeDefinition =
+                            if wrappersByPath.ContainsKey(tail)
+                            then wrappersByPath.[tail]
+                            else getWrapperForPath tail
+                        upperWrapper.AddMember(wrapper)
+                        wrappersByPath.Add(tail, wrapper)
+                        wrapper
+                    | [] ->
+                        rootWrapper
+
 
     let makeProvidedType (schemaGenerator: SchemaGenerator) (rootAstFields: AstFieldInfo list) (rootTypeRef: IntrospectionTypeRef) (explicitOptionalParameters: bool): Type =
         let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
+
+        let rootWrapper = getWrapper wrappersByPath schemaGenerator. "Types"
+        wrappersByPath.Add([], rootWrapper)
         let includeType (path: string list) (t: ProvidedTypeDefinition) =
             let wrapper = getWrapper schemaGenerator.SchemaTypes path
             wrapper.AddMember(t)
