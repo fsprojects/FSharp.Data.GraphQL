@@ -227,14 +227,15 @@ module private Operations =
             members)
         tdef
 
-    let getWrapper =
+    let getWrapper (schemaTypes: SchemaTypes) =
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
-        fun (schemaTypes: SchemaTypes) (path: string list) ->
             let rec resolveWrapperName actual =
                 if schemaTypes.ContainsType actual
                 then resolveWrapperName (actual + "Fields")
                 else actual
+        fun  (path: string list) ->
+
             let rec getWrapperForPath (path : string list) =
                 match wrappersByPath.TryGetValue(path) with
                 | true, wrapper ->
