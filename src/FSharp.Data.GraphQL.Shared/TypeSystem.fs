@@ -878,7 +878,9 @@ and ResolveFieldContext =
       /// parametrized inputs.
       Args : Map<string, obj>
       /// Variables provided by the operation caller.
-      Variables : Map<string, obj> }
+      Variables : Map<string, obj>
+      /// Field path
+      Path : obj list }
 
     /// Remembers an exception, so it can be included in the final response.
     member x.AddError(error : exn) = x.Context.Errors.Add error
