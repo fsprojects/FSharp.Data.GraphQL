@@ -227,15 +227,14 @@ module private Operations =
             members)
         tdef
 
-    let getWrapper (schemaTypes: SchemaTypes) =
+    let getWrapper =
         let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
         let rootWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
+        fun (schemaTypes: SchemaTypes) (path: string list) ->
             let rec resolveWrapperName actual =
                 if schemaTypes.ContainsType actual
                 then resolveWrapperName (actual + "Fields")
                 else actual
-        fun  (path: string list) ->
-
             let rec getWrapperForPath (path : string list) =
                 match wrappersByPath.TryGetValue(path) with
                 | true, wrapper ->
@@ -254,13 +253,10 @@ module private Operations =
                         wrapper
                     | [] ->
                         rootWrapper
-
+            getWrapperForPath path
 
     let makeProvidedType (schemaGenerator: SchemaGenerator) (rootAstFields: AstFieldInfo list) (rootTypeRef: IntrospectionTypeRef) (explicitOptionalParameters: bool): Type =
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
-
-        let rootWrapper = getWrapper wrappersByPath schemaGenerator. "Types"
-        wrappersByPath.Add([], rootWrapper)
+        let providedTypes = Dictionary<_,_>()
         let includeType (path: string list) (t: ProvidedTypeDefinition) =
             let wrapper = getWrapper schemaGenerator.SchemaTypes path
             wrapper.AddMember(t)
@@ -351,6 +347,7 @@ module private Operations =
     let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
         let operationType = makeProvidedType schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
         let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
+        let rootWrapper = getWrapper schemaGenerator.SchemaTypes []
         { OperationType = operationType
           UploadInputTypeName = uploadInputTypeName
           TypeWrapper = rootWrapper }
@@ -368,16 +365,16 @@ module private Operations =
             | Some tname -> tname
             | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
 
-    let rec private getIntrospectionType (schemaTypes: Map<string,IntrospectionType>) (tref: IntrospectionTypeRef) =
+    let rec getIntrospectionType (schemaTypes: SchemaTypes) (tref: IntrospectionTypeRef) =
         match tref.Kind with
         | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType schemaTypes tref.OfType.Value
         | _ ->
             let typeName = getTypeName tref
-            match schemaTypes.TryFind(typeName) with
+            match schemaTypes.TryFindType(typeName) with
             | Some t -> t
             | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
 
-    let private getOperationFields (schemaTypes: Map<string,IntrospectionType>) (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
+    let getOperationFields (schemaTypes: SchemaTypes) (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
         let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
             match introspectionType.Kind with
             | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
@@ -640,14 +637,13 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             | Some fields -> fields
             | None -> failwith "Error parsing query. Could not find field information for requested operation."
         let rootType = getRootType schema operation
-
         let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
         let className =
             match explicitOperationTypeName, operation.Name with
             | Some name, _ -> name.FirstCharUpper()
             | None, Some name -> name.FirstCharUpper()
             | None, None -> "Operation" + actualQuery.MD5Hash()
-        let metadata = getOperationMetadata schemaGenerator providerSettings.UploadInputTypeName enumProvidedTypes astFields operationTypeRef providerSettings.ExplicitOptionalParameters
+        let metadata = getOperationMetadata schemaGenerator astFields rootType providerSettings.ExplicitOptionalParameters
         let operationTypeName : TypeName =
             match rootType.Name with
             | Some name -> name
@@ -655,9 +651,9 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
 
         // Every time we run the query, we will need the schema types information as an expression.
         // To avoid creating the type map expression every time we call Run method, we cache it here.
-        let introspectionType = getIntrospectionType schemaTypes operationTypeRef
+        let introspectionType = getIntrospectionType schemaGenerator.SchemaTypes rootType
         let operationFieldsExpr =
-            let fields = getOperationFields schemaTypes operationAstFields introspectionType
+            let fields = getOperationFields schemaGenerator.SchemaTypes astFields introspectionType
             fields |> QuotationHelpers.arrayExpr |> snd
         let contextInfo : GraphQLRuntimeContextInfo option =
             match providerSettings.IntrospectionLocation with
