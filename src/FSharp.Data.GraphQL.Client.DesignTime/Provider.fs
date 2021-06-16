@@ -108,7 +108,7 @@ let private makeOperationMethodDef (providerSettings: ProviderSettings) (schemaG
           ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
           ProvidedStaticParameter("typeName", typeof<string>, parameterDefaultValue = "") ]
     let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
-    let opGen = OperationGenerator(schemaGenerator, httpHeaders, operationWrapper)
+    let opGen = OperationGenerator(providerSettings, schemaGenerator, httpHeaders, operationWrapper)
     let instanceBuilder (methodName : string) (args : obj []) =
         let queryOrPath =
             match args.[0] with
@@ -147,7 +147,7 @@ let private makeRootType (asm: Assembly) (ns: string) (tname: string) (providerS
         let schemaGen = SchemaGenerator(schema,
                                 ?uploadInputTypeName = providerSettings.UploadInputTypeName,
                                 explicitOptionalParameters = providerSettings.ExplicitOptionalParameters)
-        let schemaProvidedTypes = schemaGen.GetProvidedTypes()
+        let schemaProvidedTypes = schemaGen.ProvidedTypes
         let schemaProvidedTypesList = schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq
         let typeWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
         typeWrapper.AddMembers schemaProvidedTypesList
