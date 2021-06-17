@@ -463,16 +463,24 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             ) items
 
     let getRootType (schema: IntrospectionSchema) (operation: OperationDefinition) =
-        match operation.OperationType with
-        | Query -> schema.QueryType
-        | Mutation ->
-            match schema.MutationType with
-            | Some tref -> tref
-            | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
-        | Subscription ->
-            match schema.SubscriptionType with
-            | Some tref -> tref
-            | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+        let tref =
+            match operation.OperationType with
+            | Query -> schema.QueryType
+            | Mutation ->
+                match schema.MutationType with
+                | Some tref -> tref
+                | None -> failwith "The operation is a mutation operation, but the schema does not have a mutation type."
+            | Subscription ->
+                match schema.SubscriptionType with
+                | Some tref -> tref
+                | None -> failwithf "The operation is a subscription operation, but the schema does not have a subscription type."
+        let tinst =
+            match tref.Name with
+            | Some name -> schema.Types |> Array.tryFind (fun t -> t.Name = name)
+            | None -> None
+        match tinst with
+        | Some t -> { tref with Kind = t.Kind }
+        | None -> failwith "The operation was found in the schema, but it does not have a name."
 
     let generateOperationDefinition (schema: IntrospectionSchema) (query: string) (queryAst: Document) (operation: OperationDefinition) (explicitOperationTypeName: string option) =
 #if IS_DESIGNTIME
