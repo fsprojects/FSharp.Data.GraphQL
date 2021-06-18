@@ -248,7 +248,7 @@ module private Operations =
                             then wrappersByPath.[tail]
                             else getWrapperForPath tail
                         upperWrapper.AddMember(wrapper)
-                        wrappersByPath.Add(tail, wrapper)
+                        wrappersByPath.Add(path, wrapper)
                         wrapper
                     | [] ->
                         rootWrapper
@@ -260,7 +260,7 @@ module private Operations =
             let wrapper = getWrapper schemaGenerator.SchemaTypes path
             wrapper.AddMember(t)
         let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map(fun n -> n.Name)
-        let rec makeType (path: Path) (astFields: AstFieldInfo list) (tref: IntrospectionTypeRef) (isNullable: bool) =
+        let rec makeType (path: string list) (astFields: AstFieldInfo list) (tref: IntrospectionTypeRef) (isNullable: bool) =
             match tref with
             | NamedTypeRef(TypeKind.SCALAR, name) ->
                 let scalarType = TypeMapping.mapScalarType uploadInputTypeName name
@@ -341,8 +341,10 @@ module private Operations =
                 makeType path astFields innerTypeRef true
             | typeRef ->
                 failwithf "Unsupported Type ref encountered while generating Operation '%A'" typeRef
-        makeType [] rootAstFields rootTypeRef true
-
+        try
+            makeType [] rootAstFields rootTypeRef true
+        with e ->
+            failwithf "Make Type: %s" (e.StackTrace.ToString())
     let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
         let operationType = makeProvidedType schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
         let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
