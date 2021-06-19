@@ -226,35 +226,8 @@ module private Operations =
             members)
         tdef
 
-    let getWrapper =
-        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
-        let rootWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
-        fun (schemaTypes: SchemaTypes) (path: string list) ->
-            let rec resolveWrapperName actual =
-                if schemaTypes.ContainsType actual
-                then resolveWrapperName (actual + "Fields")
-                else actual
-            let rec getWrapperForPath (path : string list) =
-                match wrappersByPath.TryGetValue(path) with
-                | true, wrapper ->
-                    wrapper
-                | false, _ ->
-                    match path with
-                    | hd::tail ->
-                        let typeName = hd.FirstCharUpper() + "Fields"
-                        let wrapper = ProvidedTypeDefinition(resolveWrapperName typeName, Some typeof<obj>, isSealed = true)
-                        let upperWrapper: ProvidedTypeDefinition =
-                            if wrappersByPath.ContainsKey(tail)
-                            then wrappersByPath.[tail]
-                            else getWrapperForPath tail
-                        upperWrapper.AddMember(wrapper)
-                        wrappersByPath.Add(path, wrapper)
-                        wrapper
-                    | [] ->
-                        rootWrapper
-            getWrapperForPath path
 
-    let makeProvidedType (schemaGenerator: SchemaGenerator) (rootAstFields: AstFieldInfo list) (rootTypeRef: IntrospectionTypeRef) (explicitOptionalParameters: bool): Type =
+    let makeProvidedType (getWrapper: SchemaTypes -> Path -> ProvidedTypeDefinition) (schemaGenerator: SchemaGenerator) (rootAstFields: AstFieldInfo list) (rootTypeRef: IntrospectionTypeRef) (explicitOptionalParameters: bool): Type =
         let providedTypes = Dictionary<_,_>()
         let includeType (path: string list) (t: ProvidedTypeDefinition) =
             let wrapper = getWrapper schemaGenerator.SchemaTypes path
@@ -345,13 +318,6 @@ module private Operations =
             makeType [] rootAstFields rootTypeRef true
         with e ->
             failwithf "Make Type: %s" (e.StackTrace.ToString())
-    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
-        let operationType = makeProvidedType schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
-        let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
-        let rootWrapper = getWrapper schemaGenerator.SchemaTypes []
-        { OperationType = operationType
-          UploadInputTypeName = uploadInputTypeName
-          TypeWrapper = rootWrapper }
 
     let rec private getKind (tref : IntrospectionTypeRef) =
         match tref.Kind with
@@ -427,6 +393,40 @@ type GeneratedOperation =
       OperationType: ProvidedTypeDefinition }
 
 type internal OperationGenerator (providerSettings: ProviderSettings, schemaGenerator: SchemaGenerator, httpHeaders: seq<string * string>, operationWrapper: ProvidedTypeDefinition) =
+    let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+    let rootWrapper = ProvidedTypeDefinition("Types", Some typeof<obj>, isSealed = true)
+    let getWrapper (schemaTypes: SchemaTypes) (path: string list) =
+        let rec resolveWrapperName actual =
+            if schemaTypes.ContainsType actual
+            then resolveWrapperName (actual + "Fields")
+            else actual
+        let rec getWrapperForPath (path : string list) =
+            match wrappersByPath.TryGetValue(path) with
+            | true, wrapper ->
+                wrapper
+            | false, _ ->
+                match path with
+                | hd::tail ->
+                    let typeName = hd.FirstCharUpper() + "Fields"
+                    let wrapper = ProvidedTypeDefinition(resolveWrapperName typeName, Some typeof<obj>, isSealed = true)
+                    let upperWrapper: ProvidedTypeDefinition =
+                        if wrappersByPath.ContainsKey(tail)
+                        then wrappersByPath.[tail]
+                        else getWrapperForPath tail
+                    upperWrapper.AddMember(wrapper)
+                    wrappersByPath.Add(path, wrapper)
+                    wrapper
+                | [] ->
+                    rootWrapper
+        getWrapperForPath path
+
+    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
+        let operationType = makeProvidedType getWrapper schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
+        let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
+        let rootWrapper = getWrapper schemaGenerator.SchemaTypes []
+        { OperationType = operationType
+          UploadInputTypeName = uploadInputTypeName
+          TypeWrapper = rootWrapper }
 
 #if IS_DESIGNTIME
     let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
