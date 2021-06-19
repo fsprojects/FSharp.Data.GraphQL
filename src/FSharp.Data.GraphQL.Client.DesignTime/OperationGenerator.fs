@@ -338,7 +338,7 @@ module private Operations =
                 then TypeMapping.makeOption arrayType
                 else arrayType
             | ContainerTypeRef(TypeKind.NON_NULL, innerTypeRef) ->
-                makeType path astFields innerTypeRef true
+                makeType path astFields innerTypeRef false
             | typeRef ->
                 failwithf "Unsupported Type ref encountered while generating Operation '%A'" typeRef
         try
