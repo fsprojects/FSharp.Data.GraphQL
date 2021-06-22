@@ -108,8 +108,8 @@ let private makeOperationMethodDef (providerSettings: ProviderSettings) (schemaG
           ProvidedStaticParameter("operationName", typeof<string>, parameterDefaultValue = "")
           ProvidedStaticParameter("typeName", typeof<string>, parameterDefaultValue = "") ]
     let staticMethodDef = ProvidedMethod("Operation", [], typeof<OperationBase>, isStatic = true)
-    let opGen = OperationGenerator(providerSettings, schemaGenerator, httpHeaders, operationWrapper)
     let instanceBuilder (methodName : string) (args : obj []) =
+        let opGen = OperationGenerator(providerSettings, schemaGenerator, httpHeaders, operationWrapper)
         let queryOrPath =
             match args.[0] with
             | :? string as s -> s
