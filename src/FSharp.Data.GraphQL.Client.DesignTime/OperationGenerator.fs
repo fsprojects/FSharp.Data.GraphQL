@@ -334,7 +334,7 @@ module private Operations =
         | NamedTypeRef(_, name) ->
             match schemaTypes.TryFindType name with
             | Some t -> t
-            | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
+            | None -> failwithf "Type \"%s\" was not found in the introspection schema." name
 
     let getOperationFields (schemaTypes: SchemaTypes) (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
         let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
