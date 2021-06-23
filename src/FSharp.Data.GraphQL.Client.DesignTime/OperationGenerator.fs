@@ -314,30 +314,25 @@ module private Operations =
                 makeType path astFields innerTypeRef false
             | typeRef ->
                 failwithf "Unsupported Type ref encountered while generating Operation '%A'" typeRef
-        try
-            makeType [] rootAstFields rootTypeRef true
-        with e ->
-            failwithf "Make Type: %s" (e.StackTrace.ToString())
+        makeType [] rootAstFields rootTypeRef true
 
     let rec private getKind (tref : IntrospectionTypeRef) =
-        match tref.Kind with
-        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getKind tref.OfType.Value
+        match tref with
+        | ContainerTypeRef(_, inner) -> getKind inner
         | _ -> tref.Kind
 
+
     let rec private getTypeName (tref: IntrospectionTypeRef) =
-        match tref.Kind with
-        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getTypeName tref.OfType.Value
-        | _ ->
-            match tref.Name with
-            | Some tname -> tname
-            | None -> failwithf "Expected type kind \"%s\" to have a name, but it does not have a name." (tref.Kind.ToString())
+        match tref with
+        | ContainerTypeRef(_, inner) -> getTypeName inner
+        | NamedTypeRef(_, name) -> name
 
     let rec getIntrospectionType (schemaTypes: SchemaTypes) (tref: IntrospectionTypeRef) =
-        match tref.Kind with
-        | TypeKind.NON_NULL | TypeKind.LIST when tref.OfType.IsSome -> getIntrospectionType schemaTypes tref.OfType.Value
-        | _ ->
-            let typeName = getTypeName tref
-            match schemaTypes.TryFindType(typeName) with
+        match tref with
+        | ContainerTypeRef(_, inner) ->
+            getIntrospectionType schemaTypes inner
+        | NamedTypeRef(_, name) ->
+            match schemaTypes.TryFindType name with
             | Some t -> t
             | None -> failwithf "Type \"%s\" was not found in the introspection schema." typeName
 
