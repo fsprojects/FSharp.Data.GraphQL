@@ -4,6 +4,8 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
+open System.Text.Json
+open System.Text.Json.Serialization
 open Microsoft.FSharp.Reflection
 open System.Reflection
 open System.Collections.Generic
@@ -11,7 +13,37 @@ open System.Globalization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
+type OptionConverter<'T>() =
+    inherit JsonConverter<option<'T>>()
+
+    override _.Read(reader, _typeToConvert, options) =
+        match reader.TokenType with
+        | JsonTokenType.Null -> None
+        | _ -> Some <| JsonSerializer.Deserialize<'T>(&reader, options)
+
+    override _.Write(writer, value, options) =
+        match value with
+        | None -> writer.WriteNullValue()
+        | Some x -> JsonSerializer.Serialize<'T>(writer, x, options)
+
+type OptionConverterFactory () =
+    inherit JsonConverterFactory()
+    let optionTypeConverter = typedefof<OptionConverter<_>>
+    override _.CanConvert(typeToConvert) =
+        typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() = typedefof<option<_>>
+
+    override _.CreateConverter(typeToConvert, options) =
+        optionTypeConverter
+            .MakeGenericType(typeToConvert.GetGenericArguments())
+            .GetConstructor([||])
+            .Invoke([||]) :?> JsonConverter
+
 module Serialization =
+    let options = JsonSerializerOptions(PropertyNameCaseInsensitive=true)
+    options.Converters.Add(OptionConverterFactory())
+    options.Converters.Add(JsonStringEnumConverter())
+
+
     let private makeOption t (value : obj) =
         let otype = typedefof<_ option>
         let cases = FSharpType.GetUnionCases(otype.MakeGenericType([|t|]))
@@ -134,7 +166,7 @@ module Serialization =
     let deserializeRecord<'T> (json : string) : 'T =
         let t = typeof<'T>
         Tracer.runAndMeasureExecutionTime (sprintf "Deserialized JSON string to record type %s." (t.ToString())) (fun _ ->
-        downcast (JsonValue.Parse(json) |> convert t))
+        JsonSerializer.Deserialize<'T>(json, options))
 
     let deserializeMap values =
         let rec helper (values : (string * JsonValue) []) =
