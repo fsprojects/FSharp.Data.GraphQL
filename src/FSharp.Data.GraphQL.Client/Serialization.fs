@@ -52,7 +52,8 @@ type RecordConverter<'T> () =
     let readRecord = FSharpValue.PreComputeRecordReader(typeof<'T>, true)
 
     let recordFields =
-        [| for field in FSharpType.GetRecordFields(typeof<'T>) do
+        let flags = BindingFlags.Public ||| BindingFlags.NonPublic
+        [| for field in FSharpType.GetRecordFields(typeof<'T>, flags) do
            (field.Name, isNullableField field, field.PropertyType) |]
 
     let fieldDefaults =
@@ -122,14 +123,13 @@ type RecordConverterFactory () =
     let recordTypeConverter = typedefof<RecordConverter<_>>
 
     override _.CanConvert(typeToConvert) =
-        FSharpType.IsRecord typeToConvert
+        FSharpType.IsRecord(typeToConvert, true)
 
     override _.CreateConverter(typeToConvert, options) =
         recordTypeConverter
             .MakeGenericType(typeToConvert)
             .GetConstructor([||])
             .Invoke([||]) :?> JsonConverter
-
 
 
 module Serialization =
