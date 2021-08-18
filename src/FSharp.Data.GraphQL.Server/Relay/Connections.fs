@@ -81,9 +81,9 @@ module Definitions =
         | Some (Some first), None -> Some (Forward(first, None))
         | Some (Some first), (Some after) -> Some (Forward(first, after))
         | None, _ ->
-            match ctx.Arg "last", ctx.TryArg "before" with
-            | Some last, None -> Some (Backward(last, None))
-            | Some last, Some before -> Some (Backward(last, before))
+            match ctx.TryArg "last", ctx.TryArg "before" with
+            | Some (Some last), None -> Some (Backward(last, None))
+            | Some (Some last), (Some before) -> Some (Backward(last, before))
             | _, _ -> None
         | _ -> None
 
