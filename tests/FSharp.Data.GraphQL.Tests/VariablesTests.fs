@@ -74,6 +74,7 @@ let TestType =
         Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
         Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) ], stringifyInput)
         Define.Field("fieldWithEnumInput", String, "", [ Define.Input("input", EnumTestType) ], stringifyInput)
+        Define.Field("fieldWithNullableEnumInput", String, "", [ Define.Input("input", Nullable EnumTestType) ], stringifyInput)
         Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
         Define.Field("nnList", String, "", [ Define.Input("input", ListOf (Nullable String)) ], stringifyInput)
         Define.Field("listNN", String, "", [ Define.Input("input", Nullable (ListOf String)) ], stringifyInput)
@@ -537,6 +538,19 @@ let ``Execute handles enum input as variable`` () =
       }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", "Foo" :> obj ])
     let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Foo\"}" ]
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute handles nullable enum input as variable`` () =
+    let ast = parse """query fieldWithNullableEnumValue($enumVar: EnumTestType) {
+        fieldWithNullableEnumInput(input: $enumVar)
+      }"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", null :> obj ])
+    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "null" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
