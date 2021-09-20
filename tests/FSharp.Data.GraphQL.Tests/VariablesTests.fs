@@ -53,6 +53,19 @@ let TestNestedInputObject =
         Define.Input("nb", String)
     ])
 
+type TestRecusiveInput = {
+    ra: TestRecusiveInput option
+    rb: string
+}
+let rec TestRecursiveInputObject =
+  Define.InputObject<TestRecusiveInput>(
+    name = "TestRecusiveInput",
+    fieldsFn =
+        fun () -> [
+            Define.Input("ra", Nullable TestRecursiveInputObject)
+            Define.Input("rb", String)]
+    )
+
 let stringifyArg name (ctx: ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
     toJson arg
@@ -79,6 +92,7 @@ let TestType =
         Define.Field("fieldWithNonNullableStringInput", String, "", [ Define.Input("input", String) ], stringifyInput)
         Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
         Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) ], stringifyInput)
+        Define.Field("fieldWithRecursiveInputObject", String, "", [ Define.Input("input", TestRecursiveInputObject, { ra = None; rb = "hello world"}) ], stringifyInput) 
         Define.Field("fieldWithEnumInput", String, "", [ Define.Input("input", EnumTestType) ], stringifyInput)
         Define.Field("fieldWithNullableEnumInput", String, "", [ Define.Input("input", Nullable EnumTestType) ], stringifyInput)
         Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
@@ -322,6 +336,28 @@ let ``Execute handles non-nullable scalars and passes along null for non-nullabl
     let ast = parse """{ fieldWithNonNullableStringInput }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast "null" ]
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute handles nested input objects and nullability using inline structs and proprely coerces complex scalar types`` () =
+    let ast = parse """{ fieldWithNestedInputObject(input: {na:{c:"c"},nb:"b"})}"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast)
+    let expected = NameValueLookup.ofList [ "fieldWithNestedInputObject", upcast """{"na":{"a":null,"b":null,"c":"c","d":null},"nb":"b"}""" ]
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute handles recursive input objects and nullability using inline structs and proprely coerces complex scalar types`` () =
+    let ast = parse """{ fieldWithRecursiveInputObject(input: {ra:{rb:"bb"},rb:"b"})}"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast)
+    let expected = NameValueLookup.ofList [ "fieldWithRecursiveInputObject", upcast """{"ra":{"ra":null,"rb":"bb"},"rb":"b"}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors

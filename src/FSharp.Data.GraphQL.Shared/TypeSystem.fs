@@ -1528,15 +1528,15 @@ and InputObjectDefinition<'Val> =
       Name : string
       /// Optional input object description.
       Description : string option
-      /// Function used to define field inputs. It must be lazy
-      /// in order to support self-referencing types.
-      FieldsFn : unit -> InputFieldDef [] }
+      /// Lazy resolver for the input object fields. It must be lazy in
+      /// order to allow self-recursive type references.
+      FieldsFn : Lazy<InputFieldDef[]> }
     interface InputDef
 
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.Fields = x.FieldsFn()
+        member x.Fields = x.FieldsFn.Force()
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -2775,31 +2775,31 @@ module SchemaDefinitions =
 
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fieldsFn">
-        /// Function which generates a list of input fields defined by the current input object. Usefull, when object defines recursive dependencies.
+        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
         /// </param>
-        /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
         static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
-              FieldsFn = fun () -> fieldsFn() |> List.toArray
+              FieldsFn = lazy (fieldsFn () |> List.toArray)
               Description = description }
 
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
-        /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>   
         static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
-              FieldsFn = fun () -> fields |> List.toArray }
+              FieldsFn = lazy (fields |> List.toArray) }
 
         /// <summary>
         /// Creates the top level subscription object that holds all of the possible subscriptions as fields.
