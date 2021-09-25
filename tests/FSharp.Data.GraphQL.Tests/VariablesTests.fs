@@ -132,7 +132,7 @@ let ``Execute handles variables with complex inputs`` () =
           fieldWithObjectInput(input: $input)
         }"""
     let params' : Map<string, obj> =
-        Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [ Some "bar"]) ; c = "baz"; d = None }]
+        Map.ofList ["input", upcast { a = Some "foo"; b = Some ([ Some "bar"]) ; c = "baz"; d = None }]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
     match actual with

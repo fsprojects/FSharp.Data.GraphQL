@@ -1,52 +1,13 @@
 namespace FSharp.Data.GraphQL
 
-
 open System
-open System.Reflection
 open System.Collections.Generic
 open FSharp.Core
-open FSharp.Quotations
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Client
-open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.ProvidedSchema
 open ProviderImplementation.ProvidedTypes
-
-
-type internal SchemaTypes (schema: IntrospectionSchema, ?uploadInputTypeName: string) =
-    let schemaTypes = TypeMapping.getSchemaTypes schema
-    let uploadInputType =
-        uploadInputTypeName
-        |> Option.map (fun name -> Map.tryFind name schemaTypes)
-        |> Option.flatten
-    do  match uploadInputType with
-        | Some(schemaType) when schemaType.Kind = TypeKind.SCALAR -> ()
-        | None _ -> ()
-        | Some schemaType -> failwithf "Upload type '%s' must be a scalar." schemaType.Name
-
-    member _.UploadInputType = uploadInputType
-
-    member _.Types = schemaTypes
-
-    member _.Introspection = schema
-
-    member _.ContainsType (name: string) =
-        schemaTypes.ContainsKey(name)
-
-    member _.TryFindType(name: string) =
-        schemaTypes.TryFind(name)
-
-    member _.FindType(name: string) =
-        match schemaTypes.TryFind(name) with
-        | Some itype -> itype
-        | None -> failwithf "Type \"%s\" was not found on the schema custom types." name
-
-    member this.FindByTypeRef(tref: IntrospectionTypeRef) =
-        match tref.Name with
-        | Some name -> this.FindType name
-        | None -> failwith "Expected schema type to have a name, but it does not have one."
 
 type internal SchemaGenerator (schema: IntrospectionSchema, ?uploadInputTypeName: string, ?explicitOptionalParameters: bool) =
     let explicitOptionalParameters = defaultArg explicitOptionalParameters false
@@ -143,7 +104,7 @@ type internal SchemaGenerator (schema: IntrospectionSchema, ?uploadInputTypeName
                 let itype =
                     match providedTypes.TryGetValue(schemaType.Name) with
                     | true, ptype -> ptype
-                    | false, _-> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." schemaType.Name
+                    | false, _-> failwithf "Type \"%s\" does not exist in the schema." schemaType.Name
                 let possibleTypes =
                     match schemaType.PossibleTypes with
                     | Some trefs -> trefs |> Array.map (schemaTypes.FindByTypeRef >> resolveProvidedType)

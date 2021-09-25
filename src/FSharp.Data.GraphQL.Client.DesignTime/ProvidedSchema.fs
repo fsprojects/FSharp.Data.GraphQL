@@ -1,6 +1,7 @@
 module internal FSharp.Data.GraphQL.ProvidedSchema
 
 open System
+open System.Collections.Generic
 open FSharp.Core
 open System.Reflection
 open FSharp.Data.GraphQL
@@ -38,7 +39,7 @@ let makeProvidedEnumType (name, items : string seq) =
     tdef
 
 let makeProvidedInterfaceType(metadata : ProvidedTypeMetadata) =
-    let tdef = ProvidedTypeDefinition("I" + metadata.Name.FirstCharUpper(), None, nonNullable = true, isInterface = true)
+    let tdef = ProvidedTypeDefinition("I" + metadata.Name.ToTitleCase(), None, nonNullable = true, isInterface = true)
     metadata.Description |> Option.iter tdef.AddXmlDoc
     tdef
 
@@ -57,13 +58,14 @@ let makeProvidedRecordType (tdef : ProvidedRecordTypeDefinition, properties : Re
     let name = tdef.Name
     tdef.AddMembersDelayed(fun _ ->
         properties |> List.map (fun metadata ->
-            let pname = metadata.AliasOrName.FirstCharUpper()
-            let getterCode (args : Expr list) =
+            let pname = metadata.AliasOrName
+            let getterCode (args : Expr list)  =
                 <@@ let this = %%args.[0] : RecordBase
-                    match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
-                    | Some prop -> prop.Value
-                    | None -> failwithf "Expected to find property \"%s\", but the property was not found." pname @@>
-            let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
+                    match this.TryGetProperty(pname) with
+                    | Some value -> value
+                    | None -> null @@>
+
+            let pdef = ProvidedProperty(pname.ToTitleCase(), metadata.Type, getterCode)
             metadata.Description |> Option.iter pdef.AddXmlDoc
             metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
             pdef))
@@ -94,21 +96,16 @@ let makeProvidedRecordType (tdef : ProvidedRecordTypeDefinition, properties : Re
                 |> List.partition (fun (_, t) -> isOption t)
             if explicitOptionalParameters then
                 let constructorProperties = requiredProperties @ optionalProperties
-                let propertyNames = constructorProperties |> List.map (fst >> (fun x -> x.FirstCharUpper()))
-                let constructorPropertyTypes = constructorProperties |> List.map snd
+                let propertyNames = constructorProperties |> List.map fst
                 let invoker (args : Expr list) =
                     let properties =
                         let baseConstructorArgs =
-                            let coercedArgs =
-                                (constructorPropertyTypes, args)
-                                ||> List.map2 (fun t arg ->
-                                    let arg = Expr.Coerce(arg, typeof<obj>)
-                                    match t with
-                                    | Option (Option t) -> <@@ makeValue t %%arg @@>
-                                    | _ -> <@@ %%arg @@>)
-                            (propertyNames, coercedArgs)
-                            ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
-                        Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
+                            (propertyNames, args)
+                            ||> List.map2 (fun name value ->
+                                let expr = Expr.Coerce(value, typeof<obj>)
+                                <@@ (name,  %%expr) @@>)
+                        let arg = Expr.NewArray(typeof<string * obj>, baseConstructorArgs)
+                        <@ dict (%%arg : array<string * obj>) @>
                     Expr.NewObject(recordCtor, [Expr.Value(name); properties])
                 let constructorParams =
                     constructorProperties
@@ -118,7 +115,7 @@ let makeProvidedRecordType (tdef : ProvidedRecordTypeDefinition, properties : Re
                 List.combinations optionalProperties
                 |> List.map (fun (optionalProperties, nullValuedProperties) ->
                     let constructorProperties = requiredProperties @ optionalProperties
-                    let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map (fst >> (fun x -> x.FirstCharUpper()))
+                    let propertyNames = (constructorProperties @ nullValuedProperties) |> List.map fst
                     let constructorPropertyTypes = constructorProperties |> List.map snd
                     let nullValuedPropertyTypes = nullValuedProperties |> List.map snd
                     let invoker (args : Expr list) =
@@ -131,8 +128,9 @@ let makeProvidedRecordType (tdef : ProvidedRecordTypeDefinition, properties : Re
                                         if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
                                 let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
                                 (propertyNames, (coercedArgs @ nullValuedArgs))
-                                ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
-                            Expr.NewArray(typeof<RecordProperty>, baseConstructorArgs)
+                                ||> List.map2 (fun name value -> <@@ (name, %%value) @@>)
+                            let arg = Expr.NewArray(typeof<string * obj>, baseConstructorArgs)
+                            <@ dict (%%arg : array<string * obj>) @>
                         Expr.NewObject(recordCtor, [Expr.Value(name); properties])
                     let constructorParams =
                         constructorProperties
@@ -173,6 +171,5 @@ let makeProvidedRecordType (tdef : ProvidedRecordTypeDefinition, properties : Re
 
 let preBuildProvidedRecordType(metadata : ProvidedTypeMetadata, baseType : Type option) =
     let baseType = Option.defaultValue typeof<RecordBase> baseType
-    let name = metadata.Name.FirstCharUpper()
-    let tdef = ProvidedRecordTypeDefinition(name, Some baseType)
-    tdef
+    let name = metadata.Name.ToTitleCase()
+    ProvidedRecordTypeDefinition(name, Some baseType)

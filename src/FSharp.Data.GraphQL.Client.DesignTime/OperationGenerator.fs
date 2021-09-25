@@ -2,11 +2,12 @@ namespace FSharp.Data.GraphQL
 
 open System
 open System.IO
-open System.Text.RegularExpressions
+open System.Text
 open FSharp.Core
 open System.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
+open FSharp.Data.GraphQL.Client.DesignTimeSerialization
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
@@ -19,18 +20,15 @@ open FSharp.Quotations
 
 #nowarn "10001"
 
+type internal ProvidedOperationMetadata =
+    { OperationType : Type
+      UploadInputTypeName : string option
+      TypeWrapper : ProvidedTypeDefinition }
+
 [<AutoOpen>]
 module private Operations =
 
-    type internal ProvidedOperationMetadata =
-        { OperationType : Type
-          UploadInputTypeName : string option
-          TypeWrapper : ProvidedTypeDefinition }
-
-    let uploadTypeIsNotScalar uploadTypeName =
-        failwithf "Upload type \"%s\" was found on the schema, but it is not a Scalar type. Upload types can only be used if they are defined as scalar types." uploadTypeName
-
-    let private makeProvidedOperationResultType(operationType : Type) =
+    let makeProvidedOperationResultType (operationType : Type) =
         let tdef = ProvidedTypeDefinition("OperationResult", Some typeof<OperationResultBase>, nonNullable = true)
         tdef.AddMemberDelayed(fun _ ->
             let getterCode (args : Expr list) =
@@ -41,58 +39,78 @@ module private Operations =
             prop)
         tdef
 
+    let convertToClrTypes (schemaGenerator: SchemaGenerator) (variables: VariableDefinition list) =
+        let schemaTypes = schemaGenerator.SchemaTypes
+        let isCustomScalar (typeName: string) =
+            match schemaTypes.TryFindType typeName with
+            | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
+            | None -> false
+        let getSchemaType (typeName: string) =
+            match schemaTypes.UploadInputType with
+            | Some uploadInputTypeName when typeName = uploadInputTypeName.Name ->
+                typeof<Upload>
+            | _ ->
+                match TypeMapping.scalar.TryFind(typeName) with
+                | Some t -> t
+                | None when isCustomScalar typeName -> typeof<string>
+                | None ->
+                    match schemaGenerator.ProvidedTypes.TryGetValue(typeName) with
+                    | true, t -> t :> Type
+                    | false, _ -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
+        let rec mapVariable (variableType : InputType) (isNullable: bool) =
+            match variableType with
+            | NamedType typeName when isNullable -> getSchemaType typeName |> TypeMapping.makeOption
+            | NamedType typeName -> getSchemaType typeName
+            | ListType itype when isNullable -> mapVariable itype true |> TypeMapping.makeArray |> TypeMapping.makeOption
+            | ListType itype -> mapVariable itype true |> TypeMapping.makeArray
+            | NonNullType itype -> mapVariable itype false
+        List.map (fun vdef -> vdef.VariableName, mapVariable vdef.Type true) variables
+
+
+    // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
+    // The strategy follows the same principle with ProvidedRecord constructor overloads,
+    // except that we also must create one additional overload for the runtime context, for each already existent overload,
+    // if no default context is provided.
+    let createRunMethodOverloads contextInfo explicitOptionalParameters clrVariables =
+        let overloadsWithoutContext =
+            let optionalVariables, requiredVariables =
+                clrVariables |> List.partition (fun (_, t) -> isOption t)
+            if explicitOptionalParameters then
+                [requiredVariables @ optionalVariables]
+            else
+                optionalVariables
+                |> List.combinations
+                |> List.map (fun (optionalVariables, _) ->
+                    let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, TypeMapping.unwrapOption t)
+                    requiredVariables @ optionalVariables)
+        let overloadsWithContext =
+            overloadsWithoutContext
+            |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
+        match contextInfo with
+        | Some _ -> overloadsWithoutContext @ overloadsWithContext
+        | None -> overloadsWithContext
+
+    let rec existsUploadType (foundTypes : ProvidedTypeDefinition list) (t : Type) =
+        match t with
+        | :? ProvidedTypeDefinition as tdef when not (List.contains tdef foundTypes) ->
+            tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType (tdef :: foundTypes))
+        | Option t ->
+            existsUploadType foundTypes t
+        | Array t ->
+            existsUploadType foundTypes t
+        | _ ->
+            t = typeof<Upload>
+
     let makeProvidedOperationType
         (actualQuery: string, operationDefinition: OperationDefinition, operationTypeName: string,
-         operationFieldsExpr: Expr, schemaGenerator: SchemaGenerator, operationType: Type,
-         contextInfo: GraphQLRuntimeContextInfo option, uploadInputTypeName : string option,
-         className: string, explicitOptionalParameters: bool) =
+         schemaGenerator: SchemaGenerator, operationType: Type, selections: list<AstFieldInfo>,
+         contextInfo: GraphQLRuntimeContextInfo option, className: string, explicitOptionalParameters: bool) =
+
         let tdef = ProvidedTypeDefinition(className, Some typeof<OperationBase>)
         tdef.AddXmlDoc("Represents a GraphQL operation on the server.")
         tdef.AddMembersDelayed(fun _ ->
-            let operationResultDef = makeProvidedOperationResultType(operationType)
-            let isScalar (typeName: string) =
-                match schemaGenerator.SchemaTypes.TryFindType typeName with
-                | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
-                | None -> false
-            let variables =
-                let rec mapVariable (variableName : string) (variableType : InputType) =
-                    match variableType with
-                    | NamedType typeName ->
-                        match uploadInputTypeName with
-                        | Some uploadInputTypeName when typeName = uploadInputTypeName ->
-                            variableName, TypeMapping.makeOption typeof<Upload>
-                        | _ ->
-                            match TypeMapping.scalar.TryFind(typeName) with
-                            | Some t -> variableName, TypeMapping.makeOption t
-                            | None when isScalar typeName -> variableName, typeof<string option>
-                            | None ->
-                                match schemaGenerator.ProvidedTypes.TryGetValue(typeName) with
-                                | true, t -> variableName, TypeMapping.makeOption t
-                                | false, _ -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
-                    | ListType itype ->
-                        let name, t = mapVariable variableName itype
-                        name, t |> TypeMapping.makeArray |> TypeMapping.makeOption
-                    | NonNullType itype ->
-                        let name, t = mapVariable variableName itype
-                        name, TypeMapping.unwrapOption t
-                operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
-            let buildVariablesExprFromArgs (varNames : string list) (args : Expr list) =
-                let mapVariableExpr (name : string) (value : Expr) =
-                    let value = Expr.Coerce(value, typeof<obj>)
-                    <@@ let rec mapVariableValue (value : obj) =
-                            match value with
-                            | null -> null
-                            | :? string -> value // We need this because strings are enumerables, and we don't want to enumerate them recursively as an object
-                            | :? EnumBase as v -> v.GetValue() |> box
-                            | :? RecordBase as v -> v.ToDictionary() |> box
-                            | OptionValue v -> v |> Option.map mapVariableValue |> box
-                            | EnumerableValue v -> v |> Array.map mapVariableValue |> box
-                            | v -> v
-                        (name, mapVariableValue %%value) @@>
-                let args =
-                    let varArgs = List.skip (args.Length - variables.Length) args
-                    (varNames, varArgs) ||> List.map2 mapVariableExpr
-                Expr.NewArray(typeof<string * obj>, args)
+            let operationResultDef = makeProvidedOperationResultType operationType
+            let clrVariables = convertToClrTypes schemaGenerator operationDefinition.VariableDefinitions
             let defaultContextExpr =
                 match contextInfo with
                 | Some info ->
@@ -100,43 +118,22 @@ module private Operations =
                     let headerNames = info.HttpHeaders |> Seq.map fst |> Array.ofSeq
                     let headerValues = info.HttpHeaders |> Seq.map snd |> Array.ofSeq
                     <@@ { ServerUrl = serverUrl; HttpHeaders = Array.zip headerNames headerValues; Connection = new GraphQLClientConnection() } @@>
-                | None -> <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
-            // We need to use the combination strategy to generate overloads for variables in the Run/AsyncRun methods.
-            // The strategy follows the same principle with ProvidedRecord constructor overloads,
-            // except that we also must create one additional overload for the runtime context, for each already existent overload,
-            // if no default context is provided.
-            let methodOverloadDefinitions =
-                let overloadsWithoutContext =
-                    let optionalVariables, requiredVariables =
-                        variables |> List.partition (fun (_, t) -> isOption t)
-                    if explicitOptionalParameters then
-                        [requiredVariables @ optionalVariables]
-                    else
-                        List.combinations optionalVariables
-                        |> List.map (fun (optionalVariables, _) ->
-                            let optionalVariables = optionalVariables |> List.map (fun (name, t) -> name, (TypeMapping.unwrapOption t))
-                            requiredVariables @ optionalVariables)
-                let overloadsWithContext =
-                    overloadsWithoutContext
-                    |> List.map (fun var -> ("runtimeContext", typeof<GraphQLProviderRuntimeContext>) :: var)
-                match contextInfo with
-                | Some _ -> overloadsWithoutContext @ overloadsWithContext
-                | None -> overloadsWithContext
+                | None ->
+                    <@@ Unchecked.defaultof<GraphQLProviderRuntimeContext> @@>
+
+            let methodOverloadDefinitions = createRunMethodOverloads contextInfo explicitOptionalParameters clrVariables
             // Multipart requests should only be used when the user specifies a upload type name AND the type
             // is present in the query as an input value. If not, we fallback to classic requests.
-            let shouldUseMultipartRequest =
-                let rec existsUploadType (foundTypes : ProvidedTypeDefinition list) (t : Type) =
-                    match t with
-                    | :? ProvidedTypeDefinition as tdef when not (List.contains tdef foundTypes) -> tdef.DeclaredProperties |> Seq.exists ((fun p -> p.PropertyType) >> existsUploadType (tdef :: foundTypes))
-                    | Option t -> existsUploadType foundTypes t
-                    | Array t -> existsUploadType foundTypes t
-                    | _ -> t = typeof<Upload>
-                variables |> Seq.exists (snd >> existsUploadType [])
+            let shouldUseMultipartRequest = clrVariables |> Seq.exists (snd >> existsUploadType [])
+            let jsonParser = getOperationJsonReader schemaGenerator.SchemaTypes selections operationDefinition
             let runMethodOverloads : MemberInfo list =
                 let operationName = Option.toObj operationDefinition.Name
-                methodOverloadDefinitions |> List.map (fun overloadParameters ->
-                    let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
-                    let invoker (args : Expr list) =
+                [ for overloadParameters in methodOverloadDefinitions do
+                    let variableNames =
+                        [ for (name, _) in overloadParameters do
+                            if name <> "runtimeContext" then
+                                name ]
+                    let invoker (isAsync: bool) (args : Expr list) =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
                         let argsWithoutInstance = args.Tail
@@ -144,86 +141,57 @@ module private Operations =
                             if argsWithoutInstance.Length - variableNames.Length = 1
                             then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else argsWithoutInstance, true, defaultContextExpr
-                        let variables = buildVariablesExprFromArgs variableNames variableArgs
                         let variables =
-                            if explicitOptionalParameters then
-                                <@@ (%%variables: (string * obj) [])
-                                    |> Array.filter (fun (_, value) ->
-                                        match value with
-                                        | :? Option<obj> as option -> option.IsSome
-                                        | _ -> true) @@>
-                            else
-                                variables
-                        <@@ let context = %%context : GraphQLProviderRuntimeContext
-                            let request =
-                                { ServerUrl = context.ServerUrl
-                                  HttpHeaders = context.HttpHeaders
-                                  OperationName = Option.ofObj operationName
-                                  Query = actualQuery
-                                  Variables = %%variables }
-                            let response =
-                                if shouldUseMultipartRequest
-                                then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
-                                else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                            // If the user does not provide a context, we should dispose the default one after running the query
-                            if isDefaultContext then (context :> IDisposable).Dispose()
-                            OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                            let elements =
+                                variableArgs
+                                |> List.skip (variableArgs.Length - clrVariables.Length)
+                                |> List.map2(fun name value ->
+                                    let expr = Expr.Coerce(value, typeof<obj>)
+                                    <@@ name, %%expr @@>) variableNames
+                            Expr.NewArray(typeof<string * obj>, elements)
+                        let runExpr =
+                            <@ let context = %%context : GraphQLProviderRuntimeContext
+                               let request =
+                                    { ServerUrl = context.ServerUrl; HttpHeaders = context.HttpHeaders
+                                      OperationName = Option.ofObj operationName; Query = actualQuery
+                                      Variables = %%variables }
+                               async {
+                                    let! response =
+                                        if shouldUseMultipartRequest
+                                        then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
+                                        else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
+                                    // If the user does not provide a context, we should dispose the default one after running the query
+                                    if isDefaultContext then (context :> IDisposable).Dispose()
+                                    return OperationResultBase(response, %%jsonParser, operationTypeName)
+                               } @>
+                        if isAsync then
+                            runExpr :> Expr
+                        else
+                            <@@ %runExpr |> Async.RunSynchronously @@>
+
                     let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
-                    let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
-                    methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
-                    upcast methodDef)
-            let asyncRunMethodOverloads : MemberInfo list =
-                let operationName = Option.toObj operationDefinition.Name
-                methodOverloadDefinitions |> List.map (fun overloadParameters ->
-                    let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
-                    let invoker (args : Expr list) =
-                        // First arg is the operation instance, second should be the context, if the overload asks for one.
-                        // We determine it by seeing if the variable names have one less item than the arguments without the instance.
-                        let argsWithoutInstance = args.Tail
-                        let variableArgs, isDefaultContext, context =
-                            if argsWithoutInstance.Length - variableNames.Length = 1
-                            then argsWithoutInstance.Tail, false, argsWithoutInstance.Head
-                            else argsWithoutInstance, true, defaultContextExpr
-                        let variables = buildVariablesExprFromArgs variableNames variableArgs
-                        let variables =
-                            if explicitOptionalParameters then
-                                <@@ (%%variables: (string * obj) [])
-                                    |> Array.filter (fun (_, value) ->
-                                        match value with
-                                        | :? Option<obj> as option -> option.IsSome
-                                        | _ -> true) @@>
-                            else
-                                variables
-                        <@@ let context = %%context : GraphQLProviderRuntimeContext
-                            let request =
-                                { ServerUrl = context.ServerUrl
-                                  HttpHeaders = context.HttpHeaders
-                                  OperationName = Option.ofObj operationName
-                                  Query = actualQuery
-                                  Variables = %%variables }
-                            async {
-                                let! response =
-                                    if shouldUseMultipartRequest
-                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
-                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
-                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
-                                // If the user does not provide a context, we should dispose the default one after running the query
-                                if isDefaultContext then (context :> IDisposable).Dispose()
-                                return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
-                            } @@>
-                    let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
-                    let methodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
-                    methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
-                    upcast methodDef)
+
+                    let asyncMethodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker true)
+                    asyncMethodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
+                    asyncMethodDef
+
+                    let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker false)
+                    methodDef.AddXmlDoc("Executes the operation synchronously on the server and fetch its results.")
+                    methodDef ]
+
             let parseResultDef =
-                let invoker (args : Expr list) = <@@ OperationResultBase(JsonValue.Parse %%args.[1], %%operationFieldsExpr, operationTypeName) @@>
+                let invoker (args : Expr list) =
+                    <@@ let bytes = Encoding.UTF8.GetBytes(%%args.[1] : string)
+                        let stream = new MemoryStream(bytes)
+                        OperationResultBase(stream , %%jsonParser, operationTypeName) @@>
                 let parameters = [ProvidedParameter("responseJson", typeof<string>)]
                 let methodDef = ProvidedMethod("ParseResult", parameters, operationResultDef, invoker)
                 methodDef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
                 methodDef
-            let members : MemberInfo list = [operationResultDef; parseResultDef] @ runMethodOverloads @ asyncRunMethodOverloads
-            members)
+
+            [ yield! runMethodOverloads
+              operationResultDef
+              parseResultDef ])
         tdef
 
 
@@ -316,13 +284,12 @@ module private Operations =
                 failwithf "Unsupported Type ref encountered while generating Operation '%A'" typeRef
         makeType [] rootAstFields rootTypeRef true
 
-    let rec private getKind (tref : IntrospectionTypeRef) =
+    let rec getKind (tref : IntrospectionTypeRef) =
         match tref with
         | ContainerTypeRef(_, inner) -> getKind inner
         | _ -> tref.Kind
 
-
-    let rec private getTypeName (tref: IntrospectionTypeRef) =
+    let rec getTypeName (tref: IntrospectionTypeRef) =
         match tref with
         | ContainerTypeRef(_, inner) -> getTypeName inner
         | NamedTypeRef(_, name) -> name
@@ -335,52 +302,6 @@ module private Operations =
             match schemaTypes.TryFindType name with
             | Some t -> t
             | None -> failwithf "Type \"%s\" was not found in the introspection schema." name
-
-    let getOperationFields (schemaTypes: SchemaTypes) (operationAstFields : AstFieldInfo list) (operationType : IntrospectionType) =
-        let rec helper (acc : SchemaFieldInfo list) (astFields : AstFieldInfo list) (introspectionType : IntrospectionType) =
-            match introspectionType.Kind with
-            | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                match astFields with
-                | [] -> acc
-                | field :: tail ->
-                    let throw typeName = failwithf "Field \"%s\" of type \"%s\" was not found in the introspection schema." field.Name typeName
-                    let tref =
-                        match field with
-                        | FragmentField fragf ->
-                            let fragmentType =
-                                let tref =
-                                    Option.defaultValue [||] introspectionType.PossibleTypes
-                                    |> Array.map (getIntrospectionType schemaTypes)
-                                    |> Array.append [|introspectionType|]
-                                    |> Array.tryFind (fun pt -> pt.Name = fragf.TypeCondition)
-                                match tref with
-                                | Some t -> t
-                                | None -> failwithf "Fragment field defines a type condition \"%s\", but that type was not found in the schema definition." fragf.TypeCondition
-                            let field =
-                                fragmentType.Fields
-                                |> Option.map (Array.tryFind (fun f -> f.Name = fragf.Name))
-                                |> Option.flatten
-                            match field with
-                            | Some f -> f.Type
-                            | None -> throw fragmentType.Name
-                        | TypeField typef ->
-                            let field =
-                                introspectionType.Fields
-                                |> Option.map (Array.tryFind (fun f -> f.Name = typef.Name))
-                                |> Option.flatten
-                            match field with
-                            | Some f -> f.Type
-                            | None -> throw introspectionType.Name
-                    let fields =
-                        match getKind tref with
-                        | TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION ->
-                            let schemaType = getIntrospectionType schemaTypes tref
-                            helper [] field.Fields schemaType
-                        | _ -> []
-                    let info = { AliasOrName = field.AliasOrName.FirstCharUpper(); SchemaTypeRef = tref; Fields = Array.ofList fields }
-                    helper (info :: acc) tail introspectionType
-            | _ -> []
-        helper [] operationAstFields operationType |> Array.ofList
 
 type GeneratedOperation =
     { Query: string
@@ -402,7 +323,7 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             | false, _ ->
                 match path with
                 | hd::tail ->
-                    let typeName = hd.FirstCharUpper() + "Fields"
+                    let typeName = hd.ToTitleCase() + "Fields"
                     let wrapper = ProvidedTypeDefinition(resolveWrapperName typeName, Some typeof<obj>, isSealed = true)
                     let upperWrapper: ProvidedTypeDefinition =
                         if wrappersByPath.ContainsKey(tail)
@@ -415,13 +336,6 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
                     rootWrapper
         getWrapperForPath path
 
-    let getOperationMetadata (schemaGenerator: SchemaGenerator) operationAstFields operationTypeRef explicitOptionalParameters =
-        let operationType = makeProvidedType getWrapper schemaGenerator operationAstFields operationTypeRef explicitOptionalParameters
-        let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
-        let rootWrapper = getWrapper schemaGenerator.SchemaTypes []
-        { OperationType = operationType
-          UploadInputTypeName = uploadInputTypeName
-          TypeWrapper = rootWrapper }
 
 #if IS_DESIGNTIME
     let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
@@ -487,8 +401,8 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
             |> QueryValidationDesignTimeCache.getOrAdd key
             |> throwExceptionIfValidationFailed
 #endif
+        let infoMap = queryAst.GetInfoMap()
         let astFields =
-            let infoMap = queryAst.GetInfoMap()
             match infoMap.TryFind(operation.Name) with
             | Some fields -> fields
             | None -> failwith "Error parsing query. Could not find field information for requested operation."
@@ -496,26 +410,26 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
         let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
         let className =
             match explicitOperationTypeName, operation.Name with
-            | Some name, _ -> name.FirstCharUpper()
-            | None, Some name -> name.FirstCharUpper()
+            | Some name, _
+            | None, Some name -> name.ToTitleCase()
             | None, None -> "Operation" + actualQuery.MD5Hash()
-        let metadata = getOperationMetadata schemaGenerator astFields rootType providerSettings.ExplicitOptionalParameters
-        let operationTypeName : TypeName =
+        let metadata =
+            let operationType = makeProvidedType getWrapper schemaGenerator astFields rootType providerSettings.ExplicitOptionalParameters
+            let uploadInputTypeName = schemaGenerator.SchemaTypes.UploadInputType |> Option.map (fun t -> t.Name)
+            let rootWrapper = getWrapper schemaGenerator.SchemaTypes []
+            { OperationType = operationType
+              UploadInputTypeName = uploadInputTypeName
+              TypeWrapper = rootWrapper }
+        let operationTypeName : string =
             match rootType.Name with
             | Some name -> name
             | None -> failwith "Error parsing query. Operation type does not have a name."
 
-        // Every time we run the query, we will need the schema types information as an expression.
-        // To avoid creating the type map expression every time we call Run method, we cache it here.
-        let introspectionType = getIntrospectionType schemaGenerator.SchemaTypes rootType
-        let operationFieldsExpr =
-            let fields = getOperationFields schemaGenerator.SchemaTypes astFields introspectionType
-            fields |> QuotationHelpers.arrayExpr |> snd
         let contextInfo : GraphQLRuntimeContextInfo option =
             match providerSettings.IntrospectionLocation with
             | Uri serverUrl -> Some { ServerUrl = serverUrl; HttpHeaders = httpHeaders }
             | _ -> None
-        let operationDef = makeProvidedOperationType(actualQuery, operation, operationTypeName, operationFieldsExpr, schemaGenerator, metadata.OperationType, contextInfo, metadata.UploadInputTypeName, className, providerSettings.ExplicitOptionalParameters)
+        let operationDef = makeProvidedOperationType(actualQuery, operation, operationTypeName, schemaGenerator, metadata.OperationType, astFields, contextInfo, className, providerSettings.ExplicitOptionalParameters)
         operationDef.AddMember(metadata.TypeWrapper)
         { Query = query
           ActualQuery = actualQuery
@@ -526,7 +440,7 @@ type internal OperationGenerator (providerSettings: ProviderSettings, schemaGene
         let query =
             match queryLocation with
             | String query -> query
-            | File path -> System.IO.File.ReadAllText(path)
+            | File path -> File.ReadAllText(path)
         let queryAst = Parser.parse query
         let schema = schemaGenerator.SchemaTypes.Introspection
         let operationDefinition = tryPickOperation operationName queryAst.Definitions

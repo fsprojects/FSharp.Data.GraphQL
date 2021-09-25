@@ -20,8 +20,8 @@ group Common
   nuget Microsoft.Extensions.Http 5
 
   # Those are needed for the client type provider.
-  github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fsi
-  github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fs
+  github fsprojects/FSharp.TypeProviders.SDK:f4aca36af04aa84b16ec04df6f6bf55ac2f17a73 src/ProvidedTypes.fsi
+  github fsprojects/FSharp.TypeProviders.SDK:f4aca36af04aa84b16ec04df6f6bf55ac2f17a73 src/ProvidedTypes.fs
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json

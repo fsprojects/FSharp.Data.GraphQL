@@ -19,14 +19,15 @@ open FSharp.Quotations
 #nowarn "10001"
 
 let private loadSchema (introspectionLocation: IntrospectionLocation) (httpHeaders: seq<string * string>)=
-    let schemaJson =
+    let schemaJsonStream: Stream =
         match introspectionLocation with
         | Uri serverUrl ->
             use connection = new GraphQLClientConnection()
             GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
         | IntrospectionFile path ->
-            System.IO.File.ReadAllText path
-    Serialization.deserializeSchema schemaJson
+            System.IO.File.OpenRead(path) :> _
+
+    Serialization.deserializeSchema schemaJsonStream
 
 let importsRegex = Regex(@"^\s*#import\s+(?<file>.*)",  RegexOptions.Compiled ||| RegexOptions.Multiline)
 let parseImports (query: string) =
@@ -66,7 +67,7 @@ let rec buildFragmentType (selectionSet: Selection list) (fragment: ProvidedType
 
 let rec makeFragmentInterface
     (file: string) (schema: IntrospectionSchema)
-    (schemaProvidedTypes: Map<TypeName, ProvidedTypeDefinition>)
+    (schemaProvidedTypes: Map<string, ProvidedTypeDefinition>)
     (fragmentWrapper: ProvidedTypeDefinition)
     (cache: Map<string, ProvidedFragmentMetadata>) =
     let imports, document = loadFragmentFromPath file
@@ -89,7 +90,7 @@ let rec makeFragmentInterface
 
 let private makeFragmentInterfaces
     (schema: IntrospectionSchema)
-    (schemaProvidedTypes: Map<TypeName, ProvidedTypeDefinition>)
+    (schemaProvidedTypes: Map<string, ProvidedTypeDefinition>)
     (fragmentWrapper: ProvidedTypeDefinition)
     (providerSettings: ProviderSettings) =
     match providerSettings.FragmentsFolder with

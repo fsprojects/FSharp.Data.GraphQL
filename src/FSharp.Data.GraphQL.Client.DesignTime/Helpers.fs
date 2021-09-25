@@ -4,7 +4,6 @@ open System
 open System.Collections
 open FSharp.Reflection
 open FSharp.Quotations
-open FSharp.Data.GraphQL.Types.Introspection
 
 module internal QuotationHelpers =
     let rec coerceValues fieldTypeLookup fields =
@@ -71,11 +70,3 @@ module internal QuotationHelpers =
     let quoteArray instance =
         let func instance = arrayExpr instance ||> createLetExpr
         Tracer.runAndMeasureExecutionTime "Quoted array type" (fun _ -> func instance)
-
-[<AutoOpen>]
-module internal Patterns =
-    let (|NamedTypeRef|ContainerTypeRef|) (x: IntrospectionTypeRef) =
-        match x.Name, x.OfType with
-        | Some name, None -> NamedTypeRef(x.Kind, name)
-        | None, Some innerType -> ContainerTypeRef(x.Kind, innerType)
-        | _, _ -> failwithf "Invalid introspection type ref. Expected named or container type %A" x
