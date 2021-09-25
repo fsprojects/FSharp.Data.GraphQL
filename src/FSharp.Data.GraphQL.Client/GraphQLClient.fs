@@ -4,13 +4,16 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.IO
 open System.Collections.Generic
+open System.Threading
+open System.Text
+open System.Collections
 open System.Net.Http
+open FSharp.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
-open System.Text
-open ReflectionPatterns
-open System.Threading
+
 
 /// A requrest object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest  =
@@ -25,8 +28,39 @@ type GraphQLRequest  =
       /// Gets variables to be sent with the query.
       Variables : (string * obj) [] }
 
+
 /// Executes calls to GraphQL servers and return their responses.
 module GraphQLClient =
+
+    let rec private mapUploadVariables (accum: (string * Upload) list) (path: string) (key: string) (value : obj) =
+        match value with
+        | :? string | null ->
+            accum
+        | :? Upload as x ->
+           (path + "." + key, x)::accum
+        | :? RecordBase as x ->
+            (accum, x.GetProperties())
+            ||> Seq.fold(fun accum value -> mapUploadVariables accum (path + "." + key) value.Key value.Value)
+        | :? IEnumerable as enumerable ->
+            let values = Seq.cast<obj> enumerable
+            ((0, accum), values)
+            ||> Seq.fold(fun (idx, accum) item ->
+                idx + 1, mapUploadVariables accum (path + "." + key) (string idx) item)
+            |> snd
+        | x ->
+            let xtype = x.GetType()
+            if xtype.IsGenericType && xtype.GetGenericTypeDefinition() = typedefof<option<_>> then
+                match FSharpValue.GetUnionFields(value, xtype) with
+                | _, [| innerValue |] -> mapUploadVariables accum path key innerValue
+                | _, _ -> accum
+            else
+                accum
+
+    let extractFileUploadMapping (request: GraphQLRequest) =
+        request.Variables
+        |> Seq.collect(fun (k,v) -> mapUploadVariables [] "variables" k v)
+        |> Seq.toArray
+
     let private ensureSuccessCode (response : Async<HttpResponseMessage>) =
         async {
             let! response = response
@@ -43,7 +77,7 @@ module GraphQLClient =
             requestMessage.Content <- content
             addHeaders httpHeaders requestMessage
             let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
-            let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            let! content = response.Content.ReadAsStreamAsync() |> Async.AwaitTask
             return content
         }
 
@@ -51,28 +85,26 @@ module GraphQLClient =
         async {
             use requestMessage = new HttpRequestMessage(HttpMethod.Get, serverUrl)
             let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
-            let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+            let! content = response.Content.ReadAsStreamAsync() |> Async.AwaitTask
             return content
         }
 
+    let private createStreamContent (data: 'T) = async {
+        let memoryStream = new MemoryStream()
+        do! Serialization.serializeToStream data memoryStream
+        let content = new StreamContent(memoryStream)
+        return content
+    }
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let invoker = connection.Invoker
-            let variables =
-                match request.Variables with
-                | null | [||] -> JsonValue.Null
-                | _ -> Map.ofArray request.Variables |> Serialization.toJsonValue
-            let operationName =
-                match request.OperationName with
-                | Some x -> JsonValue.String x
-                | None -> JsonValue.Null
             let requestJson =
-                [| "operationName", operationName
-                   "query", JsonValue.String request.Query
-                   "variables", variables |]
-                |> JsonValue.Record
-            let content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
+                {| operationName = request.OperationName
+                   query = request.Query
+                   variables = dict request.Variables |}
+            let! content = createStreamContent requestJson
+            content.Headers.Add("Content-Type", "application/json")
             return! postAsync invoker request.ServerUrl request.HttpHeaders content
         }
 
@@ -112,64 +144,35 @@ module GraphQLClient =
         sendIntrospectionRequestAsync client serverUrl httpHeaders
         |> Async.RunSynchronously
 
+
     /// Executes a multipart request to a GraphQL server asynchronously.
     let sendMultipartRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
             let invoker = connection.Invoker
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             let content = new MultipartContent("form-data", boundary)
-            let files =
-                let rec tryMapFileVariable (name: string, value : obj) =
-                    match value with
-                    | null | :? string -> None
-                    | :? Upload as x -> Some [|name, x|]
-                    | OptionValue x ->
-                        x |> Option.bind (fun x -> tryMapFileVariable (name, x))
-                    | :? IDictionary<string, obj> as x ->
-                        x |> Seq.collect (fun kvp -> tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower()), kvp.Value) |> Option.defaultValue [||])
-                          |> Array.ofSeq
-                          |> Some
-                    | EnumerableValue x ->
-                        x |> Array.mapi (fun ix x -> tryMapFileVariable (name + "." + (ix.ToString()), x))
-                          |> Array.collect (Option.defaultValue [||])
-                          |> Some
-                    | _ -> None
-                request.Variables |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
-            let operationContent =
-                let variables =
-                    match request.Variables with
-                    | null | [||] -> JsonValue.Null
-                    | _ -> request.Variables |> Map.ofArray |> Serialization.toJsonValue
-                let operationName =
-                    match request.OperationName with
-                    | Some x -> JsonValue.String x
-                    | None -> JsonValue.Null
-                let json =
-                    [| "operationName", operationName
-                       "query", JsonValue.String request.Query
-                       "variables", variables |]
-                    |> JsonValue.Record
-                let content = new StringContent(json.ToString(JsonSaveOptions.DisableFormatting))
-                content.Headers.Add("Content-Disposition", "form-data; name=\"operations\"")
-                content
+            let files = extractFileUploadMapping request
+            let operationJson =
+                    {| operationName = request.OperationName
+                       query = request.Query
+                       variables =  dict request.Variables |}
+            let! operationContent = createStreamContent operationJson
+            operationContent.Headers.Add("Content-Disposition", "form-data; name=\"operations\"")
             content.Add(operationContent)
-            let mapContent =
-                let files =
-                    files
-                    |> Array.mapi (fun ix (name, _) -> ix.ToString(), JsonValue.Array [| JsonValue.String ("variables." + name) |])
-                    |> JsonValue.Record
-                let content = new StringContent(files.ToString(JsonSaveOptions.DisableFormatting))
-                content.Headers.Add("Content-Disposition", "form-data; name=\"map\"")
-                content
-            content.Add(mapContent)
-            let fileContents =
+            let filesMapJson =
                 files
-                |> Array.mapi (fun ix (_, value) ->
-                    let content = new StreamContent(value.Stream)
-                    content.Headers.Add("Content-Disposition", sprintf "form-data; name=\"%i\"; filename=\"%s\"" ix value.FileName)
-                    content.Headers.Add("Content-Type", value.ContentType)
-                    content)
-            fileContents |> Array.iter content.Add
+                |> Array.mapi(fun i (key, v) -> (i.ToString()), [key])
+                |> dict
+            let! mapContent = createStreamContent filesMapJson
+            mapContent.Headers.Add("Content-Disposition", "form-data; name=\"map\"")
+            content.Add(mapContent)
+
+            for (i, (_, upload)) in Array.indexed files do
+                let uploadContent = new StreamContent(upload.Stream)
+                uploadContent.Headers.Add("Content-Disposition", sprintf "form-data; name=\"%i\"; filename=\"%s\"" i upload.FileName)
+                uploadContent.Headers.Add("Content-Type", upload.ContentType)
+                content.Add uploadContent
+
             let! result = postAsync invoker request.ServerUrl request.HttpHeaders content
             return result
         }

@@ -51,21 +51,6 @@ module SimpleOperation =
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
-        let actual = normalize <| sprintf "%A" result.Data
-        let expected = normalize <| """Some
-            {Hero = Some
-            {AppearsIn = [|NewHope; Empire; Jedi|];
-            Friends = [|Some {HomePlanet = <null>;
-            Name = Some "Han Solo";};
-            Some {HomePlanet = Some "Alderaan";
-            Name = Some "Leia Organa";};
-            Some {Name = Some "C-3PO";
-            PrimaryFunction = Some "Protocol";};
-            Some {Name = Some "R2-D2";
-            PrimaryFunction = Some "Astromech";}|];
-            HomePlanet = Some "Tatooine";
-            Name = Some "Luke Skywalker";};}"""
-        actual |> equals expected
 
 [<Fact>]
 let ``Should be able to start a simple query operation synchronously`` () =
@@ -168,21 +153,6 @@ module FileOperation =
              Some (upcast Operation.Types.HeroFields.FriendsFields.Droid(name = "R2-D2", primaryFunction = "Astromech")) |]
         result.Data.Value.Hero.Value.Friends |> equals expectedFriends
         result.Data.Value.Hero.Value.HomePlanet |> equals (Some "Tatooine")
-        let actual = normalize <| sprintf "%A" result.Data
-        let expected = normalize <| """Some
-            {Hero = Some
-            {AppearsIn = [|NewHope; Empire; Jedi|];
-            Friends = [|Some {HomePlanet = <null>;
-            Name = Some "Han Solo";};
-            Some {HomePlanet = Some "Alderaan";
-            Name = Some "Leia Organa";};
-            Some {Name = Some "C-3PO";
-            PrimaryFunction = Some "Protocol";};
-            Some {Name = Some "R2-D2";
-            PrimaryFunction = Some "Astromech";}|];
-            HomePlanet = Some "Tatooine";
-            Name = Some "Luke Skywalker";};}"""
-        actual |> equals expected
 
 [<Fact>]
 let ``Should be able to run a query from a query file`` () =

@@ -31,16 +31,17 @@ type private ChannelBag() =
         tags |> Seq.iter adder
         upcast channel
     member __.GetAll() =
-        untagged |> Seq.map id
+        seq { yield! untagged }
+
     member __.GetByTag(tag) =
         match tagged.TryGetValue(tag) with
         | false, _ -> Seq.empty
-        | true, channels -> channels |> Seq.map id
+        | true, channels -> seq { yield! channels }
 
 type private SubscriptionManager() =
     let subscriptions = Dictionary<string, Subscription * ChannelBag>()
     member __.Add(subscription : Subscription) =
-        subscriptions.Add(subscription.Name, (subscription, new ChannelBag()))
+        subscriptions.Add(subscription.Name, (subscription, ChannelBag()))
     member __.TryGet(subscriptionName) =
         match subscriptions.TryGetValue(subscriptionName) with
         | true, sub -> Some sub
@@ -64,7 +65,7 @@ type SchemaConfig =
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() =
-        let subscriptionManager = new SubscriptionManager()
+        let subscriptionManager = SubscriptionManager()
         { new ISubscriptionProvider with
             member __.AsyncRegister (subscription : Subscription) = async {
                 return subscriptionManager.Add(subscription) }

@@ -6,6 +6,7 @@ group Common
   source https://api.nuget.org/v3/index.json
   frameworks: net5.0, netstandard2.0
 
+  nuget System.Text.Json
   nuget System.Reactive
 
   # Be explicit about FSharp.Core 4.7.2 when designing libraries.
@@ -19,8 +20,8 @@ group Common
   nuget Microsoft.Extensions.Http 5
 
   # Those are needed for the client type provider.
-  github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fsi
-  github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fs
+  github fsprojects/FSharp.TypeProviders.SDK:f4aca36af04aa84b16ec04df6f6bf55ac2f17a73 src/ProvidedTypes.fsi
+  github fsprojects/FSharp.TypeProviders.SDK:f4aca36af04aa84b16ec04df6f6bf55ac2f17a73 src/ProvidedTypes.fs
 
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
@@ -39,3 +40,13 @@ group TestsAndSamples
   nuget xunit.runner.visualstudio
   nuget BenchmarkDotNet
   nuget FSharp.Data.TypeProviders
+
+group AspNetLib
+  source https://api.nuget.org/v3/index.json
+  frameworks: net5.0, netstandard2.0
+
+  nuget Microsoft.AspNetCore.Http
+  nuget Microsoft.AspNetCore.Http.Abstractions
+  nuget Microsoft.AspNetCore.Http.Extensions
+  nuget System.Text.Json
+  nuget System.IO.Pipelines

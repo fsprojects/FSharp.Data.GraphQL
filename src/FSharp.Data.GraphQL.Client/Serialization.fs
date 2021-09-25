@@ -4,198 +4,632 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
-open Microsoft.FSharp.Reflection
+open System.IO
+open System.Text.Json
+open System.Text.Json.Serialization
 open System.Reflection
+open System.Collections.Concurrent
 open System.Collections.Generic
-open System.Globalization
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Client.ReflectionPatterns
+open FSharp.Data.GraphQL.Types.Introspection
+open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Ast.Extensions
+open FSharp.Reflection
+open FSharp.Quotations
+
+
+type OptionConverter<'T> () =
+    inherit JsonConverter<option<'T>>()
+    override _.Read(reader, typeToConvert, options) =
+        match reader.TokenType with
+        | JsonTokenType.Null -> None
+        | _ -> Some <| JsonSerializer.Deserialize<'T>(&reader, options)
+
+    override _.Write(writer, value, options) =
+        match value with
+        | None -> writer.WriteNullValue()
+        | Some x -> JsonSerializer.Serialize<'T>(writer, x, options)
+
+type OptionConverterFactory () =
+    inherit JsonConverterFactory()
+    let optionTypeConverter = typedefof<OptionConverter<_>>
+    override _.CanConvert(typeToConvert) =
+        typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() = typedefof<option<_>>
+
+    override _.CreateConverter(typeToConvert, options) =
+        optionTypeConverter
+            .MakeGenericType(typeToConvert.GetGenericArguments())
+            .GetConstructor([||])
+            .Invoke([||]) :?> JsonConverter
+
+
+type RecordConverter<'T> () =
+    inherit JsonConverter<'T>()
+    let isNullableField (propertyInfo: PropertyInfo) =
+        let propType = propertyInfo.PropertyType
+        propType.IsGenericType &&
+            (let genericType = propType.GetGenericTypeDefinition()
+             genericType = typedefof<option<_>> || genericType = typedefof<voption<_>>)
+
+    let makeRecord = FSharpValue.PreComputeRecordConstructor(typeof<'T>, true)
+    let readRecord = FSharpValue.PreComputeRecordReader(typeof<'T>, true)
+
+    let recordFields =
+        let flags = BindingFlags.Public ||| BindingFlags.NonPublic
+        [| for field in FSharpType.GetRecordFields(typeof<'T>, flags) do
+           (field.Name, isNullableField field, field.PropertyType) |]
+
+    let fieldDefaults =
+        [| for (_,_,fieldType) in recordFields do
+            if fieldType.IsValueType
+            then Activator.CreateInstance(fieldType)
+            else null |]
+
+    let tryGetFieldPosition =
+        let cache = ConcurrentDictionary<bool * string, int option>()
+        fun (caseInsensitive: bool) (propertyName: string) ->
+            let key = (caseInsensitive, propertyName)
+            match cache.TryGetValue key with
+            | true, v ->
+                v
+            | false, _ ->
+                let stringCompare = if caseInsensitive then StringComparison.InvariantCultureIgnoreCase else StringComparison.InvariantCulture
+                let index = recordFields |> Array.tryFindIndex(fun (v, _, _) -> v.Equals(propertyName, stringCompare))
+                cache.[key] <- index
+                index
+
+    override _.Read(reader, typeToConvert, options) =
+        if reader.TokenType <> JsonTokenType.StartObject then
+            failwith "Expected Json Start Object Token"
+        let mutable cont = true
+        let values = Array.copy fieldDefaults
+        let tryGetPosition = tryGetFieldPosition options.PropertyNameCaseInsensitive
+        while cont do
+            match reader.Read(), reader.TokenType with
+            | true, JsonTokenType.EndObject ->
+                cont <- false
+            | true, JsonTokenType.PropertyName ->
+                let propertyName = reader.GetString()
+                match tryGetPosition propertyName with
+                | Some pos ->
+                    let (fieldName, isNullable, propertyType) = recordFields.[pos]
+                    let value = JsonSerializer.Deserialize(&reader, propertyType, options)
+                    if (not isNullable) && isNull value then
+                        failwithf "Field '%s' is required" fieldName
+                    values.[pos] <- value
+                | None ->
+                    reader.Skip()
+                    ()
+            | false, _ ->
+                failwith "Unexpected End of JSON Sequence"
+            | _, token ->
+                failwithf "Unexpected token '%A' in JSON Sequence" token
+        let record = makeRecord values
+        record :?> 'T
+
+
+    override _.Write(writer, value, options) =
+        writer.WriteStartObject()
+        let values = readRecord value
+        let normalizeName =
+            if isNull options.PropertyNamingPolicy
+            then id
+            else options.PropertyNamingPolicy.ConvertName
+        for i = 0 to values.Length - 1 do
+            let (name, _, propertyType) = recordFields.[i]
+            writer.WritePropertyName(normalizeName name)
+            JsonSerializer.Serialize(writer, values.[i], propertyType, options)
+        writer.WriteEndObject()
+
+type RecordConverterFactory () =
+    inherit JsonConverterFactory()
+    let recordTypeConverter = typedefof<RecordConverter<_>>
+
+    override _.CanConvert(typeToConvert) =
+        FSharpType.IsRecord(typeToConvert, true)
+
+    override _.CreateConverter(typeToConvert, options) =
+        recordTypeConverter
+            .MakeGenericType(typeToConvert)
+            .GetConstructor([||])
+            .Invoke([||]) :?> JsonConverter
+
+// Converted from FSharp.SystemTextJson
+type MapConverter<'V> () =
+    inherit JsonConverter<Map<string, 'V>>()
+    let rec read (acc: Map<string, 'V>) (reader: byref<Utf8JsonReader>) options =
+        if not (reader.Read()) then acc else
+        match reader.TokenType with
+        | JsonTokenType.EndObject -> acc
+        | JsonTokenType.PropertyName ->
+            let key = reader.GetString()
+            let value =
+                // if the value type is obj, we want to default to
+                // the map converter whenever we see an object
+                if typeof<'V> = typeof<obj>
+                    && (let peekReader = reader
+                        peekReader.Read() |> ignore
+                        peekReader.TokenType = JsonTokenType.StartObject)
+                then JsonSerializer.Deserialize<Map<string, obj>>(&reader, options) :> obj :?> 'V
+                else JsonSerializer.Deserialize<'V>(&reader, options)
+            read (Map.add key value acc) &reader options
+        | _ ->
+            failwithf "Failed to serialize map"
+
+    override _.Read(reader, _typeToConvert, options) =
+        read Map.empty &reader options
+
+    override _.Write(writer, value, options) =
+        writer.WriteStartObject()
+        for kv in value do
+            let k =
+                match options.DictionaryKeyPolicy with
+                | null -> kv.Key
+                | p -> p.ConvertName kv.Key
+            writer.WritePropertyName(k)
+            JsonSerializer.Serialize<'V>(writer, kv.Value, options)
+        writer.WriteEndObject()
+
+type MapConverterFactory () =
+    inherit JsonConverterFactory()
+    let mapTypeConverter = typedefof<MapConverter<_>>
+    override _.CanConvert(typeToConvert) =
+        if typeToConvert.IsGenericType && typeToConvert.GetGenericTypeDefinition() = typedefof<Map<_, _>> then
+            let types = typeToConvert.GetGenericArguments()
+            types.[0] = typeof<string>
+        else
+            false
+    override _.CreateConverter(typeToConvert, options) =
+        let valueType = typeToConvert.GetGenericArguments().[1]
+        mapTypeConverter
+            .MakeGenericType([|valueType|])
+            .GetConstructor([||])
+            .Invoke([||]) :?> JsonConverter
+
+type UploadConverter () =
+    inherit JsonConverter<Upload>()
+
+    override _.Read(_, _, _) =
+        invalidOp "The type 'Upload' is write-only"
+
+    override _.Write(writer, _, _) =
+        writer.WriteNullValue()
+
+type RecordBaseConverter () =
+    inherit JsonConverter<RecordBase>()
+
+    override _.Read(reader, _typeToConvert, options) =
+        invalidOp "The type 'RecordBase' is write-only"
+
+    override _.Write(writer, value, options) =
+        let properties = value.ToDictionary()
+        JsonSerializer.Serialize(writer, properties, options)
+
+type EnumBaseConverter () =
+    inherit JsonConverter<EnumBase>()
+
+    override _.Read(reader, _typeToConvert, options) =
+        invalidOp "The type 'EnumBase' is write-only"
+
+    override _.Write(writer, value, options) =
+        JsonSerializer.Serialize(writer, value.GetValue(), options)
+
+
+[<AutoOpen>]
+module RuntimeSerialization =
+
+    let options = JsonSerializerOptions(PropertyNameCaseInsensitive=true, PropertyNamingPolicy=JsonNamingPolicy.CamelCase)
+    options.Converters.Add(OptionConverterFactory())
+    options.Converters.Add(RecordConverterFactory())
+    options.Converters.Add(JsonStringEnumConverter())
+    options.Converters.Add(MapConverterFactory())
+    options.Converters.Add(UploadConverter())
+    options.Converters.Add(RecordBaseConverter())
+    options.Converters.Add(EnumBaseConverter())
+
+    let getTypeName (element: JsonElement) =
+        match element.TryGetProperty("__typename") with
+        | true, value -> value.GetString()
+        | false, _ -> failwith "__typename not found in json"
+
+    let tryReadString (element: JsonElement) =
+        match element.GetString() with
+        | null -> None
+        | s -> Some s
+
+    let tryReadBool (element: JsonElement) =
+       match element.ValueKind with
+       | JsonValueKind.True -> Some true
+       | JsonValueKind.False -> Some false
+       |  _ -> None
+
+    let tryReadInt (element: JsonElement) =
+        match element.TryGetInt32() with
+        | true, value -> Some value
+        | _ -> None
+
+    let tryReadFloat (element: JsonElement) =
+        match element.TryGetDouble() with
+        | true, value -> Some value
+        | _ -> None
+
+    let tryReadDateTime (element: JsonElement) =
+        match element.TryGetDateTime() with
+        | true, value -> Some value
+        | _ -> None
+
+    let tryReadUri (element: JsonElement) =
+        match Uri.TryCreate(element.GetString(), UriKind.RelativeOrAbsolute) with
+        | true, value -> Some value
+        | false, _ -> None
+
+    let tryReadGuid (element: JsonElement) =
+        match element.TryGetGuid() with
+        | true, value -> Some value
+        | false, _ -> None
+
+    let tryReadProperty (name: string) (element: JsonElement) =
+        match element.TryGetProperty(name) with
+        | true, value -> ValueSome value
+        | false, _ -> ValueNone
+
+    let readProperty (name: string) (element: JsonElement) =
+        match element.TryGetProperty(name) with
+        | true, value -> value
+        | false, _ -> failwithf "'%s' is required, but was not found in result" name
+
+    let readString (element: JsonElement) =
+        element.GetString()
+
+    let readBool (element: JsonElement) =
+        element.GetBoolean()
+
+    let readInt (element: JsonElement) =
+        element.GetInt32()
+
+    let readFloat (element: JsonElement) =
+        element.GetDouble()
+
+    let readDateTime (element: JsonElement) =
+        element.GetDateTime()
+
+    let readUri (element: JsonElement) =
+        Uri(element.GetString())
+
+    let readGuid (element: JsonElement) =
+        element.GetGuid()
+
+    let getPossibleTypes (schemaTypes: SchemaTypes) (abstractType: IntrospectionType) (abstractTypeName: string) (selection: AstFieldInfo) =
+        match abstractType.PossibleTypes with
+        | Some possibleTypes ->
+            let fieldsByType =
+                selection.Fields
+                |> List.groupBy (function | TypeField _ -> abstractTypeName | FragmentField field -> field.TypeCondition)
+                |> Map.ofList
+            let getFieldsByTypeName typeName =
+                fieldsByType
+                |> Map.tryFind typeName
+                |> Option.defaultValue []
+            let commonFields = getFieldsByTypeName abstractTypeName
+            [ for possibleType in possibleTypes do
+                let objectType = schemaTypes.FindByTypeRef(possibleType)
+                let possibleFields = commonFields @ getFieldsByTypeName objectType.Name
+                objectType, possibleFields ]
+        | None ->
+            [ abstractType, selection.Fields ]
+
+    let readErrorPath (element: JsonElement) =
+        match tryReadProperty "path" element with
+        | ValueSome pathElement when pathElement.ValueKind = JsonValueKind.Array ->
+            use pathEnumerator = pathElement.EnumerateArray()
+            [| for element in pathEnumerator do
+                 if element.ValueKind = JsonValueKind.String
+                 then element.GetString() |> box
+                 else element.GetInt32() |> box |]
+        | _ ->
+            [||]
+
+    let readErrors (element: JsonElement) =
+        use enumerator = element.EnumerateArray()
+        [| for element in enumerator do
+            let message = readString (readProperty "message" element)
+            let path =  readErrorPath element
+            (message, path) |]
+
+    let readCustomData (element: JsonElement) =
+        use enumerator = element.EnumerateObject()
+        let customData =
+            [| for element in enumerator do
+                match element.Name with
+                | "data" | "errors" ->
+                    ()
+                | name ->
+                    let serializationType =
+                        match element.Value.ValueKind with
+                        | JsonValueKind.Object -> typeof<Map<string, obj>>
+                        | _ -> typeof<obj>
+                    name, JsonSerializer.Deserialize(element.Value.GetRawText(), serializationType, options) |]
+        Map.ofArray customData
+
+module DesignTimeSerialization =
+
+    type IExprVisitor<'R> =
+        abstract Visit<'T> : unit -> 'R
+
+    type IExprActivator =
+        abstract Accept : v: IExprVisitor<'R> -> 'R
+
+    type ExprActivator<'T> () =
+        interface IExprActivator with
+            member _.Accept(v: IExprVisitor<'R>) =
+                v.Visit<'T>()
+
+    type Expr with
+        member e.Accept (v: IExprVisitor<'R>) =
+            let ty = typedefof<ExprActivator<_>>.MakeGenericType e.Type
+            let inst = Activator.CreateInstance(ty) :?> IExprActivator
+            inst.Accept(v)
+
+        member e.AcceptLambda (v: IExprVisitor<'R>) =
+            if FSharpType.IsFunction e.Type then
+                let (_, c) = FSharpType.GetFunctionElements e.Type
+                let ty = typedefof<ExprActivator<_>>.MakeGenericType c
+                let inst = Activator.CreateInstance(ty) :?> IExprActivator
+                inst.Accept(v)
+            else
+                invalidOp "expected Expr<JsonElement -> 'c>"
+
+
+    let inline reader (f: (JsonElement -> 'a)) (elementExpr: Expr<JsonElement>) =
+        <@ f %elementExpr @> :> Expr
+
+    let inline optionalReader (f: (JsonElement -> 'a option)) (elementExpr: Expr<JsonElement>) =
+        <@ match (%elementExpr).ValueKind with
+           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+           | _ -> f (%elementExpr) @> :> Expr
+
+    let makeArrayExpr (elementExpr: Expr<JsonElement>) (body: Expr<JsonElement -> 'T>) (isNullable: bool) =
+        if isNullable then
+            <@@ let element: JsonElement = %elementExpr
+                match element.ValueKind with
+                | JsonValueKind.Array ->
+                    use enumerator = element.EnumerateArray()
+                    Some [| for element in enumerator -> (%body) element |]
+                | _ ->
+                    None
+            @@>
+        else
+            <@@ let element: JsonElement = %elementExpr
+                match element.ValueKind with
+                | JsonValueKind.Array ->
+                    use enumerator = element.EnumerateArray()
+                    [| for element in enumerator -> (%body) element |]
+                | valueKind ->
+                    failwithf "Expected array type but received type: %A" valueKind
+            @@>
+
+
+    let rec tryReadObject (schemaTypes: SchemaTypes) (introspectionType: IntrospectionType) (selections: list<AstFieldInfo>) (elementExpr: Expr<JsonElement>) =
+        let fieldExprs = makeFieldExpressions schemaTypes introspectionType selections elementExpr
+        <@@ match (%elementExpr).ValueKind with
+            | JsonValueKind.Object ->
+                let properties = Dictionary<string, obj>()
+                let typeName = getTypeName %elementExpr
+                (%%fieldExprs) properties
+                Some(RecordBase(typeName, properties))
+            | _ ->
+                None @@>
+    and readObject (schemaTypes: SchemaTypes) (introspectionType: IntrospectionType) (selections: list<AstFieldInfo>) (elementExpr: Expr<JsonElement>) =
+        let fieldExprs = makeFieldExpressions schemaTypes introspectionType selections elementExpr
+        <@@ let element = %elementExpr
+            let properties = Dictionary<string, obj>()
+            (%%fieldExprs) properties
+            let typeName = getTypeName element
+            RecordBase(typeName, properties) @@>
+    and makeFieldExpressions (schemaTypes: SchemaTypes) (introspectionType: IntrospectionType) (selections: list<AstFieldInfo>) (elementExpr: Expr<JsonElement>) =
+        let fields = Option.defaultValue [||] introspectionType.Fields
+        let fieldsMap =
+            fields
+            |> Array.map(fun field -> field.Name, field)
+            |> Map.ofArray
+        let propertiesVar = Var("properties", typeof<Dictionary<string, obj>>)
+        let propertiesExpr = Expr.Var(propertiesVar)
+        let makeSelectionExpr (selection: AstFieldInfo) =
+            let propertyName = selection.AliasOrName
+            let readerExpr: Expr =
+                let selectionField = fieldsMap.[selection.Name]
+                let isNullable = match selectionField.Type with ContainerTypeRef(TypeKind.NON_NULL, _) -> false | _ -> true
+                let elementExpr =
+                    if isNullable then
+                       <@ match tryReadProperty propertyName %elementExpr with
+                          | ValueSome element -> element
+                          | ValueNone -> Unchecked.defaultof<JsonElement> @>
+                    else
+                       <@ readProperty propertyName %elementExpr @>
+                makeElementReader schemaTypes selectionField selection selectionField.Type true elementExpr
+            readerExpr.Accept
+                { new IExprVisitor<Expr> with
+                    member _.Visit<'r> () =
+                        <@@ let properties:Dictionary<string, obj> = %%propertiesExpr
+                            properties.[propertyName] <- (%%readerExpr : 'r) @@>
+                }
+        let fieldExpressions =
+            selections
+            |> List.filter(fun s -> s.Name <> "__typename")
+            |> List.map makeSelectionExpr
+            |> List.reduce(fun e1 e2 -> Expr.Sequential(e1, e2))
+        Expr.Lambda(propertiesVar, fieldExpressions)
+    and makeElementReader (schemaTypes: SchemaTypes) (field: IntrospectionField) (selection: AstFieldInfo) (fieldType: IntrospectionTypeRef) (isNullable: bool) =
+        match fieldType with
+        | ContainerTypeRef(TypeKind.NON_NULL, innerTypeRef) ->
+            makeElementReader schemaTypes field selection innerTypeRef false
+        | ContainerTypeRef(TypeKind.LIST, innerTypeRef) ->
+            let body =
+                let elementVar = Var("element", typeof<JsonElement>)
+                let elementExpr = Expr.Var(elementVar) |> Expr.Cast<JsonElement>
+                let elementReader = makeElementReader schemaTypes field selection innerTypeRef true
+                Expr.Lambda(elementVar, elementReader elementExpr)
+            fun elementExpr ->
+                body.AcceptLambda
+                    { new IExprVisitor<Expr> with
+                        member _.Visit<'r> () =
+                            let expr = Expr.Cast<JsonElement -> 'r> body
+                            makeArrayExpr elementExpr expr isNullable }
+        | NamedTypeRef(TypeKind.OBJECT, name) ->
+            let objectType = schemaTypes.FindType(name)
+            if isNullable
+            then tryReadObject schemaTypes objectType selection.Fields
+            else readObject schemaTypes objectType selection.Fields
+        | NamedTypeRef((TypeKind.UNION | TypeKind.INTERFACE), abstractTypeName) ->
+            let abstractType = schemaTypes.FindType(abstractTypeName)
+            let implementations = getPossibleTypes schemaTypes abstractType abstractTypeName selection
+            let typeNameVar = Var("typeVar", typeof<string>)
+            let typeNameExpr = Expr.Var(typeNameVar)
+            fun elementExpr ->
+                let objectReader = if isNullable then tryReadObject else readObject
+                let readConcreteType =
+                    let rec makeConditionalRecord (elements: list<IntrospectionType * list<AstFieldInfo>>) =
+                        match elements with
+                        | (objectType, fields)::tail ->
+                            let typeName = objectType.Name
+                            let readExpr = objectReader schemaTypes objectType fields elementExpr
+                            Expr.IfThenElse(<@@ %%typeNameExpr = typeName @@>, readExpr,  makeConditionalRecord tail)
+                        | [] when isNullable -> <@@ None : RecordBase option @@>
+                        | [] -> <@@ failwithf "Unknown descriminator for type %s" abstractTypeName @@>
+                    makeConditionalRecord implementations
+                Expr.Let(typeNameVar, <@@ getTypeName (%elementExpr) @@>, readConcreteType)
+        | NamedTypeRef(TypeKind.ENUM, typeName) ->
+            fun expr ->
+                if isNullable then
+                    <@@ match tryReadString %expr with
+                        | Some value ->
+                            Some(EnumBase(typeName, value))
+                        | None ->
+                            None @@>
+                else
+                    <@@ EnumBase(typeName, readString %expr) @@>
+        | NamedTypeRef(TypeKind.SCALAR, typeName) ->
+            match typeName with
+            | "String" | "ID" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadString (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readString (%elementExpr) @> :> Expr
+            | "Int" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadInt (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readInt (%elementExpr) @> :> Expr
+            | "Boolean" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadBool (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readBool (%elementExpr) @> :> Expr
+            | "Float" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadFloat (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readFloat (%elementExpr) @> :> Expr
+            | "Date" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadDateTime (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readDateTime (%elementExpr) @> :> Expr
+            | "Guid" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadGuid (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readGuid (%elementExpr) @> :> Expr
+            | "URI" ->
+                if isNullable then
+                   fun elementExpr ->
+                       <@ match (%elementExpr).ValueKind with
+                           | JsonValueKind.Null | JsonValueKind.Undefined -> None
+                           | _ -> tryReadUri (%elementExpr) @> :> Expr
+                else
+                     fun elementExpr ->
+                        <@ readUri (%elementExpr) @> :> Expr
+            | scalar -> failwithf "%s is not supported" scalar
+        | other ->
+            failwithf "%A not supported" other
+
+
+
+    let getOperationJsonReader (schemaTypes: SchemaTypes) (selections: list<AstFieldInfo>) (operation: OperationDefinition) =
+        let introspection = schemaTypes.Introspection
+        let operationTypeRef =
+            let operationTypeRefOpt =
+                match operation.OperationType with
+                | Query -> Some introspection.QueryType
+                | Mutation -> introspection.MutationType
+                | Subscription -> introspection.SubscriptionType
+            match operationTypeRefOpt with
+            | Some op -> op
+            | None -> invalidOp (sprintf "top-level %A type is not defined in the schema" operation.OperationType)
+        let operationType = schemaTypes.FindByTypeRef(operationTypeRef)
+        let elementVar = Var("element", typeof<JsonElement>)
+        let elementExpr = Expr.Var(elementVar) |> Expr.Cast<JsonElement>
+        let dataElementExpr =
+            <@ match tryReadProperty "data" %elementExpr with
+               | ValueSome element -> element
+               | ValueNone -> Unchecked.defaultof<JsonElement> @>
+        let resultExpr = tryReadObject schemaTypes operationType selections dataElementExpr
+        let bodyExpr =
+            <@@
+                let element = %elementExpr
+                let result: RecordBase option = %%resultExpr
+                let errors: OperationError [] =
+                    match tryReadProperty "errors" element with
+                    | ValueSome errorElement when errorElement.ValueKind = JsonValueKind.Array ->
+                        element
+                        |> readErrors
+                        |> Array.map(fun (m, p) -> { Message = m; Path = p })
+                    | _ ->
+                        [||]
+                let customData = readCustomData element
+                { CustomData = customData; Data = result; Errors = errors  }
+            @@>
+        Expr.Lambda(elementVar, bodyExpr)
+
 
 module Serialization =
-    let private makeOption t (value : obj) =
-        let otype = typedefof<_ option>
-        let cases = FSharpType.GetUnionCases(otype.MakeGenericType([|t|]))
-        match value with
-        | null -> FSharpValue.MakeUnion(cases.[0], [||])
-        | _ -> FSharpValue.MakeUnion(cases.[1], [|value|])
 
-    let private downcastNone<'T> t =
-        match t with
-        | Option t -> downcast (makeOption t null)
-        | _ -> failwithf "Error parsing JSON value: %O is not an option value." t
+    let deserializeStream<'T> (stream: Stream) =
+        let vtask = JsonSerializer.DeserializeAsync<'T>(stream, RuntimeSerialization.options)
+        vtask.AsTask() |> Async.AwaitTask
 
-    let private downcastType (t : Type) x =
-        match t with
-        | Option t -> downcast (makeOption t (Convert.ChangeType(x, t)))
-        | _ -> downcast (Convert.ChangeType(x, t))
+    let deserializeSchema (stream: Stream) =
+        let introspectionSchema =
+            stream
+            |> deserializeStream<GraphQLResponse<IntrospectionResult>>
+            |> Async.RunSynchronously
+        introspectionSchema.Data.__schema
 
-    let private isStringType = isType typeof<string>
-    let private isDateTimeType = isType typeof<DateTime>
-    let private isDateTimeOffsetType = isType typeof<DateTimeOffset>
-    let private isUriType = isType typeof<Uri>
-    let private isGuidType = isType typeof<Guid>
-    let private isBooleanType = isType typeof<bool>
-    let private isEnumType = function (Option t | t) when t.IsEnum -> true | _ -> false
-
-    let private downcastString (t : Type) (s : string) =
-        match t with
-        | t when isStringType t -> downcastType t s
-        | t when isUriType t ->
-            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
-            | (true, uri) -> downcastType t uri
-            | _ -> failwithf "Error parsing JSON value: %O is an URI type, but parsing of value \"%s\" failed." t s
-        | t when isDateTimeType t ->
-            match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
-            | (true, d) -> downcastType t d
-            | _ -> failwithf "Error parsing JSON value: %O is a date type, but parsing of value \"%s\" failed." t s
-        | t when isDateTimeOffsetType t ->
-            match DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
-            | (true, d) -> downcastType t d
-            | _ -> failwithf "Error parsing JSON value: %O is a date time offset type, but parsing of value \"%s\" failed." t s
-        | t when isGuidType t ->
-            match Guid.TryParse(s) with
-            | (true, g) -> downcastType t g
-            | _ -> failwithf "Error parsing JSON value: %O is a Guid type, but parsing of value \"%s\" failed." t s
-        | t when isEnumType t ->
-            match t with
-            | (Option et | et) ->
-                try Enum.Parse(et, s) |> downcastType t
-                with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
-            | _ -> failwithf "Error parsing JSON value: %O is not a enum type." t
-        | _ -> failwithf "Error parsing JSON value: %O is not a string type." t
-
-    let private downcastBoolean (t : Type) b =
-        match t with
-        | t when isBooleanType t -> downcastType t b
-        | _ -> failwithf "Error parsing JSON value: %O is not a boolean type." t
-
-    let rec private getArrayValue (t : Type) (converter : Type -> JsonValue -> obj) (items : JsonValue []) =
-        let castArray itemType (items : obj []) : obj =
-            let arr = Array.CreateInstance(itemType, items.Length)
-            items |> Array.iteri (fun ix i -> arr.SetValue(i, ix))
-            upcast arr
-        let castList itemType (items : obj list) =
-            let tlist = typedefof<_ list>.MakeGenericType([|itemType|])
-            let empty =
-                let uc =
-                    Reflection.FSharpType.GetUnionCases(tlist)
-                    |> Seq.filter (fun uc -> uc.Name = "Empty")
-                    |> Seq.exactlyOne
-                Reflection.FSharpValue.MakeUnion(uc, [||])
-            let rec helper items =
-                match items with
-                | [] -> empty
-                | [x] -> Activator.CreateInstance(tlist, [|x; empty|])
-                | x :: xs -> Activator.CreateInstance(tlist, [|x; helper xs|])
-            helper items
-        Tracer.runAndMeasureExecutionTime "Converted Array JsonValue to CLR array" (fun _ ->
-            match t with
-            | Option t -> getArrayValue t converter items |> makeOption t
-            | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
-            | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
-            | _ -> failwithf "Error parsing JSON value: %O is not an array type." t)
-
-    let private downcastNumber (t : Type) n =
-        match t with
-        | t when isNumericType t -> downcastType t n
-        | _ -> failwithf "Error parsing JSON value: %O is not a numeric type." t
-
-    let rec private convert t parsed : obj =
-        Tracer.runAndMeasureExecutionTime (sprintf "Converted JsonValue to %O type." t) (fun _ ->
-            match parsed with
-            | JsonValue.Null -> downcastNone t
-            | JsonValue.String s -> downcastString t s
-            | JsonValue.Float n -> downcastNumber t n
-            | JsonValue.Integer n -> downcastNumber t n
-            | JsonValue.Record jprops ->
-                let jprops =
-                    jprops
-                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v)
-                    |> Map.ofSeq
-                let tprops t =
-                    FSharpType.GetRecordFields(t, true)
-                    |> Array.map (fun p -> p.Name.ToLowerInvariant(), p.PropertyType)
-                let vals t =
-                    tprops t
-                    |> Array.map (fun (n, t) ->
-                        match Map.tryFind n jprops with
-                        | Some p -> n, convert t p
-                        | None -> n, makeOption t null)
-                let rcrd =
-                    let t = match t with Option t -> t | _ -> t
-                    let vals = vals t
-                    if isMap t
-                    then Map.ofArray vals |> box
-                    else FSharpValue.MakeRecord(t, Array.map snd vals, true)
-                downcastType t rcrd
-            | JsonValue.Array items -> items |> getArrayValue t convert
-            | JsonValue.Boolean b -> downcastBoolean t b)
-
-    let deserializeRecord<'T> (json : string) : 'T =
-        let t = typeof<'T>
-        Tracer.runAndMeasureExecutionTime (sprintf "Deserialized JSON string to record type %s." (t.ToString())) (fun _ ->
-        downcast (JsonValue.Parse(json) |> convert t))
-
-    let deserializeMap values =
-        let rec helper (values : (string * JsonValue) []) =
-            values
-            |> Array.map (fun (name, value) ->
-                match value with
-                | JsonValue.Record fields -> name, (fields |> helper |> Map.ofArray |> box)
-                | JsonValue.Null -> name, null
-                | JsonValue.String s -> name, box s
-                | JsonValue.Integer n -> name, box n
-                | JsonValue.Float f -> name, box f
-                | JsonValue.Array items -> name, (items |> Array.map (fun item -> null, item) |> helper |> Array.map snd |> box)
-                | JsonValue.Boolean b -> name, box b)
-        Tracer.runAndMeasureExecutionTime "Deserialized JSON Record into FSharp Map" (fun _ ->
-            helper values |> Map.ofArray)
-
-    let private isoDateFormat = "yyyy-MM-dd"
-    let private isoDateTimeFormat = "O"
-
-    let rec toJsonValue (x : obj) : JsonValue =
-        if isNull x
-        then JsonValue.Null
-        else
-            let t = x.GetType()
-            Tracer.runAndMeasureExecutionTime (sprintf "Converted object type %s to JsonValue" (t.ToString())) (fun _ ->
-                match x with
-                | null -> JsonValue.Null
-                | OptionValue None -> JsonValue.Null
-                | :? int as x -> JsonValue.Integer (int x)
-                | :? float as x -> JsonValue.Float x
-                | :? string as x -> JsonValue.String x
-                | :? Guid as x -> JsonValue.String (x.ToString())
-                | :? DateTime as x when x.Date = x -> JsonValue.String (x.ToString(isoDateFormat))
-                | :? DateTime as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-                | :? DateTimeOffset as x -> JsonValue.String (x.ToString(isoDateTimeFormat))
-                | :? bool as x -> JsonValue.Boolean x
-                | :? Uri as x -> JsonValue.String (x.ToString())
-                | :? Upload -> JsonValue.Null
-                | :? IDictionary<string, obj> as items ->
-                    items
-                    |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
-                    |> Seq.toArray
-                    |> JsonValue.Record
-                | EnumerableValue items ->
-                    items
-                    |> Array.map toJsonValue
-                    |> JsonValue.Array
-                | OptionValue (Some x) -> toJsonValue x
-                | EnumValue x -> JsonValue.String x
-                | _ ->
-                    let props = t.GetProperties(BindingFlags.Public ||| BindingFlags.Instance)
-                    let items = props |> Array.map (fun p -> (p.Name.FirstCharLower(), p.GetValue(x) |> toJsonValue))
-                    JsonValue.Record items)
-
-    let serializeRecord (x : obj) =
-        Tracer.runAndMeasureExecutionTime (sprintf "Serialized object type %s to a JSON string" (x.GetType().ToString())) (fun _ ->
-            (toJsonValue x).ToString())
-
-    let deserializeSchema (json : string) =
-        Tracer.runAndMeasureExecutionTime "Deserialized schema" (fun _ ->
-            let result = deserializeRecord<GraphQLResponse<IntrospectionResult>> json
-            match result.Errors with
-            | None -> result.Data.__schema
-            | Some errors -> String.concat "\n" errors |> failwithf "%s")
+    let serializeToStream (value: 'T) (stream: Stream) = async {
+        do! JsonSerializer.SerializeAsync(stream, value, RuntimeSerialization.options) |> Async.AwaitTask
+        stream.Position <- 0L
+    }

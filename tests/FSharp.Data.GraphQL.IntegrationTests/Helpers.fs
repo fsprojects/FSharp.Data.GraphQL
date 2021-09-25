@@ -25,10 +25,10 @@ type File =
     member x.MakeUpload() =
         let bytes = Encoding.UTF8.GetBytes(x.Content)
         new Upload(bytes, x.Name, x.ContentType)
-    static member FromDictionary(dict : IDictionary<string, obj>) =
-        { Name = downcast dict.["Name"]
-          ContentType = downcast dict.["ContentType"]
-          Content = downcast dict.["ContentAsText"] }
+    static member FromDictionary(dict : IReadOnlyDictionary<string, obj>) =
+        { Name = downcast dict.["name"]
+          ContentType = downcast dict.["contentType"]
+          Content = downcast dict.["contentAsText"] }
 
 type FilesRequest =
     { Single : File

@@ -4,27 +4,75 @@
 namespace FSharp.Data.GraphQL.Client
 
 open System
+open System.Collections
 open System.Collections.Generic
 open System.Text
+open System.Globalization
+open System.Text.RegularExpressions
+open System.Threading
 open System.Security.Cryptography
+
+module internal Casing =
+    let private nonWordChars = Regex(@"[^a-zA-Z0-9]+", RegexOptions.Compiled)
+    let private word = Regex( @"^(?<word>\d+|^[a-z]+|[A-Z]+|[A-Z][a-z]+|\d[a-z]+)+$", RegexOptions.Compiled)
+    let toTileCase (text: string) (textInfo: TextInfo) =
+        let result = StringBuilder()
+        let tokens = nonWordChars.Split(text)
+        for token in tokens do
+            let wordMatch = word.Match(token)
+            let groups = wordMatch.Groups.["word"]
+            for capture in groups.Captures do
+                result.Append(textInfo.ToTitleCase(capture.Value.ToString())) |> ignore
+        result.ToString()
 
 /// Extensions for types used by the GraphQL client library.
 [<AutoOpen>]
 module internal Extensions =
     type String with
-        /// Returns the input string with the first character in upper case.
-        member this.FirstCharUpper() =
-            this.Substring(0, 1).ToUpperInvariant() + this.Substring(1)
-
-        /// Returns the input string with the first character in lower case.
-        member this.FirstCharLower() =
-            this.Substring(0, 1).ToLowerInvariant() + this.Substring(1)
-
         member this.MD5Hash() =
             Encoding.UTF8.GetBytes(this)
             |> MD5.Create().ComputeHash
             |> Array.map (fun x -> x.ToString("x2"))
             |> Array.reduce (+)
+
+        member this.ToTitleCase(?cultureInfo: CultureInfo) =
+            let culture = defaultArg cultureInfo Thread.CurrentThread.CurrentCulture
+            let textInfo = culture.TextInfo
+            Casing.toTileCase this textInfo
+
+module internal Printing =
+    let prettyPrintRecord (record: seq<KeyValuePair<string, obj>>) =
+        let builder = StringBuilder()
+        let newLine indentation plus =
+          builder.AppendLine() |> ignore
+          builder.Append(' ', indentation + plus) |> ignore
+        let rec print indentation (value: obj) =
+            match value with
+            | :? seq<KeyValuePair<string, obj>> as r ->
+                builder.Append("{") |> ignore
+                for i, KeyValue(key, value) in Seq.indexed r do
+                    if i > 0 then
+                        builder.Append(";") |> ignore
+                        newLine indentation 2
+                    builder.Append(key.ToTitleCase() + " = ") |> ignore
+                    print (indentation + 2) value |> ignore
+                builder.Append(" }")
+            | :? string as s ->
+                builder.Append(sprintf "%A" s)
+            | :? IEnumerable as e ->
+                let values = e |> Seq.cast<obj> |> Array.ofSeq
+                builder.Append("[") |> ignore
+                for i = 0 to values.Length - 1 do
+                    if i > 0 then builder.Append(";") |> ignore
+                    newLine indentation 2
+                    print (indentation + 2) values.[i] |> ignore
+                if values.Length > 0 then newLine indentation 0
+                builder.Append("]")
+            | value ->
+                builder.Append(sprintf "%A" value)
+        let builder = print 0 record
+        builder.ToString()
+
 
 /// Basic operations on lists.
 module internal List =
