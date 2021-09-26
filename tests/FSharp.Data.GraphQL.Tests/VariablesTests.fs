@@ -25,6 +25,7 @@ type TestInput = {
     c: string
     d: string option
 }
+
 let TestInputObject =
   Define.InputObject<TestInput>(
     name = "TestInputObject",
@@ -39,6 +40,7 @@ type TestNestedInput = {
     na: TestInput option
     nb: string
 }
+
 let TestNestedInputObject =
   Define.InputObject<TestNestedInput>(
     name = "TestNestedInputObject",
@@ -51,7 +53,9 @@ let stringifyArg name (ctx: ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
     toJson arg
 
-let stringifyInput = stringifyArg "input"
+let stringifyInput (ctx: ResolveFieldContext) () =
+    let inputArg : TestInput option = ctx.Arg "input"
+    toJson inputArg
 
 type EnumTestType = Foo | Bar
 
@@ -63,6 +67,52 @@ let EnumTestType =
         ]
       , "Test enum"
     )
+
+let TestInputObjectWithCustomCoercion =
+  Define.InputObject<TestInput>(
+    name = "TestInputObject",
+    fields = [
+        Define.Input("a", Nullable String)
+        Define.Input("b", Nullable(ListOf (Nullable String)))
+        Define.Input("c", String)
+        Define.Input("d", Nullable TestComplexScalar)
+    ],
+    coerceInput =
+      (fun value ->
+        // This can be greatly simplified by utility functions that the user can design
+        match value with
+        | ObjectValue props ->
+          try
+            let a = props |> Map.tryFind "a" |> Option.bind String.CoerceInput
+
+            let b =
+              props
+              |> Map.tryFind "b"
+              |> Option.bind (
+                function
+                | ListValue xs ->
+                  xs
+                  |> Seq.map (
+                      function
+                      | StringValue s -> Some s
+                      | NullValue -> None
+                  )
+                  |> Some
+                | _ -> None
+              )
+
+            let c = props |> Map.find "c" |> String.CoerceInput |> Option.toObj
+
+            let d = props |> Map.tryFind "d" |> Option.bind TestComplexScalar.CoerceInput
+
+            Some {
+              a = a
+              b = b
+              c = c
+              d = d
+            }
+          with _ -> None
+        | _ -> None))
 
 let TestType =
   Define.Object<unit>(
@@ -78,6 +128,7 @@ let TestType =
         Define.Field("nnList", String, "", [ Define.Input("input", ListOf (Nullable String)) ], stringifyInput)
         Define.Field("listNN", String, "", [ Define.Input("input", Nullable (ListOf String)) ], stringifyInput)
         Define.Field("nnListNN", String, "", [ Define.Input("input", ListOf String) ], stringifyInput)
+        Define.Field("fieldWithObjectInputWithCustomCoercion", String, "", [ Define.Input("input", Nullable TestInputObjectWithCustomCoercion) ], stringifyInput)
     ])
 
 let schema = Schema(TestType)
@@ -543,3 +594,18 @@ let ``Execute handles enum input as variable`` () =
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
+
+[<Fact>]
+let ``Execute handles objects with custom coercion`` () =
+    let ast = parse """{ fieldWithObjectInputWithCustomCoercion(input: {a: "foo", b: ["bar"], c: "baz"}) }"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast)
+    let expected =
+      NameValueLookup.ofList [
+        "fieldWithObjectInputWithCustomCoercion", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}"""
+      ]
+
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"

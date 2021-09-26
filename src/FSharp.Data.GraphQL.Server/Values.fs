@@ -38,31 +38,36 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
     | Scalar scalardef ->
         variableOrElse (scalardef.CoerceInput >> Option.toObj)
     | InputObject objdef ->
-        let objtype = objdef.Type
-        let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
-        let mapper =
-            ctor.GetParameters()
-            |> Array.map(fun param ->
-                match objdef.Fields |> Array.tryFind(fun field -> field.Name = param.Name) with
-                | Some x -> x
-                | None ->
-                    failwithf "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields" objdef.Name objtype param.Name)
-        fun value variables ->
-            match value with
-            | ObjectValue props ->
-                let args =
-                    mapper
-                    |> Array.map (fun field ->
-                        match Map.tryFind field.Name props with
-                        | None -> null
-                        | Some prop -> field.ExecuteInput prop variables)
-                let instance = ctor.Invoke(args)
-                instance
-            | Variable variableName ->
-                match Map.tryFind variableName variables with
-                | Some found -> found
-                | None -> null
-            | _ -> null
+        match objdef.CoerceInput with
+        | Some coerceInput ->
+            // Apply the user-provided coerce function, rather than attempt reflection
+            variableOrElse (coerceInput >> Option.toObj)
+        | None ->
+            let objtype = objdef.Type
+            let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
+            let mapper =
+                ctor.GetParameters()
+                |> Array.map(fun param ->
+                    match objdef.Fields |> Array.tryFind(fun field -> field.Name = param.Name) with
+                    | Some x -> x
+                    | None ->
+                        failwithf "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields" objdef.Name objtype param.Name)
+            fun value variables ->
+                match value with
+                | ObjectValue props ->
+                    let args =
+                        mapper
+                        |> Array.map (fun field ->
+                            match Map.tryFind field.Name props with
+                            | None -> null
+                            | Some prop -> field.ExecuteInput prop variables)
+                    let instance = ctor.Invoke(args)
+                    instance
+                | Variable variableName ->
+                    match Map.tryFind variableName variables with
+                    | Some found -> found
+                    | None -> null
+                | _ -> null
     | List (Input innerdef) ->
         let inner = compileByType errMsg innerdef
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
@@ -153,17 +158,29 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
     | _ -> raise (GraphQLException <| errMsg + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions.")
 
 and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) errMsg =
-    //TODO: this should be eventually coerced to complex object
-    match input with
-    | :? Map<string, obj> as map ->
-        let mapped =
-            objdef.Fields
-            |> Array.map (fun field ->
-                let valueFound = Map.tryFind field.Name map |> Option.toObj
-                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
-            |> Map.ofArray
-        upcast mapped
-    | _ -> input
+    match objdef.CoerceInput with
+    | Some coerceInput ->
+        // Apply the user-provided coerce function
+        match input with
+        | :? Value as v ->
+            coerceInput v |> Option.toObj
+        | _ -> failwithf "Expected an input Value but got %A" input
+    | None ->
+        match input with
+        | :? Map<string, obj> as map ->
+            let mapping =
+                objdef.Fields
+                |> Array.map (fun field ->
+                    let valueFound = Map.tryFind field.Name map |> Option.toObj
+                    let coercedValue = coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))
+
+                    (field.Name, coercedValue))
+                |> Map.ofSeq
+
+            // TODO: Should we apply reflection tricks here?
+
+            upcast mapping
+        | _ -> input
 
 let internal coerceVariable (vardef: VarDef) (inputs) =
     let vname = vardef.Name

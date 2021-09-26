@@ -1517,6 +1517,8 @@ and InputObjectDef =
         abstract Description : string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef []
+        /// Optional function to customize default coercion behaviour
+        abstract CoerceInput : (Value -> obj option) option
         inherit NamedDef
         inherit InputDef
     end
@@ -1530,13 +1532,22 @@ and InputObjectDefinition<'Val> =
       Description : string option
       /// Function used to define field inputs. It must be lazy
       /// in order to support self-referencing types.
-      FieldsFn : unit -> InputFieldDef [] }
+      FieldsFn : unit -> InputFieldDef []
+      /// Optional function to customize default coercion behaviour
+      CoerceInput : (Value -> 'Val option) option }
     interface InputDef
 
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Fields = x.FieldsFn()
+        member x.CoerceInput =
+            x.CoerceInput
+            |> Option.map
+                (fun coerceInputTyped ->
+                    (fun v ->
+                        coerceInputTyped v
+                        |> Option.map box))
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -2783,10 +2794,12 @@ module SchemaDefinitions =
         /// Function which generates a list of input fields defined by the current input object. Usefull, when object defines recursive dependencies.
         /// </param>
         /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+        /// <param name="coerceInput">Optional customization of input coercion</param>
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string, ?coerceInput : _) : InputObjectDefinition<'Out> =
             { Name = name
               FieldsFn = fun () -> fieldsFn() |> List.toArray
-              Description = description }
+              Description = description
+              CoerceInput = coerceInput }
 
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
@@ -2796,10 +2809,12 @@ module SchemaDefinitions =
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
         /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
-        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+        /// <param name="coerceInput">Optional customization of input coercion</param>
+        static member InputObject(name : string, fields : InputFieldDef list, ?description : string, ?coerceInput : _) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
-              FieldsFn = fun () -> fields |> List.toArray }
+              FieldsFn = fun () -> fields |> List.toArray
+              CoerceInput = coerceInput }
 
         /// <summary>
         /// Creates the top level subscription object that holds all of the possible subscriptions as fields.
