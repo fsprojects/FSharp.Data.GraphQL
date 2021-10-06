@@ -7,6 +7,7 @@ module FSharp.Data.GraphQL.Tests.Relay.NodeTests
 
 open System
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Decoding
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Relay
 open FSharp.Data.GraphQL.Execution

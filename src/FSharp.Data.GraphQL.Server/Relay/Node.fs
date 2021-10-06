@@ -45,7 +45,7 @@ module GlobalId =
         static member GlobalIdField (typeName: string, resolve: (ResolveFieldContext -> 'In -> string)) =
             Define.Field(
                 name = "id",
-                typedef = ID,
+                typedef = ID<string>,
                 description = "The ID of an object",
                 resolve = fun ctx value -> toGlobalId typeName (resolve ctx value))
 
@@ -53,7 +53,7 @@ module GlobalId =
         static member GlobalIdField (resolve: (ResolveFieldContext -> 'In -> string)) =
             Define.Field(
                 name = "id",
-                typedef = ID,
+                typedef = ID<string>,
                 description = "The ID of an object",
                 resolve = fun ctx value ->
                     toGlobalId ctx.ParentType.Name (resolve ctx value))
@@ -66,7 +66,7 @@ module GlobalId =
                 name = "node",
                 typedef = Nullable nodeDef,
                 description = "Fetches an object given its ID",
-                args = [ Define.Input("id", ID, description = "Identifier of an object") ],
+                args = [ Define.Input("id", ID<string>, description = "Identifier of an object") ],
                 resolve = fun ctx value ->
                     let id = ctx.Arg("id")
                     resolve ctx value id)

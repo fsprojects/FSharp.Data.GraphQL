@@ -110,14 +110,20 @@ let InterfaceType =
 let CType =
     Define.Object<C>(
         name ="C",
-        fields = [ Define.Field("id", String, (fun _ (c : C) -> c.id)); Define.Field("value", Nullable String, (fun _ c -> Some c.value)) ],
+        fields = [
+            Define.Field("id", String, (fun _ (c : C) -> c.id))
+            Define.Field("value", Nullable String, (fun _ c -> Some c.value))
+        ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? C))
 
 let DType =
     Define.Object<D>(
         name = "D",
-        fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", Nullable String, (fun _ d -> Some d.value)) ],
+        fields = [
+            Define.Field("id", String, (fun _ (d : D) -> d.id))
+            Define.Field("value", Nullable String, (fun _ d -> Some d.value))
+        ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? D))
 

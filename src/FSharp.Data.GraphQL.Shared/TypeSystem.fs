@@ -11,10 +11,12 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
+open FSharp.Data.GraphQL.Decoding
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
 open FSharp.Linq.RuntimeHelpers
+open FsToolkit.ErrorHandling
 
 /// Enum describing parts of the GraphQL query document AST, where
 /// related directive is valid to be used.
@@ -546,6 +548,8 @@ and TypeDef<'Val> =
 and InputDef =
     interface
         inherit TypeDef
+
+        abstract BoxedDecoder : Decoder<obj>
     end
 
 /// Representation of all type defintions, that can be uses as inputs.
@@ -556,6 +560,8 @@ and InputDef<'Val> =
     interface
         inherit InputDef
         inherit TypeDef<'Val>
+
+        abstract Decoder : Decoder<'Val>
     end
 
 /// Representation of all type defintions, that can be uses as outputs.
@@ -849,7 +855,7 @@ and ExecutionContext =
       Schema : ISchema
       /// Boxed value of the top level type, root query/mutation.
       RootValue : obj
-      /// Execution plan describing, what fiedls are going to be resolved.
+      /// Execution plan describing, what fields are going to be resolved.
       ExecutionPlan : ExecutionPlan
       /// Collection of variables provided to execute current operation.
       Variables : Map<string, obj>
@@ -960,7 +966,10 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
     interface FieldDef<'Val>
 
     interface IEquatable<FieldDef> with
-        member x.Equals f = x.Name = f.Name && x.TypeDef :> OutputDef = f.TypeDef && x.Args = f.Args
+        member x.Equals f =
+            x.Name = f.Name
+            && x.TypeDef :> OutputDef = f.TypeDef
+            && System.Linq.Enumerable.SequenceEqual(x.Args, f.Args)
 
     override x.Equals y =
         match y with
@@ -986,7 +995,8 @@ and ScalarDef =
         /// Optional scalar type description.
         abstract Description : string option
         /// A function used to retrieve a .NET object from provided GraphQL query.
-        abstract CoerceInput : Value -> obj option
+        // abstract CoerceInput : Value -> obj option
+        // abstract Decoder : Decoder<obj>
         /// A function used to set a surrogate representation to be
         /// returned as a query result.
         abstract CoerceValue : obj -> obj option
@@ -1004,32 +1014,57 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       /// Optional type description.
       Description : string option
       /// A function used to retrieve a .NET object from provided GraphQL query.
-      CoerceInput : Value -> 'Val option
+      //  CoerceInput : Value -> 'Val option
+      Decoder : Decoder<'Val>
       /// A function used to set a surrogate representation to be
       /// returned as a query result.
       CoerceValue : obj -> 'Val option }
+
+    member private x.Nullable =
+        lazy (
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = x
+                    // Decoder = Decode.option x.Decoder
+                }
+
+            nullable
+        )
+
+    member private x.ListOf =
+        lazy (
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = x
+                    Decoder = Decode.list x.Decoder
+                }
+
+            list
+        )
 
     interface TypeDef with
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            x.Nullable.Force() :> NullableDef
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            x.ListOf.Force() :> ListOfDef
 
-    interface InputDef
     interface OutputDef
+
+    interface InputDef with
+        member x.BoxedDecoder = Decoder.box x.Decoder
+
+    interface InputDef<'Val> with
+        member x.Decoder = x.Decoder
 
     interface ScalarDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input = x.CoerceInput input |> Option.map box
+        // member x.CoerceInput input = x.CoerceInput input |> Option.map box
         member x.CoerceValue value = (x.CoerceValue value) |> Option.map box
 
-    interface InputDef<'Val>
     interface OutputDef<'Val>
     interface LeafDef
 
@@ -1115,20 +1150,46 @@ and internal EnumDefinition<'Val> =
       /// Optional enum type description.
       Description : string option
       /// List of available enum cases.
-      Options : EnumValue<'Val> [] }
-    interface InputDef
+      Options : EnumValue<'Val> []
+      Decoder : Decoder<'Val>
+    }
+
+    member private this.Nullable =
+        lazy (
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = this
+                    // Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for object types")
+                }
+            nullable
+        )
+
+    member private this.ListOf =
+        lazy (
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = this
+                    Decoder = Decode.list this.Decoder
+                }
+            list
+        )
+
+    interface InputDef with
+        member x.BoxedDecoder = Decoder.box x.Decoder
+
+    interface InputDef<'Val> with
+        member x.Decoder = x.Decoder
+
     interface OutputDef
 
     interface TypeDef with
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            upcast x.Nullable.Force()
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            upcast x.ListOf.Force()
 
     interface EnumDef<'Val> with
         member x.Options = x.Options
@@ -1199,11 +1260,19 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> =
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = x
+                    // Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for object types")
+                }
             upcast nullable
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
+            let list: ListOfDefinition<_,_> =
+                {
+                    OfType = x
+                    Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for object types")
+                }
             upcast list
 
     interface OutputDef
@@ -1280,16 +1349,34 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> =
       /// interface for provided .NET object.
       ResolveType : (obj -> ObjectDef) option }
 
+    member private this.Nullable =
+        lazy (
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = this
+                    // Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for an interface definition")
+                }
+            nullable
+        )
+
+    member private this.ListOf =
+        lazy (
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = this
+                    Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for an interface definition")
+                }
+            list
+        )
+
     interface TypeDef with
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            upcast x.Nullable.Force()
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            upcast x.ListOf.Force()
 
     interface OutputDef
 
@@ -1372,16 +1459,34 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> =
       /// specific values, that are wrapped in F# discriminated unions.
       ResolveValue : 'In -> 'Out }
 
+    member private this.Nullable =
+        lazy (
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = this
+                    // Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for UnionDefinition")
+                }
+            nullable
+        )
+
+    member private this.ListOf =
+        lazy (
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = this
+                    Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for UnionDefinition")
+                }
+            list
+        )
+
     interface TypeDef with
         member __.Type = typeof<'Out>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            upcast x.Nullable.Force()
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            upcast x.ListOf.Force()
 
     interface OutputDef
 
@@ -1433,19 +1538,40 @@ and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
         inherit ListOfDef
     end
 
-and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> =
-    { OfType : TypeDef<'Val> }
-    interface InputDef
+and [<CustomEquality; NoComparison>] internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> =
+    {
+        OfType : TypeDef<'Val>
+        Decoder : Decoder<'Seq>
+    }
+
+    member private x.Nullable : Lazy<NullableDefinition<_>> =
+        lazy {
+            OfType = x
+        }
+
+    member private x.List : Lazy<ListOfDefinition<'Seq, 'Seq list>> =
+        lazy ({
+            OfType = x
+            Decoder = Decode.list ((x :> InputDef<'Seq>).Decoder)
+        })
+
+    interface InputDef with
+        member x.BoxedDecoder =
+            let decoder = (x :> InputDef<'Seq>).Decoder
+            Decoder.box decoder
+
+    interface InputDef<'Seq> with
+        member x.Decoder =
+            x.Decoder
 
     interface TypeDef with
         member __.Type = typeof<'Seq>
+
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            x.Nullable.Force() :> NullableDef
 
         member x.MakeList() =
-            let list: ListOfDefinition<_, _> = { OfType = x }
-            upcast list
+            x.List.Force() :> ListOfDef
 
     interface OutputDef
 
@@ -1454,6 +1580,14 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> =
 
     interface ListOfDef<'Val, 'Seq> with
         member x.OfType = x.OfType
+
+    override x.Equals(y : obj) =
+        Object.ReferenceEquals(x, y)
+        || (
+            match y with
+            | :? ListOfDefinition<'Val, 'Seq> as o -> x.OfType = o.OfType
+            | _ -> false
+        )
 
     override x.ToString() = "[" + x.OfType.ToString() + "]!"
 
@@ -1483,17 +1617,60 @@ and NullableDef<'Val> =
     end
 
 and internal NullableDefinition<'Val> =
-    { OfType : TypeDef<'Val> }
-    interface InputDef
+    {
+        OfType : TypeDef<'Val>
+    }
+
+    member private x.Decoder =
+        lazy (
+            match box x.OfType with
+            | :? InputDef<'Val option> as inputDef ->
+                inputDef.Decoder
+            | :? InputDef<'Val> as inputDef ->
+                Decode.option inputDef.Decoder
+            | _ ->
+                Decoder.fail (DecodeError.reason (sprintf "Cannot create a decoder for a NullableDefinition %A" x))
+        )
+
+    member private x.List : Lazy<ListOfDefinition<_, ('Val option) list>> =
+        lazy (
+            let innerDecoder =
+                match box x with
+                | :? InputDef<'Val option> as inputDef ->
+                    inputDef.Decoder
+                | :? InputDef<'Val> as inputDef ->
+                    Decode.option inputDef.Decoder
+                | _ ->
+                    Decoder.fail (DecodeError.reason (sprintf "Cannot create a decoder for a NullableDefinition %A" x))
+
+            let list : ListOfDefinition<_, ('Val option) list> =
+                {
+                    OfType = x
+                    Decoder = Decode.list innerDecoder
+
+                }
+
+            list
+        )
 
     interface TypeDef with
         member __.Type = typeof<'Val option>
-        member x.MakeNullable() = upcast x
+        member x.MakeNullable() =
+            upcast x
+
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            x.List.Force() :> ListOfDef
 
     interface OutputDef
+
+    interface InputDef with
+        member x.BoxedDecoder =
+            let decoder = (x :> InputDef<'Val option>).Decoder
+            Decoder.box decoder
+
+    interface InputDef<'Val option> with
+        member x.Decoder =
+            x.Decoder.Force()
 
     interface NullableDef with
         member x.OfType = upcast x.OfType
@@ -1530,8 +1707,34 @@ and InputObjectDefinition<'Val> =
       Description : string option
       /// Function used to define field inputs. It must be lazy
       /// in order to support self-referencing types.
-      FieldsFn : unit -> InputFieldDef [] }
-    interface InputDef
+      FieldsFn : unit -> InputFieldDef []
+      Decoder : Decoder<'Val> }
+
+    member private this.Nullable =
+        lazy (
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = this
+                    // Decoder = Decode.option this.Decoder
+                }
+
+            nullable
+        )
+
+    member private this.ListOf =
+        lazy (
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = this
+                    Decoder = Decode.list this.Decoder
+                }
+
+            list
+        )
+
+    interface InputDef with
+        member x.BoxedDecoder =
+            (Decoder.box x.Decoder)
 
     interface InputObjectDef with
         member x.Name = x.Name
@@ -1539,7 +1742,9 @@ and InputObjectDefinition<'Val> =
         member x.Fields = x.FieldsFn()
 
     interface TypeDef<'Val>
-    interface InputDef<'Val>
+    interface InputDef<'Val> with
+        member x.Decoder =
+            x.Decoder
 
     interface NamedDef with
         member x.Name = x.Name
@@ -1548,12 +1753,11 @@ and InputObjectDefinition<'Val> =
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
-            upcast nullable
+            upcast x.Nullable.Force()
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
-            upcast list
+            upcast x.ListOf.Force()
+
 
 /// Function type used for resolving input object field values.
 and ExecuteInput = Value -> Map<string, obj> -> obj
@@ -1588,7 +1792,8 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
       DefaultValue : 'In option
       /// INTERNAL API: input execution function -
       /// compiled by the runtime.
-      mutable ExecuteInput : ExecuteInput }
+      mutable ExecuteInput : ExecuteInput
+    }
 
     interface InputFieldDef with
         member x.Name = x.Name
@@ -1711,11 +1916,19 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> =
         member __.Type = typeof<'Val>
 
         member x.MakeNullable() =
-            let nullable : NullableDefinition<_> = { OfType = x }
+            let nullable : NullableDefinition<_> =
+                {
+                    OfType = x
+                    // Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for SubscriptionObjectDefinition")
+                }
             upcast nullable
 
         member x.MakeList() =
-            let list: ListOfDefinition<_,_> = { OfType = x }
+            let list : ListOfDefinition<_,_> =
+                {
+                    OfType = x
+                    Decoder = Decoder.fail (DecodeError.reason "Cannot create a decoder for SubscriptionObjectDefinition")
+                }
             upcast list
     interface ObjectDef with
         member x.Name = x.Name
@@ -2222,6 +2435,12 @@ module Patterns =
         | :? NullableDef as x -> Some x.OfType
         | _ -> None
 
+    /// Active pattern to match GraphQL type defintion with nullable / optional types.
+    let (|NullableWithWrapper|_|) (tdef : TypeDef) =
+        match tdef with
+        | :? NullableDef as x -> Some (x, x.OfType)
+        | _ -> None
+
     /// Active pattern to match GraphQL type defintion with non-null types.
     let (|NonNull|_|) (tdef : TypeDef) =
         match tdef with
@@ -2261,7 +2480,7 @@ module Patterns =
     let rec private named (tdef : TypeDef) =
         match tdef with
         | :? NamedDef as n -> Some n
-        | Nullable inner -> named inner
+        | Nullable (inner) -> named inner
         | List inner -> named inner
         | _ -> None
 
@@ -2516,11 +2735,34 @@ module SchemaDefinitions =
 
     /// Wraps a GraphQL type definition, allowing defining field/argument
     /// to take option of provided value.
-    let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
+    let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> =
+        upcast { NullableDefinition.OfType = innerDef }
 
     /// Wraps a GraphQL type definition, allowing defining field/argument
     /// to take collection of provided value.
-    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
+    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> =
+        match box innerDef with
+        | :? (InputDef<'Val>) as d ->
+            upcast {
+                ListOfDefinition.OfType = innerDef
+                Decoder =
+                    Decode.list d.Decoder
+                    |> Decoder.map (fun xs -> box xs :?> 'Seq) // TODO: Bad idea?
+            }
+        | _ ->
+            upcast {
+                ListOfDefinition.OfType = innerDef
+                Decoder =
+                    Decoder.fail (DecodeError.reason "Cannot create a decoder for a TypeDef definition")
+            }
+
+    /// Wraps a GraphQL type definition, allowing defining field/argument
+    /// to take collection of provided value.
+    let InputListOf(innerDef : #InputDef<'Val>) : ListOfDef<'Val, 'Val list> =
+        upcast ({
+            ListOfDefinition.OfType = innerDef
+            Decoder = Decode.list innerDef.Decoder
+        })
 
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
 
@@ -2529,13 +2771,26 @@ module SchemaDefinitions =
         | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
         | v -> other v
 
+    // let variableOrElse (decoder : Decoder<'t>) (variables : Map<string, Value>) : Decoder<'t> =
+    //     (fun value ->
+    //         match value with
+    //         | Variable variableName ->
+    //             result {
+    //                 let! variableValue =
+    //                     Map.tryFind variableName variables
+    //                     |> Result.requireSome (DecodeError.reason (sprintf "Missing variable %s" variableName))
+
+    //                 return! decoder variableValue
+    //             }
+    //         | v -> decoder v)
+
     /// GraphQL type of int
     let Int : ScalarDefinition<int> =
         { Name = "Int"
           Description =
               Some
                   "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
-          CoerceInput = coerceIntInput
+          Decoder = Decode.intish
           CoerceValue = coerceIntValue }
 
     /// GraphQL type of long
@@ -2544,14 +2799,14 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Long` scalar type represents non-fractional signed whole numeric values. Long can represent values between -(2^63) and 2^63 - 1."
-          CoerceInput = coerceLongInput
+          Decoder = Decode.longish
           CoerceValue = coerceLongValue }
 
     /// GraphQL type of boolean
     let Boolean : ScalarDefinition<bool> =
         { Name = "Boolean"
           Description = Some "The `Boolean` scalar type represents `true` or `false`."
-          CoerceInput = coerceBoolInput
+          Decoder = Decode.boolish
           CoerceValue = coerceBoolValue }
 
     /// GraphQL type of float
@@ -2560,7 +2815,7 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point)."
-          CoerceInput = coerceFloatInput
+          Decoder = Decode.floatish
           CoerceValue = coerceFloatValue }
 
     /// GraphQL type of string
@@ -2569,7 +2824,7 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
-          CoerceInput = coerceStringInput
+          Decoder = Decode.stringish
           CoerceValue = coerceStringValue }
 
     /// GraphQL type for custom identifier
@@ -2578,15 +2833,15 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
-          CoerceInput = coerceIdInput
+          Decoder = Decode.auto None
           CoerceValue = coerceIDValue }
 
-    let Obj : ScalarDefinition<obj> = {
+    let Obj decoder : ScalarDefinition<obj> = {
             Name = "Object"
             Description =
                Some
                   "The `Object` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
-            CoerceInput = (fun (o: Value) -> Some (o:>obj))
+            Decoder = decoder
             CoerceValue = (fun (o: obj) -> Some (o))
         }
 
@@ -2596,7 +2851,7 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String."
-          CoerceInput = coerceUriInput
+          Decoder = Decode.uri
           CoerceValue = coerceUriValue }
 
     /// GraphQL type for System.DateTime
@@ -2605,7 +2860,8 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
-          CoerceInput = coerceDateInput
+        //   CoerceInput = coerceDateInput
+          Decoder = Decode.dateTime
           CoerceValue = coerceDateValue }
 
     /// GraphQL type for System.Guid
@@ -2614,7 +2870,7 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Guid` scalar type represents a Globaly Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
-          CoerceInput = coerceGuidInput
+          Decoder = Decode.guid
           CoerceValue = coerceGuidValue }
 
     /// GraphQL @include directive.
@@ -2632,7 +2888,9 @@ module SchemaDefinitions =
                    ExecuteInput =
                        variableOrElse (coerceBoolInput
                                        >> Option.map box
-                                       >> Option.toObj) } |] }
+                                       >> Option.toObj)
+                 }
+              |] }
 
     /// GraphQL @skip directive.
     let SkipDirective : DirectiveDef =
@@ -2648,7 +2906,8 @@ module SchemaDefinitions =
                    ExecuteInput =
                        variableOrElse (coerceBoolInput
                                        >> Option.map box
-                                       >> Option.toObj) } |] }
+                                       >> Option.toObj)
+                 } |] }
 
     /// GraphQL @defer directive.
     let DeferDirective : DirectiveDef =
@@ -2682,30 +2941,61 @@ module SchemaDefinitions =
     [<AbstractClass; Sealed>]
     type Define =
 
+        [<Obsolete>]
+        static member Scalar(name : string,
+                             coerceInput : Value -> 'T option,
+                             coerceValue : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+            { Name = name
+              Description = description
+              Decoder =
+                (fun value ->
+                    match coerceInput value with
+                    | Some t -> Ok t
+                    | None ->
+                        let t = typeof<'T>
+                        let message = sprintf "coerceInput failed for value %A and type %s" value (t.FullName)
+                        Error (DecodeError.reason message))
+              CoerceValue = coerceValue }
+
         /// <summary>
         /// Creates GraphQL type definition for user defined scalars.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
+        /// <param name="decoder">Function used to resolve .NET object from GraphQL query AST.</param>
         /// <param name="coerceValue">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member Scalar(name : string, coerceInput : Value -> 'T option,
+        static member Scalar(name : string, decoder : Decoder<'T>,
                              coerceValue : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
-              CoerceInput = coerceInput
+              Decoder = decoder
               CoerceValue = coerceValue }
+
+        [<Obsolete>]
+        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDef<'Val> =
+            upcast
+                {
+                    EnumDefinition.Name = name
+                    Description = description
+                    Options = options |> List.toArray
+                    Decoder = Decode.auto None
+                }
 
         /// <summary>
         /// Creates GraphQL type definition for user defined enums.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="options">List of enum value cases.</param>
+        /// <param name="decoder">Function for decoding input values.</param>
         /// <param name="description">Optional enum description. Usefull for generating documentation.</param>
-        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDef<'Val> =
-            upcast { EnumDefinition.Name = name
-                     Description = description
-                     Options = options |> List.toArray }
+        static member Enum(name : string, options : EnumValue<'Val> list, decoder : Decoder<'Val>, ?description : string) : EnumDef<'Val> =
+            upcast
+                {
+                    EnumDefinition.Name = name
+                    Description = description
+                    Options = options |> List.toArray
+                    Decoder = decoder
+                }
 
         /// <summary>
         /// Creates a single enum option to be used as argument in <see cref="Schema.Enum"/>.
@@ -2773,6 +3063,35 @@ module SchemaDefinitions =
                      Implements = defaultArg (Option.map List.toArray interfaces) [||]
                      IsTypeOf = isTypeOf }
 
+        [<Obsolete>]
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+            let decoder : Decoder<'Out> =
+                (fun value ->
+                    // Here we use the decoders of the fields to customize the automatic decoder for the input object.
+                    // This enables user-provided decoders in the fields to integrate into the automatic decoder!
+                    let fieldDecoders =
+                        fieldsFn ()
+                        |> Seq.map (fun inputFieldDef ->
+                            let decoder = inputFieldDef.TypeDef.BoxedDecoder
+
+                            inputFieldDef.Name, decoder)
+                        |> Map.ofSeq
+
+                    let settings =
+                        AutoDecoderSettings.empty
+                        |> AutoDecoderSettings.replaceMissingWithNull true
+
+                    let dec = Decode.autoRecordFromFields settings fieldDecoders
+
+                    dec value)
+
+            Define.InputObject(name, fieldsFn, decoder, ?description = description)
+
+        [<Obsolete>]
+        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+            let fieldsFn = fun () -> fields
+            Define.InputObject(name, fieldsFn, ?description = description)
+
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
         /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be strandard
@@ -2782,11 +3101,17 @@ module SchemaDefinitions =
         /// <param name="fieldsFn">
         /// Function which generates a list of input fields defined by the current input object. Usefull, when object defines recursive dependencies.
         /// </param>
+        /// <param name="decoder">Function for parsing GQL values into strongly-typed representation. </param>
         /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, decoder : Decoder<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+            {
+              Name = name
               FieldsFn = fun () -> fieldsFn() |> List.toArray
-              Description = description }
+              Description = description
+              Decoder =
+                decoder
+                |> Decoder.mapError (DecodeError.nest (InInputObject name))
+            }
 
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
@@ -2795,11 +3120,10 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
+        /// <param name="decoder">Function for parsing GQL values into strongly-typed representation. </param>
         /// <param name="description">Optional input object description. Usefull for generating documentation.</param>
-        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
-              Description = description
-              FieldsFn = fun () -> fields |> List.toArray }
+        static member InputObject(name : string, fields : InputFieldDef list, decoder : Decoder<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+            Define.InputObject(name, (fun () -> fields), decoder, ?description = description)
 
         /// <summary>
         /// Creates the top level subscription object that holds all of the possible subscriptions as fields.
@@ -3017,7 +3341,7 @@ module SchemaDefinitions =
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
                      Description = None
-                     TypeDef = Obj
+                     TypeDef = Obj (Decoder.fail (DecodeError.reason "TODO"))
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None
@@ -3407,7 +3731,8 @@ module SchemaDefinitions =
                      Description = description
                      TypeDef = typedef
                      DefaultValue = defaultValue
-                     ExecuteInput = Unchecked.defaultof<ExecuteInput> }
+                     ExecuteInput = Unchecked.defaultof<ExecuteInput>
+                   }
 
         /// <summary>
         /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
@@ -3456,3 +3781,15 @@ module SchemaDefinitions =
                      Options = options |> List.toArray
                      ResolveType = resolveType
                      ResolveValue = resolveValue }
+
+[<AutoOpen>]
+module CompatabilityExtensions =
+
+    type ScalarDef with
+        [<Obsolete>]
+        member x.CoerceInput (value : Value) =
+            match x.BoxedDecoder value with
+            | Ok o -> Some o
+            | Error e ->
+                printfn "ScalarDef.CoerceInput FAILURE: %A" e
+                None

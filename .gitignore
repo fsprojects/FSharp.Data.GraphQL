@@ -16,7 +16,7 @@ samples/client-provider/js/*.*
 
 # Build results
 
-npm-debug.log 
+npm-debug.log
 node_modules/
 [Dd]ebug/
 [Rr]elease/

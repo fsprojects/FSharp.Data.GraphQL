@@ -18,6 +18,8 @@ group Common
 
   nuget Microsoft.Extensions.Http 5
 
+  nuget FsToolkit.ErrorHandling
+
   # Those are needed for the client type provider.
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fsi
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fs

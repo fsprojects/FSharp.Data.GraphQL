@@ -25,6 +25,7 @@ type TestInput = {
     c: string
     d: string option
 }
+
 let TestInputObject =
   Define.InputObject<TestInput>(
     name = "TestInputObject",
@@ -39,6 +40,7 @@ type TestNestedInput = {
     na: TestInput option
     nb: string
 }
+
 let TestNestedInputObject =
   Define.InputObject<TestNestedInput>(
     name = "TestNestedInputObject",
@@ -178,7 +180,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
         }"""
     let params' : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
-    let errMsg = sprintf " Variable '$input': value of type %O is not assignable from %O" typeof<TestInput> typeof<string>
+    let errMsg = "Variable '$input': in input object 'TestInputObject': Expected an object but found StringValue \"foo bar\""
     match actual with
     | Direct(data, errors) ->
         hasError errMsg errors
@@ -283,7 +285,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", null ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$value': expected value of type String but got None" errors
+        hasError "Variable '$value': expected value of type String!, but no value was found" errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -339,7 +341,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
     let ast = parse """query q($input: [String]) {
           list(input: $input)
         }"""
-    let variables =  Map.ofList [ "input", box [ "A" ] ]
+    let variables = Map.ofList [ "input", box [ "A" ] ]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = variables)
     let expected = NameValueLookup.ofList [ "list", upcast "[\"A\"]" ]
     match actual with
@@ -432,7 +434,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': list element expected value of type String but got None" errors
+        hasError "Variable '$input': list element 1: expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -467,7 +469,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': list element expected value of type String but got None" errors
+        hasError "Variable '$input': list element 1: expected value of type String but got None" errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]

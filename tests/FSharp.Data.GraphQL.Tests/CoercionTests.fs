@@ -19,7 +19,6 @@ let private testCoercion graphQLType (expected: 't) actual =
     | Some x -> equals expected x
     | None -> raise (Exception(sprintf "Expected %A to be able to be coerced to %A" actual expected))
 
-
 [<Fact>]
 let ``Int coerces input`` () =
     testCoercion Int 123 (IntValue 123L)

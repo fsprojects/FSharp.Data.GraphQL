@@ -191,20 +191,20 @@ let rec __Type =
                 | Some name ->
                     let found = findIntrospected ctx name
                     match ctx.TryArg "includeDeprecated" with
-                    | Some true ->  found.Fields |> Option.map Array.toSeq
-                    | _ -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
+                    | Some true ->  found.Fields |> Option.map Seq.toList
+                    | _ -> found.Fields |> Option.map (fun x -> Seq.filter (fun f -> not f.IsDeprecated) x |> Seq.toList))
         Define.Field("interfaces", Nullable (ListOf __Type), resolve = fun ctx t ->
             match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
-                found.Interfaces |> Option.map Array.toSeq )
+                found.Interfaces |> Option.map Seq.toList )
         Define.Field("possibleTypes", Nullable (ListOf __Type), resolve = fun ctx t ->
             match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
-                found.PossibleTypes |> Option.map Array.toSeq)
+                found.PossibleTypes |> Option.map Seq.toList)
         Define.Field("enumValues", Nullable (ListOf __EnumValue),
             args = [Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
             match t.Name with
@@ -212,14 +212,14 @@ let rec __Type =
             | Some name ->
                 let found = findIntrospected ctx name
                 match ctx.TryArg "includeDeprecated" with
-                | None | Some false -> found.EnumValues |> Option.map Array.toSeq
-                | Some true -> found.EnumValues |> Option.map (fun x -> upcast  (x |> Array.filter (fun f -> not f.IsDeprecated))))
+                | None | Some false -> found.EnumValues |> Option.map Seq.toList
+                | Some true -> found.EnumValues |> Option.map (fun x -> x |> Array.filter (fun f -> not f.IsDeprecated) |> Seq.toList))
         Define.Field("inputFields", Nullable (ListOf __InputValue), resolve = fun ctx t ->
             match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
-                found.InputFields |> Option.map Array.toSeq)
+                found.InputFields |> Option.map Seq.toList)
         Define.Field("ofType", Nullable __Type, resolve = fun _ t -> t.OfType)
     ])
 
@@ -248,7 +248,7 @@ and __Field =
     [
         Define.Field("name", String, fun _ f -> f.Name)
         Define.Field("description", Nullable String, fun _ f -> f.Description)
-        Define.Field("args", ListOf __InputValue, fun _ f -> f.Args)
+        Define.Field("args", ListOf __InputValue, fun _ f -> Seq.toList f.Args)
         Define.Field("type", __Type, fun _ f -> f.Type)
         Define.Field("isDeprecated", Boolean, resolve = fun _ f -> f.IsDeprecated)
         Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)

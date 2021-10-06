@@ -21,7 +21,8 @@ module Types =
                 match Map.tryFind f.Name objectFields with
                 | None -> (sprintf "'%s' field is defined by interface %s, but not implemented in object %s" f.Name idef.Name objdef.Name)::acc
                 | Some objf when objf = f -> acc
-                | Some _ -> (sprintf "'%s.%s' field signature does not match it's definition in interface %s" objdef.Name f.Name idef.Name)::acc) []
+                | Some _ ->
+                    (sprintf "'%s.%s' field signature does not match it's definition in interface %s" objdef.Name f.Name idef.Name)::acc) []
         match errors with
         | [] -> Success
         | err -> ValidationError err

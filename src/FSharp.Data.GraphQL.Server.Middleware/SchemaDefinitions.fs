@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Decoding
 
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
@@ -94,5 +95,12 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
-          CoerceInput = coerceObjectListFilterInput
+        //   CoerceInput = coerceObjectListFilterInput
+          Decoder =
+            (fun (value : Value) ->
+                match coerceObjectListFilterInput value with
+                | Some olf -> Ok olf
+                | None ->
+                    let message = sprintf "Failed to decode %A as an ObjectListFilter" value
+                    Error (DecodeError.reason message))
           CoerceValue = coerceObjectListFilterValue }

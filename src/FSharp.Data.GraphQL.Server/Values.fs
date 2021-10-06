@@ -8,8 +8,54 @@ open System
 open System.Reflection
 open System.Collections.Generic
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Decoding
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open FsToolkit.ErrorHandling
+
+let private renderDecodeError (error : DecodeError) =
+    [
+        for p in error.Path do
+            match p with
+            | AtIndex index -> sprintf "list element %i" index
+            | InProperty name -> sprintf "in field '%s'" name
+            | InInputObject typeName -> sprintf "in input object '%s'" typeName
+
+        match error.Reason with
+        | DecodeErrorReason.TypeMismatch (expected, actual) ->
+            sprintf "expected value of type %s but got %s" expected actual
+        | DecodeErrorReason.Failure message ->
+            message
+    ]
+    |> FSharp.Core.String.concat ": "
+
+let replaceVariables (value : Value) (variables : Map<string, Value>) =
+    let rec loop (value : Value) (visited : Set<string>) =
+        match value with
+        | Variable name ->
+            if Set.contains name visited then
+                Error (sprintf "Cycle in variable with name %s" name)
+            else
+                match Map.tryFind name variables with
+                | Some variableValue ->
+                    loop variableValue (Set.add name visited)
+                | None ->
+                    Error (sprintf "No variable with called %s could be found" name)
+        | ListValue xs ->
+            xs
+            |> List.map (fun listValue -> loop listValue visited)
+            |> List.sequenceResultM
+            |> Result.map ListValue
+        | ObjectValue m ->
+            m
+            |> Map.toSeq
+            |> Seq.map (fun (k, v) -> loop value visited |> Result.map (fun v -> k, v))
+            |> Seq.toList
+            |> List.sequenceResultM
+            |> Result.map (Map.ofSeq >> ObjectValue)
+        | _ -> Ok value
+
+    loop value Set.empty
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -33,10 +79,24 @@ let inline tryConvertAst schema ast =
 let inline private notAssignableMsg (innerDef: InputDef) value : string =
     sprintf "value of type %s is not assignable from %s" innerDef.Type.Name (value.GetType().Name)
 
-let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInput =
+let rec internal compileByType (errMsg : string) (inputDef : InputDef) : ExecuteInput =
     match inputDef with
     | Scalar scalardef ->
-        variableOrElse (scalardef.CoerceInput >> Option.toObj)
+        // Value -> Map<string, obj> -> obj
+        (fun (value : Value) (vars : Map<string, obj>) ->
+            match value with
+            | Variable name ->
+                match Map.tryFind name vars with
+                | Some o -> o
+                | None -> null
+            | _ ->
+                match scalardef.BoxedDecoder value with
+                | Ok t -> box t
+                | Error error ->
+                    failwithf "%A: %A" scalardef error
+        )
+        // variableOrElse (scalardef.CoerceInput >> Option.toObj)
+
     | InputObject objdef ->
         let objtype = objdef.Type
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
@@ -76,18 +136,30 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 // try to construct a list from single element
                 let single = inner value variables
                 if single = null then null else cons single nil
-    | Nullable (Input innerdef) ->
-        let inner = compileByType errMsg innerdef
-        let some, none = ReflectionHelper.optionOfType innerdef.Type
+    | NullableWithWrapper (nullableDef, Input inputDef) ->
+        // let inner = compileByType errMsg innerdef
+        // let some, none = ReflectionHelper.optionOfType innerdef.Type
 
-        fun variables value ->
-            let i = inner variables value
-            match i with
-            | null -> none
-            | coerced ->
-                let c = some coerced
-                if c <> null then c
-                else raise(GraphQLException (errMsg + notAssignableMsg innerdef coerced))
+        (fun (value : Value) (vars : Map<string, obj>) ->
+            match value with
+            | Variable name ->
+                match Map.tryFind name vars with
+                | Some o -> o
+                | None -> null
+            | value ->
+                match nullableDef.BoxedDecoder value with
+                | Ok t -> t
+                | Error error ->
+                    raise(GraphQLException (errMsg + (string error))))
+
+            // let i = inner variables value
+            // match i with
+            // | null -> none
+            // | coerced ->
+            //     let c = some coerced
+            //     if c <> null then c
+            //     else raise(GraphQLException (errMsg + notAssignableMsg innerdef coerced))
+
     | Enum enumdef ->
         fun value variables ->
             match value with
@@ -165,17 +237,49 @@ and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) err
         upcast mapped
     | _ -> input
 
-let internal coerceVariable (vardef: VarDef) (inputs) =
-    let vname = vardef.Name
-    match Map.tryFind vname inputs with
-    | None ->
-        match vardef.DefaultValue with
-        | Some defaultValue ->
-            let errMsg = (sprintf "Variable '%s': " vname)
-            let executeInput = compileByType errMsg vardef.TypeDef
-            executeInput defaultValue inputs
-        | None ->
-            match vardef.TypeDef with
-            | Nullable _ -> null
-            | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString())))
-    | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
+let internal coerceVariable (varDef : VarDef) (inputs : Map<string, Value>) =
+    result {
+        let vname = varDef.Name
+
+        let decoderAllowsNull = Result.isOk (varDef.TypeDef.BoxedDecoder NullValue)
+
+        let! variableValueOrDefault =
+            (match Map.tryFind vname inputs with
+            | Some value when decoderAllowsNull || value <> NullValue -> Ok value
+            | _ ->
+                match varDef.DefaultValue with
+                | Some defaultValue -> Ok defaultValue
+                | None ->
+                    match varDef.TypeDef with
+                    | Nullable _ -> Ok NullValue
+                    |_ ->
+                        let message = sprintf "Variable '$%s': expected value of type %s, but no value was found" vname (varDef.TypeDef.ToString())
+                        Error message)
+
+        let! decoded =
+            varDef.TypeDef.BoxedDecoder variableValueOrDefault
+            |> Result.mapError (fun decodeError ->
+                sprintf "Variable '$%s': %s" vname (renderDecodeError decodeError))
+
+        return decoded
+
+        // match Map.tryFind vname inputs with
+        // | None ->
+        //     match varDef.DefaultValue with
+        //     | Some defaultValue ->
+        //         let errMsg = (sprintf "Variable '%s': " vname)
+        //         let executeInput = compileByType errMsg varDef.TypeDef
+        //         executeInput defaultValue inputs
+        //     | None ->
+        //         match varDef.TypeDef with
+        //         | Nullable _ -> null
+        //         | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString())))
+        // | Some inputValue ->
+        //     varDef.TypeDef.TryDecode inputValue
+        //     // coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
+    }
+    |> (
+        function
+        | Ok x -> x
+        | Error error ->
+            raise (GraphQLException (error)))
