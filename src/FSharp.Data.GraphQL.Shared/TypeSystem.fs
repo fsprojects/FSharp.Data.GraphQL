@@ -3110,7 +3110,7 @@ module SchemaDefinitions =
               Description = description
               Decoder =
                 decoder
-                |> Decoder.mapError (DecodeError.nest (InInputObject name))
+                |> Decoder.mapError (DecodeError.nest <| InInputObject name)
             }
 
         /// <summary>
