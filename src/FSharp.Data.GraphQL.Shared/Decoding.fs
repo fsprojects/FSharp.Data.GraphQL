@@ -58,10 +58,7 @@ module DecodeError =
     }
 
   let nest (pathSegment : DecodePathSegment) (error : DecodeError) =
-    {
-      error with
-        Path = pathSegment :: error.Path
-    }
+    { error with Path = pathSegment :: error.Path }
 
 module Decoder =
 
