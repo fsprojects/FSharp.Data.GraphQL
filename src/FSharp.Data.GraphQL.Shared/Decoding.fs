@@ -606,10 +606,7 @@ module Decode =
 module ComputationExpression =
 
   type DecoderBuilder() =
-    member this.Bind(m, f) =
-      Decoder.bind f m
-
-    member this.Return(x) =
-      Decoder.succeed x
+    member this.Bind(m, f) = Decoder.bind f m
+    member this.Return(x) = Decoder.succeed x
 
   let decoder = DecoderBuilder()
