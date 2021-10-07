@@ -1,8 +1,10 @@
+GENERATE-LOAD-SCRIPTS: ON
 NUGET
   remote: https://api.nuget.org/v3/index.json
     NuGet.CommandLine (5.8.1)
 
 GROUP Common
+GENERATE-LOAD-SCRIPTS: ON
 RESTRICTION: || (== net50) (== netstandard2.0)
 NUGET
   remote: https://api.nuget.org/v3/index.json
@@ -64,6 +66,7 @@ GITHUB
     src/ProvidedTypes.fs (377d56321ad062985ed5aa19f205c1c4f04ef328)
     src/ProvidedTypes.fsi (377d56321ad062985ed5aa19f205c1c4f04ef328)
 GROUP TestsAndSamples
+GENERATE-LOAD-SCRIPTS: ON
 RESTRICTION: || (== net50) (== netstandard2.0)
 NUGET
   remote: https://api.nuget.org/v3/index.json

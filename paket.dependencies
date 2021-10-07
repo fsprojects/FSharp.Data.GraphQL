@@ -1,10 +1,13 @@
 source https://api.nuget.org/v3/index.json
 
+generate_load_scripts: true
+
 nuget NuGet.CommandLine
 
 group Common
   source https://api.nuget.org/v3/index.json
   frameworks: net5.0, netstandard2.0
+  generate_load_scripts: true
 
   nuget System.Reactive
 
@@ -27,6 +30,7 @@ group Common
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
   frameworks: net5.0, netstandard2.0
+  generate_load_scripts: true
 
   nuget Microsoft.Extensions.Http 5
   nuget System.Net.Http 4.3.4

@@ -1589,6 +1589,9 @@ and [<CustomEquality; NoComparison>] internal ListOfDefinition<'Val, 'Seq when '
             | _ -> false
         )
 
+    override x.GetHashCode() =
+        hash ("ListOfDef", x.OfType)
+
     override x.ToString() = "[" + x.OfType.ToString() + "]!"
 
 /// GraphQL type definition for nullable/optional types.
@@ -2971,14 +2974,17 @@ module SchemaDefinitions =
               Decoder = decoder
               CoerceValue = coerceValue }
 
-        [<Obsolete>]
         static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDef<'Val> =
             upcast
                 {
                     EnumDefinition.Name = name
                     Description = description
                     Options = options |> List.toArray
-                    Decoder = Decode.auto None
+                    Decoder =
+                        Decode.enum (
+                            options
+                            |> Seq.map (fun opt -> opt.Name, opt.Value)
+                            |> Map.ofSeq)
                 }
 
         /// <summary>
