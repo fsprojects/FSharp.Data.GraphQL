@@ -77,13 +77,18 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             |> Seq.cast<NamedDef>
         ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
+
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
             let fieldArgs field =
                 field.Ast.Arguments
                 |> Seq.map (fun x ->
                     match x.Name with
-                    | "filter" -> ObjectListFilter.CoerceInput x.Value
+                    | "filter" ->
+                        // ObjectListFilter.CoerceInput x.Value
+                        match ObjectListFilter.Decoder x.Value with
+                        | Ok t -> Some t
+                        | Error _ -> None
                     | _ -> None)
                 |> Seq.choose id
                 |> Seq.map (fun x -> field.Ast.AliasOrName, x)
@@ -109,6 +114,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
             | false -> ctx
         next ctx
+
     interface IExecutorMiddleware with
         member __.CompileSchema = Some compileMiddleware
         member __.PostCompileSchema = None

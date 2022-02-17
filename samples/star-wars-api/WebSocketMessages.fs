@@ -1,11 +1,13 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Types
 
 type GraphQLQuery =
     { ExecutionPlan : ExecutionPlan
-      Variables : Map<string, obj> }
+    //   Variables : Map<string, obj>
+      Variables : Map<string, Value> }
 
 type WebSocketClientMessage =
     | ConnectionInit

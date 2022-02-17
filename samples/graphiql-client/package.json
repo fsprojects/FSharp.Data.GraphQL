@@ -5,7 +5,6 @@
   "main": "index.js",
   "scripts": {
     "start": "npm run serve | npm run dev",
-    "fsi-start": "'C:\\Program Files (x86)\\Microsoft SDKs\\F#\\4.0\\Framework\\v4.0\\Fsi.exe' server.fsx",
     "open": "start http://localhost:8090/",
     "serve": "./node_modules/.bin/http-server -p 8080",
     "dev": "webpack-dev-server --progress --colors --port 8090"

@@ -29,7 +29,8 @@ let TypeMetaFieldDef =
               Description = None
               TypeDef = String
               DefaultValue = None
-              ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
+              ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj)
+            }
         ],
         resolve = fun ctx (_:obj) ->
             ctx.Schema.Introspected.Types

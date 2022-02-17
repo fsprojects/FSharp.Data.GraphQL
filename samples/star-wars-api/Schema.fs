@@ -1,6 +1,7 @@
 ﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Decoding
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middleware
 
@@ -227,7 +228,7 @@ module Schema =
 
     let schema : ISchema<Root> = upcast Schema(Query, Mutation, Subscription, schemaConfig)
 
-    let middlewares = 
+    let middlewares =
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
           Define.ObjectListFilterMiddleware<Droid, Character option>(true)

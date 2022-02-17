@@ -632,7 +632,8 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
         fieldDef.Args
         |> Array.iter (fun arg ->
             let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
-            arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+            arg.ExecuteInput <- compileByType errMsg arg.TypeDef
+        ))
 
 let internal compileSchema (ctx : SchemaCompileContext) =
     ctx.Schema.TypeMap.ToSeq()
@@ -650,7 +651,7 @@ let internal compileSchema (ctx : SchemaCompileContext) =
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
-let internal coerceVariables (variables: VarDef list) (vars: Map<string, obj>) =
+let internal coerceVariables (variables: VarDef list) (vars: Map<string, Value>) =
     variables
     |> List.fold (fun acc vardef -> Map.add vardef.Name (coerceVariable vardef vars) acc) Map.empty
 

@@ -74,7 +74,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                            (initialCtx : 'ctx)
                            (onComplete : 'ctx -> 'res)
                            : 'res =
-        let rec go ctx = function
+        let rec go (ctx : 'ctx) (middlewares : IExecutorMiddleware list) : 'res =
+            match middlewares with
             | [] -> onComplete ctx
             | m :: ms ->
                 match (phaseSel m) with
@@ -90,7 +91,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
-    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
+    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, Value>): Async<GQLResponse> =
         let prepareOutput res =
             let prepareData data (errs: Error list) =
                 let parsedErrors =
@@ -129,7 +130,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 return GQLResponse.Invalid(errors, executionPlan.Metadata)
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
+    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, Value> option) =
         let variables = defaultArg variables Map.empty
         eval (executionPlan, data, variables)
 
@@ -177,7 +178,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="executionPlan">Execution plan for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
-    member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
+    member __.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, Value>): Async<GQLResponse> =
         execute (executionPlan, data, variables)
 
     /// <summary>
@@ -191,7 +192,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member __.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
+    member __.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, Value>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
         let meta = defaultArg meta Metadata.Empty
         let executionPlan = createExecutionPlan (ast, operationName, meta)
         execute (executionPlan, data, variables)
@@ -207,7 +208,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member __.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
+    member __.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, Value>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         let executionPlan = createExecutionPlan (ast, operationName, meta)
@@ -235,3 +236,115 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         createExecutionPlan (ast, operationName, meta)
+
+[<AutoOpen>]
+module CompatabilityExtensions =
+
+    open System
+
+    module internal Helpers =
+
+        open System.Reflection
+        open FSharp.Reflection
+        open FSharp.Data.GraphQL.Ast
+
+        let private (| FSharpListType |) obj =
+            let t = obj.GetType()
+            if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<obj list> then
+                // Crafty trick since we can always do `List<'t> :> seq<obj>`
+                // Perhaps not the most efficient way, involves copying
+                let xs = box obj :?> seq<obj> |> List.ofSeq
+                Some xs
+            else
+                None
+
+        let private (| RecordType |) obj =
+            let t = obj.GetType()
+            if FSharpType.IsRecord t then
+                Some t
+            else
+                None
+
+        let private (| UnionType |) obj =
+            let t = obj.GetType()
+            if FSharpType.IsUnion t then
+                Some t
+            else
+                None
+
+        let private (| EnumType |) obj =
+            let t = obj.GetType()
+            if t.IsEnum then
+                Some t
+            else
+                None
+
+        let private (| TupleType |) obj =
+            let t = obj.GetType()
+            if FSharpType.IsTuple t then
+                Some (FSharpValue.GetTupleFields obj)
+            else
+                None
+
+        let private (| FSharpOptionType |) obj =
+            let t = obj.GetType()
+            if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<obj option> then
+                let _, values = FSharpValue.GetUnionFields(obj, t)
+                let opt = values |> Seq.tryHead // Some has one field and None has zero
+                Some opt
+            else
+                None
+
+        let rec private objToValue (x : obj) =
+            match box x with
+            | null -> NullValue
+            | :? Value as v -> v
+            | :? bool as b -> BooleanValue b
+            | :? int64 as i -> IntValue i
+            | :? int as i -> IntValue (int64 i)
+            | :? string as s -> StringValue s
+            | :? Guid as g -> StringValue (string g)
+            | :? Map<string, obj> as m ->
+                m
+                |> Map.map (fun _ v -> objToValue v)
+                |> ObjectValue
+            | FSharpOptionType (Some opt) ->
+                match opt with
+                | Some x -> objToValue x
+                | None -> NullValue
+            | TupleType (Some fields) ->
+                fields
+                |> Seq.map objToValue
+                |> Seq.toList
+                |> ListValue
+            | FSharpListType (Some xs) ->
+                xs |> List.map objToValue |> ListValue
+            | RecordType (Some t) ->
+                let ts = FSharpType.GetRecordFields(t)
+                let vs = FSharpValue.GetRecordFields(x)
+
+                Map.ofSeq [
+                    for pi, v in Seq.zip ts vs do
+                        let value = objToValue v
+                        pi.Name, value
+                ]
+                |> ObjectValue
+            | UnionType (Some t) ->
+                let uci, _ = FSharpValue.GetUnionFields(x, t)
+                EnumValue uci.Name
+            | EnumType (Some t) ->
+                StringValue (t.GetEnumName(x))
+            | _ -> failwithf "Error converting %A (type: %s) to an input value" x (x.GetType().FullName)
+
+        let variablesToValues (vars : Map<string, obj>) : Map<string, Value> =
+            vars
+            |> Map.map (fun _ v -> objToValue v)
+
+    open Helpers
+
+    type Executor<'Root> with
+
+        [<Obsolete>]
+        member this.AsyncExecute(ast : Document, ?data : 'Root, ?variables : Map<string, obj>, ?operationName : string, ?meta : Metadata): Async<GQLResponse> =
+            let variables = variables |> Option.map variablesToValues
+            this.AsyncExecute(ast, ?data=data, ?variables=variables, ?operationName=operationName, ?meta=meta)

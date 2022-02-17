@@ -1,10 +1,13 @@
 source https://api.nuget.org/v3/index.json
 
+generate_load_scripts: true
+
 nuget NuGet.CommandLine
 
 group Common
   source https://api.nuget.org/v3/index.json
   frameworks: net5.0, netstandard2.0
+  generate_load_scripts: true
 
   nuget System.Reactive
 
@@ -18,6 +21,8 @@ group Common
 
   nuget Microsoft.Extensions.Http 5
 
+  nuget FsToolkit.ErrorHandling
+
   # Those are needed for the client type provider.
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fsi
   github fsprojects/FSharp.TypeProviders.SDK:377d56321ad062985ed5aa19f205c1c4f04ef328 src/ProvidedTypes.fs
@@ -25,6 +30,7 @@ group Common
 group TestsAndSamples
   source https://api.nuget.org/v3/index.json
   frameworks: net5.0, netstandard2.0
+  generate_load_scripts: true
 
   nuget Microsoft.Extensions.Http 5
   nuget System.Net.Http 4.3.4

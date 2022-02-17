@@ -26,6 +26,7 @@
     <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
+    <Compile Include="DecodingTests.fs" />
     <Compile Include="CoercionTests.fs" />
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="ObservableExtensionsTests.fs" />

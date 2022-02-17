@@ -1,3 +1,4 @@
 group Common
 FSharp.Core
 FParsec
+FsToolkit.ErrorHandling

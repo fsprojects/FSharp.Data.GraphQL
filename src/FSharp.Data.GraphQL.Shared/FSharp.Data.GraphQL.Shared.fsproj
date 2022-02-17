@@ -12,6 +12,7 @@
     <Compile Include="Ast.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="ValidationTypes.fs" />
+    <Compile Include="Decoding.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />
