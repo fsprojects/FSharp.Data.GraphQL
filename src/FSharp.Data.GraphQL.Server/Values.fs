@@ -147,6 +147,7 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
         match input with
         | :? string as s ->
             ReflectionHelper.parseUnion enumdef.Type s
+        | null -> null
         | o when Enum.IsDefined(enumdef.Type, o) -> o
         | _ ->
             raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType()) enumdef.Name))
