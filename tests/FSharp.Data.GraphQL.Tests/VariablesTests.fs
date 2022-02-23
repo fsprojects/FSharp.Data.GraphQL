@@ -557,3 +557,16 @@ let ``Execute handles nullable enum input as variable`` () =
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
+[<Fact>]
+let ``Execute handles union enum input as variable`` () =
+    let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType!) {
+        fieldWithEnumInput(input: $enumVar)
+      }"""
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", Bar :> obj ])
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Bar\"}" ]
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+

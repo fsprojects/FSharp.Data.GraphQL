@@ -10,6 +10,7 @@ open System.Collections.Generic
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open Microsoft.FSharp.Reflection
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -148,6 +149,7 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
         | :? string as s ->
             ReflectionHelper.parseUnion enumdef.Type s
         | null -> null
+        | u when FSharpType.IsUnion(enumdef.Type) && enumdef.Type = input.GetType() -> u
         | o when Enum.IsDefined(enumdef.Type, o) -> o
         | _ ->
             raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType()) enumdef.Name))
