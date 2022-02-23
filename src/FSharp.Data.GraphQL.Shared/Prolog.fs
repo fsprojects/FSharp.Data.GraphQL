@@ -140,4 +140,14 @@ module internal ReflectionHelper =
                     then createSome.Invoke(null, [| value |])
                     else null
                 else none
-        (some, none)
+        let value =
+            let x = optionType.GetDeclaredProperty "Value"
+            fun input ->
+                if input <> null
+                then
+                    let valueType = input.GetType().GetTypeInfo()
+                    if valueType = optionType
+                    then x.GetValue(input)
+                    else input
+                else input
+        (some, none, value)

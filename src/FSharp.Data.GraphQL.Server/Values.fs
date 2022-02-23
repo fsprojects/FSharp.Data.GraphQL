@@ -79,7 +79,7 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 if single = null then null else cons single nil
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
-        let some, none = ReflectionHelper.optionOfType innerdef.Type
+        let some, none, _ = ReflectionHelper.optionOfType innerdef.Type
 
         fun variables value ->
             let i = inner variables value
@@ -112,7 +112,8 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
             raise (GraphQLException <| errMsg + (sprintf "expected value of type %s but got None" scalardef.Name))
         | Some res -> res
     | Nullable (Input innerdef) ->
-        let some, none = ReflectionHelper.optionOfType innerdef.Type
+        let some, none, innerValue = ReflectionHelper.optionOfType innerdef.Type
+        let input = innerValue input
         let coerced = coerceVariableValue true innerdef vardef input errMsg
         if coerced <> null
         then
