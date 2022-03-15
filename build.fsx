@@ -103,18 +103,23 @@ Target.create "CleanDocs" (fun _ ->
 Target.create "Restore" (fun _ ->
     !! "src/**/*.??proj"
     -- "src/**/*.shproj"
-    |> Seq.iter (DotNet.restore id))
+    |> Seq.iter (fun pattern ->
+        DotNet.restore (fun options ->
+            { options with MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } }
+        ) pattern
+    ))
 
 
 Target.create "Build" <| fun _ ->
     "FSharp.Data.GraphQL.sln"
     |>  DotNet.build (fun o ->
-            { o with Configuration = DotNet.BuildConfiguration.Release })
+            { o with Configuration = DotNet.BuildConfiguration.Release; MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true }})
 
 let startGraphQLServer (project: string) (streamRef: DataRef<Stream>) =
     DotNet.build (fun options ->
         { options with
-            Configuration = DotNet.BuildConfiguration.Release}) project
+            Configuration = DotNet.BuildConfiguration.Release
+            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }}) project
 
     let projectName = Path.GetFileNameWithoutExtension(project)
     let projectPath = Path.GetDirectoryName(project)
@@ -130,10 +135,12 @@ let startGraphQLServer (project: string) (streamRef: DataRef<Stream>) =
 let runTests (project : string) =
     DotNet.build (fun options ->
         { options with
-            Configuration = DotNet.BuildConfiguration.Release} ) project
+            Configuration = DotNet.BuildConfiguration.Release
+            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }} ) project
     DotNet.test (fun options ->
         { options with
             Configuration = DotNet.BuildConfiguration.Release
+            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
             Common = { options.Common with
                         CustomParams = Some "--no-build -v=normal" } }) project
 
