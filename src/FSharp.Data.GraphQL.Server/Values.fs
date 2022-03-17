@@ -64,18 +64,25 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 | None -> null
             | _ -> null
     | List (Input innerdef) ->
+        let isArray = inputDef.Type.IsArray
         let inner = compileByType errMsg innerdef
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
+
         fun value variables ->
             match value with
             | ListValue list ->
                 let mappedValues = list |> List.map (fun value -> inner value variables)
-                nil |> List.foldBack cons mappedValues
+                if isArray then
+                    ReflectionHelper.arrayOfList innerdef.Type mappedValues
+                else
+                    nil |> List.foldBack cons mappedValues
             | Variable variableName -> variables.[variableName]
             | _ ->
                 // try to construct a list from single element
                 let single = inner value variables
-                if single = null then null else cons single nil
+                if single = null then null else
+                    if isArray then ReflectionHelper.arrayOfList innerdef.Type [single]
+                    else cons single nil
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
         let some, none = ReflectionHelper.optionOfType innerdef.Type

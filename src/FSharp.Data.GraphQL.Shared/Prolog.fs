@@ -119,6 +119,18 @@ module internal ReflectionHelper =
         (cons, nil)
 
     /// <summary>
+    /// used to create array from list of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">runtime type for array type construction</param>
+    /// <param name="l">input list</param>
+    let arrayOfList (t: Type) (l : _ list) =
+        let array = System.Array.CreateInstance(t, l.Length)
+        l |> List.iteri (fun i v ->
+            array.SetValue(v, i)
+        )
+        array :> obj
+
+    /// <summary>
     /// Returns pair of function constructors for `some(value)` and `none`
     /// used to create option of type <paramref name="t"/> given at runtime.
     /// </summary>

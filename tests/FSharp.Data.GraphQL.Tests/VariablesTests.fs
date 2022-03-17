@@ -24,15 +24,21 @@ type TestInput = {
     b: string option seq option
     c: string
     d: string option
+    e: string option array option
 }
+
+let InputArrayOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Val array> =
+  ListOf innerDef
+
 let TestInputObject =
   Define.InputObject<TestInput>(
     name = "TestInputObject",
     fields = [
         Define.Input("a", Nullable String)
-        Define.Input("b", Nullable(ListOf (Nullable String)))
+        Define.Input("b", Nullable( ListOf (Nullable String)) )
         Define.Input("c", String)
         Define.Input("d", Nullable TestComplexScalar)
+        Define.Input("e", Nullable( InputArrayOf (Nullable String)) )
     ])
 
 type TestNestedInput = {
@@ -85,9 +91,9 @@ let schema = Schema(TestType)
 
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs with complex input`` () =
-    let ast = parse """{ fieldWithObjectInput(input: {a: "foo", b: ["bar"], c: "baz"}) }"""
+    let ast = parse """{ fieldWithObjectInput(input: {a: "foo", b: ["bar"], c: "baz", e: ["baf"]}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":["baf"]}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -133,7 +139,7 @@ let ``Execute handles variables with complex inputs`` () =
           fieldWithObjectInput(input: $input)
         }"""
     let params' : Map<string, obj> =
-        Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [ Some "bar"]) ; c = "baz"; d = None }]
+        Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [| Some "bar"|]) ; c = "baz"; d = None; e = None }]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
     match actual with
