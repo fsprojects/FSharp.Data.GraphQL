@@ -104,7 +104,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
     let ast = parse """{ fieldWithObjectInput(input: {a: "foo", b: "bar", c: "baz"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -126,7 +126,7 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
 let ``Execute handles objects and nullability using inline structs and proprely coerces complex scalar types`` () =
     let ast = parse """{ fieldWithObjectInput(input: {c: "foo", d: "SerializedValue"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":null,"b":null,"c":"foo","d":"DeserializedValue"}"""]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":null,"b":null,"c":"foo","d":"DeserializedValue","e":null}"""]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -141,7 +141,7 @@ let ``Execute handles variables with complex inputs`` () =
     let params' : Map<string, obj> =
         Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [| Some "bar"|]) ; c = "baz"; d = None; e = None }]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -154,7 +154,7 @@ let ``Execute handles variables with default value when no value was provided`` 
             fieldWithObjectInput(input: $input)
           }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
