@@ -37,3 +37,29 @@ let ``Execute uses provided resolve function to accesses properties`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
+
+type private Fruit =
+  | Apple
+  | Banana
+  | Cherry
+
+let private enumType =
+  Define.Enum(
+    "Fruit",
+    [
+      Define.EnumValue("APPLE", Apple)
+      Define.EnumValue("BANANA", Banana)
+      Define.EnumValue("CHERRY", Cherry)
+    ]
+  )
+
+[<Fact>]
+let ``Execute resolves enums to their names`` () =
+    let schema = testSchema [ Define.Field("fruits", ListOf enumType, "", [], resolve = fun ctx d -> [ Apple; Banana; Cherry ]) ]
+    let expected = NameValueLookup.ofList [ "fruits", [ "APPLE"; "BANANA"; "CHERRY" ] :> obj ]
+    let actual = sync <| Executor(schema).AsyncExecute(parse "{ fruits() }")
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
