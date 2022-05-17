@@ -322,7 +322,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         | Some v' -> resolved name v'
         | None -> raiseError <| coercionError value scalarDef.Name path ctx
     | Enum enumDef ->
-        let enumCase = enumDef.Options |> Array.tryPick(fun case -> if case.Value.Equals(value) then coerceStringValue value else None)
+        let enumCase = enumDef.Options |> Array.tryPick(fun case -> if case.Value.Equals(value) then Some case.Name else None)
         match enumCase with
         | Some v' -> resolved name (v' :> obj)
         | None -> raiseError <| coercionError value enumDef.Name path  ctx
