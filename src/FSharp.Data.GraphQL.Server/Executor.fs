@@ -74,9 +74,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                            (initialCtx : 'ctx)
                            (onComplete : 'ctx -> 'res)
                            : 'res =
-        let rec go ctx = function
+        let rec go ctx (middlewares: IExecutorMiddleware list) =
+            match middlewares with
             | [] -> onComplete ctx
-            | m : IExecutorMiddleware :: ms ->
+            | m :: ms ->
                 match (phaseSel m) with
                 | Some f -> f ctx (fun ctx' -> go ctx' ms)
                 | None -> go ctx ms
