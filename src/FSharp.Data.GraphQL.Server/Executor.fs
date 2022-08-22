@@ -76,7 +76,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                            : 'res =
         let rec go ctx = function
             | [] -> onComplete ctx
-            | m :: ms ->
+            | m : IExecutorMiddleware :: ms ->
                 match (phaseSel m) with
                 | Some f -> f ctx (fun ctx' -> go ctx' ms)
                 | None -> go ctx ms
