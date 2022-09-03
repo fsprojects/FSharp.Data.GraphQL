@@ -1,5 +1,5 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
@@ -11,16 +11,22 @@
     <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
     <OutputPath>..\FSharp.Data.GraphQL.Client\bin\$(Configuration)\typeproviders\fsharp41\</OutputPath>
+
+    <Description>FSharp implementation of Facebook GraphQL query language (Client)</Description>
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fsi">
-      <Paket>True</Paket>
-      <Link>paket-files/ProvidedTypes.fsi</Link>
-    </Compile>
-    <Compile Include="..\..\paket-files\common\fsprojects\FSharp.TypeProviders.SDK\src\ProvidedTypes.fs">
-      <Paket>True</Paket>
-      <Link>paket-files/ProvidedTypes.fs</Link>
-    </Compile>
+    <PackageReference Update="FSharp.Core">
+      <ExcludeAssets>all</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2">
+      <PrivateAssets>all</PrivateAssets>
+    </PackageReference>
+    <PackageReference Include="FParsec" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="..\FSharp.Data.GraphQL.Client\MimeTypes.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\TextConversions.fs" />
     <Compile Include="..\FSharp.Data.GraphQL.Client\JsonValue.fs" />
@@ -37,10 +43,9 @@
     <Compile Include="DesignTimeCache.fs" />
     <Compile Include="ProvidedTypesHelper.fs" />
     <Compile Include="GraphQLProvider.DesignTime.fs" />
-    <None Include="paket.references" />
   </ItemGroup>
+
   <ItemGroup>
-     <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

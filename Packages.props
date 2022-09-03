@@ -1,0 +1,31 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+  <PropertyGroup>
+    <MicrosoftExtensionsVersion>6.0.*</MicrosoftExtensionsVersion>
+    <AspNetCoreVersion>6.0.*</AspNetCoreVersion>
+    <XUnitVersion>2.*</XUnitVersion>
+  </PropertyGroup>
+  <ItemGroup Label="Common">
+    <PackageReference Update="FParsec" Version="1.1.1" />
+    <!--<PackageReference Update="FSharp.Core" Version="4.7.2">-->
+    <PackageReference Update="FSharp.Core" Version="6.0.*">
+      <ExcludeAssets>contentFiles</ExcludeAssets>
+    </PackageReference>
+    <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageReference Update="NuGet.CommandLine" Version="1.*" />
+    <PackageReference Update="System.Reactive" Version="5.*" />
+  </ItemGroup>
+  <ItemGroup Label="Tests and Samples">
+    <PackageReference Update="BenchmarkDotNet" Version="0.*" />
+    <PackageReference Update="EntityFramework" Version="1.*" />
+    <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
+    <PackageReference Update="Giraffe" Version="6.*" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.*" />
+    <PackageReference Update="Newtonsoft.Json" Version="13.*" />
+    <PackageReference Update="Suave" Version="2.*" />
+    <PackageReference Update="xunit" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="$(XUnitVersion)" />
+  </ItemGroup>
+</Project>

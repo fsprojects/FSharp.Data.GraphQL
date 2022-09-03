@@ -1,7 +1,7 @@
 {
-    "sdk": {
-        "version": "5.0.100",
-        "rollForward": "latestFeature"
-    },
-    "projects": ["src", "tests"]
+  "sdk": {
+    "version": "6.0.400",
+    "rollForward": "latestMinor"
+  },
+  "projects": [ "src", "tests" ]
 }

@@ -16,3 +16,6 @@ module Program =
         finished.WaitOne() |> ignore
         finished.Dispose()
         !result
+
+[<assembly: CollectionBehavior(DisableTestParallelization = true)>]
+do()

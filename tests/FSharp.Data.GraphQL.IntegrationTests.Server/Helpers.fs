@@ -1,11 +1,11 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
 open System
+open System.Collections.Generic
 open System.Text
 open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open Newtonsoft.Json.Serialization
-open System.Collections.Generic
 open FSharp.Data.GraphQL
 
 [<AutoOpen>]

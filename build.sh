@@ -4,4 +4,4 @@ set -eu
 set -o pipefail
 
 dotnet tool restore
-dotnet fake run build.fsx "$@"
+dotnet fsi build.fsx "$@"

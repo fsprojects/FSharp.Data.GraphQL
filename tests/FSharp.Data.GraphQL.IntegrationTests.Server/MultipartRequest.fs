@@ -1,10 +1,10 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
 open System
-open Microsoft.AspNetCore.WebUtilities
-open Newtonsoft.Json
 open System.Collections
 open System.Collections.Generic
+open Microsoft.AspNetCore.WebUtilities
+open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL
