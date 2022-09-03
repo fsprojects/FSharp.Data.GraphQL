@@ -1,11 +1,37 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+
+    <Description>FSharp implementation of Facebook GraphQL query language (Server)</Description>
+
+    <!--<AssemblyOriginatorKeyFile>..\..\FSharp.Data.GraphQL.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>-->
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
+    <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="False" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
+  </ItemGroup>
+
+  <ItemGroup Label="InternalsVisibleTo">
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Benchmarks</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FParsec" />
+    <PackageReference Include="System.Reactive" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
@@ -17,11 +43,9 @@
     <Compile Include="DefineExtensions.fs" />
     <Compile Include="Relay/Node.fs" />
     <Compile Include="Relay/Connections.fs" />
-    <None Include="paket.references" />
-    <None Include="FSharp.Data.GraphQL.Server.fsproj.paket.template" />
   </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

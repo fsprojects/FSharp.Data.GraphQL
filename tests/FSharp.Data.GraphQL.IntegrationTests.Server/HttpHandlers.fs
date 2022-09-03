@@ -1,17 +1,16 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
-open System.Text
-open Giraffe
-open Microsoft.AspNetCore.Http
-open Newtonsoft.Json
-open FSharp.Data.GraphQL.Execution
 open System.IO
+open System.Text
+open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.WebUtilities
+open Giraffe
+open Giraffe.HttpStatusCodeHandlers.RequestErrors
+open Newtonsoft.Json
+open Newtonsoft.Json.Linq
+open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Control.Tasks
-open Newtonsoft.Json.Linq
-open Giraffe.HttpStatusCodeHandlers.RequestErrors
-open Microsoft.AspNetCore.WebUtilities
 open FSharp.Data.GraphQL.Ast
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
@@ -38,19 +37,19 @@ module HttpHandlers =
         |> Option.map (fun v -> v.Remove(0, v.IndexOf('=') + 1))
         |> Option.map (fun v -> v.Trim('"'))
 
+    let rec parseVariables (schema : ISchema) (defs : VariableDefinition list) (variables : obj) =
+        let casted =
+            match variables with
+            | null -> Map.empty
+            | :? string as x when System.String.IsNullOrWhiteSpace(x) -> Map.empty
+            | :? Map<string, obj> as x -> x
+            | :? JToken as x -> x.ToObject<Map<string, obj>>(jsonSerializer)
+            | :? string as x -> JsonConvert.DeserializeObject<Map<string, obj>>(x, jsonSettings)
+            | _ -> failwithf "Failure deserializing variables. Unexpected variables object format."
+        Variables.read schema defs casted
+
     let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
         let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
-
-        let rec parseVariables (schema : ISchema) (defs : VariableDefinition list) (variables : obj) =
-            let casted =
-                match variables with
-                | null -> Map.empty
-                | :? string as x when System.String.IsNullOrWhiteSpace(x) -> Map.empty
-                | :? Map<string, obj> as x -> x
-                | :? JToken as x -> x.ToObject<Map<string, obj>>(jsonSerializer)
-                | :? string as x -> JsonConvert.DeserializeObject<Map<string, obj>>(x, jsonSettings)
-                | _ -> failwithf "Failure deserializing variables. Unexpected variables object format."
-            Variables.read schema defs casted
 
         let json =
             function

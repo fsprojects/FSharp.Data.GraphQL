@@ -1,4 +1,0 @@
-group Common
-FSharp.Core
-FParsec
-Microsoft.Extensions.Http

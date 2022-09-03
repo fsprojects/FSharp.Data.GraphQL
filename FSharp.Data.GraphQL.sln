@@ -1,14 +1,8 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio Version 16
-VisualStudioVersion = 16.0.28922.388
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32811.315
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = ".paket", ".paket", "{63297B98-5CED-492C-A5B7-A5B4F73CF142}"
-	ProjectSection(SolutionItems) = preProject
-		paket.dependencies = paket.dependencies
-		paket.lock = paket.lock
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{474179D3-0090-49E9-88F8-2971C0966077}"
@@ -135,6 +129,16 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "server", "server", "{9D5C46
 		samples\client-provider\file-upload\server\resolvers.mjs = samples\client-provider\file-upload\server\resolvers.mjs
 		samples\client-provider\file-upload\server\server.mjs = samples\client-provider\file-upload\server\server.mjs
 		samples\client-provider\file-upload\server\types.mjs = samples\client-provider\file-upload\server\types.mjs
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E3330910-8B6C-4191-8046-D6D57FBC39B1}"
+	ProjectSection(SolutionItems) = preProject
+		Directory.Build.targets = Directory.Build.targets
+		global.json = global.json
+		LICENSE.txt = LICENSE.txt
+		Packages.props = Packages.props
+		README.md = README.md
+		RELEASE_NOTES.md = RELEASE_NOTES.md
 	EndProjectSection
 EndProject
 Global
