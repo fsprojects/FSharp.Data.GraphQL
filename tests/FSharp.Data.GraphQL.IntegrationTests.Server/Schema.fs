@@ -1,8 +1,8 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
+open System.Text
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open System.Text
 
 type Root =
     { RequestId : string }

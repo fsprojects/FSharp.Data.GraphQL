@@ -1,12 +1,12 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
+open System
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
-open Giraffe
 open Microsoft.Extensions.Logging
-open System
-open Microsoft.AspNetCore.Server.Kestrel.Core
+open Giraffe
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
