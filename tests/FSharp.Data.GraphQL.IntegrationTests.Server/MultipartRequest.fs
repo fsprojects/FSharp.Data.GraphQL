@@ -119,12 +119,12 @@ module MultipartRequest =
         | operations -> operations |> List.mapi (fun ix operation -> mapOperation (Some ix) operation)
 
     /// Reads a GraphQL multipart request from a MultipartReader.
-    let read (reader : MultipartReader) =
-        async {
+    let read cancellationToken (reader : MultipartReader) =
+        task {
             let mutable section : GraphQLMultipartSection option = None
             let readNextSection () =
-                async {
-                    let! next = reader.ReadNextSectionAsync() |> Async.AwaitTask
+                task {
+                    let! next = reader.ReadNextSectionAsync cancellationToken
                     section <- GraphQLMultipartSection.FromSection(next)
                 }
             let mutable operations : string = null
@@ -134,7 +134,7 @@ module MultipartRequest =
             while not section.IsNone do
                 match section.Value with
                 | Form section ->
-                    let! value = section.GetValueAsync() |> Async.AwaitTask
+                    let! value = section.GetValueAsync()
                     match section.Name with
                     | "operations" ->
                         operations <- value
@@ -145,7 +145,7 @@ module MultipartRequest =
                     | _ -> failwithf "Error reading multipart request. Unexpected section name \"%s\"." section.Name
                 | File section ->
                     let stream = new System.IO.MemoryStream(4096)
-                    do! section.FileStream.CopyToAsync(stream) |> Async.AwaitTask
+                    do! section.FileStream.CopyToAsync(stream, cancellationToken) |> Async.AwaitTask
                     stream.Position <- 0L
                     let value = { Name = section.FileName; ContentType = section.Section.ContentType; Content = stream }
                     files.Add(section.Name, value)
@@ -156,4 +156,4 @@ module MultipartRequest =
                 | :? JObject as op -> [ op.ToObject<Operation>(jsonSerializer) ]
                 | _ -> failwith "Unexpected operations value."
             return { Operations = parseOperations operations map files }
-        } |> Async.StartAsTask
+        }
