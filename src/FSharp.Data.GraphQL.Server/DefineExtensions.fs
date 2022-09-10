@@ -16,7 +16,7 @@ module DefineExtensions =
         /// <param name="execute">The operation execution sub-middleware function.</param>
         static member ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) : IExecutorMiddleware =
             { new IExecutorMiddleware with 
-                member __.CompileSchema = compile
-                member __.PostCompileSchema = postCompile
-                member __.PlanOperation = plan
-                member __.ExecuteOperationAsync = execute }
+                member _.CompileSchema = compile
+                member _.PostCompileSchema = postCompile
+                member _.PlanOperation = plan
+                member _.ExecuteOperationAsync = execute }

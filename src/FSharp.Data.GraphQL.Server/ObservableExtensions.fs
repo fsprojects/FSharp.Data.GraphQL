@@ -7,10 +7,10 @@ open System.Reactive.Linq
 module internal Observable =
     let ofSeq<'Item> (items : 'Item seq) = {
         new IObservable<'Item> with
-            member __.Subscribe(observer) =
+            member _.Subscribe(observer) =
                 items |> Seq.iter(observer.OnNext)
                 observer.OnCompleted()
-                { new IDisposable with member __.Dispose() = () }
+                { new IDisposable with member _.Dispose() = () }
     }
 
     let bind (f : 'T -> IObservable<'U>) (o : IObservable<'T>) = o.SelectMany(f)
@@ -66,8 +66,8 @@ module internal Observable =
 
     let singleton (value : 'T) = {
         new IObservable<'T> with
-            member __.Subscribe(observer) =
+            member _.Subscribe(observer) =
                 observer.OnNext value
                 observer.OnCompleted()
-                { new IDisposable with member __.Dispose() = () }
+                { new IDisposable with member _.Dispose() = () }
     }

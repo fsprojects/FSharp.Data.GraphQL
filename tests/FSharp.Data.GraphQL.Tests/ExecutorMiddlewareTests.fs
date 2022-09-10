@@ -100,10 +100,10 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
 
 let middleware =
     { new IExecutorMiddleware with
-        member __.CompileSchema = Some compileMiddleware
-        member __.PostCompileSchema = Some postCompileMiddleware
-        member __.PlanOperation = Some planningMiddleware
-        member __.ExecuteOperationAsync = Some executionMiddleware }
+        member _.CompileSchema = Some compileMiddleware
+        member _.PostCompileSchema = Some postCompileMiddleware
+        member _.PlanOperation = Some planningMiddleware
+        member _.ExecuteOperationAsync = Some executionMiddleware }
 
 let executor = Executor(schema, [ middleware ])
 

@@ -278,9 +278,9 @@ Optionally, for ease of implementation, concrete class to derive from can be use
 ```fsharp
 type ExecutorMiddleware(?compile, ?plan, ?execute) =
     interface IExecutorMiddleware with
-        member __.CompileSchema = compile
-        member __.PlanOperation = plan
-        member __.ExecuteOperationAsync = execute
+        member _.CompileSchema = compile
+        member _.PlanOperation = plan
+        member _.ExecuteOperationAsync = execute
 ```
 
 Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:

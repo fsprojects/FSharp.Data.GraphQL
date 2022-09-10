@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
@@ -85,45 +85,45 @@ module internal Gen =
     let private qm = typeof<Queryable>.GetMethods()
 
     let enumerableMethods = { new Methods with
-        member __.Type = typedefof<IEnumerable<_>>
-        member __.Select =
+        member _.Type = typedefof<IEnumerable<_>>
+        member _.Select =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Select"))
             methods.First()
-        member __.Where =
+        member _.Where =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Where"))
             methods.First()
-        member __.Skip =
+        member _.Skip =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Skip"))
             methods.First()
-        member __.Take =
+        member _.Take =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Take"))
             methods.First()
-        member __.OrderBy =
+        member _.OrderBy =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderBy"))
             methods.First()
-        member __.OrderByDesc =
+        member _.OrderByDesc =
             let methods = em.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderByDescending"))
             methods.First()
         }
 
     let queryableMethods = { new Methods with
-        member __.Type = typedefof<IQueryable<_>>
-        member __.Select =
+        member _.Type = typedefof<IQueryable<_>>
+        member _.Select =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Select"))
             methods.First()
-        member __.Where =
+        member _.Where =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Where"))
             methods.First()
-        member __.Skip =
+        member _.Skip =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Skip"))
             methods.First()
-        member __.Take =
+        member _.Take =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "Take"))
             methods.First()
-        member __.OrderBy =
+        member _.OrderBy =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderBy"))
             methods.First()
-        member __.OrderByDesc =
+        member _.OrderByDesc =
             let methods = qm.Where(System.Func<MethodInfo,bool>(fun x -> x.Name = "OrderByDescending"))
             methods.First()
         }

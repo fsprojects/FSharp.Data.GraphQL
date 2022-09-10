@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 namespace FSharp.Data.GraphQL.Types
 
@@ -471,7 +471,7 @@ and FieldExecuteMap(compiler : FieldExecuteCompiler) =
     /// If set to true, and an exists an entry with the <paramref name="typeName"/> and the name of the FieldDef,
     /// then it will be overwritten.
     /// </param>
-    member __.SetExecute(typeName: string, def: FieldDef, ?overwrite : bool) =
+    member _.SetExecute(typeName: string, def: FieldDef, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
         let key = typeName, def.Name
         let compiled = compiler def
@@ -495,7 +495,7 @@ and FieldExecuteMap(compiler : FieldExecuteCompiler) =
     /// </summary>
     /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
     /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
-    member __.GetExecute(typeName: string, fieldName: string) =
+    member _.GetExecute(typeName: string, fieldName: string) =
         let key = getKey typeName fieldName
         if map.ContainsKey(key) then fst map.[key] else Unchecked.defaultof<ExecuteField>
 
@@ -504,17 +504,17 @@ and FieldExecuteMap(compiler : FieldExecuteCompiler) =
     /// </summary>
     /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
     /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
-    member __.GetArgs(typeName : string, fieldName : string) =
+    member _.GetArgs(typeName : string, fieldName : string) =
         let key = getKey typeName fieldName
         if map.ContainsKey(key) then snd map.[key] else Unchecked.defaultof<InputFieldDef []>
 
     interface IEnumerable<string * string * ExecuteField> with
-        member __.GetEnumerator() =
+        member _.GetEnumerator() =
             let seq = map |> Seq.map(fun kvp -> fst kvp.Key, snd kvp.Key, fst kvp.Value)
             seq.GetEnumerator()
 
     interface IEnumerable with
-        member __.GetEnumerator() =
+        member _.GetEnumerator() =
             let seq = map |> Seq.map(fun kvp -> fst kvp.Value)
             upcast seq.GetEnumerator()
 
@@ -1010,7 +1010,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       CoerceValue : obj -> 'Val option }
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1120,7 +1120,7 @@ and internal EnumDefinition<'Val> =
     interface OutputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1196,7 +1196,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> =
       IsTypeOf : (obj -> bool) option }
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1281,7 +1281,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> =
       ResolveType : (obj -> ObjectDef) option }
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1373,7 +1373,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> =
       ResolveValue : 'In -> 'Out }
 
     interface TypeDef with
-        member __.Type = typeof<'Out>
+        member _.Type = typeof<'Out>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1438,7 +1438,7 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> =
     interface InputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Seq>
+        member _.Type = typeof<'Seq>
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
@@ -1487,7 +1487,7 @@ and internal NullableDefinition<'Val> =
     interface InputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Val option>
+        member _.Type = typeof<'Val option>
         member x.MakeNullable() = upcast x
         member x.MakeList() =
             let list: ListOfDefinition<_,_> = { OfType = x }
@@ -1545,7 +1545,7 @@ and InputObjectDefinition<'Val> =
         member x.Name = x.Name
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1708,7 +1708,7 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> =
     }
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable() =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1767,7 +1767,7 @@ and Metadata(data : Map<string, obj>) =
     /// </summary>
     /// <param name="key">The key to be used to search information for.</param>
     /// <param name="value">The value to be stored inside the metadata.</param>
-    member __.Add(key : string, value : obj) = Metadata(data.Add (key, value))
+    member _.Add(key : string, value : obj) = Metadata(data.Add (key, value))
 
     /// <summary>
     /// Generates a new Metadata instance, filled with items of a string * obj list.
@@ -1787,10 +1787,10 @@ and Metadata(data : Map<string, obj>) =
     /// Tries to find an value inside the metadata by it's key.
     /// </summary>
     /// <param name="key">The key to be used to search information for.</param>
-    member __.TryFind<'Value>(key : string) =
+    member _.TryFind<'Value>(key : string) =
         if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
 
-    override __.ToString() = sprintf "%A" data
+    override _.ToString() = sprintf "%A" data
 
 /// Map of types of an ISchema.
 /// The map of types is used to plan and execute queries.
@@ -1820,7 +1820,7 @@ and TypeMap() =
     /// </summary>
     /// <param name="def">The NamedDef to be added to the type map. It's name will be used as the key.</param>
     /// <param name="overwrite">If set to true, and another NamedDef exists with the same name, it will be overwritten.</param>
-    member __.AddType(def : NamedDef, ?overwrite : bool) =
+    member _.AddType(def : NamedDef, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
         let add name def overwrite =
             if not (map.ContainsKey(name))
@@ -1893,7 +1893,7 @@ and TypeMap() =
         defs |> Seq.iter (fun def -> this.AddType(def, overwrite))
 
     /// Converts this type map to a sequence of string * NamedDef values, with the first item being the key.
-    member __.ToSeq(?includeDefaultTypes : bool) =
+    member _.ToSeq(?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes true
         let result = map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
         if not includeDefaultTypes
@@ -1910,7 +1910,7 @@ and TypeMap() =
     /// </summary>
     /// <param name="name">The name of the NamedDef to be searched for.</param>
     /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
-    member __.TryFind(name : string, ?includeDefaultTypes : bool) =
+    member _.TryFind(name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         if not includeDefaultTypes && isDefaultType name
         then

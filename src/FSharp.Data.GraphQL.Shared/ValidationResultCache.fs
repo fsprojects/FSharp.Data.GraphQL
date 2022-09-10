@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL.Validation
+namespace FSharp.Data.GraphQL.Validation
 
 open FSharp.Data.GraphQL
 open System
@@ -17,6 +17,6 @@ type MemoryValidationResultCache () =
     let expirationPolicy = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
     let internalCache = MemoryCache<int, ValidationResult<AstError>>(expirationPolicy)
     interface IValidationResultCache with
-        member __.GetOrAdd producer key =
+        member _.GetOrAdd producer key =
             let internalKey = key.GetHashCode()
             internalCache.GetOrAddResult internalKey producer

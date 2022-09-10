@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
@@ -126,9 +126,9 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 
     let mutable properties : RecordPropertyMetadata list = []
 
-    member __.GetRecordProperties() = properties
+    member _.GetRecordProperties() = properties
 
-    member __.SetRecordProperties(props) = properties <- props
+    member _.SetRecordProperties(props) = properties <- props
 
 [<AutoOpen>]
 module internal Failures =

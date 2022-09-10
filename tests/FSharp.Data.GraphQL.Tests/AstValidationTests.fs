@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.AstValidationTests
 
@@ -74,8 +74,8 @@ type Root =
       Pet : IPet
       Sentient : ISentient
       Human : Human }
-    member __.FindDog(_ : ComplexInput) : Dog option = None
-    member __.BooleanList(_ : bool list option) : bool option = None
+    member _.FindDog(_ : ComplexInput) : Dog option = None
+    member _.BooleanList(_ : bool list option) : bool option = None
 
 let Command =
     Define.Enum<Command>(

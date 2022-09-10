@@ -66,11 +66,11 @@ and AstFieldInfo =
 type internal PaddedStringBuilder() =
     let sb = StringBuilder()
     let mutable padCount = 0
-    member __.Pad() = padCount <- padCount + 2
-    member __.Unpad() = padCount <- padCount - 2
-    member __.AppendLine() = sb.AppendLine().Append("".PadLeft(padCount, ' ')) |> ignore
-    member __.Append(str : string) = sb.Append(str) |> ignore
-    override __.ToString() = sb.ToString()
+    member _.Pad() = padCount <- padCount + 2
+    member _.Unpad() = padCount <- padCount - 2
+    member _.AppendLine() = sb.AppendLine().Append("".PadLeft(padCount, ' ')) |> ignore
+    member _.Append(str : string) = sb.Append(str) |> ignore
+    override _.ToString() = sb.ToString()
 
 /// Specify options when printing an Ast.Document to a query string.
 [<Flags>]
