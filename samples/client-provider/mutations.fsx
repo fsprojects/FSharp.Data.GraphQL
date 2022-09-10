@@ -20,16 +20,17 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8086">
 
-let operation = 
+let operation =
     MyProvider.Operation<"""mutation m {
       setMoon (id: "1", isMoon: true) {
         id
         name
         isMoon
       }
-    }""">()
+    }""">
+        ()
 
-let result = operation.Run()
+let result = operation.Run ()
 
 // Mutations are also supported.
 // Subscriptions are not fully supported at the moment.

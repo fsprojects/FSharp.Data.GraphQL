@@ -19,17 +19,19 @@
 open FSharp.Data.GraphQL
 
 let run () =
-      // Dispose the connection after using it.
-      use connection = new GraphQLClientConnection()
-      let request : GraphQLRequest =
-          { Query = """query q { viewer { login } }"""
-            Variables = [||]
-            ServerUrl = "https://api.github.com/graphql"
-            HttpHeaders = 
-                  [| "Authorization", "bearer [your bearer token here]"
-                     "User-Agent", "[your github username here]" |]
-            OperationName = Some "q" }
-      let response = GraphQLClient.sendRequest connection request
-      printfn "%s" response
+    // Dispose the connection after using it.
+    use connection = new GraphQLClientConnection ()
+
+    let request : GraphQLRequest =
+        { Query = """query q { viewer { login } }"""
+          Variables = [||]
+          ServerUrl = "https://api.github.com/graphql"
+          HttpHeaders =
+            [| "Authorization", "bearer [your bearer token here]"
+               "User-Agent", "[your github username here]" |]
+          OperationName = Some "q" }
+
+    let response = GraphQLClient.sendRequest connection request
+    printfn "%s" response
 
 run ()

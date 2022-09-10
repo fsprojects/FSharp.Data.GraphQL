@@ -39,21 +39,22 @@ let operation =
           }
         }
       }
-    }""">()
+    }""">
+        ()
 
-let ctx = MyProvider.GetContext(serverUrl = "http://localhost:8086")
+let ctx = MyProvider.GetContext (serverUrl = "http://localhost:8086")
 
-let result = operation.Run(ctx)
+let result = operation.Run (ctx)
 
 let hisName = result.Data.Value.MyHero.Value.HisName.Value
 
 let hisFriends = result.Data.Value.MyHero.Value.HisFriends |> Array.choose id
 
 let humanFriendNames =
-  hisFriends |> Array.choose (fun f -> f.TryAsHuman()) |> Array.map (fun h -> h.HumanName)
+    hisFriends |> Array.choose (fun f -> f.TryAsHuman ()) |> Array.map (fun h -> h.HumanName)
 
 let droidFriendNames =
-  hisFriends |> Array.choose (fun f -> f.TryAsDroid()) |> Array.map (fun h -> h.DroidName)
+    hisFriends |> Array.choose (fun f -> f.TryAsDroid ()) |> Array.map (fun h -> h.DroidName)
 
 printfn "His name: %s" hisName
 

@@ -26,7 +26,7 @@ open FSharp.Data.GraphQL
 //type MyProvider = GraphQLProvider<"http://localhost:8086", "http_headers1.headerfile">
 type MyProvider = GraphQLProvider<"http://localhost:8086", "UserData: 45883115-db2f-4ccc-ae6f-21ec17d4a7a1">
 
-let operation = 
+let operation =
     MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
@@ -43,9 +43,10 @@ let operation =
           }
         }
       }
-    }""">()
+    }""">
+        ()
 
-let result = operation.Run()
+let result = operation.Run ()
 
 // If you need different user data from the introspection, you can provide here on the run method.
 //let userData = Seq.ofArray [|"UserData", "45e7ca6f-4384-4da7-ad97-963133e6f0fb"|]

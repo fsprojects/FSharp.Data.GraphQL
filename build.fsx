@@ -33,10 +33,11 @@ open Octokit
 
 #if !FAKE
 let execContext =
-    System.Environment.GetCommandLineArgs()
+    System.Environment.GetCommandLineArgs ()
     |> Array.skip 2 // skip fsi.exe; build.fsx
     |> Array.toList
     |> Fake.Core.Context.FakeExecutionContext.Create false __SOURCE_FILE__
+
 execContext
 |> Fake.Core.Context.RuntimeContext.Fake
 |> Fake.Core.Context.setExecutionContext
@@ -57,93 +58,85 @@ let projectRepo = "https://github.com/fsprojects/FSharp.Data.GraphQL.git"
 // --------------------------------------------------------------------------------------
 // Clean build results
 
-Target.create "Clean" (fun _ ->
-    Shell.cleanDirs ["bin"; "temp"]
-)
+Target.create "Clean"     <| fun _ -> Shell.cleanDirs [ "bin"; "temp" ]
 
-Target.create "CleanDocs" (fun _ ->
-    Shell.cleanDirs ["docs/output"]
-)
+Target.create "CleanDocs" <| fun _ -> Shell.cleanDirs [ "docs/output" ]
 
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-Target.create "Restore" (fun _ ->
+Target.create "Restore"   <| fun _ ->
     !! "src/**/*.??proj"
     -- "src/**/*.shproj"
-    |> Seq.iter (fun pattern -> DotNet.restore id pattern))
+    |> Seq.iter (fun pattern -> DotNet.restore id pattern)
 
 
-Target.create "Build" <| fun _ ->
+Target.create "Build"     <| fun _ ->
     "FSharp.Data.GraphQL.sln"
-    |>  DotNet.build (fun o ->
-            { o with Configuration = DotNet.BuildConfiguration.Release; MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true }})
-
-let startGraphQLServer (project: string) (streamRef: DataRef<Stream>) =
-    DotNet.build (fun options ->
-        { options with
+    |> DotNet.build (fun o ->
+        { o with
             Configuration = DotNet.BuildConfiguration.Release
-            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }}) project
+            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true } })
 
-    let projectName = Path.GetFileNameWithoutExtension(project)
-    let projectPath = Path.GetDirectoryName(project)
+let startGraphQLServer (project : string) (streamRef : DataRef<Stream>) =
+    DotNet.build
+        (fun options ->
+            { options with
+                Configuration = DotNet.BuildConfiguration.Release
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+        project
+
+    let projectName = Path.GetFileNameWithoutExtension (project)
+    let projectPath = Path.GetDirectoryName (project)
     let serverExe = projectPath </> "bin" </> "Release" </> DotNetMoniker </> (projectName + ".dll")
 
     CreateProcess.fromRawCommandLine "dotnet" serverExe
-    |> CreateProcess.withStandardInput (CreatePipe streamRef)
-    |> Proc.start
-    |> ignore
+    |> CreateProcess.withStandardInput (CreatePipe streamRef) |> Proc.start |> ignore
 
-    System.Threading.Thread.Sleep(2000)
+    System.Threading.Thread.Sleep (2000)
 
 let runTests (project : string) =
-    DotNet.build (fun options ->
-        { options with
-            Configuration = DotNet.BuildConfiguration.Release
-            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }} ) project
-    DotNet.test (fun options ->
-        { options with
-            Configuration = DotNet.BuildConfiguration.Release
-            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-            Common = { options.Common with
-                        CustomParams = Some "--no-build -v=normal" } }) project
+    DotNet.build
+        (fun options ->
+            { options with
+                Configuration = DotNet.BuildConfiguration.Release
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+        project
+
+    DotNet.test
+        (fun options ->
+            { options with
+                Configuration = DotNet.BuildConfiguration.Release
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+                Common = { options.Common with CustomParams = Some "--no-build -v=normal" } })
+        project
 
 let starWarsServerStream = StreamRef.Empty
-Target.create "StartStarWarsServer" (fun _ ->
+
+Target.create "StartStarWarsServer" <| fun _ ->
     Target.activateFinal "StopStarWarsServer"
     let project = "samples" </> "star-wars-api" </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
     startGraphQLServer project starWarsServerStream
-)
 
-Target.createFinal "StopStarWarsServer" (fun _ ->
-    try
-        starWarsServerStream.Value.Write([|0uy|],0,1)
-    with
-    | e -> printfn "%s" e.Message
-)
+Target.createFinal "StopStarWarsServer" <| fun _ ->
+    try starWarsServerStream.Value.Write ([| 0uy |], 0, 1)
+    with e -> printfn "%s" e.Message
 
 
 let integrationServerStream = StreamRef.Empty
-Target.create "StartIntegrationServer" (fun _ ->
+
+Target.create "StartIntegrationServer" <| fun _ ->
     Target.activateFinal "StopIntegrationServer"
     let project = "tests" </> "FSharp.Data.GraphQL.IntegrationTests.Server" </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj"
     startGraphQLServer project integrationServerStream
-)
 
-Target.createFinal "StopIntegrationServer" (fun _ ->
-    try
-        integrationServerStream.Value.Write([|0uy|],0,1)
-    with
-    | e -> printfn "%s" e.Message
-)
+Target.createFinal "StopIntegrationServer" <| fun _ ->
+    try integrationServerStream.Value.Write ([| 0uy |], 0, 1)
+    with e -> printfn "%s" e.Message
 
-Target.create "RunUnitTests" (fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
-)
+Target.create "RunUnitTests"        <| fun _ -> runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
 
-Target.create "RunIntegrationTests" (fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
-)
+Target.create "RunIntegrationTests" <| fun _ -> runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -156,70 +149,51 @@ let prepareDocGen () =
 
     Shell.cleanDir ".fsdocs"
 
-Target.create "GenerateDocs" (fun _ ->
+Target.create "GenerateDocs"      <| fun _ ->
     prepareDocGen ()
     DotNet.exec id "fsdocs" "build --clean" |> ignore
-)
 
-Target.create "GenerateDocsWatch" (fun _ ->
+Target.create "GenerateDocsWatch" <| fun _ ->
     prepareDocGen ()
     DotNet.exec id "fsdocs" "watch --clean" |> ignore
-    System.Console.ReadKey() |> ignore
-)
+    System.Console.ReadKey () |> ignore
 
-Target.create "ReleaseDocs" (fun _ ->
+Target.create "ReleaseDocs"       <| fun _ ->
     Git.Repository.clone "" projectRepo "temp/gh-pages"
     Git.Branches.checkoutBranch "temp/gh-pages" "gh-pages"
-    Shell.copyRecursive "output" "temp/gh-pages" true |> printfn "%A"
+    Shell.copyRecursive "output" "temp/gh-pages" true             |> printfn "%A"
     Git.CommandHelper.runSimpleGitCommand "temp/gh-pages" "add ." |> printfn "%s"
+
     let cmd = sprintf """commit -a -m "Update generated documentation for version %s""" release.NugetVersion
-    Git.CommandHelper.runSimpleGitCommand "temp/gh-pages" cmd |> printfn "%s"
+    Git.CommandHelper.runSimpleGitCommand "temp/gh-pages" cmd     |> printfn "%s"
     Git.Branches.push "temp/gh-pages"
-)
 
 let pack id =
     Shell.cleanDir <| sprintf "nuget/%s.%s" project id
-    id
-    |> NuGet.NuGetPack(fun p ->
+    id |> NuGet.NuGetPack (fun p ->
         { p with
             Version = release.NugetVersion
             OutputPath = sprintf "nuget/%s.%s" project id
-            //IncludeReferencedProjects = false
-            })
+        //IncludeReferencedProjects = false
+         })
 
 let publishPackage id =
     pack id
-    NuGet.NuGetPublish(fun p ->
-        { p with
-            WorkingDir = sprintf "nuget/%s.%s" project id })
+    NuGet.NuGetPublish <| fun p -> { p with WorkingDir = sprintf "nuget/%s.%s" project id }
 
-Target.create "PublishServer" (fun _ ->
-    publishPackage "Server"
-)
+Target.create "PublishServer"     <| fun _ -> publishPackage "Server"
 
-Target.create "PublishClient" (fun _ ->
-    publishPackage "Client"
-)
+Target.create "PublishClient"     <| fun _ -> publishPackage "Client"
 
-Target.create "PublishMiddleware" (fun _ ->
-    publishPackage "Server.Middleware"
-)
+Target.create "PublishMiddleware" <| fun _ -> publishPackage "Server.Middleware"
 
-Target.create "PackShared" (fun _ ->
-    pack "Shared"
-)
+Target.create "PackShared"        <| fun _ -> pack "Shared"
 
-Target.create "PackServer" (fun _ ->
-    pack "Server"
-)
+Target.create "PackServer"        <| fun _ -> pack "Server"
 
-Target.create "PackClient" (fun _ ->
-    pack "Client"
-)
+Target.create "PackClient"        <| fun _ -> pack "Client"
 
-Target.create "PackMiddleware" (fun _ ->
-    pack "Server.Middleware"
-)
+Target.create "PackMiddleware"    <| fun _ -> pack "Server.Middleware"
 
 
 // --------------------------------------------------------------------------------------
@@ -229,26 +203,25 @@ Target.create "All" ignore
 Target.create "PackAll" ignore
 
 "Clean"
-  ==> "Restore"
-  ==> "Build"
-  ==> "RunUnitTests"
-  ==> "StartStarWarsServer"
-  ==> "StartIntegrationServer"
-  ==> "RunIntegrationTests"
-  ==> "All"
-  =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
+    ==> "Restore"
+    ==> "Build"
+    ==> "RunUnitTests"
+    ==> "StartStarWarsServer"
+    ==> "StartIntegrationServer"
+    ==> "RunIntegrationTests"
+    ==> "All"
+    =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
 
-"CleanDocs"
-  ==> "GenerateDocs"
+"CleanDocs" ==> "GenerateDocs"
 
 "PackShared"
-  ==> "PackServer"
-  ==> "PackClient"
-  ==> "PackMiddleware"
-  ==> "PackAll"
+    ==> "PackServer"
+    ==> "PackClient"
+    ==> "PackMiddleware"
+    ==> "PackAll"
 
 Target.runOrDefaultWithArguments "All"
 
 #if !FAKE
-execContext.Context.Clear()
+execContext.Context.Clear ()
 #endif

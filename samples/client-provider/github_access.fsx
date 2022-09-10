@@ -23,14 +23,14 @@ open FSharp.Data.GraphQL
 // The classical way via POST is done.
 type MyProvider = GraphQLProvider<"github_schema.json">
 
-let operation = MyProvider.Operation<"""query q { viewer { login } }""">()
+let operation = MyProvider.Operation<"""query q { viewer { login } }"""> ()
 
 let headers = HttpHeaders.ofFile "github_authorization_headers.headerfile"
 
 let run () =
     // Dispose runtime context after using it.
-    use runtimeContext = MyProvider.GetContext(serverUrl = "https://api.github.com/graphql", httpHeaders = headers)
-    let result = operation.Run(runtimeContext)
+    use runtimeContext = MyProvider.GetContext (serverUrl = "https://api.github.com/graphql", httpHeaders = headers)
+    let result = operation.Run (runtimeContext)
     printfn "Data: %A\n" result.Data
 
 run ()
