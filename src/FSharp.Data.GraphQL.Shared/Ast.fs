@@ -19,6 +19,7 @@ type OperationType =
     | Mutation
     | Subscription
 
+
 /// 2.9 Input Values
 type Value =
     /// 2.9.1 Int Value
@@ -43,11 +44,7 @@ type Value =
 /// 2.6 Arguments
 /// Fields are conceptually functions which return values, and occasionally accept arguments which alter their behavior. These arguments often map directly to function arguments within a GraphQL server’s implementation.
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Arguments
-type Argument =
-    {
-        Name: string
-        Value: Value
-    }
+type Argument = { Name: string; Value: Value }
 
 /// 2.2.10 Directives
 type Directive =
@@ -108,10 +105,12 @@ type InputType =
     | ListType of InputType
     | NonNullType of InputType
     override x.ToString() =
-        let rec str = function
+        let rec str =
+            function
             | NamedType name -> name
             | ListType inner -> "[" + (str inner) + "]"
             | NonNullType inner -> (str inner) + "!"
+
         str x
 
 
@@ -148,13 +147,13 @@ type InputDefinition = string
 type InputFieldDefinition =
     {
         /// Name of the input field / argument.
-        Name : string
+        Name: string
         /// Optional input field / argument description.
-        Description : string option
+        Description: string option
         /// GraphQL type definition of the input type.
-        TypeDef : InputDefinition
+        TypeDef: InputDefinition
         /// Optional default input value - used when no input was provided.
-        DefaultValue : Value option
+        DefaultValue: Value option
     }
 
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Operations
@@ -292,7 +291,7 @@ type EnumTypeDefinition =
         Description: string option
         Name: string
         Directives: Directive list
-        Values: EnumValueDefinition[]
+        Values: EnumValueDefinition []
     }
 
 /// Enum type extensions are used to represent an enum type which has been extended from some original enum type. For example, this might be used to represent additional local data, or by a GraphQL service which is itself an extension of another GraphQL service.
@@ -301,7 +300,7 @@ type EnumTypeExtension =
     {
         Name: string
         Directives: Directive list
-        Values: EnumValueDefinition[]
+        Values: EnumValueDefinition []
     }
 
 
@@ -364,15 +363,16 @@ type DirectiveLocation =
 type DirectiveDefinition =
     {
         /// Directive's name - it's NOT '@' prefixed.
-        Name : string
+        Name: string
         /// Optional directive description.
-        Description : string option
+        Description: string option
         /// Directive location - describes, which part's of the query AST
         /// are valid places to include current directive to.
-        Locations : DirectiveLocation
+        Locations: DirectiveLocation
         /// Array of arguments defined within that directive.
-        Args : InputFieldDefinition []
+        Args: InputFieldDefinition []
     }
+
 
 type TypeSystemDefinition =
     | SchemaDefinition of SchemaDefinition
@@ -440,7 +440,4 @@ type Definition =
 /// GraphQL services which only seek to provide GraphQL query execution may choose to only include ExecutableDefinition and omit the TypeSystemDefinition and TypeSystemExtension rules from Definition.
 ///
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Document
-type Document =
-    {
-        Definitions: Definition list
-    }
+type Document = { Definitions: Definition list }

@@ -3,8 +3,6 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.3.32811.315
 MinimumVisualStudioVersion = 10.0.40219.1
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}"
-EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{474179D3-0090-49E9-88F8-2971C0966077}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{BF60BC93-E09B-4E5F-9D85-95A519479D54}"
@@ -12,20 +10,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{BF60
 		build.fsx = build.fsx
 		README.md = README.md
 		RELEASE_NOTES.md = RELEASE_NOTES.md
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{83F16175-43B1-4C90-A1EE-8E351C33435D}"
-	ProjectSection(SolutionItems) = preProject
-		docs\tools\generate.fsx = docs\tools\generate.fsx
-		docs\tools\templates\template.cshtml = docs\tools\templates\template.cshtml
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{8E6D5255-776D-4B61-85F9-73C37AA1FB9A}"
-	ProjectSection(SolutionItems) = preProject
-		docs\content\execution-pipeline.md = docs\content\execution-pipeline.md
-		docs\content\index.md = docs\content\index.md
-		docs\content\linq.md = docs\content\linq.md
-		docs\content\type-system.md = docs\content\type-system.md
 	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{ED8079DD-2B06-4030-9F0F-DC548F98E1C4}"
@@ -90,17 +74,6 @@ EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middleware", "src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Benchmarks", "tests\FSharp.Data.GraphQL.Benchmarks\FSharp.Data.GraphQL.Benchmarks.fsproj", "{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{56640EAF-82A6-4439-AD14-69F44A90DA99}"
-	ProjectSection(SolutionItems) = preProject
-		docs\files\introspection_query.graphql = docs\files\introspection_query.graphql
-	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "img", "img", "{78D10788-601D-4D53-808B-36661911EDD1}"
-	ProjectSection(SolutionItems) = preProject
-		docs\files\img\logo-template.pdn = docs\files\img\logo-template.pdn
-		docs\files\img\logo.png = docs\files\img\logo.png
-	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client.DesignTime", "src\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj", "{B075CD55-CEA4-4C30-A088-48319AADF070}"
 EndProject
@@ -260,8 +233,6 @@ Global
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{474179D3-0090-49E9-88F8-2971C0966077} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
-		{83F16175-43B1-4C90-A1EE-8E351C33435D} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
-		{8E6D5255-776D-4B61-85F9-73C37AA1FB9A} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
 		{54AAFE43-FA5F-485A-AD40-0240165FC633} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
 		{CAE5916B-1415-4982-B705-7318D77C029C} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
 		{9B25360F-2CE4-43D2-AFF0-5EAA693E98F7} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
@@ -271,8 +242,6 @@ Global
 		{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{A6A162DF-9FBB-4C2A-913F-FD5FED35A09B} = {ED8079DD-2B06-4030-9F0F-DC548F98E1C4}
-		{56640EAF-82A6-4439-AD14-69F44A90DA99} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
-		{78D10788-601D-4D53-808B-36661911EDD1} = {56640EAF-82A6-4439-AD14-69F44A90DA99}
 		{B075CD55-CEA4-4C30-A088-48319AADF070} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{F7858DA7-E067-486B-9E9C-697F0A56C620} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 		{F66BEE6C-0CB7-4F39-97E4-243F797E8723} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}

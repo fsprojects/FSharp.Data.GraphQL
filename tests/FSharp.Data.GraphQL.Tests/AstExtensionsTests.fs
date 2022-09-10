@@ -8,20 +8,21 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
 
 /// Converts line breaks to a single standard to avoid different SO line break termination issues.
-let normalize (str : string) = str.Replace("\r\n", "\n")
+let normalize (str: string) = str.Replace("\r\n", "\n")
 
 /// Generates an Ast.Document from a query string, prints it to another
 /// query string and expects it to be equal. Input query must be formatted (with line breaks and identation).
-/// Identation unit is two empty spaces.
-let private printAndAssert (query : string) =
+/// Indentation unit is two empty spaces.
+let private printAndAssert (query: string) =
     let document = parse query
     let expected = normalize query
-    let actual = normalize <| document.ToQueryString()
+    let actual = normalize (document.ToQueryString())
     actual |> equals expected
 
 [<Fact>]
 let ``Should be able to print a simple query`` () =
-    printAndAssert """query q {
+    printAndAssert
+        """query q {
   hero {
     name
   }
@@ -29,7 +30,8 @@ let ``Should be able to print a simple query`` () =
 
 [<Fact>]
 let ``Should be able to print a simple query with 2 fields`` () =
-    printAndAssert """query q {
+    printAndAssert
+        """query q {
   hero {
     id
     name
@@ -38,7 +40,8 @@ let ``Should be able to print a simple query with 2 fields`` () =
 
 [<Fact>]
 let ``Should be able to print a query with variables`` () =
-    printAndAssert """query q($id: String!) {
+    printAndAssert
+        """query q($id: String!) {
   hero(id: $id) {
     id
     name
@@ -47,25 +50,29 @@ let ``Should be able to print a query with variables`` () =
 
 [<Fact>]
 let ``Should be able to parse a query with an object input in the internal method`` () =
-    printAndAssert """mutation q($id: String!, $name: String!) {
+    printAndAssert
+        """mutation q($id: String!, $name: String!) {
   addHero(input: { id: $id, label: $name })
 }"""
 
 [<Fact>]
 let ``Should be able to parse a query with an object having array properties input in the internal method`` () =
-    printAndAssert """mutation q($id: String!, $name: String!, $friend1: String!) {
+    printAndAssert
+        """mutation q($id: String!, $name: String!, $friend1: String!) {
   addHero(input: { friends: [ $friend1 ], id: $id, label: $name })
 }"""
 
 [<Fact>]
 let ``Should be able to parse a query with an object having multi-element array input in the internal method`` () =
-    printAndAssert """mutation q($id: String!, $name: String!) {
+    printAndAssert
+        """mutation q($id: String!, $name: String!) {
   addHero(input: { friends: [ 7, 5, -3 ], id: $id, label: $name })
 }"""
 
 [<Fact>]
 let ``Should be able print ObjectValue names properly`` () =
-    printAndAssert """query GetCampaigns {
+    printAndAssert
+        """query GetCampaigns {
   campaigns(params: { limit: 100, offset: 0 }) {
     campaigns {
       code
@@ -75,7 +82,8 @@ let ``Should be able print ObjectValue names properly`` () =
 
 [<Fact>]
 let ``Should be able to print a query with aliases`` () =
-    printAndAssert """query q($myId: String!, $hisId: String!) {
+    printAndAssert
+        """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
     id
     name
@@ -91,7 +99,8 @@ let ``Should be able to print a query with aliases`` () =
 
 [<Fact>]
 let ``Should be able to print a query with fragment spreads`` () =
-    printAndAssert """query q($myId: String!, $hisId: String!) {
+    printAndAssert
+        """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
     id
     name
@@ -121,14 +130,16 @@ fragment friend on Character {
 
 [<Fact>]
 let ``Should be able to print a short hand format query`` () =
-    printAndAssert """{
+    printAndAssert
+        """{
   field1
   field2
 }"""
 
 [<Fact>]
 let ``Should not print query without name in short hand format`` () =
-    printAndAssert """query ($rId: Int) {
+    printAndAssert
+        """query ($rId: Int) {
   answer(id: $rId) {
     id
     answer
@@ -137,7 +148,8 @@ let ``Should not print query without name in short hand format`` () =
 
 [<Fact>]
 let ``Should be able to print a query with inline fragments`` () =
-    printAndAssert """query q($myId: String!, $hisId: String!) {
+    printAndAssert
+        """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
     id
     name
@@ -175,7 +187,8 @@ fragment friend on Character {
 
 [<Fact>]
 let ``Should be able to print arguments inside fragment spreads and default variable values`` () =
-    printAndAssert """query HeroComparison($first: Int = 3) {
+    printAndAssert
+        """query HeroComparison($first: Int = 3) {
   leftComparison: hero(episode: EMPIRE) {
     ...comparisonFields
   }
@@ -198,7 +211,8 @@ fragment comparisonFields on Character {
 
 [<Fact>]
 let ``Should be able to print directives`` () =
-    printAndAssert """query Hero($episode: Episode, $withFriends: Boolean!) {
+    printAndAssert
+        """query Hero($episode: Episode, $withFriends: Boolean!) {
   hero(episode: $episode) {
     name
     friends @include(if: $withFriends) {
@@ -209,7 +223,8 @@ let ``Should be able to print directives`` () =
 
 [<Fact>]
 let ``Should be able to print multiple directives and arguments`` () =
-    printAndAssert """query q($skip: Boolean!) {
+    printAndAssert
+        """query q($skip: Boolean!) {
   hero(id: "1000") {
     name
     friends(first: 1, name_starts_with: "D") @defer @skip(if: $skip) {
@@ -227,7 +242,8 @@ let ``Should be able to print multiple directives and arguments`` () =
 
 [<Fact>]
 let ``Should be able to print a mutation`` () =
-    printAndAssert """mutation CreateReviewForEpisode($ep: Episode!, $review: ReviewInput!) {
+    printAndAssert
+        """mutation CreateReviewForEpisode($ep: Episode!, $review: ReviewInput!) {
   createReview(episode: $ep, review: $review) {
     stars
     commentary
@@ -236,7 +252,8 @@ let ``Should be able to print a mutation`` () =
 
 [<Fact>]
 let ``Should be able to print a subscription`` () =
-    printAndAssert """subscription onCommentAdded($repoFullName: String!) {
+    printAndAssert
+        """subscription onCommentAdded($repoFullName: String!) {
   commentAdded(repoFullName: $repoFullName) {
     id
     content
@@ -245,7 +262,9 @@ let ``Should be able to print a subscription`` () =
 
 [<Fact>]
 let ``Should be able to print type name meta field`` () =
-    let expected = normalize """query q {
+    let expected =
+        normalize
+            """query q {
   hero(id: "1000") {
     name
     friends {
@@ -265,7 +284,9 @@ let ``Should be able to print type name meta field`` () =
   }
   __typename
 }"""
-    let query = """query q {
+
+    let query =
+        """query q {
   hero(id: "1000") {
     name
     friends {
@@ -281,13 +302,17 @@ let ``Should be able to print type name meta field`` () =
   }
 }
 """
+
     let document = parse query
+
     let actual = normalize <| document.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
+
     actual |> equals expected
 
 [<Fact>]
 let ``Should generate information map correctly`` () =
-    let query = """query q {
+    let query =
+        """query q {
   hero(id: "1000") {
     name
     friends {
@@ -303,32 +328,66 @@ let ``Should generate information map correctly`` () =
   }
 }
 """
+
     let document = parse query
+
     let actual = document.GetInfoMap() |> Map.toList
-    let expected = [(Some "q", [TypeField
-     {Name = "hero";
-      Alias = None;
-      Fields =
-       [TypeField
-          {Name = "friends";
-           Alias = None;
-           Fields =
-            [FragmentField {Name = "primaryFunction";
-                            Alias = None;
-                            TypeCondition = "Droid";
-                            Fields = [];};
-             FragmentField {Name = "id";
-                            Alias = None;
-                            TypeCondition = "Droid";
-                            Fields = [];};
-             FragmentField {Name = "homePlanet";
-                            Alias = None;
-                            TypeCondition = "Human";
-                            Fields = [];};
-             FragmentField {Name = "id";
-                            Alias = None;
-                            TypeCondition = "Human";
-                            Fields = [];}];}; TypeField {Name = "name";
-                                                         Alias = None;
-                                                         Fields = [];}];}])]
+
+    let expected =
+        [
+            (Some "q",
+             [
+                 TypeField
+                     {
+                         Name = "hero"
+                         Alias = None
+                         Fields =
+                             [
+                                 TypeField
+                                     {
+                                         Name = "friends"
+                                         Alias = None
+                                         Fields =
+                                             [
+                                                 FragmentField
+                                                     {
+                                                         Name = "primaryFunction"
+                                                         Alias = None
+                                                         TypeCondition = "Droid"
+                                                         Fields = []
+                                                     }
+                                                 FragmentField
+                                                     {
+                                                         Name = "id"
+                                                         Alias = None
+                                                         TypeCondition = "Droid"
+                                                         Fields = []
+                                                     }
+                                                 FragmentField
+                                                     {
+                                                         Name = "homePlanet"
+                                                         Alias = None
+                                                         TypeCondition = "Human"
+                                                         Fields = []
+                                                     }
+                                                 FragmentField
+                                                     {
+                                                         Name = "id"
+                                                         Alias = None
+                                                         TypeCondition = "Human"
+                                                         Fields = []
+                                                     }
+                                             ]
+                                     }
+                                 TypeField
+                                     {
+                                         Name = "name"
+                                         Alias = None
+                                         Fields = []
+                                     }
+                             ]
+                     }
+             ])
+        ]
+
     actual |> equals expected
