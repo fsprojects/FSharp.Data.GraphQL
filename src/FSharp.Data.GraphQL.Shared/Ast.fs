@@ -31,22 +31,36 @@ type OperationType =
 /// https://spec.graphql.org/October2021/#sec-Input-Values
 type InputValue =
     /// 2.9.1 Int Value
+    /// https://spec.graphql.org/October2021/#sec-Int-Value
     | IntValue of int64
     /// 2.9.2 Float Value
+    /// https://spec.graphql.org/October2021/#sec-Float-Value
     | FloatValue of double
     /// 2.9.3 Boolean Value
+    /// https://spec.graphql.org/October2021/#sec-Boolean-Value
     | BooleanValue of bool
     /// 2.9.4 String Value
+    /// https://spec.graphql.org/October2021/#sec-String-Value
     | StringValue of string
     /// 2.9.5 Null Value
+    /// https://spec.graphql.org/October2021/#sec-Null-Value
     | NullValue
     /// 2.9.6 Enum Value
+    /// not "true", "false" or "null"
+    /// https://spec.graphql.org/October2021/#sec-Enum-Value
     | EnumValue of string
     /// 2.9.7 List Value
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#sec-List-Value
     | ListValue of InputValue list
     /// 2.9.8 Input Object Values
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#sec-Input-Object-Values
+    /// Contains ObjectField: https://spec.graphql.org/October2021/#ObjectField
     | ObjectValue of Map<string, InputValue>
     /// 2.10 Variables
+    /// if not Const
+    /// https://spec.graphql.org/October2021/#Variable
     | VariableName of string
 
 /// 2.6 Arguments
@@ -256,17 +270,31 @@ and Field =
         | None -> x.Name
 
 
-/// 2.2.9 Input Types
-type InputType =
+/// 2.11 Type References
+/// Renamed from "Type" as this is frequently used in .Net.
+/// https://spec.graphql.org/October2021/#sec-Type-References
+/// https://spec.graphql.org/October2021/#Type
+type TypeReference =
+    /// https://spec.graphql.org/October2021/#NamedType
     | NamedType of string
-    | ListType of InputType
-    | NonNullType of InputType
+    /// https://spec.graphql.org/October2021/#ListType
+    | ListType of TypeReference list
+    /// https://spec.graphql.org/October2021/#NamedType
+    /// https://spec.graphql.org/October2021/#NonNullType
+    | NonNullNameType of string
+    /// https://spec.graphql.org/October2021/#ListType
+    /// https://spec.graphql.org/October2021/#NonNullType
+    | NonNullListType of TypeReference list
     override x.ToString() =
         let rec str =
             function
             | NamedType name -> name
-            | ListType inner -> "[" + (str inner) + "]"
-            | NonNullType inner -> (str inner) + "!"
+            | ListType inner ->
+                String.Concat [ "["
+                                String.concat ", " (List.map str inner)
+                                "]" ]
+            | NonNullNameType inner -> $"{inner}!"
+            | NonNullListType inner -> $"{str (ListType inner)}!"
 
         str x
 
@@ -287,11 +315,17 @@ type InputType =
 /// Uses Defined). (from https://spec.graphql.org/October2021/#sec-Language.Variables.Variable-use-within-Fragments)
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Variables
+/// https://spec.graphql.org/October2021/#VariableDefinition
 type VariableDefinition =
     {
+        /// https://spec.graphql.org/October2021/#Variable
         VariableName : string
-        Type : InputType
+        /// https://spec.graphql.org/October2021/#Type
+        Type : TypeReference
+        /// https://spec.graphql.org/October2021/#DefaultValue
         DefaultValue : InputValue option
+        /// May be empty.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives : Directive list
     }
 
@@ -424,19 +458,45 @@ type SchemaDefinition =
         RootOperationTypes : RootOperationTypeDefinition
     }
 
-type InputValueDefinition = {
-    Description: string option
-    Name: string
-    Type: InputType
-    DefaultValue: InputValue option
-}
+/// 3.6.1 Field Arguments
+///
+/// Object fields are conceptually functions which yield values. Occasionally object fields can accept arguments to further
+/// specify the return value. Object field arguments are defined as a list of all possible argument names and their expected input
+/// types.
+///
+/// All arguments defined within a field must not have a name which begins with "__" (two underscores), as this is used
+/// exclusively by GraphQL’s introspection system.
+///
+/// https://spec.graphql.org/October2021/#InputValueDefinition
+type InputValueDefinition =
+    {
+        Description : string option
 
-/// https://graphql.github.io/graphql-spec/June2018/#FieldDefinition
+        Name : string
+
+        /// https://spec.graphql.org/October2021/#Type
+        Type : TypeReference
+
+        /// https://spec.graphql.org/October2021/#DefaultValue
+        DefaultValue : InputValue option
+
+        /// May be empty
+        /// https://spec.graphql.org/October2021/#Directives
+        Directives : Directive list
+    }
+
+/// https://spec.graphql.org/October2021/#FieldDefinition
 type FieldDefinition = {
+    /// https://spec.graphql.org/October2021/#Description
     Description : string option
     Name : string
-    Arguments : InputValueDefinition []
-    Type : InputType
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#ArgumentsDefinition
+    Arguments : InputValueDefinition list
+    /// https://spec.graphql.org/October2021/#Type
+    Type : TypeReference
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#Directives
     Directives : Directive list
 }
 
@@ -499,78 +559,182 @@ type ScalarTypeExtension =
         Directives : Directive list
     }
 
-/// GraphQL queries are hierarchical and composed, describing a tree of information. While Scalar types describe the leaf values of these hierarchical queries, Objects describe the intermediate levels.
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Objects
+/// 3.6 Objects
+///
+/// GraphQL operations are hierarchical and composed, describing a tree of information. While Scalar types describe the leaf
+/// values of these hierarchical operations, Objects describe the intermediate levels.
+///
+/// GraphQL Objects represent a list of named fields, each of which yield a value of a specific type. Object values should be
+/// serialized as ordered maps, where the selected field names (or aliases) are the keys and the result of evaluating the field
+/// is the value, ordered by the order in which they appear in the selection set.
+///
+/// All fields defined within an Object type must not have a name which begins with "__" (two underscores), as this is used
+/// exclusively by GraphQL’s introspection system.
+///
+/// https://spec.graphql.org/October2021/#sec-Objects
 type ObjectTypeDefinition = {
-    Description: string option
-    Name: string
+    Description : string option
+    // "type"
+    Name : string
+    // "implements .. & .. & .."
     /// May be empty
-    Interfaces: string []
-    /// May be empty
-    Directives: Directive list
-    Fields: FieldDefinition []
+    /// https://spec.graphql.org/October2021/#ImplementsInterfaces
+    ImplementsInterfaces : string list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    // "{" fields "}"
+    Fields : FieldDefinition list
 }
 
-/// Object type extensions are used to represent a type which has been extended from some original type. For example, this might be used to represent local data, or by a GraphQL service which is itself an extension of another GraphQL service.
+/// 3.6.3 Object Extensions
 ///
-/// Either:
-/// - `Fields` is non-empty, and all others may be, xor
-/// - `Directives` is non-empty, and all others may be, xor
-/// - `Interfaces` is non-empty, and all others may be.
+/// Object type extensions are used to represent a type which has been extended from some original type. For example, this might
+/// be used to represent local data, or by a GraphQL service which is itself an extension of another GraphQL service.
 ///
-/// https://graphql.github.io/graphql-spec/June2018/#ObjectTypeExtension
+/// Object type extensions may choose not to add additional fields, instead only adding interfaces or directives.
+///
+/// https://spec.graphql.org/October2021/#sec-Object-Extensions
+/// https://spec.graphql.org/October2021/#ObjectTypeExtension
 type ObjectTypeExtension = {
-    /// May be empty
-    Interfaces: string []
-    /// May be empty
-    Directives: Directive list
-    /// May be empty
-    Fields: FieldDefinition []
+    /// May be empty.
+    Interfaces : string list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    /// May be empty.
+    Fields : FieldDefinition list
 }
 
-/// GraphQL interfaces represent a list of named fields and their arguments. GraphQL objects can then implement these interfaces which requires that the object type will define all fields defined by those interfaces.
-/// https://graphql.github.io/graphql-spec/June2018/#InterfaceTypeDefinition
+/// 3.7 Interfaces
+///
+/// GraphQL interfaces represent a list of named fields and their arguments. GraphQL objects and interfaces can then implement
+/// these interfaces which requires that the implementing type will define all fields defined by those interfaces.
+///
+/// Fields on a GraphQL interface have the same rules as fields on a GraphQL object; their type can be Scalar, Object, Enum,
+/// Interface, or Union, or any wrapping type whose base type is one of those five.
+///
+/// For example, an interface NamedEntity may describe a required field and types such as Person or Business may then implement
+/// this interface to guarantee this field will always exist.
+///
+/// Types may also implement multiple interfaces. For example, Business implements both the NamedEntity and ValuedEntity
+/// interfaces in the example below.
+///
+/// https://spec.graphql.org/October2021/#sec-Interfaces
 type InterfaceTypeDefinition = {
-    Description: string option
-    Name: string
-    Directives: Directive list
-    Fields: FieldDefinition []
+    Description : string option
+    Name : string
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    /// May not be empty.
+    Fields : FieldDefinition list
 }
 
+/// 3.7.1 Interface Extensions
+///
+/// Interface type extensions are used to represent an interface which has been extended from some original interface. For
+/// example, this might be used to represent common local data on many types, or by a GraphQL service which is itself an
+/// extension of another GraphQL service.
+///
+/// Interface type extensions may choose not to add additional fields, instead only adding directives.
+///
+/// https://spec.graphql.org/October2021/#sec-Interface-Extensions
 type InterfaceTypeExtension = {
-    Name: string
-    Directives: Directive list
-    Fields: FieldDefinition []
+    Name : string
+
+    /// May be empty if fields is non-empty.
+    ///
+    /// May not be empty if fields is empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+
+    /// May not empty if directives is empty.
+    ///
+    /// May be empty if directives is not empty.
+    Fields : FieldDefinition list
 }
 
+/// https://spec.graphql.org/October2021/#UnionMemberTypes
 type UnionMemberType = string
 
-/// GraphQL Unions represent an object that could be one of a list of GraphQL Object types, but provides for no guaranteed fields between those types. They also differ from interfaces in that Object types declare what interfaces they implement, but are not aware of what unions contain them.
-/// https://graphql.github.io/graphql-spec/June2018/#UnionTypeDefinition
+/// 3.8 Unions
+///
+/// GraphQL Unions represent an object that could be one of a list of GraphQL Object types, but provides for no guaranteed
+/// fields between those types. They also differ from interfaces in that Object types declare what interfaces they implement,
+/// but are not aware of what unions contain them.
+///
+/// With interfaces and objects, only those fields defined on the type can be queried directly; to query other fields on an
+/// interface, typed fragments must be used. This is the same as for unions, but unions do not define any fields, so no fields
+/// may be queried on this type without the use of type refining fragments or inline fragments (with the exception of the meta-
+/// field __typename).
+///
+/// https://spec.graphql.org/October2021/#sec-Unions
 type UnionTypeDefinition = {
-    Description: string option
-    Name: string
-    Directives: Directive list
-    Types: UnionMemberType []
+    /// Optional description
+    Description : string option
+
+    /// The name of the union
+    Name : string
+
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+
+    /// May be empty. (!)
+    /// https://spec.graphql.org/October2021/#UnionMemberTypes
+    Types : UnionMemberType list
 }
 
+/// 3.8.1 Union Extensions
+///
+/// Union type extensions are used to represent a union type which has been extended from some original union type. For example,
+/// this might be used to represent additional local data, or by a GraphQL service which is itself an extension of another
+/// GraphQL service.
+///
+/// https://spec.graphql.org/October2021/#sec-Unions
 type UnionTypeExtension = {
-    Name: string
-    Directives: Directive list
-    Types: UnionMemberType []
+    Name : string
+
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+
+    /// May not be empty.
+    /// https://spec.graphql.org/October2021/#UnionMemberTypes
+    Types : UnionMemberType list
 }
 
-/// Enums are not references for a numeric value, but are unique values in their own right. They may serialize as a string: the name of the represented value.
-/// Most often a name like "BLUE" or "RED".
-/// https://graphql.github.io/graphql-spec/June2018/#EnumValueDefinition
+/// 3.9 Enums
+///
+/// GraphQL Enum types, like Scalar types, also represent leaf values in a GraphQL type system. However Enum types describe the
+/// set of possible values.
+///
+/// Enums are not references for a numeric value, but are unique values in their own right. They may serialize as a string: the
+/// name of the represented value.
+///
+/// https://spec.graphql.org/October2021/#sec-Enums
+/// https://spec.graphql.org/October2021/#EnumValueDefinition
 type EnumValueDefinition = {
-    Description: string option
-    Name: string
-    Directives: Directive list
+    Description : string option
+
+    Name : string
+
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 }
 
-/// GraphQL Enum types, like scalar types, also represent leaf values in a GraphQL type system. However Enum types describe the set of possible values.
-/// https://graphql.github.io/graphql-spec/June2018/#EnumTypeDefinition
+/// 3.9 Enums
+///
+/// GraphQL Enum types, like Scalar types, also represent leaf values in a GraphQL type system. However Enum types describe the
+/// set of possible values.
+///
+/// Enums are not references for a numeric value, but are unique values in their own right. They may serialize as a string: the
+/// name of the represented value.
+///
+/// https://spec.graphql.org/October2021/#sec-Enums
+/// https://spec.graphql.org/October2021/#EnumTypeDefinition
 type EnumTypeDefinition =
     {
         Description : string option
@@ -579,31 +743,82 @@ type EnumTypeDefinition =
         Values : EnumValueDefinition []
     }
 
-/// Enum type extensions are used to represent an enum type which has been extended from some original enum type. For example, this might be used to represent additional local data, or by a GraphQL service which is itself an extension of another GraphQL service.
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Enum-Extensions
+/// 3.9.1 Enum Extensions
+///
+/// Enum type extensions are used to represent an enum type which has been extended from some original enum type. For example,
+/// this might be used to represent additional local data, or by a GraphQL service which is itself an extension of another
+/// GraphQL service.
+///
+/// https://spec.graphql.org/October2021/#sec-Enum-Extensions
 type EnumTypeExtension =
     {
         Name : string
+
+        /// May be empty if fields is non-empty.
+        ///
+        /// May not be empty if fields is empty.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives : Directive list
-        Values : EnumValueDefinition []
+
+        /// May not empty if directives is empty.
+        ///
+        /// May be empty if directives is not empty.
+        Values : EnumValueDefinition list
     }
 
 
-/// Fields may accept arguments to configure their behavior. These inputs are often scalars or enums, but they sometimes need to represent more complex values.
-/// https://graphql.github.io/graphql-spec/June2018/#InputObjectTypeDefinition
+/// 3.10 Input Objects
+///
+/// Fields may accept arguments to configure their behavior. These inputs are often scalars or enums, but they sometimes need to
+/// represent more complex values.
+///
+/// A GraphQL Input Object defines a set of input fields; the input fields are either scalars, enums, or other input objects.
+/// This allows arguments to accept arbitrarily complex structs.
+///
+/// Circular References:
+///
+/// Input Objects are allowed to reference other Input Objects as field types. A circular reference occurs when an Input Object
+/// references itself either directly or through referenced Input Objects.
+///
+/// Circular references are generally allowed, however they may not be defined as an unbroken chain of Non-Null singular fields.
+/// Such Input Objects are invalid because there is no way to provide a legal value for them.
+///
+/// Note: there's a long section on how input values are coerced in the spec.
+///
+/// https://spec.graphql.org/October2021/#sec-Input-Objects
 type InputObjectTypeDefinition = {
-    Description: string option
-    Name: string
-    Directives: Directive list
-    Fields: InputValueDefinition []
+    Description : string option
+
+    // "input"
+
+    Name : string
+
+    /// May be empty if fields is non-empty.
+    ///
+    /// May not be empty if fields is empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+
+    /// "{" Fields "}"
+    ///
+    /// May not empty if directives is empty.
+    ///
+    /// May be empty if directives is not empty.
+    ///
+    /// https://spec.graphql.org/October2021/#InputFieldsDefinition
+    Fields : InputValueDefinition list
 }
 
-/// 3.10.1 https://graphql.github.io/graphql-spec/June2018/#sec-Input-Object-Extensions
-/// Input object type extensions are used to represent an input object type which has been extended from some original input object type. For example, this might be used by a GraphQL service which is itself an extension of another GraphQL service.
+/// 3.10.1 Input Object Extensions
+///
+/// Input object type extensions are used to represent an input object type which has been extended from some original input
+/// object type. For example, this might be used by a GraphQL service which is itself an extension of another GraphQL service.
+///
+/// https://spec.graphql.org/October2021/#sec-Input-Object-Extensions
 type InputObjectTypeExtension = {
-    Name: string
-    Directives: Directive list
-    Fields: InputValueDefinition []
+    Name : string
+    Directives : Directive list
+    Fields : InputValueDefinition []
 }
 
 type TypeDefinition =
@@ -615,10 +830,18 @@ type TypeDefinition =
     | EnumTypeDefinition of EnumTypeDefinition
     | InputObjectTypeDefinition of InputObjectTypeDefinition
 
-/// Enum describing parts of the GraphQL query document AST, where
-/// related directive is valid to be used.
+    member x.Directives =
+        match x with
+        | ScalarTypeDefinition std -> std.Directives
+        | ObjectTypeDefinition otd -> otd.Directives
+        | InterfaceTypeDefinition itd -> itd.Directives
+        | UnionTypeDefinition utd -> utd.Directives
+        | EnumTypeDefinition etd -> etd.Directives
+        | InputObjectTypeDefinition iotd -> iotd.Directives
+
+/// https://spec.graphql.org/October2021/#ExecutableDirectiveLocation
 [<Flags>]
-type DirectiveLocation =
+type ExecutableDirectiveLocation =
     | QUERY = 1
     | MUTATION = 2
     | SUBSCRIPTION = 4
@@ -626,35 +849,55 @@ type DirectiveLocation =
     | FRAGMENT_DEFINITION = 16
     | FRAGMENT_SPREAD = 32
     | INLINE_FRAGMENT = 64
-    | SCHEMA = 128
-    | SCALAR = 256
-    | OBJECT = 512
-    | FIELD_DEFINITION = 1024
-    | ARGUMENT_DEFINITION = 2048
-    | INTERFACE = 4096
-    | UNION = 8192
-    | ENUM = 16384
-    | ENUM_VALUE = 32768
-    | INPUT_OBJECT = 65536
-    | INPUT_FIELD_DEFINITION = 131072
 
-/// 3.13
+
+/// https://spec.graphql.org/October2021/#TypeSystemDirectiveLocation
+[<Flags>]
+type TypeSystemDirectiveLocation =
+    | SCHEMA = 1
+    | SCALAR = 2
+    | OBJECT = 4
+    | FIELD_DEFINITION = 8
+    | ARGUMENT_DEFINITION = 16
+    | INTERFACE = 32
+    | UNION = 64
+    | ENUM = 128
+    | ENUM_VALUE = 256
+    | INPUT_OBJECT = 512
+    | INPUT_FIELD_DEFINITION = 1024
+
+
+type DirectiveLocation =
+    /// https://spec.graphql.org/October2021/#ExecutableDirectiveLocation
+    | ExecutableDirectiveLocation of ExecutableDirectiveLocation
+    /// https://spec.graphql.org/October2021/#TypeSystemDirectiveLocation
+    | TypeSystemDirectiveLocation of TypeSystemDirectiveLocation
+
+/// 3.13 Directives
+///
 /// DirectiveDefinition:
 ///  Description opt  directive @ `Name` `ArgumentsDefinition` opt  on `DirectiveLocations`
 ///
-/// https://graphql.github.io/graphql-spec/June2018/#DirectiveDefinition
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Type-System.Directives
+/// https://spec.graphql.org/October2021/#sec-Type-System.Directives
+/// https://spec.graphql.org/October2021/#DirectiveDefinition
 type DirectiveDefinition =
     {
+        /// Optional directive description.
+        Description: string option
+
+        // "directive" "@"
+
         /// Directive's name - it's NOT '@' prefixed.
         Name : string
-        /// Optional directive description.
-        Description : string option
-        /// Directive location - describes, which part's of the query AST
-        /// are valid places to include current directive to.
+
+        /// https://spec.graphql.org/October2021/#ArgumentsDefinition
+        Arguments : InputValueDefinition list
+
+        // [ "repeatable" ] "on"
+
+        /// Directive location - describes, which part's of the query AST are valid places to include current directive to.
+        /// https://spec.graphql.org/October2021/#DirectiveLocation
         Locations : DirectiveLocation
-        /// Array of arguments defined within that directive.
-        Args : InputFieldDefinition []
     }
 
 
@@ -682,13 +925,27 @@ type TypeSystemDefinition =
     /// https://spec.graphql.org/October2021/#DirectiveDefinition
     | DirectiveDefinition of DirectiveDefinition
 
-/// Schema extensions are used to represent a schema which has been extended from an original schema. For example, this might be used by a GraphQL service which adds additional operation types, or additional directives to an existing schema.
-/// https://graphql.github.io/graphql-spec/June2018/#SchemaExtension
+    member x.Directives =
+        match x with
+        | SchemaDefinition sd -> sd.Directives
+        | TypeDefinition td -> td.Directives
+        | DirectiveDefinition _ -> []
+
+/// 3.3.2 Schema Extension
+///
+/// Schema extensions are used to represent a schema which has been extended from an original schema. For example, this might
+/// be used by a GraphQL service which adds additional operation types, or additional directives to an existing schema.
+///
+/// Note: Schema extensions without additional operation type definitions must not be followed by a { (such as a query shorthand)
+/// to avoid parsing ambiguity. The same limitation applies to the type definitions and extensions below.
+///
+/// https://spec.graphql.org/October2021/#sec-Schema-Extension
+/// https://spec.graphql.org/October2021/#SchemaExtension
 type SchemaExtension =
     {
-        /// May be empty. Any directives provided must not already apply to the original Schema.
+        /// May be empty if OperationTypes is not, else it may not be empty.
         Directives: Directive list
-        /// May be empty
+        /// May be empty if the Directives list is not, else it may not be empty.
         OperationTypes: RootOperationTypeDefinition list
     }
 
@@ -701,12 +958,27 @@ type SchemaExtension =
 ///
 /// https://spec.graphql.org/October2021/#sec-Type-Extensions
 type TypeExtension =
+    /// https://spec.graphql.org/October2021/#sec-Scalar-Extensions
     | ScalarTypeExtension of ScalarTypeExtension
+    /// https://spec.graphql.org/October2021/#sec-Object-Extensions
     | ObjectTypeExtension of ObjectTypeExtension
+    /// https://spec.graphql.org/October2021/#InterfaceTypeExtension
     | InterfaceTypeExtension of InterfaceTypeExtension
+    /// https://spec.graphql.org/October2021/#sec-Union-Extensions
     | UnionTypeExtension of UnionTypeExtension
+    /// https://spec.graphql.org/October2021/#sec-Enum-Extensions
     | EnumTypeExtension of EnumTypeExtension
+    /// https://spec.graphql.org/October2021/#sec-Input-Object-Extensions
     | InputObjectTypeExtension of InputObjectTypeExtension
+
+    member x.Directives =
+        match x with
+        | ScalarTypeExtension ste -> ste.Directives
+        | ObjectTypeExtension ote -> ote.Directives
+        | InterfaceTypeExtension ite -> ite.Directives
+        | UnionTypeExtension ute -> ute.Directives
+        | EnumTypeExtension ete -> ete.Directives
+        | InputObjectTypeExtension iote -> iote.Directives
 
 /// 3.1 Type System Extensions
 ///
@@ -724,6 +996,11 @@ type TypeSystemExtension =
     | SchemaExtension of SchemaExtension
     /// https://spec.graphql.org/October2021/#TypeExtension
     | TypeExtension of TypeExtension
+
+    member x.Directives =
+        match x with
+        | SchemaExtension se -> se.Directives
+        | TypeExtension te -> te.Directives
 
 
 /// https://spec.graphql.org/October2021/#TypeSystemDocument
@@ -757,7 +1034,8 @@ type Definition =
         match x with
         | OperationDefinition op -> op.Directives
         | FragmentDefinition frag -> frag.Directives
-        | _ -> []
+        | TypeSystemDefinition tsd -> tsd.Directives
+        | TypeSystemExtension tse -> tse.Directives
 
     member x.SelectionSet =
         match x with
@@ -773,12 +1051,20 @@ type ExecutableDefinition =
     /// https://spec.graphql.org/October2021/#FragmentDefinition
     | FragmentDefinition of FragmentDefinition
 
+    member x.Directives =
+        match x with
+        | OperationDefinition op -> op.Directives
+        | FragmentDefinition frag -> frag.Directives
+
+
 
 /// https://spec.graphql.org/October2021/#ExecutableDocument
 type ExecutableDocument =
     {
         Definitions: ExecutableDefinition list
     }
+    member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)
+
 
 
 /// 2.2 Document
@@ -809,3 +1095,5 @@ type Document =
     }
 
     member document.IsEmpty = document.Definitions.IsEmpty
+
+    member document.Directives = document.Definitions |> List.collect (fun y -> y.Directives)

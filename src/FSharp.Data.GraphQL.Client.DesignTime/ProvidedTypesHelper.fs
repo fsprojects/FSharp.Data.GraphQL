@@ -33,6 +33,7 @@ module internal QuotationHelpers =
                 match v with
                 | :? IEnumerable as x -> Seq.cast<obj> x |> Array.ofSeq
                 | _ -> failwith "Unexpected array value."
+
             let exprs = coerceValues (fun _ -> typ) instance
             Expr.NewArray (typ, exprs)
         let tupleExpr (tupleType : Type) (v : obj) =
@@ -44,6 +45,7 @@ module internal QuotationHelpers =
             let fields = FSharpValue.GetTupleFields v
             let exprs = coerceValues fieldTypeLookup fields
             Expr.NewTuple (exprs)
+
         Array.mapi
             (fun i v ->
                 let expr =
@@ -75,7 +77,7 @@ module internal QuotationHelpers =
         let fieldTypeLookup indx = fieldInfo.[indx].PropertyType
         typ, Expr.NewRecord (instance.GetType (), coerceValues fieldTypeLookup fields)
 
-    and arrayExpr (instance : 'a array) =
+    and arrayExpr (instance: 'a array) =
         let typ = typeof<'a>
         let arrayType = instance.GetType ()
         let exprs = coerceValues (fun _ -> typ) (instance |> Array.map box)
@@ -109,6 +111,7 @@ module internal ProvidedEnum =
                 ProvidedProperty (item, tdef, getterCode, isStatic = true))
             |> Seq.cast<MemberInfo>
             |> List.ofSeq)
+
         tdef
 
 type internal ProvidedTypeMetadata = { Name : string; Description : string option }
@@ -136,7 +139,7 @@ type internal RecordPropertyMetadata = {
 type internal ProvidedRecordTypeDefinition (className, baseType) =
     inherit ProvidedTypeDefinition (className, baseType, nonNullable = true)
 
-    let mutable properties : RecordPropertyMetadata list = []
+    let mutable properties: RecordPropertyMetadata list = []
 
     member _.GetRecordProperties () = properties
 
@@ -197,13 +200,15 @@ module internal ProvidedRecord =
                     properties
                     |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t)
                     |> List.partition (fun (_, t) -> isOption t)
+
                 if explicitOptionalParameters then
                     let constructorProperties = requiredProperties @ optionalProperties
                     let propertyNames =
                         constructorProperties
                         |> List.map (fst >> (fun x -> x.FirstCharUpper ()))
                     let constructorPropertyTypes = constructorProperties |> List.map snd
-                    let invoker (args : Expr list) =
+
+                    let invoker (args: Expr list) =
                         let properties =
                             let baseConstructorArgs =
                                 let coercedArgs =
@@ -213,6 +218,7 @@ module internal ProvidedRecord =
                                         match t with
                                         | Option (Option t) -> <@@ makeValue t %%arg @@>
                                         | _ -> <@@ %%arg @@>)
+
                                 (propertyNames, coercedArgs)
                                 ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
                             Expr.NewArray (typeof<RecordProperty>, baseConstructorArgs)
@@ -230,7 +236,8 @@ module internal ProvidedRecord =
                             |> List.map (fst >> (fun x -> x.FirstCharUpper ()))
                         let constructorPropertyTypes = constructorProperties |> List.map snd
                         let nullValuedPropertyTypes = nullValuedProperties |> List.map snd
-                        let invoker (args : Expr list) =
+
+                        let invoker (args: Expr list) =
                             let properties =
                                 let baseConstructorArgs =
                                     let coercedArgs =
@@ -238,7 +245,9 @@ module internal ProvidedRecord =
                                         ||> List.map2 (fun t arg ->
                                             let arg = Expr.Coerce (arg, typeof<obj>)
                                             if isOption t then <@@ makeSome %%arg @@> else <@@ %%arg @@>)
+
                                     let nullValuedArgs = nullValuedPropertyTypes |> List.map (fun _ -> <@@ null @@>)
+
                                     (propertyNames, (coercedArgs @ nullValuedArgs))
                                     ||> List.map2 (fun name value -> <@@ { RecordProperty.Name = name; Value = %%value } @@>)
                                 Expr.NewArray (typeof<RecordProperty>, baseConstructorArgs)
@@ -250,6 +259,7 @@ module internal ProvidedRecord =
                                 | Option t -> ProvidedParameter (name, t)
                                 | _ -> ProvidedParameter (name, t))
                         ProvidedConstructor (constructorParams, invoker)))
+
         match tdef.BaseType with
         | :? ProvidedRecordTypeDefinition as bdef ->
             bdef.AddMembersDelayed (fun _ ->
@@ -340,8 +350,9 @@ module internal ProvidedOperation =
                 match schemaTypes.TryFind typeName with
                 | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
                 | None -> false
+
             let variables =
-                let rec mapVariable (variableName : string) (variableType : InputType) =
+                let rec mapVariable (variableName: string) (variableType: TypeReference) =
                     match variableType with
                     | NamedType typeName ->
                         match uploadInputTypeName with
@@ -357,11 +368,12 @@ module internal ProvidedOperation =
                     | ListType itype ->
                         let name, t = mapVariable variableName itype
                         name, t |> TypeMapping.makeArray |> TypeMapping.makeOption
-                    | NonNullType itype ->
+                    | NonNullNameType itype ->
                         let name, t = mapVariable variableName itype
                         name, TypeMapping.unwrapOption t
                 operationDefinition.VariableDefinitions
                 |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)
+
             let buildVariablesExprFromArgs (varNames : string list) (args : Expr list) =
                 let mapVariableExpr (name : string) (value : Expr) =
                     let value = Expr.Coerce (value, typeof<obj>)
@@ -377,10 +389,12 @@ module internal ProvidedOperation =
                             | v -> v
                         (name, mapVariableValue %%value)
                     @@>
+
                 let args =
                     let varArgs = List.skip (args.Length - variables.Length) args
                     (varNames, varArgs) ||> List.map2 mapVariableExpr
                 Expr.NewArray (typeof<string * obj>, args)
+
             let defaultContextExpr =
                 match contextInfo with
                 | Some info ->
@@ -411,6 +425,7 @@ module internal ProvidedOperation =
                                 optionalVariables
                                 |> List.map (fun (name, t) -> name, (TypeMapping.unwrapOption t))
                             requiredVariables @ optionalVariables)
+
                 let overloadsWithContext =
                     overloadsWithoutContext
                     |> List.map (fun var ->
@@ -422,7 +437,7 @@ module internal ProvidedOperation =
             // Multipart requests should only be used when the user specifies a upload type name AND the type
             // is present in the query as an input value. If not, we fallback to classic requests.
             let shouldUseMultipartRequest =
-                let rec existsUploadType (foundTypes : ProvidedTypeDefinition list) (t : Type) =
+                let rec existsUploadType (foundTypes: ProvidedTypeDefinition list) (t: Type) =
                     match t with
                     | :? ProvidedTypeDefinition as tdef when not (List.contains tdef foundTypes) ->
                         tdef.DeclaredProperties
@@ -433,8 +448,10 @@ module internal ProvidedOperation =
                     | Option t -> existsUploadType foundTypes t
                     | Array t -> existsUploadType foundTypes t
                     | _ -> t = typeof<Upload>
+
                 variables |> Seq.exists (snd >> existsUploadType [])
-            let runMethodOverloads : MemberInfo list =
+
+            let runMethodOverloads: MemberInfo list =
                 let operationName = Option.toObj operationDefinition.Name
                 methodOverloadDefinitions
                 |> List.map (fun overloadParameters ->
@@ -446,12 +463,14 @@ module internal ProvidedOperation =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
                         let argsWithoutInstance = args.Tail
+
                         let variableArgs, isDefaultContext, context =
                             if argsWithoutInstance.Length - variableNames.Length = 1 then
                                 argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else
                                 argsWithoutInstance, true, defaultContextExpr
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
+
                         let variables =
                             if explicitOptionalParameters then
                                 <@@
@@ -494,7 +513,8 @@ module internal ProvidedOperation =
                     let methodDef = ProvidedMethod ("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc ("Executes the operation on the server and fetch its results.")
                     upcast methodDef)
-            let asyncRunMethodOverloads : MemberInfo list =
+
+            let asyncRunMethodOverloads: MemberInfo list =
                 let operationName = Option.toObj operationDefinition.Name
                 methodOverloadDefinitions
                 |> List.map (fun overloadParameters ->
@@ -506,12 +526,14 @@ module internal ProvidedOperation =
                         // First arg is the operation instance, second should be the context, if the overload asks for one.
                         // We determine it by seeing if the variable names have one less item than the arguments without the instance.
                         let argsWithoutInstance = args.Tail
+
                         let variableArgs, isDefaultContext, context =
                             if argsWithoutInstance.Length - variableNames.Length = 1 then
                                 argsWithoutInstance.Tail, false, argsWithoutInstance.Head
                             else
                                 argsWithoutInstance, true, defaultContextExpr
                         let variables = buildVariablesExprFromArgs variableNames variableArgs
+
                         let variables =
                             if explicitOptionalParameters then
                                 <@@
@@ -560,6 +582,7 @@ module internal ProvidedOperation =
                         ProvidedMethod ("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc ("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
+
             let parseResultDef =
                 let invoker (args : Expr list) =
                     <@@ OperationResultBase (%%args.[1], JsonValue.Parse %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
@@ -577,6 +600,7 @@ module internal ProvidedOperation =
                 @ runMethodOverloads
                 @ asyncRunMethodOverloads
             members)
+
         tdef
 
 type internal ProvidedOperationMetadata = {
@@ -696,6 +720,7 @@ module internal Provider =
                                 |> List.distinctBy (fun x -> x.AliasOrName)
                                 |> List.map FragmentField
                             typeCondition, List.map (getPropertyMetadata typeCondition) conditionFields)
+
                     let baseProperties =
                         astFields
                         |> List.choose (fun x ->
@@ -705,6 +730,7 @@ module internal Provider =
                             | _ -> None)
                         |> List.distinctBy (fun x -> x.AliasOrName)
                         |> List.map (getPropertyMetadata tref.Name.Value)
+
                     let baseType =
                         let metadata : ProvidedTypeMetadata = { Name = tref.Name.Value; Description = tref.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType (metadata, None)
@@ -730,6 +756,7 @@ module internal Provider =
             | _ ->
                 failwith
                     "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
+
         let operationType = getProvidedType providedTypes schemaTypes [] operationAstFields operationTypeRef
         {
             OperationType = operationType
@@ -740,20 +767,35 @@ module internal Provider =
     let getSchemaProvidedTypes (schema : IntrospectionSchema, uploadInputTypeName : string option, explicitOptionalParameters : bool) =
         let providedTypes = ref Map.empty<TypeName, ProvidedTypeDefinition>
         let schemaTypes = TypeMapping.getSchemaTypes schema
-        let getSchemaType (tref : IntrospectionTypeRef) =
+
+        let getSchemaType (tref: IntrospectionTypeRef) =
             match tref.Name with
             | Some name ->
                 match schemaTypes.TryFind (name) with
                 | Some itype -> itype
                 | None -> failwithf "Type \"%s\" was not found on the schema custom types." name
             | None -> failwith "Expected schema type to have a name, but it does not have one."
-        let typeModifier (modifier : Type -> Type) (metadata : RecordPropertyMetadata) = { metadata with Type = modifier metadata.Type }
+
+        let typeModifier (modifier: Type -> Type) (metadata: RecordPropertyMetadata) =
+            { metadata with
+                Type = modifier metadata.Type
+            }
+
         let makeOption = typeModifier TypeMapping.makeOption
         let makeArrayOption = typeModifier (TypeMapping.makeArray >> TypeMapping.makeOption)
         let unwrapOption = typeModifier TypeMapping.unwrapOption
-        let ofFieldType (field : IntrospectionField) = { field with Type = field.Type.OfType.Value }
-        let ofInputFieldType (field : IntrospectionInputVal) = { field with Type = field.Type.OfType.Value }
-        let rec resolveFieldMetadata (field : IntrospectionField) : RecordPropertyMetadata =
+
+        let ofFieldType (field: IntrospectionField) =
+            { field with
+                Type = field.Type.OfType.Value
+            }
+
+        let ofInputFieldType (field: IntrospectionInputVal) =
+            { field with
+                Type = field.Type.OfType.Value
+            }
+
+        let rec resolveFieldMetadata (field: IntrospectionField) : RecordPropertyMetadata =
             match field.Type.Kind with
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType = TypeMapping.mapScalarType uploadInputTypeName field.Type.Name.Value
@@ -787,6 +829,7 @@ module internal Provider =
             | _ ->
                 failwith
                     "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
+
         and resolveInputFieldMetadata (field : IntrospectionInputVal) : RecordPropertyMetadata =
             match field.Type.Kind with
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
@@ -827,11 +870,17 @@ module internal Provider =
             | _ ->
                 failwith
                     "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
+
         and resolveProvidedType (itype : IntrospectionType) : ProvidedTypeDefinition =
             if providedTypes.Value.ContainsKey (itype.Name) then
                 providedTypes.Value.[itype.Name]
             else
-                let metadata = { Name = itype.Name; Description = itype.Description }
+                let metadata =
+                    {
+                        Name = itype.Name
+                        Description = itype.Description
+                    }
+
                 match itype.Kind with
                 | TypeKind.OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType (metadata, None)
@@ -874,10 +923,12 @@ module internal Provider =
             match itype.PossibleTypes with
             | Some trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
             | None -> [||]
+
         let getProvidedType typeName =
             match providedTypes.Value.TryFind (typeName) with
             | Some ptype -> ptype
             | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
+
         schemaTypes
         |> Seq.iter (fun kvp ->
             if

@@ -64,7 +64,7 @@ let mapCoercionError parentErrorMessage (err : IGQLError) : IGQLError =
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
-    let rec convert isNullable (schema : ISchema) (ast : InputType) : TypeDef option =
+    let rec convert isNullable (schema : ISchema) (ast : TypeReference) : TypeDef option =
         match ast with
         | NamedType name ->
             match schema.TryFindType name with
@@ -83,7 +83,7 @@ let inline tryConvertAst schema ast =
                     upcast i.MakeList().MakeNullable ()
                 else
                     upcast i.MakeList ())
-        | NonNullType inner -> convert false schema inner
+        | NonNullNameType inner -> convert false schema inner
 
     convert true schema ast
 
@@ -93,7 +93,7 @@ let inline private notAssignableMsg errMsg (innerDef : InputDef) value =
 let rec internal compileByType (errMsg : string) (inputDef : InputDef) : ExecuteInput =
     match inputDef with
 
-    | Scalar scalardef -> variableOrElse (InlineConstant >> scalardef.CoerceInput)
+    | Scalar scalardef -> variableOrElse (InlineConstant >> scalardef.CoerceInput >> Option.toObj)
 
     | InputObject objdef ->
         let objtype = objdef.Type
