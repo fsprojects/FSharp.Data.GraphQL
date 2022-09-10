@@ -1,17 +1,16 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
-open System.Text
-open Giraffe
-open Microsoft.AspNetCore.Http
-open Newtonsoft.Json
-open FSharp.Data.GraphQL.Execution
 open System.IO
+open System.Text
+open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.WebUtilities
+open Giraffe
+open Giraffe.HttpStatusCodeHandlers.RequestErrors
+open Newtonsoft.Json
+open Newtonsoft.Json.Linq
+open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Control.Tasks
-open Newtonsoft.Json.Linq
-open Giraffe.HttpStatusCodeHandlers.RequestErrors
-open Microsoft.AspNetCore.WebUtilities
 open FSharp.Data.GraphQL.Ast
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
@@ -38,19 +37,19 @@ module HttpHandlers =
         |> Option.map (fun v -> v.Remove(0, v.IndexOf('=') + 1))
         |> Option.map (fun v -> v.Trim('"'))
 
+    let rec parseVariables (schema : ISchema) (defs : VariableDefinition list) (variables : obj) =
+        let casted =
+            match variables with
+            | null -> Map.empty
+            | :? string as x when System.String.IsNullOrWhiteSpace(x) -> Map.empty
+            | :? Map<string, obj> as x -> x
+            | :? JToken as x -> x.ToObject<Map<string, obj>>(jsonSerializer)
+            | :? string as x -> JsonConvert.DeserializeObject<Map<string, obj>>(x, jsonSettings)
+            | _ -> failwithf "Failure deserializing variables. Unexpected variables object format."
+        Variables.read schema defs casted
+
     let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
         let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
-
-        let rec parseVariables (schema : ISchema) (defs : VariableDefinition list) (variables : obj) =
-            let casted =
-                match variables with
-                | null -> Map.empty
-                | :? string as x when System.String.IsNullOrWhiteSpace(x) -> Map.empty
-                | :? Map<string, obj> as x -> x
-                | :? JToken as x -> x.ToObject<Map<string, obj>>(jsonSerializer)
-                | :? string as x -> JsonConvert.DeserializeObject<Map<string, obj>>(x, jsonSettings)
-                | _ -> failwithf "Failure deserializing variables. Unexpected variables object format."
-            Variables.read schema defs casted
 
         let json =
             function
@@ -104,25 +103,27 @@ module HttpHandlers =
                 ms
             match getMultipartRequestBoundary ctx.Request with
             | Some boundary ->
-                use ms = copyBodyToMemory(ctx.Request)
-                let reader = MultipartReader(boundary, ms)
-                let request = reader |> MultipartRequest.read |> Async.AwaitTask |> Async.RunSynchronously
-                let results =
-                    request.Operations
-                    |> List.map (fun op ->
-                        let result =
-                            match op.Variables with
-                            | Some variables ->
-                                let variables = parseVariables Schema.schema (parseVariableDefinitions op.Query) variables
-                                Schema.executor.AsyncExecute(op.Query, variables = variables, data = root)
-                            | None -> Schema.executor.AsyncExecute(op.Query, data = root)
-                        result |> Async.RunSynchronously |> addRequestType "Multipart")
-                match results with
-                | [ result ] ->
-                    return! okWithStr (json result) next ctx
-                | results ->
-                    let result = JArray.FromObject(List.map json results).ToString()
-                    return! okWithStr result next ctx
+                return! task {
+                    use ms = copyBodyToMemory(ctx.Request)
+                    let reader = MultipartReader(boundary, ms)
+                    let! request = reader |> MultipartRequest.read ctx.RequestAborted
+                    let results =
+                        request.Operations
+                        |> List.map (fun op ->
+                            let result =
+                                match op.Variables with
+                                | Some variables ->
+                                    let variables = parseVariables Schema.schema (parseVariableDefinitions op.Query) variables
+                                    Schema.executor.AsyncExecute(op.Query, variables = variables, data = root)
+                                | None -> Schema.executor.AsyncExecute(op.Query, data = root)
+                            result |> Async.RunSynchronously |> addRequestType "Multipart")
+                    match results with
+                    | [ result ] ->
+                        return! okWithStr (json result) next ctx
+                    | results ->
+                        let result = JArray.FromObject(List.map json results).ToString()
+                        return! okWithStr result next ctx
+                }
             | None ->
                 return! badRequest (text "Invalid multipart request header: missing boundary value.") next ctx
         else
@@ -139,24 +140,23 @@ module HttpHandlers =
                         | :? string as query -> Some (query, getVariables (parseVariableDefinitions query) data)
                         | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
                     else None)
-            match request  with
-            | Some (query, Some variables) ->
-                printfn "Received query: %s" query
-                printfn "Received variables: %A" variables
-                let query = removeWhitespacesAndLineBreaks query
-                let result = Schema.executor.AsyncExecute(query, root, variables) |> Async.RunSynchronously |> addRequestType "Classic"
-                printfn "Result metadata: %A" result.Metadata
-                return! okWithStr (json result) next ctx
-            | Some (query, None) ->
-                printfn "Received query: %s" query
-                let query = removeWhitespacesAndLineBreaks query
-                let result = Schema.executor.AsyncExecute(query) |> Async.RunSynchronously |> addRequestType "Classic"
-                printfn "Result metadata: %A" result.Metadata
-                return! okWithStr (json result) next ctx
-            | None ->
-                let result = Schema.executor.AsyncExecute(Introspection.IntrospectionQuery) |> Async.RunSynchronously |> addRequestType "Classic"
-                printfn "Result metadata: %A" result.Metadata
-                return! okWithStr (json result) next ctx
+            let! result = task {
+                match request with
+                | Some (query, Some variables) ->
+                    printfn "Received query: %s" query
+                    printfn "Received variables: %A" variables
+                    let query = removeWhitespacesAndLineBreaks query
+                    return! Schema.executor.AsyncExecute(query, root, variables)
+                | Some (query, None) ->
+                    printfn "Received query: %s" query
+                    let query = removeWhitespacesAndLineBreaks query
+                    return! Schema.executor.AsyncExecute(query)
+                | None ->
+                    return! Schema.executor.AsyncExecute(Introspection.IntrospectionQuery)
+            }
+            let result = result |> addRequestType "Classic"
+            printfn "Result metadata: %A" result.Metadata
+            return! okWithStr (json result) next ctx
     }
 
     let webApp : HttpHandler =

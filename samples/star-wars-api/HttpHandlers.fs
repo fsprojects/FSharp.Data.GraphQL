@@ -1,15 +1,14 @@
 ﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System.IO
 open System.Text
 open Giraffe
 open Microsoft.AspNetCore.Http
 open Newtonsoft.Json
+open Newtonsoft.Json.Linq
 open FSharp.Data.GraphQL.Execution
-open System.IO
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Control.Tasks
-open Newtonsoft.Json.Linq
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
@@ -32,7 +31,7 @@ module HttpHandlers =
         let serialize d = JsonConvert.SerializeObject(d, jsonSettings)
 
         let deserialize (data : string) =
-            let getMap (token : JToken) = 
+            let getMap (token : JToken) =
                 let rec mapper (name : string) (token : JToken) =
                     match name, token.Type with
                     | "variables", JTokenType.Object -> token.Children<JProperty>() |> Seq.map (fun x -> x.Name, mapper x.Name x.Value) |> Map.ofSeq |> box
@@ -41,10 +40,10 @@ module HttpHandlers =
                 token.Children<JProperty>()
                 |> Seq.map (fun x -> x.Name, mapper x.Name x.Value)
                 |> Map.ofSeq
-            if System.String.IsNullOrWhiteSpace(data) 
+            if System.String.IsNullOrWhiteSpace(data)
             then None
             else data |> JToken.Parse |> getMap |> Some
-        
+
         let json =
             function
             | Direct (data, _) ->
@@ -52,19 +51,19 @@ module HttpHandlers =
             | Deferred (data, _, deferred) ->
                 deferred |> Observable.add(fun d -> printfn "Deferred: %s" (serialize d))
                 JsonConvert.SerializeObject(data, jsonSettings)
-            | Stream data ->  
+            | Stream data ->
                 data |> Observable.add(fun d -> printfn "Subscription data: %s" (serialize d))
                 "{}"
-        
+
         let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace("\r\n", " ")
-        
+
         let readStream (s : Stream) =
             use ms = new MemoryStream(4096)
             s.CopyTo(ms)
             ms.ToArray()
-        
+
         let data = Encoding.UTF8.GetString(readStream ctx.Request.Body) |> deserialize
-        
+
         let query =
             data |> Option.bind (fun data ->
                 if data.ContainsKey("query")
@@ -73,7 +72,7 @@ module HttpHandlers =
                     | :? string as x -> Some x
                     | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
                 else None)
-        
+
         let variables =
             data |> Option.bind (fun data ->
                 if data.ContainsKey("variables")
@@ -84,7 +83,7 @@ module HttpHandlers =
                     | :? Map<string, obj> as x -> Some x
                     | _ -> failwith "Failure deserializing response. Could not read variables - it is not a object in the request."
                 else None)
-        
+
         match query, variables  with
         | Some query, Some variables ->
             printfn "Received query: %s" query
@@ -106,7 +105,7 @@ module HttpHandlers =
             return! okWithStr (json result) next ctx
     }
 
-    let webApp : HttpHandler = 
+    let webApp : HttpHandler =
         setCorsHeaders
-        >=> graphQL 
+        >=> graphQL
         >=> setContentTypeAsJson

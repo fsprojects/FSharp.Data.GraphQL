@@ -1,21 +1,15 @@
-#r "paket:
-nuget Fake.Core.Target
-nuget Fake.DotNet.Cli
-nuget Fake.Tools.Git
-nuget Fake.DotNet.AssemblyInfoFile
-nuget Fake.Core.ReleaseNotes
-nuget Fake.Core.UserInput
-nuget Fake.DotNet.MSBuild
-nuget Fake.IO.FileSystem
-nuget Fake.DotNet.Fsc
-nuget Fake.Api.GitHub
-nuget Fake.DotNet.Paket
-nuget Octokit
-nuget FSharp.Core //"
-
-#if !FAKE
-#load ".fake/build.fsx/intellisense.fsx"
-#endif
+#r "nuget: Fake.Api.GitHub"
+#r "nuget: Fake.Core.ReleaseNotes"
+#r "nuget: Fake.Core.Target"
+#r "nuget: Fake.Core.UserInput"
+#r "nuget: Fake.DotNet.AssemblyInfoFile"
+#r "nuget: Fake.DotNet.Cli"
+#r "nuget: Fake.DotNet.Fsc"
+#r "nuget: Fake.DotNet.MSBuild"
+#r "nuget: Fake.IO.FileSystem"
+#r "nuget: Fake.Tools.Git"
+#r "nuget: System.Reactive"
+#r "nuget: Octokit"
 
 open System
 open System.IO
@@ -24,6 +18,7 @@ open System.Threading
 open Fake
 open Fake.Tools.Git
 open Fake.DotNet
+open Fake.DotNet.NuGet
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
@@ -33,56 +28,31 @@ open Fake.Core
 open Fake.Api
 open Octokit
 
+// https://github.com/fsprojects/FAKE/issues/2517
+// Regular header and `#load ".fake/build.fsx/intellisense.fsx"`
+
+#if !FAKE
+let execContext =
+    System.Environment.GetCommandLineArgs()
+    |> Array.skip 2 // skip fsi.exe; build.fsx
+    |> Array.toList
+    |> Fake.Core.Context.FakeExecutionContext.Create false __SOURCE_FILE__
+execContext
+|> Fake.Core.Context.RuntimeContext.Fake
+|> Fake.Core.Context.setExecutionContext
+#endif
+
 // --------------------------------------------------------------------------------------
 // Information about the project are used
 // --------------------------------------------------------------------------------------
-//  - for version and project name in generated AssemblyInfo file
 //  - by the generated NuGet package
 //  - to run tests and to publish documentation on GitHub gh-pages
 //  - for documentation, you also need to edit info in "docs/tools/generate.fsx"
 
-
+let [<Literal>] DotNetMoniker = "net6.0"
 let project = "FSharp.Data.GraphQL"
-let summary = "FSharp implementation of Facebook GraphQL query language"
-let gitName = "FSharp.Data.GraphQL"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
 let projectRepo = "https://github.com/fsprojects/FSharp.Data.GraphQL.git"
-
-// Generate assembly info files with the right version & up-to-date information
-Target.create "AssemblyInfo" (fun _ ->
-    let getAssemblyInfoAttributes projectName =
-        [ AssemblyInfo.Title projectName
-          AssemblyInfo.Product project
-          AssemblyInfo.Description summary
-          AssemblyInfo.Version release.AssemblyVersion
-          AssemblyInfo.FileVersion release.AssemblyVersion ]
-    let internalsVisibility (fsproj: string) =
-        match fsproj with
-        | f when f.EndsWith "FSharp.Data.GraphQL.Shared.fsproj" ->
-            [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Server"
-              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client"
-              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Client.DesignTime"
-              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
-        | f when f.EndsWith "FSharp.Data.GraphQL.Server.fsproj" ->
-            [ AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Benchmarks"
-              AssemblyInfo.InternalsVisibleTo "FSharp.Data.GraphQL.Tests" ]
-        | _ -> []
-
-    let getProjectDetails (projectPath:string) =
-        let projectName = System.IO.Path.GetFileNameWithoutExtension(projectPath)
-        ( projectPath,
-          projectName,
-          System.IO.Path.GetDirectoryName(projectPath),
-          (getAssemblyInfoAttributes projectName)
-        )
-
-    !! "src/**/*.fsproj"
-    //-- "src/FSharp.Data.GraphQL.Client.DesignTime/FSharp.Data.GraphQL.Client.DesignTime.fsproj"
-    |> Seq.map getProjectDetails
-    |> Seq.iter (fun (projFileName, _, folderName, attributes) ->
-         AssemblyInfoFile.createFSharp (folderName </> "AssemblyInfo.fs") (attributes @ internalsVisibility projFileName)
-    )
-)
 
 // --------------------------------------------------------------------------------------
 // Clean build results
@@ -98,16 +68,10 @@ Target.create "CleanDocs" (fun _ ->
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-// We need to disable parallel restoring of projects to because running paket in parallel from Mono
-// is giving errors in Unix based operating systems.
 Target.create "Restore" (fun _ ->
     !! "src/**/*.??proj"
     -- "src/**/*.shproj"
-    |> Seq.iter (fun pattern ->
-        DotNet.restore (fun options ->
-            { options with MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } }
-        ) pattern
-    ))
+    |> Seq.iter (fun pattern -> DotNet.restore id pattern))
 
 
 Target.create "Build" <| fun _ ->
@@ -123,7 +87,7 @@ let startGraphQLServer (project: string) (streamRef: DataRef<Stream>) =
 
     let projectName = Path.GetFileNameWithoutExtension(project)
     let projectPath = Path.GetDirectoryName(project)
-    let serverExe = projectPath </> "bin" </> "Release" </> "net5.0" </> (projectName + ".dll")
+    let serverExe = projectPath </> "bin" </> "Release" </> DotNetMoniker </> (projectName + ".dll")
 
     CreateProcess.fromRawCommandLine "dotnet" serverExe
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
@@ -215,22 +179,19 @@ Target.create "ReleaseDocs" (fun _ ->
 
 let pack id =
     Shell.cleanDir <| sprintf "nuget/%s.%s" project id
-    Paket.pack(fun p ->
+    id
+    |> NuGet.NuGetPack(fun p ->
         { p with
-            ToolType = ToolType.CreateLocalTool()
             Version = release.NugetVersion
             OutputPath = sprintf "nuget/%s.%s" project id
-            TemplateFile = sprintf "src/%s.%s/%s.%s.fsproj.paket.template" project id project id
-            MinimumFromLockFile = true
-            IncludeReferencedProjects = false })
+            //IncludeReferencedProjects = false
+            })
 
 let publishPackage id =
     pack id
-    Paket.push(fun p ->
+    NuGet.NuGetPublish(fun p ->
         { p with
-            ToolType = ToolType.CreateLocalTool()
-            WorkingDir = sprintf "nuget/%s.%s" project id
-            PublishUrl = "https://www.nuget.org/api/v2/package" })
+            WorkingDir = sprintf "nuget/%s.%s" project id })
 
 Target.create "PublishServer" (fun _ ->
     publishPackage "Server"
@@ -269,7 +230,6 @@ Target.create "PackAll" ignore
 
 "Clean"
   ==> "Restore"
-  =?> ("AssemblyInfo", BuildServer.isLocalBuild)
   ==> "Build"
   ==> "RunUnitTests"
   ==> "StartStarWarsServer"
@@ -287,4 +247,8 @@ Target.create "PackAll" ignore
   ==> "PackMiddleware"
   ==> "PackAll"
 
-Target.runOrDefault "All"
+Target.runOrDefaultWithArguments "All"
+
+#if !FAKE
+execContext.Context.Clear()
+#endif
