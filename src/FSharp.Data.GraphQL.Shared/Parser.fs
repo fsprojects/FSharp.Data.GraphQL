@@ -304,7 +304,7 @@ module internal Internal =
 
     let nonNullType =
         (listType <|> namedType) .>> pchar '!'
-        |>> NonNullType
+        |>> NonNullNameType
         <?> "NonNullType"
 
     inputTypeRef
