@@ -12,8 +12,8 @@ let normalize (str : string) = str.Replace ("\r\n", "\n")
 
 /// Generates an Ast.Document from a query string, prints it to another
 /// query string and expects it to be equal. Input query must be formatted (with line breaks and identation).
-/// Identation unit is two empty spaces.
-let private printAndAssert (query : string) =
+/// Indentation unit is two empty spaces.
+let private printAndAssert (query: string) =
     let document = parse query
     let expected = normalize query
     let actual = normalize <| document.ToQueryString ()
@@ -305,6 +305,7 @@ let ``Can print type name meta field`` () =
 
     let document = parse query
     let actual = normalize <| document.ToQueryString (QueryStringPrintingOptions.IncludeTypeNames)
+
     actual |> equals expected
 
 [<Fact>]

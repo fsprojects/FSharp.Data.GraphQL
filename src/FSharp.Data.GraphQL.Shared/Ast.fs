@@ -18,6 +18,7 @@ type OperationType =
     | Mutation
     | Subscription
 
+
 /// 2.9 Input Values
 type InputValue =
     /// 2.9.1 Int Value
@@ -43,8 +44,8 @@ type InputValue =
 /// Fields are conceptually functions which return values, and occasionally accept arguments which alter their behavior. These arguments often map directly to function arguments within a GraphQL server’s implementation.
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Arguments
 type Argument = {
-    Name: string
-    Value: InputValue
+    Name : string
+    Value : InputValue
 }
 
 /// 2.2.10 Directives
@@ -104,10 +105,12 @@ type InputType =
     | ListType of InputType
     | NonNullType of InputType
     override x.ToString() =
-        let rec str = function
+        let rec str =
+            function
             | NamedType name -> name
             | ListType inner -> "[" + (str inner) + "]"
             | NonNullType inner -> (str inner) + "!"
+
         str x
 
 
@@ -139,11 +142,11 @@ type InputDefinition = string
 type InputFieldDefinition =
     {
         /// Name of the input field / argument.
-        Name : string
+        Name: string
         /// Optional input field / argument description.
-        Description : string option
+        Description: string option
         /// GraphQL type definition of the input type.
-        TypeDef : InputDefinition
+        TypeDef: InputDefinition
         /// Optional default input value - used when no input was provided.
         DefaultValue : InputValue option
     }
@@ -265,20 +268,22 @@ type EnumValueDefinition = {
 
 /// GraphQL Enum types, like scalar types, also represent leaf values in a GraphQL type system. However Enum types describe the set of possible values.
 /// https://graphql.github.io/graphql-spec/June2018/#EnumTypeDefinition
-type EnumTypeDefinition = {
-    Description: string option
-    Name: string
-    Directives: Directive list
-    Values: EnumValueDefinition[]
-}
+type EnumTypeDefinition =
+    {
+        Description : string option
+        Name : string
+        Directives : Directive list
+        Values : EnumValueDefinition []
+    }
 
 /// Enum type extensions are used to represent an enum type which has been extended from some original enum type. For example, this might be used to represent additional local data, or by a GraphQL service which is itself an extension of another GraphQL service.
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Enum-Extensions
-type EnumTypeExtension = {
-    Name: string
-    Directives: Directive list
-    Values: EnumValueDefinition[]
-}
+type EnumTypeExtension =
+    {
+        Name : string
+        Directives : Directive list
+        Values : EnumValueDefinition []
+    }
 
 
 /// Fields may accept arguments to configure their behavior. These inputs are often scalars or enums, but they sometimes need to represent more complex values.
@@ -336,16 +341,18 @@ type DirectiveLocation =
 /// https://graphql.github.io/graphql-spec/June2018/#DirectiveDefinition
 /// https://graphql.github.io/graphql-spec/June2018/#sec-Type-System.Directives
 type DirectiveDefinition =
-    { /// Directive's name - it's NOT '@' prefixed.
-      Name : string
-      /// Optional directive description.
-      Description : string option
-      /// Directive location - describes, which part's of the query AST
-      /// are valid places to include current directive to.
-      Locations : DirectiveLocation
-      /// Array of arguments defined within that directive.
-      Args : InputFieldDefinition []
+    {
+        /// Directive's name - it's NOT '@' prefixed.
+        Name : string
+        /// Optional directive description.
+        Description : string option
+        /// Directive location - describes, which part's of the query AST
+        /// are valid places to include current directive to.
+        Locations : DirectiveLocation
+        /// Array of arguments defined within that directive.
+        Args : InputFieldDefinition []
     }
+
 
 type TypeSystemDefinition =
     | SchemaDefinition of SchemaDefinition
