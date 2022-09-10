@@ -89,6 +89,7 @@ type Document with
         let options = defaultArg options QueryStringPrintingOptions.None
         let sb = PaddedStringBuilder()
         let withQuotes (s : string) = "\"" + s + "\""
+
         let rec printValue x =
             let printObjectValue (name, value) =
                 sb.Append(name)
@@ -114,6 +115,7 @@ type Document with
             | ListValue x -> printCompound "[]" printValue x
             | ObjectValue x -> printCompound "{}" printObjectValue (Map.toList x)
             | Variable x -> sb.Append("$" + x)
+
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
                 sb.Append("$")
@@ -128,6 +130,7 @@ type Document with
                 | [vdef] -> printVariable vdef; sb.Append(") ")
                 | vdef :: tail -> printVariable vdef; sb.Append(", "); helper tail
             helper vdefs
+
         let printArguments (arguments : Argument list) =
             let printArgument (arg : Argument) =
                 sb.Append(arg.Name + ": ")
@@ -139,6 +142,7 @@ type Document with
                 | [arg] -> printArgument arg; sb.Append(")")
                 | arg :: tail -> printArgument arg; sb.Append(", "); helper tail
             helper arguments
+
         let printDirectives (directives : Directive list) =
             let printDirective (directive : Directive) =
                 sb.Append("@" + directive.Name)
@@ -149,6 +153,7 @@ type Document with
                 | [directive] -> printDirective directive
                 | directive :: tail -> printDirective directive; sb.Append(" "); helper tail
             helper directives
+
         let setSelectionSetOptions (selectionSet : Selection list) =
             let typeNameMetaField =
                 { Alias = None
@@ -161,6 +166,7 @@ type Document with
             if selectionSet.Length > 0 && shouldIncludeTypeName && not (hasTypeName)
             then selectionSet @ [Field typeNameMetaField]
             else selectionSet
+
         let rec printSelectionSet (selectionSet : Selection list) =
             let printSelection = function
                 | Field field ->
@@ -188,8 +194,14 @@ type Document with
                 | [selection] -> sb.AppendLine(); printSelection selection; sb.Unpad(); sb.AppendLine(); sb.Append("}")
                 | selection :: tail -> sb.AppendLine(); printSelection selection; helper tail
             helper selectionSet
+
         let rec printDefinitions (definitions : Definition list) =
             let printDefinition = function
+                // TODO: type system (def | ext)
+                //| TypeSystemDefinition _ ->
+                //    ()
+                //| TypeSystemExtension _ ->
+                //    ()
                 | OperationDefinition odef ->
                     match odef.OperationType with
                     | Query when odef.IsShortHandQuery -> ()
@@ -223,16 +235,30 @@ type Document with
     member this.GetInfoMap() : Map<OperationName option, AstFieldInfo list> =
         let fragments =
             this.Definitions
-            |> List.choose (function | OperationDefinition _ -> None | FragmentDefinition def -> Some def)
+            |> List.choose (function
+                // TODO: type system (def | ext)
+                //| TypeSystemDefinition _ ->
+                //    ()
+                //| TypeSystemExtension _ ->
+                //    ()
+                | OperationDefinition _ -> None
+                | FragmentDefinition def -> Some def)
             |> List.map (fun def -> def.Name.Value, def)
             |> Map.ofList
         let findFragment name =
             match Map.tryFind name fragments with
             | Some fdef -> fdef
-            | None -> failwithf "Can not get information about fragment \"%s\". Fragment spread definition was not found in the query." name
+            | None -> failwith $"Can not get information about fragment \"%s{name}\". Fragment spread definition was not found in the query."
         let operations =
             this.Definitions
-            |> List.choose (function | FragmentDefinition _ -> None | OperationDefinition def -> Some def)
+            |> List.choose (function
+                // TODO: type system (def | ext)
+                //| TypeSystemDefinition _ ->
+                //    ()
+                //| TypeSystemExtension _ ->
+                //    ()
+                | FragmentDefinition _ -> None
+                | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)
         let mapper (selectionSet : Selection list) =
             let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : string list) (selectionSet : Selection list) =
