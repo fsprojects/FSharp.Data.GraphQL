@@ -1,5 +1,6 @@
 // The MIT License (MIT)
 // Copyright (c) 2016 Bazinga Technologies Inc
+
 namespace FSharp.Data.GraphQL.Types
 
 open System
@@ -38,9 +39,9 @@ module Introspection =
         /// Description of a target directive.
         Description : string option
         /// Array of AST locations, where it's valid to place target directive.
-        Locations : DirectiveLocation[]
+        Locations : DirectiveLocation []
         /// Array of arguments, current directive can be parametrized with.
-        Args : IntrospectionInputVal[]
+        Args : IntrospectionInputVal []
     }
 
     /// Introspection descriptor of a GraphQL type defintion.
@@ -251,7 +252,7 @@ module Introspection =
         Description : string option
         /// Array of field arguments. In GraphQL fields can be parametrized,
         /// working effectively like methods.
-        Args : IntrospectionInputVal[]
+        Args : IntrospectionInputVal []
         /// Introspection reference to field's type.
         Type : IntrospectionTypeRef
         /// If true, marks current field as deprecated, but still
@@ -272,9 +273,9 @@ module Introspection =
         SubscriptionType : IntrospectionTypeRef option
         /// Array of all introspection types defined within current schema.
         /// Includes types for queries, mutations and subscriptions.
-        Types : IntrospectionType array
+        Types : IntrospectionType []
         /// Array of all directives supported by current schema.
-        Directives : IntrospectionDirective array
+        Directives : IntrospectionDirective []
     }
 
 /// Represents a subscription as described in the schema.
@@ -290,11 +291,12 @@ type Subscription = {
 and ISubscriptionProvider =
     interface
         /// Registers a new subscription type, called at schema compilation time.
-        abstract member AsyncRegister : Subscription -> Async<unit>
+        abstract member AsyncRegister: Subscription -> Async<unit>
         /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
-        abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
+        abstract member Add: ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type.
         abstract member AsyncPublish<'T> : string -> 'T -> Async<unit>
+
         /// Publishes an event to the subscription system given the identifier of the subscription type
         /// and a filter identity that can be used to choose which filter functions will be applied.
         abstract member AsyncPublishTag<'T> : string -> Tag -> 'T -> Async<unit>
@@ -304,13 +306,13 @@ and ISubscriptionProvider =
 and ILiveFieldSubscription =
     interface
         /// Determine if we should propagate the event
-        abstract member Filter : obj -> obj -> bool
+        abstract member Filter: obj -> obj -> bool
         /// Project out the field marked with the @live directive
-        abstract member Project : obj -> obj
+        abstract member Project: obj -> obj
         /// The type name of the object that is ready for live query in this subscription.
-        abstract member TypeName : string
+        abstract member TypeName: string
         /// The field name of the object that is ready for live query in this subscription.
-        abstract member FieldName : string
+        abstract member FieldName: string
     end
 
 /// Represents a generic typed, subscription field in a live query.
@@ -318,9 +320,9 @@ and ILiveFieldSubscription<'Object, 'Field> =
     interface
         inherit ILiveFieldSubscription
         /// Determine if we should propagate the event
-        abstract member Filter : 'Object -> 'Object -> bool
+        abstract member Filter: 'Object -> 'Object -> bool
         /// Project out the field marked with the @live directive
-        abstract member Project : 'Object -> 'Field
+        abstract member Project: 'Object -> 'Field
     end
 
 /// Represents a subscription of a field in a live query.
@@ -356,9 +358,10 @@ and LiveFieldSubscription<'Object, 'Field> = {
     interface ILiveFieldSubscription<'Object, 'Field> with
         member this.Filter x y = this.Filter x y
         member this.Project x = this.Project x
+
     interface ILiveFieldSubscription with
         member this.Filter x y = this.Filter (downcast x) (downcast y)
-        member this.Project x = upcast this.Project (downcast x)
+        member this.Project x = upcast this.Project(downcast x)
         member this.TypeName = this.TypeName
         member this.FieldName = this.FieldName
 
@@ -366,15 +369,15 @@ and LiveFieldSubscription<'Object, 'Field> = {
 and ILiveFieldSubscriptionProvider =
     interface
         /// Checks if a live field subscription has subscribers.
-        abstract member HasSubscribers : string -> string -> bool
+        abstract member HasSubscribers: string -> string -> bool
         /// Checks if a type and a field is registered in the provider.
-        abstract member IsRegistered : string -> string -> bool
+        abstract member IsRegistered: string -> string -> bool
         /// Registers a new live query subscription type, called at schema compilation time.
-        abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
+        abstract member AsyncRegister: ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
-        abstract member TryFind : string -> string -> ILiveFieldSubscription option
+        abstract member TryFind: string -> string -> ILiveFieldSubscription option
         /// Creates an active subscription, and returns the IObservable stream of projected POCO objects
-        abstract member Add : (obj -> bool) -> string -> string -> IObservable<obj>
+        abstract member Add: (obj -> bool) -> string -> string -> IObservable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
         abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end
@@ -401,7 +404,7 @@ and ISchema =
         abstract Subscription : SubscriptionObjectDef option
 
         /// List of all directives supported by the current schema.
-        abstract Directives : DirectiveDef[]
+        abstract Directives : DirectiveDefinition []
 
         /// Method which, given type name, returns Some if provided
         /// type has been defined in current schema. Otherwise None.
@@ -411,7 +414,7 @@ and ISchema =
         /// type. For Union types, it's the array of all union options.
         /// For Interface types, it's an array of all types - within
         /// schema - implementing target interface.
-        abstract GetPossibleTypes : TypeDef -> ObjectDef[]
+        abstract GetPossibleTypes : TypeDef -> ObjectDef []
 
         /// Checks if provided object is a possible type type (case
         /// for Unions and implementation for Interfaces) of provided
@@ -430,9 +433,9 @@ and ISchema =
         abstract SubscriptionProvider : ISubscriptionProvider
 
         /// Returns the live query subscription provider implementation for this schema.
-        abstract LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
-
+        abstract LiveFieldSubscriptionProvider: ILiveFieldSubscriptionProvider
     end
+
 
 and ISchema<'Root> =
     interface
@@ -448,7 +451,7 @@ and FieldExecuteCompiler = FieldDef -> ExecuteField
 /// A field execute map object.
 /// Field execute maps are mutable objects built to compile fields at runtime.
 and FieldExecuteMap (compiler : FieldExecuteCompiler) =
-    let map = new Dictionary<string * string, ExecuteField * InputFieldDef[]> ()
+    let map = new Dictionary<string * string, ExecuteField * InputFieldDef []> ()
 
     let getKey typeName fieldName =
         if List.exists ((=) fieldName) [ "__schema"; "__type"; "__typename" ] then
@@ -615,7 +618,7 @@ and NamedDef =
 
         /// Returns a name of the current named type. It must be unique
         /// in scope of the defining schema.
-        abstract Name : string
+        abstract Name: string
     end
 
 /// A context holding all the information needed for planning an operation.
@@ -670,9 +673,7 @@ and ExecutionInfo = {
                 | ResolveValue -> None
                 | ResolveCollection inner -> path inner segments
                 | SelectFields fields ->
-                    fields
-                    |> List.tryFind (fun f -> f.Identifier = head)
-                    |> Option.bind (fun f -> path f tail)
+                    fields |> List.tryFind (fun f -> f.Identifier = head) |> Option.bind (fun f -> path f tail)
                 | ResolveAbstraction typeMap ->
                     typeMap
                     |> Map.toSeq
@@ -680,6 +681,7 @@ and ExecutionInfo = {
                     |> Seq.collect id
                     |> Seq.tryFind (fun f -> f.Identifier = head)
                     |> Option.bind (fun f -> path f tail)
+
         path this keys
 
     override this.ToString () =
@@ -741,7 +743,7 @@ and ExecutionInfo = {
                     sb.Append("Case: ").AppendLine (tname) |> ignore
                     fields |> List.iter (str (indent + 2) sb))
 
-        let sb = Text.StringBuilder ()
+        let sb = Text.StringBuilder()
         str 0 sb this
         sb.ToString ()
 
@@ -816,7 +818,7 @@ and Resolve =
         | Async (_, _, e) -> e
         | ResolveExpr (e) -> e
         | Undefined -> failwith "Resolve function was not defined"
-        | x -> failwith <| sprintf "Unexpected resolve function %A" x
+        | x -> failwith $"Unexpected resolve function %A{x}"
 
 /// Execution strategy for provided queries. Defines if object fields should
 /// be resolved either sequentially one-by-one or in parallel.
@@ -937,20 +939,19 @@ and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
 and FieldDef =
     interface
         /// Name of the field.
-        abstract Name : string
+        abstract Name: string
         /// Optional field description.
-        abstract Description : string option
+        abstract Description: string option
         /// Optional field deprecation warning.
-        abstract DeprecationReason : string option
+        abstract DeprecationReason: string option
         /// Field's GraphQL type definition.
-        abstract TypeDef : OutputDef
+        abstract TypeDef: OutputDef
         /// Field's arguments list.
-        abstract Args : InputFieldDef[]
+        abstract Args : InputFieldDef []
         /// Field's metadata.
-        abstract Metadata : Metadata
+        abstract Metadata: Metadata
         /// Field resolution function.
         abstract Resolve : Resolve
-        // INTERNAL API: Compiled field executor. To be set only by the runtime.
         inherit IEquatable<FieldDef>
     end
 
@@ -1009,13 +1010,9 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> = {
 
     override x.ToString () =
         if not (Array.isEmpty x.Args) then
-            x.Name
-            + "("
-            + String.Join (", ", x.Args)
-            + "): "
-            + x.TypeDef.ToString ()
+            $"""{x.Name}({String.Join(", ", x.Args)}) : {x.TypeDef}"""
         else
-            x.Name + ": " + x.TypeDef.ToString ()
+            $"{x.Name} : {x.TypeDef}"
 
 and InputParameterValue =
     | InlineConstant of InputValue
@@ -1025,7 +1022,7 @@ and InputParameterValue =
 and ScalarDef =
     interface
         /// Name of the scalar type.
-        abstract Name : string
+        abstract Name: string
         /// Optional scalar type description.
         abstract Description : string option
         /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
@@ -1094,13 +1091,13 @@ and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
 and EnumVal =
     interface
         /// Identifier of the enum value.
-        abstract Name : string
+        abstract Name: string
         /// Optional enum value description.
-        abstract Description : string option
+        abstract Description: string option
         /// Value to be stringified as a result to the user.
-        abstract Value : obj
+        abstract Value: obj
         /// Optional description of the deprecation reason.
-        abstract DeprecationReason : string option
+        abstract DeprecationReason: string option
     end
 
 /// A GraphQL representation of single case of the enum type.
@@ -1130,11 +1127,11 @@ and EnumValue<'Val> = {
 and EnumDef =
     interface
         /// Enum type name.
-        abstract Name : string
+        abstract Name: string
         /// Optional enum type description.
-        abstract Description : string option
+        abstract Description: string option
         /// List of available enum cases.
-        abstract Options : EnumVal[]
+        abstract Options : EnumVal []
         inherit TypeDef
         inherit InputDef
         inherit OutputDef
@@ -1197,16 +1194,17 @@ and internal EnumDefinition<'Val> = {
 and ObjectDef =
     interface
         /// Name of the object type definition.
-        abstract Name : string
+        abstract Name: string
         /// Optional object definition description.
-        abstract Description : string option
+        abstract Description: string option
         /// Collection of fields defined by the current object.
-        abstract Fields : Map<string, FieldDef>
+        abstract Fields: Map<string, FieldDef>
         /// Collection of interfaces implemented by the current object.
         abstract Implements : InterfaceDef[]
         /// Optional function used to recognize of provided
         /// .NET object is valid for this GraphQL object definition.
-        abstract IsTypeOf : (obj -> bool) option
+        abstract IsTypeOf: (obj -> bool) option
+
         inherit TypeDef
         inherit NamedDef
         inherit OutputDef
@@ -1219,7 +1217,7 @@ and ObjectDef =
 and ObjectDef<'Val> =
     interface
         /// Collection of fields defined by the current object.
-        abstract Fields : Map<string, FieldDef<'Val>>
+        abstract Fields: Map<string, FieldDef<'Val>>
         inherit ObjectDef
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
@@ -1282,16 +1280,19 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> = {
 and InterfaceDef =
     interface
         /// Name of the interface type definition.
-        abstract Name : string
+        abstract Name: string
         /// Optional interface description.
-        abstract Description : string option
+        abstract Description: string option
+
         /// List of fields to be defined by implementing object
         /// definition in order to satisfy current interface.
-        abstract Fields : FieldDef[]
+        abstract Fields: FieldDef []
+
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// interface for provided .NET object.
-        abstract ResolveType : (obj -> ObjectDef) option
+        abstract ResolveType: (obj -> ObjectDef) option
+
         inherit TypeDef
         inherit OutputDef
         inherit CompositeDef
@@ -1305,7 +1306,8 @@ and InterfaceDef<'Val> =
     interface
         /// List of fields to be defined by implementing object
         /// definition in order to satisfy current interface.
-        abstract Fields : FieldDef<'Val>[]
+        abstract Fields: FieldDef<'Val> []
+
         inherit TypeDef<'Val>
         inherit OutputDef<'Val>
         inherit InterfaceDef
@@ -1367,18 +1369,20 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> = {
 and UnionDef =
     interface
         /// Name of the union type definition.
-        abstract Name : string
+        abstract Name: string
         /// Optiona union type description.
-        abstract Description : string option
+        abstract Description: string option
         /// Collection of object cases represented by this union.
         abstract Options : ObjectDef[]
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// union for provided .NET object.
-        abstract ResolveType : (obj -> ObjectDef) option
+        abstract ResolveType: (obj -> ObjectDef) option
+
         /// Helper function which provides ability to retrieve
         /// specific values, that are wrapped in F# discriminated unions.
-        abstract ResolveValue : obj -> obj
+        abstract ResolveValue: obj -> obj
+
         inherit TypeDef
         inherit OutputDef
         inherit CompositeDef
@@ -1393,10 +1397,12 @@ and UnionDef<'In> =
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// union for provided .NET object.
-        abstract ResolveType : ('In -> ObjectDef) option
+        abstract ResolveType: ('In -> ObjectDef) option
+
         /// Helper function which provides ability to retrieve
         /// specific values, that are wrapped in F# discriminated unions.
-        abstract ResolveValue : 'In -> obj
+        abstract ResolveValue: 'In -> obj
+
         inherit UnionDef
         inherit TypeDef<'In>
         inherit OutputDef<'In>
@@ -1465,7 +1471,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> = {
 and ListOfDef =
     interface
         /// GraphQL type definition of the container element type.
-        abstract OfType : TypeDef
+        abstract OfType: TypeDef
         inherit InputDef
         inherit OutputDef
     end
@@ -1475,7 +1481,7 @@ and ListOfDef =
 and ListOfDef<'Val, 'Seq when 'Seq :> 'Val seq> =
     interface
         /// GraphQL type definition of the container element type.
-        abstract OfType : TypeDef<'Val>
+        abstract OfType: TypeDef<'Val>
         inherit TypeDef<'Seq>
         inherit InputDef<'Seq>
         inherit OutputDef<'Seq>
@@ -1491,7 +1497,7 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = {
     interface TypeDef with
         member _.Type = typeof<'Seq>
         member x.MakeNullable () =
-            let nullable : NullableDefinition<_> = { OfType = x }
+            let nullable: NullableDefinition<_> = { OfType = x }
             upcast nullable
 
         member x.MakeList () =
@@ -1506,7 +1512,7 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = {
     interface ListOfDef<'Val, 'Seq> with
         member x.OfType = x.OfType
 
-    override x.ToString () = "[" + x.OfType.ToString () + "]!"
+    override x.ToString () = $"[{x.OfType}]!"
 
 /// GraphQL type definition for nullable/optional types.
 /// By default all GraphQL types in this library are considered
@@ -1515,7 +1521,7 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = {
 and NullableDef =
     interface
         /// GraphQL type definition of the nested type.
-        abstract OfType : TypeDef
+        abstract OfType: TypeDef
         inherit InputDef
         inherit OutputDef
     end
@@ -1527,7 +1533,7 @@ and NullableDef =
 and NullableDef<'Val> =
     interface
         /// GraphQL type definition of the nested type.
-        abstract OfType : TypeDef<'Val>
+        abstract OfType: TypeDef<'Val>
         inherit InputDef<'Val option>
         inherit OutputDef<'Val option>
         inherit NullableDef
@@ -1557,7 +1563,7 @@ and internal NullableDefinition<'Val> = {
     override x.ToString () =
         match x.OfType with
         | :? NamedDef as named -> named.Name
-        | :? ListOfDef as list -> "[" + list.OfType.ToString () + "]"
+        | :? ListOfDef as list -> $"[{list.OfType}]"
         | other -> other.ToString ()
 
 /// GraphQL tye definition for input objects. They are different
@@ -1565,9 +1571,9 @@ and internal NullableDefinition<'Val> = {
 and InputObjectDef =
     interface
         /// Name of the input object.
-        abstract Name : string
+        abstract Name: string
         /// Optional input object description.
-        abstract Description : string option
+        abstract Description: string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef[]
         /// Validates if input object has a a valid combination of filed values.
@@ -1632,13 +1638,14 @@ and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj,
 and InputFieldDef =
     interface
         /// Name of the input field / argument.
-        abstract Name : string
+        abstract Name: string
         /// Optional input field / argument description.
-        abstract Description : string option
+        abstract Description: string option
         /// GraphQL type definition of the input type.
-        abstract TypeDef : InputDef
+        abstract TypeDef: InputDef
         /// Optional default input value - used when no input was provided.
-        abstract DefaultValue : obj option
+        abstract DefaultValue: obj option
+
         /// INTERNAL API: input execution function -
         /// compiled by the runtime.
         abstract ExecuteInput : ExecuteInput with get, set
@@ -1684,7 +1691,7 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
         hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode ())
         hash
 
-    override x.ToString () = x.Name + ": " + x.TypeDef.ToString ()
+    override x.ToString () = $"{x.Name}: {x.TypeDef}"
 
 and Tag = System.IComparable
 
@@ -1692,8 +1699,8 @@ and TagsResolver = ResolveFieldContext -> Tag seq
 
 and SubscriptionFieldDef =
     interface
-        abstract OutputTypeDef : OutputDef
-        abstract TagsResolver : TagsResolver
+        abstract OutputTypeDef: OutputDef
+        abstract TagsResolver: TagsResolver
         inherit FieldDef
     end
 
@@ -1730,18 +1737,22 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
         member x.Resolve = x.Filter
         member x.Args = x.Args
         member x.Metadata = x.Metadata
+
     interface SubscriptionFieldDef with
         member x.OutputTypeDef = x.OutputTypeDef :> OutputDef
         member x.TagsResolver = x.TagsResolver
+
     interface FieldDef<'Root>
     member x.TypeDef = x.RootTypeDef
     interface SubscriptionFieldDef<'Root, 'Input, 'Output>
+
     interface IEquatable<FieldDef> with
         member x.Equals f =
             x.Name = f.Name
             && x.TypeDef :> OutputDef = f.TypeDef
             && x.Args = f.Args
             && f :? SubscriptionFieldDef<'Root>
+
     override x.Equals y =
         match y with
         | :? SubscriptionFieldDef as f -> (x :> IEquatable<FieldDef>).Equals (f)
@@ -1755,24 +1766,20 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
 
     override x.ToString () =
         if not (Array.isEmpty x.Args) then
-            x.Name
-            + "("
-            + String.Join (", ", x.Args)
-            + "): "
-            + x.TypeDef.ToString ()
+            $"""{x.Name}({String.Join(", ", x.Args)}) : {x.TypeDef}"""
         else
-            x.Name + ": " + x.TypeDef.ToString ()
+            $"{x.Name} : {x.TypeDef}"
 
 and SubscriptionObjectDef =
     interface
-        abstract Fields : Map<string, SubscriptionFieldDef>
+        abstract Fields: Map<string, SubscriptionFieldDef>
         inherit ObjectDef
     end
 
 and SubscriptionObjectDef<'Val> =
     interface
         inherit SubscriptionObjectDef
-        abstract Fields : Map<string, SubscriptionFieldDef<'Val>>
+        abstract Fields: Map<string, SubscriptionFieldDef<'Val>>
         inherit ObjectDef<'Val>
     end
 
@@ -1792,22 +1799,27 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
         member x.MakeList () =
             let list : ListOfDefinition<_, _> = { OfType = x }
             upcast list
+
     interface ObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Fields = x.Fields |> Map.map (fun _ f -> f :> FieldDef)
-        member x.Implements = Array.empty : InterfaceDef[]
+        member x.Implements = Array.empty : InterfaceDef []
         // TODO: Actually add istypeof
         member x.IsTypeOf = None
+
     interface ObjectDef<'Val> with
         member x.Fields = x.Fields |> Map.map (fun _ f -> f :> FieldDef<'Val>)
 
     interface NamedDef with
         member x.Name = x.Name
+
     interface SubscriptionObjectDef with
         member x.Fields = x.Fields |> Map.map (fun _ f -> upcast f)
+
     interface SubscriptionObjectDef<'Val> with
         member x.Fields = x.Fields
+
     override x.Equals y =
         match y with
         | :? SubscriptionObjectDefinition<'Val> as f -> f.Name = x.Name
@@ -1819,18 +1831,6 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
 
     override x.ToString () = x.Name + "!"
 
-/// 3.13 GraphQL directive definition.
-and DirectiveDef = {
-    /// Directive's name - it's NOT '@' prefixed.
-    Name : string
-    /// Optional directive description.
-    Description : string option
-    /// Directive location - describes, which part's of the query AST
-    /// are valid places to include current directive to.
-    Locations : DirectiveLocation
-    /// Array of arguments defined within that directive.
-    Args : InputFieldDef[]
-}
 
 /// Metadata object.
 /// Metadata objects are used to hold custom information inside fields and contexts
@@ -1888,7 +1888,7 @@ and TypeMap () =
         ]
         defaultTypes |> List.exists (fun x -> x = name)
 
-    let rec named (tdef : TypeDef) =
+    let rec named (tdef: TypeDef) =
         match tdef with
         | :? NamedDef as n -> Some n
         | :? NullableDef as n -> named n.OfType
@@ -2091,7 +2091,7 @@ and TypeMap () =
         map
 
 module Tags =
-    let from (x : #Tag) : Tag seq = Seq.singleton (upcast x)
+    let from (x: #Tag) : Tag seq = Seq.singleton (upcast x)
     let fromSeq x : Tag seq = x |> Seq.map (fun t -> upcast t)
 
 [<AutoOpen>]
@@ -2293,86 +2293,86 @@ module Resolve =
 module Patterns =
 
     /// Active pattern to match GraphQL type defintion with Scalar.
-    let (|Scalar|_|) (tdef : TypeDef) =
+    let (|Scalar|_|) (tdef: TypeDef) =
         match tdef with
         | :? ScalarDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with Object.
-    let (|Object|_|) (tdef : TypeDef) =
+    let (|Object|_|) (tdef: TypeDef) =
         match tdef with
         | :? ObjectDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with Interface.
-    let (|Interface|_|) (tdef : TypeDef) =
+    let (|Interface|_|) (tdef: TypeDef) =
         match tdef with
         | :? InterfaceDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with Union.
-    let (|Union|_|) (tdef : TypeDef) =
+    let (|Union|_|) (tdef: TypeDef) =
         match tdef with
         | :? UnionDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with Enum.
-    let (|Enum|_|) (tdef : TypeDef) =
+    let (|Enum|_|) (tdef: TypeDef) =
         match tdef with
         | :? EnumDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with input object.
-    let (|InputObject|_|) (tdef : TypeDef) =
+    let (|InputObject|_|) (tdef: TypeDef) =
         match tdef with
         | :? InputObjectDef as x -> Some x
         | _ -> None
 
     /// Active patter to match GraphQL subscription object definitions
 
-    let (|SubscriptionObject|_|) (tdef : TypeDef) =
+    let (|SubscriptionObject|_|) (tdef: TypeDef) =
         match tdef with
         | :? SubscriptionObjectDef as x -> Some x
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with List.
-    let (|List|_|) (tdef : TypeDef) =
+    let (|List|_|) (tdef: TypeDef) =
         match tdef with
         | :? ListOfDef as x -> Some x.OfType
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with nullable / optional types.
-    let (|Nullable|_|) (tdef : TypeDef) =
+    let (|Nullable|_|) (tdef: TypeDef) =
         match tdef with
         | :? NullableDef as x -> Some x.OfType
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with non-null types.
-    let (|NonNull|_|) (tdef : TypeDef) =
+    let (|NonNull|_|) (tdef: TypeDef) =
         match tdef with
         | :? NullableDef -> None
         | other -> Some other
 
     /// Active pattern to match GraphQL type defintion with valid input types.
-    let (|Input|_|) (tdef : TypeDef) =
+    let (|Input|_|) (tdef: TypeDef) =
         match tdef with
         | :? InputDef as i -> Some i
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with valid output types.
-    let (|Output|_|) (tdef : TypeDef) =
+    let (|Output|_|) (tdef: TypeDef) =
         match tdef with
         | :? OutputDef as o -> Some o
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with valid leaf types.
-    let (|Leaf|_|) (tdef : TypeDef) =
+    let (|Leaf|_|) (tdef: TypeDef) =
         match tdef with
         | :? LeafDef as ldef -> Some ldef
         | _ -> None
 
     /// Active pattern to match GraphQL type defintion with valid composite types.
-    let (|Composite|_|) (tdef : TypeDef) =
+    let (|Composite|_|) (tdef: TypeDef) =
         match tdef with
         | :? ObjectDef
         | :? InterfaceDef
@@ -2386,7 +2386,7 @@ module Patterns =
         | :? UnionDef -> Some (tdef :?> AbstractDef)
         | _ -> None
 
-    let rec private named (tdef : TypeDef) =
+    let rec private named (tdef: TypeDef) =
         match tdef with
         | :? NamedDef as n -> Some n
         | Nullable inner -> named inner

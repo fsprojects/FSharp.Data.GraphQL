@@ -471,56 +471,95 @@ module SchemaDefinitions =
           CoerceOutput = coerceGuidValue }
 
     /// GraphQL @include directive.
-    let IncludeDirective : DirectiveDef =
-        { Name = "include"
-          Description =
-              Some "Directs the executor to include this field or fragment only when the `if` argument is true."
-          Locations =
-              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
-          Args =
-              [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Included when true."
-                   TypeDef = BooleanType
-                   DefaultValue = None
-                   ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
+    let IncludeDirective: DirectiveDefinition =
+        {
+            Name = "include"
+            Description = Some "Directs the executor to include this field or fragment only when the `if` argument is true."
+            Locations =
+                ExecutableDirectiveLocation(
+                    ExecutableDirectiveLocation.FIELD
+                    ||| ExecutableDirectiveLocation.FRAGMENT_SPREAD
+                    ||| ExecutableDirectiveLocation.INLINE_FRAGMENT
+                )
+            Arguments =
+                [
+                    {
+                        InputFieldDefinition.Name = "if"
+                        Description = Some "Included when true."
+                        TypeDef = BooleanType
+                        DefaultValue = None
+                        ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box)
+                    }
+                ]
+        }
 
     /// GraphQL @skip directive.
-    let SkipDirective : DirectiveDef =
-        { Name = "skip"
-          Description = Some "Directs the executor to skip this field or fragment when the `if` argument is true."
-          Locations =
-              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
-          Args =
-              [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Skipped when true."
-                   TypeDef = BooleanType
-                   DefaultValue = None
-                   ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
+    let SkipDirective: DirectiveDefinition =
+        {
+            Name = "skip"
+            Description = Some "Directs the executor to skip this field or fragment when the `if` argument is true."
+            Locations =
+                ExecutableDirectiveLocation(
+                    ExecutableDirectiveLocation.FIELD
+                    ||| ExecutableDirectiveLocation.FRAGMENT_SPREAD
+                    ||| ExecutableDirectiveLocation.INLINE_FRAGMENT
+                )
+            Arguments =
+                [
+                    {
+                        InputFieldDefinition.Name = "if"
+                        Description = Some "Skipped when true."
+                        TypeDef = BooleanType
+                        DefaultValue = None
+                        ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box)
+                    }
+                ]
+        }
 
     /// GraphQL @defer directive.
-    let DeferDirective : DirectiveDef =
-        { Name = "defer"
-          Description = Some "Defers the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
+    let DeferDirective: DirectiveDefinition =
+        {
+            Name = "defer"
+            Description = Some "Defers the resolution of this field or fragment"
+            Locations =
+                ExecutableDirectiveLocation(
+                    ExecutableDirectiveLocation.FIELD
+                    ||| ExecutableDirectiveLocation.FRAGMENT_SPREAD
+                    ||| ExecutableDirectiveLocation.INLINE_FRAGMENT
+                    ||| ExecutableDirectiveLocation.FRAGMENT_DEFINITION
+                )
+            Arguments = []
+        }
 
     /// GraphQL @stream directive.
-    let StreamDirective : DirectiveDef =
-        { Name = "stream"
-          Description = Some "Streams the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
+    let StreamDirective: DirectiveDefinition =
+        {
+            Name = "stream"
+            Description = Some "Streams the resolution of this field or fragment"
+            Locations =
+                ExecutableDirectiveLocation(
+                    ExecutableDirectiveLocation.FIELD
+                    ||| ExecutableDirectiveLocation.FRAGMENT_SPREAD
+                    ||| ExecutableDirectiveLocation.INLINE_FRAGMENT
+                    ||| ExecutableDirectiveLocation.FRAGMENT_DEFINITION
+                )
+            Arguments = []
+        }
 
     /// GraphQL @live directive.
-    let LiveDirective : DirectiveDef =
-        { Name = "live"
-          Description = Some "Subscribes for live updates of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
-
+    let LiveDirective: DirectiveDefinition =
+        {
+            Name = "live"
+            Description = Some "Subscribes for live updates of this field or fragment"
+            Locations =
+                ExecutableDirectiveLocation(
+                    ExecutableDirectiveLocation.FIELD
+                    ||| ExecutableDirectiveLocation.FRAGMENT_SPREAD
+                    ||| ExecutableDirectiveLocation.INLINE_FRAGMENT
+                    ||| ExecutableDirectiveLocation.FRAGMENT_DEFINITION
+                )
+            Arguments = []
+        }
     let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) =
         methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline internal strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
