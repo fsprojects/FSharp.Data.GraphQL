@@ -6,21 +6,30 @@ namespace FSharp.Data.GraphQL.Ast
 
 open System
 
-/// There are three types of operations that GraphQL models:
-///
-/// - query – a read‐only fetch.
-/// - mutation – a write followed by a fetch.
-/// - subscription – a long‐lived request that fetches data in response to source events.
+/// There are three types of operations that GraphQL models.
 ///
 /// Each operation is represented by an optional operation name and a selection set.
-/// https://graphql.github.io/graphql-spec/June2018/#OperationType
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Operations
+/// https://spec.graphql.org/October2021/#OperationType
 type OperationType =
+    /// A read-only fetch.
     | Query
+    /// A write followed by a fetch.
     | Mutation
+    /// A long-lived request that fetches data in response to source events.
     | Subscription
 
 
 /// 2.9 Input Values
+///
+/// Field and directive arguments accept input values of various literal primitives; input values can be scalars, enumeration
+/// values, lists, or input objects.
+///
+/// If not defined as constant (for example, in DefaultValue), input values can be specified as a variable. List and inputs
+/// objects may also contain variables (unless defined to be constant).
+///
+/// https://spec.graphql.org/October2021/#sec-Input-Values
 type Value =
     /// 2.9.1 Int Value
     | IntValue of int64
@@ -42,55 +51,204 @@ type Value =
     | Variable of string
 
 /// 2.6 Arguments
-/// Fields are conceptually functions which return values, and occasionally accept arguments which alter their behavior. These arguments often map directly to function arguments within a GraphQL server’s implementation.
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Arguments
-type Argument = { Name: string; Value: Value }
-
-/// 2.2.10 Directives
-type Directive =
+///
+/// Fields are conceptually functions which return values, and occasionally accept arguments which alter their behavior.
+/// These arguments often map directly to function arguments within a GraphQL service’s implementation.
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Arguments
+/// https://spec.graphql.org/October2021/#Arguments
+type Argument =
     {
         Name: string
+        Value: Value
+    }
+
+/// 2.12 Directives
+///
+/// Directives provide a way to describe alternate runtime execution and type validation behavior in a GraphQL document.
+///
+/// In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice,
+/// such as conditionally including or skipping a field. Directives provide this by describing additional information to the
+/// executor.
+///
+/// Directives have a name along with a list of arguments which may accept values of any input type.
+///
+/// Directives can be used to describe additional information for types, fields, fragments and operations.
+///
+/// As future versions of GraphQL adopt new configurable execution capabilities, they may be exposed via directives. GraphQL
+/// services and tools may also provide any additional custom directive beyond those described here.
+///
+/// Directives may be provided in a specific syntactic order which may have semantic interpretation.
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Directives
+/// https://spec.graphql.org/October2021/#Directive
+type Directive =
+    {
+        /// https://spec.graphql.org/October2021/#Name
+        Name: string
+        /// https://spec.graphql.org/October2021/#Arguments
         Arguments: Argument list
     }
     member x.If = x.Arguments |> List.find (fun arg -> arg.Name = "if")
 
-/// 2.2.6 Fragments
+/// 2.8 Fragments
+///
+/// Fragments are the primary unit of composition in GraphQL.
+///
+/// Fragments allow for the reuse of common repeated selections of fields, reducing duplicated text in the document. Inline
+/// Fragments can be used directly within a selection to condition upon a type condition when querying against an interface or
+/// union.
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Fragments
+/// https://spec.graphql.org/October2021/#FragmentSpread
 type FragmentSpread =
     {
         Name: string
+        /// Maybe empty.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives: Directive list
     }
 
+/// <summary><para>
+/// 2.8 Fragments
+/// </para>
+///
+/// <para>Fragments are the primary unit of composition in GraphQL.</para>
+///
+/// <para>Fragments allow for the reuse of common repeated selections of fields, reducing duplicated text in the document. Inline
+/// Fragments can be used directly within a selection to condition upon a type condition when querying against an interface or
+/// union.</para>
+///
+/// <para>Example: <c>fragment userFragment on User</c></para>
+///
+/// <para>https://spec.graphql.org/October2021/#sec-Language.Fragments</para>
+///
+/// <para>https://spec.graphql.org/October2021/#FragmentDefinition</para>
+/// </summary>
 type FragmentDefinition =
     {
-        Name: string option
-        /// 2.2.6.1 Type Conditions
-        TypeCondition: string option
+        /// Name, but not the constant "on"
+        Name: string
+
+        /// 2.8.1 Type Conditions
+        ///
+        /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
+        /// User.
+        ///
+        /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
+        ///
+        /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
+        /// type of the fragment.
+        ///
+        /// Example: `fragment userFragment on User`
+        ///
+        /// https://spec.graphql.org/October2021/#sec-Type-Conditions
+        TypeCondition: string
+
+        /// May be empty
         Directives: Directive list
+
+        /// May not be empty
+        SelectionSet: Selection list
+    }
+
+/// Fragments can be defined inline within a selection set. This is done to conditionally include fields based on their runtime
+/// type. This feature of standard fragment inclusion was demonstrated in the query FragmentTyping example. We could accomplish
+/// the same thing using inline fragments.
+///
+/// https://spec.graphql.org/October2021/#sec-Inline-Fragments
+/// https://spec.graphql.org/October2021/#InlineFragment
+and InlineFragment =
+    {
+        /// 2.8.1 Type Conditions
+        ///
+        /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
+        /// User.
+        ///
+        /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
+        ///
+        /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
+        /// type of the fragment.
+        ///
+        /// Example: `fragment userFragment on User`
+        ///
+        /// https://spec.graphql.org/October2021/#sec-Type-Conditions
+        TypeCondition: string option
+
+        /// May be empty
+        Directives: Directive list
+
+        /// May not be empty
         SelectionSet: Selection list
     }
 
 
-/// 2.2.2 Selection Sets
+/// <summary><para>
+/// 2.4 Selection Sets
+/// </para><para>
+/// An operation selects the set of information it needs, and will receive exactly that information and nothing more, avoiding
+/// over-fetching and under-fetching data.
+/// </para></summary>
+/// <remarks><para>
+/// <code language="graphql">
+/// {
+///   id
+///   firstName
+///   lastName
+/// }
+/// </code>
+/// </para><para>
+/// https://spec.graphql.org/October2021/#sec-Selection-Sets
+/// </para><para>
+/// https://spec.graphql.org/October2021/#Selection
+/// </para></remarks>
 and Selection =
+    /// https://spec.graphql.org/October2021/#Field
     | Field of Field
+    /// https://spec.graphql.org/October2021/#FragmentSpread
     | FragmentSpread of FragmentSpread
-    /// 2.2.6.2 Inline Fragments
-    | InlineFragment of FragmentDefinition
+    /// https://spec.graphql.org/October2021/#InlineFragment
+    | InlineFragment of InlineFragment
     member x.Directives =
         match x with
         | Field f -> f.Directives
         | FragmentSpread s -> s.Directives
         | InlineFragment f -> f.Directives
 
-/// 2.2.3 Fields
+/// 2.5 Fields
+/// https://spec.graphql.org/October2021/#sec-Language.Fields
+///
+/// A selection set is primarily composed of fields. A field describes one discrete piece of information available to request
+/// within a selection set.
+///
+/// Some fields describe complex data or relationships to other data. In order to further explore this data, a field may itself
+/// contain a selection set, allowing for deeply nested requests. All GraphQL operations must specify their selections down to
+/// fields which return scalar values to ensure an unambiguously shaped response.
 and Field =
     {
-        /// 2.2.5 Field Alias
+        /// 2.7 Field Alias
+        ///
+        /// By default a field’s response key in the response object will use that field’s name. However, you can define a
+        /// different response key by specifying an alias.
+        ///
+        /// https://spec.graphql.org/October2021/#sec-Field-Alias
+        /// https://spec.graphql.org/October2021/#Alias
         Alias: string option
+
+        /// https://spec.graphql.org/October2021/#Name
         Name: string
+
+        /// Arguments are unordered.
+        /// https://spec.graphql.org/October2021/#Arguments
         Arguments: Argument list
+
+        /// May be empty.
+        /// Arguments are ordered.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives: Directive list
+
+        /// May be empty.
+        /// https://spec.graphql.org/October2021/#SelectionSet
         SelectionSet: Selection list
     }
     member x.AliasOrName =
@@ -115,28 +273,68 @@ type InputType =
 
 
 
-/// 2.2.8 Variables
+/// 2.10 Variables
+/// A GraphQL operation can be parameterized with variables, maximizing reuse, and avoiding costly string building in clients at
+/// runtime.
+///
+/// If not defined as constant (for example, in DefaultValue), a Variable can be supplied for an input value.
+///
+/// Variables must be defined at the top of an operation and are in scope throughout the execution of that operation. Values for
+/// those variables are provided to a GraphQL service as part of a request so they may be substituted in during execution.
+///
+/// Variables can be used within fragments. Variables have global scope with a given operation, so a variable used within a
+/// fragment must be declared in any top-level operation that transitively consumes that fragment. If a variable is referenced in
+/// a fragment and is included by an operation that does not define that variable, that operation is invalid (see All Variable
+/// Uses Defined). (from https://spec.graphql.org/October2021/#sec-Language.Variables.Variable-use-within-Fragments)
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Variables
 type VariableDefinition =
     {
         VariableName: string
         Type: InputType
         DefaultValue: Value option
+        Directives: Directive list
     }
 
-//NOTE: For references, see https://facebook.github.io/graphql/
 /// 2.3 Operations
+///
+/// There are three types of operations that GraphQL models:
+///
+/// - query – a read-only fetch.
+/// - mutation – a write followed by a fetch.
+/// - subscription – a long-lived request that fetches data in response to source events.
+///
+/// Each operation is represented by an optional operation name and a selection set.
+///
+/// https://spec.graphql.org/October2021/#sec-Language.Operations
 type OperationDefinition =
     {
-        /// Defaults to `query`; "query shorthand"
+        /// Defaults to `query`; called "query shorthand".
         OperationType: OperationType
+
+        /// https://spec.graphql.org/October2021/#Name
         Name: string option
+
         /// May be empty
+        /// https://spec.graphql.org/October2021/#VariableDefinitions
         VariableDefinitions: VariableDefinition list
+
         /// May be empty
         Directives: Directive list
+
         /// May not be empty
         SelectionSet: Selection list
     }
+    /// Create a new Operation Definition.
+    static member Create(selectionSet, ?op: OperationType) =
+        {
+            OperationType = defaultArg op Query
+            Name = None
+            VariableDefinitions = []
+            Directives = []
+            SelectionSet = selectionSet
+        }
+
     member x.IsShortHandQuery =
         x.OperationType = Query && x.Name.IsNone && x.VariableDefinitions.IsEmpty && x.Directives.IsEmpty
 
@@ -156,20 +354,75 @@ type InputFieldDefinition =
         DefaultValue: Value option
     }
 
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Operations
-type OperationTypeDefinition =
+/// 3.3.1 Root Operation Types
+///
+/// A schema defines the initial root operation type for each kind of operation it supports: query, mutation, and subscription;
+/// this determines the place in the type system where those operations begin.
+///
+/// The query root operation type must be provided and must be an Object type.
+///
+/// The mutation root operation type is optional; if it is not provided, the service does not support mutations. If it is
+/// provided, it must be an Object type.
+///
+/// Similarly, the subscription root operation type is also optional; if it is not provided, the service does not support
+/// subscriptions. If it is provided, it must be an Object type.
+///
+/// The query, mutation, and subscription root types must all be different types if provided.
+///
+/// The fields on the query root operation type indicate what fields are available at the top level of a GraphQL query operation.
+///
+/// Default Root Operation Type Names:
+///
+/// While any type can be the root operation type for a GraphQL operation, the type system definition language can omit the schema
+/// definition when the query, mutation, and subscription root types are named "Query", "Mutation", and "Subscription" respectively.
+///
+/// Likewise, when representing a GraphQL schema using the type system definition language, a schema definition should be omitted
+/// if it only uses the default root operation type names.
+///
+/// This example describes a valid complete GraphQL schema, despite not explicitly including a schema definition.
+/// The "Query" type is presumed to be the query root operation type of the schema.
+///
+/// Also see 3.3 Schema.
+/// https://spec.graphql.org/October2021/#RootOperationTypeDefinition
+type RootOperationTypeDefinition =
     {
-        NamedType: string
+        /// https://spec.graphql.org/October2021/#OperationType
         Operation: OperationType
+        /// https://spec.graphql.org/October2021/#NamedType
+        NamedType: string
     }
 
-/// A GraphQL service’s collective type system capabilities are referred to as that service’s “schema”. A schema is defined in terms of the types and directives it supports as well as the root operation types for each kind of operation: query, mutation, and subscription; this determines the place in the type system where those operations begin.
+/// 3.3 Schema
+///
+/// A GraphQL service’s collective type system capabilities are referred to as that service’s “schema”. A schema is defined in
+/// terms of the types and directives it supports as well as the root operation types for each kind of operation: query, mutation,
+/// and subscription; this determines the place in the type system where those operations begin.
+///
 /// A GraphQL schema must itself be internally valid. This section describes the rules for this validation process where relevant.
-/// https://graphql.github.io/graphql-spec/June2018/#SchemaDefinition
+///
+/// All types within a GraphQL schema must have unique names. No two provided types may have the same name. No provided type may
+/// have a name which conflicts with any built in types (including Scalar and Introspection types).
+///
+/// All directives within a GraphQL schema must have unique names.
+///
+/// All types and directives defined within a schema must not have a name which begins with "__" (two underscores), as this is
+/// used exclusively by GraphQL’s introspection system.
+///
+/// Example <c>"My schema" schema @important { ... }</c> or <c>schema { ... }</c>.
+///
+/// https://spec.graphql.org/October2021/#sec-Schema
+/// https://spec.graphql.org/October2021/#SchemaDefinition
 type SchemaDefinition =
     {
+        /// https://spec.graphql.org/October2021/#Description
+        Description: string option
+
+        /// May be empty.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives: Directive list
-        OperationTypes: OperationTypeDefinition
+
+        /// https://spec.graphql.org/October2021/#RootOperationTypeDefinition
+        RootOperationTypes: RootOperationTypeDefinition
     }
 
 type InputValueDefinition =
@@ -374,9 +627,28 @@ type DirectiveDefinition =
     }
 
 
+/// 3.0 Type System
+///
+/// The GraphQL Type system describes the capabilities of a GraphQL service and is used to determine if a requested operation is
+/// valid, to guarantee the type of response results, and describes the input types of variables to determine if values provided
+/// at request time are valid.
+///
+/// The GraphQL language includes an IDL used to describe a GraphQL service’s type system. Tools may use this definition language
+/// to provide utilities such as client code generation or service boot-strapping.
+///
+/// GraphQL tools or services which only seek to execute GraphQL requests and not construct a new GraphQL schema may choose not to
+/// allow TypeSystemDefinition. Tools which only seek to produce schema and not execute requests may choose to only allow
+/// TypeSystemDocument and not allow ExecutableDefinition or TypeSystemExtension but should provide a descriptive error if
+/// present.
+///
+/// https://spec.graphql.org/October2021/#sec-Type-System
+/// https://spec.graphql.org/October2021/#TypeSystemDefinition
 type TypeSystemDefinition =
+    /// https://spec.graphql.org/October2021/#SchemaDefinition
     | SchemaDefinition of SchemaDefinition
+    /// https://spec.graphql.org/October2021/#TypeDefinition
     | TypeDefinition of TypeDefinition
+    /// https://spec.graphql.org/October2021/#DirectiveDefinition
     | DirectiveDefinition of DirectiveDefinition
 
 /// Schema extensions are used to represent a schema which has been extended from an original schema. For example, this might be used by a GraphQL service which adds additional operation types, or additional directives to an existing schema.
@@ -386,7 +658,7 @@ type SchemaExtension =
         /// May be empty. Any directives provided must not already apply to the original Schema.
         Directives: Directive list
         /// May be empty
-        OperationTypes: OperationTypeDefinition list
+        OperationTypes: RootOperationTypeDefinition list
     }
 
 /// Type extensions are used to represent a GraphQL type which has been extended from some original type. For example, this might be used by a local service to represent additional fields a GraphQL client only accesses locally.
@@ -405,16 +677,22 @@ type TypeSystemExtension =
     | SchemaExtension of SchemaExtension
     | TypeExtension of TypeExtension
 
+
+/// https://spec.graphql.org/October2021/#Definition
 type Definition =
+    /// https://spec.graphql.org/October2021/#OperationDefinition
     | OperationDefinition of OperationDefinition
+    /// https://spec.graphql.org/October2021/#FragmentDefinition
     | FragmentDefinition of FragmentDefinition
+    /// https://spec.graphql.org/October2021/#TypeSystemDefinition
     | TypeSystemDefinition of TypeSystemDefinition
+    /// https://spec.graphql.org/October2021/#TypeSystemExtension
     | TypeSystemExtension of TypeSystemExtension
 
     member x.Name =
         match x with
         | OperationDefinition op -> op.Name
-        | FragmentDefinition frag -> frag.Name
+        | FragmentDefinition frag -> Some frag.Name
         | TypeSystemDefinition _ -> None
         | TypeSystemExtension _ -> None
 
@@ -430,14 +708,45 @@ type Definition =
         | FragmentDefinition frag -> frag.SelectionSet
         | _ -> []
 
-/// 2.2 Query Document
-/// A GraphQL Document describes a complete file or request string operated on by a GraphQL service or client. A document contains multiple definitions, either executable or representative of a GraphQL type system.
+
+/// https://spec.graphql.org/October2021/#ExecutableDefinition
+type ExecutableDefinition =
+    /// https://spec.graphql.org/October2021/#OperationDefinition
+    | OperationDefinition of OperationDefinition
+    /// https://spec.graphql.org/October2021/#FragmentDefinition
+    | FragmentDefinition of FragmentDefinition
+
+
+/// https://spec.graphql.org/October2021/#ExecutableDocument
+type ExecutableDocument =
+    {
+        Definitions: ExecutableDefinition list
+    }
+
+
+/// 2.2 Document
 ///
-/// Documents are only executable by a GraphQL service if they contain an OperationDefinition and otherwise only contain ExecutableDefinition. However documents which do not contain OperationDefinition or do contain TypeSystemDefinition or TypeSystemExtension may still be parsed and validated to allow client tools to represent many GraphQL uses which may appear across many individual files.
+/// A GraphQL Document describes a complete file or request string operated on by a GraphQL service or client. A document contains
+/// multiple definitions, either executable or representative of a GraphQL type system.
 ///
-/// If a Document contains only one operation, that operation may be unnamed or represented in the shorthand form, which omits both the query keyword and operation name. Otherwise, if a GraphQL Document contains multiple operations, each operation must be named. When submitting a Document with multiple operations to a GraphQL service, the name of the desired operation to be executed must also be provided.
+/// Documents are only executable by a GraphQL service if they are ExecutableDocument and contain at least one
+/// OperationDefinition. A Document which contains TypeSystemDefinitionOrExtension must not be executed; GraphQL execution
+/// services which receive a Document containing these should return a descriptive error.
 ///
-/// GraphQL services which only seek to provide GraphQL query execution may choose to only include ExecutableDefinition and omit the TypeSystemDefinition and TypeSystemExtension rules from Definition.
+/// GraphQL services which only seek to execute GraphQL requests and not construct a new GraphQL schema may choose to only permit
+/// ExecutableDocument.
 ///
-/// https://graphql.github.io/graphql-spec/June2018/#sec-Language.Document
-type Document = { Definitions: Definition list }
+/// Documents which do not contain OperationDefinition or do contain TypeSystemDefinitionOrExtension may still be parsed and
+/// validated to allow client tools to represent many GraphQL uses which may appear across many individual files.
+///
+/// If a Document contains only one operation, that operation may be unnamed. If that operation is a query without variables or
+/// directives then it may also be represented in the shorthand form, omitting both the query keyword as well as the operation
+/// name. Otherwise, if a GraphQL Document contains multiple operations, each operation must be named. When submitting a Document
+/// with multiple operations to a GraphQL service, the name of the desired operation to be executed must also be provided.
+///
+/// https://spec.graphql.org/October2021/#sec-Document-Syntax
+/// https://spec.graphql.org/October2021/#Document
+type Document =
+    {
+        Definitions: Definition list
+    }
