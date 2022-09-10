@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL
+namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Concurrent
@@ -47,20 +47,20 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
             let values = entries |> Seq.map (fun kvp -> kvp.Value)
             fun () -> values.GetEnumerator()
         { new IMemoryCacheStore<'key, 'value> with
-            member __.Add entry = entries.AddOrUpdate(entry.Key, entry, fun _ _ -> entry) |> ignore
-            member __.GetOrAdd key getValue = entries.GetOrAdd(key, getValue)
-            member __.Remove key = entries.TryRemove key |> ignore
-            member __.Contains key = entries.ContainsKey key
-            member __.Update key update =
+            member _.Add entry = entries.AddOrUpdate(entry.Key, entry, fun _ _ -> entry) |> ignore
+            member _.GetOrAdd key getValue = entries.GetOrAdd(key, getValue)
+            member _.Remove key = entries.TryRemove key |> ignore
+            member _.Contains key = entries.ContainsKey key
+            member _.Update key update =
                 match entries.TryGetValue(key) with
                 | (true, entry) -> entries.AddOrUpdate(key, entry, fun _ entry -> update entry) |> ignore
                 | _ -> ()
-            member __.TryFind key =
+            member _.TryFind key =
                 match entries.TryGetValue(key) with
                 | (true, entry) -> Some entry
                 | _ -> None
-            member __.GetEnumerator () = getEnumerator ()
-            member __.GetEnumerator () = getEnumerator () :> Collections.IEnumerator }
+            member _.GetEnumerator () = getEnumerator ()
+            member _.GetEnumerator () = getEnumerator () :> Collections.IEnumerator }
 
     let checkExpiration () =
         store |> Seq.iter (fun entry -> if CacheExpiration.isExpired entry then store.Remove entry.Key)
@@ -115,8 +115,8 @@ type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
             Some disposable
         | None -> None
 
-    member __.Add key value = add key value
-    member __.Remove key = remove key
-    member __.Get key = get key
-    member __.GetOrAdd key value = getOrAdd key value
-    member __.GetOrAddResult key f = getOrAddResult key f
+    member _.Add key value = add key value
+    member _.Remove key = remove key
+    member _.Get key = get key
+    member _.GetOrAdd key value = getOrAdd key value
+    member _.GetOrAddResult key f = getOrAddResult key f

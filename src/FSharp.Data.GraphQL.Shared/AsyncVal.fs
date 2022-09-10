@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL
+namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
@@ -177,13 +177,13 @@ module AsyncVal =
         |> map (Array.fold Array.append Array.empty)
 
 type AsyncValBuilder () =
-    member __.Zero () = AsyncVal.empty
-    member __.Return v = AsyncVal.wrap v
-    member __.ReturnFrom (v: AsyncVal<_>) = v
-    member __.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
-    member __.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) =
+    member _.Zero () = AsyncVal.empty
+    member _.Return v = AsyncVal.wrap v
+    member _.ReturnFrom (v: AsyncVal<_>) = v
+    member _.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
+    member _.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) =
         AsyncVal.bind binder v
-    member __.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) =
+    member _.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) =
         Async(async {
             let! value = a
             let bound = binder value
@@ -207,13 +207,13 @@ module AsyncExtensions =
 
     type Microsoft.FSharp.Control.AsyncBuilder with
 
-        member __.ReturnFrom (v: AsyncVal<'T>) =
+        member _.ReturnFrom (v: AsyncVal<'T>) =
             match v with
             | Value v -> async.Return v
             | Async a -> async.ReturnFrom a
             | Failure f -> async.Return (raise f)
 
-        member __.Bind (v: AsyncVal<'T>, binder) =
+        member _.Bind (v: AsyncVal<'T>, binder) =
             match v with
             | Value v -> async.Bind(async.Return v, binder)
             | Async a -> async.Bind(a, binder)

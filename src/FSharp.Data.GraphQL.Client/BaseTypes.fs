@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
@@ -64,10 +64,10 @@ module HttpHeaders =
 /// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
     /// Gets the name of the provided enum type.
-    member __.GetName() = name
+    member _.GetName() = name
 
     /// Gets the value of the provided enum type.
-    member __.GetValue() = value
+    member _.GetValue() = value
 
     override x.ToString() = x.GetValue()
 
@@ -106,10 +106,10 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         else []
 
     /// Gets the name of this provided record type.
-    member __.GetName() = name
+    member _.GetName() = name
 
     /// Gets a list of this provided record properties.
-    member __.GetProperties() = properties
+    member _.GetProperties() = properties
 
     /// Produces a dictionary containing all the properties of this provided record type.
     member x.ToDictionary() =
@@ -415,18 +415,18 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
         JsonValueHelper.getResponseCustomFields responseJson
         |> Serialization.deserializeMap
 
-    member private __.ResponseJson = responseJson
+    member private _.ResponseJson = responseJson
 
     ///  <exclude />
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
-    member __.RawData = rawData
+    member _.RawData = rawData
 
     /// Gets all the errors returned by the operation on the server.
-    member __.Errors = errors
+    member _.Errors = errors
 
     /// Gets all the custom data returned by the operation on server as a map of names and values.
-    member __.CustomData = customData
+    member _.CustomData = customData
 
     member x.Equals(other : OperationResultBase) =
         x.ResponseJson = other.ResponseJson
@@ -441,4 +441,4 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
-    member __.Query = query
+    member _.Query = query

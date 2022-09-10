@@ -11,10 +11,10 @@ open FSharp.Data.GraphQL.Types.Patterns
 type OptionConverter() =
     inherit JsonConverter()
 
-    override __.CanConvert(t) =
+    override _.CanConvert(t) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
 
-    override __.WriteJson(writer, value, serializer) =
+    override _.WriteJson(writer, value, serializer) =
         let value =
             if isNull value then null
             else
@@ -22,7 +22,7 @@ type OptionConverter() =
                 fields.[0]
         serializer.Serialize(writer, value)
 
-    override __.ReadJson(reader, t, _, serializer) =
+    override _.ReadJson(reader, t, _, serializer) =
         let innerType = t.GetGenericArguments().[0]
         let innerType =
             if innerType.IsValueType then (typedefof<System.Nullable<_>>).MakeGenericType([|innerType|])
@@ -36,14 +36,14 @@ type OptionConverter() =
 type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
 
-    override __.CanConvert(t) = t = typeof<GraphQLQuery>  
-    
-    override __.WriteJson(_, _, _) =  failwith "Not supported"    
+    override _.CanConvert(t) = t = typeof<GraphQLQuery>
 
-    override __.ReadJson(reader, _, _, serializer) =
+    override _.WriteJson(_, _, _) =  failwith "Not supported"
+
+    override _.ReadJson(reader, _, _, serializer) =
         let jobj = JObject.Load reader
         let query = jobj.Property("query").Value.ToString()
-        let plan = 
+        let plan =
             match meta with
             | Some meta -> executor.CreateExecutionPlan(query, meta = meta)
             | None -> executor.CreateExecutionPlan(query)
@@ -54,12 +54,12 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
             // For multipart requests, we need to replace some variables
             Map.iter(fun path rep -> jobj.SelectToken(path).Replace(JObject.FromObject(rep))) replacements
             let vars = JObject.Parse(jobj.Property("variables").Value.ToString())
-            let variables = 
+            let variables =
                 vs
                 |> List.fold (fun (acc: Map<string, obj>)(vdef: VarDef) ->
                     match vars.TryGetValue(vdef.Name) with
                     | true, jval ->
-                        let v = 
+                        let v =
                             match jval.Type with
                             | JTokenType.Null -> null
                             | JTokenType.String -> jval.ToString() :> obj
@@ -76,13 +76,13 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
 type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: Map<string, obj>, ?meta : Metadata) =
     inherit JsonConverter()
 
-    override __.CanWrite = false
+    override _.CanWrite = false
 
-    override __.CanConvert(t) = t = typeof<WebSocketClientMessage>
+    override _.CanConvert(t) = t = typeof<WebSocketClientMessage>
 
-    override __.WriteJson(_, _, _) = failwith "Not supported"
+    override _.WriteJson(_, _, _) = failwith "Not supported"
 
-    override __.ReadJson(reader, _, _, _) =
+    override _.ReadJson(reader, _, _, _) =
         let jobj = JObject.Load reader
         let typ = jobj.Property("type").Value.ToString()
         match typ with
@@ -117,11 +117,11 @@ type WebSocketClientMessageConverter<'a>(executor : Executor<'a>, replacements: 
 type WebSocketServerMessageConverter() =
     inherit JsonConverter()
 
-    override __.CanRead = false
+    override _.CanRead = false
 
-    override __.CanConvert(t) = t = typedefof<WebSocketServerMessage> || t.DeclaringType = typedefof<WebSocketServerMessage>
+    override _.CanConvert(t) = t = typedefof<WebSocketServerMessage> || t.DeclaringType = typedefof<WebSocketServerMessage>
 
-    override __.WriteJson(writer, value, _) =
+    override _.WriteJson(writer, value, _) =
         let value = value :?> WebSocketServerMessage
         let jobj = JObject()
         match value with
@@ -146,4 +146,4 @@ type WebSocketServerMessageConverter() =
             jobj.Add(JProperty("type", "complete"))
             jobj.Add(JProperty("id", id))
         jobj.WriteTo(writer)
-    override __.ReadJson(_, _, _, _) = failwith "Not supported"
+    override _.ReadJson(_, _, _, _) = failwith "Not supported"

@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.ObservableExtensionsTests
@@ -119,7 +119,7 @@ let ``bufferByTimingAndElementCount should call OnComplete and return items in e
 
 type IndexException(index : int) =
     inherit exn(sprintf "Error at index %i." index)
-    member __.Index = index
+    member _.Index = index
 
 [<Fact>]
 let ``catch should call OnComplete and return items in expected order`` () =

@@ -17,44 +17,44 @@ type GraphQLWebSocket(innerSocket : WebSocket) =
     let subscriptions = ConcurrentDictionary<string, IDisposable>() :> IDictionary<string, IDisposable>
     let id = System.Guid.NewGuid()
 
-    override __.CloseStatus = innerSocket.CloseStatus
+    override _.CloseStatus = innerSocket.CloseStatus
 
-    override __.CloseStatusDescription = innerSocket.CloseStatusDescription
+    override _.CloseStatusDescription = innerSocket.CloseStatusDescription
 
-    override __.State = innerSocket.State
+    override _.State = innerSocket.State
 
-    override __.SubProtocol = innerSocket.SubProtocol
+    override _.SubProtocol = innerSocket.SubProtocol
 
-    override __.CloseAsync(status, description, ct) = innerSocket.CloseAsync(status, description, ct)
+    override _.CloseAsync(status, description, ct) = innerSocket.CloseAsync(status, description, ct)
 
-    override __.CloseOutputAsync(status, description, ct) = innerSocket.CloseOutputAsync(status, description, ct)
+    override _.CloseOutputAsync(status, description, ct) = innerSocket.CloseOutputAsync(status, description, ct)
 
     override this.Dispose() =
         this.UnsubscribeAll()
         innerSocket.Dispose()
 
-    override __.ReceiveAsync(buffer : ArraySegment<byte>, ct) = innerSocket.ReceiveAsync(buffer, ct)
+    override _.ReceiveAsync(buffer : ArraySegment<byte>, ct) = innerSocket.ReceiveAsync(buffer, ct)
 
-    override __.SendAsync(buffer : ArraySegment<byte>, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
+    override _.SendAsync(buffer : ArraySegment<byte>, msgType, endOfMsg, ct) = innerSocket.SendAsync(buffer, msgType, endOfMsg, ct)
 
-    override __.Abort() = innerSocket.Abort()
+    override _.Abort() = innerSocket.Abort()
 
-    member __.Subscribe(id : string, unsubscriber : IDisposable) =
+    member _.Subscribe(id : string, unsubscriber : IDisposable) =
         subscriptions.Add(id, unsubscriber)
 
-    member __.Unsubscribe(id : string) =
+    member _.Unsubscribe(id : string) =
         match subscriptions.ContainsKey(id) with
         | true ->
             subscriptions.[id].Dispose()
             subscriptions.Remove(id) |> ignore
         | false -> ()
 
-    member __.UnsubscribeAll() =
+    member _.UnsubscribeAll() =
         subscriptions
         |> Seq.iter (fun x -> x.Value.Dispose())
         subscriptions.Clear()
 
-    member __.Id = id
+    member _.Id = id
 
 module SocketManager =
     let private sockets = ConcurrentDictionary<Guid, GraphQLWebSocket>() :> IDictionary<Guid, GraphQLWebSocket>
@@ -145,7 +145,7 @@ module SocketManager =
         handleMessages executor root socket |> Async.RunSynchronously
 
 type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : unit -> 'Root) =
-    member __.Invoke(ctx : HttpContext) =
+    member _.Invoke(ctx : HttpContext) =
         async {
             match ctx.WebSockets.IsWebSocketRequest with
             | true ->

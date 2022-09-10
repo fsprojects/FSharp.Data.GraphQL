@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
@@ -17,10 +17,10 @@ type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStr
         | None -> new Upload(stream, fileName, ownsStream = true)
 
     /// Gets the stream associated to this Upload type.
-    member __.Stream = stream
+    member _.Stream = stream
 
     /// Gets the content type of this Upload type.
-    member __.ContentType =
+    member _.ContentType =
         match contentType with
         | Some ct -> ct
         | None ->
@@ -30,11 +30,11 @@ type Upload (stream : Stream, fileName : string, ?contentType : string, ?ownsStr
             | _ -> "application/octet-stream"
 
     /// Gets the name of the file which contained on the stream.
-    member __.FileName = fileName
+    member _.FileName = fileName
 
     /// Gets a boolean value indicating if this Upload type owns the stream associated with it.
     /// If true, it will dispose the stream when this Upload type is disposed.
-    member __.OwnsStream = defaultArg ownsStream false
+    member _.OwnsStream = defaultArg ownsStream false
 
     interface IDisposable with
         member x.Dispose() = if x.OwnsStream then x.Stream.Dispose()

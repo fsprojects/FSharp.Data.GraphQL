@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Execution
 
@@ -113,17 +113,17 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             else sb.Append("null") |> ignore
         ()
     /// Returns raw content of the current lookup.
-    member __.Buffer : KeyValuePair<string, obj> [] = kvals
+    member _.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
-    member __.Count = kvals.Length
+    member _.Count = kvals.Length
     /// Updates an entry's value under given key. It will throw an exception
     /// if provided key cannot be found in provided lookup.
-    member __.Update key value = setValue key value
+    member _.Update key value = setValue key value
     override x.Equals(other) =
         match other with
         | :? NameValueLookup as lookup -> structEq x lookup
         | _ -> false
-    override __.GetHashCode() =
+    override _.GetHashCode() =
         let mutable hash = 0
         for kv in kvals do
             hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if isNull kv.Value then 0 else kv.Value.GetHashCode())
@@ -135,30 +135,30 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     interface IEquatable<NameValueLookup> with
         member x.Equals(other) = structEq x other
     interface System.Collections.IEnumerable with
-        member __.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
+        member _.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
     interface IEnumerable<KeyValuePair<string, obj>> with
-        member __.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
+        member _.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
     interface IDictionary<string, obj> with
-        member __.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Contains(item) = kvals |> Array.exists ((=) item)
-        member __.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
-        member __.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
+        member _.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Contains(item) = kvals |> Array.exists ((=) item)
+        member _.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
+        member _.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
         member x.Count = x.Count
-        member __.IsReadOnly = true
-        member __.Item
+        member _.IsReadOnly = true
+        member _.Item
             with get (key) = getValue key
             and set (key) v = setValue key v
-        member __.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
-        member __.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
-        member __.Remove(_:string) =
+        member _.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
+        member _.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
+        member _.Remove(_:string) =
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member __.Remove(_:KeyValuePair<string,obj>) =
+        member _.Remove(_:KeyValuePair<string,obj>) =
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member __.TryGetValue(key, value) =
+        member _.TryGetValue(key, value) =
             match kvals |> Array.tryFind (fun kv -> kv.Key = key) with
             | Some kv -> value <- kv.Value; true
             | None -> value <- null; false

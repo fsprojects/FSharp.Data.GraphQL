@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation 2005-2012.
 // This sample code is provided "as is" without warranty of any kind.
 // We disclaim all warranties, either express or implied, including the
@@ -276,7 +276,7 @@ type private JsonParser(jsonText:string) =
         i <- i + expected.Length
         r
 
-    member __.Parse() =
+    member _.Parse() =
         let value = parseRootValue()
         skipWhitespace()
         if i <> s.Length then
