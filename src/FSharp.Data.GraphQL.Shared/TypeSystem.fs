@@ -43,7 +43,7 @@ module Introspection =
             Args: IntrospectionInputVal []
         }
 
-    /// Introspection descriptor of a GraphQL type defintion.
+    /// Introspection descriptor of a GraphQL type definition.
     and IntrospectionType =
         {
             /// Which kind category current type belongs to.
@@ -55,7 +55,7 @@ module Introspection =
             /// Array of field descriptors defined within current type.
             /// Only present for Object and Interface types.
             Fields: IntrospectionField [] option
-            /// Array of interfaces implemented by output object type defintion.
+            /// Array of interfaces implemented by output object type definition.
             Interfaces: IntrospectionTypeRef [] option
             /// Array of type references being possible implementation of current type.
             /// Only present for Union types (list of union cases) and Interface types
@@ -234,7 +234,7 @@ module Introspection =
             }
 
         /// <summary>
-        /// Constructs an introspection type reference for any named type defintion
+        /// Constructs an introspection type reference for any named type definition
         /// (any type other than List or NonNull) with unique name included.
         /// </summary>
         /// <param name="inner">Introspection type descriptor to construct reference from.</param>
@@ -483,7 +483,7 @@ and FieldExecuteCompiler = FieldDef -> ExecuteField
 /// A field execute map object.
 /// Field execute maps are mutable objects built to compile fields at runtime.
 and FieldExecuteMap(compiler: FieldExecuteCompiler) =
-    let map = new Dictionary<string * string, ExecuteField * InputFieldDef []>()
+    let map = Dictionary<string * string, ExecuteField * InputFieldDef []>()
 
     let getKey typeName fieldName =
         if List.exists ((=) fieldName) [ "__schema"; "__type"; "__typename" ] then
@@ -554,7 +554,6 @@ and FieldExecuteMap(compiler: FieldExecuteCompiler) =
 /// a common root.
 and TypeDef =
     interface
-
         /// Return .NET CLR type associated with current type definition.
         abstract Type: Type
 
@@ -921,7 +920,7 @@ and ExecutionPlan =
         ValidationResult: ValidationResult<AstError>
     }
     member x.Item
-        with get (id) = x.Fields |> List.find (fun f -> f.Identifier = id)
+        with get id = x.Fields |> List.find (fun f -> f.Identifier = id)
 
 /// Execution context of the current GraphQL operation. It contains a full
 /// knowledge about which fields will be accessed, what types are associated
@@ -984,12 +983,8 @@ and ResolveFieldContext =
         | Some found -> downcast found
         | None ->
             raise (
-                System.Collections.Generic.KeyNotFoundException(
-                    sprintf
-                        "Argument '%s' was not provided within context of a field '%s'. Check if it was supplied within GraphQL query."
-                        name
-                        x.ExecutionInfo.Identifier
-                )
+                KeyNotFoundException
+                    $"Argument '%s{name}' was not provided within context of a field '%s{x.ExecutionInfo.Identifier}'. Check if it was supplied within GraphQL query."
             )
 
 /// Function type for the compiled field executor.
@@ -1063,8 +1058,8 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
 
     override x.GetHashCode() =
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
-        hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
+        hash <- (hash * 397) ^^^ x.TypeDef.GetHashCode()
+        hash <- (hash * 397) ^^^ x.Args.GetHashCode()
         hash
 
     override x.ToString() =
@@ -1522,7 +1517,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> =
 
     override x.GetHashCode() =
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.Options.GetHashCode())
+        hash <- (hash * 397) ^^^ x.Options.GetHashCode()
         hash
 
     override x.ToString() = x.Name + "!"
@@ -1739,12 +1734,12 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> =
 
     override x.GetHashCode() =
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
+        hash <- (hash * 397) ^^^ x.TypeDef.GetHashCode()
         hash
 
     override x.ToString() = x.Name + ": " + x.TypeDef.ToString()
 
-and Tag = System.IComparable
+and Tag = IComparable
 
 and TagsResolver = ResolveFieldContext -> Tag seq
 
@@ -1811,8 +1806,8 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
 
     override x.GetHashCode() =
         let mutable hash = x.Name.GetHashCode()
-        hash <- (hash * 397) ^^^ (x.TypeDef.GetHashCode())
-        hash <- (hash * 397) ^^^ (x.Args.GetHashCode())
+        hash <- (hash * 397) ^^^ x.TypeDef.GetHashCode()
+        hash <- (hash * 397) ^^^ x.Args.GetHashCode()
         hash
 
     override x.ToString() =
@@ -1918,7 +1913,7 @@ and Metadata(data: Map<string, obj>) =
     /// <param name="key">The key to be used to search information for.</param>
     member __.TryFind<'Value>(key: string) = if data.ContainsKey key then data.Item key :?> 'Value |> Some else None
 
-    override __.ToString() = sprintf "%A" data
+    override __.ToString() = $"%A{data}"
 
 /// Map of types of an ISchema.
 /// The map of types is used to plan and execute queries.
@@ -1957,7 +1952,7 @@ and TypeMap() =
 
         let add name def overwrite =
             if not (map.ContainsKey(name)) then map.Add(name, def)
-            elif overwrite then map.[name] <- def
+            elif overwrite then map[name] <- def
 
         let asNamed x =
             match named x with
@@ -2061,7 +2056,7 @@ and TypeMap() =
             None
         else
             match map.TryGetValue(name) with
-            | (true, item) -> Some item
+            | true, item -> Some item
             | _ -> None
 
     /// <summary>
@@ -2209,14 +2204,14 @@ module Resolve =
     let private boxifyFilter<'Root, 'Input, 'Output>
         (f: ResolveFieldContext -> 'Root -> 'Input -> 'Output option)
         : ResolveFieldContext -> obj -> obj -> obj option =
-        <@@ fun ctx (r: obj) (i: obj) -> f ctx (r :?> 'Root) (i :?> 'Input) |> Option.map (box) @@>
+        <@@ fun ctx (r: obj) (i: obj) -> f ctx (r :?> 'Root) (i :?> 'Input) |> Option.map box @@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
 
     let private boxifyAsyncFilter<'Root, 'Input, 'Output>
         (f: ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>)
         : ResolveFieldContext -> obj -> obj -> Async<obj option> =
-        <@@ fun ctx (r: obj) (i: obj) -> async.Bind(f ctx (r :?> 'Root) (i :?> 'Input), async.Return << Option.map (box)) @@>
+        <@@ fun ctx (r: obj) (i: obj) -> async.Bind(f ctx (r :?> 'Root) (i :?> 'Input), async.Return << Option.map box) @@>
         |> LeafExpressionConverter.EvaluateQuotation
         |> unbox
 
@@ -2258,24 +2253,24 @@ module Resolve =
     let private boxifyExpr expr : ResolveFieldContext -> obj -> obj =
         match unwrapExpr expr with
         | resolver, FSharpFunc (_, FSharpFunc (d, c)) -> resolveUntyped resolver d c runtimeBoxify
-        | resolver, _ -> failwithf "Unsupported signature for Resolve %A" (resolver.GetType())
+        | resolver, _ -> failwith $"Unsupported signature for Resolve %A{resolver.GetType()}"
 
     let private boxifyExprAsync expr : ResolveFieldContext -> obj -> Async<obj> =
         match unwrapExpr expr with
-        | resolver, FSharpFunc (_, FSharpFunc (d, FSharpAsync (c))) -> resolveUntyped resolver d c runtimeBoxifyAsync
-        | resolver, _ -> failwithf "Unsupported signature for Async Resolve %A" (resolver.GetType())
+        | resolver, FSharpFunc (_, FSharpFunc (d, FSharpAsync c)) -> resolveUntyped resolver d c runtimeBoxifyAsync
+        | resolver, _ -> failwith $"Unsupported signature for Async Resolve %A{resolver.GetType()}"
 
     let private boxifyFilterExpr expr : ResolveFieldContext -> obj -> obj -> obj option =
         match unwrapExpr expr with
-        | resolver, FSharpFunc (_, FSharpFunc (r, FSharpFunc (i, FSharpOption (o)))) ->
+        | resolver, FSharpFunc (_, FSharpFunc (r, FSharpFunc (i, FSharpOption o))) ->
             resolveUntypedFilter resolver r i o runtimeBoxifyFilter
-        | resolver, _ -> failwithf "Unsupported signature for Subscription Filter Resolve %A" (resolver.GetType())
+        | resolver, _ -> failwith $"Unsupported signature for Subscription Filter Resolve %A{resolver.GetType()}"
 
     let private boxifyAsyncFilterExpr expr : ResolveFieldContext -> obj -> obj -> Async<obj option> =
         match unwrapExpr expr with
-        | resolver, FSharpFunc (_, FSharpFunc (r, FSharpFunc (i, FSharpAsync (FSharpOption (o))))) ->
+        | resolver, FSharpFunc (_, FSharpFunc (r, FSharpFunc (i, FSharpAsync (FSharpOption o)))) ->
             resolveUntypedFilter resolver r i o runtimeBoxifyAsyncFilter
-        | resolver, _ -> failwithf "Unsupported signature for Async Subscription Filter Resolve %A" (resolver.GetType())
+        | resolver, _ -> failwith $"Unsupported signature for Async Subscription Filter Resolve %A{resolver.GetType()}"
 
     let (|BoxedSync|_|) =
         function
@@ -2289,7 +2284,7 @@ module Resolve =
 
     let (|BoxedExpr|_|) =
         function
-        | ResolveExpr (e) -> Some(boxifyExpr e)
+        | ResolveExpr e -> Some(boxifyExpr e)
         | _ -> None
 
     let (|BoxedFilterExpr|_|) =
@@ -2453,7 +2448,6 @@ module Patterns =
 [<AutoOpen>]
 module SchemaDefinitions =
     open System.Globalization
-    open System.Reflection
 
     /// Tries to convert any value to int.
     let private coerceIntValue (x: obj) : int option =
@@ -2469,7 +2463,7 @@ module SchemaDefinitions =
         | :? bool as b -> Some(if b then 1 else 0)
         | other ->
             try
-                Some(System.Convert.ToInt32 other)
+                Some(Convert.ToInt32 other)
             with
             | _ -> None
 
@@ -2487,7 +2481,7 @@ module SchemaDefinitions =
         | :? bool as b -> Some(if b then 1L else 0L)
         | other ->
             try
-                Some(System.Convert.ToInt64 other)
+                Some(Convert.ToInt64 other)
             with
             | _ -> None
 
@@ -2505,7 +2499,7 @@ module SchemaDefinitions =
         | :? bool as b -> Some(if b then 1. else 0.)
         | other ->
             try
-                Some(System.Convert.ToDouble other)
+                Some(Convert.ToDouble other)
             with
             | _ -> None
 
@@ -2523,7 +2517,7 @@ module SchemaDefinitions =
         | :? bool as b -> Some b
         | other ->
             try
-                Some(System.Convert.ToBoolean other)
+                Some(Convert.ToBoolean other)
             with
             | _ -> None
 
