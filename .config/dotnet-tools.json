@@ -7,6 +7,12 @@
       "commands": [
         "fsdocs"
       ]
+    },
+    "fantomas": {
+      "version": "5.0.0-beta-010",
+      "commands": [
+        "fantomas"
+      ]
     }
   }
 }
