@@ -21,9 +21,9 @@ open FSharp.Data.GraphQL
 type MyProvider = GraphQLProvider<"http://localhost:8086">
 
 // If you pass a query file, it will load the query from it.
-let operation = MyProvider.Operation<"operation.graphql">()
+let operation = MyProvider.Operation<"operation.graphql"> ()
 
-let result = operation.Run()
+let result = operation.Run ()
 
 printfn "Data: %A\n" result.Data
 printfn "Errors: %A\n" result.Errors

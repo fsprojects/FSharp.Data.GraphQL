@@ -20,7 +20,7 @@ open FSharp.Data.GraphQL
 
 type MyProvider = GraphQLProvider<"http://localhost:8086">
 
-let operation = 
+let operation =
     MyProvider.Operation<"""query q($id: String!) {
       hero(id: $id) {
         name
@@ -35,9 +35,10 @@ let operation =
           }
         }
       }
-    }""">()
+    }""">
+        ()
 
-let result = operation.Run(id = "1000")
+let result = operation.Run (id = "1000")
 
 printfn "Result: %A" result.Data
 printfn "Errors: %A" result.Errors

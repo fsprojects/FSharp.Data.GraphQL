@@ -12,7 +12,7 @@ module Program =
         WebHost
             .CreateDefaultBuilder(args)
             .UseStartup<Startup>()
-            .UseUrls(sprintf "http://%s" BaseAddress)
+            .UseUrls (sprintf "http://%s" BaseAddress)
 
     [<EntryPoint>]
     let main args =
