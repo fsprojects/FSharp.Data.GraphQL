@@ -5,6 +5,7 @@
 namespace FSharp.Data.GraphQL.Ast
 
 open System
+open FSharp.Data.GraphQL.Ast
 
 /// There are three types of operations that GraphQL models.
 ///
@@ -445,18 +446,60 @@ type FieldDefinition =
 
 // TypeDefinitions:
 
-/// Scalar types represent primitive leaf values in a GraphQL type system. GraphQL responses take the form of a hierarchical tree; the leaves on these trees are GraphQL scalars.
-/// https://graphql.github.io/graphql-spec/June2018/#ScalarTypeDefinition
+/// 3.5 Scalars
+///
+/// Scalar types represent primitive leaf values in a GraphQL type system. GraphQL responses take the form of a hierarchical tree;
+/// the leaves of this tree are typically GraphQL Scalar types (but may also be Enum types or null values).
+///
+/// GraphQL provides a number of built-in scalars which are fully defined in the sections below, however type systems may also add
+/// additional custom scalars to introduce additional semantic meaning.
+///
+/// Built-in Scalars:
+///
+/// GraphQL specifies a basic set of well-defined Scalar types: Int, Float, String, Boolean, and ID. A GraphQL framework should
+/// support all of these types, and a GraphQL service which provides a type by these names must adhere to the behavior described
+/// for them in this document. As an example, a service must not include a type called Int and use it to represent 64-bit numbers,
+/// internationalization information, or anything other than what is defined in this document.
+///
+/// When returning the set of types from the __Schema introspection type, all referenced built-in scalars must be included. If a
+/// built-in scalar type is not referenced anywhere in a schema (there is no field, argument, or input field of that type) then it
+/// must not be included.
+///
+/// When representing a GraphQL schema using the type system definition language, all built-in scalars must be omitted for
+/// brevity.
+///
+/// https://spec.graphql.org/October2021/#ScalarTypeDefinition
 type ScalarTypeDefinition =
     {
         Description: string option
+
         Name: string
+
+        /// May be empty.
         Directives: Directive list
     }
 
+/// 3.5.6 Scalar Extensions
+///
+/// Scalar type extensions are used to represent a scalar type which has been extended from some original scalar type. For example,
+/// this might be used by a GraphQL tool or service which adds directives to an existing scalar.
+///
+/// Type Validation:
+///
+/// Scalar type extensions have the potential to be invalid if incorrectly defined.
+///
+/// 1. The named type must already be defined and must be a Scalar type.
+/// 2. Any non-repeatable directives provided must not already apply to the original Scalar type.
+///
+/// Example: <c>extend scalar [name] directive...</c>
+///
+/// https://spec.graphql.org/October2021/#sec-Scalar-Extensions
 type ScalarTypeExtension =
     {
         Name: string
+
+        /// May not be empty.
+        /// https://spec.graphql.org/October2021/#Directives
         Directives: Directive list
     }
 
@@ -577,6 +620,7 @@ type InputObjectTypeExtension =
     }
 
 type TypeDefinition =
+    /// https://spec.graphql.org/October2021/#ScalarTypeExtension
     | ScalarTypeDefinition of ScalarTypeDefinition
     | ObjectTypeDefinition of ObjectTypeDefinition
     | InterfaceTypeDefinition of InterfaceTypeDefinition
@@ -661,8 +705,14 @@ type SchemaExtension =
         OperationTypes: RootOperationTypeDefinition list
     }
 
-/// Type extensions are used to represent a GraphQL type which has been extended from some original type. For example, this might be used by a local service to represent additional fields a GraphQL client only accesses locally.
-/// https://graphql.github.io/graphql-spec/June2018/#TypeExtension
+// Type Extensions:
+
+/// 3.4.3 Type Extensions
+///
+/// Type extensions are used to represent a GraphQL type which has been extended from some original type. For example, this might
+/// be used by a local service to represent additional fields a GraphQL client only accesses locally.
+///
+/// https://spec.graphql.org/October2021/#sec-Type-Extensions
 type TypeExtension =
     | ScalarTypeExtension of ScalarTypeExtension
     | ObjectTypeExtension of ObjectTypeExtension
@@ -671,13 +721,33 @@ type TypeExtension =
     | EnumTypeExtension of EnumTypeExtension
     | InputObjectTypeExtension of InputObjectTypeExtension
 
-/// Type system extensions are used to represent a GraphQL type system which has been extended from some original type system. For example, this might be used by a local service to represent data a GraphQL client only accesses locally, or by a GraphQL service which is itself an extension of another GraphQL service.
-/// 3.1 https://graphql.github.io/graphql-spec/June2018/#sec-Type-System-Extensions
+/// 3.1 Type System Extensions
+///
+/// Type system extensions are used to represent a GraphQL type system which has been extended from some original type system. For
+/// example, this might be used by a local service to represent data a GraphQL client only accesses locally, or by a GraphQL
+/// service which is itself an extension of another GraphQL service.
+///
+/// Tools which only seek to produce and extend schema and not execute requests may choose to only allow
+/// TypeSystemExtensionDocument and not allow ExecutableDefinition but should provide a descriptive error if present.
+///
+/// https://spec.graphql.org/October2021/#sec-Type-System-Extensions
+/// https://spec.graphql.org/October2021/#TypeSystemExtension
 type TypeSystemExtension =
+    /// https://spec.graphql.org/October2021/#SchemaExtension
     | SchemaExtension of SchemaExtension
+    /// https://spec.graphql.org/October2021/#TypeExtension
     | TypeExtension of TypeExtension
 
 
+/// https://spec.graphql.org/October2021/#TypeSystemDocument
+type TypeSystemDocument =
+    {
+        /// https://spec.graphql.org/October2021/#TypeSystemDefinition
+        Definitions: TypeSystemDefinition list
+    }
+
+
+/// Prefer to use either <c>TypeSystemDocument</c> or <c>ExecutableDocument</c>.
 /// https://spec.graphql.org/October2021/#Definition
 type Definition =
     /// https://spec.graphql.org/October2021/#OperationDefinition
