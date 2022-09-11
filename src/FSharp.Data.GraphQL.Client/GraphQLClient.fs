@@ -14,8 +14,8 @@ open System.Threading
 
 /// A requrest object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest  =
-      /// Gets the URL of the GraphQL server which will be called.
-    { ServerUrl : string
+    { /// Gets the URL of the GraphQL server which will be called.
+      ServerUrl : string
       /// Gets custom HTTP Headers to pass with each call using this request.
       HttpHeaders: seq<string * string>
       /// Gets the name of the operation that should run on the server.

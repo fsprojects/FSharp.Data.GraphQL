@@ -747,8 +747,8 @@ and ExecutionInfoKind =
 
 /// Buffered stream options. Used to specify how the buffer will behavior in a stream.
 and BufferedStreamOptions =
-      /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
-    { Interval : int option
+    { /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
+      Interval : int option
       /// The maximum number of items that will be buffered before being sent to the subscriber.
       PreferredBatchSize : int option }
 
@@ -919,7 +919,7 @@ and FieldDef =
         abstract Metadata : Metadata
         /// Field resolution function.
         abstract Resolve : Resolve
-        /// INTERNAL API: Compiled field executor. To be set only by the runtime.
+        // INTERNAL API: Compiled field executor. To be set only by the runtime.
         inherit IEquatable<FieldDef>
     end
 

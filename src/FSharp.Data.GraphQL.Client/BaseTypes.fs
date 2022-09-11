@@ -14,8 +14,8 @@ open System.ComponentModel
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
-      /// Gets the alias or the name of the field.
-    { AliasOrName : string
+    { /// Gets the alias or the name of the field.
+      AliasOrName : string
       /// Gets the introspection type information of the field.
       SchemaTypeRef : IntrospectionTypeRef
       /// Gets information about fields of this field, if it is an object type.
@@ -26,8 +26,8 @@ type TypeName = string
 
 /// Contains data about a GQL operation error.
 type OperationError =
-      /// The description of the error that happened in the operation.
-    { Message : string
+    { /// The description of the error that happened in the operation.
+      Message : string
       /// The path to the field that produced the error while resolving its value.
       Path : obj [] }
 
@@ -86,8 +86,8 @@ type EnumBase (name : string, value : string) =
 
 /// Contains information about a GraphQLProvider record property.
 type RecordProperty =
-      /// Gets the name of the record property.
-    { Name : string
+    { /// Gets the name of the record property.
+      Name : string
       /// Gets the value of the record property.
       Value : obj }
 
