@@ -611,10 +611,10 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           Path = fieldPath |> List.rev }
     let onValue v = asyncVal {
             match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
-            | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
-            | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
+            | Ok (data, None, []) -> return NameValueLookup.ofList ["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
+            | Ok (data, None, errs) -> return NameValueLookup.ofList ["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
             | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
-            | Error errs -> return NameValueLookup.ofList["data", null; "errors", upcast errs] :> Output
+            | Error errs -> return NameValueLookup.ofList ["data", null; "errors", upcast errs] :> Output
         }
     ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
     |> Observable.bind(onValue >> Observable.ofAsyncVal)
