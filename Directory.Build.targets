@@ -3,7 +3,7 @@
 
   <PropertyGroup>
     <LangVersion>6.0</LangVersion>
-    <!--<NoWarn>$(NoWarn)</NoWarn>-->
+    <NoWarn>$(NoWarn);NU1504;NU1701</NoWarn>
     <TreatWarningsAsErrors Condition="'$(Configuration)' != 'Debug'">true</TreatWarningsAsErrors>
   </PropertyGroup>
 
@@ -23,7 +23,7 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    
+
     <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
 </Project>
