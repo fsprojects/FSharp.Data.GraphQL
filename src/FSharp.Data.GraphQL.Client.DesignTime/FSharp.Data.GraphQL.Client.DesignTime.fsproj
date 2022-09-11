@@ -3,20 +3,18 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <DefineConstants>IS_DESIGNTIME; NO_GENERATIVE;$(DefineConstants)</DefineConstants>
+    <DefineConstants>IS_DESIGNTIME;NO_GENERATIVE;$(DefineConstants)</DefineConstants>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
-    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <OutputPath>..\FSharp.Data.GraphQL.Client\bin\$(Configuration)\typeproviders\fsharp41\</OutputPath>
+    <BaseOutputPath>..\FSharp.Data.GraphQL.Client\bin</BaseOutputPath>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Client)</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core">
+    <PackageReference Update="FSharp.Core" VersionOverride="4.7.2">
       <ExcludeAssets>all</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2">
