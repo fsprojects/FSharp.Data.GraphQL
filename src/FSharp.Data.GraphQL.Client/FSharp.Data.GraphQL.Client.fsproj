@@ -4,7 +4,6 @@
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <FSharpToolsDirectory>typeproviders</FSharpToolsDirectory>
     <PackagePath>typeproviders</PackagePath>
 
@@ -12,6 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Update="FSharp.Core" VersionOverride="4.7.2"/>
     <PackageReference Include="FParsec" />
     <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
