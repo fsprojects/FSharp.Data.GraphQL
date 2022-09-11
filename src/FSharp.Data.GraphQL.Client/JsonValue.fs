@@ -7,8 +7,8 @@
 // A simple F# portable parser for JSON data
 // --------------------------------------------------------------------------------------
 
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
