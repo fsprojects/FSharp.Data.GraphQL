@@ -1,0 +1,34 @@
+name: publish to GitHub
+
+on:
+  push:
+    branches:
+      - dev
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
+    - name: Pack FSharp.Data.GraphQL.Client project
+      run: |
+        sed -i "s|<PackageVersion>\(.*\)</PackageVersion>|<PackageVersion>\1-ci-$GITHUB_RUN_ID</PackageVersion>|" Directory.Build.targets
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet pack --nologo --configuration Release -o ../../nuget
+    - name: Pack FSharp.Data.GraphQL.Server project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet pack --nologo --configuration Release -o ../../nuget
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet pack --nologo --configuration Release -o ../../nuget
+    - name: NuGet push
+      run: |
+        source=https://nuget.pkg.github.com/fsprojects/index.json
+        key=${{secrets.GITHUB_TOKEN}}
+        dotnet nuget push nuget/*.nupkg -s $source -k $key
