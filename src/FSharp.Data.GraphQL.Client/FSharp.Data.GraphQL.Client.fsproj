@@ -16,7 +16,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FParsec" />
     <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 

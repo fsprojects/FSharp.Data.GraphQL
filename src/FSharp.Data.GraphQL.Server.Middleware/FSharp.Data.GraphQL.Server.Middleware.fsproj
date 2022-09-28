@@ -27,6 +27,5 @@
 
   <ItemGroup>
     <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>
