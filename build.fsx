@@ -14,7 +14,6 @@
 open System.IO
 open Fake
 open Fake.DotNet
-open Fake.DotNet.NuGet
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
@@ -54,23 +53,19 @@ let projectRepo = "https://github.com/fsprojects/FSharp.Data.GraphQL.git"
 // --------------------------------------------------------------------------------------
 // Clean build results
 
-Target.create "Clean"
-<| fun _ -> Shell.cleanDirs [ "bin"; "temp" ]
+Target.create "Clean" <| fun _ -> Shell.cleanDirs [ "bin"; "temp" ]
 
-Target.create "CleanDocs"
-<| fun _ -> Shell.cleanDirs [ "docs/output" ]
+Target.create "CleanDocs" <| fun _ -> Shell.cleanDirs [ "docs/output" ]
 
 // --------------------------------------------------------------------------------------
 // Build library & test project
 
-Target.create "Restore"
-<| fun _ ->
+Target.create "Restore" <| fun _ ->
     !! "src/**/*.??proj" -- "src/**/*.shproj"
     |> Seq.iter (fun pattern -> DotNet.restore id pattern)
 
 
-Target.create "Build"
-<| fun _ ->
+Target.create "Build" <| fun _ ->
     "FSharp.Data.GraphQL.sln"
     |> DotNet.build (fun o ->
         { o with
@@ -120,8 +115,7 @@ let runTests (project : string) =
 
 let starWarsServerStream = StreamRef.Empty
 
-Target.create "StartStarWarsServer"
-<| fun _ ->
+Target.create "StartStarWarsServer" <| fun _ ->
     Target.activateFinal "StopStarWarsServer"
 
     let project =
@@ -131,18 +125,15 @@ Target.create "StartStarWarsServer"
 
     startGraphQLServer project starWarsServerStream
 
-Target.createFinal "StopStarWarsServer"
-<| fun _ ->
+Target.createFinal "StopStarWarsServer" <| fun _ ->
     try
         starWarsServerStream.Value.Write ([| 0uy |], 0, 1)
     with e ->
         printfn "%s" e.Message
 
-
 let integrationServerStream = StreamRef.Empty
 
-Target.create "StartIntegrationServer"
-<| fun _ ->
+Target.create "StartIntegrationServer" <| fun _ ->
     Target.activateFinal "StopIntegrationServer"
 
     let project =
@@ -152,18 +143,17 @@ Target.create "StartIntegrationServer"
 
     startGraphQLServer project integrationServerStream
 
-Target.createFinal "StopIntegrationServer"
-<| fun _ ->
+Target.createFinal "StopIntegrationServer" <| fun _ ->
     try
         integrationServerStream.Value.Write ([| 0uy |], 0, 1)
     with e ->
         printfn "%s" e.Message
 
-Target.create "RunUnitTests"
-<| fun _ -> runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+Target.create "RunUnitTests" <| fun _ ->
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
 
-Target.create "RunIntegrationTests"
-<| fun _ -> runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+Target.create "RunIntegrationTests" <| fun _ ->
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -176,19 +166,16 @@ let prepareDocGen () =
 
     Shell.cleanDir ".fsdocs"
 
-Target.create "GenerateDocs"
-<| fun _ ->
+Target.create "GenerateDocs" <| fun _ ->
     prepareDocGen ()
     DotNet.exec id "fsdocs" "build --clean" |> ignore
 
-Target.create "GenerateDocsWatch"
-<| fun _ ->
+Target.create "GenerateDocsWatch" <| fun _ ->
     prepareDocGen ()
     DotNet.exec id "fsdocs" "watch --clean" |> ignore
     System.Console.ReadKey () |> ignore
 
-Target.create "ReleaseDocs"
-<| fun _ ->
+Target.create "ReleaseDocs" <| fun _ ->
     Git.Repository.clone "" projectRepo "temp/gh-pages"
     Git.Branches.checkoutBranch "temp/gh-pages" "gh-pages"
 
@@ -230,26 +217,22 @@ let publishPackage id =
     let projectPath = getProjectPath packageName
 
     projectPath
-    |> DotNet.publish (fun p -> { p with Common = { p.Common with WorkingDirectory = packageDir } })
+    |> DotNet.publish (fun p ->
+        { p with Common = { p.Common with WorkingDirectory = packageDir } })
 
-Target.create "PublishServer"
-<| fun _ -> publishPackage "Server"
+Target.create "PublishServer" <| fun _ -> publishPackage "Server"
 
-Target.create "PublishClient"
-<| fun _ -> publishPackage "Client"
+Target.create "PublishClient" <| fun _ -> publishPackage "Client"
 
-Target.create "PublishMiddleware"
-<| fun _ -> publishPackage "Server.Middleware"
+Target.create "PublishMiddleware" <| fun _ -> publishPackage "Server.Middleware"
 
-Target.create "PublishShared"
-<| fun _ -> publishPackage "Shared"
+Target.create "PublishShared" <| fun _ -> publishPackage "Shared"
 
 Target.create "PackServer" <| fun _ -> pack "Server"
 
 Target.create "PackClient" <| fun _ -> pack "Client"
 
-Target.create "PackMiddleware"
-<| fun _ -> pack "Server.Middleware"
+Target.create "PackMiddleware" <| fun _ -> pack "Server.Middleware"
 
 Target.create "PackShared" <| fun _ -> pack "Shared"
 
@@ -261,22 +244,23 @@ Target.create "All" ignore
 Target.create "PackAll" ignore
 
 "Clean"
-==> "Restore"
-==> "Build"
-==> "RunUnitTests"
-==> "StartStarWarsServer"
-==> "StartIntegrationServer"
-==> "RunIntegrationTests"
-==> "All"
-=?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
+    ==> "Restore"
+    ==> "Build"
+    ==> "RunUnitTests"
+    ==> "StartStarWarsServer"
+    ==> "StartIntegrationServer"
+    ==> "RunIntegrationTests"
+    ==> "All"
+    =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
 
-"CleanDocs" ==> "GenerateDocs"
+"CleanDocs"
+    ==> "GenerateDocs"
 
 "PackShared"
-==> "PackServer"
-==> "PackClient"
-==> "PackMiddleware"
-==> "PackAll"
+    ==> "PackServer"
+    ==> "PackClient"
+    ==> "PackMiddleware"
+    ==> "PackAll"
 
 Target.runOrDefaultWithArguments "All"
 
