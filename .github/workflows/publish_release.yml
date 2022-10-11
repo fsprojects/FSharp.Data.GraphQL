@@ -26,7 +26,7 @@ jobs:
         with:
           PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj # Relative to repository root
           VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <PackageVersion>(.*)<\/PackageVersion>
+          VERSION_REGEX: <Version>(.*)<\/Version>
           # VERSION_FILE_PATH: Directory.Build.props # Filepath with version info, relative to repository root. Defaults to project file
           # VERSION_REGEX: <Version>(.*)<\/Version> # Regex pattern to extract version info in a capturing group
           # TAG_COMMIT: true # Flag to enable / disalge git tagging
@@ -37,12 +37,12 @@ jobs:
         with:
           PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj
           VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <PackageVersion>(.*)<\/PackageVersion>
+          VERSION_REGEX: <Version>(.*)<\/Version>
           NUGET_KEY: ${{secrets.NUGET_SECRET}}
       - name: publish FSharp.Data.GraphQL.Server.Middleware on version change
         uses: rohith/publish-nuget@v2
         with:
           PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Server.Middleware/FSharp.Data.GraphQL.Server.Middleware.fsproj
           VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <PackageVersion>(.*)<\/PackageVersion>
+          VERSION_REGEX: <Version>(.*)<\/Version>
           NUGET_KEY: ${{secrets.NUGET_SECRET}}

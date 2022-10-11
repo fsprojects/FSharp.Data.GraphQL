@@ -16,7 +16,7 @@ jobs:
       uses: actions/setup-dotnet@v1
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
-        sed -i "s|<PackageVersion>\(.*\)</PackageVersion>|<PackageVersion>\1-ci-$GITHUB_RUN_ID</PackageVersion>|" Directory.Build.targets
+        sed -i "s|<Version>\(.*\)</Version>|<Version>\1-ci-$GITHUB_RUN_ID</Version>|" Directory.Build.targets
         cd src/FSharp.Data.GraphQL.Client
         dotnet pack --nologo --configuration Release -o ../../nuget
     - name: Pack FSharp.Data.GraphQL.Server project
