@@ -3,6 +3,7 @@
 
   <PropertyGroup>
     <LangVersion>6.0</LangVersion>
+    <FSharpCoreVersion>6.0.*</FSharpCoreVersion>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <NoWarn>$(NoWarn);NU1504;NU1701</NoWarn>
     <TreatWarningsAsErrors Condition="'$(Configuration)' != 'Debug'">true</TreatWarningsAsErrors>

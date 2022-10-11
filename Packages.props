@@ -8,7 +8,7 @@
   <ItemGroup Label="Common">
     <PackageReference Update="FParsec" Version="1.1.1" />
     <!--<PackageReference Update="FSharp.Core" Version="4.7.2">-->
-    <PackageReference Include="FSharp.Core" Version="6.0.*">
+    <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)">
       <ExcludeAssets>contentFiles</ExcludeAssets>
     </PackageReference>
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
