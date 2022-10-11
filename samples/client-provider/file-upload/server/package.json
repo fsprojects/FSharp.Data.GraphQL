@@ -28,7 +28,7 @@
     "eslint-plugin-import-order-alphabetical": "^0.0.2",
     "eslint-plugin-node": "^8.0.1",
     "eslint-plugin-prettier": "^3.0.1",
-    "nodemon": "^1.18.11",
+    "nodemon": "^2.0.20",
     "prettier": "^1.16.4"
   },
   "scripts": {
