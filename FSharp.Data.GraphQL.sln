@@ -105,6 +105,9 @@ EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client.DesignTime", "src\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj", "{B075CD55-CEA4-4C30-A088-48319AADF070}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Client", "src\FSharp.Data.GraphQL.Client\FSharp.Data.GraphQL.Client.fsproj", "{F7858DA7-E067-486B-9E9C-697F0A56C620}"
+	ProjectSection(ProjectDependencies) = postProject
+		{B075CD55-CEA4-4C30-A088-48319AADF070} = {B075CD55-CEA4-4C30-A088-48319AADF070}
+	EndProjectSection
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "star-wars-api", "star-wars-api", "{F66BEE6C-0CB7-4F39-97E4-243F797E8723}"
 EndProject
@@ -140,6 +143,13 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Packages.props = Packages.props
 		README.md = README.md
 		RELEASE_NOTES.md = RELEASE_NOTES.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{313AC7F5-4282-4779-8FEF-1536B4145860}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\dotnetcore.yml = .github\workflows\dotnetcore.yml
+		.github\workflows\publish_ci.yml = .github\workflows\publish_ci.yml
+		.github\workflows\publish_release.yml = .github\workflows\publish_release.yml
 	EndProjectSection
 EndProject
 Global

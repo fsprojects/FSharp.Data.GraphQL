@@ -3,19 +3,23 @@
 
   <PropertyGroup>
     <LangVersion>6.0</LangVersion>
-    <!--<NoWarn>$(NoWarn)</NoWarn>-->
+    <FSharpCoreVersion>6.0.*</FSharpCoreVersion>
+    <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
+    <NoWarn>$(NoWarn);NU1504;NU1701</NoWarn>
     <TreatWarningsAsErrors Condition="'$(Configuration)' != 'Debug'">true</TreatWarningsAsErrors>
   </PropertyGroup>
 
   <PropertyGroup Label="NuGet">
-    <Authors>John Bazinga, Andrii Chebukin, </Authors>
+    <Authors>John Bazinga, Andrii Chebukin, Jurii Chebukin, Ismael Carlos Velten, njlr</Authors>
     <Product>FSharp.Data.GraphQL</Product>
     <Summary>F# implementation of Facebook GraphQL query language</Summary>
 
-    <PackageVersion>1.1.0</PackageVersion>
+    <RepoRoot>$([System.IO.Path]::GetDirectoryName($([MSBuild]::GetPathOfFileAbove('.gitignore', '$(MSBuildThisFileDirectory)'))))</RepoRoot>
+    <RepositoryUrl>https://github.com/fsprojects/FSharp.Data.GraphQL</RepositoryUrl>
+    <Version>2.0.0</Version>
     <PackageTags>FSharp GraphQL Relay React Middleware</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
-    <!--<PackageIcon>packageIcon.png</PackageIcon>-->
+    <PackageIcon>icon.png</PackageIcon>
     <!--<PackageIconUrl>https://www.newtonsoft.com/content/images/nugeticon.png</PackageIconUrl>-->
     <PackageProjectUrl>https://fsprojects.github.io/FSharp.Data.GraphQL</PackageProjectUrl>
     <PackageLicenseExpression>MIT</PackageLicenseExpression>
@@ -23,7 +27,13 @@
     <IncludeSymbols>true</IncludeSymbols>
     <SymbolPackageFormat>snupkg</SymbolPackageFormat>
     <EmbedUntrackedSources>true</EmbedUntrackedSources>
-    
+
     <MinVerTagPrefix>v</MinVerTagPrefix>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="$(RepoRoot)\icon.png" Pack="true" PackagePath="\"/>
+    <None Include="$(RepoRoot)\README.md" Pack="true" PackagePath="\"/>
+  </ItemGroup>
+
 </Project>
