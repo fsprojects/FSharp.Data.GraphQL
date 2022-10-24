@@ -43,9 +43,3 @@ open System.ComponentModel
           CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
         member _Print: string
 
-    type private JsonParser =
-
-        new: jsonText: string -> JsonParser
-
-        member Parse: unit -> JsonValue
-
