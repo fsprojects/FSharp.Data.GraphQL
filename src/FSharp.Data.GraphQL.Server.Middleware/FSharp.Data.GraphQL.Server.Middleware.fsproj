@@ -27,9 +27,6 @@
 
   <ItemGroup>
     <PackageRefernce Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
-  </ItemGroup>
-
-  <ItemGroup>
     <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
   </ItemGroup>
 </Project>
