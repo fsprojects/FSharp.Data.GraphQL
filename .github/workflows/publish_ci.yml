@@ -3,7 +3,7 @@ name: publish to GitHub
 on:
   push:
     branches:
-      - dev
+      - package_dependencies
 
 jobs:
   build:
@@ -23,19 +23,19 @@ jobs:
         sed -i "s|<Version>\(.*\)</Version>|<Version>\1-ci-$GITHUB_RUN_ID</Version>|" Directory.Build.targets
         cd src/FSharp.Data.GraphQL.Shared
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push nuget/*Shared*.nupkg -s $SOURCE -k $KEY
+        dotnet nuget push nuget/*Shared*.nupkg -s $env:SOURCE -k $env:KEY
     - name: Pack and push to GitHub FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push nuget/*Client*.nupkg -s $SOURCE -k $KEY
+        dotnet nuget push nuget/*Client*.nupkg -s $env:SOURCE -k $env:KEY
     - name: Pack and push to GitHub FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push nuget/*Server*.nupkg -s $SOURCE -k $KEY
+        dotnet nuget push nuget/*Server*.nupkg -s $env:SOURCE -k $env:KEY
     - name: Pack and push to GitHub FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push nuget/*Server.Middleware*.nupkg -s $SOURCE -k $KEY
+        dotnet nuget push nuget/*Server.Middleware*.nupkg -s $env:SOURCE -k $env:KEY
