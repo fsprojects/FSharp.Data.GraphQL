@@ -140,6 +140,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution 
 		Directory.Build.targets = Directory.Build.targets
 		global.json = global.json
 		LICENSE.txt = LICENSE.txt
+		nuget.config = nuget.config
 		Packages.props = Packages.props
 		README.md = README.md
 		RELEASE_NOTES.md = RELEASE_NOTES.md
