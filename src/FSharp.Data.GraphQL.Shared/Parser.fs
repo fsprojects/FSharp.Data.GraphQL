@@ -87,7 +87,13 @@ module internal Internal =
           (hex2int h3)*4096 + (hex2int h2)*256 + (hex2int h1)*16 + hex2int h0 |> char)
       pchar '\\' >>. (escaped <|> unicode)
 
-    let normalCharacter = noneOf [|'\u000A';'\u000D';'\u2028';'\u2029';'"';'\''|]
+    let normalCharacter =
+      noneOf
+        [| '\u000A'
+           '\u000D'
+           '\u2028'
+           '\u2029'
+           '"' |]
     let quote =  pchar '"'
 
     between quote quote (manyChars (escapedCharacter <|> normalCharacter))
