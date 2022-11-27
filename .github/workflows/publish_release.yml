@@ -17,25 +17,29 @@ jobs:
     - uses: actions/checkout@v2
     - name: Setup .NET Core
       uses: actions/setup-dotnet@v1
-    - name: Pack and push to NuGet FSharp.Data.GraphQL.Shared project
+
+    - name: Pack FSharp.Data.GraphQL.Shared project and push to NuGet
       if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Shared
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
         dotnet nuget push ../../nuget/*Shared*.nupkg -k $KEY
-    - name: Pack and push to NuGet FSharp.Data.GraphQL.Client project
+
+    - name: Pack FSharp.Data.GraphQL.Client project and push to NuGet
       if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Client
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
         dotnet nuget push ../../nuget/*Client*.nupkg -k $KEY
-    - name: Pack and push to NuGet FSharp.Data.GraphQL.Server project
+
+    - name: Pack FSharp.Data.GraphQL.Server project and push to NuGet
       if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Server
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
         dotnet nuget push ../../nuget/*Server*.nupkg -k $KEY
-    - name: Pack and push to NuGet FSharp.Data.GraphQL.Server.Middleware project
+
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project and push to NuGet
       if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
