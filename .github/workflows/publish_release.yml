@@ -8,41 +8,40 @@ on:
 jobs:
   publish:
 
+    env:
+      KEY: '${{secrets.NUGET_SECRET}}'
+
     runs-on: ubuntu-latest
 
     steps:
-      - uses: actions/checkout@v2
+    - uses: actions/checkout@v2
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v1
 
-      # Required for a specific dotnet version that doesn't come with ubuntu-latest / windows-latest
-      # Visit bit.ly/2synnZl to see the list of SDKs that are pre-installed with ubuntu-latest / windows-latest
-      # - name: Setup dotnet
-      #   uses: actions/setup-dotnet@v1
-      #   with:
-      #     dotnet-version: 3.1.100
+    - name: Pack FSharp.Data.GraphQL.Shared project and push to NuGet
+      if: startsWith(github.ref, 'refs/tags/release')
+      run: |
+        cd src/FSharp.Data.GraphQL.Shared
+        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet nuget push ../../nuget/*Shared*.nupkg -k $KEY
 
-      # Publish
-      - name: publish FSharp.Data.GraphQL.Client on version change
-        uses: rohith/publish-nuget@v2
-        with:
-          PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Client/FSharp.Data.GraphQL.Client.fsproj # Relative to repository root
-          VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <Version>(.*)<\/Version>
-          # VERSION_FILE_PATH: Directory.Build.props # Filepath with version info, relative to repository root. Defaults to project file
-          # VERSION_REGEX: <Version>(.*)<\/Version> # Regex pattern to extract version info in a capturing group
-          # TAG_COMMIT: true # Flag to enable / disalge git tagging
-          # TAG_FORMAT: v* # Format of the git tag, [*] gets replaced with version
-          NUGET_KEY: ${{secrets.NUGET_SECRET}}
-      - name: publish FSharp.Data.GraphQL.Server on version change
-        uses: rohith/publish-nuget@v2
-        with:
-          PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Server/FSharp.Data.GraphQL.Server.fsproj
-          VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <Version>(.*)<\/Version>
-          NUGET_KEY: ${{secrets.NUGET_SECRET}}
-      - name: publish FSharp.Data.GraphQL.Server.Middleware on version change
-        uses: rohith/publish-nuget@v2
-        with:
-          PROJECT_FILE_PATH: src/FSharp.Data.GraphQL.Server.Middleware/FSharp.Data.GraphQL.Server.Middleware.fsproj
-          VERSION_FILE_PATH: Directory.Build.targets
-          VERSION_REGEX: <Version>(.*)<\/Version>
-          NUGET_KEY: ${{secrets.NUGET_SECRET}}
+    - name: Pack FSharp.Data.GraphQL.Client project and push to NuGet
+      if: startsWith(github.ref, 'refs/tags/release')
+      run: |
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet nuget push ../../nuget/*Client*.nupkg -k $KEY
+
+    - name: Pack FSharp.Data.GraphQL.Server project and push to NuGet
+      if: startsWith(github.ref, 'refs/tags/release')
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet nuget push ../../nuget/*Server*.nupkg -k $KEY
+
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project and push to NuGet
+      if: startsWith(github.ref, 'refs/tags/release')
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -k $KEY
