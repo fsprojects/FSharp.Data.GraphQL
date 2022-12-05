@@ -1530,13 +1530,13 @@ and InputObjectDefinition<'Val> =
       Description : string option
       /// Lazy resolver for the input object fields. It must be lazy in
       /// order to allow self-recursive type references.
-      FieldsFn : Lazy<InputFieldDef[]> }
+      Fields : Lazy<InputFieldDef[]> }
     interface InputDef
 
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.Fields = x.FieldsFn.Force()
+        member x.Fields = x.Fields.Force()
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -2785,7 +2785,7 @@ module SchemaDefinitions =
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
         static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
-              FieldsFn = lazy (fieldsFn () |> List.toArray)
+              Fields = lazy (fieldsFn () |> List.toArray)
               Description = description }
 
         /// <summary>
@@ -2795,11 +2795,11 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
-        /// <param name="description">Optional input object description. Useful for generating documentation.</param>   
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
         static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
-              FieldsFn = lazy (fields |> List.toArray) }
+              Fields = lazy (fields |> List.toArray) }
 
         /// <summary>
         /// Creates the top level subscription object that holds all of the possible subscriptions as fields.

@@ -45,6 +45,7 @@ type TestNestedInput = {
     na: TestInput option
     nb: string
 }
+
 let TestNestedInputObject =
   Define.InputObject<TestNestedInput>(
     name = "TestNestedInputObject",
@@ -57,6 +58,8 @@ type TestRecusiveInput = {
     ra: TestRecusiveInput option
     rb: string
 }
+
+#nowarn "40"
 let rec TestRecursiveInputObject =
   Define.InputObject<TestRecusiveInput>(
     name = "TestRecusiveInput",
@@ -92,7 +95,7 @@ let TestType =
         Define.Field("fieldWithNonNullableStringInput", String, "", [ Define.Input("input", String) ], stringifyInput)
         Define.Field("fieldWithDefaultArgumentValue", String, "", [ Define.Input("input", Nullable String, Some "hello world") ], stringifyInput)
         Define.Field("fieldWithNestedInputObject", String, "", [ Define.Input("input", TestNestedInputObject, { na = None; nb = "hello world"}) ], stringifyInput)
-        Define.Field("fieldWithRecursiveInputObject", String, "", [ Define.Input("input", TestRecursiveInputObject, { ra = None; rb = "hello world"}) ], stringifyInput) 
+        Define.Field("fieldWithRecursiveInputObject", String, "", [ Define.Input("input", TestRecursiveInputObject, { ra = None; rb = "hello world"}) ], stringifyInput)
         Define.Field("fieldWithEnumInput", String, "", [ Define.Input("input", EnumTestType) ], stringifyInput)
         Define.Field("fieldWithNullableEnumInput", String, "", [ Define.Input("input", Nullable EnumTestType) ], stringifyInput)
         Define.Field("list", String, "", [ Define.Input("input", Nullable(ListOf (Nullable String))) ], stringifyInput)
