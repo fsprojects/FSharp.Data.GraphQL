@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System.IO
 open System.Text
@@ -13,6 +13,7 @@ open FSharp.Data.GraphQL.Types
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+
     let private converters : JsonConverter[] = [| OptionConverter () |]
     let private jsonSettings = jsonSerializerSettings converters
 
