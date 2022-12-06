@@ -140,7 +140,7 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Execute handles objects and nullability using inline structs and proprely coerces complex scalar types`` () =
+let ``Execute handles objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast = parse """{ fieldWithObjectInput(input: {c: "foo", d: "SerializedValue"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":null,"b":null,"c":"foo","d":"DeserializedValue","e":null}"""]
@@ -346,10 +346,10 @@ let ``Execute handles non-nullable scalars and passes along null for non-nullabl
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Execute handles nested input objects and nullability using inline structs and proprely coerces complex scalar types`` () =
+let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast = parse """{ fieldWithNestedInputObject(input: {na:{c:"c"},nb:"b"})}"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithNestedInputObject", upcast """{"na":{"a":null,"b":null,"c":"c","d":null},"nb":"b"}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithNestedInputObject", upcast """{"na":{"a":null,"b":null,"c":"c","d":null,"e":null},"nb":"b"}""" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
@@ -357,7 +357,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Execute handles recursive input objects and nullability using inline structs and proprely coerces complex scalar types`` () =
+let ``Execute handles recursive input objects and nullability using inline structs and properly coerces complex scalar types`` () =
     let ast = parse """{ fieldWithRecursiveInputObject(input: {ra:{rb:"bb"},rb:"b"})}"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
     let expected = NameValueLookup.ofList [ "fieldWithRecursiveInputObject", upcast """{"ra":{"ra":null,"rb":"bb"},"rb":"b"}""" ]
