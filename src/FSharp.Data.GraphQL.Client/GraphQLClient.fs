@@ -89,7 +89,7 @@ module GraphQLClient =
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
     let getIntrospectionAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
-        let sendGet() = async { return! getAsync connection.Client serverUrl }
+        let sendGetAsync() = getAsync connection.Client serverUrl
         let rethrow (exns : exn list) =
             let rec mapper (acc : string) (exns : exn list) =
                 let aggregateMapper (ex : AggregateException) = mapper "" (List.ofSeq ex.InnerExceptions)
