@@ -1,22 +1,32 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
+    <TargetFramework>net6.0</TargetFramework>
     <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+
+    <Description>Built-in, generic middlewares for FSharp.Data.GraphQL.Server Executor</Description>
+
+    <!--<AssemblyOriginatorKeyFile>..\..\FSharp.Data.GraphQL.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>-->
   </PropertyGroup>
+
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
   </ItemGroup>
+
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
     <Compile Include="ObjectListFilter.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="MiddlewareDefinitions.fs" />
     <Compile Include="DefineExtensions.fs" />
-    <None Include="FSharp.Data.GraphQL.Server.Middleware.fsproj.paket.template" />
-    <None Include="paket.references" />
   </ItemGroup>
-  <Import Project="..\..\netfx.props" />
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
+
+  <ItemGroup>
+    <PackageReference Condition="$(IsNuget) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
+    <ProjectReference Condition="$(IsNuget) == ''" Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+  </ItemGroup>
 </Project>

@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Execution
 
 open System
@@ -93,7 +93,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             if lookup.Count > 0 then
                 sb.Append("{ ") |> ignore
                 lookup.Buffer
-                |> Array.iter (fun kv -> 
+                |> Array.iter (fun kv ->
                     sb.Append(kv.Key).Append(": ") |> ignore
                     stringify sb (deep+1) kv.Value
                     sb.Append(",\r\n") |> ignore
@@ -103,7 +103,7 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             sb.Append("\"").Append(s).Append("\"") |> ignore
         | :? System.Collections.IEnumerable as s ->
             sb.Append("[") |> ignore
-            for i in s do 
+            for i in s do
                 stringify sb (deep + 1) i
                 sb.Append(", ") |> ignore
             sb.Append("]") |> ignore
@@ -113,17 +113,17 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
             else sb.Append("null") |> ignore
         ()
     /// Returns raw content of the current lookup.
-    member __.Buffer : KeyValuePair<string, obj> [] = kvals
+    member _.Buffer : KeyValuePair<string, obj> [] = kvals
     /// Return a number of entries stored in current lookup. It's fixed size.
-    member __.Count = kvals.Length
+    member _.Count = kvals.Length
     /// Updates an entry's value under given key. It will throw an exception
     /// if provided key cannot be found in provided lookup.
-    member __.Update key value = setValue key value
+    member _.Update key value = setValue key value
     override x.Equals(other) =
         match other with
         | :? NameValueLookup as lookup -> structEq x lookup
         | _ -> false
-    override __.GetHashCode() =
+    override _.GetHashCode() =
         let mutable hash = 0
         for kv in kvals do
             hash <- (hash*397) ^^^ (kv.Key.GetHashCode()) ^^^ (if isNull kv.Value then 0 else kv.Value.GetHashCode())
@@ -135,30 +135,30 @@ type NameValueLookup(keyValues: KeyValuePair<string, obj> []) =
     interface IEquatable<NameValueLookup> with
         member x.Equals(other) = structEq x other
     interface System.Collections.IEnumerable with
-        member __.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
+        member _.GetEnumerator() = (kvals :> System.Collections.IEnumerable).GetEnumerator()
     interface IEnumerable<KeyValuePair<string, obj>> with
-        member __.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
+        member _.GetEnumerator() = (kvals :> IEnumerable<KeyValuePair<string, obj>>).GetEnumerator()
     interface IDictionary<string, obj> with
-        member __.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
-        member __.Contains(item) = kvals |> Array.exists ((=) item)
-        member __.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
-        member __.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
+        member _.Add(_, _) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Add(_) = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Clear() = raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
+        member _.Contains(item) = kvals |> Array.exists ((=) item)
+        member _.ContainsKey(key) = kvals |> Array.exists (fun kv -> kv.Key = key)
+        member _.CopyTo(array, arrayIndex) = kvals.CopyTo(array, arrayIndex)
         member x.Count = x.Count
-        member __.IsReadOnly = true
-        member __.Item
+        member _.IsReadOnly = true
+        member _.Item
             with get (key) = getValue key
             and set (key) v = setValue key v
-        member __.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
-        member __.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
-        member __.Remove(_:string) =
+        member _.Keys = upcast (kvals |> Array.map (fun kv -> kv.Key))
+        member _.Values = upcast (kvals |> Array.map (fun kv -> kv.Value))
+        member _.Remove(_:string) =
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member __.Remove(_:KeyValuePair<string,obj>) =
+        member _.Remove(_:KeyValuePair<string,obj>) =
             raise (NotSupportedException "NameValueLookup doesn't allow to add/remove entries")
             false
-        member __.TryGetValue(key, value) =
+        member _.TryGetValue(key, value) =
             match kvals |> Array.tryFind (fun kv -> kv.Key = key) with
             | Some kv -> value <- kv.Value; true
             | None -> value <- null; false
@@ -224,7 +224,7 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
+let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : obj list) =
     let fdef = info.Definition
     let args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
     { ExecutionInfo = info
@@ -233,8 +233,9 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) =
       ParentType = objdef
       Schema = ctx.Schema
       Args = args
-      Variables = ctx.Variables }         
-                
+      Variables = ctx.Variables
+      Path = path |> List.rev }
+
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
     if ctx.ExecutionInfo.IsNullable
     then
@@ -321,7 +322,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         | Some v' -> resolved name v'
         | None -> raiseError <| coercionError value scalarDef.Name path ctx
     | Enum enumDef ->
-        let enumCase = enumDef.Options |> Array.tryPick(fun case -> if case.Value.Equals(value) then coerceStringValue value else None)
+        let enumCase = enumDef.Options |> Array.tryPick(fun case -> if case.Value.Equals(value) then Some case.Name else None)
         match enumCase with
         | Some v' -> resolved name (v' :> obj)
         | None -> raiseError <| coercionError value enumDef.Name path  ctx
@@ -460,7 +461,7 @@ and private live (ctx : ResolveFieldContext) (path : obj list) (parent : obj) (v
         match filter with
         | Some filterFn -> provider.Add (filterFn parent) typeName name |> Observable.bind resolveUpdate
         | None -> failwithf "No live provider for %s:%s" typeName name
-  
+
     executeResolvers ctx path parent (value |> Some |> AsyncVal.wrap)
     |> AsyncVal.map(Result.map(fun (data, deferred, errs) -> (data, Some <| Option.fold Observable.merge2 updates deferred, errs)))
 
@@ -515,8 +516,8 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
         let executeField field =
             let argDefs = ctx.Context.FieldExecuteMap.GetArgs(objDef.Name, field.Definition.Name)
             let resolver = ctx.Context.FieldExecuteMap.GetExecute(objDef.Name, field.Definition.Name)
-            let fieldCtx = createFieldContext objDef argDefs ctx field
             let fieldPath = (field.Identifier :> obj :: path)
+            let fieldCtx = createFieldContext objDef argDefs ctx field fieldPath
             executeResolvers fieldCtx fieldPath value (resolveField resolver fieldCtx value)
         let! res =
             fields
@@ -528,7 +529,7 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
         | Ok(kvps, def, errs) -> return Ok (KeyValuePair(objName, box <| NameValueLookup(kvps)), def, errs)
     }
 
-let internal compileSubscriptionField (subfield: SubscriptionFieldDef) = 
+let internal compileSubscriptionField (subfield: SubscriptionFieldDef) =
     match subfield.Resolve with
     | Resolve.BoxedFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> AsyncVal.wrap |> AsyncVal.toAsync
     | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> filter
@@ -572,7 +573,8 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
               ParentType = objdef
               Schema = ctx.Schema
               Args = args
-              Variables = ctx.Variables }
+              Variables = ctx.Variables
+              Path = path |> List.rev }
         let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
         asyncVal {
             let! result =
@@ -597,6 +599,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
     let subdef = info.Definition :?> SubscriptionFieldDef
     let args = getArgumentValues subdef.Args info.Ast.Arguments ctx.Variables
     let returnType = subdef.OutputTypeDef
+    let fieldPath = [ info.Identifier :> obj ]
     let fieldCtx =
         { ExecutionInfo = info
           Context = ctx
@@ -604,13 +607,14 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
           ParentType = objdef
           Schema = ctx.Schema
           Args = args
-          Variables = ctx.Variables }
+          Variables = ctx.Variables
+          Path = fieldPath |> List.rev }
     let onValue v = asyncVal {
-            match! executeResolvers fieldCtx [ info.Identifier ] value (toOption v |> AsyncVal.wrap) with
-            | Ok (data, None, []) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
-            | Ok (data, None, errs) -> return NameValueLookup.ofList["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
+            match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
+            | Ok (data, None, []) -> return NameValueLookup.ofList ["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]] :> Output
+            | Ok (data, None, errs) -> return NameValueLookup.ofList ["data", box <| NameValueLookup.ofList [nameOrAlias, data.Value]; "errors", upcast errs] :> Output
             | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
-            | Error errs -> return NameValueLookup.ofList["data", null; "errors", upcast errs] :> Output
+            | Error errs -> return NameValueLookup.ofList ["data", null; "errors", upcast errs] :> Output
         }
     ctx.Schema.SubscriptionProvider.Add fieldCtx value subdef
     |> Observable.bind(onValue >> Observable.ofAsyncVal)

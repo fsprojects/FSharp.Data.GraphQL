@@ -69,13 +69,13 @@ and B = {
     b: int
 }
 
-and C = 
+and C =
     { id : string
       value : string }
     interface InterfaceSubject with
         member this.Id = this.id
         member this.Value = this.value
-and D = 
+and D =
     { id : string
       value : string }
     interface InterfaceSubject with
@@ -208,8 +208,8 @@ let data = {
            { value = async { return (Some "Fast") } }
        ]
        resolverError = { value = async { return failwith "Resolver error!" } }
-       resolverListError = [ 
-           { value = async { return failwith "Resolver error!" } } 
+       resolverListError = [
+           { value = async { return failwith "Resolver error!" } }
            { value = async { return failwith "Resolver error!" } }
        ]
        nullableError = { value = async { return null } }
@@ -227,13 +227,13 @@ let data = {
 let Query =
     Define.Object<TestSubject>(
         name = "Query",
-        fieldsFn = fun () -> 
+        fieldsFn = fun () ->
         [
             Define.Field("listData", ListOf UnionType, (fun _ _ -> data.list))
             Define.Field("testData", DataType, (fun _ _ -> data))
         ])
 
-let schemaConfig = 
+let schemaConfig =
     { SchemaConfig.DefaultWithBufferedStream(streamOptions = { Interval = None; PreferredBatchSize = None }) with Types = [ CType; DType ] }
 
 
@@ -685,13 +685,13 @@ let ``Parallel Defer`` () =
             ]
             "path", upcast ["testData"; "innerList"]
         ]
-    let query = 
+    let query =
         parse """{
             testData {
                 a @defer
                 b
                 innerList @defer {
-                    a                    
+                    a
                 }
             }
         }"""
@@ -736,7 +736,7 @@ let ``Parallel Stream`` () =
             ]
             "path", upcast [box "testData"; upcast "innerList"; upcast 0; upcast "innerList"; upcast 0]
         ]
-    let query = 
+    let query =
         parse """{
             testData {
                 a
@@ -783,7 +783,7 @@ let ``Inner Object List Defer`` () =
             testData {
                 b
                 innerList @defer {
-                    a                    
+                    a
                 }
             }
         }"""
@@ -817,7 +817,7 @@ let ``Inner Object List Stream`` () =
             testData {
                 b
                 innerList @stream {
-                    a                    
+                    a
                 }
             }
         }"""
@@ -1125,7 +1125,7 @@ let ``List inside root - Stream``() =
                 ]
             ]
             "path", upcast [box "listData"; upcast 0]
-        ]        
+        ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
@@ -1178,7 +1178,7 @@ let ``List Stream``() =
                 ]
             ]
             "path", upcast [box "testData"; upcast "list"; upcast 0]
-        ]        
+        ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
@@ -1235,7 +1235,7 @@ let ``Should buffer stream list correctly by timing information``() =
                 ]
             ]
             "path", upcast [box "testData"; upcast "bufferedList"; upcast [box 2; upcast 1]]
-        ]        
+        ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
@@ -1244,8 +1244,8 @@ let ``Should buffer stream list correctly by timing information``() =
                 ]
             ]
             "path", upcast [box "testData"; upcast "bufferedList"; upcast 0]
-        ]   
-    let query = 
+        ]
+    let query =
         ms 3000
         |> sprintf """{
             testData {
@@ -1301,7 +1301,7 @@ let ``Should buffer stream list correctly by count information``() =
                 ]
             ]
             "path", upcast [box "testData"; upcast "bufferedList"; upcast [box 2; upcast 1]]
-        ]        
+        ]
     let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
@@ -1310,7 +1310,7 @@ let ``Should buffer stream list correctly by count information``() =
                 ]
             ]
             "path", upcast [box "testData"; upcast "bufferedList"; upcast 0]
-        ]   
+        ]
     let query = parse """{
         testData {
             bufferedList @stream(preferredBatchSize : 2) {
@@ -1437,7 +1437,7 @@ let ``Each deferred result should be sent as soon as it is computed``() =
         |> itemEquals 1 expectedDeferred2
         |> ignore
 
-[<Fact>]
+[<Fact(Skip="Flaky test")>]
 let ``Each deferred result of a list should be sent as soon as it is computed`` () =
     let expectedDirect =
         NameValueLookup.ofList [

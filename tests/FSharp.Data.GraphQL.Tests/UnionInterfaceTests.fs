@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.UnionInterfaceTests
 
@@ -14,27 +14,27 @@ open FSharp.Data.GraphQL.Execution
 type INamed =
     interface
         abstract Name : string
-    end 
+    end
 
-type Dog = 
+type Dog =
     { Name: string; Barks: bool }
     interface INamed with
         member x.Name = x.Name
 
-type Cat = 
+type Cat =
     { Name: string; Meows: bool }
     interface INamed with
         member x.Name = x.Name
-        
+
 type Pet =
     | Cat of Cat
     | Dog of Dog
 
-type Person = 
+type Person =
     { Name: string; Pets: Pet list; Friends: INamed list }
     interface INamed with
         member x.Name = x.Name
-        
+
 let NamedType =
   Define.Interface<INamed>(
     name = "Named",
@@ -49,7 +49,7 @@ let DogType =
         Define.AutoField("name", String)
         Define.AutoField("barks", Boolean)
     ])
-    
+
 let CatType =
   Define.Object<Cat>(
     name = "Cat",
@@ -176,7 +176,7 @@ let ``Executes union types`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
     // This is the valid version of the query in the above test.
@@ -214,7 +214,7 @@ let ``Executes union types with inline fragments`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
     // NOTE: This is an *invalid* query, but it should be an *executable* query.
@@ -246,7 +246,7 @@ let ``Executes interface types`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
     // This is the valid version of the query in the above test.
@@ -341,4 +341,3 @@ let ``Execute allows fragment conditions to be abstract types`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    

@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
@@ -21,7 +21,7 @@ module ReflectionPatterns =
            typeof<byte>
            typeof<sbyte> |]
 
-    let isOption (t : Type) = 
+    let isOption (t : Type) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<_ option>
 
     let isMap (t : Type) =

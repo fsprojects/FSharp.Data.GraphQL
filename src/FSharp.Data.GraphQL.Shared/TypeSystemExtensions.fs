@@ -12,44 +12,44 @@ type FieldResolveMiddleware<'Val, 'Res> =
     ResolveFieldContext -> 'Val -> (ResolveFieldContext -> 'Val -> 'Res) -> 'Res
 
 type internal CustomFieldsObjectDefinition<'Val>(source : ObjectDef<'Val>, fields: FieldDef<'Val> seq) =
-    let exists fname = 
+    let exists fname =
         fields |> Seq.exists (fun x -> x.Name = fname)
-    let fields = 
+    let fields =
         source.Fields
         |> Map.toSeq
         |> Seq.filter (fun (n, _) -> not (exists n))
         |> Seq.append (fields |> Seq.map (fun x -> x.Name, x))
         |> Map.ofSeq
     interface ObjectDef<'Val> with
-        member __.Fields = fields
+        member _.Fields = fields
     interface ObjectDef with
-        member __.Fields = fields |> Map.map (fun _ f -> upcast f)
-        member __.Name = source.Name
-        member __.Description = source.Description
-        member __.Implements = source.Implements
-        member __.IsTypeOf = source.IsTypeOf
+        member _.Fields = fields |> Map.map (fun _ f -> upcast f)
+        member _.Name = source.Name
+        member _.Description = source.Description
+        member _.Implements = source.Implements
+        member _.IsTypeOf = source.IsTypeOf
     interface TypeDef with
         member this.MakeList() = upcast (ListOf this)
         member this.MakeNullable() = upcast (Nullable this)
-        member __.Type = (source :> TypeDef).Type
+        member _.Type = (source :> TypeDef).Type
     interface NamedDef with
-        member __.Name = (source :> NamedDef).Name
-    override __.Equals y = source.Equals y
-    override __.GetHashCode() = source.GetHashCode()
-    override __.ToString() = source.ToString()
+        member _.Name = (source :> NamedDef).Name
+    override _.Equals y = source.Equals y
+    override _.GetHashCode() = source.GetHashCode()
+    override _.ToString() = source.ToString()
 
 type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, middleware : FieldResolveMiddleware<'Val, 'Res>) =
     interface FieldDef<'Val> with
-        member __.Name = source.Name
-        member __.Description = source.Description
-        member __.DeprecationReason = source.DeprecationReason
-        member __.TypeDef = source.TypeDef
-        member __.Args = source.Args
-        member __.Metadata = source.Metadata
-        member __.Resolve =
-            let changeResolver expr = 
+        member _.Name = source.Name
+        member _.Description = source.Description
+        member _.DeprecationReason = source.DeprecationReason
+        member _.TypeDef = source.TypeDef
+        member _.Args = source.Args
+        member _.Metadata = source.Metadata
+        member _.Resolve =
+            let changeResolver expr =
                 let expr =
-                    match expr with 
+                    match expr with
                     | WithValue (_, _, e) -> e
                     | _ -> failwith "Unexpected resolver expression."
                 let resolver = <@ fun ctx input -> middleware ctx input %%expr @>
@@ -61,10 +61,10 @@ type internal CustomResolveFieldDefinition<'Val, 'Res>(source : FieldDef<'Val>, 
             | Undefined -> failwith "Field has no resolve function."
             | x -> failwith <| sprintf "Resolver '%A' is not supported." x
     interface IEquatable<FieldDef> with
-        member __.Equals(other) = source.Equals(other)
-    override __.Equals y = source.Equals y
-    override __.GetHashCode() = source.GetHashCode()
-    override __.ToString() = source.ToString()
+        member _.Equals(other) = source.Equals(other)
+    override _.Equals y = source.Equals y
+    override _.GetHashCode() = source.GetHashCode()
+    override _.ToString() = source.ToString()
 
 type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : InputFieldDef seq) =
     let exists aname = args |> Seq.exists (fun x -> x.Name = aname)
@@ -74,35 +74,35 @@ type internal CustomArgsFieldDefinition<'Val>(source : FieldDef<'Val>, args : In
         |> Seq.append (args |> Array.ofSeq)
         |> Array.ofSeq
     interface FieldDef<'Val> with
-        member __.Name = source.Name
-        member __.Description = source.Description
-        member __.DeprecationReason = source.DeprecationReason
-        member __.TypeDef = source.TypeDef
-        member __.Args = args
-        member __.Metadata = source.Metadata
-        member __.Resolve = source.Resolve
+        member _.Name = source.Name
+        member _.Description = source.Description
+        member _.DeprecationReason = source.DeprecationReason
+        member _.TypeDef = source.TypeDef
+        member _.Args = args
+        member _.Metadata = source.Metadata
+        member _.Resolve = source.Resolve
 
     interface IEquatable<FieldDef> with
-        member __.Equals(other) = source.Equals(other)
-    override __.Equals y = source.Equals y
-    override __.GetHashCode() = source.GetHashCode()
-    override __.ToString() = source.ToString()
+        member _.Equals(other) = source.Equals(other)
+    override _.Equals y = source.Equals y
+    override _.GetHashCode() = source.GetHashCode()
+    override _.ToString() = source.ToString()
 
 type internal CustomMetadataFieldDefinition<'Val>(source : FieldDef<'Val>, metadata : Metadata) =
     interface FieldDef<'Val> with
-        member __.Name = source.Name
-        member __.Description = source.Description
-        member __.DeprecationReason = source.DeprecationReason
-        member __.TypeDef = source.TypeDef
-        member __.Args = source.Args
-        member __.Metadata = metadata
-        member __.Resolve = source.Resolve
+        member _.Name = source.Name
+        member _.Description = source.Description
+        member _.DeprecationReason = source.DeprecationReason
+        member _.TypeDef = source.TypeDef
+        member _.Args = source.Args
+        member _.Metadata = metadata
+        member _.Resolve = source.Resolve
 
     interface IEquatable<FieldDef> with
-        member __.Equals(other) = source.Equals(other)
-    override __.Equals y = source.Equals y
-    override __.GetHashCode() = source.GetHashCode()
-    override __.ToString() = source.ToString()
+        member _.Equals(other) = source.Equals(other)
+    override _.Equals y = source.Equals y
+    override _.GetHashCode() = source.GetHashCode()
+    override _.ToString() = source.ToString()
 
 /// Contains extensions for the type system.
 [<AutoOpen>]

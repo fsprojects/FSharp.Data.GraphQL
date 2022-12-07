@@ -1,18 +1,29 @@
-<?xml version="1.0" encoding="utf-8"?>
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <TargetFrameworks>netcoreapp2.1;net47</TargetFrameworks>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
+    <TargetFramework>net6.0</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <GenerateProgramFile>false</GenerateProgramFile>
     <OutputType>Exe</OutputType>
+
+    <Description>FSharp implementation of Facebook GraphQL query language (Server)</Description>
   </PropertyGroup>
+
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
     <DebugSymbols>true</DebugSymbols>
     <DebugType>portable</DebugType>
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
+    <PackageReference Include="Microsoft.NET.Test.Sdk" />
+    <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="xunit" />
+    <PackageReference Include="xunit.runner.utility" />
+    <PackageReference Include="xunit.runner.visualstudio" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="Helpers.fs" />
     <Compile Include="Literals.fs" />
     <Compile Include="PropertyTrackingTests.fs" />
@@ -45,21 +56,15 @@
     <Compile Include="AstExtensionsTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
+
   <ItemGroup>
-    <Content Include="xunit.runner.json" />
+    <Content Condition="$(OS) != Unix" Include="xunit.runner.json" />
+    <Content Condition="$(OS) == Unix" Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
-  <ItemGroup>
-    <None Include="App.config" />
-    <None Include="paket.references" />
-  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
-  <ItemGroup Condition="$(OS) == Unix">
-    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
-  </ItemGroup>
-  <Import Project="..\..\netfx.props" />
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

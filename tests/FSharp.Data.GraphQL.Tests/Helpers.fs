@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 [<AutoOpen>]
 module Helpers
 
@@ -76,9 +76,9 @@ open FSharp.Data.GraphQL.Parser
 type internal OptionConverter() =
     inherit JsonConverter()
 
-    override __.CanConvert(t) =
+    override _.CanConvert(t) =
         t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
-    override __.WriteJson(writer, value, serializer) =
+    override _.WriteJson(writer, value, serializer) =
         let value =
             if isNull value then null
             else
@@ -86,7 +86,7 @@ type internal OptionConverter() =
                 fields.[0]
         serializer.Serialize(writer, value)
 
-    override __.ReadJson(reader, t, _, serializer) =
+    override _.ReadJson(reader, t, _, serializer) =
         let innerType = t.GetGenericArguments().[0]
         let innerType =
             if innerType.IsValueType then (typedefof<Nullable<_>>).MakeGenericType([|innerType|])
@@ -147,39 +147,39 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     let mre = new ManualResetEvent(false)
     let mutable subscription = Unchecked.defaultof<IDisposable>
     do subscription <- obs.Subscribe(this)
-    member __.Received 
+    member _.Received
         with get() = received.AsEnumerable()
-    member __.WaitCompleted(?expectedItemCount, ?timeout) =
+    member _.WaitCompleted(?expectedItemCount, ?timeout) =
         let ms = defaultArg timeout 30
         if TimeSpan.FromSeconds(float ms) |> mre.WaitOne |> not
         then fail "Timeout waiting for OnCompleted"
         match expectedItemCount with
-        | Some x -> 
+        | Some x ->
             if received.Count < x
             then failwithf "Expected to receive %i items, but received %i\nItems: %A" x received.Count received
         | None -> ()
-    member __.WaitForItems(expectedItemCount) =
+    member _.WaitForItems(expectedItemCount) =
         let errorMsg = sprintf "Expected to receive least %i items, but received %i\nItems: %A" expectedItemCount received.Count received
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
     member x.WaitForItem() = x.WaitForItems(1)
-    member __.IsCompleted 
+    member _.IsCompleted
         with get() = isCompleted
     interface IObserver<'T> with
-        member __.OnCompleted() = 
+        member _.OnCompleted() =
             isCompleted <- true
             mre.Set() |> ignore
-        member __.OnError(error) = raise error
-        member __.OnNext(value) = 
+        member _.OnError(error) = raise error
+        member _.OnNext(value) =
             received.Add(value)
             onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
-        member __.Dispose() = 
+        member _.Dispose() =
             subscription.Dispose()
             mre.Dispose()
 
 [<RequireQualifiedAccess>]
 module Observer =
-    let create (sub : IObservable<'T>) = 
+    let create (sub : IObservable<'T>) =
         new TestObserver<'T>(sub)
 
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =

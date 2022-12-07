@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Validation
 
@@ -55,7 +55,7 @@ module Ast =
         { Name : string
           ArgumentNames : string [] }
 
-    let private metaTypeFields = 
+    let private metaTypeFields =
         [| { Name = "__type"; ArgumentNames = [|"name"|] }
            { Name = "__schema"; ArgumentNames = [||] }
            { Name = "__typename"; ArgumentNames = [||] } |]
@@ -161,7 +161,7 @@ module Ast =
             match x with
             | OperationDefinitionInfo x -> x.Definition.Directives
             | FragmentDefinitionInfo x -> x.Definition.Directives
-    
+
     /// The validation  context used to run validations against a parsed document.
     /// It should have the schema type information, the original document and the definition information about the original document.
     type ValidationContext =
@@ -198,9 +198,9 @@ module Ast =
           FragmentType : FragmentTypeInfo option
           Path : Path
           SelectionSet : Selection list }
-        member x.FragmentOrParentType = 
+        member x.FragmentOrParentType =
             x.FragmentType
-            |> Option.map (fun x -> x.TypeCondition) 
+            |> Option.map (fun x -> x.TypeCondition)
             |> Option.defaultValue x.ParentType
 
     let private tryFindInArrayOption (finder : 'T -> bool) = Option.bind (Array.tryFind finder)
@@ -226,7 +226,7 @@ module Ast =
                     FragmentType = Some (Spread (fragName, directives, fragType))
                     SelectionSet = fragmentSelectionSet }
             getSelectionSetInfo (fragName :: visitedFragments) fragCtx
-            
+
     and private getSelectionSetInfo (visitedFragments : string list) (ctx : SelectionInfoContext) : SelectionInfo list =
         // When building the selection info, we should not raise any error when a type referred by the document
         // is not found in the schema. Not found types are validated in another validation, without the need of the
@@ -239,11 +239,11 @@ module Ast =
                 let fieldTypeRef = introspectionField |> Option.map (fun f -> f.Type)
                 let fieldPath = field.AliasOrName :: ctx.Path
                 let fieldSelectionSet =
-                    fieldTypeRef 
+                    fieldTypeRef
                     |> Option.bind ctx.Schema.TryGetTypeByRef
                     |> Option.map (fun fieldType ->
                         let fieldCtx =
-                            { ctx with 
+                            { ctx with
                                 ParentType = fieldType
                                 FragmentType = None
                                 Path = fieldPath
@@ -259,10 +259,10 @@ module Ast =
                   InputValues = inputValues |> Option.defaultValue [||]
                   Path = fieldPath }
                 |> List.singleton
-            | InlineFragment inlineFrag -> 
+            | InlineFragment inlineFrag ->
                 inlineFrag.TypeCondition
                 |> Option.bind ctx.Schema.TryGetTypeByName
-                |> Option.map (fun fragType -> 
+                |> Option.map (fun fragType ->
                     let fragType = Inline fragType
                     getFragSelectionSetInfo visitedFragments fragType inlineFrag.SelectionSet ctx)
                 |> Option.defaultValue List.empty
@@ -277,12 +277,12 @@ module Ast =
                         getFragSelectionSetInfo visitedFragments fragType fragDef.SelectionSet ctx))
                 |> Option.defaultValue List.empty)
 
-    let private getOperationDefinitions (ast : Document) = 
+    let private getOperationDefinitions (ast : Document) =
         ast.Definitions
         |> List.choose (function | OperationDefinition x -> Some x | _ -> None)
 
-    let private getFragmentDefinitions (ast : Document) = 
-        ast.Definitions 
+    let private getFragmentDefinitions (ast : Document) =
+        ast.Definitions
         |> List.choose (function | FragmentDefinition x when x.Name.IsSome -> Some x | _ -> None)
 
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
@@ -294,7 +294,7 @@ module Ast =
                 |> Option.bind (fun typeCondition ->
                     schemaInfo.TryGetTypeByName(typeCondition)
                     |> Option.map (fun fragType ->
-                        let fragCtx = 
+                        let fragCtx =
                             { Schema = schemaInfo
                               FragmentDefinitions = fragmentDefinitions
                               ParentType = fragType
@@ -309,7 +309,7 @@ module Ast =
                 schemaInfo.TryGetOperationType(def.OperationType)
                 |> Option.map (fun parentType ->
                     let path = match def.Name with | Some name -> [name] | None -> []
-                    let opCtx = 
+                    let opCtx =
                         { Schema = schemaInfo
                           FragmentDefinitions = fragmentDefinitions
                           ParentType = parentType
@@ -384,9 +384,9 @@ module Ast =
         if fieldA.FieldType = fieldB.FieldType
         then
             let fieldsForName = Dictionary<string, SelectionInfo list>()
-            fieldA.SelectionSet 
+            fieldA.SelectionSet
             |> List.iter (fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
-            fieldB.SelectionSet 
+            fieldB.SelectionSet
             |> List.iter (fun selection -> Dictionary.addWith (List.append) selection.AliasOrName [selection] fieldsForName)
             fieldsForName
             |> collectResults (fun (KeyValue (_, selectionSet)) ->
@@ -619,7 +619,7 @@ module Ast =
         | InlineFragment inlineFrag ->
             inlineFrag.SelectionSet
             |> collectResults (checkFragmentsMustNotHaveCyclesInSelection fragmentDefinitions visited)
-        | FragmentSpread spread -> 
+        | FragmentSpread spread ->
             match fragmentDefinitions |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name) with
             | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
             | None -> Success
@@ -777,7 +777,7 @@ module Ast =
     let rec private checkDirectivesInValidLocationOnInlineFragment (ctx : InlineFragmentContext) =
         let directivesValid =
             ctx.Directives
-            |> collectResults (validateDirective ctx.Schema ctx.Path DirectiveLocation.INLINE_FRAGMENT (fun d -> 
+            |> collectResults (validateDirective ctx.Schema ctx.Path DirectiveLocation.INLINE_FRAGMENT (fun d ->
                 sprintf "An inline fragment has a directive '%s', but this directive location is not supported by the schema definition." d.Name))
         let directivesValidInSelectionSet =
             ctx.SelectionSet
@@ -796,7 +796,7 @@ module Ast =
                 field.SelectionSet
                 |> collectResults (checkDirectivesInValidLocationOnSelection schemaInfo fragmentDefinitions path)
             directivesValid @@ directivesValidInSelectionSet
-        | InlineFragment frag -> 
+        | InlineFragment frag ->
             let fragCtx =
                 { Schema = schemaInfo
                   FragmentDefinitions = fragmentDefinitions
@@ -817,7 +817,7 @@ module Ast =
     let rec private checkDirectivesInValidLocationOnFragmentSpread (ctx : FragmentSpreadContext) =
         let directivesValid =
             ctx.Directives
-            |> collectResults (validateDirective ctx.Schema ctx.Path DirectiveLocation.FRAGMENT_SPREAD (fun d -> 
+            |> collectResults (validateDirective ctx.Schema ctx.Path DirectiveLocation.FRAGMENT_SPREAD (fun d ->
                 sprintf "Fragment '%s' has a directive '%s', but this directive location is not supported by the schema definition." ctx.FragmentName d.Name))
         let directivesValidInSelectionSet =
             ctx.SelectionSet
@@ -847,7 +847,7 @@ module Ast =
         |> collectResults (fun def ->
             let path = def.Name |> Option.toList
             match def with
-            | OperationDefinition odef -> 
+            | OperationDefinition odef ->
                 checkDirectivesInOperation ctx.Schema fragmentDefinitions path odef
             | FragmentDefinition frag when frag.Name.IsSome ->
                 let fragCtx =
@@ -965,8 +965,8 @@ module Ast =
             | Variable varName -> varName = name
             | ObjectValue obj -> go (Map.toList obj |> List.map snd)
             | ListValue xs -> go xs
-            | _ -> false) 
-        go (args |> List.map (fun x -> x.Value))        
+            | _ -> false)
+        go (args |> List.map (fun x -> x.Value))
 
     let rec private variableIsUsedInFragmentSpread (name : string) (fragmentDefinitions : FragmentDefinition list) (visitedFragments : string list) (spread : FragmentSpread) =
         if List.contains spread.Name visitedFragments
@@ -1061,14 +1061,14 @@ module Ast =
                 | None -> visitedFragments
             match selection.FieldType with
             | Some _ ->
-                let argumentsValid = 
-                    selection.Field.Arguments 
+                let argumentsValid =
+                    selection.Field.Arguments
                     |> checkVariableUsageAllowedOnArguments selection.InputValues varNamesAndTypeRefs selection.Path
-                let selectionValid = 
-                    selection.SelectionSet 
+                let selectionValid =
+                    selection.SelectionSet
                     |> collectResults (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs visitedFragments)
                 let directivesValid =
-                    selection.Field.Directives 
+                    selection.Field.Directives
                     |> collectResults (fun directive -> directive.Arguments |> checkVariableUsageAllowedOnArguments selection.InputValues varNamesAndTypeRefs selection.Path)
                 argumentsValid @@ selectionValid @@ directivesValid
             | None -> Success

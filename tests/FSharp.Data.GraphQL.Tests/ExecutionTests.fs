@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.ExecutionTests
 
@@ -29,17 +29,17 @@ and DeepTestSubject = {
     c: string option list
 }
 
-and DUArg = 
+and DUArg =
     | Case1
     | Case2
 
 and EnumArg =
-    | Enum1 = 1 
-    | Enum2 = 2 
+    | Enum1 = 1
+    | Enum2 = 2
 
 [<Fact>]
 let ``Execution handles basic tasks: executes arbitrary code`` () =
-    let rec data = 
+    let rec data =
         {
             a = "Apple"
             b = "Banana"
@@ -51,7 +51,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             promise = async { return data }
             deep = deep
         }
-    and deep = 
+    and deep =
         {
             a = "Already Been Done"
             b = "Boring"
@@ -82,9 +82,9 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
           e
         }"""
 
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
-            "a", upcast "Apple" 
+            "a", upcast "Apple"
             "b", upcast "Banana"
             "x", upcast "Cookie"
             "d", upcast "Donut"
@@ -96,7 +96,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
                "a", "Already Been Done" :> obj
                "b", upcast "Boring"
                "c", upcast ["Contrived" :> obj; null; upcast "Confusing"]
-            ] 
+            ]
         ]
 
     let DeepDataType =
@@ -119,7 +119,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             Define.Field("f", String, fun _ dt -> dt.f)
             Define.Field("pic", String, "Picture resizer", [ Define.Input("size", Nullable Int) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
             Define.AsyncField("promise", DataType, fun _ dt -> dt.promise)
-            Define.Field("deep", DeepDataType, fun _ dt -> dt.deep) 
+            Define.Field("deep", DeepDataType, fun _ dt -> dt.deep)
         ])
 
     let schema = Schema(DataType)
@@ -134,7 +134,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
 type TestThing = { mutable Thing: string }
 
 [<Fact>]
-let ``Execution handles basic tasks: merges parallel fragments`` () = 
+let ``Execution handles basic tasks: merges parallel fragments`` () =
     let ast = parse """{ a, ...FragOne, ...FragTwo }
 
       fragment FragOne on Type {
@@ -149,7 +149,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
 
     let rec Type =
       Define.Object(
-        name = "Type", 
+        name = "Type",
         fieldsFn = fun () ->
         [
             Define.Field("a", String, fun _ _ -> "Apple")
@@ -180,9 +180,9 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
-let ``Execution handles basic tasks: threads root value context correctly`` () = 
+let ``Execution handles basic tasks: threads root value context correctly`` () =
     let query = "query Example { a }"
     let data = { Thing = "" }
     let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing) ])
@@ -192,7 +192,7 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
       empty errors
     | _ -> fail "Expected Direct GQResponse"
     equals "thing" data.Thing
-    
+
 type TestTarget =
     { mutable Num: int option
       mutable Str: string option }
@@ -203,10 +203,10 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
         b(numArg: 123, stringArg: "foo")
       }"""
     let data = { Num = None; Str = None }
-    let Type = 
-        Define.Object("Type", 
-            [ Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ], 
-                 fun ctx value -> 
+    let Type =
+        Define.Object("Type",
+            [ Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ],
+                 fun ctx value ->
                      value.Num <- ctx.TryArg("numArg")
                      value.Str <- ctx.TryArg("stringArg")
                      value.Str) ])
@@ -218,7 +218,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     | _ -> fail "Expected Direct GQResponse"
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
-    
+
 type InlineTest = { A: string }
 
 [<Fact>]
@@ -226,15 +226,15 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
     let query = """query Example {
           b(enumArg: Case1)
         }"""
-    let EnumType = 
+    let EnumType =
         Define.Enum(
             name = "EnumArg",
-            options = 
+            options =
                 [ Define.EnumValue("Case1", DUArg.Case1, "Case 1")
                   Define.EnumValue("Case2", DUArg.Case2, "Case 2") ])
     let data = { Num = None; Str = None }
-    let Type = 
-        Define.Object("Type", 
+    let Type =
+        Define.Object("Type",
             [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
                  fun ctx value ->
                  let arg = ctx.TryArg("enumArg")
@@ -257,15 +257,15 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
     let query = """query Example {
           b(enumArg: Enum1)
         }"""
-    let EnumType = 
+    let EnumType =
         Define.Enum(
             name = "EnumArg",
-            options = 
+            options =
                 [ Define.EnumValue("Enum1", EnumArg.Enum1, "Enum 1")
                   Define.EnumValue("Enum2", EnumArg.Enum2, "Enum 2") ])
     let data = { Num = None; Str = None }
-    let Type = 
-        Define.Object("Type", 
+    let Type =
+        Define.Object("Type",
             [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
                   fun ctx value ->
                   let arg = ctx.TryArg("enumArg")
@@ -295,9 +295,9 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
     let schema =
@@ -309,9 +309,9 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj]) 
+      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
     let schema =
@@ -362,7 +362,7 @@ let ``Execution when querying the same field twice will return it`` () =
       empty errors
       data.["data"] |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-    
+
 [<Fact>]
 let ``Execution when querying returns unique document id with response`` () =
     let schema =

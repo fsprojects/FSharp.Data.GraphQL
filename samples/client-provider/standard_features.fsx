@@ -1,6 +1,6 @@
 // Uncomment those to use build script client assembly
-//#r "../../bin/FSharp.Data.GraphQL.Client/net47/FSharp.Data.GraphQL.Client.dll"
-//#r "../../bin/FSharp.Data.GraphQL.Shared/net47/FSharp.Data.GraphQL.Shared.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Client/net461/FSharp.Data.GraphQL.Client.dll"
+//#r "../../bin/FSharp.Data.GraphQL.Shared/net461/FSharp.Data.GraphQL.Shared.dll"
 
 // Uncomment those to use build script client assembly using netstandard2.0
 //#r "../../bin/FSharp.Data.GraphQL.Shared/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
@@ -8,8 +8,8 @@
 //#r "../../bin/FSharp.Data.GraphQL.Client/netstandard2.0/FSharp.Data.GraphQL.Client.dll"
 
 // Uncomment those to use dotnet build command for the client assembly
-// #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net47/FSharp.Data.GraphQL.Shared.dll"
-// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net47/FSharp.Data.GraphQL.Client.dll"
+// #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/net461/FSharp.Data.GraphQL.Shared.dll"
+// #r "../../src/FSharp.Data.GraphQL.Client/bin/Debug/net461/FSharp.Data.GraphQL.Client.dll"
 
 //Uncomment those to use dotnet build command for the client assembly using netstandard2.0
 #r "../../src/FSharp.Data.GraphQL.Shared/bin/Debug/netstandard2.0/FSharp.Data.GraphQL.Shared.dll"
@@ -20,7 +20,7 @@ open FSharp.Data.GraphQL
 
 // The URL here is for design time purposes.
 // It connects to the server to be able to map its schema.
-type MyProvider = GraphQLProvider<"http://localhost:8084">
+type MyProvider = GraphQLProvider<"http://localhost:8086">
 
 // You can also provide the introspection schema yourself if you can't access the server
 // at design time. Just provide a file in the path of the project or a literal containing
@@ -32,7 +32,7 @@ type MyProvider = GraphQLProvider<"http://localhost:8084">
 // The operation method can be used to make queries, mutations, and subscriptions.
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
-let operation = 
+let operation =
     MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
@@ -49,13 +49,18 @@ let operation =
           }
         }
       }
-    }""">()
+    }""">
+        ()
 
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
-let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8084")
+//let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8086")
+
+// You can specify a connection factory to manage your connection lifecycle if you want.
+let connection = new GraphQLClientConnection ()
+let runtimeContext = MyProvider.GetContext (serverUrl = "http://localhost:8086", connectionFactory = fun () -> connection)
 
 // To run an operation, you just need to call the Run or AsyncRun method.
-let result = operation.Run(runtimeContext)
+let result = operation.Run (runtimeContext)
 //let result = operation.AsyncRun() |> Async.RunSynchronously
 
 // If the operation runs without any error, result data will be on the Data property.
@@ -94,8 +99,8 @@ let friends = hero.Friends |> Array.choose id
 //let thisWillProduceAnError = friends |> Array.map (fun x -> x.AsDroid())
 
 // We can easily filter friends by using "TryAs" methods.
-let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman())
-let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid())
+let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman ())
+let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid ())
 
 // We can also use "Is" version methods to do some custom matching.
 let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 else 0) |> Array.reduce (+)

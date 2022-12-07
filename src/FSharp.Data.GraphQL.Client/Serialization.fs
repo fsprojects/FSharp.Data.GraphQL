@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
@@ -24,7 +24,7 @@ module Serialization =
         | Option t -> downcast (makeOption t null)
         | _ -> failwithf "Error parsing JSON value: %O is not an option value." t
 
-    let private downcastType (t : Type) x = 
+    let private downcastType (t : Type) x =
         match t with
         | Option t -> downcast (makeOption t (Convert.ChangeType(x, t)))
         | _ -> downcast (Convert.ChangeType(x, t))
@@ -76,10 +76,10 @@ module Serialization =
             upcast arr
         let castList itemType (items : obj list) =
             let tlist = typedefof<_ list>.MakeGenericType([|itemType|])
-            let empty = 
-                let uc = 
-                    Reflection.FSharpType.GetUnionCases(tlist) 
-                    |> Seq.filter (fun uc -> uc.Name = "Empty") 
+            let empty =
+                let uc =
+                    Reflection.FSharpType.GetUnionCases(tlist)
+                    |> Seq.filter (fun uc -> uc.Name = "Empty")
                     |> Seq.exactlyOne
                 Reflection.FSharpValue.MakeUnion(uc, [||])
             let rec helper items =
@@ -108,14 +108,14 @@ module Serialization =
             | JsonValue.Float n -> downcastNumber t n
             | JsonValue.Integer n -> downcastNumber t n
             | JsonValue.Record jprops ->
-                let jprops = 
-                    jprops 
-                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v) 
+                let jprops =
+                    jprops
+                    |> Array.map (fun (n, v) -> n.ToLowerInvariant(), v)
                     |> Map.ofSeq
                 let tprops t =
                     FSharpType.GetRecordFields(t, true)
                     |> Array.map (fun p -> p.Name.ToLowerInvariant(), p.PropertyType)
-                let vals t = 
+                let vals t =
                     tprops t
                     |> Array.map (fun (n, t) ->
                         match Map.tryFind n jprops with
@@ -151,11 +151,11 @@ module Serialization =
         Tracer.runAndMeasureExecutionTime "Deserialized JSON Record into FSharp Map" (fun _ ->
             helper values |> Map.ofArray)
 
-    let private isoDateFormat = "yyyy-MM-dd" 
+    let private isoDateFormat = "yyyy-MM-dd"
     let private isoDateTimeFormat = "O"
 
     let rec toJsonValue (x : obj) : JsonValue =
-        if isNull x 
+        if isNull x
         then JsonValue.Null
         else
             let t = x.GetType()
@@ -178,7 +178,7 @@ module Serialization =
                     |> Seq.map (fun (KeyValue (k, v)) -> k.FirstCharLower(), toJsonValue v)
                     |> Seq.toArray
                     |> JsonValue.Record
-                | EnumerableValue items -> 
+                | EnumerableValue items ->
                     items
                     |> Array.map toJsonValue
                     |> JsonValue.Array

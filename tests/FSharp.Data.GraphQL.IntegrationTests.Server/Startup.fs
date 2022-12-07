@@ -1,11 +1,12 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
+open System
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
-open Giraffe
 open Microsoft.Extensions.Logging
-open System
+open Giraffe
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -13,7 +14,10 @@ type Startup private () =
         this.Configuration <- configuration
 
     member __.ConfigureServices(services: IServiceCollection) =
-        services.AddGiraffe() |> ignore
+        services.AddGiraffe()
+                .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+                .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+        |> ignore
 
     member __.Configure(app: IApplicationBuilder) =
         let errorHandler (ex : Exception) (log : ILogger) =

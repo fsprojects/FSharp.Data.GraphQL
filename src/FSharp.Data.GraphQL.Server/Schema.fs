@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -17,31 +17,31 @@ type private Channel = ISubject<obj>
 type private ChannelBag() =
     let untagged = List<Channel>()
     let tagged = Dictionary<Tag, List<Channel>>()
-    member __.AddNew(tags : Tag seq) : Channel =
+    member _.AddNew(tags : Tag seq) : Channel =
         let channel = new Subject<obj>()
         untagged.Add(channel)
         let adder tag =
             match tagged.TryGetValue(tag) with
-            | true, channels -> 
+            | true, channels ->
                 channels.Add(channel)
-            | false, _ -> 
+            | false, _ ->
                 let channels = List<Channel>()
                 channels.Add(channel)
                 tagged.Add(tag, channels)
         tags |> Seq.iter adder
         upcast channel
-    member __.GetAll() =
+    member _.GetAll() =
         untagged |> Seq.map id
-    member __.GetByTag(tag) =
+    member _.GetByTag(tag) =
         match tagged.TryGetValue(tag) with
         | false, _ -> Seq.empty
         | true, channels -> channels |> Seq.map id
 
 type private SubscriptionManager() =
     let subscriptions = Dictionary<string, Subscription * ChannelBag>()
-    member __.Add(subscription : Subscription) =
+    member _.Add(subscription : Subscription) =
         subscriptions.Add(subscription.Name, (subscription, new ChannelBag()))
-    member __.TryGet(subscriptionName) =
+    member _.TryGet(subscriptionName) =
         match subscriptions.TryGetValue(subscriptionName) with
         | true, sub -> Some sub
         | _ -> None
@@ -66,24 +66,24 @@ type SchemaConfig =
     static member DefaultSubscriptionProvider() =
         let subscriptionManager = new SubscriptionManager()
         { new ISubscriptionProvider with
-            member __.AsyncRegister (subscription : Subscription) = async {
+            member _.AsyncRegister (subscription : Subscription) = async {
                 return subscriptionManager.Add(subscription) }
 
-            member __.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
+            member _.Add (ctx: ResolveFieldContext) (root: obj) (subdef: SubscriptionFieldDef) =
                 let tags = subdef.TagsResolver ctx
                 match subscriptionManager.TryGet(subdef.Name) with
-                | Some (sub, channels) -> 
+                | Some (sub, channels) ->
                     channels.AddNew(tags)
                     |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
                     |> Observable.choose id
                 | None -> Observable.Empty()
 
-            member __.AsyncPublish<'T> (name: string) (value: 'T) = async {
+            member _.AsyncPublish<'T> (name: string) (value: 'T) = async {
                 match subscriptionManager.TryGet(name) with
                 | Some (_, channels) -> channels.GetAll() |> Seq.iter (fun channel -> channel.OnNext(value))
                 | None -> () }
-                
-            member __.AsyncPublishTag<'T> (name: string) (tag : Tag) (value: 'T) = async {
+
+            member _.AsyncPublishTag<'T> (name: string) (tag : Tag) (value: 'T) = async {
                 match subscriptionManager.TryGet(name) with
                 | Some (_, channels) -> channels.GetByTag(tag) |> Seq.iter (fun channel -> channel.OnNext(value))
                 | None -> () } }
@@ -92,29 +92,29 @@ type SchemaConfig =
     static member DefaultLiveFieldSubscriptionProvider() =
         let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
         { new ILiveFieldSubscriptionProvider with
-            member __.HasSubscribers (typeName : string) (fieldName : string) =
+            member _.HasSubscribers (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.HasObservers
                 | _ -> false
-            member __.IsRegistered (typeName : string) (fieldName : string) =
+            member _.IsRegistered (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 registeredSubscriptions.ContainsKey(key)
-            member __.AsyncRegister (subscription : ILiveFieldSubscription) = async {
+            member _.AsyncRegister (subscription : ILiveFieldSubscription) = async {
                 let key = subscription.TypeName, subscription.FieldName
                 let value = subscription, new Subject<obj>()
                 registeredSubscriptions.Add(key, value) }
-            member __.TryFind (typeName : string) (fieldName : string) =
+            member _.TryFind (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | (true, (sub, _)) -> Some sub
                 | _ -> None
-            member __.Add filterFn (typeName : string) (fieldName : string) =
+            member _.Add filterFn (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (sub, channel) -> channel |> Observable.choose (fun x -> if filterFn x then Some (sub.Project x) else None)
                 | false, _ -> Observable.Empty()
-            member __.AsyncPublish<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
+            member _.AsyncPublish<'T> (typeName : string) (fieldName : string) (value : 'T) = async {
                 let key = typeName, fieldName
                 match registeredSubscriptions.TryGetValue(key) with
                 | true, (_, channel) -> channel.OnNext(box value)
@@ -138,15 +138,15 @@ type SchemaConfig =
         let streamDirective =
             let args = [|
                 Define.Input(
-                    "interval", 
-                    Nullable Int, 
+                    "interval",
+                    Nullable Int,
                     defaultValue = streamOptions.Interval,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered for milliseconds equal to the value, then sent to the client. " +
                         "After that, starts buffering again until all results are streamed.")
                 Define.Input(
-                    "preferredBatchSize", 
-                    Nullable Int, 
+                    "preferredBatchSize",
+                    Nullable Int,
                     defaultValue = streamOptions.PreferredBatchSize,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered until item count reaches this value, then sent to the client. " +
@@ -214,7 +214,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         // We need this so a default value that is an option is not printed as "Some"
-        let stringify = 
+        let stringify =
             function
             | ObjectOption x -> string x
             | x -> string x
@@ -234,7 +234,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let instrospectSubscriptionField (namedTypes: Map<string, IntrospectionTypeRef>) (subdef: SubscriptionFieldDef) =
         { Name = subdef.Name
           Description = subdef.Description
-          Args = subdef.Args |> Array.map (introspectInput namedTypes) 
+          Args = subdef.Args |> Array.map (introspectInput namedTypes)
           Type = introspectTypeRef false namedTypes subdef.OutputTypeDef
           IsDeprecated = Option.isSome subdef.DeprecationReason
           DeprecationReason = subdef.DeprecationReason }
@@ -334,29 +334,29 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
     let introspected = lazy (introspectSchema typeMap)
 
     interface ISchema with
-        member __.TypeMap = typeMap
-        member __.Directives = schemaConfig.Directives |> List.toArray
-        member __.Introspected = introspected.Force()
-        member __.Query = upcast query
-        member __.Mutation = mutation |> Option.map (fun x -> upcast x)
-        member __.Subscription = subscription |> Option.map (fun x -> upcast x)
-        member __.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
-        member __.GetPossibleTypes typedef = getPossibleTypes typedef
-        member __.ParseError exn = schemaConfig.ParseError exn
+        member _.TypeMap = typeMap
+        member _.Directives = schemaConfig.Directives |> List.toArray
+        member _.Introspected = introspected.Force()
+        member _.Query = upcast query
+        member _.Mutation = mutation |> Option.map (fun x -> upcast x)
+        member _.Subscription = subscription |> Option.map (fun x -> upcast x)
+        member _.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
+        member _.GetPossibleTypes typedef = getPossibleTypes typedef
+        member _.ParseError exn = schemaConfig.ParseError exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false
             | possibleTypes -> possibleTypes |> Array.exists (fun t -> t.Name = possibledef.Name)
-        member __.SubscriptionProvider = schemaConfig.SubscriptionProvider
-        member __.LiveFieldSubscriptionProvider = schemaConfig.LiveFieldSubscriptionProvider
+        member _.SubscriptionProvider = schemaConfig.SubscriptionProvider
+        member _.LiveFieldSubscriptionProvider = schemaConfig.LiveFieldSubscriptionProvider
 
     interface ISchema<'Root> with
-        member __.Query = query
-        member __.Mutation = mutation
-        member __.Subscription = subscription
+        member _.Query = query
+        member _.Mutation = mutation
+        member _.Subscription = subscription
 
     interface System.Collections.Generic.IEnumerable<NamedDef> with
-        member __.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd).GetEnumerator()
+        member _.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd).GetEnumerator()
 
     interface System.Collections.IEnumerable with
-        member __.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()
+        member _.GetEnumerator() = (typeMap.ToSeq() |> Seq.map snd :> System.Collections.IEnumerable).GetEnumerator()

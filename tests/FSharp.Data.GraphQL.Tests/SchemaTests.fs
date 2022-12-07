@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.SchemaTests
 
@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
 [<Fact>]
-let ``Object type should be able to merge fields with matching signatures from different interfaces`` () = 
+let ``Object type should be able to merge fields with matching signatures from different interfaces`` () =
     let MovableType = Define.Interface("Movable", [Define.Field("speed", Int)])
     let Movable2Type =
       Define.Interface(
@@ -27,24 +27,24 @@ let ``Object type should be able to merge fields with matching signatures from d
             Define.Field("speed", Int)
             Define.Field("acceleration", Int) ])
     equals [ MovableType :> InterfaceDef; upcast Movable2Type ] (PersonType.Implements |> Array.toList )
-    let expected = 
+    let expected =
         //NOTE: under normal conditions field order shouldn't matter in object definitions
         [ Define.Field("acceleration", Int) :> FieldDef
-          upcast Define.Field("name", String) 
+          upcast Define.Field("name", String)
           upcast Define.Field("speed", Int)  ]
     equals expected (( PersonType :> ObjectDef).Fields |> Map.toList |> List.map snd)
 
 [<Fact>]
 let ``Schema config should be able to override default error handling`` () =
     let mutable idx = 0
-    let conf = 
-        { SchemaConfig.Default with 
+    let conf =
+        { SchemaConfig.Default with
             ParseError = (fun e ->
                 let i = idx
                 idx <- idx + 1
                 i.ToString())}
-    let TestType = 
-        Define.Object<obj>("TestType", 
+    let TestType =
+        Define.Object<obj>("TestType",
             [ Define.Field("passing", String, fun _ _ -> "ok")
               Define.Field("failing1", Nullable String, fun _ _ -> failwith "not ok" )
               Define.Field("failing2", Nullable String, fun _ _ -> failwith "not ok" ) ])
@@ -59,7 +59,7 @@ let ``Schema config should be able to override default error handling`` () =
     }
     """
     let actual = sync <| Executor(schema).AsyncExecute query
-    let expected = 
+    let expected =
          NameValueLookup.ofList [
             "test", box <| NameValueLookup.ofList [
                 "failing1", null

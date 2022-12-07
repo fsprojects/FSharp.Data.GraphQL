@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
@@ -13,7 +13,7 @@ open System.Security.Cryptography
 module internal Extensions =
     type String with
         /// Returns the input string with the first character in upper case.
-        member this.FirstCharUpper() = 
+        member this.FirstCharUpper() =
             this.Substring(0, 1).ToUpperInvariant() + this.Substring(1)
 
         /// Returns the input string with the first character in lower case.

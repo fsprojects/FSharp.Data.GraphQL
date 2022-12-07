@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.AsyncValTests
 
@@ -12,29 +12,29 @@ let ``AsyncVal computation allows to return constant values`` () =
     let v = asyncVal { return 1 }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with 
+    match v with
     | Value v' -> v' |> equals 1
     | _ -> fail "unexpected result found in AsyncVal"
-    
+
 [<Fact>]
 let ``AsyncVal computation allows to return from async computation`` () =
     let v = asyncVal { return! async { return 1 } }
     AsyncVal.isAsync v |> equals true
     AsyncVal.isSync v |> equals false
     v |> AsyncVal.get |> equals 1
-    
+
 [<Fact>]
 let ``AsyncVal computation allows to return from another AsyncVal`` () =
     let v = asyncVal { return! asyncVal { return 1 } }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with 
+    match v with
     | Value v' -> v' |> equals 1
     | _ -> fail "unexpected result found in AsyncVal"
 
 [<Fact>]
 let ``AsyncVal computation allows to bind async computations`` () =
-    let v = asyncVal { 
+    let v = asyncVal {
         let! value = async { return 1 }
         return value }
     AsyncVal.isAsync v |> equals true
@@ -43,35 +43,35 @@ let ``AsyncVal computation allows to bind async computations`` () =
 
 [<Fact>]
 let ``AsyncVal computation allows to bind another AsyncVal`` () =
-    let v = asyncVal { 
+    let v = asyncVal {
         let! value = asyncVal { return 1 }
         return value }
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    match v with 
+    match v with
     | Value v' -> v' |> equals 1
     | _ -> fail "unexpected result found in AsyncVal"
-    
+
 [<Fact>]
 let ``AsyncVal computation defines zero value`` () =
     let v = AsyncVal.empty
     AsyncVal.isAsync v |> equals false
     AsyncVal.isSync v |> equals true
-    
+
 [<Fact>]
 let ``AsyncVal can be returned from Async computation`` () =
     let a = async { return! asyncVal { return 1 } }
     let res = a |> sync
     res |> equals 1
-    
+
 [<Fact>]
 let ``AsyncVal can be bound inside Async computation`` () =
-    let a = async { 
+    let a = async {
         let! v = asyncVal { return 1 }
         return v }
     let res = a |> sync
     res |> equals 1
-    
+
 [<Fact>]
 let ``AsyncVal sequential collection resolves all values in order of execution`` () =
     let mutable flag = "none"

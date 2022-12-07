@@ -14,7 +14,7 @@ type Root = {
     clientId : int
 }
 
-and Subject = 
+and Subject =
     | A of A
     | B of B
 
@@ -42,16 +42,16 @@ let executor =
     let getA id = al |> List.tryFind (fun a -> a.id = id)
     let getB id = bl |> List.tryFind (fun b -> b.id = id)
     let subjects = (al |> List.map A) @ (bl |> List.map B)
-    let getSubject id = 
+    let getSubject id =
         let matchesId id = function A a -> a.id = id | B b -> b.id = id
         subjects |> List.tryFind (matchesId id)
-    let rec SubjectType = 
+    let rec SubjectType =
         Define.Union(
             name = "Subject",
             options = [ AType; BType ],
             resolveValue = (fun u -> match u with A a -> box a | B b -> box b),
             resolveType = (fun u -> match u with A _ -> upcast AType | B _ -> upcast BType))
-    and AType = 
+    and AType =
         Define.Object<A>(
             name = "A",
             isTypeOf = (fun o -> o :? A),
@@ -61,7 +61,7 @@ let executor =
                   Define.Field("subjects", Nullable (ListOf (Nullable SubjectType)),
                     resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq |> Some)
                     .WithQueryWeight(1.0) ])
-    and BType = 
+    and BType =
         Define.Object<B>(
             name = "B",
             isTypeOf = (fun o -> o :? B),
@@ -74,11 +74,11 @@ let executor =
     let Query =
         Define.Object<Root>(
             name = "Query",
-            fields = 
+            fields =
                 [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
                   Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
-    let middleware = 
+    let middleware =
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<A, Subject option>(true)
           Define.ObjectListFilterMiddleware<B, Subject option>(true) ]
@@ -92,12 +92,12 @@ let expectedErrors : Error list =
 
 [<Fact>]
 let ``Simple query: Should pass when below threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
                 A (id : 1) {
                     id
                     value
-                    subjects { ...Value }                
+                    subjects { ...Value }
                 }
         }
 
@@ -111,15 +111,15 @@ let ``Simple query: Should pass when below threshold``() =
                     value
                 }
         }"""
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", upcast [ 
+                "subjects", upcast [
                     NameValueLookup.ofList [
                         "id", upcast 2
-                        "value", upcast "A2"                    
+                        "value", upcast "A2"
                     ]
                     NameValueLookup.ofList [
                         "id", upcast 6
@@ -139,7 +139,7 @@ let ``Simple query: Should pass when below threshold``() =
 
 [<Fact>]
 let ``Simple query: Should not pass when above threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
                     A (id : 1) {
                         id
@@ -199,12 +199,12 @@ let ``Simple query: Should not pass when above threshold``() =
 
 [<Fact>]
 let ``Deferred queries : Should pass when below threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
                 A (id : 1) {
                     id
                     value
-                    subjects @defer { ...Value }                
+                    subjects @defer { ...Value }
                 }
         }
 
@@ -218,7 +218,7 @@ let ``Deferred queries : Should pass when below threshold``() =
                     value
                 }
         }"""
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
@@ -226,12 +226,12 @@ let ``Deferred queries : Should pass when below threshold``() =
                 "subjects", upcast null
             ]
         ]
-    let expectedDeferred = 
+    let expectedDeferred =
         NameValueLookup.ofList [
             "data", upcast [
                 NameValueLookup.ofList [
                     "id", upcast 2
-                    "value", upcast "A2"                    
+                    "value", upcast "A2"
                 ]
                 NameValueLookup.ofList [
                     "id", upcast 6
@@ -252,7 +252,7 @@ let ``Deferred queries : Should pass when below threshold``() =
 
 [<Fact>]
 let ``Streamed queries : Should pass when below threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
                 A (id : 1) {
                     id
@@ -271,7 +271,7 @@ let ``Streamed queries : Should pass when below threshold``() =
                     value
                 }
         }"""
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
@@ -279,17 +279,17 @@ let ``Streamed queries : Should pass when below threshold``() =
                 "subjects", upcast []
             ]
         ]
-    let expectedDeferred1 = 
+    let expectedDeferred1 =
         NameValueLookup.ofList [
             "data", upcast [
                 NameValueLookup.ofList [
                     "id", upcast 2
-                    "value", upcast "A2"                    
+                    "value", upcast "A2"
                 ]
             ]
             "path", upcast [ "A" :> obj; "subjects" :> obj; 0 :> obj ]
         ]
-    let expectedDeferred2 = 
+    let expectedDeferred2 =
         NameValueLookup.ofList [
             "data", upcast [
                 NameValueLookup.ofList [
@@ -315,12 +315,12 @@ let ``Streamed queries : Should pass when below threshold``() =
 
 [<Fact>]
 let ``Deferred and Streamed queries : Should not pass when above threshold``() =
-    let query = 
+    let query =
         sprintf """query testQuery {
                 A (id : 1) {
                     id
                     value
-                    subjects @%s { ...All }                
+                    subjects @%s { ...All }
                 }
         }
 
@@ -375,7 +375,7 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
 
 [<Fact>]
 let ``Inline fragment query : Should pass when below threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
             A (id : 1) {
                 id
@@ -388,18 +388,18 @@ let ``Inline fragment query : Should pass when below threshold``() =
                     ... on B {
                         id
                     }
-                }                
+                }
             }
         }"""
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", upcast [ 
+                "subjects", upcast [
                     NameValueLookup.ofList [
                         "id", upcast 2
-                        "value", upcast "A2"                    
+                        "value", upcast "A2"
                     ]
                     NameValueLookup.ofList [
                         "id", upcast 6
@@ -416,7 +416,7 @@ let ``Inline fragment query : Should pass when below threshold``() =
 
 [<Fact>]
 let ``Inline fragment query : Should not pass when above threshold``() =
-    let query = 
+    let query =
         parse """query testQuery {
                 A (id : 1) {
                     id
@@ -430,7 +430,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
                             id
                             subjects { ...Inner }
                         }
-                    }                
+                    }
                 }
         }
 
@@ -466,12 +466,12 @@ let ``Inline fragment query : Should not pass when above threshold``() =
 
 [<Fact>]
 let ``Object list filter: should return filter information in Metadata``() =
-    let query = 
+    let query =
         parse """query testQuery {
                 A (id : 1) {
                     id
                     value
-                    subjects (filter : { value_starts_with: "A", id : 2 }) { ...Value }                
+                    subjects (filter : { value_starts_with: "A", id : 2 }) { ...Value }
                 }
         }
 
@@ -485,15 +485,15 @@ let ``Object list filter: should return filter information in Metadata``() =
                     value
                 }
         }"""
-    let expected = 
+    let expected =
         NameValueLookup.ofList [
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", upcast [ 
+                "subjects", upcast [
                     NameValueLookup.ofList [
                         "id", upcast 2
-                        "value", upcast "A2"                    
+                        "value", upcast "A2"
                     ]
                     NameValueLookup.ofList [
                         "id", upcast 6
@@ -502,7 +502,7 @@ let ``Object list filter: should return filter information in Metadata``() =
                 ]
             ]
         ]
-    let expectedFilter = 
+    let expectedFilter =
         "subjects", And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" })
     let result = execute query
     ensureDirect result <| fun data errors ->

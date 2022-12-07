@@ -1,9 +1,42 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;net461</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;net6.0</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+
+    <Description>Shared library for FSharp.Data.GraphQL.Server and FSharp.Data.GraphQL.Cient</Description>
+
+    <!--<AssemblyOriginatorKeyFile>..\..\FSharp.Data.GraphQL.snk</AssemblyOriginatorKeyFile>
+    <SignAssembly>true</SignAssembly>
+    <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>-->
   </PropertyGroup>
+
   <ItemGroup>
-    <Compile Include="AssemblyInfo.fs" />
+    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
+  </ItemGroup>
+
+  <ItemGroup Label="InternalsVisibleTo">
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Server</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Client</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Client.DesignTime</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Tests</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FParsec" />
+    <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Compile Include="Diagnostics.fs" />
     <Compile Include="Extensions.fs" />
     <Compile Include="Prolog.fs" />
@@ -18,8 +51,5 @@
     <Compile Include="Parser.fs" />
     <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="AstExtensions.fs" />
-    <None Include="paket.references" />
   </ItemGroup>
-  <Import Project="..\..\netfx.props" />
-  <Import Project="..\..\.paket\Paket.Restore.targets" />
 </Project>

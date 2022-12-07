@@ -20,7 +20,7 @@ let map fn x = fn x
 
 type File =
     { Name : string
-      ContentType : string 
+      ContentType : string
       Content : string }
     member x.MakeUpload() =
         let bytes = Encoding.UTF8.GetBytes(x.Content)

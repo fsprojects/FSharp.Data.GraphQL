@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -9,20 +9,13 @@ open System.Net.Http
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open System.Text
-open System.Reflection
 open ReflectionPatterns
-
-/// The connection component for GraphQLClient module.
-type GraphQLClientConnection() =
-    let client = new HttpClient()
-    member internal __.Client = client
-    interface IDisposable with
-        member __.Dispose() = client.Dispose()
+open System.Threading
 
 /// A requrest object for making GraphQL calls using the GraphQL client module.
 type GraphQLRequest  =
-      /// Gets the URL of the GraphQL server which will be called.
-    { ServerUrl : string
+    { /// Gets the URL of the GraphQL server which will be called.
+      ServerUrl : string
       /// Gets custom HTTP Headers to pass with each call using this request.
       HttpHeaders: seq<string * string>
       /// Gets the name of the operation that should run on the server.
@@ -44,19 +37,20 @@ module GraphQLClient =
         if not (isNull httpHeaders)
         then httpHeaders |> Seq.iter (fun (name, value) -> requestMessage.Headers.Add(name, value))
 
-    let private postAsync (client : HttpClient) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) =
+    let private postAsync (invoker : HttpMessageInvoker) (serverUrl : string) (httpHeaders : seq<string * string>) (content : HttpContent) =
         async {
             use requestMessage = new HttpRequestMessage(HttpMethod.Post, serverUrl)
             requestMessage.Content <- content
             addHeaders httpHeaders requestMessage
-            let! response = client.SendAsync(requestMessage) |> Async.AwaitTask |> ensureSuccessCode
+            let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             return content
         }
 
-    let private getAsync (client : HttpClient) (serverUrl : string) =
+    let private getAsync (invoker : HttpMessageInvoker) (serverUrl : string) =
         async {
-            let! response = client.GetAsync(serverUrl) |> Async.AwaitTask |> ensureSuccessCode
+            use requestMessage = new HttpRequestMessage(HttpMethod.Get, serverUrl)
+            let! response = invoker.SendAsync(requestMessage, CancellationToken.None) |> Async.AwaitTask |> ensureSuccessCode
             let! content = response.Content.ReadAsStringAsync() |> Async.AwaitTask
             return content
         }
@@ -64,8 +58,8 @@ module GraphQLClient =
     /// Sends a request to a GraphQL server asynchronously.
     let sendRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
-            let client = connection.Client
-            let variables = 
+            let invoker = connection.Invoker
+            let variables =
                 match request.Variables with
                 | null | [||] -> JsonValue.Null
                 | _ -> Map.ofArray request.Variables |> Serialization.toJsonValue
@@ -73,21 +67,22 @@ module GraphQLClient =
                 match request.OperationName with
                 | Some x -> JsonValue.String x
                 | None -> JsonValue.Null
-            let requestJson =         
+            let requestJson =
                 [| "operationName", operationName
                    "query", JsonValue.String request.Query
                    "variables", variables |]
                 |> JsonValue.Record
             let content = new StringContent(requestJson.ToString(), Encoding.UTF8, "application/json")
-            return! postAsync client request.ServerUrl request.HttpHeaders content
+            return! postAsync invoker request.ServerUrl request.HttpHeaders content
         }
-    
+
     /// Sends a request to a GraphQL server.
     let sendRequest client request =
         sendRequestAsync client request
         |> Async.RunSynchronously
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
+
     let getIntrospectionAsync (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
         let sendGetAsync() = getAsync connection.Client serverUrl
         let rethrow (exns : exn list) =
@@ -125,28 +120,28 @@ module GraphQLClient =
     /// Executes a multipart request to a GraphQL server asynchronously.
     let sendMultipartRequestAsync (connection : GraphQLClientConnection) (request : GraphQLRequest) =
         async {
-            let client = connection.Client
+            let invoker = connection.Invoker
             let boundary = "----GraphQLProviderBoundary" + (Guid.NewGuid().ToString("N"))
             let content = new MultipartContent("form-data", boundary)
-            let files = 
+            let files =
                 let rec tryMapFileVariable (name: string, value : obj) =
                     match value with
                     | null | :? string -> None
                     | :? Upload as x -> Some [|name, x|]
-                    | OptionValue x -> 
+                    | OptionValue x ->
                         x |> Option.bind (fun x -> tryMapFileVariable (name, x))
                     | :? IDictionary<string, obj> as x ->
                         x |> Seq.collect (fun kvp -> tryMapFileVariable (name + "." + (kvp.Key.FirstCharLower()), kvp.Value) |> Option.defaultValue [||])
                           |> Array.ofSeq
                           |> Some
-                    | EnumerableValue x -> 
+                    | EnumerableValue x ->
                         x |> Array.mapi (fun ix x -> tryMapFileVariable (name + "." + (ix.ToString()), x))
                           |> Array.collect (Option.defaultValue [||])
                           |> Some
                     | _ -> None
                 request.Variables |> Array.collect (tryMapFileVariable >> (Option.defaultValue [||]))
-            let operationContent = 
-                let variables = 
+            let operationContent =
+                let variables =
                     match request.Variables with
                     | null | [||] -> JsonValue.Null
                     | _ -> request.Variables |> Map.ofArray |> Serialization.toJsonValue
@@ -180,7 +175,7 @@ module GraphQLClient =
                     content.Headers.Add("Content-Type", value.ContentType)
                     content)
             fileContents |> Array.iter content.Add
-            let! result = postAsync client request.ServerUrl request.HttpHeaders content
+            let! result = postAsync invoker request.ServerUrl request.HttpHeaders content
             return result
         }
 

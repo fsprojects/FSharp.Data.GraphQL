@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -7,7 +7,7 @@ open System
 open System.Reflection
 open System.Collections.Generic
 
-type GraphQLException(msg) = 
+type GraphQLException(msg) =
     inherit Exception(msg)
 
 type MalformedQueryException(msg) =
@@ -34,7 +34,7 @@ module Helpers =
     let (|ObjectOption|_|) = optionCast
 
     /// Lifts a System.Object to an option, unless it is already an option.
-    let toOption x = 
+    let toOption x =
         match x with
         | null -> None
         | ObjectOption v
@@ -50,7 +50,7 @@ module internal Array =
     /// <param name="array">Array of elements.</param>
     let distinctBy keyf (array:'T[]) =
             let temp = Array.zeroCreate array.Length
-            let mutable i = 0 
+            let mutable i = 0
             let hashSet = HashSet<_>(HashIdentity.Structural<_>)
             for v in array do
                 if hashSet.Add(keyf v) then
@@ -59,7 +59,7 @@ module internal Array =
             Array.sub temp 0 i
 
 module internal List =
-    
+
     /// <summary>
     /// Merges elements of two lists, returning a new list without duplicates.
     /// </summary>
@@ -67,7 +67,7 @@ module internal List =
     /// <param name="listx">First list with elements to merge.</param>
     /// <param name="listy">Second list with elements to merge.</param>
     let mergeBy f listx listy =
-        let uniqx = 
+        let uniqx =
             listx
             |> List.filter (fun x -> not <| List.exists(fun y -> f(x) = f(y)) listy)
         uniqx @ listy
@@ -82,7 +82,7 @@ module internal Set =
     /// <param name="f">Function used to generate Set from each of the input's elements.</param>
     /// <param name="set">Input set.</param>
     let collect f set = set |> Set.fold (fun acc e -> acc + f e) Set.empty
-    
+
 module internal Map =
 
     /// <summary>
@@ -96,27 +96,39 @@ module internal Map =
     /// <param name="mapy">Second map with elements to merge.</param>
     let merge mergeFn mapx mapy =
         mapy
-        |> Map.fold (fun acc ky vy -> 
+        |> Map.fold (fun acc ky vy ->
             match Map.tryFind ky acc with
             | Some vx -> Map.add ky (mergeFn ky vx vy) acc
             | None -> Map.add ky vy acc) mapx
 
 module internal ReflectionHelper =
-    
+
     /// <summary>
-    /// Returns pair of function constructors for `cons(head,tail)` and `nil` 
+    /// Returns pair of function constructors for `cons(head,tail)` and `nil`
     /// used to create list of type <paramref name="t"/> given at runtime.
     /// </summary>
     /// <param name="t">Type used for result list constructors as type param</param>
     let listOfType t =
         let listType = typedefof<_ list>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
-        let nil = 
+        let nil =
             let empty = listType.GetDeclaredProperty "Empty"
             empty.GetValue (null)
-        let cons = 
+        let cons =
             let cons = listType.GetDeclaredMethod "Cons"
             fun item list -> cons.Invoke (null, [| item; list |])
         (cons, nil)
+
+    /// <summary>
+    /// used to create array from list of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">runtime type for array type construction</param>
+    /// <param name="l">input list</param>
+    let arrayOfList (t: Type) (l : _ list) =
+        let array = System.Array.CreateInstance(t, l.Length)
+        l |> List.iteri (fun i v ->
+            array.SetValue(v, i)
+        )
+        array :> obj
 
     /// <summary>
     /// Returns pair of function constructors for `some(value)` and `none`
@@ -125,13 +137,13 @@ module internal ReflectionHelper =
     /// <param name="t">Type used for result option constructors as type param</param>
     let optionOfType t =
         let optionType = typedefof<_ option>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
-        let none = 
+        let none =
             let x = optionType.GetDeclaredProperty "None"
             x.GetValue(null)
         let some =
             let createSome = optionType.GetDeclaredMethod "Some"
-            fun value -> 
-                if value <> null 
+            fun value ->
+                if value <> null
                 then
                     let valueType = value.GetType().GetTypeInfo()
                     if valueType = optionType
@@ -140,4 +152,14 @@ module internal ReflectionHelper =
                     then createSome.Invoke(null, [| value |])
                     else null
                 else none
-        (some, none)
+        let value =
+            let x = optionType.GetDeclaredProperty "Value"
+            fun input ->
+                if input <> null
+                then
+                    let valueType = input.GetType().GetTypeInfo()
+                    if valueType = optionType
+                    then x.GetValue(input)
+                    else input
+                else input
+        (some, none, value)

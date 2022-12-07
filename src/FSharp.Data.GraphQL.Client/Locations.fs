@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
@@ -21,7 +21,7 @@ type StringLocation =
     /// <param name="folderPath">An optional folder path. Provide it when the value parameter is a file without its path.</param>
     static member Create(value : string, ?folderPath : string) =
         try
-            let file = 
+            let file =
                 match folderPath with
                 | Some folderPath -> System.IO.Path.Combine(folderPath, value)
                 | None -> value
@@ -50,7 +50,7 @@ type IntrospectionLocation =
             | (true, _) -> Uri value
             | _ -> failwithf "Could not determine location of introspection. The introspection should be a valid GraphQL server URL, or a introspection JSON file on the path of the project or script."
         try
-            let file = 
+            let file =
                 match folderPath with
                 | Some folderPath -> System.IO.Path.Combine(folderPath, value)
                 | None -> value

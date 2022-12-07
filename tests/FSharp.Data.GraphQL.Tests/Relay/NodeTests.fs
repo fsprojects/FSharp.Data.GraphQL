@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.Relay.NodeTests
 
@@ -11,14 +11,14 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Relay
 open FSharp.Data.GraphQL.Execution
 
-type Person = { Id: string; Name: string; Age: int } 
-type Car = { Id: string; Model: string; } 
+type Person = { Id: string; Name: string; Age: int }
+type Car = { Id: string; Model: string; }
 
 let people = [
     { Id = "1"; Name = "Alice"; Age = 18 }
     { Id = "2"; Name = "Bob"; Age = 23 }
     { Id = "3"; Name = "Susan"; Age = 37 }]
-    
+
 let cars = [
     { Id = "1"; Model = "Tesla S" }
     { Id = "2"; Model = "Shelby GT500" }]
@@ -98,7 +98,7 @@ let ``Node with global ID gets correct record - Defer`` () =
             }
         }
     }"""
-    let expectedDirect2 =    
+    let expectedDirect2 =
       NameValueLookup.ofList [
         "model", null ]
     let expectedDeferred2 = Some [
@@ -129,7 +129,7 @@ let ``Node with global ID gets correct record`` () =
             }
         }
     }"""
-    let expected2 =    
+    let expected2 =
       NameValueLookup.ofList [
         "model", upcast "Tesla S" ]
     execAndValidateNode query2 expected2 None

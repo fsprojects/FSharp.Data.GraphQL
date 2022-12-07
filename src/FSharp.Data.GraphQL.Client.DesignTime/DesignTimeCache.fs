@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -15,7 +15,8 @@ type internal ProviderKey =
       CustomHttpHeadersLocation : StringLocation
       UploadInputTypeName : string option
       ResolutionFolder : string
-      ClientQueryValidation: bool }
+      ClientQueryValidation: bool
+      ExplicitOptionalParameters: bool }
 
 module internal ProviderDesignTimeCache =
     let private expiration = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)

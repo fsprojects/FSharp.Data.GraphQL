@@ -72,18 +72,18 @@ query testQuery {
 export default class QueryRunner extends React.Component {
     constructor(props) {
         super(props);
-        var subscription = new SubscriptionClient('ws://localhost:8084/', {
+        var subscription = new SubscriptionClient('ws://localhost:8086/', {
             reconnect: true
         });
         var client = new ApolloClient({
             link: subscription,
             cache: new InMemoryCache()
         });
-        this.state = { 
+        this.state = {
             query: deferQuery,
             subscription: subscription,
             client: client,
-            results : ''
+            results: ''
         };
 
         this.handleChange = this.handleChange.bind(this);
@@ -96,8 +96,7 @@ export default class QueryRunner extends React.Component {
     }
 
     handleSampleQueryChange(event) {
-        switch (event.target.value)
-        {
+        switch (event.target.value) {
             case "defer":
                 this.setState({ query: deferQuery });
                 break;
@@ -119,7 +118,7 @@ export default class QueryRunner extends React.Component {
         this.setState({ results: '' });
         this.state.subscription.unsubscribeAll();
         this.state.client.subscribe({
-            query: gql`${this.state.query}`,
+            query: gql `${this.state.query}`,
             variables: {}
         }).subscribe({
             next: result => {
@@ -133,44 +132,60 @@ export default class QueryRunner extends React.Component {
     }
 
     render() {
-        return (
-            <div>
-                <div>
-                    <p>
-                        Type a query here, or select one of the sample queries in the selection below. 
-                        You can type subscriptions and defer directives, 
-                        the client will wait for more responses over Web Socket connection.
-                    </p>
-                    <p>Once typed, just click "Run query" to connect to the socket and wait for responses.</p>
-                </div>
-                <div>
-                    <p> 
-                        Sample queries:&nbsp;
-                        <select onChange={this.handleSampleQueryChange}>
-                            <option value="defer">Deferred query sample</option>
-                            <option value="stream">Streamed query sample</option>
-                            <option value="threshold">Threshold for complex queries sample</option>
-                            <option value="live">Live query sample</option>
-                        </select>
-                    </p>
-                </div>
-                <div>
-                    <textarea cols="100" rows="20" value={this.state.query} onChange={this.handleChange}></textarea>
-                </div>
-                <div>
-                    <button onClick={this.handleRun}>Run query</button>
-                </div>
-                <div>
-                    <p>Results are displayed here.</p>
-                    <p>
-                        As explained above, queries are run by GraphQL over WebSocket protocol. 
-                        If the query is a subscription or defer query, the client will wait for subsequent responses from the Socket.
-                    </p>
-                </div>
-                <div>
-                    <textarea cols="100" rows="20" value={this.state.results}></textarea>
-                </div>
-            </div>
+        return ( <
+            div >
+            <
+            div >
+            <
+            p >
+            Type a query here, or select one of the sample queries in the selection below.You can type subscriptions and defer directives,
+            the client will wait
+            for more responses over Web Socket connection. <
+            /p> <
+            p > Once typed, just click "Run query"
+            to connect to the socket and wait
+            for responses. < /p> <
+            /div> <
+            div >
+            <
+            p >
+            Sample queries: & nbsp; <
+            select onChange = { this.handleSampleQueryChange } >
+            <
+            option value = "defer" > Deferred query sample < /option> <
+            option value = "stream" > Streamed query sample < /option> <
+            option value = "threshold" > Threshold
+            for complex queries sample < /option> <
+            option value = "live" > Live query sample < /option> <
+            /select> <
+            /p> <
+            /div> <
+            div >
+            <
+            textarea cols = "100"
+            rows = "20"
+            value = { this.state.query }
+            onChange = { this.handleChange } > < /textarea> <
+            /div> <
+            div >
+            <
+            button onClick = { this.handleRun } > Run query < /button> <
+            /div> <
+            div >
+            <
+            p > Results are displayed here. < /p> <
+            p >
+            As explained above, queries are run by GraphQL over WebSocket protocol.If the query is a subscription or defer query, the client will wait
+            for subsequent responses from the Socket. <
+            /p> <
+            /div> <
+            div >
+            <
+            textarea cols = "100"
+            rows = "20"
+            value = { this.state.results } > < /textarea> <
+            /div> <
+            /div>
         );
     }
 }

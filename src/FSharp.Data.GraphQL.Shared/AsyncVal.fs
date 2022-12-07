@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL
+namespace FSharp.Data.GraphQL
 
 open System
 open System.Collections.Generic
@@ -16,15 +16,15 @@ type AsyncVal<'T> =
     | Failure of exn : Exception
 
     static member Zero = Value(Unchecked.defaultof<'T>)
-    override x.ToString () = 
+    override x.ToString () =
         match x with
         | Value v -> "AsyncVal(" + v.ToString() + ")"
         | Async _ -> "AsyncVal(Async<>)"
         | Failure f -> "AsyncVal(Failure:" + f.Message + ")"
-    
+
 [<RequireQualifiedAccess>]
 module AsyncVal =
-    
+
     /// Returns true if AsyncVal wraps an Async computation, otherwise false.
     let inline isAsync (x: AsyncVal<'T>) = match x with | Async _ -> true | _ -> false
 
@@ -37,7 +37,7 @@ module AsyncVal =
     /// Returns value wrapped by current AsyncVal. If it's part of Async computation,
     /// it's executed synchronously and then value is returned.
     /// If the asyncVal failed, then the exception that caused the failure is raised
-    let get (x: AsyncVal<'T>) = 
+    let get (x: AsyncVal<'T>) =
         match x with
         | Value v -> v
         | Async a -> a |> Async.RunSynchronously
@@ -48,7 +48,7 @@ module AsyncVal =
 
     /// Returns an AsyncVal wrapper around provided Async computation.
     let inline wrap (v: 'T) = Value(v)
-    
+
     /// Converts AsyncVal to Async computation.
     let toAsync (x: AsyncVal<'T>) =
         match x with
@@ -59,12 +59,12 @@ module AsyncVal =
     /// Returns an empty AsyncVal with immediatelly executed value.
     let inline empty<'T> : AsyncVal<'T> = AsyncVal<'T>.Zero
 
-    /// Maps content of AsyncVal using provided mapping function, returning new 
+    /// Maps content of AsyncVal using provided mapping function, returning new
     /// AsyncVal as the result.
     let map (fn: 'T -> 'U) (x: AsyncVal<'T>) =
         match x with
         | Value v -> Value(fn v)
-        | Async a -> 
+        | Async a ->
             Async(async {
                 let! result = a
                 return fn result
@@ -89,7 +89,7 @@ module AsyncVal =
     let fold (fn: 'State -> 'T -> 'State) (zero: 'State) (x: AsyncVal<'T>) : AsyncVal<'State> =
         match x with
         | Value v -> Value(fn zero v)
-        | Async a -> 
+        | Async a ->
             Async(async{
                 let! res = a
                 return fn zero res
@@ -101,7 +101,7 @@ module AsyncVal =
     let bind (binder: 'T -> AsyncVal<'U>) (x: AsyncVal<'T>) : AsyncVal<'U> =
         match x with
         | Value v -> binder v
-        | Async a -> 
+        | Async a ->
             Async(async{
                 let! value = a
                 let bound = binder value
@@ -111,9 +111,9 @@ module AsyncVal =
                 | Failure f -> return raise f
             })
         | Failure f -> Failure(f)
-            
+
     /// Converts array of AsyncVals into AsyncVal with array results.
-    /// In case when are non-immediate values in provided array, they are 
+    /// In case when are non-immediate values in provided array, they are
     /// executed asynchronously, one by one with regard to their order in array.
     /// Returned array maintain order of values.
     /// If the array contains a Failure, then the entire array will not resolve
@@ -129,13 +129,13 @@ module AsyncVal =
                     | Async a ->
                         let! r = a
                         results.[i] <- r
-                    | Failure f -> 
+                    | Failure f ->
                         results.[i] <- raise f
                 return results })
         else Value (values |> Array.map (fun (Value v) -> v))
 
     /// Converts array of AsyncVals into AsyncVal with array results.
-    /// In case when are non-immediate values in provided array, they are 
+    /// In case when are non-immediate values in provided array, they are
     /// executed all in parallel, in unordered fashion. Order of values
     /// inside returned array is maintained.
     /// If the array contains a Failure, then the entire array will not resolve
@@ -177,28 +177,28 @@ module AsyncVal =
         |> map (Array.fold Array.append Array.empty)
 
 type AsyncValBuilder () =
-    member __.Zero () = AsyncVal.empty
-    member __.Return v = AsyncVal.wrap v
-    member __.ReturnFrom (v: AsyncVal<_>) = v
-    member __.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
-    member __.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) = 
+    member _.Zero () = AsyncVal.empty
+    member _.Return v = AsyncVal.wrap v
+    member _.ReturnFrom (v: AsyncVal<_>) = v
+    member _.ReturnFrom (a: Async<_>) = AsyncVal.ofAsync a
+    member _.Bind (v: AsyncVal<'T>, binder: 'T -> AsyncVal<'U>) =
         AsyncVal.bind binder v
-    member __.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) = 
+    member _.Bind (a: Async<'T>, binder: 'T -> AsyncVal<'U>) =
         Async(async {
             let! value = a
             let bound = binder value
             match bound with
             | Value v -> return v
-            | Async a -> return! a 
+            | Async a -> return! a
             | Failure f -> return raise f })
 
-            
+
 [<AutoOpen>]
 module AsyncExtensions =
-    
+
     /// Computation expression for working on AsyncVals.
     let asyncVal = AsyncValBuilder ()
-    
+
     /// Active pattern used for checking if AsyncVal contains immediate value.
     let (|Immediate|_|) (x: AsyncVal<'T>) = match x with | Value v -> Some v | _ -> None
 
@@ -207,13 +207,13 @@ module AsyncExtensions =
 
     type Microsoft.FSharp.Control.AsyncBuilder with
 
-        member __.ReturnFrom (v: AsyncVal<'T>) =
+        member _.ReturnFrom (v: AsyncVal<'T>) =
             match v with
             | Value v -> async.Return v
             | Async a -> async.ReturnFrom a
             | Failure f -> async.Return (raise f)
 
-        member __.Bind (v: AsyncVal<'T>, binder) =
+        member _.Bind (v: AsyncVal<'T>, binder) =
             match v with
             | Value v -> async.Bind(async.Return v, binder)
             | Async a -> async.Bind(a, binder)

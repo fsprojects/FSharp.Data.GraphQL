@@ -1,10 +1,10 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
 open System
-open Microsoft.AspNetCore.WebUtilities
-open Newtonsoft.Json
 open System.Collections
 open System.Collections.Generic
+open Microsoft.AspNetCore.WebUtilities
+open Newtonsoft.Json
 open Newtonsoft.Json.Linq
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL
@@ -47,7 +47,7 @@ module MultipartRequest =
         let mapOperation (operationIndex : int option) (operation : Operation) =
             let findFile (varName : string) (varValue : obj) =
                 let tryPickMultipleFilesFromMap (length : int) (varName : string) =
-                    Seq.init length (fun ix -> 
+                    Seq.init length (fun ix ->
                         match map.TryGetValue(sprintf "%s.%i" varName ix) with
                         | (true, v) -> Some v
                         | _ -> None)
@@ -68,7 +68,7 @@ module MultipartRequest =
                     | [x] -> Some x
                     | _ -> None
                 let pickSingleFileFromMap varName =
-                    map 
+                    map
                     |> Seq.choose (fun kvp -> if kvp.Key = varName then Some files.[kvp.Value] else None)
                     |> Seq.exactlyOne
                 let pickFileRequestFromMap (request : UploadRequest) varName =
@@ -81,7 +81,7 @@ module MultipartRequest =
                     | NamedType tname -> tname = "Upload" || tname = "UploadRequest"
                     | ListType t | NonNullType t -> isUpload t
                 let ast = Parser.parse operation.Query
-                let vardefs = 
+                let vardefs =
                     ast.Definitions
                     |> List.choose (function OperationDefinition def -> Some def.VariableDefinitions | _ -> None)
                     |> List.collect id
@@ -119,12 +119,12 @@ module MultipartRequest =
         | operations -> operations |> List.mapi (fun ix operation -> mapOperation (Some ix) operation)
 
     /// Reads a GraphQL multipart request from a MultipartReader.
-    let read (reader : MultipartReader) = 
-        async {
+    let read cancellationToken (reader : MultipartReader) =
+        task {
             let mutable section : GraphQLMultipartSection option = None
             let readNextSection () =
-                async {
-                    let! next = reader.ReadNextSectionAsync() |> Async.AwaitTask
+                task {
+                    let! next = reader.ReadNextSectionAsync cancellationToken
                     section <- GraphQLMultipartSection.FromSection(next)
                 }
             let mutable operations : string = null
@@ -134,18 +134,18 @@ module MultipartRequest =
             while not section.IsNone do
                 match section.Value with
                 | Form section ->
-                    let! value = section.GetValueAsync() |> Async.AwaitTask
+                    let! value = section.GetValueAsync()
                     match section.Name with
-                    | "operations" -> 
+                    | "operations" ->
                         operations <- value
-                    | "map" -> 
+                    | "map" ->
                         map <- JsonConvert.DeserializeObject<Map<string, string list>>(value)
                                |> Seq.map (fun kvp -> kvp.Value.Head, kvp.Key)
                                |> Map.ofSeq
                     | _ -> failwithf "Error reading multipart request. Unexpected section name \"%s\"." section.Name
                 | File section ->
                     let stream = new System.IO.MemoryStream(4096)
-                    do! section.FileStream.CopyToAsync(stream) |> Async.AwaitTask
+                    do! section.FileStream.CopyToAsync(stream, cancellationToken) |> Async.AwaitTask
                     stream.Position <- 0L
                     let value = { Name = section.FileName; ContentType = section.Section.ContentType; Content = stream }
                     files.Add(section.Name, value)
@@ -156,4 +156,4 @@ module MultipartRequest =
                 | :? JObject as op -> [ op.ToObject<Operation>(jsonSerializer) ]
                 | _ -> failwith "Unexpected operations value."
             return { Operations = parseOperations operations map files }
-        } |> Async.StartAsTask
+        }

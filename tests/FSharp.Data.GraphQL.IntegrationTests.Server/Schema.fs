@@ -1,8 +1,8 @@
 ﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
+open System.Text
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open System.Text
 
 type Root =
     { RequestId : string }
@@ -40,8 +40,8 @@ module Schema =
     let InputFieldType =
         Define.InputObject<InputField>(
             name = "InputField",
-            fields = 
-                [ Define.Input("string", String, description = "A string value.") 
+            fields =
+                [ Define.Input("string", String, description = "A string value.")
                   Define.Input("int", Int, description = "An integer value.")
                   Define.Input("stringOption", Nullable String, description = "A string option value.")
                   Define.Input("intOption", Nullable Int, description = "An integer option value.")
@@ -52,7 +52,7 @@ module Schema =
         Define.InputObject<Input>(
             name ="Input",
             description = "Input object type.",
-            fields = 
+            fields =
                 [ Define.Input("single", Nullable InputFieldType, description = "A single input field.")
                   Define.Input("list", Nullable (ListOf InputFieldType), description = "A list of input fields.") ])
 
@@ -61,7 +61,7 @@ module Schema =
             name = "OutputField",
             description = "The output for a field input.",
             fields =
-                [ Define.Field("string", String, resolve = (fun _ x -> x.String), description = "A string value.") 
+                [ Define.Field("string", String, resolve = (fun _ x -> x.String), description = "A string value.")
                   Define.AutoField("int", Int, description = "An integer value.")
                   Define.AutoField("stringOption", Nullable String, description = "A string option value.")
                   Define.AutoField("intOption", Nullable Int, description = "An integer option value.")
@@ -102,7 +102,7 @@ module Schema =
         Define.Object<Input>(
             name = "Output",
             description = "The output for an input.",
-            fields = 
+            fields =
                 [ Define.AutoField("single", Nullable OutputFieldType, description = "A single output field.")
                   Define.AutoField("list", Nullable (ListOf OutputFieldType), description = "A list of output fields.") ])
 
@@ -110,7 +110,7 @@ module Schema =
         Define.Object<Root>(
             name = "Query",
             description = "The query type.",
-            fields = 
+            fields =
                 [ Define.Field(
                     name = "echo",
                     typedef = Nullable OutputType,

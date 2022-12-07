@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.Relay.ConnectionTests
 
@@ -27,11 +27,11 @@ let people = [
 let humanName { Name = n; Pets = _ } = n
 
 let inline toConnection cursor slice all =
-    { Edges = 
-        slice 
-        |> List.map (fun s -> { Node = s; Cursor = cursor s}) 
+    { Edges =
+        slice
+        |> List.map (fun s -> { Node = s; Cursor = cursor s})
         |> List.toSeq
-      PageInfo = 
+      PageInfo =
         { HasNextPage = slice.Tail <> (all |> List.tail)
           HasPreviousPage = slice.Head <> (all.Head)
           StartCursor = Some (cursor all.Head)
@@ -40,24 +40,24 @@ let inline toConnection cursor slice all =
 
 let resolveSlice (cursor: 't -> string) (values: 't list) (SliceInfo slice) () : Connection<'t> =
     match slice with
-    | Forward(first, after) -> 
-        let idx = 
+    | Forward(first, after) ->
+        let idx =
             match after with
             | Some a -> 1 + (values |> List.findIndex (fun x -> (cursor x) = a))
             | None -> 0
-        let slice = 
-            values 
+        let slice =
+            values
             |> List.splitAt idx
             |> snd
             |> List.take first
         toConnection cursor slice values
     | Backward(last, before) ->
-        let idx = 
+        let idx =
             match before with
             | Some a -> values |> List.findIndexBack (fun x -> (cursor x) = a)
             | None -> values.Length
-        let slice = 
-            values 
+        let slice =
+            values
             |> List.splitAt idx
             |> fst
             |> List.rev
@@ -91,22 +91,22 @@ let Human =
    "Human", [
     Define.Field("name", String, fun _ human -> human.Name)
     Define.Field("pets",  ConnectionOf Pet, "", Connection.forwardArgs, fun ctx human -> resolveSlice petName (human.Pets) ctx ()) ])
-    
+
 let strings = ["one"; "two"; "three"; "four"; "five"]
 let Query =
   Define.Object(
    "Query", [
     Define.Field(
-        name = "strings", 
+        name = "strings",
         description = "",
-        typedef = ConnectionOf String, 
-        args = Connection.allArgs, 
+        typedef = ConnectionOf String,
+        args = Connection.allArgs,
         resolve = resolveSlice id strings)
     Define.Field(
-        name = "people", 
+        name = "people",
         description = "",
-        typedef = ConnectionOf Human, 
-        args = Connection.forwardArgs, 
+        typedef = ConnectionOf Human,
+        args = Connection.forwardArgs,
         resolve = resolveSlice humanName people) ])
 
 let schema = Schema(Query, config = { SchemaConfig.Default with Types = [ Pet; Human ]})
@@ -130,7 +130,7 @@ let ``Connection definition includes connection and edge fields for simple cases
                 box <| NameValueLookup.ofList [
                     "node", upcast "five" ]]]]
     match result with
-    | Direct(data, errors) -> 
+    | Direct(data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
@@ -179,12 +179,12 @@ let ``Connection definition includes connection and edge fields for complex case
                                         "name", upcast "Max"
                                         "barks", upcast false]]]]]]]]]
     match result with
-    | Direct(data, errors) -> 
+    | Direct(data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
 
 
 [<Fact>]
-let ``Connection doesn't allow to use List node type`` () = 
+let ``Connection doesn't allow to use List node type`` () =
     throws<Exception>(fun () -> ConnectionOf (ListOf String) |> ignore)

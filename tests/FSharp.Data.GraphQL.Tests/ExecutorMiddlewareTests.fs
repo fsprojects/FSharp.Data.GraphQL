@@ -87,7 +87,7 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
         match kind with
         | SelectFields fields -> fields |> List.choose (fun f -> if f.Identifier <> "c" then Some f else None) |> SelectFields
         | other -> other
-    let selection = 
+    let selection =
         ctx.ExecutionPlan.Operation.SelectionSet
         |> List.map (fun x -> match x with Field f -> Field { f with SelectionSet = chooserS f.SelectionSet } | _ -> x)
     let fields =
@@ -100,21 +100,21 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
 
 let middleware =
     { new IExecutorMiddleware with
-        member __.CompileSchema = Some compileMiddleware
-        member __.PostCompileSchema = Some postCompileMiddleware
-        member __.PlanOperation = Some planningMiddleware
-        member __.ExecuteOperationAsync = Some executionMiddleware }
+        member _.CompileSchema = Some compileMiddleware
+        member _.PostCompileSchema = Some postCompileMiddleware
+        member _.PlanOperation = Some planningMiddleware
+        member _.ExecuteOperationAsync = Some executionMiddleware }
 
 let executor = Executor(schema, [ middleware ])
 
 [<Fact>]
 let ``Executor middleware: change fields and measure planning time`` () =
     let result = sync <| executor.AsyncExecute(ast)
-    let expected = 
-            NameValueLookup.ofList 
-                [ "testData", 
-                    upcast NameValueLookup.ofList 
-                        [ "a", upcast "Cookie" 
+    let expected =
+            NameValueLookup.ofList
+                [ "testData",
+                    upcast NameValueLookup.ofList
+                        [ "a", upcast "Cookie"
                           "b", upcast "Banana"
                           "d", upcast false ] ]
     match result with

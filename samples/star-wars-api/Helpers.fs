@@ -21,27 +21,25 @@ module StringHelpers =
         |> Array.ofSeq
         |> Encoding.UTF8.GetString
 
-    let utf8Bytes (str : string) =
-        str |> Encoding.UTF8.GetBytes
+    let utf8Bytes (str : string) = str |> Encoding.UTF8.GetBytes
 
-    let isNullOrWhiteSpace (str : string) =
-        String.IsNullOrWhiteSpace(str)
+    let isNullOrWhiteSpace (str : string) = String.IsNullOrWhiteSpace (str)
 
 [<AutoOpen>]
 module JsonHelpers =
-    let tryGetJsonProperty (jobj: JObject) prop =
-        match jobj.Property(prop) with
+    let tryGetJsonProperty (jobj : JObject) prop =
+        match jobj.Property (prop) with
         | null -> None
-        | p -> Some(p.Value.ToString())
+        | p -> Some (p.Value.ToString ())
 
     let jsonSerializerSettings (converters : JsonConverter seq) =
-        JsonSerializerSettings()
+        JsonSerializerSettings ()
         |> tee (fun s ->
-            s.Converters <- List<JsonConverter>(converters)
-            s.ContractResolver <- CamelCasePropertyNamesContractResolver())
+            s.Converters <- List<JsonConverter> (converters)
+            s.ContractResolver <- CamelCasePropertyNamesContractResolver ())
 
     let jsonSerializer (converters : JsonConverter seq) =
-        JsonSerializer()
+        JsonSerializer ()
         |> tee (fun c ->
             Seq.iter c.Converters.Add converters
-            c.ContractResolver <- CamelCasePropertyNamesContractResolver())
+            c.ContractResolver <- CamelCasePropertyNamesContractResolver ())

@@ -6,8 +6,8 @@ open FSharp.Data.GraphQL.ParsingBenchmark
 open FSharp.Data.GraphQL.ExecutionBenchmark
 open FSharp.Data.GraphQL.MiddlewaresBenchmark
 
-let defaultSwitch () = 
-    BenchmarkSwitcher [| 
+let defaultSwitch () =
+    BenchmarkSwitcher [|
         typeof<AsyncValBenchmark>
         typeof<SimpleExecutionBenchmark>
         typeof<ParsingBenchmark>

@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Introspection
 
 #nowarn "40"
@@ -13,7 +13,7 @@ let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if isNull property then null else property.GetValue(o, null)
 
-/// Common GraphQL query that may be used to retrieve overall data 
+/// Common GraphQL query that may be used to retrieve overall data
 /// about schema type system itself.
 let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
 __schema {
@@ -114,13 +114,13 @@ ofType {
   }
 }
 }"""
-    
+
 /// GraphQL enum describing kind of the GraphQL type definition.
 /// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,
 /// NON_NULL or INPUT_OBJECT.
 let __TypeKind =
   Define.Enum(
-    name = "__TypeKind", 
+    name = "__TypeKind",
     description = "An enum describing what kind of type a given __Type is.",
     options = [
         Define.EnumValue("SCALAR", TypeKind.SCALAR, "Indicates this type is a scalar.")
@@ -132,7 +132,7 @@ let __TypeKind =
         Define.EnumValue("LIST", TypeKind.LIST, "Indicates this type is a list. `ofType` is a valid field.")
         Define.EnumValue("NON_NULL", TypeKind.NON_NULL, "Indicates this type is a non-null. `ofType` is a valid field.")
     ])
-    
+
 /// GraphQL enum describing kind of location for a particular directive
 /// to be used in. Can be one of: QUERY, MUTATION, SUBSCRIPTION, FIELD,
 /// FRAGMENT_DEFINITION, FRAGMENT_SPREAD or INLINE_FRAGMENT.
@@ -164,15 +164,15 @@ let __DirectiveLocation =
         Define.EnumValue("INPUT_OBJECT", DirectiveLocation.INPUT_OBJECT, "Location adjacent to an input object IDL definition.")
         Define.EnumValue("INPUT_FIELD_DEFINITION", DirectiveLocation.INPUT_FIELD_DEFINITION, "Location adjacent to an input object field IDL definition.")
     ])
-    
+
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
 
-/// The fundamental unit of any GraphQL Schema is the type. There are many 
-/// kinds of types in GraphQL as represented by the `__TypeKind` enum. 
-/// Depending on the kind of a type, certain fields describe information about 
-/// that type. Scalar types provide no information beyond a name and description, 
-/// while Enum types provide their values. Object and Interface types provide 
-/// the fields they describe. Abstract types, Union and Interface, provide 
+/// The fundamental unit of any GraphQL Schema is the type. There are many
+/// kinds of types in GraphQL as represented by the `__TypeKind` enum.
+/// Depending on the kind of a type, certain fields describe information about
+/// that type. Scalar types provide no information beyond a name and description,
+/// while Enum types provide their values. Object and Interface types provide
+/// the fields they describe. Abstract types, Union and Interface, provide
 /// the Object types possible at runtime. List and NonNull types compose other types.
 let rec __Type =
   Define.Object<IntrospectionTypeRef>(
@@ -193,21 +193,21 @@ let rec __Type =
                     match ctx.TryArg "includeDeprecated" with
                     | Some true ->  found.Fields |> Option.map Array.toSeq
                     | _ -> found.Fields |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x))
-        Define.Field("interfaces", Nullable (ListOf __Type), resolve = fun ctx t -> 
-            match t.Name with 
+        Define.Field("interfaces", Nullable (ListOf __Type), resolve = fun ctx t ->
+            match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
                 found.Interfaces |> Option.map Array.toSeq )
-        Define.Field("possibleTypes", Nullable (ListOf __Type), resolve = fun ctx t -> 
-            match t.Name with 
+        Define.Field("possibleTypes", Nullable (ListOf __Type), resolve = fun ctx t ->
+            match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
                 found.PossibleTypes |> Option.map Array.toSeq)
         Define.Field("enumValues", Nullable (ListOf __EnumValue),
             args = [Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
-            match t.Name with 
+            match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
@@ -215,15 +215,15 @@ let rec __Type =
                 | None | Some false -> found.EnumValues |> Option.map Array.toSeq
                 | Some true -> found.EnumValues |> Option.map (fun x -> upcast  (x |> Array.filter (fun f -> not f.IsDeprecated))))
         Define.Field("inputFields", Nullable (ListOf __InputValue), resolve = fun ctx t ->
-            match t.Name with 
+            match t.Name with
             | None -> None
             | Some name ->
                 let found = findIntrospected ctx name
                 found.InputFields |> Option.map Array.toSeq)
         Define.Field("ofType", Nullable __Type, resolve = fun _ t -> t.OfType)
     ])
-   
-/// Arguments provided to Fields or Directives and the input fields of an 
+
+/// Arguments provided to Fields or Directives and the input fields of an
 /// InputObject are represented as Input Values which describe their type
 /// and optionally a default value.
 and __InputValue =
@@ -237,8 +237,8 @@ and __InputValue =
         Define.Field("type", __Type, resolve = fun _ f -> f.Type)
         Define.Field("defaultValue", Nullable String, fun _ f -> f.DefaultValue)
     ])
-    
-/// Object and Interface types are described by a list of Fields, each of 
+
+/// Object and Interface types are described by a list of Fields, each of
 /// which has a name, potentially a list of arguments, and a return type.
 and __Field =
   Define.Object<IntrospectionField>(
@@ -253,9 +253,9 @@ and __Field =
         Define.Field("isDeprecated", Boolean, resolve = fun _ f -> f.IsDeprecated)
         Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
     ])
-    
-/// One possible value for a given Enum. Enum values are unique values, 
-/// not a placeholder for a string or numeric value. However an Enum value 
+
+/// One possible value for a given Enum. Enum values are unique values,
+/// not a placeholder for a string or numeric value. However an Enum value
 /// is returned in a JSON response as a string.
 and __EnumValue =
   Define.Object<IntrospectionEnumVal>(
@@ -272,13 +272,13 @@ and __EnumValue =
 and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation) =
     let c = int comparand
     compared |> Array.exists (fun cc -> c &&& (int cc) <> 0)
-    
-/// A GraphQL Directive provides a way to describe alternate runtime execution 
-/// and type validation behavior in a GraphQL document. In some cases, you need 
-/// to provide options to alter GraphQL’s execution behavior in ways field 
-/// arguments will not suffice, such as conditionally including or skipping a field. 
+
+/// A GraphQL Directive provides a way to describe alternate runtime execution
+/// and type validation behavior in a GraphQL document. In some cases, you need
+/// to provide options to alter GraphQL’s execution behavior in ways field
+/// arguments will not suffice, such as conditionally including or skipping a field.
 /// Directives provide this by describing additional information to the executor.
-and __Directive = 
+and __Directive =
   Define.Object<IntrospectionDirective>(
     name = "__Directive",
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
@@ -292,9 +292,9 @@ and __Directive =
         Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FRAGMENT_SPREAD; DirectiveLocation.INLINE_FRAGMENT; DirectiveLocation.FRAGMENT_DEFINITION |]))
         Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
     ])
-    
-/// GraphQL object defining capabilities of GraphQL server. It exposes 
-/// all available types and directives on the server, as well as the 
+
+/// GraphQL object defining capabilities of GraphQL server. It exposes
+/// all available types and directives on the server, as well as the
 /// entry points for query, mutation, and subscription operations.
 and __Schema =
   Define.Object<IntrospectionSchema>(

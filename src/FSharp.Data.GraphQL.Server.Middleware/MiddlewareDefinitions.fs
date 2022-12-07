@@ -9,7 +9,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
     let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
-                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef 
+                if f.ParentDef = upcast ctx.ExecutionPlan.RootDef
                 then 0.0
                 else
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
@@ -56,10 +56,10 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         then next ctx
         else error ctx
     interface IExecutorMiddleware with
-        member __.CompileSchema = None
-        member __.PostCompileSchema = None
-        member __.PlanOperation = None
-        member __.ExecuteOperationAsync = Some (middleware threshold)
+        member _.CompileSchema = None
+        member _.PostCompileSchema = None
+        member _.PlanOperation = None
+        member _.ExecuteOperationAsync = Some (middleware threshold)
 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata : bool) =
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
@@ -105,15 +105,15 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 | _ -> collectArgs acc xs
         let ctx =
             match reportToMetadata with
-            | true -> 
+            | true ->
                 { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
             | false -> ctx
         next ctx
     interface IExecutorMiddleware with
-        member __.CompileSchema = Some compileMiddleware
-        member __.PostCompileSchema = None
-        member __.PlanOperation = None
-        member __.ExecuteOperationAsync = Some reportMiddleware
+        member _.CompileSchema = Some compileMiddleware
+        member _.PostCompileSchema = None
+        member _.PlanOperation = None
+        member _.ExecuteOperationAsync = Some reportMiddleware
 
 /// A function that resolves an identity name for a schema object, based on a object definition of it.
 type IdentityNameResolver = ObjectDef -> string
@@ -152,7 +152,7 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
             then ctx.Schema.LiveFieldSubscriptionProvider.Register x)
         next ctx
     interface IExecutorMiddleware with
-        member __.CompileSchema = Some middleware
-        member __.PostCompileSchema = None
-        member __.PlanOperation = None
-        member __.ExecuteOperationAsync = None
+        member _.CompileSchema = Some middleware
+        member _.PostCompileSchema = None
+        member _.PlanOperation = None
+        member _.ExecuteOperationAsync = None
