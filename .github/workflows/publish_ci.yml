@@ -4,39 +4,83 @@ on:
   push:
     branches:
       - dev
+    tags:
+      - '*'
 
 jobs:
   build:
-
-    env:
-      GITHUB_TOKEN: '${{secrets.GITHUB_TOKEN}}'
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1
-    - name: Add GitHub
-      run: dotnet nuget add source --username USERNAME --password ${{ secrets.GITHUB_TOKEN }} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/fsprojects/index.json"
-    - name: Change version, pack and push to GitHub FSharp.Data.GraphQL.Shared project
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        # This is necessary so that we have the tags.
+        fetch-depth: 0
+    - name: Get Build Version
       run: |
-        sed -i "s|<Version>\(.*\)</Version>|<Version>\1-ci-$GITHUB_RUN_ID</Version>|" Directory.Build.targets
+        $Version = "$env:GITHUB_REF_NAME-ci-$env:GITHUB_RUN_ID"
+
+        $File = (
+          Select-Xml -XPath "/Project/PropertyGroup[@Label='NuGet']/Version" -Path "Directory.Build.targets"
+        )[0].Node
+
+        $File.InnerText = $Version
+        $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.targets))
+      shell: pwsh
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v3
+    - name: Add the GitHub source
+      run: dotnet nuget add source --username USERNAME --password ${{secrets.GITHUB_TOKEN}} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/fsprojects/index.json"
+
+    - name: Pack FSharp.Data.GraphQL.Shared project
+      run: |
         cd src/FSharp.Data.GraphQL.Shared
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Shared*.nupkg -s "github" -k $GITHUB_TOKEN
-    - name: Pack and push to GitHub FSharp.Data.GraphQL.Client project
+    - name: Run tests
+      run: |
+        cd src/FSharp.Data.GraphQL.Shared
+        dotnet test --configuration Release --no-restore --no-build
+    - name: Publish to GitHub
+      run: |
+        cd src/FSharp.Data.GraphQL.Shared
+        dotnet nuget push ../../nuget/*Shared*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
+
+    - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Client*.nupkg -s "github" -k $GITHUB_TOKEN
-    - name: Pack and push to GitHub FSharp.Data.GraphQL.Server project
+    - name: Run tests
+      run: |
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet test --configuration Release --no-restore --no-build
+    - name: Publish to GitHub
+      run: |
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet nuget push ../../nuget/*Client*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
+
+    - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Server*.nupkg -s "github" -k $GITHUB_TOKEN
-    - name: Pack and push to GitHub FSharp.Data.GraphQL.Server.Middleware project
+    - name: Run tests
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet test --configuration Release --no-restore --no-build
+    - name: Publish to GitHub
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet nuget push ../../nuget/*Server*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
+
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -s "github" -k $GITHUB_TOKEN
+    - name: Run tests
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet test --configuration Release --no-restore --no-build
+    - name: Publish to GitHub
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}

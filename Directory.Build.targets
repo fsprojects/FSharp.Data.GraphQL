@@ -16,7 +16,7 @@
 
     <RepoRoot>$([System.IO.Path]::GetDirectoryName($([MSBuild]::GetPathOfFileAbove('.gitignore', '$(MSBuildThisFileDirectory)'))))</RepoRoot>
     <RepositoryUrl>https://github.com/fsprojects/FSharp.Data.GraphQL</RepositoryUrl>
-    <Version>2.0.0</Version>
+    <Version>1.0.0</Version>
     <PackageTags>FSharp GraphQL Relay React Middleware</PackageTags>
     <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageIcon>icon.png</PackageIcon>
@@ -32,8 +32,8 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="$(RepoRoot)\icon.png" Pack="true" PackagePath="\"/>
-    <None Include="$(RepoRoot)\README.md" Pack="true" PackagePath="\"/>
+    <None Include="$(RepoRoot)\icon.png" Pack="true" PackagePath="\" />
+    <None Include="$(RepoRoot)\README.md" Pack="true" PackagePath="\" />
   </ItemGroup>
 
 </Project>
