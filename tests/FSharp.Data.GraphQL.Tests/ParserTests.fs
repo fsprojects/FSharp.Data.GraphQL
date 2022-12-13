@@ -307,6 +307,19 @@ let ``parser should parse query with quoted arguments``() =
   }"""
 
 [<Fact>]
+let ``parser should parse query with single-quoted arguments``() =
+    let expected =
+        [ field "id" ]
+        |> fieldWithNameAndArgsAndSelections "search" [ argString "query" "It's working!" ]
+        |> queryWithSelection
+        |> doc1
+    test expected """{
+    search(query: "It's working!") {
+      id
+    }
+  }"""
+
+[<Fact>]
 let ``parser should parse query with arguments``() =
     let expected =
         [ field "name" ]
