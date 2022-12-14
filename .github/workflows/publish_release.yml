@@ -2,8 +2,8 @@ name: publish to NuGet
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'releases/*'
 
 jobs:
   publish:
@@ -15,7 +15,7 @@ jobs:
       with:
         # This is necessary so that we have the tags.
         fetch-depth: 0
-    - name: Get Build Version
+    - name: Set Build Version
       run: |
         $Version = "$env:GITHUB_REF_NAME"
 
@@ -26,61 +26,48 @@ jobs:
         $File.InnerText = $Version
         $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.targets))
       shell: pwsh
+
     - name: Install .NET Core
       uses: actions/setup-dotnet@v3
 
+    - name: Install local tools
+      run: dotnet tool restore
+
+    - name: Run integration tests
+      run: dotnet fsi build.fsx
+
     - name: Pack FSharp.Data.GraphQL.Shared project
-      if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-    - name: Run tests
-      run: |
-        cd src/FSharp.Data.GraphQL.Shared
-        dotnet test --configuration Release --no-restore --no-build
-    - name: Publish to NuGet
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Shared project to NuGet
       run: |
         cd src/FSharp.Data.GraphQL.Shared
         dotnet nuget push ../../nuget/*Shared*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Client project
-      if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-    - name: Run tests
-      run: |
-        cd src/FSharp.Data.GraphQL.Client
-        dotnet test --configuration Release --no-restore --no-build
-    - name: Publish to NuGet
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Client project to NuGet
       run: |
         cd src/FSharp.Data.GraphQL.Client
         dotnet nuget push ../../nuget/*Client*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Server project
-      if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-    - name: Run tests
-      run: |
-        cd src/FSharp.Data.GraphQL.Server
-        dotnet test --configuration Release --no-restore --no-build
-    - name: Publish to NuGet
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server project to NuGet
       run: |
         cd src/FSharp.Data.GraphQL.Server
         dotnet nuget push ../../nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
-      if: startsWith(github.ref, 'refs/tags/release')
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-    - name: Run tests
-      run: |
-        cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet test --configuration Release --no-restore --no-build
-    - name: Publish to NuGet
+    - name: Publish FSharp.Data.GraphQL.Server.Middleware project to NuGet
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -k ${{secrets.NUGET_SECRET}}
