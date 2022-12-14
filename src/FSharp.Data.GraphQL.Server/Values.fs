@@ -107,7 +107,13 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef): ExecuteInp
                 let coerced = coerceEnumInput value
                 match coerced with
                 | None -> null
-                | Some s -> ReflectionHelper.parseUnion enumdef.Type s
+                | Some s ->
+                    enumdef.Options
+                    |> Seq.tryFind (fun v -> v.Name = s)
+                    |> Option.map (fun x -> x.Value :?> _)
+                    |> Option.defaultWith
+                        (fun () ->
+                            ReflectionHelper.parseUnion enumdef.Type s)
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
 
 let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: obj) (errMsg: string) : obj =

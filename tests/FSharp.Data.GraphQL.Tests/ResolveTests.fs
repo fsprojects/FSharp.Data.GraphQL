@@ -42,22 +42,59 @@ type private Fruit =
   | Apple
   | Banana
   | Cherry
+  | DragonFruit
 
-let private enumType =
+module private Fruit =
+
+  let show =
+    function
+    | Apple -> "apple"
+    | Banana -> "banana"
+    | Cherry -> "cherry"
+    | DragonFruit -> "dragon fruit"
+
+
+let private fruitType =
   Define.Enum(
     "Fruit",
     [
       Define.EnumValue("APPLE", Apple)
       Define.EnumValue("BANANA", Banana)
       Define.EnumValue("CHERRY", Cherry)
+      Define.EnumValue("DRAGON_FRUIT", DragonFruit)
     ]
   )
 
 [<Fact>]
 let ``Execute resolves enums to their names`` () =
-    let schema = testSchema [ Define.Field("fruits", ListOf enumType, "", [], resolve = fun ctx d -> [ Apple; Banana; Cherry ]) ]
-    let expected = NameValueLookup.ofList [ "fruits", [ "APPLE"; "BANANA"; "CHERRY" ] :> obj ]
+    let schema = testSchema [ Define.Field("fruits", ListOf fruitType, "", [], resolve = fun ctx d -> [ Apple; Banana; Cherry; DragonFruit ]) ]
+    let expected = NameValueLookup.ofList [ "fruits", [ "APPLE"; "BANANA"; "CHERRY"; "DRAGON_FRUIT" ] :> obj ]
     let actual = sync <| Executor(schema).AsyncExecute(parse "{ fruits() }")
+    match actual with
+    | Direct(data, errors) ->
+      empty errors
+      data.["data"] |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute resolves enums arguments from their names`` () =
+    let schema =
+      testSchema [
+        Define.Field(
+          "foo",
+          String,
+          "",
+          [
+            Define.Input("fruit", fruitType, defaultValue = Cherry)
+          ],
+          resolve =
+            fun ctx _ ->
+              let fruit = ctx.Arg "fruit"
+              $"You asked for {Fruit.show fruit}")
+      ]
+
+    let expected = NameValueLookup.ofList [ "foo", box "You asked for dragon fruit" ]
+    let actual = sync <| Executor(schema).AsyncExecute(parse "{ foo(fruit: DRAGON_FRUIT) }")
     match actual with
     | Direct(data, errors) ->
       empty errors
