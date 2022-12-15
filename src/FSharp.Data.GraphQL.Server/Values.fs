@@ -162,11 +162,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
             if s <> null then
                 s
             else
-                raise (
-                    GraphQLException
-                    <| errMsg
-                       + (sprintf "value of type %O is not assignable from %O" innerdef.Type (coerced.GetType ()))
-                )
+                else raise <| GraphQLException ($"%s{errMsg}value of type %O{coerced.GetType()} is not assignable from %O")
         else
             none
     | List (Input innerdef) ->
