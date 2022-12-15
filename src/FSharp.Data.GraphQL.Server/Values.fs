@@ -119,7 +119,8 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                 if c <> null then
                     c
                 else
-                    raise <| GraphQLException (errMsg + notAssignableMsg innerdef coerced)
+                    raise
+                    <| GraphQLException (errMsg + notAssignableMsg innerdef coerced)
     | Enum enumdef ->
         fun value variables ->
             match value with
@@ -162,7 +163,8 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
             if s <> null then
                 s
             else
-                else raise <| GraphQLException ($"%s{errMsg}value of type %O{coerced.GetType()} is not assignable from %O")
+                raise
+                <| GraphQLException ($"%s{errMsg}value of type %O{innerdef.Type} is not assignable from %O{coerced.GetType ()}")
         else
             none
     | List (Input innerdef) ->
@@ -197,7 +199,9 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         match input with
         | :? string as s -> ReflectionHelper.parseUnion enumdef.Type s
         | null when isNullable -> null
-        | null -> raise <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
+        | null ->
+            raise
+            <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
 
         | u when
             FSharpType.IsUnion (enumdef.Type)
@@ -211,7 +215,9 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
                 <| errMsg
                    + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType ()) enumdef.Name)
             )
-    | _ -> raise <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
+    | _ ->
+        raise
+        <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
 
 and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) errMsg =
     //TODO: this should be eventually coerced to complex object
@@ -240,5 +246,7 @@ let internal coerceVariable (vardef : VarDef) (inputs) =
         | None ->
             match vardef.TypeDef with
             | Nullable _ -> null
-            | _ -> raise <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
+            | _ ->
+                raise
+                <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
     | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
