@@ -175,11 +175,8 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         match input with
         | null when isNullable -> null
         | null ->
-            raise (
-                GraphQLException
-                <| errMsg
-                   + (sprintf "expected value of type %s, but no value was found." (vardef.TypeDef.ToString ()))
-            )
+            raise
+            <| GraphQLException ($"%s{errMsg}expected value of type %s{vardef.TypeDef.ToString ()}, but no value was found.")
         // special case - while single values should be wrapped with a list in this scenario,
         // string would be treat as IEnumerable and coerced into a list of chars
         | :? string as s ->
@@ -197,11 +194,8 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
 
             mapped
         | other ->
-            raise (
-                GraphQLException
-                <| errMsg
-                   + (sprintf "Cannot coerce value of type '%O' to list." (other.GetType ()))
-            )
+            raise
+            <| GraphQLException ($"{errMsg}Cannot coerce value of type '%O{other.GetType ()}' to list.")
     | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
     | Enum enumdef ->
         match input with
