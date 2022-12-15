@@ -119,7 +119,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                 if c <> null then
                     c
                 else
-                    raise (GraphQLException (errMsg + notAssignableMsg innerdef coerced))
+                    raise <| GraphQLException (errMsg + notAssignableMsg innerdef coerced)
     | Enum enumdef ->
         fun value variables ->
             match value with
