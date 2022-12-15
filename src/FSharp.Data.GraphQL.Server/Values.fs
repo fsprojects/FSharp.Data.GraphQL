@@ -203,12 +203,8 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         match input with
         | :? string as s -> ReflectionHelper.parseUnion enumdef.Type s
         | null when isNullable -> null
-        | null ->
-            raise (
-                GraphQLException
-                <| errMsg
-                   + (sprintf "Expected Enum '%s', but no value was found." enumdef.Name)
-            )
+        | null -> raise <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
+
         | u when
             FSharpType.IsUnion (enumdef.Type)
             && enumdef.Type = input.GetType ()
