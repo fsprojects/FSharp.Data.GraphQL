@@ -255,5 +255,5 @@ let internal coerceVariable (vardef : VarDef) (inputs) =
         | None ->
             match vardef.TypeDef with
             | Nullable _ -> null
-            | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString ())))
+            | _ -> raise <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
     | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
