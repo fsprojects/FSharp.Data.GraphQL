@@ -221,12 +221,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
                 <| errMsg
                    + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType ()) enumdef.Name)
             )
-    | _ ->
-        raise (
-            GraphQLException
-            <| errMsg
-               + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions."
-        )
+    | _ -> raise <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
 
 and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) errMsg =
     //TODO: this should be eventually coerced to complex object
