@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Tests.ResponseJsonTests
+module FSharp.Data.GraphQL.IntegrationTests.ResponseJsonTests
 
 open System
 open Xunit
