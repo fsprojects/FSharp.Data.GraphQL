@@ -17,6 +17,7 @@
 
   <ItemGroup>
     <Content Include="introspection.json" />
+    <Content Include="introspection-altered-types.json" />
     <None Include="operation.graphql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
@@ -24,6 +25,7 @@
     <Compile Include="Helpers.fs" />
     <Compile Include="LocalProviderTests.fs" />
     <Compile Include="LocalProviderWithOptionalParametersOnlyTests.fs" />
+    <Compile Include="ResponseJsonTests.fs" />
     <Compile Include="SwapiLocalProviderTests.fs" />
     <Compile Include="SwapiRemoteProviderTests.fs" />
   </ItemGroup>
