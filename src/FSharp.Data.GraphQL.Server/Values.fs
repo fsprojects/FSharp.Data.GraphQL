@@ -148,8 +148,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | None ->
             raise (
                 GraphQLException
-                <| errMsg
-                   + (sprintf "expected value of type %s but got None" scalardef.Name)
+                <| $"%s{errMsg}expected value of type %s{scalardef.Name} but got None"
             )
         | Some res -> res
     | Nullable (Input innerdef) ->
@@ -212,8 +211,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | _ ->
             raise (
                 GraphQLException
-                <| errMsg
-                   + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType ()) enumdef.Name)
+                <| $"%s{errMsg}Cannot coerce value of type '%O{input.GetType ()}' to type Enum '%s{enumdef.Name}'"
             )
     | _ ->
         raise
