@@ -148,7 +148,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | None ->
             raise (
                 GraphQLException
-                <| $"%s{errMsg}expected value of type %s{scalardef.Name} but got None"
+                <| $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'None'."
             )
         | Some res -> res
     | Nullable (Input innerdef) ->
@@ -163,7 +163,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
                 s
             else
                 raise
-                <| GraphQLException ($"%s{errMsg}value of type %O{innerdef.Type} is not assignable from %O{coerced.GetType ()}")
+                <| GraphQLException ($"%s{errMsg}value of type '%O{innerdef.Type}' is not assignable from '%O{coerced.GetType ()}'.")
         else
             none
     | List (Input innerdef) ->
@@ -173,7 +173,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | null when isNullable -> null
         | null ->
             raise
-            <| GraphQLException ($"%s{errMsg}expected value of type %s{vardef.TypeDef.ToString ()}, but no value was found.")
+            <| GraphQLException ($"%s{errMsg}expected value of type '%s{vardef.TypeDef.ToString ()}', but no value was found.")
         // special case - while single values should be wrapped with a list in this scenario,
         // string would be treat as IEnumerable and coerced into a list of chars
         | :? string as s ->
@@ -211,7 +211,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | _ ->
             raise (
                 GraphQLException
-                <| $"%s{errMsg}Cannot coerce value of type '%O{input.GetType ()}' to type Enum '%s{enumdef.Name}'"
+                <| $"%s{errMsg}Cannot coerce value of type '%O{input.GetType ()}' to type Enum '%s{enumdef.Name}'."
             )
     | _ ->
         raise
@@ -225,7 +225,7 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) e
             objdef.Fields
             |> Array.map (fun field ->
                 let valueFound = Map.tryFind field.Name map |> Option.toObj
-                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
+                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound $"%s{errMsg}in field '%s{field.Name}': "))
             |> Map.ofArray
 
         upcast mapped

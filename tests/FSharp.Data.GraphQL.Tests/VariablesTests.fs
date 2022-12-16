@@ -192,7 +192,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" errors
+        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -202,7 +202,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
         }"""
     let params' : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
-    let errMsg = sprintf " Variable '$input': value of type %O is not assignable from %O" typeof<TestInput> typeof<string>
+    let errMsg = sprintf " Variable '$input': value of type '%O' is not assignable from '%O'." typeof<TestInput> typeof<string>
     match actual with
     | Direct(data, errors) ->
         hasError errMsg errors
@@ -222,7 +222,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     match actual with
     | Direct(data, errors) ->
         List.length errors |> equals 1
-        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type String but got None" errors
+        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -307,7 +307,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", null ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$value': expected value of type String but got None" errors
+        hasError "Variable '$value': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -415,7 +415,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': expected value of type [String]!, but no value was found" errors
+        hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -478,7 +478,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': list element expected value of type String but got None" errors
+        hasError "Variable '$input': list element expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -489,7 +489,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': expected value of type [String!]!, but no value was found" errors
+        hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -513,7 +513,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
     match actual with
     | Direct(data, errors) ->
-        hasError "Variable '$input': list element expected value of type String but got None" errors
+        hasError "Variable '$input': list element expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
