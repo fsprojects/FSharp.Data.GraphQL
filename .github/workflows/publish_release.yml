@@ -2,46 +2,72 @@ name: publish to NuGet
 
 on:
   push:
-    branches:
-      - master
+    tags:
+      - 'releases/*'
 
 jobs:
   publish:
-
-    env:
-      KEY: '${{secrets.NUGET_SECRET}}'
-
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v2
-    - name: Setup .NET Core
-      uses: actions/setup-dotnet@v1
+    - name: Checkout
+      uses: actions/checkout@v3
+      with:
+        # This is necessary so that we have the tags.
+        fetch-depth: 0
+    - name: Set Build Version
+      run: |
+        $Version = "$env:GITHUB_REF_NAME"
 
-    - name: Pack FSharp.Data.GraphQL.Shared project and push to NuGet
-      if: startsWith(github.ref, 'refs/tags/release')
+        $File = (
+          Select-Xml -XPath "/Project/PropertyGroup[@Label='NuGet']/Version" -Path "Directory.Build.targets"
+        )[0].Node
+
+        $File.InnerText = $Version
+        $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.targets))
+      shell: pwsh
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v3
+
+    - name: Install local tools
+      run: dotnet tool restore
+
+    - name: Run integration tests
+      run: dotnet fsi build.fsx
+
+    - name: Pack FSharp.Data.GraphQL.Shared project
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Shared*.nupkg -k $KEY
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Shared project to NuGet
+      run: |
+        cd src/FSharp.Data.GraphQL.Shared
+        dotnet nuget push ../../nuget/*Shared*.nupkg -k ${{secrets.NUGET_SECRET}}
 
-    - name: Pack FSharp.Data.GraphQL.Client project and push to NuGet
-      if: startsWith(github.ref, 'refs/tags/release')
+    - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Client*.nupkg -k $KEY
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Client project to NuGet
+      run: |
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet nuget push ../../nuget/*Client*.nupkg -k ${{secrets.NUGET_SECRET}}
 
-    - name: Pack FSharp.Data.GraphQL.Server project and push to NuGet
-      if: startsWith(github.ref, 'refs/tags/release')
+    - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Server*.nupkg -k $KEY
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server project to NuGet
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet nuget push ../../nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
 
-    - name: Pack FSharp.Data.GraphQL.Server.Middleware project and push to NuGet
-      if: startsWith(github.ref, 'refs/tags/release')
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -k $KEY
+    - name: Publish FSharp.Data.GraphQL.Server.Middleware project to NuGet
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -k ${{secrets.NUGET_SECRET}}
