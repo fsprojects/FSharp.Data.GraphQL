@@ -6,7 +6,9 @@ module FSharp.Data.GraphQL.Tests.ObservableExtensionsTests
 open Xunit
 open FSharp.Data.GraphQL
 open Helpers
+
 open System
+open FSharp.Control.Reactive
 
 
 let delay time x = async {
@@ -89,7 +91,7 @@ let ``bufferByTiming should call OnComplete and return items in expected order``
         yield delay 400 2
         yield delay 100 1
         yield delay 200 3 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTiming (ms 300)
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferMilliseconds (ms 300) |> Observable.map List.ofSeq
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ [1; 3]; [2] ]
@@ -100,7 +102,7 @@ let ``bufferByElementCount should call OnComplete and return items in expected o
         yield delay 400 2
         yield delay 100 1
         yield delay 200 3 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByElementCount 2
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferCount 2 |> Observable.map List.ofSeq
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ [1; 3]; [2] ]
@@ -112,7 +114,7 @@ let ``bufferByTimingAndElementCount should call OnComplete and return items in e
         yield delay 50 1
         yield delay 100 3
         yield delay 150 4 }
-    let obs = Observable.ofAsyncSeq source |> Observable.bufferByTimingAndElementCount (ms 300) 2
+    let obs = Observable.ofAsyncSeq source |> Observable.bufferMillisecondsCount (ms 300) 2 |> Observable.map List.ofSeq
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ [1; 3]; [4]; [2] ]
@@ -126,7 +128,7 @@ let ``catch should call OnComplete and return items in expected order`` () =
     let source : int seq = seq { for x in 1 .. 5 do yield raise <| IndexException(x) }
     let obs =
         Observable.ofSeq source
-        |> Observable.catch (fun (ex : IndexException) -> ex.Index |> Observable.singleton)
+        |> Observable.catchWith (fun (ex : IndexException) -> ex.Index |> Observable.singleton)
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1 ]
@@ -154,7 +156,7 @@ let ``concat should call OnComplete and return items in expected order`` () =
     let obs =
         Observable.ofSeq source
         |> Observable.map Observable.ofAsyncSeq
-        |> Observable.concat
+        |> Observable.concatInner
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
@@ -170,7 +172,7 @@ let ``concat2 should call OnComplete and return items in expected order`` () =
         yield delay 300 5 }
     let obs =
         Observable.ofAsyncSeq source2
-        |> Observable.concat2 (Observable.ofAsyncSeq source1)
+        |> Observable.concat (Observable.ofAsyncSeq source1)
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1; 3; 2; 5; 4 ]
@@ -188,7 +190,7 @@ let ``merge should call OnComplete and return items in expected order`` () =
     let obs =
         Observable.ofSeq source
         |> Observable.map Observable.ofAsyncSeq
-        |> Observable.merge
+        |> Observable.mergeInner
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
@@ -204,7 +206,7 @@ let ``merge2 should call OnComplete and return items in expected order`` () =
         yield delay 300 5 }
     let obs =
         Observable.ofAsyncSeq source2
-        |> Observable.merge2 (Observable.ofAsyncSeq source1)
+        |> Observable.merge (Observable.ofAsyncSeq source1)
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals [ 1; 3; 5; 4; 2 ]
@@ -212,7 +214,7 @@ let ``merge2 should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``concatSeq should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
-    let obs = Observable.singleton source |> Observable.concatSeq
+    let obs = Observable.ofSeq source
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals source
@@ -220,7 +222,7 @@ let ``concatSeq should call OnComplete and return items in expected order`` () =
 [<Fact>]
 let ``mapAsync should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
-    let obs = Observable.ofSeq source |> Observable.mapAsync (fun x -> async { return x })
+    let obs = Observable.ofSeq source |> Observable.flatmapAsync (fun x -> async { return x })
     use sub = Observer.create obs
     sub.WaitCompleted(timeout = ms 10)
     sub.Received |> seqEquals source

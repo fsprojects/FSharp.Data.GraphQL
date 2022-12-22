@@ -61,7 +61,7 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
         ensureDeferred result <| fun data errors deferred ->
             let expectedItemCount = Seq.length expectedDeferred
             empty errors
-            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+            data |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
             use sub = Observer.create deferred
             sub.WaitCompleted(expectedItemCount)
             sub.Received
@@ -70,7 +70,7 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
     | None ->
         ensureDirect result <| fun data errors ->
             empty errors
-            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+            data |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
 
 [<Fact>]
 let ``Node with global ID gets correct record - Defer`` () =

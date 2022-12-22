@@ -142,7 +142,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     |> Option.defaultWith (fun () -> ReflectionHelper.parseUnion enumdef.Type s)
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
 
-let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : obj) (errMsg : string) : obj =
+let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : JsonElement) (errMsg : string) : obj =
     match typedef with
     | Scalar scalardef ->
         match scalardef.CoerceValue input with
@@ -155,7 +155,6 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | Some res -> res
     | Nullable (Input innerdef) ->
         let some, none, innerValue = ReflectionHelper.optionOfType innerdef.Type
-        let input = innerValue input
         let coerced = coerceVariableValue true innerdef vardef input errMsg
 
         if coerced <> null then
@@ -172,19 +171,13 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
 
         match input with
-        | null when isNullable -> null
-        | null ->
+        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
+        | _ when input.ValueKind = JsonValueKind.Null ->
             raise
             <| GraphQLException ($"%s{errMsg}expected value of type '%s{vardef.TypeDef.ToString ()}', but no value was found.")
-        // special case - while single values should be wrapped with a list in this scenario,
-        // string would be treat as IEnumerable and coerced into a list of chars
-        | :? string as s ->
-            let single = coerceVariableValue false innerdef vardef s (errMsg + "element ")
-            cons single nil
-        | :? System.Collections.IEnumerable as iter ->
+        | _ when input.ValueKind = JsonValueKind.Array ->
             let mapped =
-                iter
-                |> Seq.cast<obj>
+                input.EnumerateArray()
                 |> Seq.map (fun elem -> coerceVariableValue false innerdef vardef elem (errMsg + "list element "))
                 //TODO: optimize
                 |> Seq.toList
@@ -198,40 +191,33 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
     | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
     | Enum enumdef ->
         match input with
-        | :? string as s -> ReflectionHelper.parseUnion enumdef.Type s
-        | null when isNullable -> null
-        | null ->
+        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
+        | _ when input.ValueKind = JsonValueKind.Null ->
             raise
             <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
-
-        | u when
-            FSharpType.IsUnion (enumdef.Type)
-            && enumdef.Type = input.GetType ()
-            ->
-            u
-        | o when Enum.IsDefined (enumdef.Type, o) -> o
-        | _ ->
-            raise (
-                GraphQLException
-                <| $"%s{errMsg}Cannot coerce value of type '%O{input.GetType ()}' to type Enum '%s{enumdef.Name}'."
-            )
+        | _ -> input.Deserialize(enumdef.Type) // TODO: Add JsonSerializerOptions with FSharp.SystemtextJson
     | _ ->
         raise
         <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
 
-and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) errMsg =
+// TODO: Collect errors from subfields
+and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonElement) errMsg =
     //TODO: this should be eventually coerced to complex object
-    match input with
-    | :? Map<string, obj> as map ->
+    if input.ValueKind = JsonValueKind.Object then
         let mapped =
             objdef.Fields
             |> Array.map (fun field ->
-                let valueFound = Map.tryFind field.Name map |> Option.toObj
-                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound $"%s{errMsg}in field '%s{field.Name}': "))
-            |> Map.ofArray
+                // TODO: Consider using of option
+                let value =
+                    match input.TryGetProperty field.Name with
+                    | true, valueFound -> valueFound
+                    | false, _ -> JsonDocument.Parse("null").RootElement
+                KeyValuePair (field.Name, coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "))
+            |> ImmutableDictionary.CreateRange
 
         upcast mapped
-    | _ -> input
+    else
+        input
 
 let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
     let vname = vardef.Name
@@ -243,12 +229,12 @@ let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<stri
         | Some defaultValue ->
             let errMsg = (sprintf "Variable '%s': " vname)
             let executeInput = compileByType errMsg vardef.TypeDef
-            executeInput defaultValue inputs
+            executeInput defaultValue (ImmutableDictionary.Empty) // TODO: Check if empty is enough
         | None ->
             match vardef.TypeDef with
             | Nullable _ -> null
             | _ ->
                 raise
                 <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
-    | true, input ->
-        coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
+    | true, jsonElement ->
+        coerceVariableValue false vardef.TypeDef vardef jsonElement (sprintf "Variable '$%s': " vname)

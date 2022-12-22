@@ -67,7 +67,7 @@ let ``Schema config should be able to override default error handling`` () =
                 "failing2", null ]]
     match actual with
     | Direct(data, errors) ->
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
       errors
       |> equals
         [ GQLProblemDetails.Create("0", ["test"; "failing1"])

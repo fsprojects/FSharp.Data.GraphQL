@@ -84,7 +84,7 @@ module AsyncVal =
                 with e -> return fn e |> Error
             })
         | Failure f -> Value(fn f |> Error)
-        |> map (Result.mapError (List.map (GQLProblemDetails.OfFieldError path)))
+        |> map (Result.mapError (List.map (GQLProblemDetails.OfFieldError (path |> List.rev))))
 
 
     /// Folds content of AsyncVal over provided initial state zero using provided fn.

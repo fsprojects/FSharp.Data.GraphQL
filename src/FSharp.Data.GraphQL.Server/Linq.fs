@@ -108,6 +108,7 @@ let rec private unwrapType =
     | other -> other.Type
 
 open System.Reflection
+open System.Collections.Immutable
 
 let private bindingFlags = BindingFlags.Instance|||BindingFlags.IgnoreCase|||BindingFlags.Public
 let private memberExpr (t: Type) name parameter =
@@ -581,7 +582,7 @@ let private defaultArgApplicators: Map<string, ArgApplication> =
 /// and can can cause eager overfetching.
 /// </para>
 /// </summary>
-let rec tracker (vars: Map<string, obj>) (info: ExecutionInfo) : Tracker  =
+let rec tracker (vars: ImmutableDictionary<string, obj>) (info: ExecutionInfo) : Tracker  =
     let ir = getTracks Set.empty info
     let composed = compose vars ir
     let (IR(_, trackers, children)) = composed
@@ -628,9 +629,9 @@ type System.Linq.IQueryable<'Source> with
     /// <param name="info">Execution info data to be applied on the queryable.</param>
     /// <param name="variables">Optional map with client-provided arguments used to resolve argument values.</param>
     /// <param name="applicators">Map of applicators used to define LINQ expression mutations based on GraphQL arguments.</param>
-    member this.Apply(info: ExecutionInfo, ?variables: Map<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> =
+    member this.Apply(info: ExecutionInfo, ?variables: ImmutableDictionary<string, obj>, ?applicators: Map<string, ArgApplication>) : IQueryable<'Source> =
         let appl =
             match applicators with
             | None -> defaultArgApplicators
             | Some a -> a |> Map.fold (fun acc key value -> Map.add (key.ToLowerInvariant()) value acc) defaultArgApplicators
-        toLinq info this (defaultArg variables Map.empty) appl
+        toLinq info this (defaultArg variables ImmutableDictionary.Empty) appl

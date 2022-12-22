@@ -120,7 +120,7 @@ let ``Executor middleware: change fields and measure planning time`` () =
     match result with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
     match result.Metadata.TryFind<int64>("planningTime") with
     | Some time -> time |> greaterThanOrEqual 5L

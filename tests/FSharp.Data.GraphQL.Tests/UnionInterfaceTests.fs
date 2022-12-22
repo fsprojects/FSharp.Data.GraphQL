@@ -141,7 +141,7 @@ let ``Execute can introspect on union and intersection types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
@@ -174,7 +174,7 @@ let ``Executes union types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -212,7 +212,7 @@ let ``Executes union types with inline fragments`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
@@ -244,7 +244,7 @@ let ``Executes interface types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -280,7 +280,7 @@ let ``Executes interface types with inline fragments`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -339,5 +339,5 @@ let ``Execute allows fragment conditions to be abstract types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"

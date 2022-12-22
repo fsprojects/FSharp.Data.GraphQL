@@ -67,7 +67,7 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -101,7 +101,7 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -135,7 +135,7 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -169,7 +169,7 @@ let ``Input field should be marked as nullable when its type is nullable and hav
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -316,7 +316,7 @@ let ``Core type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 type User = { FirstName: string; LastName: string }
@@ -382,7 +382,7 @@ let ``Default field type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -424,7 +424,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -473,7 +473,7 @@ let ``Default field args type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -519,7 +519,7 @@ let ``Nullable field args type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -1391,5 +1391,5 @@ let ``Introspection executes an introspection query`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"

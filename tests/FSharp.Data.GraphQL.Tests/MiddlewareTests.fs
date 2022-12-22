@@ -87,8 +87,8 @@ let executor =
 let execute (query : Document) =
     executor.AsyncExecute(query) |> sync
 
-let expectedErrors : Error list =
-    [ "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", [] ]
+let expectedErrors : GQLProblemDetails list =
+    [ GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", List.empty<string>) ]
 
 [<Fact>]
 let ``Simple query: Should pass when below threshold``() =
@@ -132,7 +132,7 @@ let ``Simple query: Should pass when below threshold``() =
     match result with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
@@ -192,7 +192,7 @@ let ``Simple query: Should not pass when above threshold``() =
     match result with
     | Direct (data, errors) ->
         errors |> equals expectedErrors
-        data.["data"] |> isNameValueDict |> empty
+        data |> isNameValueDict |> empty
     | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
@@ -227,8 +227,8 @@ let ``Deferred queries : Should pass when below threshold``() =
             ]
         ]
     let expectedDeferred =
-        NameValueLookup.ofList [
-            "data", upcast [
+        DeferredResult (
+            [
                 NameValueLookup.ofList [
                     "id", upcast 2
                     "value", upcast "A2"
@@ -237,16 +237,16 @@ let ``Deferred queries : Should pass when below threshold``() =
                     "id", upcast 6
                     "value", upcast "3000"
                 ]
-            ]
-            "path", upcast [ "A" :> obj; "subjects" :> obj ]
-        ]
+            ],
+            [ "A"; "subjects" ]
+        )
     let result = execute query
     ensureDeferred result <| fun data errors deferred ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
         use sub = Observer.create deferred
         sub.WaitCompleted()
-        sub.Received |> single |> equals (upcast expectedDeferred)
+        sub.Received |> single |> equals expectedDeferred
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
 
@@ -302,7 +302,7 @@ let ``Streamed queries : Should pass when below threshold``() =
     let result = execute query
     ensureDeferred result <| fun data errors deferred ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
         use sub = Observer.create deferred
         sub.WaitCompleted(2)
         sub.Received
@@ -369,7 +369,7 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
     |> Seq.iter (fun result ->
         ensureDirect result <| fun data errors ->
             errors |> equals expectedErrors
-            data.["data"] |> isNameValueDict |> empty
+            data |> isNameValueDict |> empty
         result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
         result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0))
 
@@ -410,7 +410,7 @@ let ``Inline fragment query : Should pass when below threshold``() =
     let result = execute query
     ensureDirect result <| fun data errors ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
 
@@ -460,7 +460,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
     let result = execute query
     ensureDirect result <| fun data errors ->
         errors |> equals expectedErrors
-        data.["data"] |> isNameValueDict |> empty
+        data |> isNameValueDict |> empty
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
 
@@ -507,7 +507,7 @@ let ``Object list filter: should return filter information in Metadata``() =
     let result = execute query
     ensureDirect result <| fun data errors ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
     result.Metadata.TryFind<(string * ObjectListFilter) list>("filters") |> equals (Some [ expectedFilter ])

@@ -7,13 +7,11 @@ open System.Collections.Generic
 open System.Linq
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Helpers
 open FSharp.Control.Reactive
-open FSharp.Control.Reactive.Observable
 open System.Text.Json
 open System.Collections.Immutable
 
@@ -234,7 +232,7 @@ type StreamOutput =
 
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
-let private resolverError path ctx e = ctx.Schema.ParseError e |> List.map (GQLProblemDetails.OfFieldError path)
+let private resolverError path ctx e = ctx.Schema.ParseError e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
 let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
 let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)
@@ -627,7 +625,8 @@ let internal compileSchema (ctx : SchemaCompileContext) =
 
 let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary<string, JsonElement>) =
     variables
-    |> List.fold (fun acc vardef -> acc.Add(vardef.Name, (coerceVariable vardef vars)); acc) (ImmutableDictionary.CreateBuilder<string, obj>())
+    |> List.fold (fun (acc : ImmutableDictionary<string, obj>.Builder) vardef -> acc.Add(vardef.Name, (coerceVariable vardef vars)); acc)
+                 (ImmutableDictionary.CreateBuilder<string, obj>())
     // TODO: Use FSharp.Collection.Immutable
     |> fun builder -> builder.ToImmutable()
 

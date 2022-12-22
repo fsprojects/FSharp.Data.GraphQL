@@ -2,6 +2,8 @@
 // Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.PropertyTrackerTests
 
+open System.Collections.Immutable
+
 #nowarn "40"
 
 open Xunit
@@ -92,7 +94,7 @@ let ``Property tracker can track indirect properties`` () =
         Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList
             [ Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, [])
               Tracker.Direct(track "LastName" typeof<Person> typeof<string>, []) ])
-    let actual = tracker Map.empty info
+    let actual = tracker ImmutableDictionary.Empty info
     actual |> equals expected
 
 [<Fact>]
@@ -118,5 +120,5 @@ let ``Property tracker can correctly jump over properties not being part of the 
             [ Tracker.Direct(track "Id" typeof<Person> typeof<int>, [])
               Compose(track "Friends" typeof<Person> typeof<Person list>, [], Set.ofList
                   [ Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, []) ]) ])
-    let actual = tracker Map.empty info
+    let actual = tracker ImmutableDictionary.Empty info
     actual |> equals expected

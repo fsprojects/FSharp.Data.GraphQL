@@ -21,7 +21,7 @@ let private execAndCompare query expected =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail ""
 
 [<Fact>]
