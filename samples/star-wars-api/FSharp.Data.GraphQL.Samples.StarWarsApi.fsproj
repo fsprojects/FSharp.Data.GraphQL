@@ -7,13 +7,14 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.SystemTextJson" />
     <PackageReference Include="Giraffe" />
-    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="JSON.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="WebSocketMessages.fs" />
     <Compile Include="JsonConverters.fs" />

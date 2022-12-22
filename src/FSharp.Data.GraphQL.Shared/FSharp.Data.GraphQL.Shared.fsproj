@@ -33,12 +33,16 @@
 
   <ItemGroup>
     <PackageReference Include="FParsec" />
+    <PackageReference Include="System.Collections.Immutable" />
+    <PackageReference Include="System.Text.Json" />
     <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="ObjAndStructConversions.fs" />
     <Compile Include="Diagnostics.fs" />
     <Compile Include="Extensions.fs" />
+    <Compile Include="Errors.fs" />
     <Compile Include="Prolog.fs" />
     <Compile Include="MemoryCache.fs" />
     <Compile Include="Ast.fs" />

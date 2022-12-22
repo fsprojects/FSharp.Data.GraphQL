@@ -6,7 +6,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 
 type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) =
-    let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+    let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
                 if f.ParentDef = upcast ctx.ExecutionPlan.RootDef
@@ -46,7 +46,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                          | ResolveLive info -> checkThreshold current (info :: xs)
             checkThreshold 0.0 fields
         let error (ctx : ExecutionContext) =
-            GQLResponse.ErrorAsync("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
+            GQLExecutionResult.ErrorAsync(ctx.ExecutionPlan.DocumentId, "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
         let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
         let ctx =
             match reportToMetadata with
@@ -77,7 +77,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             |> Seq.cast<NamedDef>
         ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
-    let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+    let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
             let fieldArgs field =
                 field.Ast.Arguments

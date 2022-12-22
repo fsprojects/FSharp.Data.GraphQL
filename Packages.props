@@ -1,7 +1,8 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
   <PropertyGroup>
-    <MicrosoftExtensionsVersion>6.0.*</MicrosoftExtensionsVersion>
+    <SystemVersion>7.0.*</SystemVersion>
+    <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>6.0.*</AspNetCoreVersion>
     <XUnitVersion>2.4.2</XUnitVersion>
   </PropertyGroup>
@@ -11,16 +12,21 @@
     <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)">
       <ExcludeAssets>contentFiles</ExcludeAssets>
     </PackageReference>
+    <PackageReference Include="FSharp.Control.FusionTasks" Version="2.6.*" />
+    <PackageReference Update="FSharp.Control.Reactive" Version="5.0.*" />
+    <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
-    <PackageReference Update="System.CodeDom" Version="6.*" />
+    <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="5.*" />
+    <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />
   </ItemGroup>
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.13.2" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.3.*" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.4.*" />
     <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.3.*" />
     <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.3.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
@@ -31,7 +37,7 @@
     <PackageReference Update="xunit.extensibility.execution" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.visualstudio" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="2.4.5" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="CommandLineParser" Version="2.9.*" />

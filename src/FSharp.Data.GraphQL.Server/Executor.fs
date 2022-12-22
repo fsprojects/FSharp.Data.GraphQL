@@ -6,6 +6,8 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
+open System.Collections.Immutable
+open System.Text.Json
 
 /// A function signature that represents a middleware for schema compile phase.
 /// I takes two arguments: A schema compile context, containing all the data used for the
@@ -30,7 +32,7 @@ type OperationPlanningMiddleware =
 /// execution phase, and another function that can be called to pass
 /// the execution for the next middleware.
 type OperationExecutionMiddleware =
-    ExecutionContext -> (ExecutionContext -> AsyncVal<GQLResponse>) -> AsyncVal<GQLResponse>
+    ExecutionContext -> (ExecutionContext -> AsyncVal<GQLExecutionResult>) -> AsyncVal<GQLExecutionResult>
 
 /// An interface to implement Executor middlewares.
 /// A middleware can have one to three sub-middlewares, one for each phase of the query execution.
@@ -91,19 +93,13 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         | Success -> ()
         | ValidationError errors -> raise (GraphQLException (System.String.Join("\n", errors)))
 
-    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj>): Async<GQLResponse> =
+    let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
+        let documentId = executionPlan.DocumentId
         let prepareOutput res =
-            let prepareData data (errs: Error list) =
-                let parsedErrors =
-                    errs
-                    |> List.map(fun (message, path) -> NameValueLookup.ofList [ "message", upcast message; "path", upcast path])
-                match parsedErrors with
-                | [] -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ] :> Output
-                | errors -> NameValueLookup.ofList [ "documentId", box executionPlan.DocumentId ; "data", upcast data ; "errors", upcast errors ] :> Output
             match res with
-            | Direct (data, errors) -> GQLResponse.Direct(prepareData data errors, errors, res.Metadata)
-            | Deferred (data, errors, deferred) -> GQLResponse.Deferred(prepareData data errors, errors, deferred, res.Metadata)
-            | Stream (stream) -> GQLResponse.Stream(stream, res.Metadata)
+            | Direct (data, errors) -> GQLExecutionResult.Direct (documentId, data, errors, res.Metadata)
+            | Deferred (data, errors, deferred) -> GQLExecutionResult.Deferred (documentId, data, errors, deferred, res.Metadata)
+            | Stream (stream) -> GQLExecutionResult.Stream (documentId, stream, res.Metadata)
         async {
             match executionPlan.ValidationResult with
             | Validation.Success ->
@@ -119,19 +115,19 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                           Errors = errors
                           FieldExecuteMap = fieldExecuteMap
                           Metadata = executionPlan.Metadata }
-                    let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation
+                    let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation |> AsyncVal.toAsync
                     return prepareOutput res
                 with
-                | ex -> return prepareOutput(GQLResponse.Error(ex.ToString(), executionPlan.Metadata))
+                | ex -> return prepareOutput(GQLExecutionResult.Error(documentId, ex.ToString(), executionPlan.Metadata))
             | Validation.ValidationError errors ->
                 let errors = errors |> List.map (fun err ->
-                    let path = err.Path |> Option.defaultValue [] |> List.map box
-                    err.Message, path)
-                return GQLResponse.Invalid(errors, executionPlan.Metadata)
+                    let path = err.Path |> Option.defaultValue []
+                    GQLProblemDetails.Create (err.Message, path))
+                return GQLExecutionResult.Invalid(documentId, errors, executionPlan.Metadata)
         }
 
-    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: Map<string, obj> option) =
-        let variables = defaultArg variables Map.empty
+    let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement> option) =
+        let variables = defaultArg variables ImmutableDictionary.Empty
         eval (executionPlan, data, variables)
 
     let createExecutionPlan (ast: Document, operationName: string option, meta : Metadata) =
@@ -178,7 +174,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="executionPlan">Execution plan for the operation.</param>
     /// <param name="data">Optional object provided as a root to all top level field resolvers</param>
     /// <param name="variables">Map of all variable values provided by the client request.</param>
-    member _.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: Map<string, obj>): Async<GQLResponse> =
+    member _.AsyncExecute(executionPlan: ExecutionPlan, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
         execute (executionPlan, data, variables)
 
     /// <summary>
@@ -192,7 +188,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(ast: Document, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
+    member _.AsyncExecute(ast: Document, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
         let meta = defaultArg meta Metadata.Empty
         let executionPlan = createExecutionPlan (ast, operationName, meta)
         execute (executionPlan, data, variables)
@@ -208,7 +204,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
     /// <param name="variables">Map of all variable values provided by the client request.</param>
     /// <param name="operationName">In case when document consists of many operations, this field describes which of them to execute.</param>
     /// <param name="meta">A plain dictionary of metadata that can be used through execution customizations.</param>
-    member _.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: Map<string, obj>, ?operationName: string, ?meta : Metadata): Async<GQLResponse> =
+    member _.AsyncExecute(queryOrMutation: string, ?data: 'Root, ?variables: ImmutableDictionary<string, JsonElement>, ?operationName: string, ?meta : Metadata): Async<GQLExecutionResult> =
         let meta = defaultArg meta Metadata.Empty
         let ast = parse queryOrMutation
         let executionPlan = createExecutionPlan (ast, operationName, meta)

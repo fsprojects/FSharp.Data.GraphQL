@@ -1,115 +1,97 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System.Collections.Immutable
 open System.IO
 open System.Text
+open System.Text.Json
+open System.Threading.Tasks
 open Giraffe
 open Microsoft.AspNetCore.Http
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
-open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
+type private GQLRequestContent =
+    { Query : string
+      // TODO: Add OperationName handling
+      OperationName : string voption
+      Variables : ImmutableDictionary<string, JsonElement> voption }
+
 module HttpHandlers =
 
-    let private converters : JsonConverter[] = [| OptionConverter () |]
-    let private jsonSettings = jsonSerializerSettings converters
+    let ofIResult ctx (res: IResult) : HttpFuncResult = task {
+            do! res.ExecuteAsync(ctx)
+            return Some ctx
+        }
 
-    let internalServerError : HttpHandler = setStatusCode 500
-
-    let okWithStr str : HttpHandler = setStatusCode 200 >=> text str
+    let ofTaskIResult ctx (taskRes: Task<IResult>) : HttpFuncResult = task {
+        let! res = taskRes
+        do! res.ExecuteAsync(ctx)
+        return Some ctx
+    }
 
     let setCorsHeaders : HttpHandler =
         setHttpHeader "Access-Control-Allow-Origin" "*"
         >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
 
-    let setContentTypeAsJson : HttpHandler = setHttpHeader "Content-Type" "application/json"
+    let private graphQL (next : HttpFunc) (ctx : HttpContext) =
+        task {
 
-    // TODO: Rewrite completely to async code
-    let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let serialize d = JsonConvert.SerializeObject (d, jsonSettings)
+            // TODO: validate the result
+            let toResponse documentId =
+                function
+                | Direct   (data, errs) ->
+                    { DocumentId = documentId
+                      Data = data
+                      Errors = errs }
+                | Deferred (data, errs, deferred) ->
+                    // TODO: Print to logger
+                    deferred |> Observable.add (fun d -> printfn "Deferred: %s" (JsonSerializer.Serialize(d, Json.serializerOptions)))
+                    { DocumentId = documentId
+                      Data = data
+                      Errors = errs }
+                | Stream data ->
+                    // TODO: Print to logger
+                    data |> Observable.add (fun d -> printfn "Subscription data: %s" (JsonSerializer.Serialize(d, Json.serializerOptions)))
+                    { DocumentId = documentId
+                      Data = null
+                      Errors = [] }
 
-        let deserialize (data : string) =
-            let getMap (token : JToken) =
-                let rec mapper (name : string) (token : JToken) =
-                    match name, token.Type with
-                    | "variables", JTokenType.Object -> token.Children<JProperty> () |> Seq.map (fun x -> x.Name, mapper x.Name x.Value) |> Map.ofSeq   |> box
-                    | name       , JTokenType.Array  -> token                        |> Seq.map (fun x -> mapper name x)                 |> Array.ofSeq |> box
-                    | _ -> (token :?> JValue).Value
+            let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace ("\r\n", " ")
 
-                token.Children<JProperty> ()
-                |> Seq.map (fun x -> x.Name, mapper x.Name x.Value)
-                |> Map.ofSeq
+            if ctx.Request.Body.Length = 0
+            then
+                let! result = Schema.executor.AsyncExecute (Introspection.IntrospectionQuery)
+                printfn "Result metadata: %A" result.Metadata
+                let response = toResponse result.DocumentId result.Content
+                return Results.Ok response
+            else
 
-            if System.String.IsNullOrWhiteSpace (data)
-            then None
-            else data |> JToken.Parse |> getMap |> Some
+            let! request = ctx.BindJsonAsync<GQLRequestContent>()
+            let query = request.Query
 
-        let json =
-            function
-            | Direct   (data, _) ->
-                JsonConvert.SerializeObject (data, jsonSettings)
-            | Deferred (data, _, deferred) ->
-                deferred |> Observable.add (fun d -> printfn "Deferred: %s" (serialize d))
-                JsonConvert.SerializeObject (data, jsonSettings)
-            | Stream data ->
-                data |> Observable.add (fun d -> printfn "Subscription data: %s" (serialize d))
-                "{}"
+            return!
+                match request.Variables with
+                | ValueSome variables -> task {
+                        printfn "Received query: %s" query
+                        printfn "Received variables: %A" variables
+                        let query = removeWhitespacesAndLineBreaks query
+                        let root = { RequestId = System.Guid.NewGuid().ToString () }
+                        let! result = Schema.executor.AsyncExecute (query, root, variables)
+                        printfn "Result metadata: %A" result.Metadata
+                        let response = toResponse result.DocumentId result.Content
+                        return Results.Ok response
+                    }
+                | ValueNone -> task {
+                        printfn "Received query: %s" query
+                        let query = removeWhitespacesAndLineBreaks query
+                        let! result = Schema.executor.AsyncExecute (query)
+                        printfn "Result metadata: %A" result.Metadata
+                        let response = toResponse result.DocumentId result.Content
+                        return Results.Ok response
+                    }
+        }
+        |> ofTaskIResult ctx
 
-        let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace ("\r\n", " ")
-
-        let readStream (s : Stream) =
-            use ms = new MemoryStream (4096)
-            s.CopyTo (ms)
-            ms.ToArray ()
-
-        let data = Encoding.UTF8.GetString (readStream ctx.Request.Body) |> deserialize
-
-        let query =
-            data
-            |> Option.bind (fun data ->
-                if data.ContainsKey ("query")
-                then
-                    match data.["query"] with
-                    | :? string as x -> Some x
-                    | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
-                else
-                    None)
-
-        let variables =
-            data
-            |> Option.bind (fun data ->
-                if data.ContainsKey ("variables")
-                then
-                    match data.["variables"] with
-                    | null -> None
-                    | :? string as x -> deserialize x
-                    | :? Map<string, obj> as x -> Some x
-                    | _ -> failwith "Failure deserializing response. Could not read variables - it is not a object in the request."
-                else
-                    None)
-
-        match query, variables with
-        | Some query, Some variables ->
-            printfn "Received query: %s" query
-            printfn "Received variables: %A" variables
-            let query = removeWhitespacesAndLineBreaks query
-            let root = { RequestId = System.Guid.NewGuid().ToString () }
-            let result = Schema.executor.AsyncExecute (query, root, variables) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-        | Some query, None ->
-            printfn "Received query: %s" query
-            let query = removeWhitespacesAndLineBreaks query
-            let result = Schema.executor.AsyncExecute (query) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-        | None, _ ->
-            let result = Schema.executor.AsyncExecute (Introspection.IntrospectionQuery) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-    }
-
-    let webApp : HttpHandler = setCorsHeaders >=> graphQL >=> setContentTypeAsJson
+    let webApp : HttpHandler = setCorsHeaders >=> graphQL

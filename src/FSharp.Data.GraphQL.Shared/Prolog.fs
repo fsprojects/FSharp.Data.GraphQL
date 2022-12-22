@@ -9,6 +9,8 @@ open System.Collections.Generic
 
 type GraphQLException(msg) =
     inherit Exception(msg)
+    interface IGQLError with
+        member _.Message = msg
 
 type MalformedQueryException(msg) =
     inherit GraphQLException(msg)

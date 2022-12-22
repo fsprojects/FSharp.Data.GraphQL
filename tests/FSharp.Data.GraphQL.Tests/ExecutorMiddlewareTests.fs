@@ -80,7 +80,7 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     { result with Metadata = metadata }
 
 // On the execution phase, we remove the evaluation of the c field
-let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =

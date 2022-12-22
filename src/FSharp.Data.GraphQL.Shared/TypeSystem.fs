@@ -7,6 +7,7 @@ open System.Reflection
 open System.Collections
 open System.Collections.Concurrent
 open System.Collections.Generic
+open System.Collections.Immutable
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
@@ -431,7 +432,7 @@ and ISchema =
         /// Returns a function called when errors occurred during query execution.
         /// It's used to retrieve messages shown as output to the client.
         /// May be also used to log messages before returning them.
-        abstract ParseError : exn -> string
+        abstract ParseError : exn -> IGQLError list
 
         /// Returns the subscription provider implementation for this schema.
         abstract SubscriptionProvider : ISubscriptionProvider
@@ -626,7 +627,7 @@ and PlanningContext =
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
-and Includer = Map<string, obj> -> bool
+and Includer = ImmutableDictionary<string, obj> -> bool
 
 /// A node representing part of the current GraphQL query execution plan.
 /// It contains info about both document AST fragment of incoming query as well,
@@ -852,7 +853,7 @@ and ExecutionContext =
       /// Execution plan describing, what fiedls are going to be resolved.
       ExecutionPlan : ExecutionPlan
       /// Collection of variables provided to execute current operation.
-      Variables : Map<string, obj>
+      Variables : ImmutableDictionary<string, obj>
       /// Collection of errors that occurred while executing current operation.
       Errors : ConcurrentBag<exn>
       /// A map of all fields of the query and their respective execution operations.
@@ -878,9 +879,9 @@ and ResolveFieldContext =
       /// parametrized inputs.
       Args : Map<string, obj>
       /// Variables provided by the operation caller.
-      Variables : Map<string, obj>
+      Variables : ImmutableDictionary<string, obj>
       /// Field path
-      Path : obj list }
+      Path : string list }
 
     /// Remembers an exception, so it can be included in the final response.
     member x.AddError(error : exn) = x.Context.Errors.Add error
@@ -1556,7 +1557,7 @@ and InputObjectDefinition<'Val> =
             upcast list
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = Value -> Map<string, obj> -> obj
+and ExecuteInput = Value -> ImmutableDictionary<string, obj> -> obj
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -2524,9 +2525,13 @@ module SchemaDefinitions =
 
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
 
-    let variableOrElse other value variables =
+    let variableOrElse other value (variables : ImmutableDictionary<string, obj>) =
         match value with
-        | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
+        // TODO: Use FSharp.Collection.Immutable
+        | Variable variableName ->
+            match variables.TryGetValue variableName with
+            | true, value -> value
+            | false, _ -> null
         | v -> other v
 
     /// GraphQL type of int

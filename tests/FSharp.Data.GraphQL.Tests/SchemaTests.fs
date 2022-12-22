@@ -42,7 +42,7 @@ let ``Schema config should be able to override default error handling`` () =
             ParseError = (fun e ->
                 let i = idx
                 idx <- idx + 1
-                i.ToString())}
+                [{ new IGQLError with member __.Message = i.ToString() }]) }
     let TestType =
         Define.Object<obj>("TestType",
             [ Define.Field("passing", String, fun _ _ -> "ok")
@@ -68,5 +68,8 @@ let ``Schema config should be able to override default error handling`` () =
     match actual with
     | Direct(data, errors) ->
       data.["data"] |> equals (upcast expected)
-      errors |> equals ["0", ["test"; "failing1"]; "1", ["test"; "failing2"]]
+      errors
+      |> equals
+        [ GQLProblemDetails.Create("0", ["test"; "failing1"])
+          GQLProblemDetails.Create("1", ["test"; "failing2"]) ]
     | _ -> fail "Expected Direct GQResponse"

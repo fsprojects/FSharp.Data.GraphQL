@@ -9,6 +9,7 @@ open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
 open System.Threading
+open FSharp.Data.GraphQL
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
@@ -36,8 +37,8 @@ let single (xs : 'a seq) =
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
-let hasError (errMsg : string) (errors: Error seq) =
-    let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
+let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
+    let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 let (<??) opt other =
     match opt with
@@ -58,13 +59,13 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
-let ensureDeferred (result : GQLResponse) (onDeferred : Output -> Error list -> IObservable<Output> -> unit) : unit =
-    match result with
+let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
+    match result.Content with
     | Deferred(data, errors, deferred) -> onDeferred data errors deferred
     | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
 
-let ensureDirect (result : GQLResponse) (onDirect : Output -> Error list -> unit) : unit =
-    match result with
+let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
+    match result.Content with
     | Direct(data, errors) -> onDirect data errors
     | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
 

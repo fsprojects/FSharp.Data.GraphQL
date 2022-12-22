@@ -2,8 +2,8 @@
   <Sdk Name="Microsoft.Build.CentralPackageVersions" Version="2.1.3" />
 
   <PropertyGroup>
-    <LangVersion>6.0</LangVersion>
-    <FSharpCoreVersion>6.0.*</FSharpCoreVersion>
+    <LangVersion>7.0</LangVersion>
+    <FSharpCoreVersion>7.0.*</FSharpCoreVersion>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <NoWarn>$(NoWarn);NU1504;NU1701</NoWarn>
     <TreatWarningsAsErrors Condition="'$(Configuration)' != 'Debug'">true</TreatWarningsAsErrors>

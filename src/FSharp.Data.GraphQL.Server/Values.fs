@@ -5,8 +5,10 @@
 module internal FSharp.Data.GraphQL.Values
 
 open System
-open System.Reflection
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.Reflection
+open System.Text.Json
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -75,9 +77,9 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                 let instance = ctor.Invoke (args)
                 instance
             | Variable variableName ->
-                match Map.tryFind variableName variables with
-                | Some found -> found
-                | None -> null
+                match variables.TryGetValue variableName with
+                | true, found -> found
+                | false, _ -> null
             | _ -> null
     | List (Input innerdef) ->
         let isArray = inputDef.Type.IsArray
@@ -125,9 +127,9 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
         fun value variables ->
             match value with
             | Variable variableName ->
-                match variables.TryFind variableName with
-                | Some var -> var
-                | None -> failwithf "Variable '%s' not supplied.\nVariables: %A" variableName variables
+                match variables.TryGetValue variableName with
+                | true, var -> var
+                | false, _ -> failwithf "Variable '%s' not supplied.\nVariables: %A" variableName variables
             | _ ->
                 let coerced = coerceEnumInput value
 
@@ -231,11 +233,12 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) e
         upcast mapped
     | _ -> input
 
-let internal coerceVariable (vardef : VarDef) (inputs) =
+let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
     let vname = vardef.Name
 
-    match Map.tryFind vname inputs with
-    | None ->
+    // TODO: Use FSharp.Collection.Immutable
+    match inputs.TryGetValue vname with
+    | false, _ ->
         match vardef.DefaultValue with
         | Some defaultValue ->
             let errMsg = (sprintf "Variable '%s': " vname)
@@ -247,4 +250,5 @@ let internal coerceVariable (vardef : VarDef) (inputs) =
             | _ ->
                 raise
                 <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
-    | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
+    | true, input ->
+        coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)

@@ -3,13 +3,14 @@
 
 namespace FSharp.Data.GraphQL
 
-open System.Collections.Generic
-open System.Reactive.Linq
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
+open FSharp.Control.Reactive
+open System.Collections.Generic
+open System.Reactive.Linq
 open System.Reactive.Subjects
 
 type private Channel = ISubject<obj>
@@ -56,7 +57,7 @@ type SchemaConfig =
       /// Function called when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseError : exn -> string
+      ParseError : exn -> IGQLError list
       /// Provider for the back-end of the subscription system.
       SubscriptionProvider : ISubscriptionProvider
       /// Provider for the back-end of the live query subscription system.
@@ -74,7 +75,7 @@ type SchemaConfig =
                 match subscriptionManager.TryGet(subdef.Name) with
                 | Some (sub, channels) ->
                     channels.AddNew(tags)
-                    |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
+                    |> Observable.flatmapAsync (fun o -> sub.Filter ctx root o)
                     |> Observable.choose id
                 | None -> Observable.Empty()
 
@@ -123,7 +124,10 @@ type SchemaConfig =
     static member Default =
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
-          ParseError = fun e -> e.Message
+          ParseError =
+            function
+            | :? GraphQLException as ex -> [ex]
+            | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
     /// <summary>
