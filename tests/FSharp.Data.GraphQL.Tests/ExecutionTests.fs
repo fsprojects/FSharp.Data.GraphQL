@@ -373,11 +373,12 @@ let ``Execution when querying returns unique document id with response`` () =
                 ]))
     let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    result1.DocumentId |> notEquals Unchecked.defaultof<int>
+    result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
     | Direct(data1, errors1), Direct(data2, errors2) ->
-      data1.["documentId"] |> notEquals (null)
-      data1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
-      data1.["documentId"] |> equals (data2.["documentId"])
+        equals data1 data2
+        equals errors1 errors2
     | _ -> fail "Expected Direct GQResponse"
 
 type InnerNullableTest = { Kaboom : string }
@@ -399,19 +400,13 @@ let ``Execution handles errors: properly propagates errors`` () =
         NameValueLookup.ofList [
             "inner", null
         ]
-    let expectedErrors =
-        [
-            NameValueLookup.ofList [
-                "message", upcast "Non-Null field kaboom resolved as a null!"
-                "path", upcast [ "inner"; "kaboom" ]
-            ]
-        ]
+    let expectedErrors = [ GQLProblemDetails.Create ("Non-Null field kaboom resolved as a null!", [ "inner"; "kaboom" ]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
     match result with
     | Direct(data, errors) ->
-        data.["documentId"] |> notEquals null
-        // data |> equals (upcast expectedData)
-        data.["errors"] |> equals (upcast expectedErrors)
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -421,17 +416,11 @@ let ``Execution handles errors: exceptions`` () =
                  "Type", [
                      Define.Field("a", String, fun _ _ -> failwith "Resolver Error!")
                  ]))
-    let expectedErrors =
-        [ NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast ["a"]
-            ]
-        ]
+    let expectedErrors = [ GQLProblemDetails.Create ("Resolver Error!", ["a"]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
     ensureDirect result <| fun data errors ->
-        // data |> equals null
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
+        data |> equals null
+        errors |> equals expectedErrors
 
 
 [<Fact>]
@@ -452,18 +441,11 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let expectedErrors =
         [
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 0; upcast "error"]
-            ]
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 1; upcast "error"]
-            ]
+            GQLProblemDetails.Create ("Resolver Error!", [ "list"; "0"; "error" ])
+            GQLProblemDetails.Create ("Resolver Error!", [ "list"; "1"; "error" ])
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->
-        data.["documentId"] |> notEquals null
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
+        errors |> equals expectedErrors

@@ -250,16 +250,17 @@ let buildDeferredResult (data : obj) (errs : GQLProblemDetails list) (path : obj
     | _ -> upcast NameValueLookup.ofList [ "data", data; "errors", upcast errs; "path", upcast formattedPath ]
 
 let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
+    let formattedPath = path |> List.rev
     match res with
     | Ok (data, deferred, errs) ->
         let deferredData =
             match errs with
-            | [] -> DeferredResult (data, path)
-            | _ -> DeferredErrors (data, errs, path)
+            | [] -> DeferredResult (data, formattedPath)
+            | _ -> DeferredErrors (data, errs, formattedPath)
             |> Observable.singleton
-        let deferred = deferred |> Option.map (Observable.map (fun o -> DeferredResult(o, path)))
+        let deferred = deferred |> Option.map (Observable.map (fun o -> DeferredResult(o, formattedPath)))
         Option.fold Observable.concat deferredData deferred
-    | Error errs -> Observable.singleton <| DeferredErrors (null, errs, path)
+    | Error errs -> Observable.singleton <| DeferredErrors (null, errs, formattedPath)
 
 /// Collect together an array of results using the appropriate execution strategy.
 let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {

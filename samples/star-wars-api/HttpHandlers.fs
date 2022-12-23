@@ -60,6 +60,8 @@ module HttpHandlers =
 
             let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace ("\r\n", " ")
 
+            // TODO: Figure out how to check if body is empty
+            // TODO: Return introspection on GET
             if ctx.Request.Body.Length = 0
             then
                 let! result = Schema.executor.AsyncExecute (Introspection.IntrospectionQuery)

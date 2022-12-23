@@ -1,5 +1,5 @@
 [<CompilationRepresentation (CompilationRepresentationFlags.ModuleSuffix)>]
-module public FSharp.Data.GraphQL.Samples.StarWarsApi.Json
+module public FSharp.Data.GraphQL.Json
 
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -10,6 +10,7 @@ let [<Literal>] UnionTag = "kind"
 let configureSerializerOptions (additionalConverters: JsonConverter seq) (options : JsonSerializerOptions) =
     options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
     options.PropertyNameCaseInsensitive <- true
+    //options.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
     let converters = options.Converters
     converters.Add (JsonStringEnumConverter ())
     additionalConverters |> Seq.iter converters.Add

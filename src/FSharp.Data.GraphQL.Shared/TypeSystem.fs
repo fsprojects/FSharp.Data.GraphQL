@@ -286,9 +286,9 @@ module Introspection =
           SubscriptionType : IntrospectionTypeRef option
           /// Array of all introspection types defined within current schema.
           /// Includes types for queries, mutations and subscriptions.
-          Types : IntrospectionType []
+          Types : IntrospectionType array
           /// Array of all directives supported by current schema.
-          Directives : IntrospectionDirective [] }
+          Directives : IntrospectionDirective array }
 
 /// Represents a subscription as described in the schema.
 type Subscription = {

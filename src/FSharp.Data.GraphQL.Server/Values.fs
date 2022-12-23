@@ -4,15 +4,13 @@
 [<AutoOpen>]
 module internal FSharp.Data.GraphQL.Values
 
-open System
 open System.Collections.Generic
 open System.Collections.Immutable
-open System.Reflection
 open System.Text.Json
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open Microsoft.FSharp.Reflection
+open System
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -78,7 +76,20 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                 instance
             | Variable variableName ->
                 match variables.TryGetValue variableName with
-                | true, found -> found
+                | true, found ->
+                    // TODO: Figure out how does this happen
+                    if found.GetType() = typeof<option<_>>.GetGenericTypeDefinition().MakeGenericType(objdef.Type) then found
+                    else
+                    let variables = found :?> ImmutableDictionary<string, obj>
+                    let args =
+                        mapper
+                        |> Array.map (fun field ->
+                            match variables.TryGetValue field.Name with
+                            | true, value -> value
+                            | false, _ -> null)
+
+                    let instance = ctor.Invoke (args)
+                    instance
                 | false, _ -> null
             | _ -> null
     | List (Input innerdef) ->
@@ -153,6 +164,8 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
                 <| $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'None'."
             )
         | Some res -> res
+    | Nullable (InputObject innerdef) ->
+        coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
     | Nullable (Input innerdef) ->
         let some, none, innerValue = ReflectionHelper.optionOfType innerdef.Type
         let coerced = coerceVariableValue true innerdef vardef input errMsg
@@ -195,7 +208,16 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | _ when input.ValueKind = JsonValueKind.Null ->
             raise
             <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
-        | _ -> input.Deserialize(enumdef.Type) // TODO: Add JsonSerializerOptions with FSharp.SystemtextJson
+        | _ when input.ValueKind = JsonValueKind.String ->
+            let value = input.GetString()
+            match enumdef.Options |> Array.tryFind (fun o -> o.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) with
+            | Some option -> option.Value
+            | None ->
+                raise
+                <| GraphQLException $"%s{errMsg}Value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
+        | _ ->
+            raise
+            <| GraphQLException $"%s{errMsg}Enum values must be strings but got '%O{input.ValueKind}'."
     | _ ->
         raise
         <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
@@ -217,7 +239,8 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonEl
 
         upcast mapped
     else
-        input
+        raise
+        <| GraphQLException ($"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'.")
 
 let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
     let vname = vardef.Name

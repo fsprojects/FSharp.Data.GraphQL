@@ -3,6 +3,8 @@
 
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
+open System.Text.Json
+
 #nowarn "25"
 
 open Xunit
@@ -280,10 +282,11 @@ let ``Introspection schema should be serializable back and forth using json`` ()
     match result with
     | Direct (data, errors) ->
         empty errors
-        let json = toJson data
-        let deserialized : IntrospectionData = Helpers.fromJson json
+        // TODO: https://github.com/Tarmil/FSharp.SystemTextJson/issues/140
+        let json = JsonSerializer.Serialize(data, Json.serializerOptions)
+        let deserialized = JsonSerializer.Deserialize<IntrospectionResult>(json, Json.serializerOptions)
         let expected = (schema :> ISchema).Introspected
-        deserialized.Data.__schema |> equals expected
+        deserialized.__schema |> equals expected
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
