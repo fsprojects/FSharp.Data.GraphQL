@@ -7,7 +7,8 @@ open Giraffe
 open Microsoft.Extensions.Logging
 open System
 open Microsoft.AspNetCore.Server.Kestrel.Core
-open System.Threading
+open GraphQL.Server.Ui.Playground
+open Microsoft.Extensions.Hosting
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -20,7 +21,7 @@ type Startup private () =
                 .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
         |> ignore
 
-    member _.Configure(app: IApplicationBuilder) =
+    member _.Configure(app: IApplicationBuilder, env: IHostEnvironment) =
         let errorHandler (ex : Exception) (log : ILogger) =
             log.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
             clearResponse >=> setStatusCode 500
@@ -29,5 +30,10 @@ type Startup private () =
             .UseWebSockets()
             //.UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, fun () -> { RequestId = Guid.NewGuid().ToString() })
             .UseGiraffe HttpHandlers.webApp
+
+        if env.IsDevelopment() then
+            app.UseGraphQLPlayground("/") |> ignore
+            app.UseGraphQLVoyager("/LaunchUrl") |> ignore
+            
 
     member val Configuration : IConfiguration = null with get, set
