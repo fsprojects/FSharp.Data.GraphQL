@@ -150,13 +150,13 @@ module SocketManager =
         handleMessages executor root cancellationToken socket
 
 type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, executor : Executor<'Root>, root : unit -> 'Root) =
-    member _.Invoke(ctx : HttpContext, cancellationToken) =
+    member _.Invoke(ctx : HttpContext) =
         task {
             match ctx.WebSockets.IsWebSocketRequest with
             | true ->
                 let! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-ws") |> Async.AwaitTask
                 use socket = new GraphQLWebSocket(socket)
-                do! SocketManager.startSocket socket executor root cancellationToken
+                do! SocketManager.startSocket socket executor root ctx.RequestAborted
             | false ->
                 next.Invoke(ctx) |> ignore
         }
