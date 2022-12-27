@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Server.Kestrel.Core
@@ -8,7 +9,6 @@ open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Giraffe
-open System
 
 type Startup private () =
     new (configuration: IConfiguration) as this =

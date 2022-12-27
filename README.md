@@ -6,6 +6,16 @@ F# implementation of Facebook [GraphQL query language specification](https://fac
 
 [![Join the chat at https://gitter.im/FSharp-Data-GraphQL/community](https://badges.gitter.im/FSharp-Data-GraphQL/community.svg)](https://gitter.im/FSharp-Data-GraphQL/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
+## Installing project templates
+
+Type the following commands to install the template for creating web applications:
+
+From GitHub:
+`dotnet new -i "FSharp.Data.GraphQL::2.0.0-ci-*" --nuget-source "https://nuget.pkg.github.com/fsprojects/index.json"`
+
+From NuGet:
+`dotnet new -i "FSharp.Data.GraphQL::2.0.0"`
+
 ## Quick start
 
 ```fsharp

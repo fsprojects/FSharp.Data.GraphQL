@@ -1,0 +1,135 @@
+{
+  "$schema": "http://json.schemastore.org/template",
+  "author": "John Bazinga, Andrii Chebukin, Jurii Chebukin, Ismael Carlos Velten, njlr",
+  "classifications": [ "FSharp", "GraphQL", "Relay", "React", "Middleware" ],
+  "name": "F# Giraffe GraphQL",
+  "description": "F# GraphQL API project",
+  "identity": "FSharp.Giraffe.GraphQL",
+  "shortName": "fsharp.gir.graphql",
+  "defaultName": "StarWarsApi",
+  "tags": {
+    "language": "F#",
+    "type": "project"
+  },
+  "sourceName": "FSharp.Data.GraphQL.Samples.StarWarsApi",
+  "preferNameDirectory": true,
+  "symbols": {
+    "Framework": {
+      "type": "parameter",
+      "description": "The target framework for the project.",
+      "datatype": "choice",
+      "choices": [
+        {
+          "choice": "net6.0",
+          "description": "Target net6.0"
+        }
+      ],
+      "replaces": "net6.0",
+      "defaultValue": "net6.0"
+    }
+  },
+  "HttpPort": {
+    "type": "parameter",
+    "datatype": "integer",
+    "defaultValue": "8086",
+    "displayName": "HTTP Port",
+    "description": "Port number to use for the Kestrel HTTP endpoint in launchSettings.json."
+  },
+  "HttpPortConstant": {
+    "type": "generated",
+    "generator": "constant",
+    "parameters": {
+      "value": "8086"
+    }
+  },
+  "HttpPortReplacer": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": {
+      "sourceVariableName": "HttpPort",
+      "fallbackVariableName": "HttpPortConstant"
+    },
+    "replaces": "8086"
+  },
+  "HttpsPort": {
+    "type": "parameter",
+    "datatype": "integer",
+    "defaultValue": "8087",
+    "displayName": "HTTPS Port",
+    "description": "Port number to use for the Kestrel HTTPS endpoint in launchSettings.json."
+  },
+  "HttpsPortConstant": {
+    "type": "generated",
+    "generator": "constant",
+    "parameters": {
+      "value": "8087"
+    }
+  },
+  "HttpsPortReplacer": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": {
+      "sourceVariableName": "HttpsPort",
+      "fallbackVariableName": "HttpsPortConstant"
+    },
+    "replaces": "8087"
+  },
+  "IISExpressHttpPort": {
+    "type": "parameter",
+    "datatype": "integer",
+    "defaultValue": "44299",
+    "displayName": "IIS Express HTTP Port",
+    "description": "Port number to use for the IIS Express HTTP endpoint in launchSettings.json."
+  },
+  "IISExpressHttpPortConstant": {
+    "type": "generated",
+    "generator": "constant",
+    "parameters": {
+      "value": "44299"
+    }
+  },
+  "IISExpressHttpPortReplacer": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": {
+      "sourceVariableName": "IISExpressHttpPort",
+      "fallbackVariableName": "IISExpressHttpPortConstant"
+    },
+    "replaces": "44299"
+  },
+  "IISExpressHttpsPort": {
+    "type": "parameter",
+    "datatype": "integer",
+    "defaultValue": "44300",
+    "displayName": "IIS Express HTTPS Port",
+    "description": "Port number to use for the IIS Express HTTPS endpoint in launchSettings.json (Must be between 44300 and 44399)."
+  },
+  "IISExpressHttpsPortConstant": {
+    "type": "generated",
+    "generator": "constant",
+    "parameters": {
+      "value": "44300"
+    }
+  },
+  "IISExpressHttpsPortReplacer": {
+    "type": "generated",
+    "generator": "coalesce",
+    "parameters": {
+      "sourceVariableName": "IISExpressHttpsPort",
+      "fallbackVariableName": "IISExpressHttpsPortConstant"
+    },
+    "replaces": "44300"
+  },
+  "postActions": [
+    {
+      "description": "Restore NuGet packages required by this project.",
+      "manualInstructions": [
+        {
+          "text": "Run 'dotnet restore'"
+        }
+      ],
+      "actionId": "210D431B-A78B-4D2F-B762-4ED3E3EA9025",
+      "continueOnError": true
+    }
+  ]
+}
