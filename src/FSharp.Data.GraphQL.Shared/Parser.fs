@@ -176,7 +176,7 @@ module internal Internal =
   // 2.9 Value
   //   Variable|IntValue|FloatValue|StringValue|
   //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
-  inputValueRef :=
+  inputValueRef.Value <-
     choice [ variable |>> Variable <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
@@ -222,7 +222,7 @@ module internal Internal =
   let nonNullType =
     (listType <|> namedType) .>> pchar '!'
     |>> NonNullType <?> "NonNullType"
-  inputTypeRef :=
+  inputTypeRef.Value <-
     choice [ attempt nonNullType
              namedType
              listType ]
@@ -264,10 +264,10 @@ module internal Internal =
 
     pstring "..." .>> whitespaces >>. (inlineFragment <|> fragmentSpread)  <?> "Fragment"
 
-  selectionRef :=
+  selectionRef.Value <-
     field <|> selectionFragment  <?> "Selection"
 
-  selectionSetRef :=
+  selectionSetRef.Value <-
     betweenCharsMany1 '{' '}' selection <?> "SelectionSet"
 
 

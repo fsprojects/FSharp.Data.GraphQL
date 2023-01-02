@@ -246,10 +246,10 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                     | Planned -> fields @ [ executionPlan ]
             | FragmentSpread spread ->
                 let spreadName = spread.Name
-                if !visitedFragments |> List.exists (fun name -> name = spreadName)
+                if visitedFragments.Value |> List.exists (fun name -> name = spreadName)
                 then fields // Fragment already found
                 else
-                    visitedFragments := spreadName::!visitedFragments
+                    visitedFragments.Value <- spreadName::visitedFragments.Value
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // Retrieve fragment data just as it was normal selection set
@@ -288,10 +288,10 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 | Planned -> Map.merge (fun _ -> deepMerge) fields infoMap
             | FragmentSpread spread ->
                 let spreadName = spread.Name
-                if !visitedFragments |> List.exists (fun name -> name = spreadName)
+                if visitedFragments.Value |> List.exists (fun name -> name = spreadName)
                 then fields // Fragment already found
                 else
-                    visitedFragments := spreadName::!visitedFragments
+                    visitedFragments.Value <- spreadName::visitedFragments.Value
                     match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // Retrieve fragment data just as it was normal selection set

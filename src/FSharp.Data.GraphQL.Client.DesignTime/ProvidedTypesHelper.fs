@@ -631,14 +631,14 @@ module internal Provider =
                 |> makeOption
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         and resolveProvidedType (itype : IntrospectionType) : ProvidedTypeDefinition =
-            if (!providedTypes).ContainsKey(itype.Name)
-            then (!providedTypes).[itype.Name]
+            if providedTypes.Value.ContainsKey(itype.Name)
+            then providedTypes.Value.[itype.Name]
             else
                 let metadata = { Name = itype.Name; Description = itype.Description }
                 match itype.Kind with
                 | TypeKind.OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
-                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
+                    providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     let properties =
                         itype.Fields
                         |> Option.defaultValue [||]
@@ -647,7 +647,7 @@ module internal Provider =
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INPUT_OBJECT ->
                     let tdef = ProvidedRecord.preBuildProvidedType(metadata, None)
-                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
+                    providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     let properties =
                         itype.InputFields
                         |> Option.defaultValue [||]
@@ -656,7 +656,7 @@ module internal Provider =
                     upcast ProvidedRecord.makeProvidedType(tdef, properties, explicitOptionalParameters)
                 | TypeKind.INTERFACE | TypeKind.UNION ->
                     let bdef = ProvidedInterface.makeProvidedType(metadata)
-                    providedTypes := (!providedTypes).Add(itype.Name, bdef)
+                    providedTypes.Value <- providedTypes.Value.Add(itype.Name, bdef)
                     bdef
                 | TypeKind.ENUM ->
                     let items =
@@ -664,7 +664,7 @@ module internal Provider =
                         | Some values -> values |> Array.map (fun value -> value.Name)
                         | None -> [||]
                     let tdef = ProvidedEnum.makeProvidedType(itype.Name, items)
-                    providedTypes := (!providedTypes).Add(itype.Name, tdef)
+                    providedTypes.Value <- providedTypes.Value.Add(itype.Name, tdef)
                     tdef
                 | _ -> failwithf "Type \"%s\" is not a Record, Union, Enum, Input Object, or Interface type." itype.Name
         let ignoredKinds = [TypeKind.SCALAR; TypeKind.LIST; TypeKind.NON_NULL]
@@ -674,7 +674,7 @@ module internal Provider =
             | Some trefs -> trefs |> Array.map (getSchemaType >> resolveProvidedType)
             | None -> [||]
         let getProvidedType typeName =
-            match (!providedTypes).TryFind(typeName) with
+            match providedTypes.Value.TryFind(typeName) with
             | Some ptype -> ptype
             | None -> failwithf "Expected to find a type \"%s\" on the schema type map, but it was not found." typeName
         schemaTypes
@@ -683,7 +683,7 @@ module internal Provider =
                 let itype = getProvidedType kvp.Value.Name
                 let ptypes = possibleTypes kvp.Value
                 ptypes |> Array.iter (fun ptype -> ptype.AddInterfaceImplementation(itype)))
-        !providedTypes
+        providedTypes.Value
 
     let makeProvidedType(asm : Assembly, ns : string, resolutionFolder : string) =
         let generator = ProvidedTypeDefinition(asm, ns, "GraphQLProvider", None)
