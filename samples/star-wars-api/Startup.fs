@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
@@ -26,8 +27,10 @@ type Startup private () =
             clearResponse >=> setStatusCode 500
 
         if env.IsDevelopment() then
-            app.UseGraphQLPlayground("/") |> ignore
-            app.UseGraphQLVoyager("/LaunchUrl") |> ignore
+            app.UseGraphQLPlayground("/playground") |> ignore
+            app.UseGraphQLVoyager("/voyager") |> ignore
+            app.UseRouting() |> ignore
+            app.UseEndpoints(fun endpoints -> endpoints.MapBananaCakePop(PathString("/cakePop")) |> ignore) |> ignore
 
         app
             .UseGiraffeErrorHandler(errorHandler)

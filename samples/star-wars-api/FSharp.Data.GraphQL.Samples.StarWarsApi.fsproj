@@ -11,6 +11,7 @@
     <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="GraphQL.Server.Ui.Playground" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
+    <PackageReference Include="HotChocolate.AspNetCore" />
   </ItemGroup>
 
   <ItemGroup>
