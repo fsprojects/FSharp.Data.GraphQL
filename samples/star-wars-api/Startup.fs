@@ -1,12 +1,13 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
-open Giraffe
+open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Giraffe
 open System
-open Microsoft.AspNetCore.Server.Kestrel.Core
 
 type Startup private () =
     new (configuration: IConfiguration) as this =
@@ -19,10 +20,15 @@ type Startup private () =
                 .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
         |> ignore
 
-    member _.Configure(app: IApplicationBuilder) =
+    member _.Configure(app: IApplicationBuilder, env: IHostEnvironment) =
         let errorHandler (ex : Exception) (log : ILogger) =
             log.LogError(EventId(), ex, "An unhandled exception has occurred while executing the request.")
             clearResponse >=> setStatusCode 500
+
+        if env.IsDevelopment() then
+            app.UseGraphQLPlayground("/") |> ignore
+            app.UseGraphQLVoyager("/LaunchUrl") |> ignore
+
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()

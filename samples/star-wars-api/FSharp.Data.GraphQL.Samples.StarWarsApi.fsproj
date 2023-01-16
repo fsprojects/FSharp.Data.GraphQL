@@ -9,6 +9,8 @@
   <ItemGroup>
     <PackageReference Include="Giraffe" />
     <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="GraphQL.Server.Ui.Playground" />
+    <PackageReference Include="GraphQL.Server.Ui.Voyager" />
   </ItemGroup>
 
   <ItemGroup>

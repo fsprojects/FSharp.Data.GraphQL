@@ -38,6 +38,8 @@
     <PackageReference Update="EntityFramework" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
     <PackageReference Update="Giraffe" Version="6.*" />
+    <PackageReference Update="GraphQL.Server.Ui.Playground" Version="7.1.*"  />
+    <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="7.1.*"  />
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
