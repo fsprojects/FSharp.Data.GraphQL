@@ -39,8 +39,6 @@
     <Compile Include="Schema.fs" />
     <Compile Include="Linq.fs" />
     <Compile Include="DefineExtensions.fs" />
-    <Compile Include="Relay/Node.fs" />
-    <Compile Include="Relay/Connections.fs" />
   </ItemGroup>
 
   <ItemGroup>

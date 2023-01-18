@@ -153,6 +153,39 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{313AC7
 		.github\workflows\pull_request.yml = .github\workflows\pull_request.yml
 	EndProjectSection
 EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Relay", "src\FSharp.Data.GraphQL.Relay\FSharp.Data.GraphQL.Relay.fsproj", "{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "relay-modern-starter-kit", "relay-modern-starter-kit", "{600D4BE2-FCE0-4684-AC6F-2DC829B395BA}"
+	ProjectSection(SolutionItems) = preProject
+		.babelrc = .babelrc
+		index.html = index.html
+		package.json = package.json
+		server.fsx = server.fsx
+		webpack.config.js = webpack.config.js
+		yarn.lock = yarn.lock
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "data", "data", "{E9DACEDD-1166-4142-9726-33CCA56218BA}"
+	ProjectSection(SolutionItems) = preProject
+		schema.json = schema.json
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{A8F031E0-2BD5-4BAE-830A-60CBA76A047D}"
+	ProjectSection(SolutionItems) = preProject
+		app.jsx = app.jsx
+		relayEnvironment.js = relayEnvironment.js
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "scripts", "scripts", "{6EEA0E79-693F-4D4F-B55B-DB0C64EBDA45}"
+	ProjectSection(SolutionItems) = preProject
+		jsonToGraphql.js = jsonToGraphql.js
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "components", "components", "{7AA3516E-60F5-4969-878F-4E3DCF3E63A3}"
+	ProjectSection(SolutionItems) = preProject
+		user.jsx = user.jsx
+	EndProjectSection
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -259,6 +292,18 @@ Global
 		{B837B3ED-83CE-446F-A4E5-44CB06AA6505}.Release|x64.Build.0 = Release|Any CPU
 		{B837B3ED-83CE-446F-A4E5-44CB06AA6505}.Release|x86.ActiveCfg = Release|Any CPU
 		{B837B3ED-83CE-446F-A4E5-44CB06AA6505}.Release|x86.Build.0 = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|x64.Build.0 = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Debug|x86.Build.0 = Debug|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|Any CPU.Build.0 = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|x64.ActiveCfg = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|x64.Build.0 = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|x86.ActiveCfg = Release|Any CPU
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -284,6 +329,12 @@ Global
 		{B837B3ED-83CE-446F-A4E5-44CB06AA6505} = {F66BEE6C-0CB7-4F39-97E4-243F797E8723}
 		{A47968E2-CDD1-4BCF-9093-D0C5225A815B} = {3D948D55-3CD2-496D-A04C-3B4E7BB69140}
 		{9D5C46E8-0C07-4384-8E58-903F7C2C7171} = {A47968E2-CDD1-4BCF-9093-D0C5225A815B}
+		{BC1614A7-D865-44FC-84DF-8F9BE5D44AFA} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
+		{600D4BE2-FCE0-4684-AC6F-2DC829B395BA} = {B0C25450-74BF-40C2-9E02-09AADBAE2C2F}
+		{E9DACEDD-1166-4142-9726-33CCA56218BA} = {600D4BE2-FCE0-4684-AC6F-2DC829B395BA}
+		{A8F031E0-2BD5-4BAE-830A-60CBA76A047D} = {600D4BE2-FCE0-4684-AC6F-2DC829B395BA}
+		{6EEA0E79-693F-4D4F-B55B-DB0C64EBDA45} = {600D4BE2-FCE0-4684-AC6F-2DC829B395BA}
+		{7AA3516E-60F5-4969-878F-4E3DCF3E63A3} = {A8F031E0-2BD5-4BAE-830A-60CBA76A047D}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
