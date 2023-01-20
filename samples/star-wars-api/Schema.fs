@@ -1,8 +1,9 @@
-﻿namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middleware
+open FSharp.Data.GraphQL.Relay
 
 #nowarn "40"
 
@@ -142,8 +143,31 @@ module Schema =
             [
                 Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
-                Define.Field("friends", ListOf (Nullable CharacterType), "The friends of the human, or an empty list if they have none.",
-                    fun _ (h : Human) -> h.Friends |> List.map getCharacter |> List.toSeq).WithQueryWeight(0.5)
+                Define.Field("friends",
+                    ConnectionOf String |> Nullable,
+                    "The friends of the human, or an empty list if they have none.",
+                    Connection.allArgs,
+                    fun ctx human -> 
+                        let totalCount = human.Friends.Length
+                        let friends, hasNextPage =
+                            match ctx with
+                            | SliceInfo(Forward(n, after)) ->
+                                match after with
+                                | Some (GlobalId("Friend", id)) ->
+                                    let i = human.Friends |> List.indexed |> List.pick (fun (i, e) -> if e = id then Some i else None)
+                                    human.Friends |> List.skip (i+1) |> List.take n,
+                                    i+1+n < totalCount
+                                | None ->
+                                    human.Friends |> List.take n,
+                                    n < totalCount
+                                | _ -> failwithf "Cursor %A is not 'Friend' global id" after
+                            | _ -> human.Friends, false
+                        let edges = friends |> Seq.map (fun b -> { Cursor = toGlobalId "Friend" (string b); Node = b }) |> Seq.toList
+                        let headCursor = edges |> List.tryHead |> Option.map (fun edge -> edge.Cursor)
+                        let pi = { HasNextPage = hasNextPage; EndCursor = headCursor; StartCursor = None; HasPreviousPage = false }
+                        let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
+                        Some con
+                    )
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
             ])

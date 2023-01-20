@@ -23,6 +23,9 @@
     <Compile Include="Program.fs" />
   </ItemGroup>
   <ItemGroup Label="ProjectReferences">
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Relay\FSharp.Data.GraphQL.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
