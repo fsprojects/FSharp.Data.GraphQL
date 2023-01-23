@@ -60,11 +60,11 @@ jobs:
       run: |
         dotnet nuget push nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
 
-    - name: Pack FSharp.Data.GraphQL.Relay.Server project
+    - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
-        cd src/FSharp.Data.GraphQL.Relay.Server
+        cd src/FSharp.Data.GraphQL.Server.Relay
         dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Relay.Server project to NuGet
+    - name: Publish FSharp.Data.GraphQL.Server.Relay project to NuGet
       run: |
         dotnet nuget push nuget/*Server.Relay*.nupkg -k ${{secrets.NUGET_SECRET}}
 

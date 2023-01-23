@@ -2,7 +2,7 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Relay
+open FSharp.Data.GraphQL.Server.Relay
 open FSharp.Data.GraphQL.Server.Middleware
 
 #nowarn "40"

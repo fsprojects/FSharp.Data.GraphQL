@@ -1,7 +1,7 @@
 // The MIT License (MIT)
 // Copyright (c) 2016 Bazinga Technologies Inc
 
-namespace FSharp.Data.GraphQL.Relay
+namespace FSharp.Data.GraphQL.Server.Relay
 
 open System
 open System.Reflection

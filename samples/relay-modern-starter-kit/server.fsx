@@ -30,7 +30,7 @@ let getWidget id = viewer.Widgets |> List.tryFind (fun w -> w.Id = id)
 // Schema definition
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Relay
+open FSharp.Data.GraphQL.Server.Relay
 
 let rec Widget = 
     Define.Object<Widget>(
