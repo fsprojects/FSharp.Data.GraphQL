@@ -36,26 +36,25 @@ export default createPaginationContainer(
     UserComponent,
     {
         viewer: graphql`
-      fragment user_viewer on User {
-        widgets(
-          first: $count
-          after: $cursor
-        ) @connection(key: "User_widgets") {
-          pageInfo {
-                hasNextPage
-                hasPreviousPage
-                startCursor
-                endCursor
-             }
-          edges {
-            node {
-              id,
-              name
-            }
-          }
+fragment user_viewer on User {
+  widgets(
+    first: $count
+    after: $cursor
+  ) @connection(key: "User_widgets") {
+    pageInfo {
+          hasNextPage
+          hasPreviousPage
+          startCursor
+          endCursor
         }
+    edges {
+      node {
+        id,
+        name
       }
-    `,
+    }
+  }
+}`,
     },
     {
         direction: 'forward',
@@ -75,15 +74,13 @@ export default createPaginationContainer(
             };
         },
         query: graphql`
-      query userPaginationQuery(
-        $count: Int!
-        $cursor: String
-      ) {
-        viewer {
-          # You could reference the fragment defined previously.
-          ...user_viewer
-        }
-      }
-    `
-    }
+query userPaginationQuery(
+  $count: Int!
+  $cursor: String
+) {
+  viewer {
+    # You could reference the fragment defined previously.
+    ...user_viewer
+  }
+}`}
 );

@@ -2,8 +2,8 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.Middleware
 open FSharp.Data.GraphQL.Relay
+open FSharp.Data.GraphQL.Server.Middleware
 
 #nowarn "40"
 
@@ -160,7 +160,7 @@ module Schema =
                                 | None ->
                                     human.Friends |> List.take n,
                                     n < totalCount
-                                | _ -> failwithf "Cursor %A is not 'Friend' global id" after
+                                | _ -> failwithf "Cursor %A is not a Friend's global id" after
                             | _ -> human.Friends, false
                         let edges = friends |> Seq.map (fun b -> { Cursor = toGlobalId "Friend" (string b); Node = b }) |> Seq.toList
                         let headCursor = edges |> List.tryHead |> Option.map (fun edge -> edge.Cursor)

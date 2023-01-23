@@ -13,12 +13,11 @@ ReactDOM.render(
     <QueryRenderer
         environment={environment}
         query={graphql`
-      query appQuery($count: Int!, $cursor: String) {
-        viewer {
-          ...user_viewer
-        }
-      }
-    `}
+query appQuery($count: Int!, $cursor: String) {
+    viewer {
+        ...user_viewer
+    }
+}`}
         variables={{ cursor: null, count: 1 }}
         render={({ error, props }) => {
             if (error) { console.log(error.source); return <div>{error.message}</div> }
