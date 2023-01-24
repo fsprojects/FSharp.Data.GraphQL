@@ -1,3 +1,6 @@
+open System.Net.Http
+
+
 #r "nuget: Fake.Api.GitHub"
 #r "nuget: Fake.Core.ReleaseNotes"
 #r "nuget: Fake.Core.Target"
@@ -72,7 +75,7 @@ Target.create "Build" <| fun _ ->
             Configuration = DotNet.BuildConfiguration.Release
             MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true } })
 
-let startGraphQLServer (project : string) (streamRef : DataRef<Stream>) =
+let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     DotNet.build
         (fun options ->
             { options with
@@ -90,7 +93,7 @@ let startGraphQLServer (project : string) (streamRef : DataRef<Stream>) =
         </> DotNetMoniker
         </> (projectName + ".dll")
 
-    CreateProcess.fromRawCommandLine "dotnet" $"{serverExe} --urls=http://localhost:8086/"
+    CreateProcess.fromRawCommandLine "dotnet" $"{serverExe} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
     |> Proc.start
     |> ignore
@@ -123,7 +126,7 @@ Target.create "StartStarWarsServer" <| fun _ ->
         </> "star-wars-api"
         </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
 
-    startGraphQLServer project starWarsServerStream
+    startGraphQLServer project 8086 starWarsServerStream
 
 Target.createFinal "StopStarWarsServer" <| fun _ ->
     try
@@ -141,13 +144,22 @@ Target.create "StartIntegrationServer" <| fun _ ->
         </> "FSharp.Data.GraphQL.IntegrationTests.Server"
         </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj"
 
-    startGraphQLServer project integrationServerStream
+    startGraphQLServer project 8085 integrationServerStream
 
 Target.createFinal "StopIntegrationServer" <| fun _ ->
     try
         integrationServerStream.Value.Write ([| 0uy |], 0, 1)
     with e ->
         printfn "%s" e.Message
+
+Target.create "UpdateIntrospectionFile" <| fun _ ->
+    let client = new HttpClient ()
+    let result = client.GetAsync("http://localhost:8086").Result
+    let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
+    result.Content.CopyTo(file, null, System.Threading.CancellationToken.None)
+    file.Close()
+    result.Dispose()
+    client.Dispose()
 
 Target.create "RunUnitTests" <| fun _ ->
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
@@ -249,6 +261,7 @@ Target.create "PackAll" ignore
     ==> "RunUnitTests"
     ==> "StartStarWarsServer"
     ==> "StartIntegrationServer"
+    ==> "UpdateIntrospectionFile"
     ==> "RunIntegrationTests"
     ==> "All"
     =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
