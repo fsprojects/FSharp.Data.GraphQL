@@ -15,16 +15,16 @@ jobs:
       with:
         # This is necessary so that we have the tags.
         fetch-depth: 0
+        
     - name: Set Build Version
       run: |
-        $Version = "$env:GITHUB_REF_NAME"
-
+        $version = "$env:GITHUB_REF_NAME"
         $File = (
           Select-Xml -XPath "/Project/PropertyGroup[@Label='NuGet']/Version" -Path "Directory.Build.targets"
         )[0].Node
-
-        $File.InnerText = $Version
+        $File.InnerText = $version
         $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.targets))
+        echo "VERSION=$version" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       shell: pwsh
 
     - name: Install .NET Core
@@ -42,8 +42,7 @@ jobs:
         dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared project to NuGet
       run: |
-        cd src/FSharp.Data.GraphQL.Shared
-        dotnet nuget push ../../nuget/*Shared*.nupkg -k ${{secrets.NUGET_SECRET}}
+        dotnet nuget push nuget/*Shared*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
@@ -51,8 +50,7 @@ jobs:
         dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client project to NuGet
       run: |
-        cd src/FSharp.Data.GraphQL.Client
-        dotnet nuget push ../../nuget/*Client*.nupkg -k ${{secrets.NUGET_SECRET}}
+        dotnet nuget push nuget/*Client*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
@@ -60,8 +58,7 @@ jobs:
         dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server project to NuGet
       run: |
-        cd src/FSharp.Data.GraphQL.Server
-        dotnet nuget push ../../nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
+        dotnet nuget push nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
@@ -69,5 +66,19 @@ jobs:
         dotnet pack --nologo --configuration Release /p:IsNuget=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware project to NuGet
       run: |
-        cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet nuget push ../../nuget/*Server.Middleware*.nupkg -k ${{secrets.NUGET_SECRET}}
+        dotnet nuget push nuget/*Server.Middleware*.nupkg -k ${{secrets.NUGET_SECRET}}
+
+    - name: Prepare the sample project to be packed as a project template
+      run: |
+        & "./Prepare template project for packing.ps1"
+      shell: pwsh
+
+    - name: Pack FSharp.Data.GraphQL.ProjectTemplates template project
+      run: |
+        cd samples
+        dotnet pack --nologo --configuration Release -o ../nuget
+    - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
+      run: |
+        $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.$Env:VERSION.nupkg"
+        dotnet nuget push $path -k ${{secrets.NUGET_SECRET}}
+      shell: pwsh
