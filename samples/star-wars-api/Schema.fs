@@ -42,6 +42,7 @@ type Character =
     | Droid of Droid
 
 module Schema =
+
     let humans =
         [ { Id = "1000"
             Name = Some "Luke Skywalker"
@@ -80,6 +81,15 @@ module Schema =
             Friends = [ "1000"; "1002"; "1003" ]
             AppearsIn = [ Episode.NewHope; Episode.Empire; Episode.Jedi ]
             PrimaryFunction = Some "Astromech" } ]
+
+    let characterMap =
+        seq {
+            for h in humans do
+                yield h.Id, Human h
+            for d in droids do
+                yield d.Id, Droid d
+        }
+        |> Map.ofSeq
 
     let planets =
         [ { Id = "1"
@@ -144,10 +154,10 @@ module Schema =
                 Define.Field("id", String, "The id of the human.", fun _ (h : Human) -> h.Id)
                 Define.Field("name", Nullable String, "The name of the human.", fun _ (h : Human) -> h.Name)
                 Define.Field("friends",
-                    ConnectionOf String |> Nullable,
+                    ConnectionOf CharacterType,
                     "The friends of the human, or an empty list if they have none.",
                     Connection.allArgs,
-                    fun ctx human -> 
+                    fun ctx human ->
                         let totalCount = human.Friends.Length
                         let friends, hasNextPage =
                             match ctx with
@@ -162,11 +172,11 @@ module Schema =
                                     n < totalCount
                                 | _ -> failwithf "Cursor %A is not a Friend's global id" after
                             | _ -> human.Friends, false
-                        let edges = friends |> Seq.map (fun b -> { Cursor = toGlobalId "Friend" (string b); Node = b }) |> Seq.toList
+                        let edges = friends |> Seq.map (fun b -> { Cursor = toGlobalId "Friend" (string b); Node = characterMap[b] }) |> Seq.toList
                         let headCursor = edges |> List.tryHead |> Option.map (fun edge -> edge.Cursor)
                         let pi = { HasNextPage = hasNextPage; EndCursor = headCursor; StartCursor = None; HasPreviousPage = false }
                         let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
-                        Some con
+                        con
                     )
                 Define.Field("appearsIn", ListOf EpisodeType, "Which movies they appear in.", fun _ (h : Human) -> h.AppearsIn)
                 Define.Field("homePlanet", Nullable String, "The home planet of the human, or null if unknown.", fun _ h -> h.HomePlanet)
@@ -251,7 +261,7 @@ module Schema =
 
     let schema : ISchema<Root> = upcast Schema(Query, Mutation, Subscription, schemaConfig)
 
-    let middlewares = 
+    let middlewares =
         [ Define.QueryWeightMiddleware(2.0, true)
           Define.ObjectListFilterMiddleware<Human, Character option>(true)
           Define.ObjectListFilterMiddleware<Droid, Character option>(true)

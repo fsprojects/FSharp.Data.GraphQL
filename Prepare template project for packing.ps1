@@ -10,6 +10,7 @@ $version = $dirBuildTargets.SelectSingleNode("//PropertyGroup[@Label='NuGet']/Ve
 [xml]$fsharpPackages = @"
 <ItemGroup Label="PackageReferences">
     <PackageReference Include="FSharp.Data.GraphQL.Server.Middleware" Version="$($version)" />
+    <PackageReference Include="FSharp.Data.GraphQL.Server.Relay" Version="$($version)" />
     <PackageReference Include="FSharp.Data.GraphQL.Server" Version="$($version)" />
     <PackageReference Include="FSharp.Data.GraphQL.Shared" Version="$($version)" />
 </ItemGroup>

@@ -2,24 +2,25 @@
 #r "nuget: Newtonsoft.Json, 13.0.1"
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net461/FSharp.Data.GraphQL.Shared.dll"
 #r "../../src/FSharp.Data.GraphQL.Server/bin/Debug/net461/FSharp.Data.GraphQL.Server.dll"
+#r "../../src/FSharp.Data.GraphQL.Server.Relay/bin/Debug/net461/FSharp.Data.GraphQL.Server.Relay.dll"
 
 open System
 
 // Data
 
-type Widget = 
+type Widget =
     { Id: string;
       Name: string }
 
-type User = 
+type User =
     { Id: string;
       Name: string;
       Widgets: Widget list }
 
-let viewer = 
+let viewer =
     {   Id = "1"
         Name = "Anonymous"
-        Widgets = 
+        Widgets =
         [   { Id = "1"; Name = "What's it"}
             { Id = "2"; Name = "Who's it"}
             { Id = "3"; Name = "How's it"} ]}
@@ -32,29 +33,29 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
 
-let rec Widget = 
+let rec Widget =
     Define.Object<Widget>(
         name = "Widget",
         description = "A shiny widget",
         interfaces = [ Node ],
-        fields = 
+        fields =
             [ Define.GlobalIdField(fun _ w -> w.Id)
               Define.Field("name", String, fun _ w -> w.Name)])
 
-and User = 
+and User =
     Define.Object<User>(
         name = "User",
         description = "A person who uses our app",
         interfaces = [ Node ],
-        fields = 
+        fields =
             [   Define.GlobalIdField(fun _ w -> w.Id)
                 Define.Field("name", String, fun _ w -> w.Name)
                 Define.Field(
-                    "widgets", 
-                    ConnectionOf Widget |> Nullable, 
-                    "A person's collection of widgets", 
+                    "widgets",
+                    ConnectionOf Widget,
+                    "A person's collection of widgets",
                     Connection.allArgs,
-                    fun ctx user -> 
+                    fun ctx user ->
                         let totalCount = user.Widgets.Length
                         let widgets, hasNextPage =
                             match ctx with
@@ -73,17 +74,17 @@ and User =
                         let headCursor = edges |> Array.tryHead |> Option.map (fun edge -> edge.Cursor)
                         let pi = { HasNextPage = hasNextPage; EndCursor = headCursor; StartCursor = None; HasPreviousPage = false }
                         let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
-                        Some con
+                        con
                 )])
 
 and Node = Define.Node<obj>(fun () -> [ User; Widget ])
 
-let Query = 
+let Query =
     Define.Object(
-        "Query", 
+        "Query",
         [ Define.NodeField (
-            Node, 
-            fun ctx () id -> 
+            Node,
+            fun ctx () id ->
                 match id with
                 | GlobalId("User", i) -> getUser i |> Option.map box
                 | GlobalId("Widget", i) -> getWidget i |> Option.map box
@@ -113,7 +114,7 @@ let tryParse fieldName data =
         | Some "" -> None
         | s -> s
     else None
-    
+
 let handle : WebPart =
     fun http ->
         async {
@@ -130,7 +131,7 @@ let handle : WebPart =
                     let! result = ex.AsyncExecute(q, variables=variables)
                     return! http |> Successful.OK (json result)
                 | None ->
-                    printfn "Received query: %s" query 
+                    printfn "Received query: %s" query
                     // at the moment parser is not parsing new lines correctly, so we need to get rid of them
                     let q = query.Trim().Replace("\r\n", " ")
                     let! result = ex.AsyncExecute(q)
@@ -143,7 +144,7 @@ let handle : WebPart =
 
 let setCorsHeaders =
     Writers.setHeader  "Access-Control-Allow-Origin" "*"
-    >=> 
+    >=>
     Writers.setHeader "Access-Control-Allow-Headers" "content-type"
 
 startWebServer defaultConfig (setCorsHeaders >=> handle >=> Writers.setMimeType "application/json")
