@@ -47,35 +47,36 @@ and User =
         name = "User",
         description = "A person who uses our app",
         interfaces = [ Node ],
-        fields =
-            [   Define.GlobalIdField(fun _ w -> w.Id)
-                Define.Field("name", String, fun _ w -> w.Name)
-                Define.Field(
-                    "widgets",
-                    ConnectionOf Widget,
-                    "A person's collection of widgets",
-                    Connection.allArgs,
-                    fun ctx user ->
-                        let totalCount = user.Widgets.Length
-                        let widgets, hasNextPage =
-                            match ctx with
-                            | SliceInfo(Forward(n, after)) ->
-                                match after with
-                                | Some (GlobalId("Widget", id)) ->
-                                    let i = user.Widgets |> List.indexed |> List.pick (fun (i, e) -> if e.Id = id then Some i else None)
-                                    user.Widgets |> List.skip (i+1) |> List.take n,
-                                    i+1+n < totalCount
-                                | None ->
-                                    user.Widgets |> List.take n,
-                                    n < totalCount
-                                | _ -> failwithf "Cursor %A is not 'Widget' global id" after
-                            | _ -> user.Widgets, false
-                        let edges = widgets |> Seq.map (fun b -> { Cursor = toGlobalId "Widget" (string b.Id); Node = b }) |> Seq.toArray
-                        let headCursor = edges |> Array.tryHead |> Option.map (fun edge -> edge.Cursor)
-                        let pi = { HasNextPage = hasNextPage; EndCursor = headCursor; StartCursor = None; HasPreviousPage = false }
-                        let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
-                        con
-                )])
+        fields = [
+            Define.GlobalIdField(fun _ w -> w.Id)
+            Define.Field("name", String, fun _ w -> w.Name)
+            Define.Field(
+                "widgets",
+                ConnectionOf Widget,
+                "A person's collection of widgets",
+                Connection.allArgs,
+                fun ctx user ->
+                    let totalCount = user.Widgets.Length
+                    let widgets, hasNextPage =
+                        match ctx with
+                        | SliceInfo(Forward(n, after)) ->
+                            match after with
+                            | Some (GlobalId("Widget", id)) ->
+                                let i = user.Widgets |> List.indexed |> List.pick (fun (i, e) -> if e.Id = id then Some i else None)
+                                user.Widgets |> List.skip (i+1) |> List.take n,
+                                i+1+n < totalCount
+                            | None ->
+                                user.Widgets |> List.take n,
+                                n < totalCount
+                            | _ -> failwithf "Cursor %A is not 'Widget' global id" after
+                        | _ -> user.Widgets, false
+                    let edges = widgets |> Seq.map (fun b -> { Cursor = toGlobalId "Widget" (string b.Id); Node = b }) |> Seq.toArray
+                    let headCursor = edges |> Array.tryHead |> Option.map (fun edge -> edge.Cursor)
+                    let pi = { HasNextPage = hasNextPage; EndCursor = headCursor; StartCursor = None; HasPreviousPage = false }
+                    let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
+                    con
+            )
+        ])
 
 and Node = Define.Node<obj>(fun () -> [ User; Widget ])
 
