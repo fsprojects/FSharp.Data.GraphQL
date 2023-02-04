@@ -870,18 +870,18 @@ babel-relay-plugin@0.8.1:
   dependencies:
     graphql "^0.4.18"
 
-babel-runtime@>=6.0.0, babel-runtime@^6.18.0, babel-runtime@^6.22.0, babel-runtime@^6.23.0:
+babel-runtime@^5.0.0, babel-runtime@^5.8.x:
+  version "5.8.38"
+  resolved "https://registry.yarnpkg.com/babel-runtime/-/babel-runtime-5.8.38.tgz#1c0b02eb63312f5f087ff20450827b425c9d4c19"
+  dependencies:
+    core-js "^1.0.0"
+
+babel-runtime@^6.18.0, babel-runtime@^6.22.0, babel-runtime@^6.23.0:
   version "6.23.0"
   resolved "https://registry.yarnpkg.com/babel-runtime/-/babel-runtime-6.23.0.tgz#0a9489f144de70efb3ce4300accdb329e2fc543b"
   dependencies:
     core-js "^2.4.0"
     regenerator-runtime "^0.10.0"
-
-babel-runtime@^5.0.0, babel-runtime@^5.8.x, babel-runtime@~5.8.3:
-  version "5.8.38"
-  resolved "https://registry.yarnpkg.com/babel-runtime/-/babel-runtime-5.8.38.tgz#1c0b02eb63312f5f087ff20450827b425c9d4c19"
-  dependencies:
-    core-js "^1.0.0"
 
 babel-template@^6.24.1:
   version "6.24.1"
@@ -1718,11 +1718,11 @@ graceful-fs@^4.1.2, graceful-fs@^4.1.4:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/graceful-readlink/-/graceful-readlink-1.0.1.tgz#4cafad76bc62f02fa039b2f94e9a3dd3a391a725"
 
-graphql-relay@0.4.1:
-  version "0.4.1"
-  resolved "https://registry.yarnpkg.com/graphql-relay/-/graphql-relay-0.4.1.tgz#2b58618b4062eed35a13e4b0d1181a76fdd62532"
+graphql-relay@0.6.0:
+  version "0.6.0"
+  resolved "https://registry.yarnpkg.com/graphql-relay/-/graphql-relay-0.6.0.tgz#18ec36b772cfcb3dbb9bd369c3f8004cf42c7b93"
   dependencies:
-    babel-runtime "~5.8.3"
+    prettier "^1.16.0"
 
 graphql@^0.4.18:
   version "0.4.18"
@@ -1730,11 +1730,11 @@ graphql@^0.4.18:
   dependencies:
     babel-runtime "^5.8.x"
 
-graphql@^0.5.0:
-  version "0.5.0"
-  resolved "https://registry.yarnpkg.com/graphql/-/graphql-0.5.0.tgz#1f03f8267128392df05d449889c48c4bd9ac34ce"
+graphql@^0.6.0:
+  version "0.6.2"
+  resolved "https://registry.yarnpkg.com/graphql/-/graphql-0.6.2.tgz#19cdcb17e5862d64396a0684f92f7be64e90e7af"
   dependencies:
-    babel-runtime ">=6.0.0"
+    iterall "1.0.2"
 
 graphql@^0.9.1:
   version "0.9.6"
@@ -2025,7 +2025,7 @@ isstream@~0.1.2:
   version "0.1.2"
   resolved "https://registry.yarnpkg.com/isstream/-/isstream-0.1.2.tgz#47e63f7af55afa6f92e1500e690eb8b8529c099a"
 
-iterall@^1.0.0:
+iterall@1.0.2, iterall@^1.0.0:
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/iterall/-/iterall-1.0.2.tgz#41a2e96ce9eda5e61c767ee5dc312373bb046e91"
 
@@ -2656,6 +2656,10 @@ portfinder@0.4.x:
 preserve@^0.2.0:
   version "0.2.0"
   resolved "https://registry.yarnpkg.com/preserve/-/preserve-0.2.0.tgz#815ed1f6ebc65926f865b310c0713bcb3315ce4b"
+
+prettier@^1.16.0:
+  version "1.19.1"
+  resolved "https://registry.yarnpkg.com/prettier/-/prettier-1.19.1.tgz#f7d7f5ff8a9cd872a7be4ca142095956a60797cb"
 
 private@^0.1.6, private@~0.1.5:
   version "0.1.7"
@@ -3295,8 +3299,8 @@ type-is@~1.6.14:
     mime-types "~2.1.15"
 
 ua-parser-js@^0.7.9:
-  version "0.7.12"
-  resolved "https://registry.yarnpkg.com/ua-parser-js/-/ua-parser-js-0.7.12.tgz#04c81a99bdd5dc52263ea29d24c6bf8d4818a4bb"
+  version "0.7.33"
+  resolved "https://registry.yarnpkg.com/ua-parser-js/-/ua-parser-js-0.7.33.tgz#1d04acb4ccef9293df6f70f2c3d22f3030d8b532"
 
 uglify-js@~2.7.3:
   version "2.7.5"
