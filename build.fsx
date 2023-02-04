@@ -1,5 +1,6 @@
+open System.IO
 open System.Net.Http
-
+open System.Text.Json
 
 #r "nuget: Fake.Api.GitHub"
 #r "nuget: Fake.Core.ReleaseNotes"
@@ -14,7 +15,6 @@ open System.Net.Http
 #r "nuget: System.Reactive"
 #r "nuget: Octokit"
 
-open System.IO
 open Fake
 open Fake.DotNet
 open Fake.IO
@@ -154,11 +154,20 @@ Target.createFinal "StopIntegrationServer" <| fun _ ->
 
 Target.create "UpdateIntrospectionFile" <| fun _ ->
     let client = new HttpClient ()
-    let result = client.GetAsync("http://localhost:8086").Result
-    let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
-    result.Content.CopyTo(file, null, System.Threading.CancellationToken.None)
-    file.Close()
-    result.Dispose()
+    (task{
+        let! result = client.GetAsync("http://localhost:8086")
+        let! contentStream = result.Content.ReadAsStreamAsync()
+        let! jsonDocument = JsonDocument.ParseAsync contentStream
+        let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
+        let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
+        let writer = new Utf8JsonWriter(file, jsonWriterOptions)
+        jsonDocument.WriteTo writer
+        do! writer.FlushAsync()
+        do! writer.DisposeAsync()
+        do! file.DisposeAsync()
+        result.Dispose()
+    }).Wait()
     client.Dispose()
 
 Target.create "RunUnitTests" <| fun _ ->

@@ -39,12 +39,11 @@
     <Compile Include="Schema.fs" />
     <Compile Include="Linq.fs" />
     <Compile Include="DefineExtensions.fs" />
-    <Compile Include="Relay/Node.fs" />
-    <Compile Include="Relay/Connections.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Condition="$(IsNuget) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
     <ProjectReference Condition="$(IsNuget) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
+
 </Project>

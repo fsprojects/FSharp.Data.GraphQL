@@ -1,5 +1,5 @@
 module.exports = {
-    entry: './index.jsx',
+    entry: './src/app.jsx',
     output: {
         filename: 'bundle.js', //this is the default name, so you can skip it
         //at this directory our bundle file will be available
@@ -9,13 +9,9 @@ module.exports = {
     module: {
         loaders: [
             {
-              test: /.jsx?$/,
-              loader: 'babel-loader',
-              exclude: /node_modules/,
-              query: {
-                presets: ['es2015', 'react', 'stage-0'],
-                plugins: [ './build/babelRelayPlugin', 'transform-class-properties', 'react-require' ]
-              }
+                test: /.jsx?$/,
+                loader: 'babel-loader',
+                exclude: /node_modules/
             }
         ]
     },
