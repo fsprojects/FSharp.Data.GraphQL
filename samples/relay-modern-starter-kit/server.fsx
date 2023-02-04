@@ -164,11 +164,6 @@ let handle : WebPart =
         }
 
 let setCorsHeaders =
-    Writers.setHeader "Access-Control-Allow-Origin" "*"
-    >=> Writers.setHeader "Access-Control-Allow-Headers" "content-type"
+    Writers.setHeader "Access-Control-Allow-Origin" "*" >=> Writers.setHeader "Access-Control-Allow-Headers" "content-type"
 
-startWebServer
-    defaultConfig
-    (setCorsHeaders
-     >=> handle
-     >=> Writers.setMimeType "application/json")
+startWebServer defaultConfig (setCorsHeaders >=> handle >=> Writers.setMimeType "application/json")
