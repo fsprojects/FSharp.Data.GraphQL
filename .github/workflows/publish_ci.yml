@@ -7,13 +7,13 @@ on:
 
 jobs:
   publish:
-  
+
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout
       uses: actions/checkout@v3
-      
+
     - name: Set Build Version
       run: |
         $File = (
@@ -24,10 +24,10 @@ jobs:
         $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.targets))
         echo "VERSION=$version" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
       shell: pwsh
-      
+
     - name: Install .NET Core
       uses: actions/setup-dotnet@v3
-      
+
     - name: Add the GitHub source
       run: dotnet nuget add source --username USERNAME --password ${{secrets.GITHUB_TOKEN}} --store-password-in-clear-text --name github "https://nuget.pkg.github.com/fsprojects/index.json"
 
@@ -60,6 +60,14 @@ jobs:
     - name: Publish FSharp.Data.GraphQL.Server project to GitHub
       run: |
         dotnet nuget push nuget/*Server*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
+
+    - name: Pack FSharp.Data.GraphQL.Server.Relay project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Relay
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Relay project to GitHub
+      run: |
+        dotnet nuget push nuget/*Server.Relay*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |

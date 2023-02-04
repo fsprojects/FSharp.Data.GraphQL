@@ -15,7 +15,7 @@ jobs:
       with:
         # This is necessary so that we have the tags.
         fetch-depth: 0
-        
+
     - name: Set Build Version
       run: |
         $version = "$env:GITHUB_REF_NAME"
@@ -59,6 +59,14 @@ jobs:
     - name: Publish FSharp.Data.GraphQL.Server project to NuGet
       run: |
         dotnet nuget push nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}}
+
+    - name: Pack FSharp.Data.GraphQL.Server.Relay project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Relay
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Relay project to NuGet
+      run: |
+        dotnet nuget push nuget/*Server.Relay*.nupkg -k ${{secrets.NUGET_SECRET}}
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |

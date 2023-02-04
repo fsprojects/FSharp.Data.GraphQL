@@ -9,7 +9,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Relay
+open FSharp.Data.GraphQL.Server.Relay
 
 type IPet =
     interface
