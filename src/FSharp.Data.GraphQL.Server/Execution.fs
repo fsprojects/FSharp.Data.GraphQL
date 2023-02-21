@@ -254,7 +254,7 @@ type StreamOutput =
 
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
-let private resolverError path ctx e = ctx.Schema.ParseError e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
+let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
 let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
 let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)

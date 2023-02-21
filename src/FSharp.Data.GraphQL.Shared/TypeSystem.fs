@@ -433,7 +433,7 @@ and ISchema =
         /// Returns a function called when errors occurred during query execution.
         /// It's used to retrieve messages shown as output to the client.
         /// May be also used to log messages before returning them.
-        abstract ParseError : exn -> IGQLError list
+        abstract ParseError : FieldPath -> exn -> IGQLError list
 
         /// Returns the subscription provider implementation for this schema.
         abstract SubscriptionProvider : ISubscriptionProvider

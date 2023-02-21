@@ -57,7 +57,7 @@ type SchemaConfig =
       /// Function called when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseError : exn -> IGQLError list
+      ParseError : FieldPath -> exn -> IGQLError list
       /// Provider for the back-end of the subscription system.
       SubscriptionProvider : ISubscriptionProvider
       /// Provider for the back-end of the live query subscription system.
@@ -126,9 +126,10 @@ type SchemaConfig =
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
           ParseError =
-            function
-            | :? GraphQLException as ex -> [ex]
-            | ex -> [{ new IGQLError with member _.Message = ex.Message }]
+            fun path ex ->
+                match ex with
+                | :? GraphQLException as ex -> [ex]
+                | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
     /// <summary>
@@ -348,7 +349,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member _.Subscription = subscription |> Option.map (fun x -> upcast x)
         member _.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
         member _.GetPossibleTypes typedef = getPossibleTypes typedef
-        member _.ParseError exn = schemaConfig.ParseError exn
+        member _.ParseError path exn = schemaConfig.ParseError path exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false

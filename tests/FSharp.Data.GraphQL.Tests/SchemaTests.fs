@@ -39,7 +39,7 @@ let ``Schema config should be able to override default error handling`` () =
     let mutable idx = 0
     let conf =
         { SchemaConfig.Default with
-            ParseError = (fun e ->
+            ParseError = (fun path ex ->
                 let i = idx
                 idx <- idx + 1
                 [{ new IGQLError with member __.Message = i.ToString() }]) }
