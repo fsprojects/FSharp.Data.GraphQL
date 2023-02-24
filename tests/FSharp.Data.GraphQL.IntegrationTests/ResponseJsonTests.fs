@@ -8,7 +8,7 @@ open FSharp.Data.GraphQL.Client
 
 // Local provider should be able to be created from local introspection json file.
 // This schema is adjusted to have some less common type names in order to test them.
-type Provider = GraphQLProvider<"introspection-altered-types.json">
+type Provider = GraphQLProvider<"introspection.json">
 
 
 [<Fact>]
