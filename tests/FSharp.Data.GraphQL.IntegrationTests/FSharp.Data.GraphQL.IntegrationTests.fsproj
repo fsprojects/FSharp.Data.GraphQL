@@ -17,7 +17,6 @@
 
   <ItemGroup>
     <Content Include="introspection.json" />
-    <Content Include="introspection-altered-types.json" />
     <None Include="operation.graphql">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
