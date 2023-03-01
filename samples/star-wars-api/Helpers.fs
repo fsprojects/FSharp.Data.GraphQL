@@ -2,7 +2,7 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
 open System.Text
-open System.Collections.Generic
+
 
 [<AutoOpen>]
 module Helpers =
@@ -10,6 +10,7 @@ module Helpers =
     let tee f x =
         f x
         x
+
 
 [<AutoOpen>]
 module StringHelpers =
@@ -24,6 +25,7 @@ module StringHelpers =
 
     let isNullOrWhiteSpace (str : string) = String.IsNullOrWhiteSpace (str)
 
+
 [<AutoOpen>]
 module LoggingHelpers =
 
@@ -31,9 +33,10 @@ module LoggingHelpers =
     open Microsoft.Extensions.Logging
 
     type IServiceProvider with
-        member sericeProvider.CreateLogger (``type`` : Type) =
-            let loggerFactory = sericeProvider.GetRequiredService<ILoggerFactory>()
+        member serviceProvider.CreateLogger (``type`` : Type) =
+            let loggerFactory = serviceProvider.GetRequiredService<ILoggerFactory>()
             loggerFactory.CreateLogger(``type``)
+
 
 [<AutoOpen>]
 module ReflectionHelpers =
@@ -43,3 +46,4 @@ module ReflectionHelpers =
     let getModuleType = function
         | PropertyGet (_, propertyInfo, _) -> propertyInfo.DeclaringType
         | _ -> failwith "Expression is no property."
+
