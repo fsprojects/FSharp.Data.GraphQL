@@ -5,6 +5,7 @@ open System.Text.Json
 open System.Text.Json.Nodes
 open System.Text.Json.Serialization
 open Microsoft.FSharp.Reflection
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns

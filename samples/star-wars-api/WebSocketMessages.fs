@@ -24,8 +24,8 @@ type WebSocketServerMessage =
     | Error of id : string option * err : string
     | Complete of id : string
 with
-    static member OfResponseContent(id, subsciption : GQLSubscriptionResponseContent) =
-        match subsciption with
+    static member OfResponseContent(id, subscription : GQLSubscriptionResponseContent) =
+        match subscription with
         | SubscriptionResult data -> Data (id, data)
         | SubscriptionErrors (data, errors) -> Error (Some id, JsonSerializer.Serialize(errors, Json.serializerOptions))
     static member OfResponseContent(id, deferred : GQLDeferredResponseContent) =
