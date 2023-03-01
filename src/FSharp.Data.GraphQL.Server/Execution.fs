@@ -255,7 +255,10 @@ type StreamOutput =
 
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
+/// Given an error e, call ParseError in the given context's Schema to convert it into
+/// a list of one or more <see herf="IGQLErrors">IGQLErrors</see>, then convert those to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
+// Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
 let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)
