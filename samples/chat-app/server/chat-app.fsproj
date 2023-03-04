@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <RootNamespace>chat_app</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="DomainModel.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj" />
+  </ItemGroup>
+
+</Project>

@@ -1,0 +1,36 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <Description>FSharp implementation of Facebook GraphQL query language (Application Infrastructure)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Rop/Rop.fs" />
+    <Compile Include="Rop/RopAsync.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="Messages.fs" />
+    <Compile Include="Serialization/GraphQLQueryDecoding.fs" />
+    <Compile Include="Serialization/JsonConverters.fs" />
+    <Compile Include="GraphQLOptions.fs" />
+    <Compile Include="GraphQLSubscriptionsManagement.fs" />
+    <Compile Include="GraphQLWebsocketMiddleware.fs" />
+    <Compile Include="Giraffe/HttpHandlers.fs" />
+    <Compile Include="StartupExtensions.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Giraffe" />
+  </ItemGroup>
+
+</Project>

@@ -16,12 +16,7 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
-    <Compile Include="Helpers.fs" />
     <Compile Include="Schema.fs" />
-    <Compile Include="WebSocketMessages.fs" />
-    <Compile Include="JsonConverters.fs" />
-    <Compile Include="WebSocketMiddleware.fs" />
-    <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
@@ -30,6 +25,7 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 

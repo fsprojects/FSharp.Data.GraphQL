@@ -171,6 +171,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "components", "components", 
 		user.jsx = user.jsx
 	EndProjectSection
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server.AppInfrastructure", "src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj", "{554A6833-1E72-41B4-AAC1-C19371EC061B}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -289,6 +291,18 @@ Global
 		{E011A3B2-3D96-48E3-AF5F-DA544FF5C5FE}.Release|x64.Build.0 = Release|Any CPU
 		{E011A3B2-3D96-48E3-AF5F-DA544FF5C5FE}.Release|x86.ActiveCfg = Release|Any CPU
 		{E011A3B2-3D96-48E3-AF5F-DA544FF5C5FE}.Release|x86.Build.0 = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|x64.Build.0 = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Debug|x86.Build.0 = Debug|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|Any CPU.Build.0 = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|x64.ActiveCfg = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|x64.Build.0 = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|x86.ActiveCfg = Release|Any CPU
+		{554A6833-1E72-41B4-AAC1-C19371EC061B}.Release|x86.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -317,6 +331,7 @@ Global
 		{6EEA0E79-693F-4D4F-B55B-DB0C64EBDA45} = {600D4BE2-FCE0-4684-AC6F-2DC829B395BA}
 		{7AA3516E-60F5-4969-878F-4E3DCF3E63A3} = {A8F031E0-2BD5-4BAE-830A-60CBA76A047D}
 		{E011A3B2-3D96-48E3-AF5F-DA544FF5C5FE} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
+		{554A6833-1E72-41B4-AAC1-C19371EC061B} = {BEFD8748-2467-45F9-A4AD-B450B12D5F78}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
