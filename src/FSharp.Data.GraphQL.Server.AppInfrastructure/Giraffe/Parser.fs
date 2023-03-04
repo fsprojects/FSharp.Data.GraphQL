@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Samples.StarWarsApi.Parser
+module FSharp.Data.GraphQL.Server.AppInfrastructure.Parser
 
 open Microsoft.AspNetCore.Http
 open FSharp.Data.GraphQL

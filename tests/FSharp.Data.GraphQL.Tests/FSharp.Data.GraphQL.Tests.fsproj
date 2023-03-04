@@ -67,6 +67,9 @@
     <Compile Include="SubscriptionTests.fs" />
     <Compile Include="MiddlewareTests.fs" />
     <Compile Include="AstExtensionsTests.fs" />
+    <Compile Include="AppInfrastructure/TestSchema.fs" />
+    <Compile Include="AppInfrastructure/InvalidMessageTests.fs" />
+    <Compile Include="AppInfrastructure/SerializationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
@@ -78,6 +81,7 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
 </Project>

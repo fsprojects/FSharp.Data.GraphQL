@@ -1,33 +1,22 @@
-namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Server.AppInfrastructure.Giraffe
 
 open System
-open System.Collections.Immutable
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
-open Microsoft.AspNetCore.Http.Json
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
-open Microsoft.Extensions.Options
 
 open FsToolkit.ErrorHandling
 open Giraffe
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-
-module Constants =
-
-    let [<Literal>] Idented = "Idented"
+open FSharp.Data.GraphQL.Server.AppInfrastructure
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
-
-// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
-type MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions
-// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.json.jsonoptions
-type HttpClientJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions
 
 module HttpHandlers =
 
@@ -49,19 +38,17 @@ module HttpHandlers =
         setHttpHeader "Access-Control-Allow-Origin" "*"
         >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
 
-    let private graphQL (next : HttpFunc) (ctx : HttpContext) =
+    let private graphQL<'Root> (next : HttpFunc) (ctx : HttpContext) =
         let sp = ctx.RequestServices
 
         let logger = sp.CreateLogger moduleType
 
+        let options = sp.GetRequiredService<GraphQLOptions<'Root>>()
+
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
             let serializeIdented value =
-                let jsonSerializerOptions =
-                    sp
-                        .GetRequiredService<IOptionsMonitor<HttpClientJsonOptions>>()
-                        .Get(Constants.Idented)
-                        .SerializerOptions
+                let jsonSerializerOptions = options.GetSerializerOptionsIdented()
                 JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
@@ -261,7 +248,7 @@ module HttpHandlers =
             variables
             |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
 
-            let root = Root ctx
+            let root = options.RootFactory ctx
 
             let! result = executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName)
 
@@ -270,7 +257,7 @@ module HttpHandlers =
         }
 
         taskResult {
-            let executor = Schema.executor
+            let executor = options.SchemaExecutor
             ctx.Response.Headers.Add("Request-Type", "Classic") // For integration testing purposes
             match! checkOperationType ctx with
             | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument

@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Samples.StarWarsApi.Ast
+module FSharp.Data.GraphQL.Server.AppInfrastructure.Ast
 
 open System.Collections.Immutable
 open FSharp.Data.GraphQL

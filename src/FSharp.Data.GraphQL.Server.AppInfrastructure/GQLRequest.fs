@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Server.AppInfrastructure
 
 open System.Collections.Immutable
 open System.Text.Json
