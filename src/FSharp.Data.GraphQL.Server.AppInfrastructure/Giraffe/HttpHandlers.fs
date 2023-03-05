@@ -6,6 +6,7 @@ open Giraffe
 open FSharp.Data.GraphQL.Server.AppInfrastructure
 open FSharp.Data.GraphQL.Server.AppInfrastructure.Rop
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open System.Collections.Generic
 open System.Text.Json
@@ -15,9 +16,6 @@ open System.Threading.Tasks
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
-
-    let private getRequiredService<'Service> (ctx : HttpContext) : 'Service =
-        ctx.RequestServices.GetrequiredService<'Service>()
 
     let private httpOk (cancellationToken : CancellationToken) (serializerOptions : JsonSerializerOptions) payload : HttpHandler =
         setStatusCode 200
@@ -80,7 +78,7 @@ module HttpHandlers =
             if cancellationToken.IsCancellationRequested then
                 return (fun _ -> None) ctx
             else
-                let options = ctx |> getRequiredService<GraphQLOptions<'Root>>
+                let options = ctx.RequestServices.GetRequiredService<GraphQLOptions<'Root>>()
                 let executor = options.SchemaExecutor
                 let rootFactory = options.RootFactory
                 let serializerOptions = options.SerializerOptions
