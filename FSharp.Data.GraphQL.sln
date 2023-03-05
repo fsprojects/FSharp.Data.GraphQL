@@ -45,6 +45,8 @@ Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{474179D3-0090-49E9-88F8-2971C0966077}"
 EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server.AppInfrastructure", "src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj", "{554A6833-1E72-41B4-AAC1-C19371EC061B}"
+EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Relay", "src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj", "{E011A3B2-3D96-48E3-AF5F-DA544FF5C5FE}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server.Middleware", "src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj", "{8FB23F61-77CB-42C7-8EEC-B22D7C4E4067}"
@@ -170,8 +172,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "components", "components", 
 	ProjectSection(SolutionItems) = preProject
 		user.jsx = user.jsx
 	EndProjectSection
-EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Server.AppInfrastructure", "src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj", "{554A6833-1E72-41B4-AAC1-C19371EC061B}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
