@@ -17,12 +17,7 @@ type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 module HttpHandlers =
 
     let private getRequiredService<'Service> (ctx : HttpContext) : 'Service =
-        let service = (ctx.GetService<'Service>())
-        if obj.ReferenceEquals(service, null)
-        then
-            let theType = typedefof<'Service>
-            failwithf "required service \"%s\" was not registered at the dependency injection container!" (theType.FullName)
-        service
+        ctx.RequestServices.GetrequiredService<'Service>()
 
     let private httpOk (cancellationToken : CancellationToken) (serializerOptions : JsonSerializerOptions) payload : HttpHandler =
         setStatusCode 200

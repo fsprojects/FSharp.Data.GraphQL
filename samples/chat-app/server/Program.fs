@@ -11,6 +11,7 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 
 module Program =
+
     let rootFactory () : Root =
         { RequestId = Guid.NewGuid().ToString() }
 
