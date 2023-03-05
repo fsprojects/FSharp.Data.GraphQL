@@ -77,7 +77,7 @@ let ``payload type of number in subscribe message`` () =
         "payload": 42
     }
     """
-    |> willResultInInvalidMessage "The JSON value could not be converted to GraphQLTransportWS.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 2."
+    |> willResultInInvalidMessage "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AppInfrastructure.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 2."
 
 [<Fact>]
 let ``no id in subscribe message`` () =
@@ -98,7 +98,7 @@ let ``string payload wrongly used in subscribe`` () =
           "payload": "{\"query\": \"subscription { watchMoon(id: \\\"1\\\") { id name isMoon } }\"}"
        }
     """
-    |> willResultInInvalidMessage "The JSON value could not be converted to GraphQLTransportWS.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 79."
+    |> willResultInInvalidMessage "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AppInfrastructure.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 79."
 
 [<Fact>]
 let ``id is incorrectly a number in a subscribe message`` () =

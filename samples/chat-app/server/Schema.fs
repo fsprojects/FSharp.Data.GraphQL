@@ -1,4 +1,4 @@
-namespace chat_app
+namespace FSharp.Data.GraphQL.Samples.ChatApp
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
