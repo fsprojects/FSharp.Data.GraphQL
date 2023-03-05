@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>net6.0</TargetFramework>
-    <RootNamespace>chat_app</RootNamespace>
+    <RootNamespace>FSharp.Data.GraphQL.Samples.ChatApp</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup>
