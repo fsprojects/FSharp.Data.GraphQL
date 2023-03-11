@@ -117,6 +117,7 @@ let runTests (project : string) =
         project
 
 let starWarsServerStream = StreamRef.Empty
+let chatAppServerStream = StreamRef.Empty
 
 Target.create "StartStarWarsServer" <| fun _ ->
     Target.activateFinal "StopStarWarsServer"
@@ -133,6 +134,24 @@ Target.createFinal "StopStarWarsServer" <| fun _ ->
         starWarsServerStream.Value.Write ([| 0uy |], 0, 1)
     with e ->
         printfn "%s" e.Message
+
+Target.create "StartChatAppServer" <| fun _ ->
+    Target.activateFinal "StopChatAppServer"
+
+    let project =
+        "samples"
+        </> "chat-app"
+        </> "server"
+        </> "FSharp.Data.GraphQL.Samples.ChatApp.fsproj"
+
+    startGraphQLServer project 8087 chatAppServerStream
+
+Target.createFinal "StopChatAppServer" <| fun _ ->
+    try
+        chatAppServerStream.Value.Write ([| 0uy |], 0, 1)
+    with e ->
+        printfn "%s" e.Message
+
 
 let integrationServerStream = StreamRef.Empty
 
@@ -159,6 +178,24 @@ Target.create "UpdateIntrospectionFile" <| fun _ ->
         let! contentStream = result.Content.ReadAsStreamAsync()
         let! jsonDocument = JsonDocument.ParseAsync contentStream
         let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
+        let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+        let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
+        let writer = new Utf8JsonWriter(file, jsonWriterOptions)
+        jsonDocument.WriteTo writer
+        do! writer.FlushAsync()
+        do! writer.DisposeAsync()
+        do! file.DisposeAsync()
+        result.Dispose()
+    }).Wait()
+    client.Dispose()
+
+Target.create "UpdateChatAppSchemaSnapshotFile" <| fun _ ->
+    let client = new HttpClient ()
+    (task{
+        let! result = client.GetAsync("http://localhost:8087")
+        let! contentStream = result.Content.ReadAsStreamAsync()
+        let! jsonDocument = JsonDocument.ParseAsync contentStream
+        let file = new FileStream("samples/chat-app/client/TestData/schema-snapshot.json", FileMode.Create, FileAccess.Write, FileShare.None)
         let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
         let writer = new Utf8JsonWriter(file, jsonWriterOptions)
@@ -276,6 +313,9 @@ Target.create "PackAll" ignore
     ==> "StartIntegrationServer"
     ==> "UpdateIntrospectionFile"
     ==> "RunIntegrationTests"
+    ==> "StartChatAppServer"
+    ==> "UpdateChatAppSchemaSnapshotFile"
+    ==> "StopChatAppServer"
     ==> "All"
     =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
 
