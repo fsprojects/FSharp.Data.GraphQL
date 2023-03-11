@@ -131,8 +131,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         (fun theOutput ->
           theOutput
           |> howToSendDataOnNext id
-          |> Async.AwaitTask
-          |> Async.RunSynchronously
+          |> Task.WaitAll
         ),
       onError =
         (fun ex ->
