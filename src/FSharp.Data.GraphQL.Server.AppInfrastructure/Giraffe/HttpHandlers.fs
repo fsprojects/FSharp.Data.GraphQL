@@ -55,19 +55,23 @@ module HttpHandlers =
             data
             |> Seq.map(fun x -> (x.Key, x.Value))
             |> Map.ofSeq
-        match data.TryGetValue("errors") with
-        | (true, (:? list<NameValueLookup> as nameValueLookups)) ->
-            result
-            |> Map.change
-                "errors"
-                (fun _ -> Some <| upcast (nameValueLookups @ (theseNew |> toNameValueLookupList) |> List.distinct))
-        | (true, _) ->
-            result
-        | (false, _) ->
-            result
-            |> Map.add
-                "errors"
-                (upcast (theseNew |> toNameValueLookupList))
+
+        if theseNew |> List.isEmpty then
+            result // because we want to avoid having an "errors" property as an empty list (according to specification)
+        else
+            match data.TryGetValue("errors") with
+            | (true, (:? list<NameValueLookup> as nameValueLookups)) ->
+                result
+                |> Map.change
+                    "errors"
+                    (fun _ -> Some <| upcast (nameValueLookups @ (theseNew |> toNameValueLookupList) |> List.distinct))
+            | (true, _) ->
+                result
+            | (false, _) ->
+                result
+                |> Map.add
+                    "errors"
+                    (upcast (theseNew |> toNameValueLookupList))
 
     let handleGraphQL<'Root>
         (cancellationToken : CancellationToken)
