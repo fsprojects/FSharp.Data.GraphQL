@@ -108,7 +108,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     task {
       if not (socket.State = WebSocketState.Open) then
         if logger.IsEnabled(LogLevel.Trace) then
-          logger.LogTrace(sprintf "ignoring message to be sent via socket, since its state is not 'Open', but '%A'" socket.State)
+          logger.LogTrace("Ignoring message to be sent via socket, since its state is not 'Open', but '{state}'" socket.State)
       else
         let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
         let segment =
