@@ -51,6 +51,7 @@
     <Compile Include="Ast.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
+    <Compile Include="IntrospectionQuery.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />
     <Compile Include="ValidationResultCache.fs" />

@@ -1,13 +1,14 @@
 namespace FSharp.Data.GraphQL
 
+open System.Collections.Immutable
+open System.Text.Json
+
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
-open System.Collections.Immutable
-open System.Text.Json
 
 /// A function signature that represents a middleware for schema compile phase.
 /// I takes two arguments: A schema compile context, containing all the data used for the

@@ -4,9 +4,9 @@
 
 module FSharp.Data.GraphQL.Parser
 
-open FSharp.Data.GraphQL.Ast
 open System
 open FParsec
+open FSharp.Data.GraphQL.Ast
 
 [<AutoOpen>]
 module internal Internal =
