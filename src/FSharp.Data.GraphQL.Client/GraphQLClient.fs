@@ -101,7 +101,7 @@ module GraphQLClient =
                     { ServerUrl = serverUrl
                       HttpHeaders = httpHeaders
                       OperationName = None
-                      Query = IntrospectionQuery.IntrospectionQuery
+                      Query = IntrospectionQuery.Definition
                       Variables = [||] }
                 try return! sendRequestAsync connection request
                 with postex -> return rethrow [getex; postex]

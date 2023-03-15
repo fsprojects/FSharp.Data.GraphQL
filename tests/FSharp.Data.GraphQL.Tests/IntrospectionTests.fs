@@ -346,7 +346,7 @@ let ``Introspection works with query and mutation sharing same generic param`` =
         Define.Object<User list>("Mutation",
             [ Define.Field("addUser", user, "Adds an user", [ Define.Input("input", userInput) ], fun _ u -> u |> List.head)])
     let schema = Schema(query, mutation)
-    Executor(schema).AsyncExecute(IntrospectionQuery.IntrospectionQuery) |> sync |> ignore
+    Executor(schema).AsyncExecute(IntrospectionQuery.Definition) |> sync |> ignore
 
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
@@ -535,7 +535,7 @@ let ``Introspection executes an introspection query`` () =
     let root = Define.Object("QueryRoot", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let (Patterns.Object raw) = root
-    let result = sync <| Executor(schema).AsyncExecute(parse IntrospectionQuery.IntrospectionQuery, raw)
+    let result = sync <| Executor(schema).AsyncExecute(parse IntrospectionQuery.Definition, raw)
     let expected =
       NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [
