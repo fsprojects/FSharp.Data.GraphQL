@@ -117,7 +117,7 @@ let runTests (project : string) =
         project
 
 let starWarsServerStream = StreamRef.Empty
-let chatAppServerStream = StreamRef.Empty
+let chatServerStream = StreamRef.Empty
 
 Target.create "StartStarWarsServer" <| fun _ ->
     Target.activateFinal "StopStarWarsServer"
@@ -135,8 +135,8 @@ Target.createFinal "StopStarWarsServer" <| fun _ ->
     with e ->
         printfn "%s" e.Message
 
-Target.create "StartChatAppServer" <| fun _ ->
-    Target.activateFinal "StopChatAppServer"
+Target.create "StartChatServer" <| fun _ ->
+    Target.activateFinal "StopChatServer"
 
     let project =
         "samples"
@@ -144,11 +144,11 @@ Target.create "StartChatAppServer" <| fun _ ->
         </> "server"
         </> "FSharp.Data.GraphQL.Samples.ChatApp.fsproj"
 
-    startGraphQLServer project 8087 chatAppServerStream
+    startGraphQLServer project 8087 chatServerStream
 
-Target.createFinal "StopChatAppServer" <| fun _ ->
+Target.createFinal "StopChatServer" <| fun _ ->
     try
-        chatAppServerStream.Value.Write ([| 0uy |], 0, 1)
+        chatServerStream.Value.Write ([| 0uy |], 0, 1)
     with e ->
         printfn "%s" e.Message
 
@@ -313,9 +313,9 @@ Target.create "PackAll" ignore
     ==> "StartIntegrationServer"
     ==> "UpdateIntrospectionFile"
     ==> "RunIntegrationTests"
-    ==> "StartChatAppServer"
+    ==> "StartChatServer"
     ==> "UpdateChatAppSchemaSnapshotFile"
-    ==> "StopChatAppServer"
+    ==> "StopChatServer"
     ==> "All"
     =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
 
