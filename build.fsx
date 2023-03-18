@@ -171,13 +171,13 @@ Target.createFinal "StopIntegrationServer" <| fun _ ->
     with e ->
         printfn "%s" e.Message
 
-Target.create "UpdateIntrospectionFile" <| fun _ ->
+let updateIntrospectionFile (outputRelativePath : string) (url : string) (targetParameter: TargetParameter) =
     let client = new HttpClient ()
-    (task{
-        let! result = client.GetAsync("http://localhost:8086")
+    (task {
+        let! result = client.GetAsync(url)
         let! contentStream = result.Content.ReadAsStreamAsync()
         let! jsonDocument = JsonDocument.ParseAsync contentStream
-        let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
+        let file = new FileStream(outputRelativePath, FileMode.Create, FileAccess.Write, FileShare.None)
         let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
         let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
         let writer = new Utf8JsonWriter(file, jsonWriterOptions)
@@ -189,23 +189,12 @@ Target.create "UpdateIntrospectionFile" <| fun _ ->
     }).Wait()
     client.Dispose()
 
-Target.create "UpdateChatAppSchemaSnapshotFile" <| fun _ ->
-    let client = new HttpClient ()
-    (task{
-        let! result = client.GetAsync("http://localhost:8087")
-        let! contentStream = result.Content.ReadAsStreamAsync()
-        let! jsonDocument = JsonDocument.ParseAsync contentStream
-        let file = new FileStream("samples/chat-app/client/TestData/schema-snapshot.json", FileMode.Create, FileAccess.Write, FileShare.None)
-        let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
-        let writer = new Utf8JsonWriter(file, jsonWriterOptions)
-        jsonDocument.WriteTo writer
-        do! writer.FlushAsync()
-        do! writer.DisposeAsync()
-        do! file.DisposeAsync()
-        result.Dispose()
-    }).Wait()
-    client.Dispose()
+Target.create "UpdateIntrospectionFile" <|
+    ("http://localhost:8086" |> updateIntrospectionFile  "tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json")
+
+Target.create "UpdateChatAppSchemaSnapshotFile" <|
+   ("http://localhost:8087" |> updateIntrospectionFile  "samples/chat-app/client/TestData/schema-snapshot.json")
+
 
 Target.create "RunUnitTests" <| fun _ ->
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
