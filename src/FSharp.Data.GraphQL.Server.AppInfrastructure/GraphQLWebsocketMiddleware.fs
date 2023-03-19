@@ -306,9 +306,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       timerTokenSource.CancelAfter(connectionInitTimeoutInMs)
       let detonationRegistration = timerTokenSource.Token.Register(fun _ ->
         socket
-        |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.connectionTimeout, "Connection initialisation timeout")
-        |> Async.AwaitTask
-        |> Async.RunSynchronously
+        |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.connectionTimeout, "Connection initialization timeout")
+        |> Task.WaitAll
       )
       let! connectionInitSucceeded = Task.Run<bool>((fun _ ->
         task {
