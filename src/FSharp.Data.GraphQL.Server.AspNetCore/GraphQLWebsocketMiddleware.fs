@@ -116,7 +116,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         if not (socket.State = WebSocketState.Open) then
           logger.LogTrace("ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
         else
-          do! socket.SendAsync(segment, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = new CancellationToken())
+          do! socket.SendAsync(segment, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = CancellationToken.None)
 
         logger.LogTrace("<- Response: {response}", message)
     }
@@ -153,7 +153,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     task {
         if theSocket |> canCloseSocket
         then
-          do! theSocket.CloseAsync(code, message, new CancellationToken())
+          do! theSocket.CloseAsync(code, message, CancellationToken.None)
         else
           ()
     }
@@ -166,7 +166,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     // ---------->
     // Helpers -->
     // ---------->
-    let safe_ReceiveMessageViaSocket = receiveMessageViaSocket (new CancellationToken())
+    let safe_ReceiveMessageViaSocket = receiveMessageViaSocket (CancellationToken.None)
 
     let safe_Send = sendMessageViaSocket serializerOptions socket
     let safe_Receive() =
@@ -242,13 +242,13 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                     "InvalidMessage" |> logMsgReceivedWithOptionalPayload None
                     match failureMsgs |> List.head with
                     | InvalidMessage (code, explanation) ->
-                      do! socket.CloseAsync(enum code, explanation, new CancellationToken())
+                      do! socket.CloseAsync(enum code, explanation, CancellationToken.None)
                 | Success (ConnectionInit p, _) ->
                     "ConnectionInit" |> logMsgReceivedWithOptionalPayload p
                     do! socket.CloseAsync(
                       enum CustomWebSocketStatus.tooManyInitializationRequests,
                       "too many initialization requests",
-                      new CancellationToken())
+                      CancellationToken.None)
                 | Success (ClientPing p, _) ->
                     "ClientPing" |> logMsgReceivedWithOptionalPayload p
                     match pingHandler with
@@ -265,7 +265,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                       do! socket.CloseAsync(
                         enum CustomWebSocketStatus.subscriberAlreadyExists,
                         sprintf "Subscriber for %s already exists" id,
-                        new CancellationToken())
+                        CancellationToken.None)
                     else
                       let! planExecutionResult =
                         executor.AsyncExecute(query.ExecutionPlan, root(), query.Variables)
@@ -302,7 +302,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       let! connectionInitSucceeded = Task.Run<bool>((fun _ ->
         task {
           logger.LogDebug("Waiting for ConnectionInit...")
-          let! receivedMessage = receiveMessageViaSocket (new CancellationToken()) serializerOptions schemaExecutor socket
+          let! receivedMessage = receiveMessageViaSocket (CancellationToken.None) serializerOptions schemaExecutor socket
           match receivedMessage with
           | Some (Success (ConnectionInit payload, _)) ->
             logger.LogDebug("Valid connection_init received! Responding with ACK!")
