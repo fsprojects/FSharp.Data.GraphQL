@@ -362,7 +362,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                 |> safe_HandleMessages options.SerializerOptions options.SchemaExecutor options.RootFactory options.WebsocketOptions.CustomPingHandler
             with
               | ex ->
-                logger.LogError("Unexpected exception \"{exceptionname}\" in GraphQLWebsocketMiddleware. More:\n{exceptionstr}", (ex.GetType().Name), ex)
+                logger.LogError(ex, "Cannot handle Websocket message.")
         else
           do! next.Invoke(ctx)
     }
