@@ -109,6 +109,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       if not (socket.State = WebSocketState.Open) then
         logger.LogTrace("Ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
       else
+        // TODO: Allocate string only if a debugger is attached
         let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
         let segment =
           new ArraySegment<byte>(
