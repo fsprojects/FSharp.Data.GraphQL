@@ -78,50 +78,28 @@ module MapFrom =
 module Schema =
   open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 
-  let validationException_Member_With_This_Name_Already_Exists (theName : string) =
-    GraphQLException(sprintf "member with name \"%s\" already exists" theName)
-
-  let validationException_Organization_Doesnt_Exist (theId : OrganizationId) =
-    match theId with
-    | OrganizationId x ->
-      GraphQLException (sprintf "organization with ID \"%s\" doesn't exist" (x.ToString()))
-
-  let validationException_ChatRoom_Doesnt_Exist (theId : ChatRoomId) =
-    GraphQLException(sprintf "chat room with ID \"%s\" doesn't exist" (theId.ToString()))
-
-  let validationException_PrivMember_Doesnt_Exist (theId : MemberPrivateId) =
-    match theId with
-    | MemberPrivateId x ->
-      GraphQLException(sprintf "member with private ID \"%s\" doesn't exist" (x.ToString()))
-
-  let validationException_Member_Isnt_Part_Of_Org () =
-    GraphQLException("this member is not part of this organization")
-
-  let validationException_ChatRoom_Isnt_Part_Of_Org () =
-    GraphQLException("this chat room is not part of this organization")
-
   let authenticateMemberInOrganization (organizationId : OrganizationId) (memberPrivId : MemberPrivateId) : RopResult<(Organization_In_Db * Member_In_Db), GraphQLException> =
     let maybeOrganization = FakePersistence.Organizations |> Map.tryFind organizationId
     let maybeMember = FakePersistence.Members.Values |> Seq.tryFind (fun x -> x.PrivId = memberPrivId)
 
     match (maybeOrganization, maybeMember) with
     | None, _ ->
-      fail <| (organizationId |> validationException_Organization_Doesnt_Exist)
+      fail <| (organizationId |> Exceptions.Organization_Doesnt_Exist)
     | _, None ->
-      fail <| (memberPrivId |> validationException_PrivMember_Doesnt_Exist)
+      fail <| (memberPrivId |> Exceptions.PrivMember_Doesnt_Exist)
     | Some organization, Some theMember ->
       if not (organization.Members |> List.contains theMember.Id) then
-        fail <| (validationException_Member_Isnt_Part_Of_Org())
+        fail <| (Exceptions.Member_Isnt_Part_Of_Org())
       else
         succeed (organization, theMember)
 
   let validateChatRoomExistence (organization : Organization_In_Db) (chatRoomId : ChatRoomId) : RopResult<ChatRoom_In_Db, GraphQLException> =
     match FakePersistence.ChatRooms |> Map.tryFind chatRoomId with
     | None ->
-      fail <| validationException_ChatRoom_Doesnt_Exist chatRoomId
+      fail <| Exceptions.ChatRoom_Doesnt_Exist chatRoomId
     | Some chatRoom ->
       if not (organization.ChatRooms |> List.contains chatRoom.Id) then
-        fail <| validationException_ChatRoom_Isnt_Part_Of_Org()
+        fail <| Exceptions.ChatRoom_Isnt_Part_Of_Org()
       else
         succeed <| chatRoom
 
@@ -389,7 +367,7 @@ module Schema =
               |> Option.map
                   (fun organization ->
                     if organization.Members |> List.exists (fun m -> m.Name = newMemberName) then
-                      raise (newMemberName |> validationException_Member_With_This_Name_Already_Exists)
+                      raise (newMemberName |> Exceptions.Member_With_This_Name_Already_Exists)
                     else
                       let newMemberPrivId = MemberPrivateId (Guid.NewGuid())
                       let newMemberId = MemberId (Guid.NewGuid())
