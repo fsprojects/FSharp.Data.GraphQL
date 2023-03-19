@@ -275,7 +275,7 @@ Target.create "PublishMiddleware" <| fun _ -> publishPackage "Server.Middleware"
 
 Target.create "PublishShared" <| fun _ -> publishPackage "Shared"
 
-Target.create "PublishAppInfrastructure" <| fun _ -> publishPackage "Server.AppInfrastructure"
+Target.create "PublishAspNetCore" <| fun _ -> publishPackage "Server.AspNetCore"
 
 Target.create "PackServer" <| fun _ -> pack "Server"
 
@@ -285,7 +285,7 @@ Target.create "PackMiddleware" <| fun _ -> pack "Server.Middleware"
 
 Target.create "PackShared" <| fun _ -> pack "Shared"
 
-Target.create "PackAppInfrastructure" <| fun _ -> pack "Server.AppInfrastructure"
+Target.create "PackAspNetCore" <| fun _ -> pack "Server.AspNetCore"
 
 
 // --------------------------------------------------------------------------------------
@@ -315,7 +315,7 @@ Target.create "PackAll" ignore
     ==> "PackServer"
     ==> "PackClient"
     ==> "PackMiddleware"
-    ==> "PackAppInfrastructure"
+    ==> "PackAspNetCore"
     ==> "PackAll"
 
 Target.runOrDefaultWithArguments "All"

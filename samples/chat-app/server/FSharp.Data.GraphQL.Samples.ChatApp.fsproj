@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.AppInfrastructure\FSharp.Data.GraphQL.Server.AppInfrastructure.fsproj" />
+    <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
   </ItemGroup>
 
 </Project>

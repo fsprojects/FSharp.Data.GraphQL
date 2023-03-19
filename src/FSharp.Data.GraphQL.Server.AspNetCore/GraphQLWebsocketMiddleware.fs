@@ -1,8 +1,8 @@
-namespace FSharp.Data.GraphQL.Server.AppInfrastructure
+namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
 open Microsoft.AspNetCore.Http
-open FSharp.Data.GraphQL.Server.AppInfrastructure.Rop
+open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 open System
 open System.Collections.Generic
 open System.Net.WebSockets

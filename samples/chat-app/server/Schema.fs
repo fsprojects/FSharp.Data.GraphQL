@@ -112,7 +112,7 @@ module MapFrom =
 
 
 module Schema =
-  open FSharp.Data.GraphQL.Server.AppInfrastructure.Rop
+  open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 
   let validationException_Member_With_This_Name_Already_Exists (theName : string) =
     GraphQLException(sprintf "member with name \"%s\" already exists" theName)

@@ -1,8 +1,8 @@
 namespace FSharp.Data.GraphQL.Samples.ChatApp
 
 open Giraffe
-open FSharp.Data.GraphQL.Server.AppInfrastructure
-open FSharp.Data.GraphQL.Server.AppInfrastructure.Giraffe
+open FSharp.Data.GraphQL.Server.AspNetCore
+open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Server.Kestrel.Core

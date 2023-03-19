@@ -1,10 +1,10 @@
-namespace FSharp.Data.GraphQL.Server.AppInfrastructure.Giraffe
+namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open Giraffe
-open FSharp.Data.GraphQL.Server.AppInfrastructure
-open FSharp.Data.GraphQL.Server.AppInfrastructure.Rop
+open FSharp.Data.GraphQL.Server.AspNetCore
+open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging

@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Server.AppInfrastructure
+namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 module internal GraphQLSubscriptionsManagement =
   let addSubscription (id : SubscriptionId, unsubscriber : SubscriptionUnsubscriber, onUnsubscribe : OnUnsubscribeAction)

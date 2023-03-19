@@ -1,8 +1,8 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open Giraffe
-open FSharp.Data.GraphQL.Server.AppInfrastructure.Giraffe
-open FSharp.Data.GraphQL.Server.AppInfrastructure
+open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
+open FSharp.Data.GraphQL.Server.AspNetCore
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Server.Kestrel.Core

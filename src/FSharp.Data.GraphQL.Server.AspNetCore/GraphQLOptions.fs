@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Server.AppInfrastructure
+namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
 open System

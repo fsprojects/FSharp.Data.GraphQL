@@ -1,6 +1,6 @@
 // https://fsharpforfunandprofit.com/rop/
 
-module FSharp.Data.GraphQL.Server.AppInfrastructure.Rop
+module FSharp.Data.GraphQL.Server.AspNetCore.Rop
 
 /// A Result is a success or failure
 /// The Success case has a success value, plus a list of messages
