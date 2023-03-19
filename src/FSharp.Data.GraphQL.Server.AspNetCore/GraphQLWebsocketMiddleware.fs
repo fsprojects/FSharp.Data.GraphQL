@@ -121,7 +121,13 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         logger.LogTrace("<- Response: {response}", message)
     }
 
-  let addClientSubscription (id : SubscriptionId) (jsonSerializerOptions) (socket) (howToSendDataOnNext: SubscriptionId -> Output -> Task<unit>) (streamSource: IObservable<Output>) (subscriptions : SubscriptionsDict)  =
+  let addClientSubscription
+      (id : SubscriptionId)
+      (howToSendDataOnNext: SubscriptionId -> Output -> Task<unit>)
+      ( subscriptions : SubscriptionsDict,
+        socket : WebSocket,
+        streamSource: IObservable<Output>,
+        jsonSerializerOptions : JsonSerializerOptions )  =
     let observer = new Reactive.AnonymousObserver<Output>(
       onNext =
         (fun theOutput ->
@@ -196,14 +202,14 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       task {
             match executionResult with
             | Stream observableOutput ->
-                subscriptions
-                |> addClientSubscription id serializerOptions socket safe_SendQueryOutput observableOutput
+                (subscriptions, socket, observableOutput, serializerOptions)
+                |> addClientSubscription id safe_SendQueryOutput
             | Deferred (data, errors, observableOutput) ->
                 do! data
                     |> safe_SendQueryOutput id
                 if errors.IsEmpty then
-                  subscriptions
-                  |> addClientSubscription id serializerOptions socket (safe_SendQueryOutputDelayedBy 5000) observableOutput
+                  (subscriptions, socket, observableOutput, serializerOptions)
+                  |> addClientSubscription id (safe_SendQueryOutputDelayedBy 5000)
                 else
                   ()
             | Direct (data, _) ->
