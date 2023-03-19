@@ -89,6 +89,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         with :? OperationCanceledException ->
           ()
 
+      // TODO: Allocate string only if a debugger is attached
       let message =
         completeMessage
         |> Seq.filter (fun x -> x > 0uy)
