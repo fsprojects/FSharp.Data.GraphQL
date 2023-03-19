@@ -75,7 +75,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     not (theSocket.State = WebSocketState.Aborted) &&
     not (theSocket.State = WebSocketState.Closed)
 
-  let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions: JsonSerializerOptions) (executor : Executor<'Root>) (socket : WebSocket) : Task<RopResult<ClientMessage, ClientMessageProtocolFailure> option> =
+  let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions: JsonSerializerOptions) (socket : WebSocket) : Task<RopResult<ClientMessage, ClientMessageProtocolFailure> option> =
     task {
       let buffer = Array.zeroCreate 4096
       let completeMessage = new List<byte>()
@@ -172,7 +172,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     let safe_Send = sendMessageViaSocket serializerOptions socket
     let safe_Receive() =
       socket
-      |> safe_ReceiveMessageViaSocket serializerOptions executor
+      |> safe_ReceiveMessageViaSocket serializerOptions
 
     let safe_SendQueryOutput id output =
       let outputAsDict = output :> IDictionary<string, obj>
@@ -294,7 +294,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     // <-- Main
     // <--------
 
-  let waitForConnectionInitAndRespondToClient (serializerOptions : JsonSerializerOptions) (schemaExecutor : Executor<'Root>) (connectionInitTimeoutInMs : int) (socket : WebSocket) : Task<RopResult<unit, string>> =
+  let waitForConnectionInitAndRespondToClient (serializerOptions : JsonSerializerOptions) (connectionInitTimeoutInMs : int) (socket : WebSocket) : Task<RopResult<unit, string>> =
     task {
       let timerTokenSource = new CancellationTokenSource()
       timerTokenSource.CancelAfter(connectionInitTimeoutInMs)
@@ -306,7 +306,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       let! connectionInitSucceeded = Task.Run<bool>((fun _ ->
         task {
           logger.LogDebug("Waiting for ConnectionInit...")
-          let! receivedMessage = receiveMessageViaSocket (CancellationToken.None) serializerOptions schemaExecutor socket
+          let! receivedMessage = receiveMessageViaSocket (CancellationToken.None) serializerOptions socket
           match receivedMessage with
           | Some (Success (ConnectionInit payload, _)) ->
             logger.LogDebug("Valid connection_init received! Responding with ACK!")
@@ -347,7 +347,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
           use! socket = ctx.WebSockets.AcceptWebSocketAsync("graphql-transport-ws")
           let! connectionInitResult =
             socket
-            |> waitForConnectionInitAndRespondToClient options.SerializerOptions options.SchemaExecutor options.WebsocketOptions.ConnectionInitTimeoutInMs
+            |> waitForConnectionInitAndRespondToClient options.SerializerOptions options.WebsocketOptions.ConnectionInitTimeoutInMs
           match connectionInitResult with
           | Failure errMsg ->
             logger.LogWarning("{warningmsg}", (sprintf "%A" errMsg))
