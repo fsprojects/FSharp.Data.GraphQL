@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <PropertyGroup Label="NuGet">
-    <Authors>John Bazinga, Andrii Chebukin, Jurii Chebukin, Ismael Carlos Velten, njlr, Garrett Birkel</Authors>
+    <Authors>John Bazinga, Andrii Chebukin, Jurii Chebukin, Ismael Carlos Velten, njlr, Garrett Birkel, valbers</Authors>
     <Product>FSharp.Data.GraphQL</Product>
     <Summary>F# implementation of Facebook GraphQL query language</Summary>
 
