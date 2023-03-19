@@ -172,49 +172,49 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     // ---------->
     // Helpers -->
     // ---------->
-    let safe_ReceiveMessageViaSocket = receiveMessageViaSocket (CancellationToken.None)
+    let rcvMsgViaSocket = receiveMessageViaSocket (CancellationToken.None)
 
-    let safe_Send = sendMessageViaSocket serializerOptions socket
-    let safe_Receive() =
+    let sendMsg = sendMessageViaSocket serializerOptions socket
+    let rcv() =
       socket
-      |> safe_ReceiveMessageViaSocket serializerOptions
+      |> rcvMsgViaSocket serializerOptions
 
-    let safe_SendQueryOutput id output =
+    let sendOutput id output =
       let outputAsDict = output :> IDictionary<string, obj>
       match outputAsDict.TryGetValue("errors") with
       | true, theValue ->
         // The specification says: "This message terminates the operation and no further messages will be sent."
         subscriptions
         |> GraphQLSubscriptionsManagement.removeSubscription(id)
-        safe_Send (Error (id, unbox theValue))
+        sendMsg (Error (id, unbox theValue))
       | false, _ ->
-        safe_Send (Next (id, output))
+        sendMsg (Next (id, output))
 
-    let sendQueryOutputDelayedBy (cancToken: CancellationToken) (ms: int) id output =
+    let sendOutputDelayedBy (cancToken: CancellationToken) (ms: int) id output =
       task {
             do! Async.StartAsTask(Async.Sleep ms, cancellationToken = cancToken)
             do! output
-                |> safe_SendQueryOutput id
+                |> sendOutput id
         }
-    let safe_SendQueryOutputDelayedBy = sendQueryOutputDelayedBy cancellationToken
+    let sendQueryOutputDelayedBy = sendOutputDelayedBy cancellationToken
 
-    let safe_ApplyPlanExecutionResult (id: SubscriptionId) (socket) (executionResult: GQLResponse)  =
+    let applyPlanExecutionResult (id: SubscriptionId) (socket) (executionResult: GQLResponse)  =
       task {
             match executionResult with
             | Stream observableOutput ->
                 (subscriptions, socket, observableOutput, serializerOptions)
-                |> addClientSubscription id safe_SendQueryOutput
+                |> addClientSubscription id sendOutput
             | Deferred (data, errors, observableOutput) ->
                 do! data
-                    |> safe_SendQueryOutput id
+                    |> sendOutput id
                 if errors.IsEmpty then
                   (subscriptions, socket, observableOutput, serializerOptions)
-                  |> addClientSubscription id (safe_SendQueryOutputDelayedBy 5000)
+                  |> addClientSubscription id (sendQueryOutputDelayedBy 5000)
                 else
                   ()
             | Direct (data, _) ->
                 do! data
-                    |> safe_SendQueryOutput id
+                    |> sendOutput id
         }
 
     let getStrAddendumOfOptionalPayload optionalPayload =
@@ -238,7 +238,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     task {
       try
         while not cancellationToken.IsCancellationRequested && socket |> isSocketOpen do
-            let! receivedMessage = safe_Receive()
+            let! receivedMessage = rcv()
             match receivedMessage with
             | None ->
               logger.LogTrace("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
@@ -260,9 +260,9 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                     match pingHandler with
                     | Some func ->
                       let! customP = p |> func serviceProvider
-                      do! ServerPong customP |> safe_Send
+                      do! ServerPong customP |> sendMsg
                     | None ->
-                      do! ServerPong p |> safe_Send
+                      do! ServerPong p |> sendMsg
                 | Success (ClientPong p, _) ->
                     "ClientPong" |> logMsgReceivedWithOptionalPayload p
                 | Success (Subscribe (id, query), _) ->
@@ -277,7 +277,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                         executor.AsyncExecute(query.ExecutionPlan, root(), query.Variables)
                         |> Async.StartAsTask
                       do! planExecutionResult
-                          |> safe_ApplyPlanExecutionResult id socket
+                          |> applyPlanExecutionResult id socket
                 | Success (ClientComplete id, _) ->
                     "ClientComplete" |> logMsgWithIdReceived id
                     subscriptions |> GraphQLSubscriptionsManagement.removeSubscription (id)
