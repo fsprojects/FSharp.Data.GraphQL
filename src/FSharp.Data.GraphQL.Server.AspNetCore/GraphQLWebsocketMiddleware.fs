@@ -106,8 +106,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
   let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) =
     task {
       if not (socket.State = WebSocketState.Open) then
-        if logger.IsEnabled(LogLevel.Trace) then
-          logger.LogTrace("Ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
+        logger.LogTrace("Ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
       else
         let! serializedMessage = message |> serializeServerMessage jsonSerializerOptions
         let segment =
@@ -115,13 +114,11 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             System.Text.Encoding.UTF8.GetBytes(serializedMessage)
           )
         if not (socket.State = WebSocketState.Open) then
-          if logger.IsEnabled(LogLevel.Trace) then
-            logger.LogTrace("ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
+          logger.LogTrace("ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
         else
           do! socket.SendAsync(segment, WebSocketMessageType.Text, endOfMessage = true, cancellationToken = new CancellationToken())
 
-        if logger.IsEnabled(LogLevel.Trace) then
-          logger.LogTrace("<- Response: {response}", message)
+        logger.LogTrace("<- Response: {response}", message)
     }
 
   let addClientSubscription (id : SubscriptionId) (jsonSerializerOptions) (socket) (howToSendDataOnNext: SubscriptionId -> Output -> Task<unit>) (streamSource: IObservable<Output>) (subscriptions : SubscriptionsDict)  =
@@ -220,12 +217,10 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         |> Option.defaultWith (fun () -> "")
 
     let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
-      if logger.IsEnabled(LogLevel.Trace) then
-        logger.LogTrace ("{message}{messageaddendum}", msgAsStr, (optionalPayload |> getStrAddendumOfOptionalPayload))
+      logger.LogTrace ("{message}{messageaddendum}", msgAsStr, (optionalPayload |> getStrAddendumOfOptionalPayload))
 
     let logMsgWithIdReceived (id : string) (msgAsStr : string) =
-      if logger.IsEnabled(LogLevel.Trace) then
-        logger.LogTrace("{message} (id: {messageid})", msgAsStr, id)
+      logger.LogTrace("{message} (id: {messageid})", msgAsStr, id)
 
     // <--------------
     // <-- Helpers --|
@@ -240,8 +235,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             let! receivedMessage = safe_Receive()
             match receivedMessage with
             | None ->
-              if logger.IsEnabled(LogLevel.Trace) then
-                logger.LogTrace(sprintf "Websocket socket received empty message! (socket state = %A)" socket.State)
+              logger.LogTrace("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
             | Some msg ->
                 match msg with
                 | Failure failureMsgs ->
