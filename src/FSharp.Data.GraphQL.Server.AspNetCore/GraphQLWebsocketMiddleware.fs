@@ -145,9 +145,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       onCompleted =
         (fun () ->
           Complete id
-          |> sendMessageViaSocket jsonSerializerOptions (socket)
-          |> Async.AwaitTask
-          |> Async.RunSynchronously
+          |> sendMessageViaSocket jsonSerializerOptions socket
+          |> Task.WhenAll
           subscriptions
           |> GraphQLSubscriptionsManagement.removeSubscription(id)
         )
