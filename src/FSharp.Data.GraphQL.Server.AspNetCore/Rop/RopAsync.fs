@@ -1,4 +1,4 @@
-module FSharp.Data.GraphQL.Server.AppInfrastructure.RopAsync
+module FSharp.Data.GraphQL.Server.AspNetCore.RopAsync
 
 open Rop
 open System.Threading.Tasks

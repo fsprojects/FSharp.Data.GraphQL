@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Tests.AppInfrastructure
+namespace FSharp.Data.GraphQL.Tests.AspNetCore
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types

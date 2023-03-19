@@ -1,7 +1,7 @@
-module FSharp.Data.GraphQL.Tests.AppInfrastructure.SerializationTests
+module FSharp.Data.GraphQL.Tests.AspNetCore.SerializationTests
 
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Server.AppInfrastructure
+open FSharp.Data.GraphQL.Server.AspNetCore
 open System.Text.Json
 open Xunit
 

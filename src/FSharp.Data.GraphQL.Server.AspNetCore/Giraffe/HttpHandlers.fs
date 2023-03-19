@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Server.AppInfrastructure.Giraffe
+namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open System
 open System.IO
@@ -14,7 +14,7 @@ open Giraffe
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Server.AppInfrastructure
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 

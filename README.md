@@ -51,7 +51,7 @@ It's type safe. Things like invalid fields or invalid return types will be check
 
 ### ASP.NET / Giraffe / Websocket (for GraphQL subscriptions) usage
 
-→ See the [AppInfrastructure/README.md](src/FSharp.Data.GraphQL.Server.AppInfrastructure/README.md)
+→ See the [AspNetCore/README.md](src/FSharp.Data.GraphQL.Server.AspNetCore/README.md)
 
 ## Demos
 

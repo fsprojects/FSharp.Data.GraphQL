@@ -1,5 +1,5 @@
 [<AutoOpen>]
-module FSharp.Data.GraphQL.Server.AppInfrastructure.HttpContextExtensions
+module FSharp.Data.GraphQL.Server.AspNetCore.HttpContextExtensions
 
 open System.Collections.Generic
 open System.Collections.Immutable
