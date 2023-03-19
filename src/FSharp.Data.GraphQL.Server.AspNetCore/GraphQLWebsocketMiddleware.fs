@@ -283,7 +283,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
       with
       | ex ->
-        logger.LogError("Unexpected exception \"{exceptionname}\" in GraphQLWebsocketMiddleware (handleMessages). More:\n{exceptionstr}", (ex.GetType().Name), ex)
+        logger.LogError(ex, "Cannot handle a message; dropping a websocket connection")
         // at this point, only something really weird must have happened.
         // In order to avoid faulty state scenarios and unimagined damages,
         // just close the socket without further ado.
