@@ -363,7 +363,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             longRunningCancellationToken.Register(fun _ ->
                 socket
                 |> tryToGracefullyCloseSocketWithDefaultBehavior
-                |> Task.WhenAll
+                |> Async.AwaitTask
+                |> Async.RunSynchronously
             ) |> ignore
             let safe_HandleMessages = handleMessages longRunningCancellationToken
             try
