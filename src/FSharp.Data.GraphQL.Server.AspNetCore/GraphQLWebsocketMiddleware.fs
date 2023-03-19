@@ -139,7 +139,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         ),
       onError =
         (fun ex ->
-          logger.LogError("[Error on subscription {id}]: {exceptionstr}", id, ex)
+          logger.LogError(ex, "Error on subscription with id='{id}'", id)
         ),
       onCompleted =
         (fun () ->
