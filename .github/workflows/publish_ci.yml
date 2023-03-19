@@ -63,6 +63,14 @@ jobs:
       run: |
         dotnet nuget push nuget/*Server*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
+    - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.AspNetCore
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore project to GitHub
+      run: |
+        dotnet nuget push nuget/*Server.AspNetCore*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}}
+
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
