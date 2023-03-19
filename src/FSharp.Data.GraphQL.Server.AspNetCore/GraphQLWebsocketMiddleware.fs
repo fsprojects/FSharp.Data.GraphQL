@@ -157,13 +157,11 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     |> GraphQLSubscriptionsManagement.addSubscription(id, unsubscriber, (fun _ -> ()))
 
   let tryToGracefullyCloseSocket (code, message) theSocket =
-    task {
-        if theSocket |> canCloseSocket
-        then
-          do! theSocket.CloseAsync(code, message, CancellationToken.None)
-        else
-          ()
-    }
+    if theSocket |> canCloseSocket
+    then
+      theSocket.CloseAsync(code, message, CancellationToken.None)
+    else
+      Task.CompletedTask
 
   let tryToGracefullyCloseSocketWithDefaultBehavior =
     tryToGracefullyCloseSocket (WebSocketCloseStatus.NormalClosure, "Normal Closure")
