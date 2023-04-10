@@ -181,7 +181,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         match scalardef.CoerceInput (Variable input) with
         | None when isNullable -> null
         // TODO: Capture position in the JSON document
-        | None -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'None'."
+        | None -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'null'."
         | Some res -> res
     | Nullable (InputObject innerdef) ->
         coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
@@ -221,13 +221,13 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
             raise
             <| GraphQLException ($"{errMsg}Cannot coerce value of type '%O{other.GetType ()}' to list.")
     // TODO: Improve error message generation
-    | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}': ")
+    | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}' ")
     | Enum enumdef ->
         match input with
         | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
         | _ when input.ValueKind = JsonValueKind.Null ->
             raise
-            <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
+            <| GraphQLException ($"%s{errMsg}Expected value of Enum '%s{enumdef.Name}', but no value was found.")
         | _ when input.ValueKind = JsonValueKind.String ->
             let value = input.GetString()
             match enumdef.Options |> Array.tryFind (fun o -> o.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) with
