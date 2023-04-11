@@ -249,12 +249,15 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonEl
         let mapped =
             objdef.Fields
             |> Array.map (fun field ->
+                let inline coerce value = KeyValuePair (field.Name, coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': ")
                 // TODO: Consider using of option
-                let value =
-                    match input.TryGetProperty field.Name with
-                    | true, valueFound -> valueFound
-                    | false, _ -> JsonDocument.Parse("null").RootElement
-                KeyValuePair (field.Name, coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "))
+                match input.TryGetProperty field.Name with
+                | true, value -> coerce value
+                | false, _ ->
+                    match field.DefaultValue with
+                    | Some value -> KeyValuePair (field.Name, value)
+                    | None -> coerce (JsonDocument.Parse("null").RootElement)
+            )
             |> ImmutableDictionary.CreateRange
 
         upcast mapped
