@@ -181,7 +181,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         match scalardef.CoerceInput (Variable input) with
         | None when isNullable -> null
         // TODO: Capture position in the JSON document
-        | None -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'null'."
+        | None -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}!' but got 'null'."
         | Some res -> res
     | Nullable (InputObject innerdef) ->
         coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
@@ -221,7 +221,7 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
             raise
             <| GraphQLException ($"{errMsg}Cannot coerce value of type '%O{other.GetType ()}' to list.")
     // TODO: Improve error message generation
-    | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}' ")
+    | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}': ")
     | Enum enumdef ->
         match input with
         | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
@@ -281,6 +281,6 @@ let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<stri
             | Nullable _ -> null
             | _ ->
                 raise
-                <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
+                <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}!' has no value provided.")
     | true, jsonElement ->
         coerceVariableValue false vardef.TypeDef vardef jsonElement (sprintf "Variable '$%s': " vname)
