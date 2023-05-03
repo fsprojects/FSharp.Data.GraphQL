@@ -159,7 +159,7 @@ module Schema =
                           ConnectionOf CharacterType,
                           "The friends of the human, or an empty list if they have none.",
                           Connection.allArgs,
-                          fun ctx human ->
+                          fun ctx (human: Human) ->
                               let totalCount = human.Friends.Length
 
                               let friends, hasNextPage =
