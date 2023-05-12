@@ -325,3 +325,9 @@ let parse query =
   match run documents query with
   | Success(result, _, _) -> result
   | Failure(errorMsg, _, _) -> raise (System.FormatException(errorMsg))
+
+/// Parses a GraphQL Document. Throws exception on invalid formats.
+let tryParse query =
+  match run documents query with
+  | Success(result, _, _) -> Result.Ok result
+  | Failure(errorMsg, _, _) -> Result.Error errorMsg
