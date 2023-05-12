@@ -8,6 +8,8 @@ namespace FSharp.Data.GraphQL.Ast
 type Document = {
     Definitions: Definition list
 }
+with
+    member doc.IsEmpty = doc.Definitions.IsEmpty
 
 and Definition =
     | OperationDefinition of OperationDefinition
