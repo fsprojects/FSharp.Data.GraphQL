@@ -34,11 +34,11 @@ type SimpleExecutionWithMiddlewaresBenchmark() =
         simpleAst <- parse QueryStrings.simple
         flatAst <- parse QueryStrings.flat
         nestedAst <- parse QueryStrings.nested
-        simpleExecutionPlan <- schemaProcessor.CreateExecutionPlan(simpleAst)
-        flatExecutionPlan <- schemaProcessor.CreateExecutionPlan(flatAst)
-        nestedExecutionPlan <- schemaProcessor.CreateExecutionPlan(nestedAst)
+        simpleExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(simpleAst)
+        flatExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(flatAst)
+        nestedExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(nestedAst)
         filteredAst <- parse QueryStrings.filtered
-        filteredExecutionPlan <- schemaProcessor.CreateExecutionPlan(filteredAst)
+        filteredExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(filteredAst)
 
     [<Benchmark>]
     member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously

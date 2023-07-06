@@ -7,11 +7,12 @@
   </PropertyGroup>
 
   <ItemGroup Label="PackageReferences">
+    <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="Giraffe" />
-    <PackageReference Include="Newtonsoft.Json" />
     <PackageReference Include="GraphQL.Server.Ui.Playground" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />
+    <PackageReference Include="Newtonsoft.Json" />
   </ItemGroup>
 
   <ItemGroup>

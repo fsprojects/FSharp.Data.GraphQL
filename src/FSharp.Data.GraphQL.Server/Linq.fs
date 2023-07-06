@@ -141,11 +141,24 @@ type CallableArg =
 /// Delegate describing application of the callable argument on the provided LINQ expression.
 type ArgApplication = Expression -> CallableArg -> Expression
 
+let private extractStringValueIfOption =
+    let _, _, (getValue : obj -> obj) = ReflectionHelper.optionOfType typeof<string>
+    getValue >> string
+
 let private sourceAndMethods track =
     match track.ReturnType with
     | Gen.Queryable t -> t, Gen.queryableMethods
     | Gen.Enumerable t -> t, Gen.enumerableMethods
     | other -> failwithf "Type '%O' is neither queryable nor enumerable" other
+
+let private extractValueIfOption callable =
+    let optionType = typeof<option<_>>.GetGenericTypeDefinition()
+    let argType = callable.Argument.Value.GetType()
+    if argType.IsGenericType && argType.GetGenericTypeDefinition() = optionType then
+        let _, _, (getValue : obj -> obj) = ReflectionHelper.optionOfType argType.GenericTypeArguments[0]
+        callable.Argument.Value |> getValue
+    else
+        callable.Argument.Value
 
 /// Id(value) -> expression.Where(p0 => p0.(idField) == value)
 let private applyId: ArgApplication = fun expression callable ->
@@ -153,7 +166,7 @@ let private applyId: ArgApplication = fun expression callable ->
     let p0 = Expression.Parameter tSource
     let idProperty = memberExpr callable.Type "id" p0
     // Func<tSource, bool> predicate = p0 => p0 == value
-    let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant callable.Argument.Value), p0)
+    let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant (extractValueIfOption callable)), p0)
     let where = methods.Where.MakeGenericMethod [| tSource |]
     upcast Expression.Call(null, where, expression, predicate)
 
@@ -162,7 +175,7 @@ let private applyOrderBy: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource
     // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-    let property = memberExpr callable.Type (string callable.Argument.Value) p0
+    let property = memberExpr callable.Type (callable.Argument.Value |> extractStringValueIfOption) p0
     let memberAccess = Expression.Lambda(property, [| p0 |])
     let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
     upcast Expression.Call(null, orderBy, expression, memberAccess)
@@ -172,7 +185,7 @@ let private applyOrderByDesc: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let p0 = Expression.Parameter tSource
     // Func<tSource, tResult> memberAccess = p0 => p0.<value>
-    let property = memberExpr callable.Type (string callable.Argument.Value) p0
+    let property = memberExpr callable.Type (callable.Argument.Value |> extractStringValueIfOption) p0
     let memberAccess = Expression.Lambda(property, [| p0 |])
     let orderBy = methods.OrderByDesc.MakeGenericMethod [| tSource; memberAccess.ReturnType |]
     upcast Expression.Call(null, orderBy, expression, memberAccess)
@@ -181,13 +194,13 @@ let private applyOrderByDesc: ArgApplication = fun expression callable ->
 let private applySkip: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let skip = methods.Skip.MakeGenericMethod [| tSource |]
-    upcast Expression.Call(null, skip, expression, Expression.Constant(callable.Argument.Value))
+    upcast Expression.Call(null, skip, expression, Expression.Constant (extractValueIfOption callable))
 
 /// Take(num) -> expression.Take(num)
 let private applyTake: ArgApplication = fun expression callable ->
     let tSource, methods = sourceAndMethods callable.Track
     let skip = methods.Take.MakeGenericMethod [| tSource |]
-    upcast Expression.Call(null, skip, expression, Expression.Constant(callable.Argument.Value))
+    upcast Expression.Call(null, skip, expression, Expression.Constant (extractValueIfOption callable))
 
 /// First(num)/After(id) -> expression.Where(p0 => p0.(idField) > id).OrderBy(p0 => p0.(idField)).Take(num)
 let private applyFirst: ArgApplication = fun expression callable ->
@@ -206,13 +219,13 @@ let private applyFirst: ArgApplication = fun expression callable ->
         | Some(after) ->
             //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
             // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-            let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant after.Value), p0)
+            let predicate = Expression.Lambda(Expression.GreaterThan(p0, Expression.Constant (after.Value |> extractStringValueIfOption)), p0)
             let where = methods.Where.MakeGenericMethod [| tSource |]
             Expression.Call(null, where, ordered, predicate)
         | None -> ordered
     // 5. apply result.Take(value)
     let take = methods.Take.MakeGenericMethod [| tSource |]
-    upcast Expression.Call(null, take, result, Expression.Constant callable.Argument.Value)
+    upcast Expression.Call(null, take, result, Expression.Constant (callable.Argument.Value |> extractStringValueIfOption))
 
 /// Last(num)/Before(id) -> expression.Where(p0 => p0.(idField) < id).OrderByDescending(p0 => p0.(idField)).Take(num)
 let private applyLast: ArgApplication = fun expression callable ->
@@ -231,13 +244,13 @@ let private applyLast: ArgApplication = fun expression callable ->
         | Some(before) ->
             //TODO: 3a. parse id value using Relay GlobalId and retrieve "actual" id value
             // 4a. apply q.Where(p0 => p0.<ID_field> > id) on the ordered expression
-            let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant before.Value), p0)
+            let predicate = Expression.Lambda(Expression.LessThan(p0, Expression.Constant (before.Value |> extractStringValueIfOption)), p0)
             let where = methods.Where.MakeGenericMethod [| tSource |]
             Expression.Call(null, where, ordered, predicate)
         | None -> ordered
     // 5. apply result.Take(value)
     let take = methods.Take.MakeGenericMethod [| tSource |]
-    upcast Expression.Call(null, take, result, Expression.Constant callable.Argument.Value)
+    upcast Expression.Call(null, take, result, Expression.Constant (callable.Argument.Value |> extractStringValueIfOption))
 
 /// Tries to resolve all supported LINQ args with values
 /// from a given ExecutionInfo and variables collection

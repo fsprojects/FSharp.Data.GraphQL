@@ -4,6 +4,7 @@
 module FSharp.Data.GraphQL.Planning
 
 open System
+open System.Diagnostics
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -61,13 +62,16 @@ let private objectInfo (ctx: PlanningContext) (parentDef: ObjectDef) field inclu
             match parentDef with
             | SubscriptionObject _ -> (fdef :?> SubscriptionFieldDef).OutputTypeDef
             | Object _ -> fdef.TypeDef
-            | _ -> raise (GraphQLException (sprintf "Unexpected parentdef type!"))
+            | _ ->
+                Debug.Fail "Must be prevented by validation"
+                failwith "Unexpected parentdef type!"
           Definition = fdef
           Ast = field
           Include = includer
           IsNullable = false }
     | None ->
-        raise (GraphQLException (sprintf "No field '%s' was defined in object definition '%s'" field.Name parentDef.Name))
+        Debug.Fail "Must be prevented by validation"
+        failwith $"No field '%s{field.Name}' was defined in object definition '%s{parentDef.Name}'"
 
 let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef) field typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
@@ -111,7 +115,8 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
                 abstractionInfo ctx abstractDef field None includer
             | _ ->
                 let pname = parentDef :?> NamedDef
-                raise (GraphQLException (sprintf "There is no object type named '%s' that is a possible type of '%s'" typeName pname.Name))
+                Debug.Fail "Must be prevented by validation"
+                failwith $"There is no object type named '%s{typeName}' that is a possible type of '%s{pname.Name}'"
 
 let private directiveIncluder (directive: Directive) : Includer =
     fun variables ->
@@ -120,7 +125,9 @@ let private directiveIncluder (directive: Directive) : Includer =
         | other ->
             match coerceBoolInput (InlineConstant other) with
             | Some s -> s
-            | None -> raise (GraphQLException (sprintf "Expected 'if' argument of directive '@%s' to have boolean value but got %A" directive.Name other))
+            | None ->
+                Debug.Fail "Must be prevented by validation"
+                failwith $"Expected 'if' argument of directive '@%s{directive.Name}' to have boolean value but got %A{other}"
 
 let private incl: Includer = fun _ -> true
 let private excl: Includer = fun _ -> false
@@ -154,7 +161,9 @@ let private getStreamBufferMode (field : Field) =
     let cast argName value =
         match value with
         | IntValue v -> int v
-        | _ -> raise <| GraphQLException(sprintf "Stream directive parsing error: expected an integer value in argument '%s', but could not parse it." argName)
+        | _ ->
+            Debug.Fail "Must be prevented by validation"
+            failwith $"Stream directive parsing error: expected an integer value in argument '%s{argName}', but could not parse it."
     let directive =
         field.Directives
         |> List.tryFind (fun d -> d.Name = "stream")
@@ -166,7 +175,9 @@ let private getStreamBufferMode (field : Field) =
     let preferredBatchSize = getArg "preferredBatchSize"
     match directive with
     | Some d -> { Interval = interval d; PreferredBatchSize = preferredBatchSize d }
-    | None -> failwithf "Expected Stream directive on field '%s', but it does not exist." field.AliasOrName
+    | None ->
+        Debug.Fail "Must be prevented by validation"
+        failwithf $"Expected Stream directive on field '%s{field.AliasOrName}', but it does not exist."
 
 let private isLiveField (field : Field) =
     field.Directives |> List.exists (fun d -> d.Name = "live")
@@ -179,11 +190,15 @@ let private (|Planned|Deferred|Streamed|Live|) field =
 
 let private getSelectionFrag = function
     | SelectFields(fragmentFields) -> fragmentFields
-    | _ -> failwith "Expected a Selection!"
+    | _ ->
+        Debug.Fail "Must be prevented by validation"
+        failwith "Expected a Selection!"
 
 let private getAbstractionFrag = function
     | ResolveAbstraction(fragmentFields) -> fragmentFields
-    | _ -> failwith "Expected an Abstraction!"
+    | _ ->
+        Debug.Fail "Must be prevented by validation"
+        failwith "Expected an Abstraction!"
 
 let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
      let rec merge (x: ExecutionInfo) (y: ExecutionInfo) =
@@ -192,7 +207,9 @@ let rec private deepMerge (xs: ExecutionInfo list) (ys: ExecutionInfo list) =
          | ResolveCollection(x'), ResolveCollection(y') -> { x with Kind = ResolveCollection(merge x' y') }
          | ResolveAbstraction(xs'), ResolveAbstraction(ys') -> { x with Kind = ResolveAbstraction(Map.merge (fun _ x' y' -> deepMerge x' y') xs' ys')}
          | SelectFields(xs'), SelectFields(ys') -> { x with Kind = SelectFields(deepMerge xs' ys') }
-         | _ -> failwithf "Cannot merge ExecutionInfos with different kinds!"
+         | _ ->
+            Debug.Fail "Must be prevented by validation"
+            failwith "Cannot merge ExecutionInfos with different kinds!"
      // Apply the merge to every conflict
      let xs' =
          xs
@@ -221,7 +238,9 @@ let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionI
         { info with Kind = ResolveCollection inner }
     | Abstract _ ->
         planAbstraction ctx info.Ast.SelectionSet info (ref []) None
-    | _ -> failwith "Invalid Return Type in Planning!"
+    | _ ->
+        Debug.Fail "Must be prevented by validation"
+        failwith "Invalid Return Type in Planning!"
 
 and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) (info: ExecutionInfo) visitedFragments : ExecutionInfo =
     let parentDef = downcast info.ReturnDef
@@ -316,12 +335,18 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
     |> List.map (fun vdef ->
         let vname = vdef.VariableName
         match Values.tryConvertAst schema vdef.Type with
-        | None -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not known in the current schema" vname (vdef.Type.ToString()) ))
+        | None ->
+            Debug.Fail "Must be prevented by validation"
+            raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not known in the current schema" vname (vdef.Type.ToString()) ))
         | Some tdef ->
             match tdef with
             | :? InputDef as idef ->
                 { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
-            | _ -> raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
+            | _ ->
+                Debug.Fail "Must be prevented by validation"
+                raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
+
+open FSharp.Data.GraphQL.Validation
 
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // Create artificial plan info to start with
@@ -335,44 +360,43 @@ let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
         Include = incl
         IsNullable = false }
     let resolvedInfo = planSelection ctx ctx.Operation.SelectionSet rootInfo (ref [])
-    let topFields =
+    let fields =
         match resolvedInfo.Kind with
         | SelectFields tf -> tf
-        | x -> failwith <| sprintf "Expected SelectFields Kind, but got %A" x
+        | x -> failwith $"Expected SelectFields Kind, but got %A{x}"
     let variables = planVariables ctx.Schema ctx.Operation
     match ctx.Operation.OperationType with
     | Query ->
         { DocumentId = ctx.DocumentId
           Operation = ctx.Operation
-          Fields = topFields
           RootDef = ctx.Schema.Query
-          Strategy = Parallel
+          Fields = fields
           Variables = variables
-          Metadata = ctx.Metadata
-          ValidationResult = ctx.ValidationResult }
+          Strategy = Parallel
+          Metadata = ctx.Metadata }
     | Mutation ->
         match ctx.Schema.Mutation with
         | Some mutationDef ->
             { DocumentId = ctx.DocumentId
               Operation = ctx.Operation
-              Fields = topFields
               RootDef = mutationDef
-              Strategy = Sequential
+              Fields = fields
               Variables = variables
-              Metadata = ctx.Metadata
-              ValidationResult = ctx.ValidationResult }
+              Strategy = Sequential
+              Metadata = ctx.Metadata }
         | None ->
-            raise (GraphQLException "Tried to execute a GraphQL mutation on schema with no mutation type defined")
+            Debug.Fail "Must be prevented by validation"
+            failwith "Tried to execute a GraphQL mutation on schema with no mutation type defined"
     | Subscription ->
         match ctx.Schema.Subscription with
         | Some subscriptionDef ->
             { DocumentId = ctx.DocumentId
               Operation = ctx.Operation
-              Fields = topFields
               RootDef = subscriptionDef
-              Strategy = Sequential
+              Fields = fields
               Variables = variables
-              Metadata = ctx.Metadata
-              ValidationResult = ctx.ValidationResult }
+              Strategy = Sequential
+              Metadata = ctx.Metadata }
         | None ->
-            raise (GraphQLException "Tried to execute a GraphQL subscription on schema with no mutation type defined")
+            Debug.Fail "Must be prevented by validation"
+            failwith "Tried to execute a GraphQL subscription on schema with no mutation type defined"

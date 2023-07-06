@@ -34,6 +34,7 @@
   <ItemGroup>
     <PackageReference Include="FParsec" />
     <PackageReference Include="FSharp.SystemTextJson" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="System.Collections.Immutable" />
     <PackageReference Include="System.Text.Json" />
     <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Portable.System.DateTimeOnly" VersionOverride="6.0.3" />
@@ -43,9 +44,9 @@
   <ItemGroup>
     <Compile Include="Diagnostics.fs" />
     <Compile Include="ObjAndStructConversions.fs" />
+    <Compile Include="Errors.fs" />
     <Compile Include="ValidationTypes.fs" />
     <Compile Include="Extensions.fs" />
-    <Compile Include="Errors.fs" />
     <Compile Include="Prolog.fs" />
     <Compile Include="MemoryCache.fs" />
     <Compile Include="Ast.fs" />

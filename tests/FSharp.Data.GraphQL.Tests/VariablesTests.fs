@@ -204,7 +204,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     match actual with
     | RequestError errors ->
         hasError "Variable '$input' of type 'TestInputObject': in field 'c': expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles variables and errors on incorrect type`` () =
@@ -218,7 +218,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
     match actual with
     | RequestError errors ->
         hasError errMsg errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles variables and errors on omission of nested non-nulls`` () =
@@ -232,7 +232,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     | RequestError errors ->
         List.length errors |> equals 1
         hasError "Variable '$input' of type 'TestInputObject': in field 'c': expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted`` () =
@@ -328,7 +328,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     match actual with
     | RequestError errors ->
         hasError "Variable '$value': expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value in a variable`` () =
@@ -448,7 +448,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     match actual with
     | RequestError errors ->
         hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain values`` () =
@@ -521,7 +521,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     match actual with
     | RequestError errors ->
         hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
@@ -534,7 +534,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     match actual with
     | RequestError errors ->
         hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain values`` () =
@@ -562,7 +562,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     match actual with
     | RequestError errors ->
         hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected Direct GQResponse"
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow invalid types to be used as values`` () =
@@ -570,13 +570,13 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
           fieldWithObjectInput(input: $input)
         }"""
     // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
-    let e = throws<MalformedQueryException> (fun () ->
-        let testInputList = "[\"A\",\"B\"]"
-        let params' = paramsWithValueInput testInputList
-        Executor(schema).AsyncExecute(ast, variables = params')
-        |> sync
-        |> ignore)
-    e.Message |> equals "GraphQL query defined variable '$input' of type 'TestType!' which is not an input type definition"
+    let testInputList = "[\"A\",\"B\"]"
+    let params' = paramsWithValueInput testInputList
+    let result = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    match result with
+    | RequestError errors ->
+        hasError "Variable 'input' in operation 'q' has a type that is not an input type defined by the schema (TestType!)." errors
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow unknown types to be used as values`` () =
@@ -584,13 +584,13 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
           fieldWithObjectInput(input: $input)
         }"""
     // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
-    let e = throws<MalformedQueryException> (fun () ->
-        let testInputValue = "\"whoknows\""
-        let params' = paramsWithValueInput testInputValue
-        Executor(schema).AsyncExecute(ast, variables = params')
-        |> sync
-        |> ignore)
-    e.Message |> equals "GraphQL query defined variable '$input' of type 'UnknownType!' which is not known in the current schema"
+    let testInputValue = "\"whoknows\""
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    match actual with
+    | RequestError errors ->
+        hasError "Variable 'input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)." errors
+    | _ -> fail "Expected RequestError GQResponse"
 
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =

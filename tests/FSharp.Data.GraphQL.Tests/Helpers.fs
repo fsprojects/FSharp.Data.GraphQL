@@ -7,7 +7,6 @@ open System
 open System.Linq
 open System.Collections.Generic
 open Xunit
-open FSharp.Data.GraphQL.Execution
 open System.Threading
 open FSharp.Data.GraphQL
 
@@ -156,3 +155,15 @@ module Observer =
 
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
         new TestObserver<'T>(sub, onReceive)
+
+open System.Runtime.CompilerServices
+open FSharp.Data.GraphQL.Types
+
+[<Extension>]
+type ExecutorExtensions =
+
+    [<Extension>]
+    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
+        match executor.CreateExecutionPlan(queryOrMutation, ?operationName = operationName, ?meta = meta) with
+        | Ok executionPlan -> executionPlan
+        | Error _ -> fail "invalid query"; Unchecked.defaultof<_>

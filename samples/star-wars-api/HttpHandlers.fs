@@ -268,8 +268,7 @@ module HttpHandlers =
                     variables |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
 
                     let root = { RequestId = System.Guid.NewGuid () |> string }
-                    let executionPlan = Schema.executor.CreateExecutionPlan (ast, ?operationName = operationName)
-                    let! result = Schema.executor.AsyncExecute (executionPlan, root, ?variables = variables)
+                    let! result = Schema.executor.AsyncExecute (ast, root, ?variables = variables, ?operationName = operationName)
                     let response = result |> toResponse
                     return Results.Ok response
             }

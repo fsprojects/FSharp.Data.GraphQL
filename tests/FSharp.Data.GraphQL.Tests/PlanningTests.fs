@@ -67,7 +67,7 @@ let ``Planning should retain correct types for leafs``() =
         lastName
         age
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
@@ -88,7 +88,7 @@ let ``Planning should work with fragments``() =
         firstName
         lastName
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
@@ -113,7 +113,7 @@ let ``Planning should work with parallel fragments``() =
         lastName
     }
     """
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
@@ -131,11 +131,14 @@ let ``Planning should retain correct types for lists``() =
         people {
             firstName
             lastName
-            friends
+            friends {
+                firstName
+                lastName
+            }
         }
     }"""
     let PersonList : ListOfDef<Person, Person list> = ListOf Person
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
     listInfo.Identifier |> equals "people"
@@ -171,7 +174,7 @@ let ``Planning should work with interfaces``() =
     fragment ageFragment on Person {
         age
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let INamedList : ListOfDef<obj, obj list> = ListOf INamed
     let listInfo = plan.Fields.Head
@@ -207,7 +210,7 @@ let ``Planning should work with unions``() =
             }
         }
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
     let UNamedList : ListOfDef<Named, Named list> = ListOf UNamed

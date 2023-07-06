@@ -82,7 +82,7 @@ let schemaProcessor = Executor(schema)
 
 [<Fact>]
 let ``Property tracker can track indirect properties`` () =
-    let plan = schemaProcessor.CreateExecutionPlan("""
+    let plan = schemaProcessor.CreateExecutionPlanOrFail("""
     {
         people {
             fullName
@@ -99,7 +99,7 @@ let ``Property tracker can track indirect properties`` () =
 
 [<Fact>]
 let ``Property tracker can correctly jump over properties not being part of the tracked chain`` () =
-    let plan = schemaProcessor.CreateExecutionPlan("""
+    let plan = schemaProcessor.CreateExecutionPlanOrFail("""
     {
         people {
             friends {

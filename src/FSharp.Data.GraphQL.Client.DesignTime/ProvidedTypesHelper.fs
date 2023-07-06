@@ -7,6 +7,7 @@ open System
 open System.Collections
 open System.Collections.Generic
 open System.Reflection
+open System.Text.Json.Serialization
 open FSharp.Core
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
@@ -767,16 +768,16 @@ module internal Provider =
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
                                 #if IS_DESIGNTIME
-                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-                                    let rec formatValidationExceptionMessage(errors : AstError list) =
+                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<GQLProblemDetails>) =
+                                    let rec formatValidationExceptionMessage(errors : GQLProblemDetails list) =
                                         match errors with
                                         | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
                                         | errors ->
                                             errors
                                             |> List.map (fun err ->
                                                 match err.Path with
-                                                | Some path -> sprintf "%s Path: %A" err.Message path
-                                                | None -> err.Message)
+                                                | Include path -> $"%s{err.Message} Path: %A{path}"
+                                                | Skip -> err.Message)
                                             |> List.reduce (fun x y -> x + Environment.NewLine + y)
                                     match validationResult with
                                     | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)

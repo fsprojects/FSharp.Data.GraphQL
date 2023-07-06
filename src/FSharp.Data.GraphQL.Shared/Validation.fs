@@ -205,7 +205,7 @@ module Ast =
 
     let private tryFindInArrayOption (finder : 'T -> bool) = Option.bind (Array.tryFind finder)
 
-    let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<AstError>) =
+    let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<GQLProblemDetails>) =
         let rec traverseSelections selection = (onSelection selection) @@ (selection.SelectionSet |> collectResults traverseSelections)
         ctx.Definitions |> collectResults (fun def -> def.SelectionSet |> collectResults traverseSelections)
 
@@ -668,7 +668,7 @@ module Ast =
             | _ when tref.Kind = TypeKind.NON_NULL -> checkIsCoercible tref.OfType.Value argName value
             | IntValue _ ->
                 match tref.Name, tref.Kind with
-                | Some ("Int" | "Float"), TypeKind.SCALAR -> Success
+                | Some ("ID" | "Int" | "Float"), TypeKind.SCALAR -> Success
                 | _ -> canNotCoerce
             | FloatValue _ ->
                 match tref.Name, tref.Kind with

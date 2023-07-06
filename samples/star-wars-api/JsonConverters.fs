@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
 open System.Collections.Immutable
 open System.Text.Json
 open System.Text.Json.Nodes
@@ -53,15 +54,15 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
     override __.Read(reader, _, options) =
 
         let request = JsonSerializer.Deserialize<GQLEditableRequestContent>(&reader, options)
-        let plan =
+        let result =
             let query = request.Query
             match meta with
             | Some meta -> executor.CreateExecutionPlan(query, meta = meta)
             | None -> executor.CreateExecutionPlan(query)
-        let varDefs = plan.Variables
-        match varDefs with
-        | [] -> { ExecutionPlan = plan; Variables = ImmutableDictionary.Empty }
-        | vs ->
+        match result with
+        | Result.Error struct (_, errors) -> failwith (String.concat Environment.NewLine (errors |> Seq.map (fun error -> error.Message)))
+        | Ok executionPlan when executionPlan.Variables  = [] -> { ExecutionPlan = executionPlan; Variables = ImmutableDictionary.Empty }
+        | Ok executionPlan ->
             // For multipart requests, we need to replace some variables
             let vars = request.Variables.Value
             // TODO: Implement JSON path
@@ -71,7 +72,7 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
                      replacements
             //Map.iter(fun path rep -> vars.SelectToken(path).Replace(JObject.FromObject(rep))) replacements
             let variables =
-                vs
+                executionPlan.Variables
                 |> List.fold (fun (acc: ImmutableDictionary<string, JsonElement>.Builder) (vdef: VarDef) ->
                     match vars.TryGetPropertyValue vdef.Name with
                     | true, jsonNode ->
@@ -84,7 +85,7 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
                         | None, _ -> failwithf "Variable %s has no default value and is missing!" vdef.Name
                     acc)
                     (ImmutableDictionary.CreateBuilder<string, JsonElement>())
-            { ExecutionPlan = plan; Variables = variables.ToImmutable() }
+            { ExecutionPlan = executionPlan; Variables = variables.ToImmutable() }
 
 open System
 open System.Collections.Generic

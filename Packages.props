@@ -4,6 +4,7 @@
     <SystemVersion>7.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
+    <FsToolkitVersion>4.6.*</FsToolkitVersion>
     <XUnitVersion>2.5.0</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
@@ -16,6 +17,7 @@
     <PackageReference Update="FSharp.Control.FusionTasks" Version="2.6.*" />
     <PackageReference Update="FSharp.Control.Reactive" Version="5.0.*" />
     <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
+    <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
