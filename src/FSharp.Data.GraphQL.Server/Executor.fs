@@ -111,11 +111,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 let variables = coerceVariables executionPlan.Variables variables
                 let executionCtx =
                     { Schema = schema
-                      ExecutionPlan = executionPlan
-                      RootDef = executionPlan.RootDef
-                      FieldDefs = executionPlan.Fields
-                      VariableDefs = executionPlan.Variables
                       RootValue = root
+                      ExecutionPlan = executionPlan
                       Variables = variables
                       Errors = errors
                       FieldExecuteMap = fieldExecuteMap
