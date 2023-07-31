@@ -26,7 +26,8 @@ let TestComplexScalar =
              match i with
              | Variable e -> e.GetString()
              | InlineConstant (StringValue s) -> s
-         if value = "SerializedValue" then Some "DeserializedValue" else None),
+         if value = "SerializedValue" then Ok "DeserializedValue"
+         else Error { new IGQLError with member _.Message = "" }),
     coerceOutput = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
 type TestInput = {

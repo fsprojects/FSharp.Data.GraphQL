@@ -32,6 +32,7 @@
 
   <ItemGroup>
     <Compile Include="ReflectionHelper.fs" />
+    <Compile Include="Errors.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />

@@ -326,6 +326,7 @@ let ``Should generate information map correctly`` () =
   }
 }
 """
+
     let document = parse query
     let actual = document.GetInfoMap () |> Map.toList
 

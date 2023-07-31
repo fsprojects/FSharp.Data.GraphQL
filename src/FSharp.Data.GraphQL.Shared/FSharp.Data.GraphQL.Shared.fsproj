@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net6.0;net7.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
 
     <Description>Shared library for FSharp.Data.GraphQL.Server and FSharp.Data.GraphQL.Cient</Description>

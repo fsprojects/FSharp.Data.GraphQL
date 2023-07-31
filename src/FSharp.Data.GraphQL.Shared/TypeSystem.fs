@@ -627,7 +627,7 @@ and PlanningContext =
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
-and Includer = ImmutableDictionary<string, obj> -> bool
+and Includer = ImmutableDictionary<string, obj> -> Result<bool, IGQLError list>
 
 /// A node representing part of the current GraphQL query execution plan.
 /// It contains info about both document AST fragment of incoming query as well,
@@ -989,8 +989,8 @@ and ScalarDef =
         abstract Name : string
         /// Optional scalar type description.
         abstract Description : string option
-        /// A function used to retrieve a .NET object from provided GraphQL query.
-        abstract CoerceInput : InputParameterValue -> obj option
+        /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+        abstract CoerceInput : InputParameterValue -> Result<obj, IGQLError list>
         /// A function used to serialize a .NET object and coerce its value to JSON compatible if needed.
         abstract CoerceOutput : obj -> obj option
         inherit TypeDef
@@ -1007,7 +1007,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       /// Optional type description.
       Description : string option
       /// A function used to retrieve a .NET object from provided GraphQL query.
-      CoerceInput : InputParameterValue -> 'Val option
+      CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
       /// A function used to set a surrogate representation to be
       /// returned as a query result.
       CoerceOutput : obj -> 'Val option }
@@ -1029,7 +1029,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
     interface ScalarDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input = x.CoerceInput input |> Option.map box
+        member x.CoerceInput input = x.CoerceInput input |> Result.map box
         member x.CoerceOutput value = (x.CoerceOutput value) |> Option.map box
 
     interface InputDef<'Val>
@@ -1559,7 +1559,7 @@ and InputObjectDefinition<'Val> =
             upcast list
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = InputValue -> ImmutableDictionary<string, obj> -> obj
+and ExecuteInput = InputValue -> ImmutableDictionary<string, obj> -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -2271,11 +2271,43 @@ module Patterns =
     /// Active pattern to match GraphQL type defintion with named types.
     let rec (|Named|_|) (tdef : TypeDef) = named tdef
 
+module private Errors =
+
+    type InputValue with
+
+        member inputValue.GetCoerceError(destinationType) =
+            let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted to %s{destinationType}"
+            let message =
+                match inputValue with
+                | IntValue value -> getMessage "integer" value
+                | FloatValue value -> getMessage "float" value
+                | BooleanValue value -> getMessage "boolean" value
+                | StringValue value -> getMessage "string" value
+                | NullValue ->  $"Inline null value cannot be converted to {destinationType}"
+                | EnumValue value ->  getMessage "enum" value
+                | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
+            Error [{ new IGQLError with member _.Message = message }]
+
+    type JsonElement with
+
+        member e.GetDeserializeError(destinationType, minValue, maxValue ) =
+            Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+
+        member e.GetDeserializeError(destinationType) =
+            Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType}" }]
+
+    let getParseRangeError (destinationType, minValue, maxValue) value =
+        Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+
+    let getParseError destinationType value =
+        Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType}" }]
+
 [<AutoOpen>]
 module SchemaDefinitions =
 
     open System.Globalization
     open System.Reflection
+    open Errors
 
     /// Tries to convert any value to int.
     let coerceIntValue (x : obj) : int option =
@@ -2406,145 +2438,155 @@ module SchemaDefinitions =
         | Option o -> Some(downcast Convert.ChangeType(o, typeof<'t>))
         | _ -> Some(downcast Convert.ChangeType(x, typeof<'t>))
 
+
     /// Tries to resolve AST query input to int.
     let coerceIntInput =
+        let destinationType = "integer"
         function
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Some (e.GetInt32())
-        | InlineConstant (IntValue i) -> Some (int i)
-        | InlineConstant (FloatValue f) -> Some(int f)
+        | Variable e when e.ValueKind = JsonValueKind.Number ->
+            match e.TryGetInt32() with
+            | true, value -> Ok value
+            | false, _ -> e.GetDeserializeError(destinationType, Int32.MinValue, Int32.MaxValue)
+        | InlineConstant (IntValue i) -> Ok (int i)
+        | InlineConstant (FloatValue f) -> Ok (int f)
         | InlineConstant (StringValue s) ->
             match Int32.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | InlineConstant (BooleanValue b) -> Some(if b then 1 else 0)
-        | _ -> None
+            | true, i -> Ok i
+            | false, _ -> getParseRangeError(destinationType, Int32.MinValue, Int32.MaxValue) s
+        | InlineConstant (BooleanValue b) -> Ok (if b then 1 else 0)
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to int64.
     let coerceLongInput =
+        let destinationType = "integer"
         function
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Some (e.GetInt64())
-        | InlineConstant (IntValue i) -> Some (int64 i)
-        | InlineConstant (FloatValue f) -> Some(int64 f)
+        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (e.GetInt64())
+        | InlineConstant (IntValue i) -> Ok (int64 i)
+        | InlineConstant (FloatValue f) -> Ok(int64 f)
         | InlineConstant (StringValue s) ->
             match Int64.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | InlineConstant (BooleanValue b) -> Some(if b then 1L else 0L)
-        | _ -> None
+            | true, i -> Ok i
+            | false, _ -> getParseRangeError(destinationType, Int64.MinValue, Int64.MaxValue) s
+        | InlineConstant (BooleanValue b) -> Ok(if b then 1L else 0L)
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to double.
     let coerceFloatInput =
+        let destinationType = "float"
         function
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Some (e.GetDouble())
-        | InlineConstant (IntValue i) -> Some(double i)
-        | InlineConstant (FloatValue f) -> Some f
+        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (e.GetDouble())
+        | InlineConstant (IntValue i) -> Ok(double i)
+        | InlineConstant (FloatValue f) -> Ok f
         | InlineConstant (StringValue s) ->
             match Double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | InlineConstant (BooleanValue b) -> Some(if b then 1. else 0.)
-        | _ -> None
+            | true, i -> Ok i
+            | false, _ -> getParseRangeError(destinationType, Double.MinValue, Double.MaxValue) s
+        | InlineConstant (BooleanValue b) -> Ok(if b then 1. else 0.)
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to string.
     let coerceStringInput =
+        let destinationType = "string"
         function
         | Variable e ->
             match e.ValueKind with
-            | JsonValueKind.String -> Some (e.GetString())
+            | JsonValueKind.String -> Ok (e.GetString())
             | JsonValueKind.True
             | JsonValueKind.False
-            | JsonValueKind.Number -> Some (e.GetRawText())
-            | _ -> None
-        | InlineConstant (IntValue i) -> Some(i.ToString(CultureInfo.InvariantCulture))
-        | InlineConstant (FloatValue f) -> Some(f.ToString(CultureInfo.InvariantCulture))
-        | InlineConstant (StringValue s) -> Some s
-        | InlineConstant (BooleanValue b) ->
-            Some(if b then "true"
-                 else "false")
-        | _ -> None
+            | JsonValueKind.Number -> Ok (e.GetRawText())
+            | _ -> e.GetDeserializeError destinationType
+        | InlineConstant (IntValue i) -> Ok(i.ToString(CultureInfo.InvariantCulture))
+        | InlineConstant (FloatValue f) -> Ok(f.ToString(CultureInfo.InvariantCulture))
+        | InlineConstant (StringValue s) -> Ok s
+        | InlineConstant (BooleanValue b) -> Ok (if b then "true" else "false")
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     let coerceEnumInput =
         function
-        | EnumValue e -> Some e
-        | _ -> None
+        | EnumValue e -> Ok e
+        | value -> value.GetCoerceError "enum"
 
     /// Tries to resolve AST query input to bool.
     let coerceBoolInput =
+        let destinationType = "boolean"
         function
-        | Variable e when e.ValueKind = JsonValueKind.True -> Some true
-        | Variable e when e.ValueKind = JsonValueKind.False -> Some false
-        | InlineConstant (IntValue i) -> Some(if i = 0L then false else true)
-        | InlineConstant (FloatValue f) -> Some(if f = 0. then false else true)
+        | Variable e when e.ValueKind = JsonValueKind.True -> Ok true
+        | Variable e when e.ValueKind = JsonValueKind.False -> Ok false
+        | InlineConstant (IntValue i) -> Ok(if i = 0L then false else true)
+        | InlineConstant (FloatValue f) -> Ok(if f = 0. then false else true)
         | InlineConstant (StringValue s) ->
             match Boolean.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | InlineConstant (BooleanValue b) -> Some b
-        | _ -> None
+            | true, i -> Ok i
+            | false, _ -> getParseError destinationType s
+        | InlineConstant (BooleanValue b) -> Ok b
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to provided generic type.
-    let coerceIdInput input : 't option=
+    let coerceIdInput input : Result<'t, IGQLError list> =
         match input with
-        | Variable e when e.ValueKind = JsonValueKind.String -> Some (downcast Convert.ChangeType(e.GetString() , typeof<'t>))
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Some (downcast Convert.ChangeType(e.GetInt32() , typeof<'t>))
-        | InlineConstant (IntValue i) -> Some(downcast Convert.ChangeType(i, typeof<'t>))
-        | InlineConstant (StringValue s) -> Some(downcast Convert.ChangeType(s, typeof<'t>))
-        | _ -> None
+        | Variable e when e.ValueKind = JsonValueKind.String -> Ok (downcast Convert.ChangeType(e.GetString() , typeof<'t>))
+        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (downcast Convert.ChangeType(e.GetInt32() , typeof<'t>))
+        | InlineConstant (IntValue i) -> Ok(downcast Convert.ChangeType(i, typeof<'t>))
+        | InlineConstant (StringValue s) -> Ok(downcast Convert.ChangeType(s, typeof<'t>))
+        | InlineConstant value -> value.GetCoerceError "id"
 
     /// Tries to resolve AST query input to URI.
     let coerceUriInput =
         function
         | Variable e when e.ValueKind = JsonValueKind.String ->
             match Uri.TryCreate(e.GetString(), UriKind.RelativeOrAbsolute) with
-            | true, uri -> Some uri
-            | false, _ -> None
+            | true, uri -> Ok uri
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"Cannot deserialize '{e.GetRawText()}' into URI" }]
         | InlineConstant (StringValue s) ->
             match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
-            | true, uri -> Some uri
-            | false, _ -> None
-        | _ -> None
+            | true, uri -> Ok uri
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"Cannot parse '{s}' into URI" }]
+        | InlineConstant value -> value.GetCoerceError "URI"
 
     /// Tries to resolve AST query input to DateTimeOffset.
     let coerceDateTimeOffsetInput =
+        let destinationType = "date and time with offset"
         function
         | Variable e when e.ValueKind = JsonValueKind.String ->
             let s = e.GetString()
             match DateTimeOffset.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
+            | true, date -> Ok date
+            | false, _ -> e.GetDeserializeError destinationType
         | InlineConstant (StringValue s) ->
             match DateTimeOffset.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
-        | _ -> None
+            | true, date -> Ok date
+            | false, _ -> getParseRangeError(destinationType, DateTimeOffset.MinValue, DateTimeOffset.MaxValue) s
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to DateOnly.
     let coerceDateOnlyInput =
+        let destinationType = "date"
         function
         | Variable e when e.ValueKind = JsonValueKind.String ->
             let s = e.GetString()
             match DateOnly.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
+            | true, date -> Ok date
+            | false, _ -> e.GetDeserializeError destinationType
         | InlineConstant (StringValue s) ->
             match DateOnly.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
-        | _ -> None
+            | true, date -> Ok date
+            | false, _ -> getParseRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue) s
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to Guid.
     let coerceGuidInput =
+        let destinationType = "GUID"
         function
         | Variable e when e.ValueKind = JsonValueKind.String ->
             let s = e.GetString()
             match Guid.TryParse(s) with
-            | true, guid -> Some guid
-            | false, _ -> None
+            | true, guid -> Ok guid
+            | false, _ -> e.GetDeserializeError destinationType
         | InlineConstant (StringValue s) ->
             match Guid.TryParse(s) with
-            | true, guid -> Some guid
-            | false, _ -> None
-        | _ -> None
+            | true, guid -> Ok guid
+            | false, _ -> getParseError destinationType s
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Wraps a GraphQL type definition, allowing defining field/argument
     /// to take option of provided value.
@@ -2561,8 +2603,8 @@ module SchemaDefinitions =
         // TODO: Use FSharp.Collection.Immutable
         | VariableName variableName ->
             match variables.TryGetValue variableName with
-            | true, value -> value
-            | false, _ -> null
+            | true, value -> Ok value
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"Variable '%s{variableName}' not found" }]
         | v -> other v
 
     /// GraphQL type of int
@@ -2622,7 +2664,7 @@ module SchemaDefinitions =
             Description =
                Some
                   "The `Object` scalar type represents textual data, represented as UTF-8 character sequences. The `String` type is most often used by GraphQL to represent free-form human-readable text."
-            CoerceInput = (fun o -> Some (o))
+            CoerceInput = (fun o -> Ok (o))
             CoerceOutput = (fun o -> Some (o))
         }
 
@@ -2674,11 +2716,7 @@ module SchemaDefinitions =
                    Description = Some "Included when true."
                    TypeDef = BooleanType
                    DefaultValue = None
-                   ExecuteInput =
-                       variableOrElse (InlineConstant >>
-                                       coerceBoolInput
-                                       >> Option.map box
-                                       >> Option.toObj) } |] }
+                   ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
     /// GraphQL @skip directive.
     let SkipDirective : DirectiveDef =
@@ -2691,11 +2729,7 @@ module SchemaDefinitions =
                    Description = Some "Skipped when true."
                    TypeDef = BooleanType
                    DefaultValue = None
-                   ExecuteInput =
-                       variableOrElse (InlineConstant >>
-                                       coerceBoolInput
-                                       >> Option.map box
-                                       >> Option.toObj) } |] }
+                   ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
 
     /// GraphQL @defer directive.
     let DeferDirective : DirectiveDef =
@@ -2736,7 +2770,21 @@ module SchemaDefinitions =
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member Scalar(name : string, coerceInput : InputParameterValue -> 'T option,
+        static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError>,
+                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError List.singleton
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined scalars.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError list>,
                              coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
