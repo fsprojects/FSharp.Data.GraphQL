@@ -7,6 +7,7 @@ module internal FSharp.Data.GraphQL.Values
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Diagnostics
 open System.Reflection
 open System.Text.Json
 open FsToolkit.ErrorHandling
@@ -15,24 +16,23 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Errors
-open System.Diagnostics
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
-        if inputType.Name = "FSharpValueOption`1" then
+        if outputType.Name = "FSharpValueOption`1" then
             let _, valuenone, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
             valuenone
-        elif inputType.IsValueType then
+        elif outputType.IsValueType then
             Activator.CreateInstance(outputType)
         else null
     else
         null
 
 let private wrapOptional (outputType: Type) value=
-    let inputType = value.GetType()
     match value with
-    | null -> wrapOptionalNone outputType inputType
+    | null -> wrapOptionalNone outputType typeof<obj>
     | value ->
+        let inputType = value.GetType()
         if inputType.Name <> outputType.Name then
             let expectedType = outputType.GenericTypeArguments[0]
             if outputType.Name = "FSharpOption`1" && expectedType.IsAssignableFrom inputType then
@@ -105,8 +105,8 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                         mapper
                         |> Array.map (fun (field, param) ->
                             match Map.tryFind field.Name props with
-                            | None -> Ok <| wrapOptionalNone field.TypeDef.Type param.ParameterType
-                            | Some prop -> field.ExecuteInput prop variables |> Result.map (wrapOptional field.TypeDef.Type))
+                            | None -> Ok <| wrapOptionalNone param.ParameterType field.TypeDef.Type
+                            | Some prop -> field.ExecuteInput prop variables |> Result.map (wrapOptional param.ParameterType))
 
                     let! args = argResults |> splitSeqErrorsList
 
@@ -127,13 +127,15 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                                 mapper
                                 |> Array.map (fun (field, param) -> result {
                                     let! value = field.ExecuteInput (VariableName field.Name) objectFields
-                                    return wrapOptional field.TypeDef.Type value
+                                    return wrapOptional param.ParameterType value
                                 })
 
                             let! args = argResults |> splitSeqErrorsList
 
                             let instance = ctor.Invoke (args)
                             return instance
+                        | null ->
+                            return null
                         | _ ->
                             let ty = found.GetType()
                             if ty = objtype || (ty.Name = "FSharpOption`1" && ty.GetGenericArguments()[0] = objtype) then
@@ -154,7 +156,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
             match value with
             | ListValue list -> result {
                     let! mappedValues =
-                        list |> List.map (fun value -> inner value variables) |> splitSeqErrorsList
+                        list |> Seq.map (fun value -> inner value variables) |> splitSeqErrorsList
                     let mappedValues =
                         mappedValues
                         |> Seq.map (wrapOptional innerdef.Type)

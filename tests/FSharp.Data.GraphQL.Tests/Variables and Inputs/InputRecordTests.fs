@@ -1,20 +1,20 @@
 // The MIT License (MIT)
 
-module FSharp.Data.GraphQL.Tests.InputTests
-
-open System
+module FSharp.Data.GraphQL.Tests.InputRecordTests
 
 #nowarn "25"
 
 open Xunit
+open System
+open System.Collections.Immutable
 open System.Runtime.InteropServices
-open System.Text.Json.Serialization
+open System.Text.Json
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.Relay
+open FSharp.Data.GraphQL.Samples.StarWarsApi
 
 type InputRecord = {
     a: string
@@ -51,8 +51,8 @@ type InputRecordNested = {
 let InputRecordNestedType = Define.InputObject<InputRecordNested>("InputRecordNested",
     [
         Define.Input("a", InputRecordType)
-        Define.Input("b", Nullable InputRecordType)
-        Define.Input("c", Nullable InputRecordType)
+        Define.Input("b", Nullable InputRecordOptionalType)
+        Define.Input("c", Nullable InputRecordOptionalType)
     ])
 
 type InputObject(
@@ -94,23 +94,23 @@ let schema =
             [
                 Define.Field(
                     "recordInputs",
-                    IntType,
+                    StringType,
                     [
                         Define.Input("record", InputRecordType)
-                        Define.Input("recordOptional", InputRecordOptionalType)
-                        Define.Input("recordNested", InputRecordNestedType)
+                        Define.Input("recordOptional", Nullable InputRecordOptionalType)
+                        Define.Input("recordNested", Nullable InputRecordNestedType)
                     ],
-                    fun _ _ -> 5)
+                    stringifyInput) // TODO: add all args tringificaiton
                 Define.Field(
                     "objectInputs",
-                    IntType,
+                    StringType,
                     [
                         Define.Input("object", InputObjectType)
-                        Define.Input("objectOptional", InputObjectOptionalType)
+                        Define.Input("objectOptional", Nullable InputObjectOptionalType)
                     ],
-                    fun _ _ -> 5)
+                    stringifyInput) // TODO: add all args tringificaiton
             ]))
-    Executor<obj>(schema)
+    Executor schema
 
 [<Fact>]
 let ``Execute handles creation of inline input records with all fields`` () =
@@ -153,12 +153,66 @@ let ``Execute handles creation of inline input records with mandatory only field
     | Direct(data, errors) -> empty errors
     | _ -> fail "Expected a direct GQLResponse"
 
-//[<Fact>]
-//let ``Execute handles creation of input records from variables`` () =
+let variablesWithAllInputs(record, optRecord) = $"""
+    {{
+        "record":%s{record},
+        "optRecord":%s{optRecord}
+    }}
+"""
 
+let paramsWithValues variables =
+    JsonDocument
+        .Parse(variables : string)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
 
-//[<Fact>]
-//let ``Execute handles creation of inline input objects`` () =
+[<Fact>]
+let ``Execute handles creation of input records from variables with all fields`` () =
+    let query = """query ($record: InputRecord!, $optRecord: InputRecordOptional){
+      recordInputs(
+        record: $record,
+        recordOptional: $optRecord,
+        recordNested: { a: $record, b: $optRecord, c: $optRecord }
+      )
+    }"""
+    let testInputObject = """{"a":"a","b":"b","c":"c"}"""
+    let params' = variablesWithAllInputs(testInputObject, testInputObject) |> paramsWithValues
+    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
+    match actual with
+    | Direct(data, errors) ->
+        empty errors
+        //data |> equals (upcast expected)
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
-//[<Fact>]
-//let ``Execute handles creation of input objects from variables`` () =
+[<Fact>]
+let ``Execute handles creation of input records from variables with optional null fields`` () =
+    let query = """query ($record: InputRecord!, $optRecord: InputRecordOptional){
+      recordInputs(
+        record: $record,
+        recordOptional: $optRecord,
+        recordNested: { a: $record, b: $optRecord, c: $optRecord }
+      )
+    }"""
+    let testInputObject = """{"a":"a","b":"b","c":"c"}"""
+    let params' = variablesWithAllInputs(testInputObject, "null") |> paramsWithValues
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    match result with
+    | Direct(data, errors) ->
+        empty errors
+    | _ -> fail "Expected a direct GQLResponse"
+
+[<Fact>]
+let ``Execute handles creation of input records from variables with mandatory only fields`` () =
+    let query = """query ($record: InputRecord!){
+      recordInputs(
+        record: $record,
+        recordNested: { a: $record }
+      )
+    }"""
+    let testInputObject = """{"a":"a","b":"b","c":"c"}"""
+    let params' = variablesWithAllInputs(testInputObject, "null") |> paramsWithValues
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
+    match result with
+    | Direct(data, errors) ->
+        empty errors
+    | _ -> fail "Expected a direct GQLResponse"
