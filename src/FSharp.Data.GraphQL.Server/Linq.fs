@@ -96,7 +96,7 @@ let inline private argVal vars argDef argOpt  =
     | Some arg ->
         Execution.argumentValue vars argDef arg
         // TODO: Improve error propagation
-        |> Result.defaultWith (failwith "%A")
+        |> Result.defaultWith (failwithf "%A")
         |> Some
     | None -> argDef.DefaultValue
 
