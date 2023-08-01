@@ -7,6 +7,7 @@ module internal FSharp.Data.GraphQL.Values
 open System
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Reflection
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
@@ -14,6 +15,36 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Errors
+open System.Diagnostics
+
+let private wrapOptionalNone (outputType: Type) (inputType: Type) =
+    if inputType.Name <> outputType.Name then
+        if inputType.Name = "FSharpValueOption`1" then
+            let _, valuenone, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
+            valuenone
+        elif inputType.IsValueType then
+            Activator.CreateInstance(outputType)
+        else null
+    else
+        null
+
+let private wrapOptional (outputType: Type) value=
+    let inputType = value.GetType()
+    match value with
+    | null -> wrapOptionalNone outputType inputType
+    | value ->
+        if inputType.Name <> outputType.Name then
+            let expectedType = outputType.GenericTypeArguments[0]
+            if outputType.Name = "FSharpOption`1" && expectedType.IsAssignableFrom inputType then
+                let some, _, _ = ReflectionHelper.optionOfType outputType.GenericTypeArguments[0]
+                some value
+            elif outputType.Name = "FSharpValueOption`1" && expectedType.IsAssignableFrom inputType then
+                let valuesome, _, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
+                valuesome value
+            else
+                value
+        else
+            value
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -40,8 +71,8 @@ let inline tryConvertAst schema ast =
 
     convert true schema ast
 
-let inline private notAssignableMsg (innerDef : InputDef) value : string =
-    sprintf "value of type %s is not assignable from %s" innerDef.Type.Name (value.GetType().Name)
+let inline private notAssignableMsg errMsg (innerDef : InputDef) value =
+    $"%s{errMsg}value of type %s{innerDef.Type.Name } is not assignable from %s{value.GetType().Name}"
 
 let rec internal compileByType (errMsg : string) (inputDef : InputDef) : ExecuteInput =
     match inputDef with
@@ -74,58 +105,42 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                         mapper
                         |> Array.map (fun (field, param) ->
                             match Map.tryFind field.Name props with
-                            | None ->
-                                //if param.ParameterType.Name = "FSharpOption`1" then
-                                if param.ParameterType.Name <> "FSharpValueOption`1" then
-                                    let _, valuenone, _ = ReflectionHelper.vOptionOfType field.TypeDef.Type.GenericTypeArguments[0]
-                                    Ok valuenone
-                                elif param.ParameterType.IsValueType then
-                                    Ok <| Activator.CreateInstance(param.ParameterType)
-                                else
-                                    Ok null
-                            | Some prop -> field.ExecuteInput prop variables)
+                            | None -> Ok <| wrapOptionalNone field.TypeDef.Type param.ParameterType
+                            | Some prop -> field.ExecuteInput prop variables |> Result.map (wrapOptional field.TypeDef.Type))
 
                     let! args = argResults |> splitSeqErrorsList
 
                     let instance = ctor.Invoke (args)
                     return instance
+
+                    //// Args will be put into ImmutableDictionary<string, object> with variable name
+                    //// and then processed in the match case below so we do not need to create instance here
+                    //return args
                 }
             | VariableName variableName -> result {
                     match variables.TryGetValue variableName with
                     | true, found ->
                         match found with
-                        | :? ImmutableDictionary<string, obj> as objectFields ->
+                        | :? IReadOnlyDictionary<string, obj> as objectFields ->
 
                             let argResults =
                                 mapper
                                 |> Array.map (fun (field, param) -> result {
-                                        match! field.ExecuteInput (VariableName field.Name) objectFields with
-                                        | null ->
-                                            //if param.ParameterType.Name = "FSharpOption`1" then
-                                            if param.ParameterType.Name <> "FSharpValueOption`1" then
-                                                let _, valuenone, _ = ReflectionHelper.vOptionOfType field.TypeDef.Type.GenericTypeArguments[0]
-                                                return valuenone
-                                            elif param.ParameterType.IsValueType then
-                                                return Activator.CreateInstance(param.ParameterType)
-                                            else
-                                                return null
-                                        | value ->
-                                            if param.ParameterType.Name = "FSharpOption`1" then
-                                                let some, _, _ = ReflectionHelper.optionOfType field.TypeDef.Type.GenericTypeArguments[0]
-                                                return some value
-                                            elif param.ParameterType.Name <> "FSharpValueOption`1" then
-                                                let valuesome, _, _ = ReflectionHelper.vOptionOfType field.TypeDef.Type.GenericTypeArguments[0]
-                                                return valuesome value
-                                            else
-                                                return value
-                                    }
-                                )
+                                    let! value = field.ExecuteInput (VariableName field.Name) objectFields
+                                    return wrapOptional field.TypeDef.Type value
+                                })
 
                             let! args = argResults |> splitSeqErrorsList
 
                             let instance = ctor.Invoke (args)
                             return instance
-                        | _ -> return Error [{ new IGQLError with member _.Message = $"Variable '{variableName}' is not an object" }]
+                        | _ ->
+                            let ty = found.GetType()
+                            if ty = objtype || (ty.Name = "FSharpOption`1" && ty.GetGenericArguments()[0] = objtype) then
+                                return found
+                            else
+                                Debugger.Break()
+                                return! Error [{ new IGQLError with member _.Message = $"Variable '{variableName}' is not an object" }]
                     | false, _ -> return null
                 }
             | _ -> Ok null
@@ -140,12 +155,15 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
             | ListValue list -> result {
                     let! mappedValues =
                         list |> List.map (fun value -> inner value variables) |> splitSeqErrorsList
-                    let mappedValues = mappedValues |> List.ofArray
+                    let mappedValues =
+                        mappedValues
+                        |> Seq.map (wrapOptional innerdef.Type)
+                        |> Seq.toList
 
                     if isArray then
                         return ReflectionHelper.arrayOfList innerdef.Type mappedValues
                     else
-                        return nil |> List.foldBack cons mappedValues
+                        return List.foldBack cons mappedValues nil
                 }
             | VariableName variableName -> Ok variables.[variableName]
             | _ -> result {
@@ -162,19 +180,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
 
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
-        let some, none, _ = ReflectionHelper.optionOfType innerdef.Type
-
-        fun value variables -> result {
-            let! i = inner value variables
-            match i with
-            | null -> return none
-            | coerced ->
-                let c = some coerced
-                if c <> null then
-                    return c
-                else
-                    return Error [ { new IGQLError with member _.Message = errMsg + notAssignableMsg innerdef coerced } ]
-        }
+        fun value variables -> inner value variables
 
     | Enum enumdef ->
         fun value variables ->
@@ -195,17 +201,34 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                             |> Option.map (fun x -> x.Value :?> _)
                             |> Option.defaultWith (fun () -> ReflectionHelper.parseUnion enumdef.Type s)
                 }
-    | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
+    | _ ->
+        Debug.Fail "Unexpected InputDef"
+        failwithf "Unexpected value of inputDef: %O" inputDef
 
-
-let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : JsonElement) (errMsg : string) : Result<obj, IGQLError list> =
+let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input : JsonElement) (errMsg : string) : Result<obj, IGQLError list> =
     match typedef with
     | Scalar scalardef ->
-        match scalardef.CoerceInput (Variable input) with
-        | Ok null when isNullable -> Ok null
-        // TODO: Capture position in the JSON document
-        | Ok null -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}!' but got 'null'."
-        | result -> result
+        if input.ValueKind = JsonValueKind.Null then
+            Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected value of type '%s{scalardef.Name}!' but got 'null'." } ]
+        else
+            match scalardef.CoerceInput (Variable input) with
+            | Ok null when isNullable -> Ok null
+            // TODO: Capture position in the JSON document
+            | Ok null -> Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected value of type '%s{scalardef.Name}!' but got 'null'." } ]
+            | result ->
+                let mapError (err : IGQLError) : IGQLError =
+                    match err with
+                    | :? IGQLErrorExtensions as ext ->
+                        { new ICoerceGQLError with
+                            member _.Message = err.Message
+                            member _.VariableMessage = errMsg
+                          interface IGQLErrorExtensions with
+                            member _.Extensions = ext.Extensions }
+                    | _ ->
+                        { new ICoerceGQLError with
+                            member _.Message = err.Message
+                            member _.VariableMessage = errMsg }
+                result |> Result.mapError (fun errs -> errs |> List.map mapError)
     | Nullable (InputObject innerdef) ->
         if input.ValueKind = JsonValueKind.Null then Ok null
         else coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
@@ -283,19 +306,19 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonEl
     else
         Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'." } ]
 
-let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
-    let vname = vardef.Name
+//let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
+//    let vname = vardef.Name
 
-    // TODO: Use FSharp.Collection.Immutable
-    match inputs.TryGetValue vname with
-    | false, _ ->
-        match vardef.DefaultValue with
-        | Some defaultValue ->
-            let executeInput = compileByType $"Variable '%s{vname}': " vardef.TypeDef
-            executeInput defaultValue (ImmutableDictionary.Empty) // TODO: Check if empty is enough
-        | None ->
-            match vardef.TypeDef with
-            | Nullable _ -> Ok null
-            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
-    | true, jsonElement ->
-        coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vname}': "
+//    // TODO: Use FSharp.Collection.Immutable
+//    match inputs.TryGetValue vname with
+//    | false, _ ->
+//        match vardef.DefaultValue with
+//        | Some defaultValue ->
+//            let executeInput = compileByType $"Variable '%s{vname}': " vardef.TypeDef
+//            executeInput defaultValue (ImmutableDictionary.Empty) // TODO: Check if empty is enough
+//        | None ->
+//            match vardef.TypeDef with
+//            | Nullable _ -> Ok null
+//            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
+//    | true, jsonElement ->
+//        coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vname}': "

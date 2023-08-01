@@ -17,9 +17,6 @@ type MalformedQueryException(msg) =
 
 /// General helper functions and types.
 module Helpers =
-    /// Executes a function that returns unit, and then return its parameter again.
-    let tee f x = f x; x
-
     /// Casts a System.Object to an option to a System.Object option.
     let optionCast (value: obj) =
         let optionDef = typedefof<option<_>>
@@ -51,14 +48,14 @@ module internal Array =
     /// <param name="keyf">Function, which output is used to determine uniqueness of input elements.</param>
     /// <param name="array">Array of elements.</param>
     let distinctBy keyf (array:'T[]) =
-            let temp = Array.zeroCreate array.Length
-            let mutable i = 0
-            let hashSet = HashSet<_>(HashIdentity.Structural<_>)
-            for v in array do
-                if hashSet.Add(keyf v) then
-                    temp.[i] <- v
-                    i <- i + 1
-            Array.sub temp 0 i
+        let temp = Array.zeroCreate array.Length
+        let mutable i = 0
+        let hashSet = HashSet<_>(HashIdentity.Structural<_>)
+        for v in array do
+            if hashSet.Add(keyf v) then
+                temp.[i] <- v
+                i <- i + 1
+        Array.sub temp 0 i
 
 module internal List =
 
@@ -166,7 +163,7 @@ module internal ReflectionHelper =
                 else input
         (some, none, value)
 
-            /// <summary>
+    /// <summary>
     /// Returns pair of function constructors for `some(value)` and `none`
     /// used to create option of type <paramref name="t"/> given at runtime.
     /// </summary>

@@ -1559,7 +1559,7 @@ and InputObjectDefinition<'Val> =
             upcast list
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = InputValue -> ImmutableDictionary<string, obj> -> Result<obj, IGQLError list>
+and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -2598,7 +2598,7 @@ module SchemaDefinitions =
 
     let private ignoreInputResolve (_ : unit) (input : 'T) = ()
 
-    let internal variableOrElse other value (variables : ImmutableDictionary<string, obj>) =
+    let internal variableOrElse other value (variables : IReadOnlyDictionary<string, obj>) =
         match value with
         // TODO: Use FSharp.Collection.Immutable
         | VariableName variableName ->

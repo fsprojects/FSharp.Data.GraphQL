@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
@@ -110,12 +111,18 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 match accResult with
                 | Error errs -> Error errs
                 | Ok acc -> collectArgs acc xs
-        let ctx =
+        let ctxResult = result {
             match reportToMetadata with
             | true ->
-                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
-            | false -> ctx
-        next ctx
+                let! args = collectArgs [] ctx.ExecutionPlan.Fields
+                return { ctx with Metadata = ctx.Metadata.Add("filters", args) }
+            | false -> return ctx
+        }
+        match ctxResult with
+        | Ok ctx -> next ctx
+        | Error errs -> asyncVal {
+                return GQLExecutionResult.Direct(ctx.ExecutionPlan.DocumentId, null, (errs |> List.map GQLProblemDetails.OfError), ctx.Metadata)
+            }
     interface IExecutorMiddleware with
         member _.CompileSchema = Some compileMiddleware
         member _.PostCompileSchema = None

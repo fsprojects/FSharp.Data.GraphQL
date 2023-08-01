@@ -3,12 +3,15 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Collections.Generic
 open System.Text.Json.Serialization
-open Microsoft.FSharp.Core.LanguagePrimitives
 
 type internal FieldPath = obj list
 
 type IGQLError =
     abstract member Message : string with get
+
+type internal ICoerceGQLError =
+    inherit IGQLError
+    abstract member VariableMessage : string with get
 
 type IGQLErrorExtensions =
     abstract member Extensions : IReadOnlyDictionary<string, obj> voption with get
@@ -94,7 +97,12 @@ type GQLProblemDetails =
             | :? IGQLErrorExtensions as ext -> ext.Extensions |> Skippable.ofValueOption
             | _ -> Skip
 
-        GQLProblemDetails.Create (error.Message, extensions)
+        let message =
+            match error with
+            | :? ICoerceGQLError as error -> error.VariableMessage + error.Message
+            | _ -> error.Message
+
+        GQLProblemDetails.Create (message, extensions)
 
     static member OfFieldError (path : FieldPath) (error : IGQLError) =
         let extensions =
@@ -102,4 +110,9 @@ type GQLProblemDetails =
             | :? IGQLErrorExtensions as ext -> ext.Extensions |> Skippable.ofValueOption
             | _ -> Skip
 
-        GQLProblemDetails.Create (error.Message, path, extensions)
+        let message =
+            match error with
+            | :? ICoerceGQLError as error -> error.VariableMessage + error.Message
+            | _ -> error.Message
+
+        GQLProblemDetails.Create (message, path, extensions)

@@ -670,18 +670,62 @@ let internal compileSchema (ctx : SchemaCompileContext) =
         | InputObject indef -> compileInputObject indef
         | _ -> ())
 
-let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary<string, JsonElement>) =
-    variables
-    |> List.fold (
-        fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) vardef -> result {
-            let! value = coerceVariable vardef vars
-            and! acc = acc
-            acc.Add(vardef.Name, value)
-            return acc
-        })
-                 (ImmutableDictionary.CreateBuilder<string, obj>() |> Ok)
-    // TODO: Use FSharp.Collection.Immutable
-    |> Result.map (fun builder -> builder.ToImmutable())
+let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary<string, JsonElement>) = result {
+    let variables, inlineValues, nulls =
+        variables
+        |> List.fold
+            (fun (valiables, inlineValues, missing) vardef ->
+                match vars.TryGetValue vardef.Name with
+                | false, _ ->
+                    match vardef.DefaultValue with
+                    | Some defaultValue ->
+                        let item = struct(vardef, defaultValue)
+                        (valiables, item::inlineValues, missing)
+                    | None ->
+                        let item =
+                            match vardef.TypeDef with
+                            | Nullable _ -> Ok <| KeyValuePair(vardef.Name, null)
+                            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
+                        (valiables, inlineValues, item::missing)
+                | true, jsonElement ->
+                    let item = struct(vardef, jsonElement)
+                    (item::valiables, inlineValues, missing)
+                )
+            ([], [], [])
+
+    // First we need to coerce variables
+    let! variablesBuilder =
+        variables
+        |> List.fold (
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> result {
+                    let! value = coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vardef.Name}': "
+                    and! acc = acc
+                    acc.Add(vardef.Name, value)
+                    return acc
+                })
+                (ImmutableDictionary.CreateBuilder<string, obj>() |> Ok)
+
+    let suppliedVaribles = variablesBuilder.ToImmutable()
+
+    // Having variables we can coerce inline values that are also
+    let! variablesBuilder =
+        inlineValues
+        |> List.fold (
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> result {
+                    let executeInput = compileByType $"Variable '%s{vardef.Name}': " vardef.TypeDef
+                    let! value = executeInput defaultValue suppliedVaribles
+                    and! acc = acc
+                    acc.Add(vardef.Name, value)
+                    return acc
+                })
+                (variablesBuilder |> Ok)
+
+    and! nulls = nulls |> splitSeqErrorsList
+
+    nulls |> Array.iter variablesBuilder.Add
+
+    return variablesBuilder.ToImmutable()
+}
 
 #nowarn "0046"
 

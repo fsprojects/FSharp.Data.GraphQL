@@ -78,14 +78,13 @@ module Definitions =
     /// to construct Relay slice information.
     let (|SliceInfo|_|) (ctx:ResolveFieldContext) =
         match ctx.TryArg "first", ctx.TryArg "after" with
-        | Some (Some first), None -> Some (Forward(first, None))
-        | Some (Some first), (Some after) -> Some (Forward(first, after))
+        | Some (first), None -> Some (Forward(first, None))
+        | Some (first), (after) -> Some (Forward(first, after))
         | None, _ ->
             match ctx.TryArg "last", ctx.TryArg "before" with
-            | Some (Some last), None -> Some (Backward(last, None))
-            | Some (Some last), (Some before) -> Some (Backward(last, before))
+            | Some (last), None -> Some (Backward(last, None))
+            | Some (last), (before) -> Some (Backward(last, before))
             | _, _ -> None
-        | _ -> None
 
     /// Object defintion representing information about pagination in context of Relay connection
     let PageInfo =

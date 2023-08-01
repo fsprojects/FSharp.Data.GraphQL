@@ -351,8 +351,6 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
                 Debug.Fail "Must be prevented by validation"
                 raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
 
-open FSharp.Data.GraphQL.Validation
-
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // Create artificial plan info to start with
     let rootInfo = {
