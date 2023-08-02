@@ -59,7 +59,7 @@ and UNamed =
                  | Person p -> upcast p)
 
 [<Fact>]
-let ``Planning should retain correct types for leafs``() =
+let ``Planning must retain correct types for leafs``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """{
@@ -77,7 +77,7 @@ let ``Planning should retain correct types for leafs``() =
                 ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should work with fragments``() =
+let ``Planning must work with fragments``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """query Example {
@@ -98,7 +98,7 @@ let ``Planning should work with fragments``() =
                 ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should work with parallel fragments``() =
+let ``Planning must work with parallel fragments``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """query Example {
@@ -123,7 +123,7 @@ let ``Planning should work with parallel fragments``() =
                 ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should retain correct types for lists``() =
+let ``Planning must retain correct types for lists``() =
     let Query = Define.Object("Query", [ Define.Field("people", ListOf Person, fun _ () -> people) ])
     let schema = Schema(Query)
     let schemaProcessor = Executor(schema)
@@ -158,7 +158,7 @@ let ``Planning should retain correct types for lists``() =
     friendInfo.ReturnDef |> equals (upcast Person)
 
 [<Fact>]
-let ``Planning should work with interfaces``() =
+let ``Planning must work with interfaces``() =
     let Query = Define.Object("Query", [ Define.Field("names", ListOf INamed, fun _ () -> []) ])
     let schema = Schema(query = Query, config = { SchemaConfig.Default with Types = [ Person; Animal ] })
     let schemaProcessor = Executor(schema)
@@ -194,7 +194,7 @@ let ``Planning should work with interfaces``() =
                               ("species", upcast INamed, upcast StringType) ] ])
 
 [<Fact>]
-let ``Planning should work with unions``() =
+let ``Planning must work with unions``() =
     let Query = Define.Object("Query", [ Define.Field("names", ListOf UNamed, fun _ () -> []) ])
     let schema = Schema(Query)
     let schemaProcessor = Executor(schema)

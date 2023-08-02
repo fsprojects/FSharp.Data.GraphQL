@@ -41,7 +41,7 @@ let inputFieldQuery = """{
 """
 
 [<Fact>]
-let ``Input field should be marked as nullable when defaultValue is provided`` () =
+let ``Input field must be marked as nullable when defaultValue is provided`` () =
     let root = Define.Object("Query", [
         Define.Field("onlyField", StringType, "The only field", [
             Define.Input("in", StringType, defaultValue = "1")
@@ -75,7 +75,7 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Input field should be marked as non-nullable when defaultValue is not provided`` () =
+let ``Input field must be marked as non-nullable when defaultValue is not provided`` () =
     let root = Define.Object("Query", [
         Define.Field("onlyField", StringType, "The only field", [
             Define.Input("in", StringType)
@@ -109,7 +109,7 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Input field should be marked as nullable when its type is nullable`` () =
+let ``Input field must be marked as nullable when its type is nullable`` () =
     let root = Define.Object("Query", [
         Define.Field("onlyField", StringType, "The only field", [
             Define.Input("in", Nullable StringType)
@@ -143,7 +143,7 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Input field should be marked as nullable when its type is nullable and have default value provided`` () =
+let ``Input field must be marked as nullable when its type is nullable and have default value provided`` () =
     let root = Define.Object("Query", [
         Define.Field("onlyField", StringType, "The only field", [
             Define.Input("in", Nullable StringType, defaultValue = Some "1")
@@ -177,7 +177,7 @@ let ``Input field should be marked as nullable when its type is nullable and hav
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
-let ``Introspection schema should be serializable back and forth using json`` () =
+let ``Introspection schema must be serializable back and forth using json`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let query = """query IntrospectionQuery {

@@ -28,7 +28,7 @@ let TestInterface =
                                                       Define.Input("y", StringType) ], (fun _ _ -> "")) ])
 
 [<Fact>]
-let ``Validation should inform about not implemented fields``() =
+let ``Validation must inform about not implemented fields``() =
     let TestData =
         Define.Object<TestDataType>
             (name = "TestData", fields = [ Define.Field("property", StringType, (fun _ d -> d.TestProperty)) ],
@@ -39,7 +39,7 @@ let ``Validation should inform about not implemented fields``() =
     equals expected result
 
 [<Fact>]
-let ``Validation should inform about fields with not matching signatures``() =
+let ``Validation must inform about fields with not matching signatures``() =
     let TestData =
         Define.Object<TestDataType>
             (name = "TestData",
@@ -55,7 +55,7 @@ let ``Validation should inform about fields with not matching signatures``() =
     equals expected result
 
 [<Fact>]
-let ``Validation should succeed if object implements interface correctly``() =
+let ``Validation must succeed if object implements interface correctly``() =
     let TestData =
         Define.Object<TestDataType>
             (name = "TestData",

@@ -24,7 +24,7 @@ let ``ofSeq should call OnComplete and return items in expected order`` () =
     sub.Received |> seqEquals source
 
 [<Fact>]
-let `` bind should call OnComplete and return items in expected order`` () =
+let ``bind should call OnComplete and return items in expected order`` () =
     let source = seq { for x in 1 .. 5 do yield x }
     let obs = Observable.ofSeq source |> Observable.bind (fun x -> Observable.ofSeq [x; x])
     use sub = Observer.create obs

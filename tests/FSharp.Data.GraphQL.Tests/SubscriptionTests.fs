@@ -1,12 +1,9 @@
 module FSharp.Data.GraphQL.Tests.SubscriptionTests
 
 open Xunit
-open FSharp.Control
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open System.Threading
-open System.Collections.Concurrent
 open FSharp.Data.GraphQL.Types
 
 type Value =
@@ -104,7 +101,7 @@ let schema = Schema(Query, subscription = Subscription, config = schemaConfig)
 let executor = Executor(schema)
 
 [<Fact>]
-let ``Should be able to subscribe to sync field and get results``() =
+let ``Can subscribe to sync field and get results``() =
     let expected = SubscriptionResult (NameValueLookup.ofList [
             "watchData", upcast NameValueLookup.ofList [
                 "id", upcast 1
@@ -131,7 +128,7 @@ let ``Should be able to subscribe to sync field and get results``() =
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to tagged sync field and get results with expected tag``() =
+let ``Can subscribe to tagged sync field and get results with expected tag``() =
     let expected = SubscriptionResult (NameValueLookup.ofList [
             "watchDataByKey", upcast NameValueLookup.ofList [
                 "id", upcast 1
@@ -158,7 +155,7 @@ let ``Should be able to subscribe to tagged sync field and get results with expe
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to tagged sync field and do not get results with unexpected tag``() =
+let ``Can subscribe to tagged sync field and do not get results with unexpected tag``() =
     let query = parse """subscription Test {
         watchDataByKey(id: 1, key: "tag2") {
             id
@@ -174,7 +171,7 @@ let ``Should be able to subscribe to tagged sync field and do not get results wi
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to async field and get results``() =
+let ``Can subscribe to async field and get results``() =
     let expected = SubscriptionResult (NameValueLookup.ofList [
         "watchDataAsync", upcast NameValueLookup.ofList [
             "id", upcast 1
@@ -200,7 +197,7 @@ let ``Should be able to subscribe to async field and get results``() =
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to tagged async field and get results with expected tag``() =
+let ``Can subscribe to tagged async field and get results with expected tag``() =
     let expected = SubscriptionResult (NameValueLookup.ofList [
             "watchDataByKeyAsync", upcast NameValueLookup.ofList [
                 "id", upcast 1
@@ -227,7 +224,7 @@ let ``Should be able to subscribe to tagged async field and get results with exp
     | _ -> failwith "Expected Stream GQLResponse"
 
 [<Fact>]
-let ``Should be able to subscribe to tagged async field and do not get results with unexpected tag``() =
+let ``Can subscribe to tagged async field and do not get results with unexpected tag``() =
     let query = parse """subscription Test {
         watchDataByKeyAsync(id: 1, key: "tag2") {
             id

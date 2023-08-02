@@ -6,6 +6,7 @@ module FSharp.Data.GraphQL.Tests.Relay.NodeTests
 #nowarn "40"
 
 open System
+open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Execution
@@ -50,9 +51,6 @@ and Node = Define.Node (fun () -> [ Person; Car ])
 
 let schema = Schema<unit>(Define.Object("Query", [ Define.NodeField(Node, resolve) ]), config = { SchemaConfig.Default with Types = [ Person; Car ] })
 
-open Xunit
-open System.Threading
-open System.Collections.Concurrent
 
 let execAndValidateNode (query: string) expectedDirect expectedDeferred =
     let result = sync <| Executor(schema).AsyncExecute(query)
