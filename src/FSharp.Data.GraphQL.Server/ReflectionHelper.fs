@@ -130,8 +130,6 @@ module internal Gen =
 
 module internal ReflectionHelper =
 
-    open System.Runtime.InteropServices
-
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
         else
@@ -149,7 +147,7 @@ module internal ReflectionHelper =
             let getNonOptionalParammeters =
                 Seq.where (
                     fun (parameter: ParameterInfo) ->
-                        parameter.GetCustomAttribute<OptionalAttribute>() = null
+                        (not parameter.IsOptional)
                         && parameter.ParameterType.Name <> "FSharpOption`1"
                         && parameter.ParameterType.Name <> "FSharpValueOption`1"
                 )
