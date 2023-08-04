@@ -41,7 +41,6 @@
     <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
-    <Compile Include="CoercionTests.fs" />
     <Compile Include="IntrospectionTests.fs" />
     <Compile Include="PlanningTests.fs" />
     <Compile Include="PropertyTrackerTests.fs" />
@@ -49,6 +48,7 @@
     <Compile Include="ExecutorMiddlewareTests.fs" />
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
+    <Compile Include="Variables and Inputs\CoercionTests.fs" />
     <Compile Include="Variables and Inputs\InputRecordTests.fs" />
     <Compile Include="Variables and Inputs\InputScalarAndAutoFieldScalarTests.fs" />
     <Compile Include="Variables and Inputs\InputComplexTests.fs" />
