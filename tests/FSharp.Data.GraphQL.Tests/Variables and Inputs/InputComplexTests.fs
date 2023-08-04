@@ -41,7 +41,7 @@ type TestInput =
       optSeq : string option seq option
       voptSeq : string option seq voption // string voption seq voption is too hard to implement
       optArr : string option array option
-      voptArr : string option array voption }  // string voption array voption is too hard to implement
+      voptArr : string option array voption } // string voption array voption is too hard to implement
 
 let InputArrayOf (innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Val array> = ListOf innerDef
 
@@ -61,20 +61,21 @@ let TestInputObject =
 let TestType =
     Define.Object<unit> (
         name = "TestType",
-        fields =
-            [ Define.Field ("fieldWithObjectInput", StringType, "", [ Define.Input ("input", Nullable TestInputObject) ], stringifyInput) ]
+        fields = [ Define.Field ("fieldWithObjectInput", StringType, "", [ Define.Input ("input", Nullable TestInputObject) ], stringifyInput) ]
     )
 
 let schema = Schema (TestType)
 
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs with complex input`` () =
-    let ast = parse """{ fieldWithObjectInput(input: {mand: "baz", opt1: "foo", optSeq: ["bar"], optArr: ["baf"]}) }"""
+    let ast =
+        parse """{ fieldWithObjectInput(input: {mand: "baz", opt1: "foo", optSeq: ["bar"], optArr: ["baf"]}) }"""
     let actual = sync <| Executor(schema).AsyncExecute (ast)
 
     let expected =
         NameValueLookup.ofList
-            [ "fieldWithObjectInput", upcast """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":null,"optArr":["baf"],"voptArr":null}""" ]
+            [ "fieldWithObjectInput",
+              upcast """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":null,"optArr":["baf"],"voptArr":null}""" ]
 
     match actual with
     | Direct (data, errors) ->
@@ -103,7 +104,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
     let expected =
         NameValueLookup.ofList
             [ "fieldWithObjectInput",
-                  upcast """{"mand":"foo","opt1":null,"opt2":"DeserializedValue","optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}""" ]
+              upcast """{"mand":"foo","opt1":null,"opt2":"DeserializedValue","optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}""" ]
 
     match actual with
     | Direct (data, errors) ->
@@ -118,7 +119,8 @@ let paramsWithValueInput input =
         .Parse(variablesWithInput "input" input)
         .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
 
-let testInputObject = """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":["bar"],"optArr":null,"voptArr":null}"""
+let testInputObject =
+    """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":["bar"],"optArr":null,"voptArr":null}"""
 
 [<Fact>]
 let ``Execute handles variables with complex inputs`` () =

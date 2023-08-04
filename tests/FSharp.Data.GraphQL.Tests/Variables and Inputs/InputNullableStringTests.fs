@@ -27,11 +27,11 @@ let TestType =
         name = "TestType",
         fields =
             [ Define.Field (
-                "fieldWithDefaultArgumentValue",
-                StringType,
-                "",
-                [ Define.Input ("input", Nullable StringType, Some "hello world") ],
-                stringifyInput
+                  "fieldWithDefaultArgumentValue",
+                  StringType,
+                  "",
+                  [ Define.Input ("input", Nullable StringType, Some "hello world") ],
+                  stringifyInput
               )
               Define.Field ("fieldWithNullableStringInput", StringType, "", [ Define.Input ("input", Nullable StringType) ], stringifyInput)
               Define.Field ("fieldWithNonNullableStringInput", StringType, "", [ Define.Input ("input", StringType) ], stringifyInput) ]
