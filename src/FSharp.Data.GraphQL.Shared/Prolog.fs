@@ -6,6 +6,7 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Reflection
 open System.Collections.Generic
+open System.Collections.Immutable
 
 type GraphQLInvalidInputTypeExcetion (msg, unmatchedOptionalFields) =
     inherit Exception(msg)
@@ -22,15 +23,20 @@ type MalformedQueryException(msg) =
 
 /// General helper functions and types.
 module Helpers =
+
     /// Casts a System.Object to an option to a System.Object option.
     let optionCast (value: obj) =
-        let optionDef = typedefof<option<_>>
         if isNull value then None
         else
             let t = value.GetType()
-            let p = t.GetProperty("Value")
-            if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+            if t.Name = "FSharpOption`1" then
+                let p = t.GetProperty("Value")
                 Some (p.GetValue(value, [||]))
+            elif t.Name = "FSharpValueOption`1" then
+                if value = Activator.CreateInstance t then None
+                else
+                    let p = t.GetProperty("Value")
+                    Some (p.GetValue(value, [||]))
             else None
 
     /// Matches a System.Object with an option.
