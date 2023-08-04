@@ -50,6 +50,7 @@
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
     <Compile Include="Variables and Inputs\InputRecordTests.fs" />
+    <Compile Include="Variables and Inputs\InputScalarAndAutoFieldScalarTests.fs" />
     <Compile Include="Variables and Inputs\InputComplexTests.fs" />
     <Compile Include="Variables and Inputs\InputNestedTests.fs" />
     <Compile Include="Variables and Inputs\InputNullableStringTests.fs" />

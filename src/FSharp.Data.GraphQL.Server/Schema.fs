@@ -9,7 +9,9 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
 open FSharp.Control.Reactive
+
 open System.Collections.Generic
+open System.Collections.Immutable
 open System.Reactive.Linq
 open System.Reactive.Subjects
 
@@ -290,7 +292,24 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             let inputs =
                 inObjDef.Fields
                 |> Array.map (introspectInput namedTypes)
-            IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
+            let optionalFields =
+                inObjDef.Fields
+                |> Seq.choose (fun f -> match f.TypeDef with Nullable _ -> Some f.Name | _ -> None)
+                |> ImmutableHashSet.CreateRange
+            let optionalParameters =
+                let ctor = ReflectionHelper.matchConstructor inObjDef.Type (inObjDef.Fields |> Array.map (fun f -> f.Name))
+                ctor.GetParameters()
+                |> Seq.where (fun p ->
+                    (p.IsOptional && not p.HasDefaultValue)
+                    || p.ParameterType.Name = "FSharpOption`1"
+                    || p.ParameterType.Name = "FSharpValueOption`1")
+                |> Seq.map (fun p -> p.Name)
+                |> ImmutableHashSet.CreateRange
+            if optionalFields.IsSubsetOf optionalParameters
+            then IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
+            else
+                let unmatchedOptionalFields = optionalFields.Except optionalParameters
+                raise <| GraphQLInvalidInputTypeExcetion ($"Input object %s{inObjDef.Name} has optional fields that are not optional parameters of the constructor", unmatchedOptionalFields)
         | Union uniondef ->
             let possibleTypes =
                 getPossibleTypes uniondef

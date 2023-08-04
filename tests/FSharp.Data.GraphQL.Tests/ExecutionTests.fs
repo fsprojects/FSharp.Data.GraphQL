@@ -25,6 +25,7 @@ type TestSubject = {
     pic: int option -> string
     promise: Async<TestSubject>
 }
+
 and DeepTestSubject = {
     a: string
     b: string

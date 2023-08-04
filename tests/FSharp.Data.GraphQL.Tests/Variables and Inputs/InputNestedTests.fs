@@ -100,4 +100,3 @@ let ``Execute handles recursive input objects and nullability using inline struc
         empty errors
         data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-

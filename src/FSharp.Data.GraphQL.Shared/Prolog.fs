@@ -7,6 +7,11 @@ open System
 open System.Reflection
 open System.Collections.Generic
 
+type GraphQLInvalidInputTypeExcetion (msg, unmatchedOptionalFields) =
+    inherit Exception(msg)
+
+    member _.UnmatchedOptionalFields : string ImmutableHashSet = unmatchedOptionalFields
+
 type GraphQLException(msg) =
     inherit Exception(msg)
     interface IGQLError with
