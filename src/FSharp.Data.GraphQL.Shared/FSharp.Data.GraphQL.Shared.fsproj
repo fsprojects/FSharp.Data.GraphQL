@@ -45,14 +45,15 @@
   <ItemGroup>
     <Compile Include="Diagnostics.fs" />
     <Compile Include="ObjAndStructConversions.fs" />
-    <Compile Include="Errors.fs" />
-    <Compile Include="ValidationTypes.fs" />
     <Compile Include="Extensions.fs" />
-    <Compile Include="Prolog.fs" />
+    <Compile Include="Reflection.fs" />
     <Compile Include="MemoryCache.fs" />
+    <Compile Include="Errors.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="ValidationTypes.fs" />
+    <Compile Include="AsyncVal.fs" />
     <Compile Include="Ast.fs" />
     <Compile Include="AstExtensions.fs" />
-    <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
     <Compile Include="SchemaDefinitions.fs" />
     <Compile Include="SchemaDefinitionsExtensions.fs" />

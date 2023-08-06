@@ -357,7 +357,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
     | Nullable (Output innerDef) ->
         let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
         executeResolvers innerCtx path parent (toOption value |> AsyncVal.wrap)
-        |> AsyncVal.map(Result.catchError (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
+        |> AsyncVal.map(Result.valueOr (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
 
     | Interface iDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
