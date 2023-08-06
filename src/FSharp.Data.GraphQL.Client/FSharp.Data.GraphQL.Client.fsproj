@@ -11,7 +11,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" VersionOverride="4.7.2"/>
+    <PackageReference Update="FSharp.Core" VersionOverride="4.7.2" />
     <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="False" />
     <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
   </ItemGroup>

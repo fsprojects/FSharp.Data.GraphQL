@@ -10,7 +10,6 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Quotations

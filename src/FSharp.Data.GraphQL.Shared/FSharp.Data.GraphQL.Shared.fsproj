@@ -51,14 +51,14 @@
     <Compile Include="Prolog.fs" />
     <Compile Include="MemoryCache.fs" />
     <Compile Include="Ast.fs" />
+    <Compile Include="AstExtensions.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
+    <Compile Include="TypeSystemExtensions.fs" />
     <Compile Include="IntrospectionQuery.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />
     <Compile Include="ValidationResultCache.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
-    <Compile Include="AstExtensions.fs" />
   </ItemGroup>
 </Project>
