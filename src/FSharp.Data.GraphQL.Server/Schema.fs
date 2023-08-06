@@ -9,9 +9,7 @@ open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
 open FSharp.Control.Reactive
-
 open System.Collections.Generic
-open System.Collections.Immutable
 open System.Reactive.Linq
 open System.Reactive.Subjects
 
@@ -165,17 +163,6 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let initialTypes: NamedDef list =
-        [ IntType
-          StringType
-          BooleanType
-          FloatType
-          IDType
-          DateTimeOffsetType
-          DateOnlyType
-          UriType
-          __Schema
-          query ]
 
     let schemaConfig =
         match config with
@@ -183,9 +170,22 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Some c -> c
 
     let typeMap : TypeMap =
+
+        let initialTypes: NamedDef list =
+            [ IntType
+              StringType
+              BooleanType
+              FloatType
+              IDType
+              DateTimeOffsetType
+              DateOnlyType
+              UriType
+              __Schema
+              query ]
+
         let m = mutation |> function Some (Named n) -> [n] | _ -> []
         let s = subscription |> function Some (Named n) -> [n] | _ -> []
-        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
+        seq { initialTypes; s; m; schemaConfig.Types } |> Seq.collect id |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
         typeMap.ToSeq()
@@ -292,24 +292,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
             let inputs =
                 inObjDef.Fields
                 |> Array.map (introspectInput namedTypes)
-            let optionalFields =
-                inObjDef.Fields
-                |> Seq.choose (fun f -> match f.TypeDef with Nullable _ -> Some f.Name | _ -> None)
-                |> ImmutableHashSet.CreateRange
-            let optionalParameters =
-                let ctor = ReflectionHelper.matchConstructor inObjDef.Type (inObjDef.Fields |> Array.map (fun f -> f.Name))
-                ctor.GetParameters()
-                |> Seq.where (fun p ->
-                    (p.IsOptional && not p.HasDefaultValue)
-                    || p.ParameterType.Name = "FSharpOption`1"
-                    || p.ParameterType.Name = "FSharpValueOption`1")
-                |> Seq.map (fun p -> p.Name)
-                |> ImmutableHashSet.CreateRange
-            if optionalFields.IsSubsetOf optionalParameters
-            then IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
-            else
-                let unmatchedOptionalFields = optionalFields.Except optionalParameters
-                raise <| GraphQLInvalidInputTypeExcetion ($"Input object %s{inObjDef.Name} has optional fields that are not optional parameters of the constructor", unmatchedOptionalFields)
+            IntrospectionType.InputObject(inObjDef.Name, inObjDef.Description, inputs)
         | Union uniondef ->
             let possibleTypes =
                 getPossibleTypes uniondef
