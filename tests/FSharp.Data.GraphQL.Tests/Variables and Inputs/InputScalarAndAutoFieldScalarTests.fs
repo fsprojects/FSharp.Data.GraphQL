@@ -83,107 +83,98 @@ let ``Object Nullable to Nullable Type`` =
 
 [<Fact>]
 let ``Schema can be created for unmatched input nullable fields on record`` () =
-    let schema : ISchema =
-        Schema (
-            query =
-                Define.Object (
-                    "Query",
-                    fun () ->
-                        [ Define.Field (
-                              "rightRecord",
-                              ``Record Nullable to Nullable Type``,
-                              [ Define.Input ("record", ``InputRecord Non-nullable to Nullable Type``) ],
-                              (fun ctx _ -> ctx.Arg<InputRecordOptional> ("record"))
-                          ) ]
-                )
-        )
-
-    schema.Introspected
+    Schema (
+        query =
+            Define.Object (
+                "Query",
+                fun () ->
+                    [ Define.Field (
+                            "rightRecord",
+                            ``Record Nullable to Nullable Type``,
+                            [ Define.Input ("record", ``InputRecord Non-nullable to Nullable Type``) ],
+                            (fun ctx _ -> ctx.Arg<InputRecordOptional> ("record"))
+                        ) ]
+            )
+    ) |> Executor :> obj
 
 [<Fact>]
 let ``Schema cannot be created for unmatched input nullable fields on record`` () =
-    Assert.Throws<GraphQLInvalidInputTypeExcetion> (fun () ->
-        let schema : ISchema =
-            Schema (
-                query =
-                    Define.Object (
-                        "Query",
-                        fun () ->
-                            [ Define.Field (
-                                  "wrongRecord",
-                                  StringType,
-                                  [ Define.Input ("record", ``InputRecord Nullable to Non-nullable Type``) ],
-                                  stringifyInput
-                              ) ]
-                    )
-            )
-
-        schema.Introspected :> obj)
-
-[<Fact>]
-let ``Schema can be created for matched input nullable fields on class`` () =
-    let schema : ISchema =
+    Assert.Throws<InvalidInputTypeException> (fun () ->
         Schema (
             query =
                 Define.Object (
                     "Query",
                     fun () ->
                         [ Define.Field (
-                              "rightObject",
-                              ``Object Nullable to Nullable Type``,
-                              [ Define.Input ("object", ``InputObject Non-nullable to Nullable Type``) ],
-                              (fun ctx _ -> ctx.Arg<InputObjectOptional> ("object"))
-                          ) ]
+                                "wrongRecord",
+                                StringType,
+                                [ Define.Input ("record", ``InputRecord Nullable to Non-nullable Type``) ],
+                                stringifyInput
+                            ) ]
                 )
-        )
+        ) |> Executor :> obj
+    )
 
-    schema.Introspected :> obj
+[<Fact>]
+let ``Schema can be created for matched input nullable fields on class`` () =
+    Schema (
+        query =
+            Define.Object (
+                "Query",
+                fun () ->
+                    [ Define.Field (
+                            "rightObject",
+                            ``Object Nullable to Nullable Type``,
+                            [ Define.Input ("object", ``InputObject Non-nullable to Nullable Type``) ],
+                            (fun ctx _ -> ctx.Arg<InputObjectOptional> ("object"))
+                        ) ]
+            )
+    ) |> Executor :> obj
 
 [<Fact>]
 let ``Schema cannot be created for unmatched input nullable fields on class`` () =
-    Assert.Throws<GraphQLInvalidInputTypeExcetion> (fun () ->
-        let schema : ISchema =
-            Schema (
-                query =
-                    Define.Object (
-                        "Query",
-                        fun () ->
-                            [ Define.Field (
-                                  "wrongObject",
-                                  StringType,
-                                  [ Define.Input ("object", ``InputObject Nullable to Non-nullable Type``) ],
-                                  stringifyInput
-                              ) ]
-                    )
-            )
-
-        schema.Introspected :> obj)
-
-
-let schema =
-    let schema =
-        Schema<unit> (
+    Assert.Throws<InvalidInputTypeException> (fun () ->
+        Schema (
             query =
                 Define.Object (
                     "Query",
                     fun () ->
-                        [
-                          Define.Field (
-                              "record",
-                              ``Record Nullable to Nullable Type``,
-                              [ Define.Input ("record", ``InputRecord Non-nullable to Nullable Type``) ],
-                              (fun ctx _ -> ctx.Arg<InputRecordOptional> ("record"))
-                          )
-                          Define.Field (
-                              "object",
-                              ``Object Nullable to Nullable Type``,
-                              [ Define.Input ("object", ``InputObject Non-nullable to Nullable Type``) ],
-                              (fun ctx _ -> ctx.Arg<InputObjectOptional> ("object"))
-                          ) ]
+                        [ Define.Field (
+                                "wrongObject",
+                                StringType,
+                                [ Define.Input ("object", ``InputObject Nullable to Non-nullable Type``) ],
+                                stringifyInput
+                            ) ]
                 )
-        )
+        ) |> Executor :> obj
+    )
 
-    Executor schema
+
+let schema =
+    lazy
+        let schema =
+            Schema<unit> (
+                query =
+                    Define.Object (
+                        "Query",
+                        fun () ->
+                            [
+                              Define.Field (
+                                  "record",
+                                  ``Record Nullable to Nullable Type``,
+                                  [ Define.Input ("record", ``InputRecord Non-nullable to Nullable Type``) ],
+                                  (fun ctx _ -> ctx.Arg<InputRecordOptional> ("record"))
+                              )
+                              Define.Field (
+                                  "object",
+                                  ``Object Nullable to Nullable Type``,
+                                  [ Define.Input ("object", ``InputObject Non-nullable to Nullable Type``) ],
+                                  (fun ctx _ -> ctx.Arg<InputObjectOptional> ("object"))
+                              ) ]
+                    )
+            )
+
+        Executor schema
 
 [<Fact>]
 let ``Execute handles nullable auto-fields in input and output record fields coercion`` () =
@@ -196,7 +187,7 @@ let ``Execute handles nullable auto-fields in input and output record fields coe
       }
     }"""
 
-    let actual = sync <| schema.AsyncExecute (parse query)
+    let actual = sync <| schema.Value.AsyncExecute (parse query)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c"] ]
 
@@ -217,7 +208,7 @@ let ``Execute handles nullable auto-fields in input and output object fields coe
       }
     }"""
 
-    let actual = sync <| schema.AsyncExecute (parse query)
+    let actual = sync <| schema.Value.AsyncExecute (parse query)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c" ] ]
 

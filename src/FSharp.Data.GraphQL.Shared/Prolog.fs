@@ -8,7 +8,7 @@ open System.Reflection
 open System.Collections.Generic
 open System.Collections.Immutable
 
-type GraphQLInvalidInputTypeExcetion (msg, unmatchedOptionalFields) =
+type InvalidInputTypeException (msg, unmatchedOptionalFields) =
     inherit Exception(msg)
 
     member _.UnmatchedOptionalFields : string ImmutableHashSet = unmatchedOptionalFields
@@ -29,10 +29,10 @@ module Helpers =
         if isNull value then None
         else
             let t = value.GetType()
-            if t.Name = "FSharpOption`1" then
+            if t.FullName.StartsWith  "Microsoft.FSharp.Core.FSharpOption`1" then
                 let p = t.GetProperty("Value")
                 Some (p.GetValue(value, [||]))
-            elif t.Name = "FSharpValueOption`1" then
+            elif t.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" then
                 if value = Activator.CreateInstance t then None
                 else
                     let p = t.GetProperty("Value")

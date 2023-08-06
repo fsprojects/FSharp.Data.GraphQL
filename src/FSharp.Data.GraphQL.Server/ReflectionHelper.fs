@@ -130,6 +130,13 @@ module internal Gen =
 
 module internal ReflectionHelper =
 
+    let isParameterOptional (p: ParameterInfo) =
+        p.IsOptional
+        || p.ParameterType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1"
+        || p.ParameterType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1"
+
+    let isPrameterMandatory = not << isParameterOptional
+
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
         else
@@ -144,20 +151,14 @@ module internal ReflectionHelper =
                 // start from most complete constructors
                 |> Seq.sortBy (fun struct(_, parameters) -> -parameters.Length)
 
-            let getNonOptionalParammeters =
-                Seq.where (
-                    fun (parameter: ParameterInfo) ->
-                        (not parameter.IsOptional)
-                        && parameter.ParameterType.Name <> "FSharpOption`1"
-                        && parameter.ParameterType.Name <> "FSharpValueOption`1"
-                )
+            let getMandatoryParammeters = Seq.where isPrameterMandatory
 
             let struct(ctor, _) =
                 seq {
                     // match all constructors with all parameters
                     yield! constructorsWithParameters |> Seq.map (fun struct(ctor, parameters) -> struct(ctor, parameters |> Seq.map (fun p -> p.Name)))
                     // match all constructors with non optional parameters
-                    yield! constructorsWithParameters |> Seq.map (fun struct(ctor, parameters) -> struct(ctor, parameters |> getNonOptionalParammeters |> Seq.map (fun p -> p.Name)))
+                    yield! constructorsWithParameters |> Seq.map (fun struct(ctor, parameters) -> struct(ctor, parameters |> getMandatoryParammeters |> Seq.map (fun p -> p.Name)))
                 }
                 // try match field with params by name
                 // at last, default constructor should be used if defined

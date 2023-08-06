@@ -8,6 +8,7 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Diagnostics
+open System.Linq
 open System.Reflection
 open System.Text.Json
 open FsToolkit.ErrorHandling
@@ -19,7 +20,7 @@ open FSharp.Data.GraphQL.Errors
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
-        if outputType.Name = "FSharpValueOption`1" then
+        if outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" then
             let _, valuenone, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
             valuenone
         elif outputType.IsValueType then
@@ -35,10 +36,10 @@ let private wrapOptional (outputType: Type) value=
         let inputType = value.GetType()
         if inputType.Name <> outputType.Name then
             let expectedType = outputType.GenericTypeArguments[0]
-            if outputType.Name = "FSharpOption`1" && expectedType.IsAssignableFrom inputType then
+            if outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1" && expectedType.IsAssignableFrom inputType then
                 let some, _, _ = ReflectionHelper.optionOfType outputType.GenericTypeArguments[0]
                 some value
-            elif outputType.Name = "FSharpValueOption`1" && expectedType.IsAssignableFrom inputType then
+            elif outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" && expectedType.IsAssignableFrom inputType then
                 let valuesome, _, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
                 valuesome value
             else
@@ -83,39 +84,69 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
         let objtype = objdef.Type
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
 
-        let mapper =
+        let struct (mapper, nullableMismatchParameters, missingParameters) =
             ctor.GetParameters ()
-            |> Array.map (fun param ->
+            |> Array.fold (
+                fun
+                    struct(all: ResizeArray<_>, areNullable: HashSet<_>, missing: HashSet<_>)
+                    param ->
                 match
                     objdef.Fields
                     |> Array.tryFind (fun field -> field.Name = param.Name)
                 with
-                | Some field -> (field, param)
+                | Some field ->
+                    match field.TypeDef with
+                    | Nullable _ when ReflectionHelper.isPrameterMandatory param && field.DefaultValue.IsNone ->
+                        areNullable.Add param.Name |> ignore
+                    | _ ->
+                        all.Add(struct (ValueSome field, param)) |> ignore
                 | None ->
-                    failwithf
-                        "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields"
-                        objdef.Name
-                        objtype
-                        param.Name)
+                    if ReflectionHelper.isParameterOptional param then
+                        all.Add <| struct (ValueNone, param) |> ignore
+                    else
+                        missing.Add param.Name |> ignore
+                struct(all,areNullable, missing))
+                struct (ResizeArray(), HashSet(), HashSet())
+
+        if missingParameters.Any() then
+            raise
+            <| InvalidInputTypeException(
+                $"Input object '%s{objdef.Name}' refers to type '%O{objtype}', but mandatory constructor parameters '%A{missingParameters}' don't match any of the defined input fields",
+                missingParameters.ToImmutableHashSet()
+               )
+        if nullableMismatchParameters.Any() then
+            raise
+            <| InvalidInputTypeException(
+                $"Input object %s{objdef.Name} refers to type '%O{objtype}', but optional fields '%A{missingParameters}' are not optional parameters of the constructor",
+                nullableMismatchParameters.ToImmutableHashSet()
+               )
+
+        //let optionalFields =
+        //    objdef.Fields
+        //    |> Seq.choose (fun f -> match f.TypeDef with Nullable _ -> Some f.Name | _ -> None)
+        //    |> ImmutableHashSet.CreateRange
+        //if optionalFields.IsSubsetOf optionalParameters then
+        //    let unmatchedOptionalFields = optionalFields.Except optionalParameters
+        //    raise <| InvalidInputTypeException ($"Input object %s{objdef.Name} refers to type '%O{objtype}', but has optional fields that are not optional parameters of the constructor", unmatchedOptionalFields)
+
 
         fun value variables ->
             match value with
             | ObjectValue props -> result {
                     let argResults =
                         mapper
-                        |> Array.map (fun (field, param) ->
-                            match Map.tryFind field.Name props with
-                            | None -> Ok <| wrapOptionalNone param.ParameterType field.TypeDef.Type
-                            | Some prop -> field.ExecuteInput prop variables |> Result.map (wrapOptional param.ParameterType))
+                        |> Seq.map (fun struct (field, param) ->
+                            match field with
+                            | ValueSome field ->
+                                match Map.tryFind field.Name props with
+                                | None -> Ok <| wrapOptionalNone param.ParameterType field.TypeDef.Type
+                                | Some prop -> field.ExecuteInput prop variables |> Result.map (wrapOptional param.ParameterType)
+                            | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
 
                     let! args = argResults |> splitSeqErrorsList
 
                     let instance = ctor.Invoke (args)
                     return instance
-
-                    //// Args will be put into ImmutableDictionary<string, object> with variable name
-                    //// and then processed in the match case below so we do not need to create instance here
-                    //return args
                 }
             | VariableName variableName -> result {
                     match variables.TryGetValue variableName with
@@ -125,9 +156,12 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
 
                             let argResults =
                                 mapper
-                                |> Array.map (fun (field, param) -> result {
-                                    let! value = field.ExecuteInput (VariableName field.Name) objectFields
-                                    return wrapOptional param.ParameterType value
+                                |> Seq.map (fun struct (field, param) -> result {
+                                    match field with
+                                    | ValueSome field ->
+                                        let! value = field.ExecuteInput (VariableName field.Name) objectFields
+                                        return wrapOptional param.ParameterType value
+                                    | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                                 })
 
                             let! args = argResults |> splitSeqErrorsList
@@ -138,7 +172,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                             return null
                         | _ ->
                             let ty = found.GetType()
-                            if ty = objtype || (ty.Name = "FSharpOption`1" && ty.GetGenericArguments()[0] = objtype) then
+                            if ty = objtype || (ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1" && ty.GetGenericArguments()[0] = objtype) then
                                 return found
                             else
                                 Debugger.Break()
