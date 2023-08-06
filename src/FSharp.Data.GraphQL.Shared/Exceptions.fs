@@ -16,5 +16,5 @@ type GraphQLException(msg) =
     interface IGQLError with
         member _.Message = msg
 
-type MalformedQueryException(msg) =
+type MalformedGQLQueryException(msg) =
     inherit GraphQLException(msg)
