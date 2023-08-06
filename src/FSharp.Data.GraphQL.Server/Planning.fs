@@ -342,14 +342,14 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
         match Values.tryConvertAst schema vdef.Type with
         | None ->
             Debug.Fail "Must be prevented by validation"
-            raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not known in the current schema" vname (vdef.Type.ToString()) ))
+            raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{vdef.Type.ToString()}' which is not known in the current schema")
         | Some tdef ->
             match tdef with
             | :? InputDef as idef ->
                 { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
             | _ ->
                 Debug.Fail "Must be prevented by validation"
-                raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
+                raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{tdef.ToString()}' which is not an input type definition"))
 
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // Create artificial plan info to start with
