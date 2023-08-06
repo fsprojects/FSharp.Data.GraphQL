@@ -107,6 +107,7 @@ type internal CustomMetadataFieldDefinition<'Val>(source : FieldDef<'Val>, metad
 /// Contains extensions for the type system.
 [<AutoOpen>]
 module TypeSystemExtensions =
+
     type ObjectDef<'Val> with
         /// <summary>
         /// Creates a new object definition based on the existing one, containing

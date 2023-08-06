@@ -54,7 +54,8 @@
     <Compile Include="AstExtensions.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
+    <Compile Include="SchemaDefinitions.fs" />
+    <Compile Include="SchemaDefinitionsExtensions.fs" />
     <Compile Include="IntrospectionQuery.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />
