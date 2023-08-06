@@ -2280,42 +2280,44 @@ module Patterns =
     /// Active pattern to match GraphQL type defintion with named types.
     let rec (|Named|_|) (tdef : TypeDef) = named tdef
 
-module private Errors =
-
-    type InputValue with
-
-        member inputValue.GetCoerceError(destinationType) =
-            let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted to %s{destinationType}"
-            let message =
-                match inputValue with
-                | IntValue value -> getMessage "integer" value
-                | FloatValue value -> getMessage "float" value
-                | BooleanValue value -> getMessage "boolean" value
-                | StringValue value -> getMessage "string" value
-                | NullValue ->  $"Inline null value cannot be converted to {destinationType}"
-                | EnumValue value ->  getMessage "enum" value
-                | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
-            Error [{ new IGQLError with member _.Message = message }]
-
-    type JsonElement with
-
-        member e.GetDeserializeError(destinationType, minValue, maxValue ) =
-            Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
-
-        member e.GetDeserializeError(destinationType) =
-            Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType}" }]
-
-    let getParseRangeError (destinationType, minValue, maxValue) value =
-        Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
-
-    let getParseError destinationType value =
-        Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType}" }]
-
 [<AutoOpen>]
 module SchemaDefinitions =
 
+    module Errors =
+
+        type InputValue with
+
+            member inputValue.GetCoerceError(destinationType) =
+                let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted to %s{destinationType}"
+                let message =
+                    match inputValue with
+                    | IntValue value -> getMessage "integer" value
+                    | FloatValue value -> getMessage "float" value
+                    | BooleanValue value -> getMessage "boolean" value
+                    | StringValue value -> getMessage "string" value
+                    | NullValue ->  $"Inline null value cannot be converted to {destinationType}"
+                    | EnumValue value ->  getMessage "enum" value
+                    | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
+                Error [{ new IGQLError with member _.Message = message }]
+
+        type JsonElement with
+
+            member e.GetDeserializeError(destinationType, minValue, maxValue ) =
+                Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+
+            member e.GetDeserializeError(destinationType) =
+                Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType}" }]
+
+        let getParseRangeError (destinationType, minValue, maxValue) value =
+            Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+
+        let getParseError destinationType value =
+            Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType}" }]
+
+
     open System.Diagnostics
     open System.Globalization
+    open System.Reflection
     open Errors
 
     /// Tries to convert any value to int.
