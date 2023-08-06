@@ -12,6 +12,7 @@ open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
+open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
@@ -676,6 +677,7 @@ and ExecutionInfo =
                     |> Seq.tryFind (fun f -> f.Identifier = head)
                     |> Option.bind (fun f -> path f tail)
         path this keys
+
     override this.ToString () =
         let pad indent (sb: Text.StringBuilder) = for i = 0 to indent do sb.Append '\t' |> ignore
         let nameAs info =
@@ -1519,6 +1521,8 @@ and InputObjectDef =
         abstract Description : string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef []
+        /// Validates if input object has a a valid combination of filed values.
+        abstract Validator: GQLValidator<obj>
         /// INTERNAL API: input execution function -
         /// compiled by the runtime.
         abstract ExecuteInput : ExecuteInput with get, set
@@ -1536,6 +1540,8 @@ and InputObjectDefinition<'Val> =
       /// Lazy resolver for the input object fields. It must be lazy in
       /// order to allow self-recursive type references.
       Fields : Lazy<InputFieldDef[]>
+      /// Validates if input object has a a valid combination of filed values.
+      Validator: GQLValidator<'Val>
       /// INTERNAL API: input execution function -
       /// compiled by the runtime.
       mutable ExecuteInput : ExecuteInput }
@@ -1546,6 +1552,7 @@ and InputObjectDefinition<'Val> =
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Fields = x.Fields.Force()
+        member x.Validator = unbox >> x.Validator
         member x.ExecuteInput
             with get () = x.ExecuteInput
             and set v = x.ExecuteInput <- v
@@ -1585,6 +1592,7 @@ and InputFieldDef =
         /// INTERNAL API: input execution function -
         /// compiled by the runtime.
         abstract ExecuteInput : ExecuteInput with get, set
+
         inherit IEquatable<InputFieldDef>
     end
 

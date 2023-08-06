@@ -17,6 +17,7 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open FSharp.Data.GraphQL.Validation
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
@@ -137,6 +138,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     let! args = argResults |> splitSeqErrorsList
 
                     let instance = ctor.Invoke args
+                    do! objdef.Validator instance
                     return instance
                 }
             | VariableName variableName -> result {
@@ -158,6 +160,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                             let! args = argResults |> splitSeqErrorsList
 
                             let instance = ctor.Invoke args
+                            do! objdef.Validator instance
                             return instance
                         | null ->
                             return null

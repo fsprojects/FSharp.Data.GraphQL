@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
 
 [<AutoOpen>]
@@ -632,6 +633,7 @@ module SchemaDefinitions =
             { Name = name
               Fields = lazy (fieldsFn () |> List.toArray)
               Description = description
+              Validator = GQLValidator.empty
               ExecuteInput = Unchecked.defaultof<_> }
 
         /// <summary>
@@ -646,6 +648,40 @@ module SchemaDefinitions =
             { Name = name
               Description = description
               Fields = lazy (fields |> List.toArray)
+              Validator = GQLValidator.empty
+              ExecuteInput = Unchecked.defaultof<_> }
+
+        /// <summary>
+        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
+        /// .NET class or struct, or a F# record.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fieldsFn">
+        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
+        /// </param>
+        /// <param name="validator">Object validator.</param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+            { Name = name
+              Fields = lazy (fieldsFn () |> List.toArray)
+              Description = description
+              Validator = validator
+              ExecuteInput = Unchecked.defaultof<_> }
+
+        /// <summary>
+        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
+        /// .NET class or struct, or a F# record.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fields">List of input fields defined by the current input object. </param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
+        static member InputObject(name : string, fields : InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+            { Name = name
+              Description = description
+              Fields = lazy (fields |> List.toArray)
+              Validator = validator
               ExecuteInput = Unchecked.defaultof<_> }
 
         /// <summary>
