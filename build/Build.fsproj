@@ -6,6 +6,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="Properties\launchSettings.json" />
     <Compile Include="BinLog.fs" />
     <Compile Include="MSBuild.fs" />
     <Compile Include="DotNet.fs" />
