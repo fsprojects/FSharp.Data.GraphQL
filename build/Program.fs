@@ -1,50 +1,31 @@
+module Program
+
+open System
 open System.IO
 open System.Net.Http
 open System.Text.Json
 
-#r "nuget: Fake.Api.GitHub"
-#r "nuget: Fake.Core.ReleaseNotes"
-#r "nuget: Fake.Core.Target"
-#r "nuget: Fake.Core.UserInput"
-#r "nuget: Fake.DotNet.AssemblyInfoFile"
-#r "nuget: Fake.DotNet.Cli"
-#r "nuget: Fake.DotNet.Fsc"
-#r "nuget: Fake.DotNet.MSBuild"
-#r "nuget: Fake.IO.FileSystem"
-#r "nuget: Fake.Tools.Git"
-#r "nuget: System.Reactive"
-#r "nuget: Octokit"
-
-open Fake
+open Argu
+open Fake.Core
+open Fake.Core.TargetOperators
 open Fake.DotNet
 open Fake.IO
 open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
-open Fake.Core.TargetOperators
 open Fake.Tools
-open Fake.Core
 
-// https://github.com/fsprojects/FAKE/issues/2517
-// Regular header and `#load ".fake/build.fsx/intellisense.fsx"`
+Path.Combine(__SOURCE_DIRECTORY__, "..")
+|> Path.GetFullPath
+|> Directory.SetCurrentDirectory
 
-#if !FAKE
-let execContext =
-    System.Environment.GetCommandLineArgs ()
-    |> Array.skip 2 // skip fsi.exe; build.fsx
-    |> Array.toList
-    |> Fake.Core.Context.FakeExecutionContext.Create false __SOURCE_FILE__
-
+let execContext = Fake.Core.Context.FakeExecutionContext.Create false "build.fsx" [ ]
 execContext
 |> Fake.Core.Context.RuntimeContext.Fake
 |> Fake.Core.Context.setExecutionContext
-#endif
 
-// --------------------------------------------------------------------------------------
-// Information about the project are used
-// --------------------------------------------------------------------------------------
-//  - by the generated NuGet package
-//  - to run tests and to publish documentation on GitHub gh-pages
-//  - for documentation, you also need to edit info in "docs/tools/generate.fsx"
+module DotNetCli =
+    let setVersion (o: DotNet.Options) = { o with Version = Some "7.0.100" }
+    let setRestoreOptions (o: DotNet.RestoreOptions)= o.WithCommon  setVersion
 
 [<Literal>]
 let DotNetMoniker = "net6.0"
@@ -65,7 +46,7 @@ Target.create "CleanDocs" <| fun _ -> Shell.cleanDirs [ "docs/output" ]
 
 Target.create "Restore" <| fun _ ->
     !! "src/**/*.??proj" -- "src/**/*.shproj"
-    |> Seq.iter (fun pattern -> DotNet.restore id pattern)
+    |> Seq.iter (fun pattern -> DotNet.restore DotNetCli.setRestoreOptions pattern)
 
 
 Target.create "Build" <| fun _ ->
@@ -73,14 +54,14 @@ Target.create "Build" <| fun _ ->
     |> DotNet.build (fun o ->
         { o with
             Configuration = DotNet.BuildConfiguration.Release
-            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true } })
+            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true } }.WithCommon DotNetCli.setVersion)
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     DotNet.build
         (fun options ->
             { options with
                 Configuration = DotNet.BuildConfiguration.Release
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } }.WithCommon DotNetCli.setVersion)
         project
 
     let projectName = Path.GetFileNameWithoutExtension (project)
@@ -105,7 +86,7 @@ let runTests (project : string) =
         (fun options ->
             { options with
                 Configuration = DotNet.BuildConfiguration.Release
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } }.WithCommon DotNetCli.setVersion)
         project
 
     DotNet.test
@@ -113,7 +94,7 @@ let runTests (project : string) =
             { options with
                 Configuration = DotNet.BuildConfiguration.Release
                 MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-                Common = { options.Common with CustomParams = Some "--no-build -v=normal" } })
+                Common = { options.Common with CustomParams = Some "--no-build -v=normal" } }.WithCommon DotNetCli.setVersion)
         project
 
 let starWarsServerStream = StreamRef.Empty
@@ -189,11 +170,11 @@ let prepareDocGen () =
 
 Target.create "GenerateDocs" <| fun _ ->
     prepareDocGen ()
-    DotNet.exec id "fsdocs" "build --clean" |> ignore
+    DotNet.exec DotNetCli.setVersion "fsdocs" "build --clean" |> ignore
 
 Target.create "GenerateDocsWatch" <| fun _ ->
     prepareDocGen ()
-    DotNet.exec id "fsdocs" "watch --clean" |> ignore
+    DotNet.exec DotNetCli.setVersion "fsdocs" "watch --clean" |> ignore
     System.Console.ReadKey () |> ignore
 
 Target.create "ReleaseDocs" <| fun _ ->
@@ -230,7 +211,7 @@ let pack id =
     |> DotNet.pack (fun p ->
         { p with
             Common = { p.Common with Version = Some release.NugetVersion }
-            OutputPath = Some packageDir })
+            OutputPath = Some packageDir }.WithCommon DotNetCli.setVersion)
 
 let publishPackage id =
     let packageName = getPackageName id
@@ -239,7 +220,9 @@ let publishPackage id =
 
     projectPath
     |> DotNet.publish (fun p ->
-        { p with Common = { p.Common with WorkingDirectory = packageDir } })
+        { p with Common = { p.Common with WorkingDirectory = packageDir } }.WithCommon DotNetCli.setVersion)
+
+Target.create "PublishShared" <| fun _ -> publishPackage "Shared"
 
 Target.create "PublishServer" <| fun _ -> publishPackage "Server"
 
@@ -247,7 +230,9 @@ Target.create "PublishClient" <| fun _ -> publishPackage "Client"
 
 Target.create "PublishMiddleware" <| fun _ -> publishPackage "Server.Middleware"
 
-Target.create "PublishShared" <| fun _ -> publishPackage "Shared"
+Target.create "PublishRelay" <| fun _ -> publishPackage "Server.Relay"
+
+Target.create "PackShared" <| fun _ -> pack "Shared"
 
 Target.create "PackServer" <| fun _ -> pack "Server"
 
@@ -255,11 +240,11 @@ Target.create "PackClient" <| fun _ -> pack "Client"
 
 Target.create "PackMiddleware" <| fun _ -> pack "Server.Middleware"
 
-Target.create "PackShared" <| fun _ -> pack "Shared"
+Target.create "PackRelay" <| fun _ -> pack "Server.Relay"
 
 
 // --------------------------------------------------------------------------------------
-// Run all targets by default. Invoke 'build -t <Target>' to override
+// Run all targets by default. Invoke 'build --target <Target>' to override
 
 Target.create "All" ignore
 Target.create "PackAll" ignore
@@ -274,18 +259,54 @@ Target.create "PackAll" ignore
     ==> "RunIntegrationTests"
     ==> "All"
     =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
+    |> ignore
 
 "CleanDocs"
     ==> "GenerateDocs"
+    |> ignore
 
 "PackShared"
     ==> "PackServer"
     ==> "PackClient"
     ==> "PackMiddleware"
+    ==> "PackRelay"
     ==> "PackAll"
+    |> ignore
 
 Target.runOrDefaultWithArguments "All"
 
-#if !FAKE
 execContext.Context.Clear ()
-#endif
+
+//type Args =
+//    | All
+//    | PackAll
+//    | Clean
+//    | CleanDocs
+//    | PackShared
+
+//    interface IArgParserTemplate with
+//        member arg.Usage =
+//            match arg with
+//            | All -> "Run all targets by default"
+//            | PackAll -> "Run all pack targets by default"
+//            | Clean -> "Cleans the solution"
+//            | CleanDocs -> "Cleans only generated documentation"
+//            | PackShared -> "Packs shared project and all dependant"
+
+//let parser = ArgumentParser.Create<Args>(programName = "build")
+
+//open System.Text
+
+//[<EntryPoint>]
+//let main (args: string[]) =
+
+//    Console.InputEncoding <- Encoding.UTF8
+//    Console.OutputEncoding <- Encoding.UTF8
+
+//    match parser.ParseCommandLine(inputs = args, raiseOnUsage = true).TryGetSubCommand() with
+//    | Some mainArg -> Target.runOrDefault (string mainArg)
+//    | None -> Target.runOrDefault "All"
+
+//    execContext.Context.Clear ()
+
+//    0

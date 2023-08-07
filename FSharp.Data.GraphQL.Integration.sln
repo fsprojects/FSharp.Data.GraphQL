@@ -14,9 +14,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BDE03396-2ED6-4153-B94C-351BAB3F67BD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{BA7F22E2-D411-4229-826B-F55FF171D12A}"
-	ProjectSection(SolutionItems) = preProject
-		build.fsx = build.fsx
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
