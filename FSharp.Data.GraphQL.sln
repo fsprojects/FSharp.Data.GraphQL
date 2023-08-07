@@ -95,11 +95,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "graphiql-client", "graphiql
 		samples\graphiql-client\webpack.config.js = samples\graphiql-client\webpack.config.js
 	EndProjectSection
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "build", "build", "{DFA5AAFF-31B8-4203-822C-8ACC4D7A7D74}"
-	ProjectSection(SolutionItems) = preProject
-		samples\relay-starter-kit\build\babelRelayPlugin.js = samples\relay-starter-kit\build\babelRelayPlugin.js
-	EndProjectSection
-EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "client-provider", "client-provider", "{3D948D55-3CD2-496D-A04C-3B4E7BB69140}"
 	ProjectSection(SolutionItems) = preProject
 		samples\client-provider\field_aliases.fsx = samples\client-provider\field_aliases.fsx

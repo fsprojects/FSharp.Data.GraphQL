@@ -1,9 +1,9 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
-    <MicrosoftExtensionsVersion>6.0.*</MicrosoftExtensionsVersion>
-    <AspNetCoreVersion>6.0.*</AspNetCoreVersion>
-    <XUnitVersion>2.4.2</XUnitVersion>
+    <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
+    <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
+    <XUnitVersion>2.5.0</XUnitVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
     <PackageReference Update="FParsec" Version="1.1.1" />
@@ -15,14 +15,14 @@
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
     <PackageReference Update="System.CodeDom" Version="6.*" />
     <PackageReference Update="System.Management" Version="6.*" />
-    <PackageReference Update="System.Reactive" Version="5.*" />
+    <PackageReference Update="System.Reactive" Version="6.*" />
   </ItemGroup>
   <ItemGroup Label="Test platform">
-    <PackageReference Update="BenchmarkDotNet" Version="0.13.2" />
+    <PackageReference Update="BenchmarkDotNet" Version="0.13.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.3.*" />
-    <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.3.*" />
-    <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.3.*" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.7.0" />
+    <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
+    <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.analyzers" Version="1.*" />
     <PackageReference Update="xunit.assert" Version="$(XUnitVersion)" />
@@ -38,9 +38,9 @@
     <PackageReference Update="EntityFramework" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
     <PackageReference Update="Giraffe" Version="6.*" />
-    <PackageReference Update="GraphQL.Server.Ui.Playground" Version="7.1.*"  />
-    <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="7.1.*"  />
-    <PackageReference Update="HotChocolate.AspNetCore" Version="12.16.*" />
+    <PackageReference Update="GraphQL.Server.Ui.Playground" Version="7.*"  />
+    <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="7.*"  />
+    <PackageReference Update="HotChocolate.AspNetCore" Version="13.*" />
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
