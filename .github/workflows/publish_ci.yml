@@ -35,7 +35,7 @@ jobs:
       run: dotnet tool restore
 
     - name: Run integration tests
-      run: dotnet fsi build.fsx
+      run: dotnet run --project build/Build.fsproj
 
     - name: Pack FSharp.Data.GraphQL.Shared project
       run: |

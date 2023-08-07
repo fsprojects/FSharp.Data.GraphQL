@@ -4,6 +4,7 @@
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
     <XUnitVersion>2.5.0</XUnitVersion>
+    <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
     <PackageReference Update="FParsec" Version="1.1.1" />
@@ -16,6 +17,21 @@
     <PackageReference Update="System.CodeDom" Version="6.*" />
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" />
+  </ItemGroup>
+  <ItemGroup Label="Build">
+    <PackageReference Update="Argu" Version="6.*" />
+    <PackageReference Update="BlackFox.VsWhere" Version="1.1.0" />
+    <PackageReference Update="Fake.Core.Environment" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.Core.ReleaseNotes" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.Core.Target" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.DotNet.Cli" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.DotNet.Fsc" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.DotNet.MSBuild" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.DotNet.NuGet" Version="$(FAKEVersion)" />
+    <PackageReference Update="Fake.Tools.Git" Version="$(FAKEVersion)" />
+    <PackageReference Update="FSharp.Compiler.Service" Version="43.7.300" />
+    <PackageReference Update="Mono.Posix.NETStandard" Version="1.0.0" />
+    <PackageReference Update="MSBuild.StructuredLogger" Version="2.*" />
   </ItemGroup>
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.13.*" />

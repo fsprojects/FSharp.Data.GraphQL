@@ -1,0 +1,8 @@
+{
+  "profiles": {
+    "Build": {
+      "commandName": "Project"//,
+      //"commandLineArgs": "--target Clean"
+    }
+  }
+}

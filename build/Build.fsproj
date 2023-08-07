@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net7.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="BinLog.fs" />
+    <Compile Include="MSBuild.fs" />
+    <Compile Include="DotNet.fs" />
+    <Compile Include="Helpers.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Argu" />
+    <PackageReference Include="BlackFox.VsWhere" />
+    <PackageReference Include="Fake.Core.Environment" />
+    <PackageReference Include="Fake.Core.ReleaseNotes" />
+    <PackageReference Include="Fake.Core.Target" />
+    <!--<PackageReference Include="Fake.DotNet.Cli" />-->
+    <!--<PackageReference Include="Fake.DotNet.Fsc" />-->
+    <!--<PackageReference Include="Fake.DotNet.MSBuild" />-->
+    <PackageReference Include="Fake.DotNet.NuGet" />
+    <PackageReference Include="Fake.Tools.Git" />
+    <PackageReference Include="Mono.Posix.NETStandard" />
+    <PackageReference Include="MSBuild.StructuredLogger" />
+  </ItemGroup>
+
+</Project>

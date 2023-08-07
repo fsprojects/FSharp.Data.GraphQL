@@ -1,0 +1,97 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.3.32811.315
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{E3330910-8B6C-4191-8046-D6D57FBC39B1}"
+	ProjectSection(SolutionItems) = preProject
+		.editorconfig = .editorconfig
+		Directory.Build.targets = Directory.Build.targets
+		global.json = global.json
+		LICENSE.txt = LICENSE.txt
+		Packages.props = Packages.props
+		Prepare template project for packing.ps1 = Prepare template project for packing.ps1
+		README.md = README.md
+		RELEASE_NOTES.md = RELEASE_NOTES.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "GitHub", "GitHub", "{313AC7F5-4282-4779-8FEF-1536B4145860}"
+	ProjectSection(SolutionItems) = preProject
+		.github\workflows\publish_ci.yml = .github\workflows\publish_ci.yml
+		.github\workflows\publish_release.yml = .github\workflows\publish_release.yml
+		.github\workflows\pull_request.yml = .github\workflows\pull_request.yml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "docs", "docs", "{A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "files", "files", "{56640EAF-82A6-4439-AD14-69F44A90DA99}"
+	ProjectSection(SolutionItems) = preProject
+		docs\files\introspection_query.graphql = docs\files\introspection_query.graphql
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "img", "img", "{78D10788-601D-4D53-808B-36661911EDD1}"
+	ProjectSection(SolutionItems) = preProject
+		docs\files\img\logo-template.pdn = docs\files\img\logo-template.pdn
+		docs\files\img\logo.png = docs\files\img\logo.png
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "project", "project", "{BF60BC93-E09B-4E5F-9D85-95A519479D54}"
+	ProjectSection(SolutionItems) = preProject
+		build.cmd = build.cmd
+		build.sh = build.sh
+		README.md = README.md
+		RELEASE_NOTES.md = RELEASE_NOTES.md
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tools", "tools", "{83F16175-43B1-4C90-A1EE-8E351C33435D}"
+	ProjectSection(SolutionItems) = preProject
+		docs\tools\generate.fsx = docs\tools\generate.fsx
+		docs\tools\templates\template.cshtml = docs\tools\templates\template.cshtml
+	EndProjectSection
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "content", "content", "{8E6D5255-776D-4B61-85F9-73C37AA1FB9A}"
+	ProjectSection(SolutionItems) = preProject
+		docs\content\execution-pipeline.md = docs\content\execution-pipeline.md
+		docs\content\index.md = docs\content\index.md
+		docs\content\linq.md = docs\content\linq.md
+		docs\content\type-system.md = docs\content\type-system.md
+	EndProjectSection
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "Build", "build\Build.fsproj", "{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Debug|x64 = Debug|x64
+		Debug|x86 = Debug|x86
+		Release|Any CPU = Release|Any CPU
+		Release|x64 = Release|x64
+		Release|x86 = Release|x86
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|x64.ActiveCfg = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|x64.Build.0 = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|x86.ActiveCfg = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Debug|x86.Build.0 = Debug|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|Any CPU.Build.0 = Release|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|x64.ActiveCfg = Release|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|x64.Build.0 = Release|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|x86.ActiveCfg = Release|Any CPU
+		{B05A0575-36CC-4FF0-8795-E5AA9120BAAF}.Release|x86.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{56640EAF-82A6-4439-AD14-69F44A90DA99} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
+		{78D10788-601D-4D53-808B-36661911EDD1} = {56640EAF-82A6-4439-AD14-69F44A90DA99}
+		{83F16175-43B1-4C90-A1EE-8E351C33435D} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
+		{8E6D5255-776D-4B61-85F9-73C37AA1FB9A} = {A6A6AF7D-D6E3-442D-9B1E-58CC91879BE1}
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {C5B9895C-9DF8-4557-8D44-7D0C4C31F86E}
+	EndGlobalSection
+EndGlobal
