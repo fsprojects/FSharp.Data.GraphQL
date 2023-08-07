@@ -5,6 +5,7 @@ open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Timers
 
+
 // Cache implementation based on http://www.fssnip.net/7UT/title/Threadsafe-Generic-MemoryCache-and-Memoize-Function
 
 type internal CacheExpirationPolicy =
@@ -39,6 +40,8 @@ type internal IMemoryCacheStore<'key, 'value> =
     abstract member Update: 'key -> (CacheEntry<'key, 'value> -> CacheEntry<'key, 'value>) -> unit
     abstract member TryFind: 'key -> CacheEntry<'key, 'value> option
 
+
+/// An in-memory key/value cache with a customizable expiration time.
 type internal MemoryCache<'key, 'value> (?cacheExpirationPolicy) =
     let policy = defaultArg cacheExpirationPolicy NoExpiration
     let store =

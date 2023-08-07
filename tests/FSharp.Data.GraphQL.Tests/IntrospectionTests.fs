@@ -3,6 +3,10 @@
 
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
+open System.Text.Json
+open System.Text.Json.Serialization
+open FSharp.Data.GraphQL.Samples.StarWarsApi
+
 #nowarn "25"
 
 open Xunit
@@ -67,7 +71,7 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -101,7 +105,7 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -135,7 +139,7 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -169,7 +173,7 @@ let ``Input field should be marked as nullable when its type is nullable and hav
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -280,10 +284,14 @@ let ``Introspection schema should be serializable back and forth using json`` ()
     match result with
     | Direct (data, errors) ->
         empty errors
-        let json = toJson data
-        let deserialized : IntrospectionData = Helpers.fromJson json
+        let json = JsonSerializer.Serialize(data, Json.serializerOptions)
+        let skippableOptions =
+            // Use .NET 6 built-in deserialization of F# types to prevent `Some null` deserialization to happen
+            let skippableOptions = Json.defaultJsonFSharpOptions.WithTypes(JsonFSharpTypes.Minimal)
+            JsonSerializerOptions () |> Json.configureSerializerOptions skippableOptions Seq.empty
+        let deserialized = JsonSerializer.Deserialize<IntrospectionResult>(json, skippableOptions)
         let expected = (schema :> ISchema).Introspected
-        deserialized.Data.__schema |> equals expected
+        deserialized.__schema |> equals expected
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -316,7 +324,7 @@ let ``Core type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 type User = { FirstName: string; LastName: string }
@@ -382,7 +390,7 @@ let ``Default field type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -424,7 +432,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -473,7 +481,7 @@ let ``Default field args type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -519,7 +527,7 @@ let ``Nullable field args type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -549,7 +557,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "String"
-                            "description", upcast "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
+                            "description", upcast "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The `String` type is most often used by GraphQL to represent free-form human-readable text."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -579,7 +587,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "ID"
-                            "description", upcast "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
+                            "description", upcast "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The `ID` type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -588,8 +596,18 @@ let ``Introspection executes an introspection query`` () =
                     ]
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
-                            "name", upcast "Date"
-                            "description", upcast "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
+                            "name", upcast "DateTimeOffset"
+                            "description", upcast "The `DateTimeOffset` scalar type represents a Date value with Time component. The `DateTimeOffset` type appears in a JSON response as a String representation compatible with ISO-8601 format."
+                            "fields", null
+                            "inputFields", null
+                            "interfaces", null
+                            "enumValues", null
+                            "possibleTypes", null
+                    ]
+                    box <| NameValueLookup.ofList [
+                            "kind", upcast "SCALAR"
+                            "name", upcast "DateOnly"
+                            "description", upcast "The `DateOnly` scalar type represents a Date value without Time component. The `DateOnly` type appears in a JSON response as a `String` representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -599,7 +617,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "URI"
-                            "description", upcast "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String."
+                            "description", upcast "The `URI` scalar type represents a string resource identifier compatible with URI standard. The `URI` type appears in a JSON response as a String."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -1391,5 +1409,5 @@ let ``Introspection executes an introspection query`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"

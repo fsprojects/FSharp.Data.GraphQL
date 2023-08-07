@@ -11,6 +11,7 @@ open System.Globalization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 
+// TODO: Remove and use FSharp.SystemTextJson
 module Serialization =
     let private makeOption t (value : obj) =
         let otype = typedefof<_ option>

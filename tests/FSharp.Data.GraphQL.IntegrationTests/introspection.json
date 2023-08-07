@@ -1,5 +1,5 @@
 {
-  "documentId": 971433562,
+  "documentId": 1444123434,
   "data": {
     "__schema": {
       "queryType": {
@@ -15,7 +15,7 @@
         {
           "kind": "SCALAR",
           "name": "Int",
-          "description": "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1.",
+          "description": "The \u0060Int\u0060 scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -25,7 +25,7 @@
         {
           "kind": "SCALAR",
           "name": "String",
-          "description": "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text.",
+          "description": "The \u0060String\u0060 scalar type represents textual data, represented as UTF-8 character sequences. The \u0060String\u0060 type is most often used by GraphQL to represent free-form human-readable text.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -35,7 +35,7 @@
         {
           "kind": "SCALAR",
           "name": "Boolean",
-          "description": "The `Boolean` scalar type represents `true` or `false`.",
+          "description": "The \u0060Boolean\u0060 scalar type represents \u0060true\u0060 or \u0060false\u0060.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -45,7 +45,7 @@
         {
           "kind": "SCALAR",
           "name": "Float",
-          "description": "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point).",
+          "description": "The \u0060Float\u0060 scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point).",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -55,7 +55,7 @@
         {
           "kind": "SCALAR",
           "name": "ID",
-          "description": "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID.",
+          "description": "The \u0060ID\u0060 scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The \u0060ID\u0060 type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as \u0060\u00224\u0022\u0060) or integer (such as \u00604\u0060) input value will be accepted as an ID.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -64,8 +64,18 @@
         },
         {
           "kind": "SCALAR",
-          "name": "Date",
-          "description": "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format.",
+          "name": "DateTimeOffset",
+          "description": "The \u0060DateTimeOffset\u0060 scalar type represents a Date value with Time component. The \u0060DateTimeOffset\u0060 type appears in a JSON response as a String representation compatible with ISO-8601 format.",
+          "fields": null,
+          "inputFields": null,
+          "interfaces": null,
+          "enumValues": null,
+          "possibleTypes": null
+        },
+        {
+          "kind": "SCALAR",
+          "name": "DateOnly",
+          "description": "The \u0060DateOnly\u0060 scalar type represents a Date value without Time component. The \u0060DateOnly\u0060 type appears in a JSON response as a \u0060String\u0060 representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt).",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -75,7 +85,7 @@
         {
           "kind": "SCALAR",
           "name": "URI",
-          "description": "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String.",
+          "description": "The \u0060URI\u0060 scalar type represents a string resource identifier compatible with URI standard. The \u0060URI\u0060 type appears in a JSON response as a String.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -184,7 +194,7 @@
         {
           "kind": "OBJECT",
           "name": "__Directive",
-          "description": "A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.",
+          "description": "A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL\u2019s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.",
           "fields": [
             {
               "name": "args",
@@ -386,7 +396,7 @@
         {
           "kind": "OBJECT",
           "name": "__Type",
-          "description": "The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the `__TypeKind` enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.",
+          "description": "The fundamental unit of any GraphQL Schema is the type. There are many kinds of types in GraphQL as represented by the \u0060__TypeKind\u0060 enum. Depending on the kind of a type, certain fields describe information about that type. Scalar types provide no information beyond a name and description, while Enum types provide their values. Object and Interface types provide the fields they describe. Abstract types, Union and Interface, provide the Object types possible at runtime. List and NonNull types compose other types.",
           "fields": [
             {
               "name": "description",
@@ -758,43 +768,43 @@
             },
             {
               "name": "OBJECT",
-              "description": "Indicates this type is an object. `fields` and `interfaces` are valid fields.",
+              "description": "Indicates this type is an object. \u0060fields\u0060 and \u0060interfaces\u0060 are valid fields.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "INTERFACE",
-              "description": "Indicates this type is an interface. `fields` and `possibleTypes` are valid fields.",
+              "description": "Indicates this type is an interface. \u0060fields\u0060 and \u0060possibleTypes\u0060 are valid fields.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "UNION",
-              "description": "Indicates this type is a union. `possibleTypes` is a valid field.",
+              "description": "Indicates this type is a union. \u0060possibleTypes\u0060 is a valid field.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "ENUM",
-              "description": "Indicates this type is an enum. `enumValues` is a valid field.",
+              "description": "Indicates this type is an enum. \u0060enumValues\u0060 is a valid field.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "INPUT_OBJECT",
-              "description": "Indicates this type is an input object. `inputFields` is a valid field.",
+              "description": "Indicates this type is an input object. \u0060inputFields\u0060 is a valid field.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "LIST",
-              "description": "Indicates this type is a list. `ofType` is a valid field.",
+              "description": "Indicates this type is a list. \u0060ofType\u0060 is a valid field.",
               "isDeprecated": false,
               "deprecationReason": null
             },
             {
               "name": "NON_NULL",
-              "description": "Indicates this type is a non-null. `ofType` is a valid field.",
+              "description": "Indicates this type is a non-null. \u0060ofType\u0060 is a valid field.",
               "isDeprecated": false,
               "deprecationReason": null
             }
@@ -1265,7 +1275,7 @@
             },
             {
               "name": "totalCount",
-              "description": "A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \\\"5\\\" as the argument to `first`, then fetch the total count so it could display \\\"5 of 83\\\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.",
+              "description": "A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \\\u00225\\\u0022 as the argument to \u0060first\u0060, then fetch the total count so it could display \\\u00225 of 83\\\u0022, for example. In cases where we employ infinite scrolling or don\u0027t have an exact count of entries, this field will return \u0060null\u0060.",
               "args": [],
               "type": {
                 "kind": "SCALAR",
@@ -1645,7 +1655,7 @@
         {
           "kind": "SCALAR",
           "name": "ObjectListFilter",
-          "description": "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
+          "description": "The \u0060Filter\u0060 scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query.",
           "fields": null,
           "inputFields": null,
           "interfaces": null,
@@ -1656,7 +1666,7 @@
       "directives": [
         {
           "name": "include",
-          "description": "Directs the executor to include this field or fragment only when the `if` argument is true.",
+          "description": "Directs the executor to include this field or fragment only when the \u0060if\u0060 argument is true.",
           "locations": [
             "FIELD",
             "FRAGMENT_SPREAD",
@@ -1681,7 +1691,7 @@
         },
         {
           "name": "skip",
-          "description": "Directs the executor to skip this field or fragment when the `if` argument is true.",
+          "description": "Directs the executor to skip this field or fragment when the \u0060if\u0060 argument is true.",
           "locations": [
             "FIELD",
             "FRAGMENT_SPREAD",

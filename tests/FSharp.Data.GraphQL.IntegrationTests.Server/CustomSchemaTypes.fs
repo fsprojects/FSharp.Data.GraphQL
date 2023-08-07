@@ -1,4 +1,4 @@
-﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
+namespace FSharp.Data.GraphQL.IntegrationTests.Server
 
 open System.IO
 open FSharp.Data.GraphQL.Types
@@ -16,7 +16,7 @@ type File =
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
 module SchemaDefinitions =
-    let private coerceUploadInput (_ : Value) : File option =
+    let private coerceUploadInput (_ : InputParameterValue) : File option =
         failwith "Can not coerce upload input. The type `Upload` can only be passed as a variable through a multipart request."
 
     let private coerceUploadValue (value : obj) =
@@ -29,4 +29,4 @@ module SchemaDefinitions =
         { Name = "Upload"
           Description = Some "The `Upload` type represents an upload of binary data."
           CoerceInput = coerceUploadInput
-          CoerceValue = coerceUploadValue }
+          CoerceOutput = coerceUploadValue }

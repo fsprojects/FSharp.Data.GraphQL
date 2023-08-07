@@ -26,6 +26,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
@@ -34,6 +35,7 @@
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />
+    <Compile Include="IO.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Executor.fs" />
     <Compile Include="Schema.fs" />

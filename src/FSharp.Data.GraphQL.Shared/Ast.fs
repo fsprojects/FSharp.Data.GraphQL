@@ -72,7 +72,7 @@ and Field =
 /// 2.2.4 Arguments
 and Argument = {
     Name: string
-    Value: Value
+    Value: InputValue
 }
 
 /// 2.2.6 Fragments
@@ -90,7 +90,7 @@ and FragmentDefinition = {
 }
 
 /// 2.9 Input Values
-and Value =
+and InputValue =
     /// 2.9.1 Int Value
     | IntValue of int64
     /// 2.9.2 Float Value
@@ -104,17 +104,17 @@ and Value =
     /// 2.9.6 Enum Value
     | EnumValue of string
     /// 2.9.7 List Value
-    | ListValue of Value list
+    | ListValue of InputValue list
     /// 2.9.8 Input Object Values
-    | ObjectValue of Map<string, Value>
+    | ObjectValue of Map<string, InputValue>
     /// 2.10 Variables
-    | Variable of string
+    | VariableName of string
 
 /// 2.2.8 Variables
 and VariableDefinition =
     { VariableName: string
       Type: InputType
-      DefaultValue: Value option }
+      DefaultValue: InputValue option }
 
 /// 2.2.9 Input Types
 and InputType =
@@ -162,7 +162,7 @@ and FieldDefinition = {
 and InputValueDefinition = {
     Name: string
     Type: InputType
-    DefaultValue: Value option
+    DefaultValue: InputValue option
 }
 
 and InterfaceTypeDefinition = {

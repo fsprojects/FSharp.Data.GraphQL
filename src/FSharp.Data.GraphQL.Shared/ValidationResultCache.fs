@@ -13,6 +13,8 @@ type ValidationResultProducer =
 type IValidationResultCache =
     abstract GetOrAdd : ValidationResultProducer ->  ValidationResultKey -> ValidationResult<AstError>
 
+
+/// An in-memory cache for the results of schema/document validations, with a lifetime of 30 seconds.
 type MemoryValidationResultCache () =
     let expirationPolicy = CacheExpirationPolicy.SlidingExpiration(TimeSpan.FromSeconds 30.0)
     let internalCache = MemoryCache<int, ValidationResult<AstError>>(expirationPolicy)

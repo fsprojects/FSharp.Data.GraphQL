@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
+    <Compile Include="JSON.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="WebSocketMessages.fs" />

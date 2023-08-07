@@ -3,6 +3,9 @@
 
 module FSharp.Data.GraphQL.Tests.VariablesTests
 
+open System.Collections.Immutable
+open System.Text.Json
+
 #nowarn "25"
 
 open System
@@ -12,12 +15,19 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Samples.StarWarsApi
 
 let TestComplexScalar =
   Define.Scalar(
     name = "ComplexScalar",
-    coerceInput = (fun (StringValue value) -> if value = "SerializedValue" then Some "DeserializedValue" else None),
-    coerceValue = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
+    coerceInput =
+        (fun i ->
+         let value =
+             match i with
+             | Variable e -> e.GetString()
+             | InlineConstant (StringValue s) -> s
+         if value = "SerializedValue" then Some "DeserializedValue" else None),
+    coerceOutput = (fun value -> if value = upcast "DeserializedValue" then Some "SerializedValue" else None))
 
 type TestInput = {
     a: string option
@@ -35,10 +45,10 @@ let TestInputObject =
     name = "TestInputObject",
     fields = [
         Define.Input("a", Nullable StringType)
-        Define.Input("b", Nullable( ListOf (Nullable StringType)) )
+        Define.Input("b", Nullable (ListOf (Nullable StringType)))
         Define.Input("c", StringType)
         Define.Input("d", Nullable TestComplexScalar)
-        Define.Input("e", Nullable( InputArrayOf (Nullable StringType)) )
+        Define.Input("e", Nullable (InputArrayOf (Nullable StringType)))
     ])
 
 type TestNestedInput = {
@@ -71,7 +81,7 @@ let rec TestRecursiveInputObject =
 
 let stringifyArg name (ctx: ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
-    toJson arg
+    JsonSerializer.Serialize(arg, Json.serializerOptions)
 
 let stringifyInput = stringifyArg "input"
 
@@ -114,7 +124,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This test does not pass anymore since the literal representation of the argument does not match the input type.")>]
@@ -125,7 +135,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This test can not pass anymore since validation does not allow inputs of incorrect type.")>]
@@ -136,7 +146,7 @@ let ``Execute handles objects and nullability using inline structs and doesn't u
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -147,22 +157,27 @@ let ``Execute handles objects and nullability using inline structs and properly 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
+
+let variablesWithInput inputName input = $"""{{"%s{inputName}":%s{input}}}"""
+let paramsWithValueInput input =
+    JsonDocument.Parse(variablesWithInput "input" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+
+let testInputObject = """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}"""
 
 [<Fact>]
 let ``Execute handles variables with complex inputs`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params' : Map<string, obj> =
-        Map.ofList ["input", upcast { a = Some "foo"; b = Some (upcast [| Some "bar"|]) ; c = "baz"; d = None; e = None }]
+    let params' = paramsWithValueInput testInputObject
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast testInputObject ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -171,11 +186,11 @@ let ``Execute handles variables with default value when no value was provided`` 
             fieldWithObjectInput(input: $input)
           }"""
     let actual = sync <| Executor(schema).AsyncExecute(ast)
-    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"a":"foo","b":["bar"],"c":"baz","d":null,"e":null}""" ]
+    let expected = NameValueLookup.ofList [ "fieldWithObjectInput", upcast testInputObject ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -183,16 +198,12 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params' : Map<string, obj> =
-      Map.ofList [
-        "input", upcast Map.ofList [
-            "a", "foo" :> obj
-            "b", upcast ["bar"]
-            "c", null]]
+    let testInputObject = """{"a":"foo","b":["bar"],"c":null}"""
+    let params' = paramsWithValueInput testInputObject
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
-        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
+    | RequestError errors ->
+        hasError "Variable '$input' of type 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -200,11 +211,12 @@ let ``Execute handles variables and errors on incorrect type`` () =
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params' : Map<string, obj> = Map.ofList ["input", upcast "foo bar"]
+    let testInputObject = "\"foo bar\""
+    let params' = paramsWithValueInput testInputObject
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
-    let errMsg = sprintf " Variable '$input': value of type '%O' is not assignable from '%O'." typeof<TestInput> typeof<string>
+    let errMsg = $"Variable '$input' of type 'TestInputObject': expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.String}'."
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError errMsg errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -213,16 +225,13 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     let ast = parse """query q($input: TestInputObject) {
           fieldWithObjectInput(input: $input)
         }"""
-    let params' : Map<string, obj> =
-      Map.ofList [
-        "input", upcast Map.ofList [
-            "a", "foo" :> obj
-            "b", upcast ["bar"]]]
+    let testInputObject = """{"a":"foo","b":["bar"]}"""
+    let params' = paramsWithValueInput testInputObject
     let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         List.length errors |> equals 1
-        hasError "Variable '$input': in input object 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
+        hasError "Variable '$input' of type 'TestInputObject': in field 'c': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -233,7 +242,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -246,7 +255,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This test does not pass anymore, since validation requires variables to be defined in the operation.")>]
@@ -259,7 +268,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in an u
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -267,12 +276,14 @@ let ``Execute handles variables and allows nullable inputs to be set to null in 
     let ast = parse """query SetsNullable($value: String) {
         fieldWithNullableStringInput(input: $value)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", null ])
-    let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "null" ]
+    let testInputValue = "null"
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -280,12 +291,16 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     let ast = parse """query SetsNullable($value: String) {
         fieldWithNullableStringInput(input: $value)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", "a" :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast "\"a\"" ]
+    let paramsWithValueInput input =
+        JsonDocument.Parse(variablesWithInput "value" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let testInputValue = "\"a\""
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNullableStringInput", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -296,7 +311,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -304,9 +319,14 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     let ast = parse """query SetsNonNullable($value: String!) {
           fieldWithNonNullableStringInput(input: $value)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", null ])
+
+    let paramsWithValueInput input =
+        JsonDocument.Parse(variablesWithInput "value" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let testInputValue = "null"
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError "Variable '$value': expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -315,12 +335,17 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     let ast = parse """query SetsNonNullable($value: String!) {
           fieldWithNonNullableStringInput(input: $value)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "value", "a" :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast "\"a\"" ]
+
+    let paramsWithValueInput input =
+        JsonDocument.Parse(variablesWithInput "value" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let testInputValue = "\"a\""
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNonNullableStringInput", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -331,7 +356,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This test can not pass anymore, since validation does not allow to omit non nullable arguments with no default value.")>]
@@ -342,7 +367,7 @@ let ``Execute handles non-nullable scalars and passes along null for non-nullabl
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -353,7 +378,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -364,7 +389,7 @@ let ``Execute handles recursive input objects and nullability using inline struc
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -372,12 +397,14 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
     let ast = parse """query q($input: [String]) {
           list(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
-    let expected = NameValueLookup.ofList [ "list", upcast "null" ]
+    let testInputValue = "null"
+    let params' = paramsWithValueInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "list", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -385,13 +412,14 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
     let ast = parse """query q($input: [String]) {
           list(input: $input)
         }"""
-    let variables =  Map.ofList [ "input", box [ "A" ] ]
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = variables)
-    let expected = NameValueLookup.ofList [ "list", upcast "[\"A\"]" ]
+    let testInputList = "[\"A\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -399,12 +427,14 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
     let ast = parse """query q($input: [String]) {
           list(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
-    let expected = NameValueLookup.ofList [ "list", upcast "[\"A\",null,\"B\"]" ]
+    let testInputList = "[\"A\",null,\"B\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -412,9 +442,11 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let ast = parse """query q($input: [String]!) {
           nnList(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
+    let testInputList = "null"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -423,12 +455,14 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     let ast = parse """query q($input: [String]!) {
           nnList(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
-    let expected = NameValueLookup.ofList [ "nnList", upcast "[\"A\"]" ]
+    let testInputList = "[\"A\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -436,12 +470,14 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     let ast = parse """query q($input: [String]!) {
           nnList(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
-    let expected = NameValueLookup.ofList [ "nnList", upcast "[\"A\",null,\"B\"]" ]
+    let testInputList = "[\"A\",null,\"B\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -449,12 +485,14 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     let ast = parse """query q($input: [String!]) {
           listNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
-    let expected = NameValueLookup.ofList [ "listNN", upcast "null" ]
+    let testInputList = "null"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -462,12 +500,14 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     let ast = parse """query q($input: [String!]) {
           listNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
-    let expected = NameValueLookup.ofList [ "listNN", upcast "[\"A\"]" ]
+    let testInputList = "[\"A\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -475,9 +515,11 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     let ast = parse """query q($input: [String!]) {
           listNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
+    let testInputList = "[\"A\",null,\"B\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError "Variable '$input': list element expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -486,9 +528,11 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let ast = parse """query q($input: [String!]!) {
           nnListNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", null ])
+    let testInputList = "null"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -497,12 +541,14 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let ast = parse """query q($input: [String!]!) {
           nnListNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A" ] :> obj ])
-    let expected = NameValueLookup.ofList [ "nnListNN", upcast "[\"A\"]" ]
+    let testInputList = "[\"A\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "nnListNN", upcast testInputList ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -510,9 +556,11 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let ast = parse """query q($input: [String!]!) {
           nnListNN(input: $input)
         }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj; null; "B" :> obj ] :> obj ])
+    let testInputList = "[\"A\",null,\"B\"]"
+    let params' = paramsWithValueInput testInputList
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
     match actual with
-    | Direct(data, errors) ->
+    | RequestError errors ->
         hasError "Variable '$input': list element expected value of type 'String' but got 'None'." errors
     | _ -> fail "Expected Direct GQResponse"
 
@@ -523,7 +571,9 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
         }"""
     // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
     let e = throws<MalformedQueryException> (fun () ->
-        Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", [ "A":> obj, "B" :> obj ] :> obj ])
+        let testInputList = "[\"A\",\"B\"]"
+        let params' = paramsWithValueInput testInputList
+        Executor(schema).AsyncExecute(ast, variables = params')
         |> sync
         |> ignore)
     e.Message |> equals "GraphQL query defined variable '$input' of type 'TestType!' which is not an input type definition"
@@ -535,7 +585,9 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
         }"""
     // as that kind of an error inside of a query is guaranteed to fail in every call, we're gonna to fail noisy here
     let e = throws<MalformedQueryException> (fun () ->
-        Executor(schema).AsyncExecute(ast, variables = Map.ofList [ "input", "whoknows" :> obj ])
+        let testInputValue = "\"whoknows\""
+        let params' = paramsWithValueInput testInputValue
+        Executor(schema).AsyncExecute(ast, variables = params')
         |> sync
         |> ignore)
     e.Message |> equals "GraphQL query defined variable '$input' of type 'UnknownType!' which is not known in the current schema"
@@ -548,20 +600,25 @@ let ``Execute uses argument default value when no argument was provided`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
+
+let paramsWithOptionalInput input =
+    JsonDocument.Parse(variablesWithInput "optional" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
 
 [<Fact>]
 let ``Execute uses argument default value when nullable variable provided`` () =
     let ast = parse """query optionalVariable($optional: String) {
         fieldWithDefaultArgumentValue(input: $optional)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["optional", null ])
-    let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast "\"hello world\"" ]
+    let testInputValue = "\"hello world\""
+    let params' = paramsWithOptionalInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithDefaultArgumentValue", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact(Skip = "This test does not pass anymore since validation requires that literal representations of input types match their types.")>]
@@ -572,21 +629,25 @@ let ``Execute uses argument default value when argument provided cannot be parse
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
+let paramsWithEnumInput input =
+    JsonDocument.Parse(variablesWithInput "enumVar" input).RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
 
 [<Fact>]
 let ``Execute handles enum input as variable`` () =
     let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType!) {
         fieldWithEnumInput(input: $enumVar)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", "Foo" :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Foo\"}" ]
+    let testInputValue = "\"Foo\""
+    let params' = paramsWithEnumInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"kind\":\"Foo\"}" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -594,12 +655,14 @@ let ``Execute handles nullable null enum input as variable`` () =
     let ast = parse """query fieldWithNullableEnumValue($enumVar: EnumTestType) {
         fieldWithNullableEnumInput(input: $enumVar)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", null :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "null" ]
+    let testInputValue = "null"
+    let params' = paramsWithEnumInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -607,12 +670,14 @@ let ``Execute handles union enum input as variable`` () =
     let ast = parse """query fieldWithEnumValue($enumVar: EnumTestType!) {
         fieldWithEnumInput(input: $enumVar)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", Bar :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"case\":\"Bar\"}" ]
+    let testInputValue = "\"Bar\""
+    let params' = paramsWithEnumInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"kind\":\"Bar\"}" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -620,12 +685,14 @@ let ``Execute handles Some union enum input as variable`` () =
     let ast = parse """query fieldWithNullableEnumValue($enumVar: EnumTestType) {
         fieldWithNullableEnumInput(input: $enumVar)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", Some Bar :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "{\"case\":\"Bar\"}" ]
+    let testInputValue = "\"Bar\""
+    let params' = paramsWithEnumInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "{\"kind\":\"Bar\"}" ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -633,11 +700,12 @@ let ``Execute handles None enum input as variable`` () =
     let ast = parse """query fieldWithNullableEnumValue($enumVar: EnumTestType) {
         fieldWithNullableEnumInput(input: $enumVar)
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = Map.ofList ["enumVar", None :> obj ])
-    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "null" ]
+    let testInputValue = "null"
+    let params' = paramsWithEnumInput testInputValue
+    let actual = sync <| Executor(schema).AsyncExecute(ast, variables = params')
+    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
-

@@ -5,6 +5,7 @@ module internal FSharp.Data.GraphQL.Extensions
 
 open System.Reflection
 open System.Collections.Generic
+open System.Text.Json.Serialization
 
 type IDictionary<'TKey, 'TValue> with
     member x.TryFind(key : 'TKey) =
@@ -38,6 +39,7 @@ type TypeInfo with
         | prop, _ -> prop
 
 module Option =
+
     let mergeWith (f: 'T -> 'T -> 'T) (o1 : 'T option) (o2 : 'T option) : 'T option =
         match (o1, o2) with
         | Some a, Some b -> Some (f a b)
@@ -50,7 +52,15 @@ module Option =
         | Some t -> onSome t
         | None -> defaultValue
 
+module Skippable =
+
+    let ofList list =
+        match list with
+        | [] -> Skip
+        | list -> Include list
+
 module Result =
+
     let catchError (handle : 'Err -> 'T) (r : Result<'T, 'Err>) : 'T =
         match r with
         | Ok x -> x
@@ -62,6 +72,7 @@ module Result =
         | None -> Error errValue
 
 module Dictionary =
+
     let adjust (f : 'V -> 'V) (key : 'K) (dict : Dictionary<'K, 'V>) : unit =
         match dict.TryGetValue(key) with
         | true, v -> dict.[key] <- f v

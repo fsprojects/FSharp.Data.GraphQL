@@ -177,7 +177,7 @@ module internal Internal =
   //   Variable|IntValue|FloatValue|StringValue|
   //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
   inputValueRef.Value <-
-    choice [ variable |>> Variable <?> "Variable"
+    choice [ variable |>> VariableName <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
              stringValue |>> StringValue <?> "String"

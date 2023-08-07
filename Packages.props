@@ -1,6 +1,7 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <Project>
   <PropertyGroup>
+    <SystemVersion>7.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
     <XUnitVersion>2.5.0</XUnitVersion>
@@ -12,11 +13,16 @@
     <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)">
       <ExcludeAssets>contentFiles</ExcludeAssets>
     </PackageReference>
+    <PackageReference Update="FSharp.Control.FusionTasks" Version="2.6.*" />
+    <PackageReference Update="FSharp.Control.Reactive" Version="5.0.*" />
+    <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
-    <PackageReference Update="System.CodeDom" Version="6.*" />
+    <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" />
+    <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />
   </ItemGroup>
   <ItemGroup Label="Build">
     <PackageReference Update="BlackFox.VsWhere" Version="1.1.0" />

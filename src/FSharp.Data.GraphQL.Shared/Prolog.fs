@@ -9,6 +9,8 @@ open System.Collections.Generic
 
 type GraphQLException(msg) =
     inherit Exception(msg)
+    interface IGQLError with
+        member _.Message = msg
 
 type MalformedQueryException(msg) =
     inherit GraphQLException(msg)
@@ -137,6 +139,40 @@ module internal ReflectionHelper =
     /// <param name="t">Type used for result option constructors as type param</param>
     let optionOfType t =
         let optionType = typedefof<_ option>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
+        let none =
+            let x = optionType.GetDeclaredProperty "None"
+            x.GetValue(null)
+        let some =
+            let createSome = optionType.GetDeclaredMethod "Some"
+            fun value ->
+                if value <> null
+                then
+                    let valueType = value.GetType().GetTypeInfo()
+                    if valueType = optionType
+                    then value
+                    elif t.GetTypeInfo().IsAssignableFrom(valueType)
+                    then createSome.Invoke(null, [| value |])
+                    else null
+                else none
+        let value =
+            let x = optionType.GetDeclaredProperty "Value"
+            fun input ->
+                if input <> null
+                then
+                    let valueType = input.GetType().GetTypeInfo()
+                    if valueType = optionType
+                    then x.GetValue(input)
+                    else input
+                else input
+        (some, none, value)
+
+            /// <summary>
+    /// Returns pair of function constructors for `some(value)` and `none`
+    /// used to create option of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">Type used for result option constructors as type param</param>
+    let vOptionOfType t =
+        let optionType = typedefof<_ voption>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
         let none =
             let x = optionType.GetDeclaredProperty "None"
             x.GetValue(null)

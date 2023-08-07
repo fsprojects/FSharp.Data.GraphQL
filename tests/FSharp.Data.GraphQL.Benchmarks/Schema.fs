@@ -57,6 +57,7 @@ module SchemaDefinition =
                            fun ctx () -> getPerson (ctx.Arg("id"))) ])
 
 module QueryStrings =
+
     let simple = """{
         hero(id: "1000") {
             id

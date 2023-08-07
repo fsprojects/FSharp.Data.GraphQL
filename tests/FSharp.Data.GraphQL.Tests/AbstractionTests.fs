@@ -89,7 +89,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     match result with
     | Direct(data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
 
 [<Fact>]
@@ -143,7 +143,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     match result with
     | Direct(data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
 
 type Widget =

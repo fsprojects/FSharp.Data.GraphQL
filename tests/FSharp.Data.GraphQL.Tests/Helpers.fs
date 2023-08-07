@@ -9,6 +9,7 @@ open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL.Execution
 open System.Threading
+open FSharp.Data.GraphQL
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
@@ -36,8 +37,8 @@ let single (xs : 'a seq) =
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
-let hasError (errMsg : string) (errors: Error seq) =
-    let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
+let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
+    let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 let (<??) opt other =
     match opt with
@@ -58,51 +59,22 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
-let ensureDeferred (result : GQLResponse) (onDeferred : Output -> Error list -> IObservable<Output> -> unit) : unit =
-    match result with
+let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
+    match result.Content with
     | Deferred(data, errors, deferred) -> onDeferred data errors deferred
     | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
 
-let ensureDirect (result : GQLResponse) (onDirect : Output -> Error list -> unit) : unit =
-    match result with
+let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
+    match result.Content with
     | Direct(data, errors) -> onDirect data errors
     | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
 
-open Newtonsoft.Json
-open Newtonsoft.Json.Serialization
-open Microsoft.FSharp.Reflection
+let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProblemDetails list -> unit) : unit =
+    match result.Content with
+    | RequestError errors -> onRequestError errors
+    | _ -> fail <| sprintf "Expected RequestError GQLResponse but received '%O'" result
+
 open FSharp.Data.GraphQL.Parser
-
-type internal OptionConverter() =
-    inherit JsonConverter()
-
-    override _.CanConvert(t) =
-        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
-    override _.WriteJson(writer, value, serializer) =
-        let value =
-            if isNull value then null
-            else
-                let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
-                fields.[0]
-        serializer.Serialize(writer, value)
-
-    override _.ReadJson(reader, t, _, serializer) =
-        let innerType = t.GetGenericArguments().[0]
-        let innerType =
-            if innerType.IsValueType then (typedefof<Nullable<_>>).MakeGenericType([|innerType|])
-            else innerType
-        let value = serializer.Deserialize(reader, innerType)
-        let cases = FSharpType.GetUnionCases(t)
-        if isNull value then FSharpValue.MakeUnion(cases.[0], [||])
-        else FSharpValue.MakeUnion(cases.[1], [|value|])
-
-let internal settings = JsonSerializerSettings()
-settings.Converters <- [| OptionConverter() |]
-settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
-
-let toJson (o: 't) : string = JsonConvert.SerializeObject(o, settings)
-
-let fromJson<'t> (json: string) : 't = JsonConvert.DeserializeObject<'t>(json, settings)
 
 let asts query =
     ["defer"; "stream"]

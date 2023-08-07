@@ -30,7 +30,7 @@ let ``Execute uses default resolve to accesses properties`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -48,7 +48,7 @@ let ``Execute uses provided resolve function to accesses properties`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 type private Fruit =
@@ -89,7 +89,7 @@ let ``Execute resolves enums to their names`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -115,5 +115,5 @@ let ``Execute resolves enums arguments from their names`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"

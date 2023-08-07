@@ -5,12 +5,12 @@
 module internal FSharp.Data.GraphQL.Values
 
 open System
-open System.Reflection
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.Text.Json
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open Microsoft.FSharp.Reflection
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -42,7 +42,9 @@ let inline private notAssignableMsg (innerDef : InputDef) value : string =
 
 let rec internal compileByType (errMsg : string) (inputDef : InputDef) : ExecuteInput =
     match inputDef with
-    | Scalar scalardef -> variableOrElse (scalardef.CoerceInput >> Option.toObj)
+
+    | Scalar scalardef -> variableOrElse (InlineConstant >> scalardef.CoerceInput >> Option.toObj)
+
     | InputObject objdef ->
         let objtype = objdef.Type
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
@@ -54,7 +56,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     objdef.Fields
                     |> Array.tryFind (fun field -> field.Name = param.Name)
                 with
-                | Some x -> x
+                | Some field -> (field, param)
                 | None ->
                     failwithf
                         "Input object '%s' refers to type '%O', but constructor parameter '%s' doesn't match any of the defined input fields"
@@ -67,18 +69,50 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
             | ObjectValue props ->
                 let args =
                     mapper
-                    |> Array.map (fun field ->
+                    |> Array.map (fun (field, param) ->
                         match Map.tryFind field.Name props with
                         | None -> null
                         | Some prop -> field.ExecuteInput prop variables)
 
                 let instance = ctor.Invoke (args)
                 instance
-            | Variable variableName ->
-                match Map.tryFind variableName variables with
-                | Some found -> found
-                | None -> null
+            | VariableName variableName ->
+                match variables.TryGetValue variableName with
+                | true, found ->
+                    // TODO: Figure out how does this happen
+                    let optionType = typeof<option<_>>.GetGenericTypeDefinition().MakeGenericType(objdef.Type)
+                    //let voptionType = typeof<voption<_>>.GetGenericTypeDefinition().MakeGenericType(objdef.Type)
+                    if found.GetType() = optionType then found
+                    //elif found.GetType() = voptionType then found
+                    else
+                    let variables = found :?> ImmutableDictionary<string, obj>
+                    let args =
+                        mapper
+                        |> Array.map (fun (field, param) ->
+                            match variables.TryGetValue field.Name with
+                            | true, value ->
+                                let paramType = param.ParameterType
+                                if paramType.IsGenericType && paramType.GetGenericTypeDefinition() = typeof<voption<_>>.GetGenericTypeDefinition() then
+                                    let valuesome, valuenone, _ = ReflectionHelper.vOptionOfType field.TypeDef.Type.GenericTypeArguments[0]
+                                    match value with
+                                    | null -> valuenone
+                                    | _ ->
+                                        let valueType = value.GetType()
+                                        if valueType.IsGenericType && valueType.GetGenericTypeDefinition() = typeof<option<_>>.GetGenericTypeDefinition()
+                                        then
+                                            let _, _, getValue = ReflectionHelper.optionOfType valueType.GenericTypeArguments[0]
+                                            value |> getValue |> valuesome
+                                        else
+                                            value |> valuesome
+                                else
+                                    value
+                            | false, _ -> null)
+
+                    let instance = ctor.Invoke (args)
+                    instance
+                | false, _ -> null
             | _ -> null
+
     | List (Input innerdef) ->
         let isArray = inputDef.Type.IsArray
         let inner = compileByType errMsg innerdef
@@ -93,7 +127,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     ReflectionHelper.arrayOfList innerdef.Type mappedValues
                 else
                     nil |> List.foldBack cons mappedValues
-            | Variable variableName -> variables.[variableName]
+            | VariableName variableName -> variables.[variableName]
             | _ ->
                 // try to construct a list from single element
                 let single = inner value variables
@@ -104,30 +138,30 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     ReflectionHelper.arrayOfList innerdef.Type [ single ]
                 else
                     cons single nil
+
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
         let some, none, _ = ReflectionHelper.optionOfType innerdef.Type
 
-        fun variables value ->
-            let i = inner variables value
-
+        fun value variables ->
+            let i = inner value variables
             match i with
             | null -> none
             | coerced ->
                 let c = some coerced
-
                 if c <> null then
                     c
                 else
                     raise
                     <| GraphQLException (errMsg + notAssignableMsg innerdef coerced)
+
     | Enum enumdef ->
         fun value variables ->
             match value with
-            | Variable variableName ->
-                match variables.TryFind variableName with
-                | Some var -> var
-                | None -> failwithf "Variable '%s' not supplied.\nVariables: %A" variableName variables
+            | VariableName variableName ->
+                match variables.TryGetValue variableName with
+                | true, var -> var
+                | false, _ -> failwithf "Variable '%s' not supplied.\nVariables: %A" variableName variables
             | _ ->
                 let coerced = coerceEnumInput value
 
@@ -140,20 +174,19 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     |> Option.defaultWith (fun () -> ReflectionHelper.parseUnion enumdef.Type s)
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
 
-let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : obj) (errMsg : string) : obj =
+
+let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : JsonElement) (errMsg : string) : obj =
     match typedef with
     | Scalar scalardef ->
-        match scalardef.CoerceValue input with
+        match scalardef.CoerceInput (Variable input) with
         | None when isNullable -> null
-        | None ->
-            raise (
-                GraphQLException
-                <| $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'None'."
-            )
+        // TODO: Capture position in the JSON document
+        | None -> raise <| GraphQLException $"%s{errMsg}expected value of type '%s{scalardef.Name}' but got 'None'."
         | Some res -> res
+    | Nullable (InputObject innerdef) ->
+        coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
     | Nullable (Input innerdef) ->
         let some, none, innerValue = ReflectionHelper.optionOfType innerdef.Type
-        let input = innerValue input
         let coerced = coerceVariableValue true innerdef vardef input errMsg
 
         if coerced <> null then
@@ -170,19 +203,13 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         let cons, nil = ReflectionHelper.listOfType innerdef.Type
 
         match input with
-        | null when isNullable -> null
-        | null ->
+        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
+        | _ when input.ValueKind = JsonValueKind.Null ->
             raise
             <| GraphQLException ($"%s{errMsg}expected value of type '%s{vardef.TypeDef.ToString ()}', but no value was found.")
-        // special case - while single values should be wrapped with a list in this scenario,
-        // string would be treat as IEnumerable and coerced into a list of chars
-        | :? string as s ->
-            let single = coerceVariableValue false innerdef vardef s (errMsg + "element ")
-            cons single nil
-        | :? System.Collections.IEnumerable as iter ->
+        | _ when input.ValueKind = JsonValueKind.Array ->
             let mapped =
-                iter
-                |> Seq.cast<obj>
+                input.EnumerateArray()
                 |> Seq.map (fun elem -> coerceVariableValue false innerdef vardef elem (errMsg + "list element "))
                 //TODO: optimize
                 |> Seq.toList
@@ -193,58 +220,64 @@ let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input 
         | other ->
             raise
             <| GraphQLException ($"{errMsg}Cannot coerce value of type '%O{other.GetType ()}' to list.")
-    | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
+    // TODO: Improve error message generation
+    | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}': ")
     | Enum enumdef ->
         match input with
-        | :? string as s -> ReflectionHelper.parseUnion enumdef.Type s
-        | null when isNullable -> null
-        | null ->
+        | _ when input.ValueKind = JsonValueKind.Null && isNullable -> null
+        | _ when input.ValueKind = JsonValueKind.Null ->
             raise
             <| GraphQLException ($"%s{errMsg}Expected Enum '%s{enumdef.Name}', but no value was found.")
-
-        | u when
-            FSharpType.IsUnion (enumdef.Type)
-            && enumdef.Type = input.GetType ()
-            ->
-            u
-        | o when Enum.IsDefined (enumdef.Type, o) -> o
+        | _ when input.ValueKind = JsonValueKind.String ->
+            let value = input.GetString()
+            match enumdef.Options |> Array.tryFind (fun o -> o.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) with
+            | Some option -> option.Value
+            | None ->
+                raise
+                <| GraphQLException $"%s{errMsg}Value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
         | _ ->
-            raise (
-                GraphQLException
-                <| $"%s{errMsg}Cannot coerce value of type '%O{input.GetType ()}' to type Enum '%s{enumdef.Name}'."
-            )
+            raise
+            <| GraphQLException $"%s{errMsg}Enum values must be strings but got '%O{input.ValueKind}'."
     | _ ->
         raise
         <| GraphQLException ($"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions.")
 
-and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) errMsg =
+// TODO: Collect errors from subfields
+and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonElement) errMsg =
     //TODO: this should be eventually coerced to complex object
-    match input with
-    | :? Map<string, obj> as map ->
+    if input.ValueKind = JsonValueKind.Object then
         let mapped =
             objdef.Fields
             |> Array.map (fun field ->
-                let valueFound = Map.tryFind field.Name map |> Option.toObj
-                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound $"%s{errMsg}in field '%s{field.Name}': "))
-            |> Map.ofArray
+                // TODO: Consider using of option
+                let value =
+                    match input.TryGetProperty field.Name with
+                    | true, valueFound -> valueFound
+                    | false, _ -> JsonDocument.Parse("null").RootElement
+                KeyValuePair (field.Name, coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "))
+            |> ImmutableDictionary.CreateRange
 
         upcast mapped
-    | _ -> input
+    else
+        raise
+        <| GraphQLException ($"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'.")
 
-let internal coerceVariable (vardef : VarDef) (inputs) =
+let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
     let vname = vardef.Name
 
-    match Map.tryFind vname inputs with
-    | None ->
+    // TODO: Use FSharp.Collection.Immutable
+    match inputs.TryGetValue vname with
+    | false, _ ->
         match vardef.DefaultValue with
         | Some defaultValue ->
             let errMsg = (sprintf "Variable '%s': " vname)
             let executeInput = compileByType errMsg vardef.TypeDef
-            executeInput defaultValue inputs
+            executeInput defaultValue (ImmutableDictionary.Empty) // TODO: Check if empty is enough
         | None ->
             match vardef.TypeDef with
             | Nullable _ -> null
             | _ ->
                 raise
                 <| GraphQLException ($"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}' has no value provided.")
-    | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)
+    | true, jsonElement ->
+        coerceVariableValue false vardef.TypeDef vardef jsonElement (sprintf "Variable '$%s': " vname)

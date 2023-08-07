@@ -575,7 +575,7 @@ let ``parser should parse query with fragment directives``() =
     let v = var b None "condition"
 
     let hasConditionalFragment =
-        arg "if" (Variable "condition")
+        arg "if" (VariableName "condition")
         |> directive1 "include"
         |> spreadWithDirective "maybeFragment"
         |> namedQueryWithVariableAndSelection "hasConditionalFragment" v

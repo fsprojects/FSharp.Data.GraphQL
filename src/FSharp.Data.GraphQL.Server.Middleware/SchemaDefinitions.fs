@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
+open System
 
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
@@ -54,7 +55,7 @@ module SchemaDefinitions =
                     | Some acc -> build (Some (Or (acc, x))) xs
                     | None -> build (Some x) xs
             build None x
-        let rec mapFilter (name : string, value : Value) =
+        let rec mapFilter (name : string, value : InputValue) =
             let mapFilters fields = fields |> List.map coerceObjectListFilterInput |> List.choose id
             match name, value with
             | Equals "and", ListValue fields -> fields |> mapFilters |> buildAnd
@@ -79,8 +80,7 @@ module SchemaDefinitions =
             if filters |> Seq.contains None then None
             else filters |> Seq.choose id |> List.ofSeq |> buildAnd
         match x with
-        | ObjectValue x ->
-            mapInput x
+        | ObjectValue x -> mapInput x
         | _ -> None
 
     let private coerceObjectListFilterValue (x : obj) : ObjectListFilter option =
@@ -94,5 +94,8 @@ module SchemaDefinitions =
           Description =
               Some
                   "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
-          CoerceInput = coerceObjectListFilterInput
-          CoerceValue = coerceObjectListFilterValue }
+          CoerceInput =
+              (function
+               | InlineConstant c -> coerceObjectListFilterInput c
+               | Variable _ -> raise <| NotSupportedException "List filter cannot be a variable") // TODO: Investigate
+          CoerceOutput = coerceObjectListFilterValue }

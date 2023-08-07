@@ -4,22 +4,25 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open FSharp.Core
+open System.Collections
+open System.Collections.Generic
 open System.Reflection
+open FSharp.Core
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Validation
-open System.Collections.Generic
-open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Ast.Extensions
+open FSharp.Data.GraphQL.Types.Introspection
+open FSharp.Data.GraphQL.Validation
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
-open System.Collections
+
+type internal FieldStringPath = string list
 
 module internal QuotationHelpers =
+
     let rec coerceValues fieldTypeLookup fields =
         let arrayExpr (arrayType : Type) (v : obj) =
             let typ = arrayType.GetElementType()
@@ -474,6 +477,7 @@ type internal ProvidedOperationMetadata =
       TypeWrapper : ProvidedTypeDefinition }
 
 module internal Provider =
+
     let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef, explicitOptionalParameters: bool) =
         let generateWrapper name =
             let rec resolveWrapperName actual =
@@ -481,10 +485,10 @@ module internal Provider =
                 then resolveWrapperName (actual + "Fields")
                 else actual
             ProvidedTypeDefinition(resolveWrapperName name, None, isSealed = true)
-        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+        let wrappersByPath = Dictionary<FieldStringPath, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
-        let rec getWrapper (path : string list) =
+        let rec getWrapper (path : FieldStringPath) =
             if wrappersByPath.ContainsKey path
             then wrappersByPath.[path]
             else
@@ -497,11 +501,11 @@ module internal Provider =
                 upperWrapper.AddMember(wrapper)
                 wrappersByPath.Add(path, wrapper)
                 wrapper
-        let includeType (path : string list) (t : ProvidedTypeDefinition) =
+        let includeType (path : FieldStringPath) (t : ProvidedTypeDefinition) =
             let wrapper = getWrapper path
             wrapper.AddMember(t)
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
-        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
+        let providedTypes = Dictionary<FieldStringPath * TypeName, ProvidedTypeDefinition>()
+        let rec getProvidedType (providedTypes : Dictionary<FieldStringPath * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : FieldStringPath) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.SCALAR when tref.Name.IsSome -> TypeMapping.mapScalarType uploadInputTypeName tref.Name.Value |> TypeMapping.makeOption
             | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value

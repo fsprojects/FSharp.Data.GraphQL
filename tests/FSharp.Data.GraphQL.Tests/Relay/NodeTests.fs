@@ -61,16 +61,16 @@ let execAndValidateNode (query: string) expectedDirect expectedDeferred =
         ensureDeferred result <| fun data errors deferred ->
             let expectedItemCount = Seq.length expectedDeferred
             empty errors
-            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+            data |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
             use sub = Observer.create deferred
             sub.WaitCompleted(expectedItemCount)
             sub.Received
-            |> Seq.cast<NameValueLookup>
+            |> Seq.cast<GQLDeferredResponseContent>
             |> Seq.iter (fun ad -> expectedDeferred |> contains ad |> ignore)
     | None ->
         ensureDirect result <| fun data errors ->
             empty errors
-            data.["data"] |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
+            data |> equals (upcast NameValueLookup.ofList ["node", upcast expectedDirect])
 
 [<Fact>]
 let ``Node with global ID gets correct record - Defer`` () =
@@ -86,10 +86,7 @@ let ``Node with global ID gets correct record - Defer`` () =
       NameValueLookup.ofList [
         "name", null
         "age", upcast 18]
-    let expectedDeferred1 = Some [
-        NameValueLookup.ofList [
-            "data", upcast "Alice"
-            "path", upcast ["node"; "name"]]]
+    let expectedDeferred1 = Some [ DeferredResult ("Alice", ["node"; "name"]) ]
     execAndValidateNode query1 expectedDirect1 expectedDeferred1
     let query2 = """query ExampleQuery {
         node(id: "Y2FyOjE=") {
@@ -101,10 +98,7 @@ let ``Node with global ID gets correct record - Defer`` () =
     let expectedDirect2 =
       NameValueLookup.ofList [
         "model", null ]
-    let expectedDeferred2 = Some [
-        NameValueLookup.ofList [
-            "data", upcast "Tesla S"
-            "path", upcast ["node"; "model"]]]
+    let expectedDeferred2 = Some [ DeferredResult ("Tesla S", ["node"; "model"]) ]
     execAndValidateNode query2 expectedDirect2 expectedDeferred2
 
 [<Fact>]

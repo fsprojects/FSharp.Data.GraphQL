@@ -8,7 +8,9 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open Helpers
+open FSharp.Data.GraphQL.Samples.StarWarsApi
+open System.Text.Json
+open System.Collections.Immutable
 
 #nowarn "40"
 
@@ -124,11 +126,12 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
 
     let schema = Schema(DataType)
     let schemaProcessor = Executor(schema)
-    let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
+    let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = params', operationName = "Example")
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 type TestThing = { mutable Thing: string }
@@ -178,7 +181,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -295,7 +298,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
+      data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -309,7 +312,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
+      data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -324,7 +327,7 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
+      data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -338,7 +341,7 @@ let ``Execution handles basic tasks: list of scalars`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
+      data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
     | _ -> fail "Expected Direct GQResponse"
 
 type TwiceTest = { A : string; B : int }
@@ -360,7 +363,7 @@ let ``Execution when querying the same field twice will return it`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
+      data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -373,11 +376,12 @@ let ``Execution when querying returns unique document id with response`` () =
                 ]))
     let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    result1.DocumentId |> notEquals Unchecked.defaultof<int>
+    result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
     | Direct(data1, errors1), Direct(data2, errors2) ->
-      data1.["documentId"] |> notEquals (null)
-      data1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
-      data1.["documentId"] |> equals (data2.["documentId"])
+        equals data1 data2
+        equals errors1 errors2
     | _ -> fail "Expected Direct GQResponse"
 
 type InnerNullableTest = { Kaboom : string }
@@ -399,19 +403,13 @@ let ``Execution handles errors: properly propagates errors`` () =
         NameValueLookup.ofList [
             "inner", null
         ]
-    let expectedErrors =
-        [
-            NameValueLookup.ofList [
-                "message", upcast "Non-Null field kaboom resolved as a null!"
-                "path", upcast [ "inner"; "kaboom" ]
-            ]
-        ]
+    let expectedErrors = [ GQLProblemDetails.Create ("Non-Null field kaboom resolved as a null!", [ box "inner"; "kaboom" ]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
     match result with
     | Direct(data, errors) ->
-        data.["documentId"] |> notEquals null
-        // data.["data"] |> equals (upcast expectedData)
-        data.["errors"] |> equals (upcast expectedErrors)
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
     | _ -> fail "Expected Direct GQResponse"
 
 [<Fact>]
@@ -421,17 +419,11 @@ let ``Execution handles errors: exceptions`` () =
                  "Type", [
                      Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
                  ]))
-    let expectedErrors =
-        [ NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast ["a"]
-            ]
-        ]
+    let expectedErrors = [ GQLProblemDetails.Create ("Resolver Error!", [ box "a" ]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
     ensureDirect result <| fun data errors ->
-        // data.["data"] |> equals null
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
+        data |> equals null
+        errors |> equals expectedErrors
 
 
 [<Fact>]
@@ -452,18 +444,11 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let expectedErrors =
         [
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 0; upcast "error"]
-            ]
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 1; upcast "error"]
-            ]
+            GQLProblemDetails.Create ("Resolver Error!", [ box "list"; 0; "error" ])
+            GQLProblemDetails.Create ("Resolver Error!", [ box "list"; 1; "error" ])
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->
-        data.["documentId"] |> notEquals null
-        data.["data"] |> equals (upcast expectedData)
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
