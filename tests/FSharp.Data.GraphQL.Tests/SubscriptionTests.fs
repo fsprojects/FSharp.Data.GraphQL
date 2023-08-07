@@ -21,8 +21,8 @@ let ValueType =
         name = "Value",
         fieldsFn = fun () ->
         [
-            Define.Field("id", Int, (fun _ d -> d.Id))
-            Define.Field("data", String, (fun _ d -> d.Data))
+            Define.Field("id", IntType, (fun _ d -> d.Id))
+            Define.Field("data", StringType, (fun _ d -> d.Data))
         ])
 
 let RootType =
@@ -30,7 +30,7 @@ let RootType =
         name = "Query",
         description = "Root object",
         isTypeOf = (fun o -> o :? Root),
-        fieldsFn = fun () -> [ Define.Field("clientId", String, (fun _ r -> r.ClientId)) ]
+        fieldsFn = fun () -> [ Define.Field("clientId", StringType, (fun _ r -> r.ClientId)) ]
     )
 
 let values = [ { Id = 1; Data = "Value 1" }; { Id = 2; Data = "Value 2" } ]
@@ -49,7 +49,7 @@ let SubscriptionField =
         RootType,
         ValueType,
         "Get's updated data",
-        [ Define.Input("id", Int) ],
+        [ Define.Input("id", IntType) ],
         fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None)
 
 let TaggedSubscriptionField =
@@ -58,7 +58,7 @@ let TaggedSubscriptionField =
         RootType,
         ValueType,
         "Get's updated data if key is correct",
-        [ Define.Input("id", Int); Define.Input("key", String) ],
+        [ Define.Input("id", IntType); Define.Input("key", StringType) ],
         (fun ctx _ v -> if ctx.Arg("id") = v.Id then Some v else None),
         tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 
@@ -68,7 +68,7 @@ let AsyncSubscriptionField =
         RootType,
         ValueType,
         "Get's updated data asynchronously on the server",
-        [ Define.Input("id", Int) ],
+        [ Define.Input("id", IntType) ],
         fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) })
 
 let AsyncTaggedSubscriptionField =
@@ -77,7 +77,7 @@ let AsyncTaggedSubscriptionField =
         RootType,
         ValueType,
         "Get's updated data asynchronously on the server if key is correct",
-        [ Define.Input("id", Int); Define.Input("key", String) ],
+        [ Define.Input("id", IntType); Define.Input("key", StringType) ],
         (fun ctx _ v -> async { return (if ctx.Arg("id") = v.Id then Some v else None) }),
         tagsResolver = (fun ctx -> Tags.from (ctx.Arg<string>("key"))))
 

@@ -39,21 +39,21 @@ module SchemaDefinition =
   let rec Person =
       Define.Object(name = "Person", isTypeOf = (fun o -> o :? Person),
                     fieldsFn = fun () ->
-                        [ Define.Field("id", String, resolve = fun _ person -> person.Id)
-                          Define.Field("name", Nullable String, resolve = fun _ person -> person.Name)
+                        [ Define.Field("id", StringType, resolve = fun _ person -> person.Id)
+                          Define.Field("name", Nullable StringType, resolve = fun _ person -> person.Name)
                           Define.Field("friends", Nullable(ListOf(Nullable Person)),
                                        resolve = fun _ person ->
                                            person.Friends
                                            |> List.map getPerson
                                            |> List.toSeq
                                            |> Some).WithQueryWeight(1.0)
-                          Define.Field("homePlanet", String) ])
+                          Define.Field("homePlanet", StringType) ])
 
   let Query =
       Define.Object
           (name = "Query",
            fields = [ Define.Field
-                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", String) ],
+                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", StringType) ],
                            fun ctx () -> getPerson (ctx.Arg("id"))) ])
 
 module QueryStrings =

@@ -89,35 +89,35 @@ and InterfaceSubject =
 let AType =
     Define.Object<A>(
         "A", [
-            Define.Field("a", Nullable String, resolve = fun _ a -> Some a.a)
-            Define.Field("id", Nullable String, resolve = fun _ a -> Some a.id)
+            Define.Field("a", Nullable StringType, resolve = fun _ a -> Some a.a)
+            Define.Field("id", Nullable StringType, resolve = fun _ a -> Some a.id)
         ])
 
 let BType =
     Define.Object<B>(
         "B", [
-            Define.Field("id", String, (fun _ (b : B) -> b.id))
-            Define.Field("b", Int, (fun _ b -> b.b))
+            Define.Field("id", StringType, (fun _ (b : B) -> b.id))
+            Define.Field("b", IntType, (fun _ b -> b.b))
         ])
 
 let InterfaceType =
     Define.Interface(
         "TestInterface", [
-            Define.Field("id", String, resolve = fun _ (x : InterfaceSubject) -> x.Id)
-            Define.Field("value", Nullable String, resolve = fun _ (x : InterfaceSubject) -> Some x.Value)
+            Define.Field("id", StringType, resolve = fun _ (x : InterfaceSubject) -> x.Id)
+            Define.Field("value", Nullable StringType, resolve = fun _ (x : InterfaceSubject) -> Some x.Value)
         ])
 
 let CType =
     Define.Object<C>(
         name ="C",
-        fields = [ Define.Field("id", String, (fun _ (c : C) -> c.id)); Define.Field("value", Nullable String, (fun _ c -> Some c.value)) ],
+        fields = [ Define.Field("id", StringType, (fun _ (c : C) -> c.id)); Define.Field("value", Nullable StringType, (fun _ c -> Some c.value)) ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? C))
 
 let DType =
     Define.Object<D>(
         name = "D",
-        fields = [ Define.Field("id", String, (fun _ (d : D) -> d.id)); Define.Field("value", Nullable String, (fun _ d -> Some d.value)) ],
+        fields = [ Define.Field("id", StringType, (fun _ (d : D) -> d.id)); Define.Field("value", Nullable StringType, (fun _ d -> Some d.value)) ],
         interfaces = [ InterfaceType ],
         isTypeOf = (fun o -> o :? D))
 
@@ -139,32 +139,32 @@ let rec InnerDataType =
         name = "InnerData",
         fieldsFn = fun () ->
         [
-            Define.Field("a", String, (fun _ d -> d.a))
+            Define.Field("a", StringType, (fun _ d -> d.a))
             Define.Field("innerList", Nullable (ListOf InnerDataType), (fun _ d -> Some d.innerList))
         ])
 
 let AsyncDataType =
     Define.Object<AsyncTestSubject>(
         name = "AsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", Nullable String, (fun _ d -> d.value )) ])
+        fieldsFn = fun () -> [ Define.AsyncField("value", Nullable StringType, (fun _ d -> d.value )) ])
 
 let NonNullAsyncDataType =
     Define.Object<NonNullAsyncTestSubject>(
         name = "NonNullAsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", String, (fun _ d -> d.value )) ])
+        fieldsFn = fun () -> [ Define.AsyncField("value", StringType, (fun _ d -> d.value )) ])
 
 let DataType =
     Define.Object<TestSubject>(
         name = "Data",
         fieldsFn = fun () ->
         [
-            Define.Field("id", String, (fun _ d -> d.id))
-            Define.Field("a", Nullable String, (fun _ d -> Some d.a))
-            Define.Field("b", Nullable String, (fun _ d -> Some d.b))
+            Define.Field("id", StringType, (fun _ d -> d.id))
+            Define.Field("a", Nullable StringType, (fun _ d -> Some d.a))
+            Define.Field("b", Nullable StringType, (fun _ d -> Some d.b))
             Define.Field("union", Nullable UnionType, (fun _ d -> Some d.union))
             Define.Field("list", Nullable (ListOf UnionType), (fun _ d -> Some d.list))
             Define.Field("innerList", Nullable (ListOf InnerDataType), (fun _ d -> Some d.innerList))
-            Define.Field("live", String, (fun _ d -> d.live))
+            Define.Field("live", StringType, (fun _ d -> d.live))
             Define.Field("iface", Nullable InterfaceType, (fun _ d -> Some d.iface))
             Define.Field("ifaceList", Nullable (ListOf InterfaceType), (fun _ d -> Some d.ifaceList))
             Define.Field("delayed", Nullable AsyncDataType, (fun _ d -> Some d.delayed))

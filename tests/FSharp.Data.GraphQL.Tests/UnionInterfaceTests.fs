@@ -38,7 +38,7 @@ type Person =
 let NamedType =
   Define.Interface<INamed>(
     name = "Named",
-    fields = [ Define.Field("name", String) ])
+    fields = [ Define.Field("name", StringType) ])
 
 let DogType =
   Define.Object<Dog>(
@@ -46,8 +46,8 @@ let DogType =
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("barks", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("barks", BooleanType)
     ])
 
 let CatType =
@@ -56,8 +56,8 @@ let CatType =
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("meows", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("meows", BooleanType)
     ])
 
 let PetType =
@@ -79,7 +79,7 @@ let PersonType =
     isTypeOf = is<Person>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
+        Define.AutoField("name", StringType)
         Define.Field("pets", ListOf PetType, fun _ person -> person.Pets)
         Define.AutoField("friends", ListOf NamedType)
     ])

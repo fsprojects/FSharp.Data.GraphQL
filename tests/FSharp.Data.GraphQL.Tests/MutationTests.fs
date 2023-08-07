@@ -30,17 +30,17 @@ type Root =
             return failwith "Cannot change number"
         }
 
-let NumberHolder = Define.Object("NumberHolder", [ Define.Field("theNumber", Int, fun _ x -> x.Number) ])
+let NumberHolder = Define.Object("NumberHolder", [ Define.Field("theNumber", IntType, fun _ x -> x.Number) ])
 let schema =
   Schema(
     query = Define.Object("Query", [ Define.Field("numberHolder", NumberHolder, fun _ x -> x.NumberHolder) ]),
     mutation =
       Define.Object("Mutation",
       [
-        Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber")))
-        Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber")))
-        Define.Field("failToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
-        Define.AsyncField("promiseAndFailToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", Int) ], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber")))
+        Define.Field("immediatelyChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", IntType) ], fun ctx (x:Root) -> x.ChangeImmediatelly(ctx.Arg("newNumber")))
+        Define.AsyncField("promiseToChangeTheNumber", NumberHolder, "", [ Define.Input("newNumber", IntType) ], fun ctx (x:Root) -> x.AsyncChange(ctx.Arg("newNumber")))
+        Define.Field("failToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", IntType) ], fun ctx (x:Root) -> x.ChangeFail(ctx.Arg("newNumber")))
+        Define.AsyncField("promiseAndFailToChangeTheNumber", Nullable NumberHolder, "", [ Define.Input("newNumber", IntType) ], fun ctx (x:Root) -> x.AsyncChangeFail(ctx.Arg("newNumber")))
     ]))
 
 [<Fact>]

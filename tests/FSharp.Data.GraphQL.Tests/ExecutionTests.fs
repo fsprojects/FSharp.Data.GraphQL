@@ -102,22 +102,22 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let DeepDataType =
         Define.Object<DeepTestSubject>(
             "DeepDataType", [
-                Define.Field("a", String, (fun _ dt -> dt.a))
-                Define.Field("b", String, (fun _ dt -> dt.b))
-                Define.Field("c", (ListOf (Nullable String)), (fun _ dt -> dt.c))
+                Define.Field("a", StringType, (fun _ dt -> dt.a))
+                Define.Field("b", StringType, (fun _ dt -> dt.b))
+                Define.Field("c", (ListOf (Nullable StringType)), (fun _ dt -> dt.c))
             ])
     let rec DataType =
       Define.Object<TestSubject>(
           "DataType",
           fieldsFn = fun () ->
           [
-            Define.Field("a", String, resolve = fun _ dt -> dt.a)
-            Define.Field("b", String, resolve = fun _ dt -> dt.b)
-            Define.Field("c", String, resolve = fun _ dt -> dt.c)
-            Define.Field("d", String, fun _ dt -> dt.d)
-            Define.Field("e", String, fun _ dt -> dt.e)
-            Define.Field("f", String, fun _ dt -> dt.f)
-            Define.Field("pic", String, "Picture resizer", [ Define.Input("size", Nullable Int) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
+            Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
+            Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
+            Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
+            Define.Field("d", StringType, fun _ dt -> dt.d)
+            Define.Field("e", StringType, fun _ dt -> dt.e)
+            Define.Field("f", StringType, fun _ dt -> dt.f)
+            Define.Field("pic", StringType, "Picture resizer", [ Define.Input("size", Nullable IntType) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
             Define.AsyncField("promise", DataType, fun _ dt -> dt.promise)
             Define.Field("deep", DeepDataType, fun _ dt -> dt.deep)
         ])
@@ -152,9 +152,9 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         name = "Type",
         fieldsFn = fun () ->
         [
-            Define.Field("a", String, fun _ _ -> "Apple")
-            Define.Field("b", String, fun _ _ -> "Banana")
-            Define.Field("c", String, fun _ _ -> "Cherry")
+            Define.Field("a", StringType, fun _ _ -> "Apple")
+            Define.Field("b", StringType, fun _ _ -> "Banana")
+            Define.Field("c", StringType, fun _ _ -> "Cherry")
             Define.Field("deep", Type, fun _ v -> v)
         ])
 
@@ -185,7 +185,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
 let ``Execution handles basic tasks: threads root value context correctly`` () =
     let query = "query Example { a }"
     let data = { Thing = "" }
-    let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing) ])
+    let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", StringType, fun _ value -> value.Thing <- "thing"; value.Thing) ])
     let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, data)
     match result with
     | Direct(data, errors) ->
@@ -205,7 +205,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("numArg", IntType); Define.Input("stringArg", StringType) ],
                  fun ctx value ->
                      value.Num <- ctx.TryArg("numArg")
                      value.Str <- ctx.TryArg("stringArg")
@@ -235,7 +235,7 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                  fun ctx value ->
                  let arg = ctx.TryArg("enumArg")
                  match arg with
@@ -266,7 +266,7 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                   fun ctx value ->
                   let arg = ctx.TryArg("enumArg")
                   match arg with
@@ -289,7 +289,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", { A = "b" })
     match result with
@@ -303,7 +303,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", { A = "b" })
     match result with
@@ -317,7 +317,7 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| Executor(schema).AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
@@ -332,7 +332,7 @@ let ``Execution handles basic tasks: list of scalars`` () =
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("strings", ListOf String, fun _ _ -> ["foo"; "bar"; "baz"])
+                    Define.Field("strings", ListOf StringType, fun _ _ -> ["foo"; "bar"; "baz"])
                 ]))
     let result = sync <| Executor(schema).AsyncExecute("query Example { strings }")
     match result with
@@ -348,8 +348,8 @@ let ``Execution when querying the same field twice will return it`` () =
     let schema =
       Schema(Define.Object<TwiceTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
-                    Define.Field("b", Int, fun _ x -> x.B)
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let query = "query Example { a, b, a }"
     let result = sync <| Executor(schema).AsyncExecute(query, { A = "aa"; B = 2 });
@@ -368,8 +368,8 @@ let ``Execution when querying returns unique document id with response`` () =
     let schema =
       Schema(Define.Object<TwiceTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
-                    Define.Field("b", Int, fun _ x -> x.B)
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
@@ -388,7 +388,7 @@ let ``Execution handles errors: properly propagates errors`` () =
     let InnerObj =
         Define.Object<InnerNullableTest>(
             "Inner", [
-                Define.Field("kaboom", String, fun _ x -> x.Kaboom)
+                Define.Field("kaboom", StringType, fun _ x -> x.Kaboom)
             ])
     let schema =
         Schema(Define.Object<NullableTest>(
@@ -419,7 +419,7 @@ let ``Execution handles errors: exceptions`` () =
     let schema =
         Schema(Define.Object<unit>(
                  "Type", [
-                     Define.Field("a", String, fun _ _ -> failwith "Resolver Error!")
+                     Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
                  ]))
     let expectedErrors =
         [ NameValueLookup.ofList [
@@ -439,7 +439,7 @@ let ``Execution handles errors: nullable list fields`` () =
     let InnerObject =
         Define.Object<int>(
             "Inner", [
-                Define.Field("error", String, fun _ _ -> failwith "Resolver Error!")
+                Define.Field("error", StringType, fun _ _ -> failwith "Resolver Error!")
             ])
     let schema =
         Schema(Define.Object<unit>(

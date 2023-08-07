@@ -27,7 +27,7 @@ let TypeMetaFieldDef =
         args = [
             { Name = "name"
               Description = None
-              TypeDef = String
+              TypeDef = StringType
               DefaultValue = None
               ExecuteInput = variableOrElse(coerceStringInput >> Option.map box >> Option.toObj) }
         ],
@@ -41,7 +41,7 @@ let TypeNameMetaFieldDef : FieldDef<obj> =
     Define.Field(
         name = "__typename",
         description = "The name of the current Object type at runtime.",
-        typedef = String,
+        typedef = StringType,
         resolve = fun ctx (_:obj) -> ctx.ParentType.Name)
 
 let private tryFindDef (schema: ISchema) (objdef: ObjectDef) (field: Field) : FieldDef option =

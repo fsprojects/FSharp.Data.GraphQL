@@ -22,40 +22,40 @@ let private testCoercion graphQLType (expected: 't) actual =
 
 [<Fact>]
 let ``Int coerces input`` () =
-    testCoercion Int 123 (IntValue 123L)
-    testCoercion Int 123 (FloatValue 123.4)
-    testCoercion Int 123 (StringValue "123")
-    testCoercion Int 1 (BooleanValue true)
-    testCoercion Int 0 (BooleanValue false)
+    testCoercion IntType 123 (IntValue 123L)
+    testCoercion IntType 123 (FloatValue 123.4)
+    testCoercion IntType 123 (StringValue "123")
+    testCoercion IntType 1 (BooleanValue true)
+    testCoercion IntType 0 (BooleanValue false)
 
 [<Fact>]
 let ``Float coerces input`` () =
-    testCoercion Float 123. (IntValue 123L)
-    testCoercion Float 123.4 (FloatValue 123.4)
-    testCoercion Float 123.4 (StringValue "123.4")
-    testCoercion Float 1. (BooleanValue true)
-    testCoercion Float 0. (BooleanValue false)
+    testCoercion FloatType 123. (IntValue 123L)
+    testCoercion FloatType 123.4 (FloatValue 123.4)
+    testCoercion FloatType 123.4 (StringValue "123.4")
+    testCoercion FloatType 1. (BooleanValue true)
+    testCoercion FloatType 0. (BooleanValue false)
 
 [<Fact>]
 let ``Long coerces input`` () =
-    testCoercion Long 123L (IntValue 123L)
-    testCoercion Long 123L (FloatValue 123.4)
-    testCoercion Long 123L (StringValue "123")
-    testCoercion Long 1L (BooleanValue true)
-    testCoercion Long 0L (BooleanValue false)
+    testCoercion LongType 123L (IntValue 123L)
+    testCoercion LongType 123L (FloatValue 123.4)
+    testCoercion LongType 123L (StringValue "123")
+    testCoercion LongType 1L (BooleanValue true)
+    testCoercion LongType 0L (BooleanValue false)
 
 [<Fact>]
 let ``Boolean coerces input`` () =
-    testCoercion Boolean true (IntValue 123L)
-    testCoercion Boolean false (IntValue 0L)
-    testCoercion Boolean true (FloatValue 123.4)
-    testCoercion Boolean true (BooleanValue true)
-    testCoercion Boolean false (BooleanValue false)
+    testCoercion BooleanType true (IntValue 123L)
+    testCoercion BooleanType false (IntValue 0L)
+    testCoercion BooleanType true (FloatValue 123.4)
+    testCoercion BooleanType true (BooleanValue true)
+    testCoercion BooleanType false (BooleanValue false)
 
 [<Fact>]
 let ``String coerces input`` () =
-    testCoercion String "123" (IntValue 123L)
-    testCoercion String "123.4" (FloatValue 123.4)
-    testCoercion String "acb123.4" (StringValue "acb123.4")
-    testCoercion String "true" (BooleanValue true)
-    testCoercion String "false" (BooleanValue false)
+    testCoercion StringType "123" (IntValue 123L)
+    testCoercion StringType "123.4" (FloatValue 123.4)
+    testCoercion StringType "acb123.4" (StringValue "acb123.4")
+    testCoercion StringType "true" (BooleanValue true)
+    testCoercion StringType "false" (BooleanValue false)

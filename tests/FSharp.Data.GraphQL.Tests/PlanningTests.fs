@@ -39,18 +39,18 @@ let animals =
 let rec Person =
     Define.Object(name = "Person",
                   fieldsFn = (fun () ->
-                  [ Define.Field("firstName", String, fun _ person -> person.firstName)
-                    Define.Field("lastName", String, fun _ person -> person.lastName)
-                    Define.Field("age", Int, fun _ person -> person.age)
-                    Define.Field("name", String, fun _ person -> person.firstName + " " + person.lastName)
+                  [ Define.Field("firstName", StringType, fun _ person -> person.firstName)
+                    Define.Field("lastName", StringType, fun _ person -> person.lastName)
+                    Define.Field("age", IntType, fun _ person -> person.age)
+                    Define.Field("name", StringType, fun _ person -> person.firstName + " " + person.lastName)
                     Define.Field("friends", ListOf Person, fun _ _ -> []) ]), interfaces = [ INamed ])
 
 and Animal =
     Define.Object(name = "Animal",
-                  fields = [ Define.Field("name", String, fun _ animal -> animal.name)
-                             Define.Field("species", String, fun _ animal -> animal.species) ], interfaces = [ INamed ])
+                  fields = [ Define.Field("name", StringType, fun _ animal -> animal.name)
+                             Define.Field("species", StringType, fun _ animal -> animal.species) ], interfaces = [ INamed ])
 
-and INamed = Define.Interface<obj>("INamed", [ Define.Field("name", String) ])
+and INamed = Define.Interface<obj>("INamed", [ Define.Field("name", StringType) ])
 
 and UNamed =
     Define.Union("UNamed", [ Person; Animal ],
@@ -72,9 +72,9 @@ let ``Planning should retain correct types for leafs``() =
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
 let ``Planning should work with fragments``() =
@@ -93,9 +93,9 @@ let ``Planning should work with fragments``() =
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
 let ``Planning should work with parallel fragments``() =
@@ -118,9 +118,9 @@ let ``Planning should work with parallel fragments``() =
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
 let ``Planning should retain correct types for lists``() =
@@ -147,8 +147,8 @@ let ``Planning should retain correct types for lists``() =
     equals 3 innerFields.Length
     innerFields
     |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
                 ("friends", upcast Person, upcast PersonList) ]
     let (ResolveCollection(friendInfo)) = (innerFields |> List.find (fun i -> i.Identifier = "friends")).Kind
     friendInfo.ParentDef |> equals (upcast PersonList)
@@ -184,11 +184,11 @@ let ``Planning should work with interfaces``() =
     innerFields
     |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef)))
     |> equals (Map.ofList [ "Person",
-                            [ ("name", upcast INamed, upcast String)
-                              ("age", upcast INamed, upcast Int) ]
+                            [ ("name", upcast INamed, upcast StringType)
+                              ("age", upcast INamed, upcast IntType) ]
                             "Animal",
-                            [ ("name", upcast INamed, upcast String)
-                              ("species", upcast INamed, upcast String) ] ])
+                            [ ("name", upcast INamed, upcast StringType)
+                              ("species", upcast INamed, upcast StringType) ] ])
 
 [<Fact>]
 let ``Planning should work with unions``() =
@@ -220,8 +220,8 @@ let ``Planning should work with unions``() =
     innerFields
     |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef)))
     |> equals (Map.ofList [ "Animal",
-                            [ ("name", upcast UNamed, upcast String)
-                              ("species", upcast UNamed, upcast String) ]
+                            [ ("name", upcast UNamed, upcast StringType)
+                              ("species", upcast UNamed, upcast StringType) ]
                             "Person",
-                            [ ("name", upcast UNamed, upcast String)
-                              ("age", upcast UNamed, upcast Int) ] ])
+                            [ ("name", upcast UNamed, upcast StringType)
+                              ("age", upcast UNamed, upcast IntType) ] ])

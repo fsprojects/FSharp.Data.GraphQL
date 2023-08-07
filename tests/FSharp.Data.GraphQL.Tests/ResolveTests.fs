@@ -20,7 +20,7 @@ let testSchema testFields : Schema<TestData> = Schema (Define.Object ("Query", f
 
 [<Fact>]
 let ``Execute uses default resolve to accesses properties`` () =
-    let schema = testSchema [ Define.AutoField ("test", String) ]
+    let schema = testSchema [ Define.AutoField ("test", StringType) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
 
     let actual =
@@ -36,7 +36,7 @@ let ``Execute uses default resolve to accesses properties`` () =
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema =
-        testSchema [ Define.Field ("test", String, "", [ Define.Input ("a", String) ], resolve = fun ctx d -> d.Test + ctx.Arg ("a")) ]
+        testSchema [ Define.Field ("test", StringType, "", [ Define.Input ("a", StringType) ], resolve = fun ctx d -> d.Test + ctx.Arg ("a")) ]
 
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
 
@@ -97,7 +97,7 @@ let ``Execute resolves enums arguments from their names`` () =
     let schema =
         testSchema [ Define.Field (
                          "foo",
-                         String,
+                         StringType,
                          "",
                          [ Define.Input ("fruit", fruitType, defaultValue = Cherry) ],
                          resolve =

@@ -27,10 +27,10 @@ let DataType =
         "Data",
         fieldsFn = fun () ->
         [
-            Define.Field("a", String, resolve = fun _ dt -> dt.a)
-            Define.Field("b", String, resolve = fun _ dt -> dt.b)
-            Define.Field("c", String, resolve = fun _ dt -> dt.c)
-            Define.Field("d", Boolean, "Returns its argument", [ Define.Input("input", Boolean) ], fun ctx _ -> ctx.Arg<bool> "input")
+            Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
+            Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
+            Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
+            Define.Field("d", BooleanType, "Returns its argument", [ Define.Input("input", BooleanType) ], fun ctx _ -> ctx.Arg<bool> "input")
         ])
 let Query =
     Define.Object<TestSubject>(
@@ -50,7 +50,7 @@ let ast = parse """{
 
 // On the schema compile phase, we hack the compiling to make the field a return the value of c
 let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
-    let fieldDef = Define.Field("a", String, fun _ dt -> dt.c)
+    let fieldDef = Define.Field("a", StringType, fun _ dt -> dt.c)
     ctx.FieldExecuteMap.SetExecute("Data", fieldDef)
     next ctx
 

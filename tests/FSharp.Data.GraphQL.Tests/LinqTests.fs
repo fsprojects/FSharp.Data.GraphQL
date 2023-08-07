@@ -20,16 +20,16 @@ type Person =
       Contact : Contact
       Friends : Contact list }
 
-let Contact = Define.Object("Contact", [ Define.Field("email", String, fun _ x -> x.Email) ])
+let Contact = Define.Object("Contact", [ Define.Field("email", StringType, fun _ x -> x.Email) ])
 
 let Person =
     Define.Object<Person>("Person",
-                          [ Define.Field("id", ID, fun _ x -> x.ID)
-                            Define.AutoField("firstName", String)
-                            Define.Field("lastName", String, fun _ x -> x.LastName)
-                            Define.Field("fullName", String, fun _ x -> x.FirstName + " " + x.LastName)
+                          [ Define.Field("id", IDType, fun _ x -> x.ID)
+                            Define.AutoField("firstName", StringType)
+                            Define.Field("lastName", StringType, fun _ x -> x.LastName)
+                            Define.Field("fullName", StringType, fun _ x -> x.FirstName + " " + x.LastName)
                             Define.Field("contact", Contact, fun _ x -> x.Contact)
-                            Define.Field("email", String, fun _ x -> x.Contact.Email)
+                            Define.Field("email", StringType, fun _ x -> x.Contact.Email)
                             Define.Field("friends", ListOf Contact, fun _ x -> x.Friends) ])
 
 let data =
@@ -60,15 +60,15 @@ let resolveRoot ctx () =
     result
 
 let linqArgs =
-    [ Define.Input("id", ID<int>)
-      Define.Input("skip", Int)
-      Define.Input("take", Int)
-      Define.Input("orderBy", String)
-      Define.Input("orderByDesc", String)
-      Define.Input("first", Int)
-      Define.Input("last", Int)
-      Define.Input("before", String)
-      Define.Input("after", String) ]
+    [ Define.Input("id", IDType<int>)
+      Define.Input("skip", IntType)
+      Define.Input("take", IntType)
+      Define.Input("orderBy", StringType)
+      Define.Input("orderByDesc", StringType)
+      Define.Input("first", IntType)
+      Define.Input("last", IntType)
+      Define.Input("before", StringType)
+      Define.Input("after", StringType) ]
 
 let schema =
     Schema(Define.Object("RootQuery",

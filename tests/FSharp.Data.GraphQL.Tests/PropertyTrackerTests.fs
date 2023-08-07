@@ -25,9 +25,9 @@ let rec Person =
         interfaces = [ Node ],
         fieldsFn = fun () ->
             [ Define.GlobalIdField(fun _ p -> string p.Id)
-              Define.Field("firstName", String, fun _ p -> p.FirstName)
-              Define.Field("lastName", String, fun _ p -> p.LastName)
-              Define.Field("fullName", String, fun _ p -> p.FirstName + " " + p.LastName)
+              Define.Field("firstName", StringType, fun _ p -> p.FirstName)
+              Define.Field("lastName", StringType, fun _ p -> p.LastName)
+              Define.Field("fullName", StringType, fun _ p -> p.FirstName + " " + p.LastName)
               Define.Field("friends", ConnectionOf Person, "", Connection.forwardArgs, fun ctx p ->
                   let data =
                       match ctx with
@@ -62,8 +62,8 @@ and Droid =
         interfaces = [ Node ],
         fieldsFn = fun () ->
             [ Define.GlobalIdField(fun _ d -> string d.Id)
-              Define.Field("number", String, fun _ d -> d.Number)
-              Define.Field("function", String, fun _ d -> d.Function) ])
+              Define.Field("number", StringType, fun _ d -> d.Number)
+              Define.Field("function", StringType, fun _ d -> d.Function) ])
 and Node = Define.Node<obj>(fun () -> [ Person; Droid ])
 and Query =
     Define.Object<obj list>("Query",

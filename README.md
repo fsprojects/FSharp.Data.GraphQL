@@ -31,9 +31,9 @@ let PersonType = Define.Object(
     name = "Person",
     fields = [
         // Property resolver will be auto-generated
-        Define.AutoField("firstName", String)
+        Define.AutoField("firstName", StringType)
         // Asynchronous explicit member resolver
-        Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })
+        Define.AsyncField("lastName", StringType, resolve = fun context person -> async { return person.LastName })
     ])
 
 // Include person as a root query of a schema
@@ -91,12 +91,12 @@ let customStreamDirective =
     let args = [|
         Define.Input(
             "interval",
-            Nullable Int,
+            Nullable IntType,
             defaultValue = Some 2000,
             description = "An optional argument used to buffer stream results. ")
         Define.Input(
             "preferredBatchSize",
-            Nullable Int,
+            Nullable IntType,
             defaultValue = None,
             description = "An optional argument used to buffer stream results. ") |]
     { StreamDirective with Args = args }
@@ -424,7 +424,7 @@ As field definitions are immutable by default, generating copies of them with im
 
 ```fsharp
 let field : FieldDef<'Val> = // Search for field inside ISchema
-let arg : Define.Input("id", String)
+let arg : Define.Input("id", StringType)
 let fieldWithArg = field.WithArgs([ arg ])
 ```
 

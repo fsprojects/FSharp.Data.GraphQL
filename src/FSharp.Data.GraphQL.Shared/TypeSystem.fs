@@ -2530,7 +2530,7 @@ module SchemaDefinitions =
         | v -> other v
 
     /// GraphQL type of int
-    let Int : ScalarDefinition<int> =
+    let IntType : ScalarDefinition<int> =
         { Name = "Int"
           Description =
               Some
@@ -2539,7 +2539,7 @@ module SchemaDefinitions =
           CoerceValue = coerceIntValue }
 
     /// GraphQL type of long
-    let Long : ScalarDefinition<int64> =
+    let LongType : ScalarDefinition<int64> =
         { Name = "Long"
           Description =
               Some
@@ -2548,14 +2548,14 @@ module SchemaDefinitions =
           CoerceValue = coerceLongValue }
 
     /// GraphQL type of boolean
-    let Boolean : ScalarDefinition<bool> =
+    let BooleanType : ScalarDefinition<bool> =
         { Name = "Boolean"
           Description = Some "The `Boolean` scalar type represents `true` or `false`."
           CoerceInput = coerceBoolInput
           CoerceValue = coerceBoolValue }
 
     /// GraphQL type of float
-    let Float : ScalarDefinition<double> =
+    let FloatType : ScalarDefinition<double> =
         { Name = "Float"
           Description =
               Some
@@ -2564,7 +2564,7 @@ module SchemaDefinitions =
           CoerceValue = coerceFloatValue }
 
     /// GraphQL type of string
-    let String : ScalarDefinition<string> =
+    let StringType : ScalarDefinition<string> =
         { Name = "String"
           Description =
               Some
@@ -2573,7 +2573,7 @@ module SchemaDefinitions =
           CoerceValue = coerceStringValue }
 
     /// GraphQL type for custom identifier
-    let ID<'Val> : ScalarDefinition<'Val> =
+    let IDType<'Val> : ScalarDefinition<'Val> =
         { Name = "ID"
           Description =
               Some
@@ -2581,7 +2581,7 @@ module SchemaDefinitions =
           CoerceInput = coerceIdInput
           CoerceValue = coerceIDValue }
 
-    let Obj : ScalarDefinition<obj> = {
+    let ObjType : ScalarDefinition<obj> = {
             Name = "Object"
             Description =
                Some
@@ -2591,7 +2591,7 @@ module SchemaDefinitions =
         }
 
     /// GraphQL type for System.Uri
-    let Uri : ScalarDefinition<Uri> =
+    let UriType : ScalarDefinition<Uri> =
         { Name = "URI"
           Description =
               Some
@@ -2600,7 +2600,7 @@ module SchemaDefinitions =
           CoerceValue = coerceUriValue }
 
     /// GraphQL type for System.DateTime
-    let Date : ScalarDefinition<DateTime> =
+    let DateType : ScalarDefinition<DateTime> =
         { Name = "Date"
           Description =
               Some
@@ -2609,7 +2609,7 @@ module SchemaDefinitions =
           CoerceValue = coerceDateValue }
 
     /// GraphQL type for System.Guid
-    let Guid : ScalarDefinition<Guid> =
+    let GuidType : ScalarDefinition<Guid> =
         { Name = "Guid"
           Description =
               Some
@@ -2627,7 +2627,7 @@ module SchemaDefinitions =
           Args =
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Included when true."
-                   TypeDef = Boolean
+                   TypeDef = BooleanType
                    DefaultValue = None
                    ExecuteInput =
                        variableOrElse (coerceBoolInput
@@ -2643,7 +2643,7 @@ module SchemaDefinitions =
           Args =
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Skipped when true."
-                   TypeDef = Boolean
+                   TypeDef = BooleanType
                    DefaultValue = None
                    ExecuteInput =
                        variableOrElse (coerceBoolInput
@@ -3017,7 +3017,7 @@ module SchemaDefinitions =
         static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
                      Description = None
-                     TypeDef = Obj
+                     TypeDef = ObjType
                      Resolve = ResolveExpr(execField)
                      Args = [||]
                      DeprecationReason = None

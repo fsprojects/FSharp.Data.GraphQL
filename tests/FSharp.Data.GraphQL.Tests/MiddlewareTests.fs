@@ -56,8 +56,8 @@ let executor =
             name = "A",
             isTypeOf = (fun o -> o :? A),
             fieldsFn = fun () ->
-                [ Define.Field("id", Int, resolve = fun _ a -> a.id)
-                  Define.Field("value", String, resolve = fun _ a -> a.value)
+                [ Define.Field("id", IntType, resolve = fun _ a -> a.id)
+                  Define.Field("value", StringType, resolve = fun _ a -> a.value)
                   Define.Field("subjects", Nullable (ListOf (Nullable SubjectType)),
                     resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq |> Some)
                     .WithQueryWeight(1.0) ])
@@ -66,8 +66,8 @@ let executor =
             name = "B",
             isTypeOf = (fun o -> o :? B),
             fieldsFn = fun () ->
-                [ Define.Field("id", Int, resolve = fun _ b -> b.id)
-                  Define.Field("value", String, resolve = fun _ b -> b.value)
+                [ Define.Field("id", IntType, resolve = fun _ b -> b.id)
+                  Define.Field("value", StringType, resolve = fun _ b -> b.value)
                   Define.Field("subjects", Nullable (ListOf (Nullable SubjectType)),
                     resolve = fun _ (b : B) -> b.subjects |> List.map getSubject |> List.toSeq |> Some)
                     .WithQueryWeight(1.0) ])
@@ -75,8 +75,8 @@ let executor =
         Define.Object<Root>(
             name = "Query",
             fields =
-                [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
-                  Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", Int) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
+                [ Define.Field("A", Nullable AType, "A Field", [ Define.Input("id", IntType) ], resolve = fun ctx _ -> getA (ctx.Arg("id")))
+                  Define.Field("B", Nullable BType, "B Field", [ Define.Input("id", IntType) ], resolve = fun ctx _ -> getB (ctx.Arg("id"))) ])
     let schema = Schema(Query)
     let middleware =
         [ Define.QueryWeightMiddleware(2.0, true)

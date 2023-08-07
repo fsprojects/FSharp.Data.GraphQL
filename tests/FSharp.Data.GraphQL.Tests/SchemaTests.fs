@@ -11,27 +11,27 @@ open FSharp.Data.GraphQL.Execution
 
 [<Fact>]
 let ``Object type should be able to merge fields with matching signatures from different interfaces`` () =
-    let MovableType = Define.Interface("Movable", [Define.Field("speed", Int)])
+    let MovableType = Define.Interface("Movable", [Define.Field("speed", IntType)])
     let Movable2Type =
       Define.Interface(
           "Movable2", [
-            Define.Field("speed", Int)
-            Define.Field("acceleration", Int)
+            Define.Field("speed", IntType)
+            Define.Field("acceleration", IntType)
         ])
     let PersonType =
       Define.Object(
         name = "Person",
         interfaces = [ MovableType; Movable2Type ],
         fields = [
-            Define.Field("name", String)
-            Define.Field("speed", Int)
-            Define.Field("acceleration", Int) ])
+            Define.Field("name", StringType)
+            Define.Field("speed", IntType)
+            Define.Field("acceleration", IntType) ])
     equals [ MovableType :> InterfaceDef; upcast Movable2Type ] (PersonType.Implements |> Array.toList )
     let expected =
         //NOTE: under normal conditions field order shouldn't matter in object definitions
-        [ Define.Field("acceleration", Int) :> FieldDef
-          upcast Define.Field("name", String)
-          upcast Define.Field("speed", Int)  ]
+        [ Define.Field("acceleration", IntType) :> FieldDef
+          upcast Define.Field("name", StringType)
+          upcast Define.Field("speed", IntType)  ]
     equals expected (( PersonType :> ObjectDef).Fields |> Map.toList |> List.map snd)
 
 [<Fact>]
@@ -45,9 +45,9 @@ let ``Schema config should be able to override default error handling`` () =
                 i.ToString())}
     let TestType =
         Define.Object<obj>("TestType",
-            [ Define.Field("passing", String, fun _ _ -> "ok")
-              Define.Field("failing1", Nullable String, fun _ _ -> failwith "not ok" )
-              Define.Field("failing2", Nullable String, fun _ _ -> failwith "not ok" ) ])
+            [ Define.Field("passing", StringType, fun _ _ -> "ok")
+              Define.Field("failing1", Nullable StringType, fun _ _ -> failwith "not ok" )
+              Define.Field("failing2", Nullable StringType, fun _ _ -> failwith "not ok" ) ])
     let schema = Schema(Define.Object("Query", [ Define.Field("test", TestType, fun _ () -> obj())]), config = conf)
     let query = """
     {

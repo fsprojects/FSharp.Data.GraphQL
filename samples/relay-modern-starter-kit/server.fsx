@@ -35,7 +35,7 @@ let rec Widget =
         interfaces = [ Node ],
         fields =
             [ Define.GlobalIdField (fun _ w -> w.Id)
-              Define.Field ("name", String, (fun _ w -> w.Name)) ]
+              Define.Field ("name", StringType, (fun _ w -> w.Name)) ]
     )
 
 and User =
@@ -45,7 +45,7 @@ and User =
         interfaces = [ Node ],
         fields =
             [ Define.GlobalIdField (fun _ w -> w.Id)
-              Define.Field ("name", String, (fun _ w -> w.Name))
+              Define.Field ("name", StringType, (fun _ w -> w.Name))
               Define.Field (
                   "widgets",
                   ConnectionOf Widget,

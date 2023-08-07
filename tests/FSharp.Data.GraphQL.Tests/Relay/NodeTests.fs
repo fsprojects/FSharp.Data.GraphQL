@@ -28,17 +28,17 @@ let rec Person =
     name = "Person",
     interfaces = [ Node ],
     fields = [
-        Define.Field("id", ID, resolve = fun _ person -> toGlobalId "person" person.Id)
-        Define.Field("name", Nullable String, fun _ person -> Some person.Name)
-        Define.Field("age", Int, fun _ person -> person.Age) ])
+        Define.Field("id", IDType, resolve = fun _ person -> toGlobalId "person" person.Id)
+        Define.Field("name", Nullable StringType, fun _ person -> Some person.Name)
+        Define.Field("age", IntType, fun _ person -> person.Age) ])
 
 and Car =
   Define.Object<Car>(
     name = "Car",
     interfaces = [ Node ],
     fields = [
-        Define.Field("id", ID, fun _ car -> toGlobalId "car" car.Id)
-        Define.Field("model", Nullable String, fun _ car -> Some car.Model) ])
+        Define.Field("id", IDType, fun _ car -> toGlobalId "car" car.Id)
+        Define.Field("model", Nullable StringType, fun _ car -> Some car.Model) ])
 
 and resolve _ _ id =
     match id with

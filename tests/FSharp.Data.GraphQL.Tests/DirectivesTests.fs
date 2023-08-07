@@ -14,7 +14,7 @@ type Data = { A: string; B: string }
 let data = { A = "a"; B = "b" }
 
 let schema =
-    Schema(Define.Object("TestType", [ Define.AutoField("a", String); Define.AutoField("b", String) ])) :> Schema<Data>
+    Schema(Define.Object("TestType", [ Define.AutoField("a", StringType); Define.AutoField("b", StringType) ])) :> Schema<Data>
 
 let private execAndCompare query expected =
     let actual = sync <| Executor(schema).AsyncExecute(parse query, data)

@@ -72,14 +72,14 @@ let petName = function
 let Cat =
   Define.Object(
    "Cat", [
-    Define.Field("name", String, fun _ (Cat(name, _)) -> name)
-    Define.Field("meows", Boolean, fun _ (Cat(_, meows)) -> meows) ])
+    Define.Field("name", StringType, fun _ (Cat(name, _)) -> name)
+    Define.Field("meows", BooleanType, fun _ (Cat(_, meows)) -> meows) ])
 
 let Dog =
   Define.Object(
    "Dog", [
-    Define.Field("name", String, fun _ (Dog(name, _)) -> name)
-    Define.Field("barks", Boolean, fun _ (Dog(_, barks)) -> barks) ])
+    Define.Field("name", StringType, fun _ (Dog(name, _)) -> name)
+    Define.Field("barks", BooleanType, fun _ (Dog(_, barks)) -> barks) ])
 
 let Pet = Define.Union("Pet", [ Dog; Cat ], id<Pet>, fun pet ->
     match pet with
@@ -89,7 +89,7 @@ let Pet = Define.Union("Pet", [ Dog; Cat ], id<Pet>, fun pet ->
 let Human =
   Define.Object(
    "Human", [
-    Define.Field("name", String, fun _ human -> human.Name)
+    Define.Field("name", StringType, fun _ human -> human.Name)
     Define.Field("pets",  ConnectionOf Pet, "", Connection.forwardArgs, fun ctx human -> resolveSlice petName (human.Pets) ctx ()) ])
 
 let strings = ["one"; "two"; "three"; "four"; "five"]
@@ -99,7 +99,7 @@ let Query =
     Define.Field(
         name = "strings",
         description = "",
-        typedef = ConnectionOf String,
+        typedef = ConnectionOf StringType,
         args = Connection.allArgs,
         resolve = resolveSlice id strings)
     Define.Field(
@@ -187,4 +187,4 @@ let ``Connection definition includes connection and edge fields for complex case
 
 [<Fact>]
 let ``Connection doesn't allow to use List node type`` () =
-    throws<Exception>(fun () -> ConnectionOf (ListOf String) |> ignore)
+    throws<Exception>(fun () -> ConnectionOf (ListOf StringType) |> ignore)

@@ -14,14 +14,14 @@ open FSharp.Data.GraphQL.Server.Relay
 type IPet =
     interface
         abstract Name : string
-    end 
+    end
 
-type Dog = 
+type Dog =
     { Name: string; Woofs: bool }
     interface IPet with
         member x.Name = x.Name
 
-type Cat = 
+type Cat =
     { Name: string; Meows: bool }
     interface IPet with
         member x.Name = x.Name
@@ -37,32 +37,32 @@ let resolvePet = function
     | CatCase c -> upcast c
 
 [<Fact>]
-let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () = 
-    let PetType = Define.Interface("Pet", fun () -> [ Define.Field("name", String) ])
+let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Interface`` () =
+    let PetType = Define.Interface("Pet", fun () -> [ Define.Field("name", StringType) ])
     let DogType =
       Define.Object<Dog>(
-        name = "Dog", 
+        name = "Dog",
         isTypeOf = is<Dog>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, resolve = fun _ d -> d.Name)
-            Define.Field("woofs", Boolean, fun _ d -> d.Woofs)
+            Define.Field("name", StringType, resolve = fun _ d -> d.Name)
+            Define.Field("woofs", BooleanType, fun _ d -> d.Woofs)
         ])
     let CatType =
       Define.Object<Cat>(
-        name = "Cat", 
+        name = "Cat",
         isTypeOf = is<Cat>,
         interfaces = [ PetType ],
         fields = [
-            Define.Field("name", String, resolve = fun _ c -> c.Name)
-            Define.Field("meows", Boolean, fun _ c -> c.Meows)
+            Define.Field("name", StringType, resolve = fun _ c -> c.Name)
+            Define.Field("meows", BooleanType, fun _ c -> c.Meows)
         ])
     let schema =
       Schema(
         query = Define.Object("Query", fun () ->
         [
             Define.Field("pets", ListOf PetType, fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet ; upcast { Name = "Garfield"; Meows = false } ])
-        ]), 
+        ]),
         config = { SchemaConfig.Default with Types = [CatType; DogType] })
     let schemaProcessor = Executor(schema)
     let query = """{
@@ -87,28 +87,28 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     match result with
-    | Direct(data, errors) -> 
+    | Direct(data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
-    
+
 [<Fact>]
-let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () = 
+let ``Execute handles execution of abstract types: isTypeOf is used to resolve runtime type for Union`` () =
     let DogType =
       Define.Object<Dog>(
-        name = "Dog", 
+        name = "Dog",
         isTypeOf = is<Dog>,
         fields = [
-            Define.AutoField("name", String)
-            Define.AutoField("woofs", Boolean)
+            Define.AutoField("name", StringType)
+            Define.AutoField("woofs", BooleanType)
         ])
     let CatType =
       Define.Object<Cat>(
-        name = "Cat", 
+        name = "Cat",
         isTypeOf = is<Cat>,
         fields = [
-            Define.AutoField("name", String)
-            Define.AutoField("meows", Boolean)
+            Define.AutoField("name", StringType)
+            Define.AutoField("meows", BooleanType)
         ])
     let PetType = Define.Union("Pet", [ DogType; CatType ], resolvePet)
     let schema =
@@ -141,27 +141,27 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                 "name", "Garfield" :> obj
                 "meows", upcast false]]]
     match result with
-    | Direct(data, errors) -> 
+    | Direct(data, errors) ->
         empty errors
         data.["data"] |> equals (upcast expected)
     | _ ->  fail "Expected a direct GQLResponse"
 
-type Widget = 
+type Widget =
    { Id: string;
        Name: string }
 
-type User = 
+type User =
    { Id: string;
        Name: string;
        Widgets: Widget list }
 
 // TODO: should not this test have a better name? Is it an abstraction test?
 [<Fact>]
-let ``inner types `` () = 
+let ``inner types `` () =
     let viewer = {
         Id = "1"
         Name = "Anonymous"
-        Widgets = 
+        Widgets =
             [ { Id = "1"; Name = "What's it"}
               { Id = "2"; Name = "Who's it"}
               { Id = "3"; Name = "How's it"} ]}
@@ -169,40 +169,40 @@ let ``inner types `` () =
     let getUser id = if viewer.Id = id then Some viewer else None
     let getWidget id = viewer.Widgets |> List.tryFind (fun w -> w.Id = id)
 
-    let rec Widget = 
+    let rec Widget =
         Define.Object<Widget>(
             name = "Widget",
             description = "A shiny widget",
             interfaces = [ Node ],
-            fields = 
+            fields =
                 [ Define.GlobalIdField(fun _ w -> w.Id)
-                  Define.Field("name", String, fun _ (w : Widget) -> w.Name) ]
+                  Define.Field("name", StringType, fun _ (w : Widget) -> w.Name) ]
         )
 
     and WidgetsField name (getUser: ResolveFieldContext -> 'a -> User) =
         let resolve ctx xx =
-            let user = getUser ctx xx 
+            let user = getUser ctx xx
             let widgets = user.Widgets |> List.toArray
             Connection.ofArray widgets
 
         Define.Field(name, ConnectionOf Widget, "A person's collection of widgets", Connection.allArgs, resolve)
 
-    and User = 
+    and User =
         Define.Object<User>(
             name = "User",
             description = "A person who uses our app",
             interfaces = [ Node ],
-            fields = 
+            fields =
                 [ Define.GlobalIdField(fun _ w -> w.Id)
-                  Define.Field("name", String, fun _ w -> w.Name)
+                  Define.Field("name", StringType, fun _ w -> w.Name)
                   WidgetsField "widgets" (fun _ user -> user) ]
         )
 
     and Node = Define.Node<obj>(fun () -> [ User; Widget ])
 
     let Query =
-        Define.Object("Query", 
-            [ Define.NodeField(Node, fun _ () id -> 
+        Define.Object("Query",
+            [ Define.NodeField(Node, fun _ () id ->
                  match id with
                  | GlobalId("User", i) -> getUser i |> Option.map box
                  | GlobalId("Widget", i) -> getWidget i |> Option.map box
@@ -219,6 +219,6 @@ let ``inner types `` () =
                 }"
     let result = sync <| schemaProcessor.AsyncExecute(parse query)
     match result with
-    | Direct(_, errors) -> 
+    | Direct(_, errors) ->
         empty errors
     | _ ->  fail "Expected a direct GQLResponse"

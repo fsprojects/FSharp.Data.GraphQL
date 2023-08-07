@@ -93,10 +93,10 @@ module Definitions =
         name = "PageInfo",
         description = "Information about pagination in a connection.",
         fields =
-            [ Define.Field("hasNextPage", Boolean, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
-              Define.Field("hasPreviousPage", Boolean, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
-              Define.Field("startCursor", Nullable String, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
-              Define.Field("endCursor", Nullable String, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor) ])
+            [ Define.Field("hasNextPage", BooleanType, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
+              Define.Field("hasPreviousPage", BooleanType, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
+              Define.Field("startCursor", Nullable StringType, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
+              Define.Field("endCursor", Nullable StringType, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor) ])
 
     /// Converts existing output type defintion into an edge in a Relay connection.
     /// <paramref name="nodeType"/> must not be a List.
@@ -108,7 +108,7 @@ module Definitions =
                 name = n.Name + "Edge",
                 description = "An edge in a connection from an object to another object of type " + n.Name,
                 fields =
-                    [ Define.Field("cursor", String, "A cursor for use in pagination", fun _ edge -> edge.Cursor)
+                    [ Define.Field("cursor", StringType, "A cursor for use in pagination", fun _ edge -> edge.Cursor)
                       Define.Field("node", nodeType, "The item at the end of the edge. Must NOT be an enumerable collection.", fun _ edge -> edge.Node) ])
         | _ -> failwithf "Unexpected value of nodeType: %O" nodeType
 
@@ -123,7 +123,7 @@ module Definitions =
             name = n.Name + "Connection",
             description = "A connection from an object to a list of objects of type " + n.Name,
             fields =
-                [ Define.Field("totalCount", Nullable Int, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""", fun _ conn -> conn.TotalCount)
+                [ Define.Field("totalCount", Nullable IntType, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""", fun _ conn -> conn.TotalCount)
                   Define.Field("pageInfo", PageInfo, "Information to aid in pagination.", fun _ conn -> conn.PageInfo)
                   Define.Field("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges)])
 
@@ -133,14 +133,14 @@ module Connection =
     /// List of argument definitions used to apply
     /// Relay's connection forwarding ability.
     let forwardArgs =
-        [ Define.Input("first", Nullable Int)
-          Define.Input("after", Nullable String) ]
+        [ Define.Input("first", Nullable IntType)
+          Define.Input("after", Nullable StringType) ]
 
     /// List of argument definitions used to apply
     /// Relay's connection backwarding ability.
     let backwardArgs =
-        [ Define.Input("last", Nullable Int)
-          Define.Input("before", Nullable String) ]
+        [ Define.Input("last", Nullable IntType)
+          Define.Input("before", Nullable StringType) ]
 
     /// List of argument definitions used to apply
     /// Relay's ability to move connections forwards and backwards.

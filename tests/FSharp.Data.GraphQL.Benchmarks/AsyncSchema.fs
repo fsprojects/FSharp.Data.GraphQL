@@ -41,8 +41,8 @@ module AsyncSchemaDefinition =
   let rec Person =
       Define.Object(name = "Person", isTypeOf = (fun o -> o :? Person),
                     fieldsFn = fun () ->
-                        [ Define.AsyncField("id", String, resolve = fun _ person -> delay person.Id)
-                          Define.AsyncField("name", Nullable String, resolve = fun _ person -> delay person.Name)
+                        [ Define.AsyncField("id", StringType, resolve = fun _ person -> delay person.Id)
+                          Define.AsyncField("name", Nullable StringType, resolve = fun _ person -> delay person.Name)
                           Define.AsyncField("friends", Nullable(ListOf(Nullable Person)),
                                        resolve = fun _ person ->
                                            person.Friends
@@ -50,12 +50,12 @@ module AsyncSchemaDefinition =
                                            |> List.toSeq
                                            |> Some
                                            |> delay).WithQueryWeight(1.0)
-                          Define.Field("homePlanet", String) ])
+                          Define.Field("homePlanet", StringType) ])
 
   let Query =
       Define.Object
           (name = "Query",
            fields = [ Define.Field
-                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", String) ],
+                          ("hero", Nullable Person, "Retrieves a person by provided id", [ Define.Input("id", StringType) ],
                            fun ctx () -> getPerson (ctx.Arg("id"))) ])
 
