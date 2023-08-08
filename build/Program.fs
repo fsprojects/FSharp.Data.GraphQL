@@ -5,7 +5,6 @@ open System.IO
 open System.Net.Http
 open System.Text.Json
 
-open Argu
 open Fake.Core
 open Fake.Core.TargetOperators
 open Fake.DotNet
@@ -24,7 +23,7 @@ execContext
 |> Fake.Core.Context.setExecutionContext
 
 module DotNetCli =
-    let setVersion (o: DotNet.Options) = { o with Version = Some "7.0.100" }
+    let setVersion (o: DotNet.Options) = { o with Version = Some "7.0.306" }
     let setRestoreOptions (o: DotNet.RestoreOptions)= o.WithCommon  setVersion
 
 [<Literal>]
@@ -276,37 +275,3 @@ Target.create "PackAll" ignore
 Target.runOrDefaultWithArguments "All"
 
 execContext.Context.Clear ()
-
-//type Args =
-//    | All
-//    | PackAll
-//    | Clean
-//    | CleanDocs
-//    | PackShared
-
-//    interface IArgParserTemplate with
-//        member arg.Usage =
-//            match arg with
-//            | All -> "Run all targets by default"
-//            | PackAll -> "Run all pack targets by default"
-//            | Clean -> "Cleans the solution"
-//            | CleanDocs -> "Cleans only generated documentation"
-//            | PackShared -> "Packs shared project and all dependant"
-
-//let parser = ArgumentParser.Create<Args>(programName = "build")
-
-//open System.Text
-
-//[<EntryPoint>]
-//let main (args: string[]) =
-
-//    Console.InputEncoding <- Encoding.UTF8
-//    Console.OutputEncoding <- Encoding.UTF8
-
-//    match parser.ParseCommandLine(inputs = args, raiseOnUsage = true).TryGetSubCommand() with
-//    | Some mainArg -> Target.runOrDefault (string mainArg)
-//    | None -> Target.runOrDefault "All"
-
-//    execContext.Context.Clear ()
-
-//    0

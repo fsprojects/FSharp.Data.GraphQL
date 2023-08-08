@@ -15,7 +15,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Argu" />
     <PackageReference Include="BlackFox.VsWhere" />
     <PackageReference Include="Fake.Core.Environment" />
     <PackageReference Include="Fake.Core.ReleaseNotes" />
