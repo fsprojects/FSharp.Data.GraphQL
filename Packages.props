@@ -19,7 +19,6 @@
     <PackageReference Update="System.Reactive" Version="6.*" />
   </ItemGroup>
   <ItemGroup Label="Build">
-    <PackageReference Update="Argu" Version="6.*" />
     <PackageReference Update="BlackFox.VsWhere" Version="1.1.0" />
     <PackageReference Update="Fake.Core.Environment" Version="$(FAKEVersion)" />
     <PackageReference Update="Fake.Core.ReleaseNotes" Version="$(FAKEVersion)" />
