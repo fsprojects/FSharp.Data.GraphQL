@@ -72,4 +72,4 @@ let ``Schema config should be able to override default error handling`` () =
       |> equals
         [ GQLProblemDetails.Create("0", [ box "test"; "failing1" ])
           GQLProblemDetails.Create("1", [ box "test"; "failing2" ]) ]
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

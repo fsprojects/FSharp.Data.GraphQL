@@ -112,7 +112,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Interface`` () =
@@ -244,7 +244,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Union`` () =

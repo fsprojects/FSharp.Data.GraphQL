@@ -3,12 +3,13 @@
 
 module FSharp.Data.GraphQL.Tests.InputListTests
 
+open Xunit
+open System
 open System.Collections.Immutable
 open System.Text.Json
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -58,7 +59,7 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain values`` () =
@@ -77,7 +78,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain null`` () =
@@ -96,7 +97,7 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists to be null`` () =
@@ -112,7 +113,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     match actual with
     | RequestError errors -> hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain values`` () =
@@ -131,7 +132,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain null`` () =
@@ -150,7 +151,7 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to be null`` () =
@@ -169,7 +170,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to contain values`` () =
@@ -188,7 +189,7 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow lists of non-nulls to contain null`` () =
@@ -204,7 +205,7 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
 
     match actual with
     | RequestError errors -> hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
@@ -220,7 +221,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     match actual with
     | RequestError errors -> hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain values`` () =
@@ -239,7 +240,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain null`` () =
@@ -255,4 +256,4 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     match actual with
     | RequestError errors -> hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"

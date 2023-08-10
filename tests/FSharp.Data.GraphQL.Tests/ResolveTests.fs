@@ -31,7 +31,7 @@ let ``Execute uses default resolve to accesses properties`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
@@ -49,7 +49,7 @@ let ``Execute uses provided resolve function to accesses properties`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type private Fruit =
     | Apple
@@ -90,7 +90,7 @@ let ``Execute resolves enums to their names`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute resolves enums arguments from their names`` () =
@@ -116,4 +116,4 @@ let ``Execute resolves enums arguments from their names`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

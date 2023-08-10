@@ -195,7 +195,7 @@ let ``Execute handles nullable auto-fields in input and output record fields coe
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nullable auto-fields in input and output object fields coercion`` () =
@@ -216,5 +216,5 @@ let ``Execute handles nullable auto-fields in input and output object fields coe
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
