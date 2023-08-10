@@ -1519,6 +1519,9 @@ and InputObjectDef =
         abstract Description : string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef []
+        /// INTERNAL API: input execution function -
+        /// compiled by the runtime.
+        abstract ExecuteInput : ExecuteInput with get, set
         inherit NamedDef
         inherit InputDef
     end
@@ -1532,13 +1535,20 @@ and InputObjectDefinition<'Val> =
       Description : string option
       /// Lazy resolver for the input object fields. It must be lazy in
       /// order to allow self-recursive type references.
-      Fields : Lazy<InputFieldDef[]> }
+      Fields : Lazy<InputFieldDef[]>
+      /// INTERNAL API: input execution function -
+      /// compiled by the runtime.
+      mutable ExecuteInput : ExecuteInput }
+
     interface InputDef
 
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Fields = x.Fields.Force()
+        member x.ExecuteInput
+            with get () = x.ExecuteInput
+            and set v = x.ExecuteInput <- v
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -2304,8 +2314,8 @@ module private Errors =
 [<AutoOpen>]
 module SchemaDefinitions =
 
+    open System.Diagnostics
     open System.Globalization
-    open System.Reflection
     open Errors
 
     /// Tries to convert any value to int.
@@ -2454,6 +2464,7 @@ module SchemaDefinitions =
             | false, _ -> getParseRangeError(destinationType, Int32.MinValue, Int32.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok (if b then 1 else 0)
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to int64.
     let coerceLongInput =
@@ -2468,6 +2479,7 @@ module SchemaDefinitions =
             | false, _ -> getParseRangeError(destinationType, Int64.MinValue, Int64.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok(if b then 1L else 0L)
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to double.
     let coerceFloatInput =
@@ -2482,6 +2494,7 @@ module SchemaDefinitions =
             | false, _ -> getParseRangeError(destinationType, Double.MinValue, Double.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok(if b then 1. else 0.)
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to string.
     let coerceStringInput =
@@ -2519,6 +2532,7 @@ module SchemaDefinitions =
             | false, _ -> getParseError destinationType s
         | InlineConstant (BooleanValue b) -> Ok b
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to provided generic type.
     let coerceIdInput input : Result<'t, IGQLError list> =
@@ -2528,6 +2542,7 @@ module SchemaDefinitions =
         | InlineConstant (IntValue i) -> Ok(downcast Convert.ChangeType(i, typeof<'t>))
         | InlineConstant (StringValue s) -> Ok(downcast Convert.ChangeType(s, typeof<'t>))
         | InlineConstant value -> value.GetCoerceError "id"
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to URI.
     let coerceUriInput =
@@ -2541,6 +2556,7 @@ module SchemaDefinitions =
             | true, uri -> Ok uri
             | false, _ -> Error [{ new IGQLError with member _.Message = $"Cannot parse '{s}' into URI" }]
         | InlineConstant value -> value.GetCoerceError "URI"
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to DateTimeOffset.
     let coerceDateTimeOffsetInput =
@@ -2556,6 +2572,7 @@ module SchemaDefinitions =
             | true, date -> Ok date
             | false, _ -> getParseRangeError(destinationType, DateTimeOffset.MinValue, DateTimeOffset.MaxValue) s
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to DateOnly.
     let coerceDateOnlyInput =
@@ -2571,6 +2588,7 @@ module SchemaDefinitions =
             | true, date -> Ok date
             | false, _ -> getParseRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue) s
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Tries to resolve AST query input to Guid.
     let coerceGuidInput =
@@ -2586,6 +2604,7 @@ module SchemaDefinitions =
             | true, guid -> Ok guid
             | false, _ -> getParseError destinationType s
         | InlineConstant value -> value.GetCoerceError destinationType
+        | _ -> Debug.Fail "Compiler bug, must not ever happen"; Unchecked.defaultof<_>
 
     /// Wraps a GraphQL type definition, allowing defining field/argument
     /// to take option of provided value.
@@ -2880,7 +2899,8 @@ module SchemaDefinitions =
         static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Fields = lazy (fieldsFn () |> List.toArray)
-              Description = description }
+              Description = description
+              ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
         /// <summary>
         /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
@@ -2893,7 +2913,8 @@ module SchemaDefinitions =
         static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
             { Name = name
               Description = description
-              Fields = lazy (fields |> List.toArray) }
+              Fields = lazy (fields |> List.toArray)
+              ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
         /// <summary>
         /// Creates the top level subscription object that holds all of the possible subscriptions as fields.

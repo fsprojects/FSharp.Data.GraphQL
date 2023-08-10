@@ -20,7 +20,13 @@ let TestInputObject = InputComplexTests.TestInputObject
 
 type TestInput = InputComplexTests.TestInput
 
-type TestNestedInput = { n : string; no : TestInput option; nvo : TestInput voption }
+type TestNestedInput =
+    { n : string
+    ; no : TestInput option
+    ; nvo : TestInput voption
+    ; nl : TestInput list
+    ; nlo : TestInput list option
+    ; nlvo : TestInput list voption }
 
 let TestNestedInputObject =
     Define.InputObject<TestNestedInput> (
@@ -28,7 +34,10 @@ let TestNestedInputObject =
         fields =
             [ Define.Input ("n", StringType)
               Define.Input ("no", Nullable TestInputObject)
-              Define.Input ("nvo", Nullable TestInputObject) ]
+              Define.Input ("nvo", Nullable TestInputObject)
+              Define.Input ("nl", ListOf TestInputObject)
+              Define.Input ("nlo", Nullable (ListOf TestInputObject))
+              Define.Input ("nlvo", Nullable (ListOf TestInputObject)) ]
     )
 
 #nowarn "40"
@@ -59,7 +68,7 @@ let TestType =
                   "fieldWithNestedInputObject",
                   StringType,
                   "",
-                  [ Define.Input ("input", TestNestedInputObject, { n = "hello world"; no = None; nvo = ValueNone }) ],
+                  [ Define.Input ("input", TestNestedInputObject, { n = "hello world"; no = None; nvo = ValueNone; nl = []; nlo = None; nlvo = ValueNone }) ],
                   stringifyInput
               )
               Define.Field (
@@ -81,6 +90,36 @@ let ``Execute handles nested input objects and nullability using inline structs 
         NameValueLookup.ofList
             [ "fieldWithNestedInputObject",
                  upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}}""" ]
+
+    match actual with
+    | Direct (data, errors) ->
+        empty errors
+        data |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with empty lists`` () =
+    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}, nl:[], nlo: [], nlvo: []})}"""
+    let actual = sync <| Executor(schema).AsyncExecute (ast)
+    let expected =
+        NameValueLookup.ofList
+            [ "fieldWithNestedInputObject",
+                 upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":[],"nlvo":[]}""" ]
+
+    match actual with
+    | Direct (data, errors) ->
+        empty errors
+        data |> equals (upcast expected)
+    | _ -> fail "Expected Direct GQResponse"
+
+[<Fact>]
+let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with lists`` () =
+    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", nl:[{mand:"mand"}], nlo: [{mand:"mand"}], nlvo: [{mand:"mand"}]})}"""
+    let actual = sync <| Executor(schema).AsyncExecute (ast)
+    let expected =
+        NameValueLookup.ofList
+            [ "fieldWithNestedInputObject",
+                 upcast """{"n":"optSeq","no":null,"nvo":null,"nl":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlo":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlvo":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}]}""" ]
 
     match actual with
     | Direct (data, errors) ->

@@ -631,7 +631,7 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
             match! executeResolvers fieldCtx fieldPath value (toOption v |> AsyncVal.wrap) with
             | Ok (data, None, []) -> return SubscriptionResult (NameValueLookup.ofList [nameOrAlias, data.Value])
             | Ok (data, None, errs) -> return SubscriptionErrors (NameValueLookup.ofList [nameOrAlias, data.Value], errs)
-            | Ok (_, Some _, _) -> return failwithf "Deferred/Streamed/Live are not supported for subscriptions!"
+            | Ok (_, Some _, _) -> return failwith "Deferred/Streamed/Live are not supported for subscriptions!"
             | Error errs -> return SubscriptionErrors (null, errs)
         }
     return
@@ -641,9 +641,18 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
 
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
-    |> Array.iter(fun input ->
-        let errMsg = sprintf "Input object '%s': in field '%s': " indef.Name input.Name
-        input.ExecuteInput <- compileByType errMsg input.TypeDef)
+    |> Array.iter(fun inputField ->
+        // TODO: Implement compilaiton cache to reuse for the same type
+        let errMsg = $"Input object '%s{indef.Name}': in field '%s{inputField.Name}': "
+        inputField.ExecuteInput <- compileByType errMsg inputField.TypeDef
+        match inputField.TypeDef with
+        | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
+        | _ -> ()
+    )
+#if DEBUG
+    if isNull (box indef.ExecuteInput) then
+        System.Diagnostics.Debug.Fail($"Input object '{indef.Name}' has no ExecuteInput function!")
+#endif
 
 let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) =
     objdef.Fields
@@ -651,8 +660,13 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
         executeFields fieldDef
         fieldDef.Args
         |> Array.iter (fun arg ->
-            let errMsg = sprintf "Object '%s': field '%s': argument '%s': " objdef.Name fieldDef.Name arg.Name
-            arg.ExecuteInput <- compileByType errMsg arg.TypeDef))
+            let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
+            arg.ExecuteInput <- compileByType errMsg arg.TypeDef
+            match arg.TypeDef with
+            | InputObject inputObjDef -> inputObjDef.ExecuteInput <- arg.ExecuteInput
+            | _ -> ()
+        )
+    )
 
 let internal compileSchema (ctx : SchemaCompileContext) =
     ctx.Schema.TypeMap.ToSeq()
@@ -663,7 +677,7 @@ let internal compileSchema (ctx : SchemaCompileContext) =
                 let filter =
                     match sub with
                     | :? SubscriptionFieldDef as subField -> compileSubscriptionField subField
-                    | _ -> failwithf "Schema error: subscription object '%s' does have a field '%s' that is not a subscription field definition." subdef.Name sub.Name
+                    | _ -> failwith $"Schema error: subscription object '%s{subdef.Name}' does have a field '%s{sub.Name}' that is not a subscription field definition."
                 ctx.Schema.SubscriptionProvider.Register { Name = sub.Name; Filter = filter })
         | Object objdef ->
             compileObject objdef (fun fieldDef -> ctx.FieldExecuteMap.SetExecute(tName, fieldDef))

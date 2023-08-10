@@ -33,14 +33,15 @@ let InputRecordOptionalType =
           Define.Input ("c", Nullable StringType) ]
     )
 
-type InputRecordNested = { a : InputRecord; b : InputRecordOptional option; c : InputRecordOptional voption }
+type InputRecordNested = { a : InputRecord; b : InputRecordOptional option; c : InputRecordOptional voption; l : InputRecord list }
 
 let InputRecordNestedType =
     Define.InputObject<InputRecordNested> (
         "InputRecordNested",
         [ Define.Input ("a", InputRecordType)
           Define.Input ("b", Nullable InputRecordOptionalType)
-          Define.Input ("c", Nullable InputRecordOptionalType) ]
+          Define.Input ("c", Nullable InputRecordOptionalType)
+          Define.Input ("l", ListOf InputRecordType) ]
     )
 
 type InputObject (a : string, b : string, c : string) =
@@ -101,7 +102,7 @@ let ``Execute handles creation of inline input records with all fields`` () =
       recordInputs(
         record: { a: "a", b: "b", c: "c" },
         recordOptional: { a: "a", b: "b", c: "c" },
-        recordNested: { a: { a: "a", b: "b", c: "c" }, b: { a: "a", b: "b", c: "c" }, c: { a: "a", b: "b", c: "c" } }
+        recordNested: { a: { a: "a", b: "b", c: "c" }, b: { a: "a", b: "b", c: "c" }, c: { a: "a", b: "b", c: "c" }, l: [{ a: "a", b: "b", c: "c" }] }
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
@@ -116,13 +117,13 @@ let ``Execute handles creation of inline input records with optional null fields
       recordInputs(
         record: { a: "a", b: "b", c: "c" },
         recordOptional: null,
-        recordNested: { a: { a: "a", b: "b", c: "c" }, b: null, c: null }
+        recordNested: { a: { a: "a", b: "b", c: "c" }, b: null, c: null, l: [] }
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
     | Direct (data, errors) -> empty errors
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of inline input records with mandatory only fields`` () =
@@ -130,19 +131,20 @@ let ``Execute handles creation of inline input records with mandatory only field
         """{
       recordInputs(
         record: { a: "a", b: "b", c: "c" },
-        recordNested: { a: { a: "a", b: "b", c: "c" } }
+        recordNested: { a: { a: "a", b: "b", c: "c" }, l: [{ a: "a", b: "b", c: "c" }] }
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
     | Direct (data, errors) -> empty errors
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
 let variablesWithAllInputs (record, optRecord) =
     $"""
     {{
         "record":%s{record},
-        "optRecord":%s{optRecord}
+        "optRecord":%s{optRecord},
+        "list":[%s{record}]
     }}
 """
 
@@ -154,11 +156,11 @@ let paramsWithValues variables =
 [<Fact>]
 let ``Execute handles creation of input records from variables with all fields`` () =
     let query =
-        """query ($record: InputRecord!, $optRecord: InputRecordOptional){
+        """query ($record: InputRecord!, $optRecord: InputRecordOptional, $list: [InputRecord!]!){
       recordInputs(
         record: $record,
         recordOptional: $optRecord,
-        recordNested: { a: $record, b: $optRecord, c: $optRecord }
+        recordNested: { a: $record, b: $optRecord, c: $optRecord, l: $list }
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
@@ -174,11 +176,11 @@ let ``Execute handles creation of input records from variables with all fields``
 [<Fact>]
 let ``Execute handles creation of input records from variables with optional null fields`` () =
     let query =
-        """query ($record: InputRecord!, $optRecord: InputRecordOptional){
+        """query ($record: InputRecord!, $optRecord: InputRecordOptional, $list: [InputRecord!]!){
       recordInputs(
         record: $record,
         recordOptional: $optRecord,
-        recordNested: { a: $record, b: $optRecord, c: $optRecord }
+        recordNested: { a: $record, b: $optRecord, c: $optRecord, l: $list }
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
@@ -186,15 +188,15 @@ let ``Execute handles creation of input records from variables with optional nul
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
     match result with
     | Direct (data, errors) -> empty errors
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with mandatory only fields`` () =
     let query =
-        """query ($record: InputRecord!){
+        """query ($record: InputRecord!, $list: [InputRecord!]!){
       recordInputs(
         record: $record,
-        recordNested: { a: $record }
+        recordNested: { a: $record, l: $list }
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
@@ -202,4 +204,4 @@ let ``Execute handles creation of input records from variables with mandatory on
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
     match result with
     | Direct (data, errors) -> empty errors
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"

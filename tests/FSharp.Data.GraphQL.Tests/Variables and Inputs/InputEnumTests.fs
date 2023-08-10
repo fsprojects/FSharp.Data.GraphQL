@@ -57,7 +57,7 @@ let ``Execute handles enum input as variable`` () =
     let testInputValue = "\"Foo\""
     let params' = paramsWithEnumInput testInputValue
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"kind\":\"Foo\"}" ]
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Foo\"" ]
 
     match actual with
     | Direct (data, errors) ->
@@ -95,7 +95,7 @@ let ``Execute handles union enum input as variable`` () =
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "{\"kind\":\"Bar\"}" ]
+    let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Bar\"" ]
 
     match actual with
     | Direct (data, errors) ->
@@ -114,7 +114,7 @@ let ``Execute handles Some union enum input as variable`` () =
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "{\"kind\":\"Bar\"}" ]
+    let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "\"Bar\"" ]
 
     match actual with
     | Direct (data, errors) ->

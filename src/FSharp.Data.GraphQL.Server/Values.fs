@@ -121,15 +121,6 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                 nullableMismatchParameters.ToImmutableHashSet()
                )
 
-        //let optionalFields =
-        //    objdef.Fields
-        //    |> Seq.choose (fun f -> match f.TypeDef with Nullable _ -> Some f.Name | _ -> None)
-        //    |> ImmutableHashSet.CreateRange
-        //if optionalFields.IsSubsetOf optionalParameters then
-        //    let unmatchedOptionalFields = optionalFields.Except optionalParameters
-        //    raise <| InvalidInputTypeException ($"Input object %s{objdef.Name} refers to type '%O{objtype}', but has optional fields that are not optional parameters of the constructor", unmatchedOptionalFields)
-
-
         fun value variables ->
             match value with
             | ObjectValue props -> result {
@@ -216,6 +207,9 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
 
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
+        match innerdef with
+        | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inner
+        | _ -> ()
         fun value variables -> inner value variables
 
     | Enum enumdef ->
@@ -297,7 +291,6 @@ let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input
             }
         | other ->
             Error [ { new IGQLError with member _.Message = $"{errMsg}Cannot coerce value of type '%O{other.GetType ()}' to list." } ]
-    // TODO: Improve error message generation
     | InputObject objdef -> coerceVariableInputObject objdef vardef input ($"{errMsg[..(errMsg.Length-3)]} of type '%s{objdef.Name}': ")
     | Enum enumdef ->
         match input with
@@ -314,9 +307,7 @@ let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input
     | _ ->
         failwith $"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
-// TODO: Collect errors from subfields
 and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonElement) errMsg =
-    //TODO: this should be eventually coerced to complex objects
     if input.ValueKind = JsonValueKind.Object then result {
         let mappedResult =
             objdef.Fields
@@ -324,7 +315,6 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonEl
                 let inline coerce value =
                     let value = coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "
                     KeyValuePair (field.Name, value)
-                // TODO: Consider using of option
                 match input.TryGetProperty field.Name with
                 | true, value -> coerce value
                 | false, _ ->
@@ -335,26 +325,9 @@ and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonEl
             |> ImmutableDictionary.CreateRange
 
         let! mapped = mappedResult |> splitObjectErrorsList
+        let variables = seq { KeyValuePair (vardef.Name, mapped :> obj) } |> ImmutableDictionary.CreateRange
 
-        return upcast mapped
-        //input.Deserialize(vardef.TypeDef.Type, jsonOptions)
+        return! objdef.ExecuteInput (VariableName vardef.Name) variables
     }
     else
         Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'." } ]
-
-//let internal coerceVariable (vardef : VarDef) (inputs : ImmutableDictionary<string, JsonElement>) =
-//    let vname = vardef.Name
-
-//    // TODO: Use FSharp.Collection.Immutable
-//    match inputs.TryGetValue vname with
-//    | false, _ ->
-//        match vardef.DefaultValue with
-//        | Some defaultValue ->
-//            let executeInput = compileByType $"Variable '%s{vname}': " vardef.TypeDef
-//            executeInput defaultValue (ImmutableDictionary.Empty) // TODO: Check if empty is enough
-//        | None ->
-//            match vardef.TypeDef with
-//            | Nullable _ -> Ok null
-//            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vname}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
-//    | true, jsonElement ->
-//        coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vname}': "
