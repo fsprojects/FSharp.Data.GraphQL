@@ -183,7 +183,7 @@ module HttpHandlers =
                     if not hasBody then return IntrospectionQuery ValueNone
                     else
                         let! request = ctx.BindJsonAsync<GQLRequestContent>()
-                        if Introspection.IntrospectionQuery.Contains request.Query
+                        if IntrospectionQuery.Definition.Contains request.Query
                         then return ValueSome request.Query |> IntrospectionQuery
                         else return OperationQuery request
             }
@@ -194,7 +194,7 @@ module HttpHandlers =
                     match query with
                     | ValueNone ->
                         logger.LogInformation ("Executing default GraphQL introspection query")
-                        Schema.executor.AsyncExecute (Introspection.IntrospectionQuery)
+                        Schema.executor.AsyncExecute (IntrospectionQuery.Definition)
                     | ValueSome query ->
                         logger.LogInformation ($"Executing GraphQL introspection query:{Environment.NewLine}{query}", query)
                         Schema.executor.AsyncExecute query
