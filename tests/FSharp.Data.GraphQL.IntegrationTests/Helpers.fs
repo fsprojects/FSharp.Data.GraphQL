@@ -18,6 +18,12 @@ let hasItems (seq : seq<'T>) =
 
 let map fn x = fn x
 
+let checkRequestTypeHeader requestType (operationResult: OperationResultBase) =
+    match operationResult.Headers.TryGetValues "Request-Type" with
+    | true, values -> values |> Seq.contains requestType |> Assert.True
+    | false, _ -> Assert.Fail("Request-Type header not found")
+
+
 type File =
     { Name : string
       ContentType : string

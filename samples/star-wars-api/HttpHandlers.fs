@@ -250,8 +250,8 @@ module HttpHandlers =
 
         /// Execute the operation for given request
         let executeOperation (executor: Executor<_>) content = task {
-            let operationName = content.OperationName |> Skippable.toOption
-            let variables = content.Variables |> Skippable.toOption
+            let operationName = content.OperationName |> Skippable.filter (not << isNull) |> Skippable.toOption
+            let variables = content.Variables |> Skippable.filter (not << isNull) |> Skippable.toOption
 
             operationName
             |> Option.iter (fun on -> logger.LogTrace("GraphQL operation name: '{operationName}'", on))
@@ -271,6 +271,7 @@ module HttpHandlers =
 
         taskResult {
             let executor = Schema.executor
+            ctx.Response.Headers.Add("Request-Type", "Classic") // For integration testing purposes
             match! checkOperationType ctx with
             | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
             | OperationQuery content -> return! executeOperation executor content
