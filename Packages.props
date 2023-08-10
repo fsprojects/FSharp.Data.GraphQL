@@ -4,7 +4,7 @@
     <SystemVersion>7.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
-    <FsToolkitVersion>4.6.*</FsToolkitVersion>
+    <FsToolkitVersion>4.9.*</FsToolkitVersion>
     <XUnitVersion>2.5.0</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
