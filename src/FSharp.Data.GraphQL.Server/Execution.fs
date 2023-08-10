@@ -658,6 +658,8 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     // TODO: Use FSharp.Collection.Immutable
     |> fun builder -> builder.ToImmutable()
 
+#nowarn "0046"
+
 let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLExecutionResult> =
     let resultSet =
         ctx.ExecutionPlan.Fields

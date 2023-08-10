@@ -10,9 +10,10 @@ open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
+open FSharp.Control.Reactive
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
-open FSharp.Control.Reactive
 
 type GraphQLWebSocket(innerSocket : WebSocket) =
     inherit WebSocket()
