@@ -85,12 +85,12 @@ let schema = Schema (TestType)
 
 [<Fact>]
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types`` () =
-    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}})}"""
+    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}, nl: []})}"""
     let actual = sync <| Executor(schema).AsyncExecute (ast)
     let expected =
         NameValueLookup.ofList
             [ "fieldWithNestedInputObject",
-                 upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}}""" ]
+                 upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":null,"nlvo":null}""" ]
 
     match actual with
     | Direct (data, errors) ->
