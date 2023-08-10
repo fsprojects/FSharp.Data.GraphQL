@@ -18,14 +18,29 @@ type Startup private () =
         this.Configuration <- configuration
 
     member _.ConfigureServices(services: IServiceCollection) =
-        services.AddGiraffe()
-                .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
-                .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
-                .Configure<JsonOptions>(Action<JsonOptions>(fun s -> (Json.configureDefaultSerializerOptions Seq.empty s.SerializerOptions) |> ignore))
-                .AddSingleton<Json.ISerializer,Json.ISerializer>(
-                    fun sp ->
-                        let options = sp.GetRequiredService<IOptions<JsonOptions>>().Value.SerializerOptions
-                        SystemTextJson.Serializer(options))
+        services
+            .AddGiraffe()
+            .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+            .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+            // Surprisingly minimal APIs use Microsoft.AspNetCore.Http.Json.JsonOptions
+            // Use if you want to return HTTP responses using minmal APIs IResult interface
+            .Configure<HttpClientJsonOptions>(
+                Action<HttpClientJsonOptions>(fun o ->
+                    Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
+                )
+            )
+            // Use for pretty printing in logs
+            .Configure<HttpClientJsonOptions>(
+                Constants.Idented,
+                Action<HttpClientJsonOptions>(fun o ->
+                    Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
+                    o.SerializerOptions.WriteIndented <- true
+                )
+            )
+            // Replace Newtonsoft.Json and use the same settings in Giraffe
+            .AddSingleton<Json.ISerializer, SystemTextJson.Serializer>(fun sp ->
+                let options = sp.GetService<IOptions<HttpClientJsonOptions>>()
+                SystemTextJson.Serializer(options.Value.SerializerOptions))
         |> ignore
 
     member _.Configure(app: IApplicationBuilder, env: IHostEnvironment) =

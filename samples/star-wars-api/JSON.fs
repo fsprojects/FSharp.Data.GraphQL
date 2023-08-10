@@ -10,23 +10,29 @@ let [<Literal>] UnionTag = "kind"
 let configureSerializerOptions (jsonFSharpOptions: JsonFSharpOptions) (additionalConverters: JsonConverter seq) (options : JsonSerializerOptions) =
     options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
     options.PropertyNameCaseInsensitive <- true
-    //options.DefaultIgnoreCondition <- JsonIgnoreCondition.WhenWritingNull
     let converters = options.Converters
     converters.Add (JsonStringEnumConverter ())
+    //converters.Add (JsonSerializerOptionsState (options)) // Dahomey.Json
     additionalConverters |> Seq.iter converters.Add
     jsonFSharpOptions.AddToJsonSerializerOptions options
-    options
 
 let defaultJsonFSharpOptions =
     JsonFSharpOptions(
-        JsonUnionEncoding.InternalTag ||| JsonUnionEncoding.AllowUnorderedTag ||| JsonUnionEncoding.NamedFields
+        JsonUnionEncoding.InternalTag
+        ||| JsonUnionEncoding.AllowUnorderedTag
+        ||| JsonUnionEncoding.NamedFields
         ||| JsonUnionEncoding.UnwrapSingleCaseUnions
         ||| JsonUnionEncoding.UnwrapRecordCases
-        ||| JsonUnionEncoding.UnwrapOption, UnionTag)
+        ||| JsonUnionEncoding.UnwrapOption
+        ||| JsonUnionEncoding.UnwrapFieldlessTags,
+        UnionTag,
+        allowOverride = true)
 
 let configureDefaultSerializerOptions = configureSerializerOptions defaultJsonFSharpOptions
 
 let getSerializerOptions (additionalConverters: JsonConverter seq) =
-    JsonSerializerOptions () |> configureDefaultSerializerOptions additionalConverters
+    let options = JsonSerializerOptions ()
+    options |> configureDefaultSerializerOptions additionalConverters
+    options
 
 let serializerOptions = getSerializerOptions Seq.empty
