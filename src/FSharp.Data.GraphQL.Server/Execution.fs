@@ -182,14 +182,14 @@ let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) 
     argDefs
     |> Array.fold (fun acc argdef ->
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
-        | Some argument -> result {
+        | Some argument -> validation {
                 let! acc = acc
                 and! arg = argumentValue variables argdef argument
                 match arg with
                 | null -> return acc
                 | v -> return Map.add argdef.Name v acc
             }
-        | None -> result {
+        | None -> validation {
                 let! acc = acc
                 return collectDefaultArgValue acc argdef
             }
