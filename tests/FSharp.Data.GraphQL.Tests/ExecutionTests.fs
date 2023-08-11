@@ -424,10 +424,10 @@ let ``Execution handles errors: exceptions`` () =
                  ]))
     let expectedErrors = [ GQLProblemDetails.Create ("Resolver Error!", [ box "a" ]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
-    ensureDirect result <| fun data errors ->
-        data |> equals null
+    match result with
+    | RequestError errors ->
         errors |> equals expectedErrors
-
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles errors: nullable list fields`` () =

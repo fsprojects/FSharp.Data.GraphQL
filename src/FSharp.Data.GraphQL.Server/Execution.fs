@@ -608,7 +608,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
         | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
         | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
-        | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
+        | Error errs -> return GQLExecutionResult.RequestError(documentId, errs, ctx.Metadata)
     }
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) value = result {
