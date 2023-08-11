@@ -712,7 +712,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         variables
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> result {
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> validation {
                     let! value = coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vardef.Name}': "
                     and! acc = acc
                     acc.Add(vardef.Name, value)
@@ -722,11 +722,12 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
 
     let suppliedVaribles = variablesBuilder.ToImmutable()
 
-    // Having variables we can coerce inline values that are also
+    // TODO: consider how to execute inline objects validation having some variables coercion or validation failed
+    // Having variables we can coerce inline values that contain on variables
     let! variablesBuilder =
         inlineValues
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> result {
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> validation {
                     let executeInput = compileByType $"Variable '%s{vardef.Name}': " vardef.TypeDef
                     let! value = executeInput defaultValue suppliedVaribles
                     and! acc = acc
