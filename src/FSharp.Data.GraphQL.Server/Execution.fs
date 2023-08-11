@@ -699,7 +699,8 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                         let item =
                             match vardef.TypeDef with
                             | Nullable _ -> Ok <| KeyValuePair(vardef.Name, null)
-                            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
+                            | Named typeDef -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{typeDef.Name}!' was not provided." } ]
+                            | _ -> System.Diagnostics.Debug.Fail $"{vardef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
                         (valiables, inlineValues, item::missing)
                 | true, jsonElement ->
                     let item = struct(vardef, jsonElement)
