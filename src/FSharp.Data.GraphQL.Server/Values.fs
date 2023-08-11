@@ -316,27 +316,28 @@ let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input
         failwith $"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
 and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonElement) errMsg =
-    if input.ValueKind = JsonValueKind.Object then result {
-        let mappedResult =
-            objdef.Fields
-            |> Array.map (fun field ->
-                let inline coerce value =
-                    let value = coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "
-                    KeyValuePair (field.Name, value)
-                match input.TryGetProperty field.Name with
-                | true, value -> coerce value
-                | false, _ ->
-                    match field.DefaultValue with
-                    | Some value -> KeyValuePair (field.Name, Ok value)
-                    | None -> coerce (JsonDocument.Parse("null").RootElement)
-            )
-            |> ImmutableDictionary.CreateRange
+    match input.ValueKind with
+    | JsonValueKind.Object -> result {
+            let mappedResult =
+                objdef.Fields
+                |> Array.map (fun field ->
+                    let inline coerce value =
+                        let value = coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "
+                        KeyValuePair (field.Name, value)
+                    match input.TryGetProperty field.Name with
+                    | true, value -> coerce value
+                    | false, _ ->
+                        match field.DefaultValue with
+                        | Some value -> KeyValuePair (field.Name, Ok value)
+                        | None -> coerce (JsonDocument.Parse("null").RootElement)
+                )
+                |> ImmutableDictionary.CreateRange
 
-        let! mapped = mappedResult |> splitObjectErrorsList
-        // TODO: Improve without creating a dictionary
-        let variables = seq { KeyValuePair (vardef.Name, mapped :> obj) } |> ImmutableDictionary.CreateRange
+            let! mapped = mappedResult |> splitObjectErrorsList
+            // TODO: Improve without creating a dictionary
+            let variables = seq { KeyValuePair (vardef.Name, mapped :> obj) } |> ImmutableDictionary.CreateRange
 
-        return! objdef.ExecuteInput (VariableName vardef.Name) variables
-    }
-    else
-        Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'." } ]
+            return! objdef.ExecuteInput (VariableName vardef.Name) variables
+        }
+    | JsonValueKind.Null -> Ok null
+    | valueKind -> Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'." } ]
