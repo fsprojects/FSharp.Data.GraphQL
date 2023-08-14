@@ -6,6 +6,7 @@ module internal Helpers
 open System
 open System.Collections.Generic
 open System.Linq
+open System.Text.Json.Serialization
 open System.Threading
 open Xunit
 open FSharp.Data.GraphQL
@@ -36,9 +37,20 @@ let single (xs : 'a seq) =
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
+
 let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
     let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
+
+let hasErrorAtPath path (errMsg : string) (errors: GQLProblemDetails seq) =
+    match errors |> Seq.where (fun pd -> pd.Message.Contains(errMsg)) |> Seq.tryHead with
+    | Some error ->
+        error.Path
+        |> Skippable.filter (fun pathValue -> Assert.True((pathValue = path), $"Expected that message '%s{errMsg}' has path {path}, but path {pathValue} found."); true)
+        |> Skippable.defaultWith (fun () -> Assert.Fail($"Expected that message '%s{errMsg}' has path {path}, but no path found."); []) |> ignore
+    | None ->
+        Assert.Fail ($"Expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
+
 let (<??) opt other =
     match opt with
     | None -> Some other
