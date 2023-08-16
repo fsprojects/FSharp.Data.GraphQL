@@ -1007,7 +1007,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
       Name : string
       /// Optional type description.
       Description : string option
-      /// A function used to retrieve a .NET object from provided GraphQL query.
+      /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
       CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
       /// A function used to set a surrogate representation to be
       /// returned as a query result.
@@ -1043,6 +1043,53 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
     override x.Equals y =
         match y with
         | :? ScalarDefinition<'Val> as s -> x.Name = s.Name
+        | _ -> false
+
+    override x.GetHashCode() = x.Name.GetHashCode()
+    override x.ToString() = x.Name + "!"
+
+/// Concrete representation of the scalar types wrapped into a value object.
+and [<CustomEquality; NoComparison>] ValueObjectScalarDefinition<'Primitive, 'Val> =
+    { /// Name of the scalar type.
+      Name : string
+      /// Optional type description.
+      Description : string option
+      /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+      CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
+      /// A function used to set a surrogate representation to be
+      /// returned as a query result.
+      CoerceOutput : obj -> 'Primitive option }
+
+    interface TypeDef with
+        member _.Type = typeof<'Val>
+
+        member x.MakeNullable() =
+            let nullable : NullableDefinition<_> = { OfType = x }
+            upcast nullable
+
+        member x.MakeList() =
+            let list: ListOfDefinition<_,_> = { OfType = x }
+            upcast list
+
+    interface InputDef
+    interface OutputDef
+
+    interface ScalarDef with
+        member x.Name = x.Name
+        member x.Description = x.Description
+        member x.CoerceInput input = x.CoerceInput input |> Result.map box
+        member x.CoerceOutput value = (x.CoerceOutput value) |> Option.map box
+
+    interface InputDef<'Val>
+    interface OutputDef<'Val>
+    interface LeafDef
+
+    interface NamedDef with
+        member x.Name = x.Name
+
+    override x.Equals y =
+        match y with
+        | :? ValueObjectScalarDefinition<'Primitive, 'Val> as s -> x.Name = s.Name
         | _ -> false
 
     override x.GetHashCode() = x.Name.GetHashCode()
