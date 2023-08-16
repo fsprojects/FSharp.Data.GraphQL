@@ -17,7 +17,7 @@ let private testCoercion graphQLType (expected: 't) actual =
     let result = (scalar.CoerceInput actual) |> Result.map (fun x -> downcast x)
     match result with
     | Ok x -> equals expected x
-    | Error _ -> raise (Exception(sprintf "Expected %A to be able to be coerced to %A" actual expected))
+    | Error _ -> raise (Exception $"Expected %A{actual} to be able to be coerced to %A{expected}")
 
 
 [<Fact>]
