@@ -24,7 +24,7 @@ let Contact = Define.Object("Contact", [ Define.Field("email", StringType, fun _
 
 let Person =
     Define.Object<Person>("Person",
-                          [ Define.Field("id", IDType, fun _ x -> x.ID)
+                          [ Define.Field("id", IDType, fun _ x -> string x.ID)
                             Define.AutoField("firstName", StringType)
                             Define.Field("lastName", StringType, fun _ x -> x.LastName)
                             Define.Field("fullName", StringType, fun _ x -> x.FirstName + " " + x.LastName)
@@ -60,7 +60,7 @@ let resolveRoot ctx () =
     result
 
 let linqArgs =
-    [ Define.Input("id", Nullable IDType<int>)
+    [ Define.Input("id", Nullable IDType)
       Define.Input("skip", Nullable IntType)
       Define.Input("take", Nullable IntType)
       Define.Input("orderBy", Nullable StringType)
