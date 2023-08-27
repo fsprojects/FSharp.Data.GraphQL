@@ -171,7 +171,8 @@ let private applyId: ArgApplication = fun expression callable ->
     let p0 = Expression.Parameter tSource
     let idProperty = memberExpr callable.Type "id" p0
     // Func<tSource, bool> predicate = p0 => p0 == value
-    let predicate = Expression.Lambda(Expression.Equal(idProperty, Expression.Constant (extractValueIfOption callable)), p0)
+    let toStringMethodInfo = idProperty.Type.GetMethod("ToString", Array.empty)
+    let predicate = Expression.Lambda(Expression.Equal(Expression.Call(idProperty, toStringMethodInfo), Expression.Constant (extractValueIfOption callable)), p0)
     let where = methods.Where.MakeGenericMethod [| tSource |]
     upcast Expression.Call(null, where, expression, predicate)
 

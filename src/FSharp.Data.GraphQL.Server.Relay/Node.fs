@@ -78,6 +78,6 @@ module GlobalId =
           Define.Interface(
             name = "Node",
             description = "An object that can be uniquely identified by its id",
-            fields = [ Define.Field("id", IDType<string>) ],
+            fields = [ Define.Field("id", IDType) ],
             resolveType = resolveTypeFun possibleTypes)
 
