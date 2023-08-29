@@ -362,8 +362,6 @@ module SchemaDefinitions =
     /// to take collection of provided value.
     let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
 
-    let private ignoreInputResolve (_ : unit) (input : 'T) = ()
-
     let internal variableOrElse other value (variables : IReadOnlyDictionary<string, obj>) =
         match value with
         // TODO: Use FSharp.Collection.Immutable

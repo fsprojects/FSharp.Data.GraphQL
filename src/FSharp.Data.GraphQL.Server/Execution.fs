@@ -642,9 +642,8 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun inputField ->
-        // TODO: Implement compilaiton cache to reuse for the same type
-        let errMsg = $"Input object '%s{indef.Name}': in field '%s{inputField.Name}': "
-        inputField.ExecuteInput <- compileByType errMsg inputField.TypeDef
+        // TODO: Implement compilation cache to reuse for the same type
+        inputField.ExecuteInput <- compileByType [inputField.Name |> box] inputField.TypeDef
         match inputField.TypeDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
         | _ -> ()
@@ -660,8 +659,9 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
         executeFields fieldDef
         fieldDef.Args
         |> Array.iter (fun arg ->
-            let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
-            arg.ExecuteInput <- compileByType errMsg arg.TypeDef
+            //let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
+            // TODO: Pass arg name
+            arg.ExecuteInput <- compileByType [fieldDef.Name |> box] arg.TypeDef
             match arg.TypeDef with
             | InputObject inputObjDef -> inputObjDef.ExecuteInput <- arg.ExecuteInput
             | _ -> ()
@@ -688,22 +688,28 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let variables, inlineValues, nulls =
         variables
         |> List.fold
-            (fun (valiables, inlineValues, missing) vardef ->
-                match vars.TryGetValue vardef.Name with
+            (fun (valiables, inlineValues, missing) varDef ->
+                match vars.TryGetValue varDef.Name with
                 | false, _ ->
-                    match vardef.DefaultValue with
+                    match varDef.DefaultValue with
                     | Some defaultValue ->
-                        let item = struct(vardef, defaultValue)
+                        let item = struct(varDef, defaultValue)
                         (valiables, item::inlineValues, missing)
                     | None ->
                         let item =
-                            match vardef.TypeDef with
-                            | Nullable _ -> Ok <| KeyValuePair(vardef.Name, null)
-                            | Named typeDef -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{typeDef.Name}!' was not provided." } ]
-                            | _ -> System.Diagnostics.Debug.Fail $"{vardef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
+                            match varDef.TypeDef with
+                            | Nullable _ -> Ok <| KeyValuePair(varDef.Name, null)
+                            | Named typeDef -> Error [ {
+                                    Message = $"Variable '$%s{varDef.Name}' of type '%s{typeDef.Name}!' is not nullable but neither value was provided, nor a default value was specified."
+                                    ErrorKind = InputCoercion
+                                    Variable = varDef
+                                    Path = []
+                                    FieldErrorDetails = ValueNone
+                                } :> IGQLError ]
+                            | _ -> System.Diagnostics.Debug.Fail $"{varDef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
                         (valiables, inlineValues, item::missing)
                 | true, jsonElement ->
-                    let item = struct(vardef, jsonElement)
+                    let item = struct(varDef, jsonElement)
                     (item::valiables, inlineValues, missing)
                 )
             ([], [], [])
@@ -713,7 +719,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
         variables
         |> List.fold (
             fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> validation {
-                    let! value = coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vardef.Name}': "
+                    let! value = coerceVariableValue false [] ValueNone vardef.TypeDef vardef jsonElement
                     and! acc = acc
                     acc.Add(vardef.Name, value)
                     return acc
@@ -728,7 +734,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
         inlineValues
         |> List.fold (
             fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> validation {
-                    let executeInput = compileByType $"Variable '%s{vardef.Name}': " vardef.TypeDef
+                    let executeInput = compileByType [] vardef.TypeDef
                     let! value = executeInput defaultValue suppliedVaribles
                     and! acc = acc
                     acc.Add(vardef.Name, value)

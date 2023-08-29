@@ -85,7 +85,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
     | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 // See https://spec.graphql.org/October2021/#sec-List
-[<Fact(Skip = "This test does not pass yet as this feature is not yet implemented.")>]
+[<Fact>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
     let ast = parse """{ fieldWithObjectInput(input: {mand:"baz", opt1: "foo", optSeq: "bar"}) }"""
     let actual = sync <| Executor(schema).AsyncExecute (ast)

@@ -1576,6 +1576,8 @@ and InputObjectDefinition<'Val> =
             let list: ListOfDefinition<_,_> = { OfType = x }
             upcast list
 
+    override x.ToString() = x.Name + "!"
+
 /// Function type used for resolving input object field values.
 and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
 

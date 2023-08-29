@@ -112,7 +112,8 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
 
     match actual with
-    | RequestError errors -> hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
+    | RequestError errors ->
+        hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
@@ -204,7 +205,8 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
 
     match actual with
-    | RequestError errors -> hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
+    | RequestError errors ->
+        hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
@@ -220,7 +222,8 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
 
     match actual with
-    | RequestError errors -> hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
+    | RequestError errors ->
+        hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
@@ -255,5 +258,6 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
     let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
 
     match actual with
-    | RequestError errors -> hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
+    | RequestError errors ->
+        hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"

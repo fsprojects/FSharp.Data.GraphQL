@@ -161,7 +161,8 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
         <| Executor(schema).AsyncExecute (ast, variables = params')
 
     match actual with
-    | RequestError errors -> errors |> hasError "Variable '$value': expected value of type 'String!' but got 'null'."
+    | RequestError errors ->
+        errors |> hasError "Variable '$value': expected value of type 'String!' but got 'null'."
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]

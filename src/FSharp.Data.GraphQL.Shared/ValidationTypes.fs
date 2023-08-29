@@ -35,6 +35,11 @@ module ValidationResult =
         // TODO: Use PSeq
         Seq.fold (fun acc t -> acc @@ (f t)) Success xs
 
+    let mapErrors (f : 'Err1 -> 'Err2) (res : ValidationResult<'Err1>) : ValidationResult<'Err2> =
+        match res with
+        | Success -> Success
+        | ValidationError errors -> ValidationError (List.map f errors)
+
 type internal GQLValidator<'Val> = 'Val -> ValidationResult<IGQLError>
 
 module GQLValidator =
