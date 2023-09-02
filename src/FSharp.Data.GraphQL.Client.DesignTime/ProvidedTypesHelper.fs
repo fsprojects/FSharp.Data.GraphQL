@@ -710,15 +710,14 @@ module internal Provider =
                     tdef.AddXmlDoc("A type provider for GraphQL operations.")
                     tdef.AddMembersDelayed (fun _ ->
                         let httpHeaders = HttpHeaders.load httpHeadersLocation
-                        let schemaJson =
+                        let schema =
                             match introspectionLocation with
                             | Uri serverUrl ->
                                 use connection = new GraphQLClientConnection()
-                                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
+                                GraphQLClient.getIntrospection connection serverUrl httpHeaders
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
                         let schema = Serialization.deserializeSchema schemaJson
-
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
                         let typeWrapper = ProvidedTypeDefinition("Types", None, isSealed = true)
                         typeWrapper.AddMembers(schemaProvidedTypes |> Seq.map (fun kvp -> kvp.Value) |> List.ofSeq)
