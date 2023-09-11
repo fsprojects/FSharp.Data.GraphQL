@@ -82,12 +82,12 @@ module MultipartRequest =
                     | NamedType tname -> tname = "Upload" || tname = "UploadRequest"
                     | ListType t | NonNullType t -> isUpload t
                 let ast = Parser.parse operation.Query
-                let vardefs =
+                let varDefs =
                     ast.Definitions
                     |> List.choose (function OperationDefinition def -> Some def.VariableDefinitions | _ -> None)
                     |> List.collect id
-                let vardef = vardefs |> List.find (fun x -> x.VariableName = varName)
-                if isUpload vardef.Type
+                let varDef = varDefs |> List.find (fun x -> x.VariableName = varName)
+                if isUpload varDef.Type
                 then
                     match varValue.ValueKind with
                     | JsonValueKind.Object ->

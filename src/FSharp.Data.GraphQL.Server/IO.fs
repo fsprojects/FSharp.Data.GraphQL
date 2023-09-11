@@ -26,7 +26,6 @@ type GQLResponse =
           Data = Skip
           Errors = Include errors }
 
-
 type GQLExecutionResult =
     { DocumentId: int
       Content : GQLResponseContent

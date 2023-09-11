@@ -2,11 +2,10 @@
 // Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.AbstractionTests
 
-#nowarn "40"
-
 open Xunit
-open System
-open System.Text.Json.Serialization
+
+#nowarn "0025"
+#nowarn "0040"
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -108,11 +107,9 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                   [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj
                     NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] ] ]
 
-    match result with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Interface`` () =
@@ -132,20 +129,9 @@ let ``Execute handles execution of abstract types: absent field resolution produ
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        [ { Message = "Field 'unknownField1' is not defined in schema type 'Dog'."
-            Path = Include [ "pets"; "unknownField1" ]
-            Locations = Skip
-            Extensions = Skip }
-          { Message = "Field 'unknownField2' is not defined in schema type 'Cat'."
-            Path = Include [ "pets"; "unknownField2" ]
-            Locations = Skip
-            Extensions = Skip } ]
-
-    match result with
-    | RequestError (errors) -> equals expected errors
-    | _ -> fail "Expected a requets error GQLResponse"
+    ensureRequestError result <| fun [ dogError; catError ] ->
+        dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
+        catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent type resolution produces errors for Interface`` () =
@@ -165,20 +151,9 @@ let ``Execute handles execution of abstract types: absent type resolution produc
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        [ { Message = "Field 'unknownField2' is not defined in schema type 'Cat'."
-            Path = Include [ "pets"; "unknownField2" ]
-            Locations = Skip
-            Extensions = Skip }
-          { Message = "Inline fragment has type condition 'UnknownDog', but that type does not exist in the schema."
-            Path = Include [ "pets" ]
-            Locations = Skip
-            Extensions = Skip } ]
-
-    match result with
-    | RequestError (errors) -> equals expected errors
-    | _ -> fail "Expected a requets error GQLResponse"
+    ensureRequestError result <| fun [ catError; dogError ] ->
+        catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
+        dogError |> ensureValidationError "Inline fragment has type condition 'UnknownDog', but that type does not exist in the schema." [ "pets" ]
 
 
 let schemaWithUnion =
@@ -240,11 +215,9 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
                   [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj
                     NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] ] ]
 
-    match result with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Union`` () =
@@ -264,20 +237,9 @@ let ``Execute handles execution of abstract types: absent field resolution produ
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        [ { Message = "Field 'unknownField1' is not defined in schema type 'Dog'."
-            Path = Include [ "pets"; "unknownField1" ]
-            Locations = Skip
-            Extensions = Skip }
-          { Message = "Field 'unknownField2' is not defined in schema type 'Cat'."
-            Path = Include [ "pets"; "unknownField2" ]
-            Locations = Skip
-            Extensions = Skip } ]
-
-    match result with
-    | RequestError (errors) -> equals expected errors
-    | _ -> fail "Expected a requets error GQLResponse"
+    ensureRequestError result <| fun [ dogError; catError ] ->
+        dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
+        catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent type resolution produces errors for Union`` () =
@@ -297,17 +259,6 @@ let ``Execute handles execution of abstract types: absent type resolution produc
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        [ { Message = "Field 'unknownField1' is not defined in schema type 'Dog'."
-            Path = Include [ "pets"; "unknownField1" ]
-            Locations = Skip
-            Extensions = Skip }
-          { Message = "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema."
-            Path = Include [ "pets" ]
-            Locations = Skip
-            Extensions = Skip } ]
-
-    match result with
-    | RequestError (errors) -> equals expected errors
-    | _ -> fail "Expected a requets error GQLResponse"
+    ensureRequestError result <| fun [ dogError; catError ] ->
+        dogError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
+        catError |> ensureValidationError "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema." [ "pets" ]

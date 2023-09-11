@@ -9,7 +9,6 @@ open System.Collections.Generic
 open System.Collections.Immutable
 open System.Diagnostics
 open System.Linq
-open System.Reflection
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
@@ -19,6 +18,7 @@ open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Validation
+open FSharp.Data.GraphQL
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
@@ -49,22 +49,6 @@ let private wrapOptional (outputType: Type) value=
         else
             value
 
-let mapInputError varDef inputObjectPath (objectFieldErrorDetails: ObjectFieldErrorDetails voption) (err : IGQLError) : IGQLError = {
-    InnerError = err
-    ErrorKind = InputCoercion
-    Variable = varDef
-    Path = inputObjectPath
-    FieldErrorDetails = objectFieldErrorDetails
-}
-
-let mapInputObjectError inputObjectPath objectType (err : IGQLError) : IGQLError = {
-    InnerError = err
-    ErrorKind = InputObjectValidation
-    Path = inputObjectPath
-    ObjectType = ValueSome objectType
-    FieldType = ValueNone
-}
-
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
     let rec convert isNullable (schema : ISchema) (ast : InputType) : TypeDef option =
@@ -90,7 +74,7 @@ let inline tryConvertAst schema ast =
 
     convert true schema ast
 
-let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef) : ExecuteInput =
+let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : InputSource) (originalInputDef : InputDef, inputDef : InputDef) : ExecuteInput =
     match inputDef with
 
     | Scalar scalardef -> variableOrElse (InlineConstant >> scalardef.CoerceInput)
@@ -136,12 +120,29 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
                 nullableMismatchParameters.ToImmutableHashSet()
                )
 
-        let attachErrorExtensionsIfScalar varDef (fieldDef: InputFieldDef) path objectFieldErrorDetails result =
+        let attachErrorExtensionsIfScalar inputSource path objDef (fieldDef: InputFieldDef) result =
+
+            let mapFieldError err : IGQLError = {
+                InputSource = inputSource
+                InnerError = err
+                ErrorKind = InputCoercion
+                Path = (box fieldDef.Name)::path
+                FieldErrorDetails = ValueSome { ObjectDef = objDef; FieldDef = ValueSome fieldDef }
+            }
+
             match fieldDef.TypeDef with
             | :? ScalarDef ->
                 result |>
-                Result.mapError (fun errs -> errs |> List.map (mapInputError varDef path objectFieldErrorDetails))
+                Result.mapError (fun errs -> errs |> List.map mapFieldError)
             | _ -> result
+
+        let mapInputObjectError inputSource inputObjectPath objectType (err : IGQLError) : IGQLError = {
+            InputSource = inputSource
+            InnerError = err
+            ErrorKind = InputObjectValidation
+            Path = inputObjectPath
+            FieldErrorDetails = ValueSome { ObjectDef = objectType; FieldDef = ValueNone }
+        }
 
         fun value variables ->
             match value with
@@ -156,14 +157,14 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
                                 | None -> Ok <| wrapOptionalNone param.ParameterType field.TypeDef.Type
                                 | Some prop ->
                                     field.ExecuteInput prop variables |> Result.map (wrapOptional param.ParameterType)
-                                    |> attachErrorExtensionsIfScalar field inputObjectPath objDef.Name
+                                    |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                             | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
 
                     let! args = argResults |> splitSeqErrorsList
 
                     let instance = ctor.Invoke args
                     do! objDef.Validator instance
-                        |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputObjectPath objDef.Name)
+                        |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputSource inputObjectPath originalInputDef)
                     return instance
                 }
             | VariableName variableName ->
@@ -180,7 +181,8 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
                                     | ValueSome field ->
                                         let! value =
                                             field.ExecuteInput (VariableName field.Name) objectFields
-                                            |> attachErrorExtensionsIfScalar field inputObjectPath objDef.Name
+                                            // TODO: Take into account variable name
+                                            |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                                         return wrapOptional param.ParameterType value
                                     | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                                 })
@@ -189,7 +191,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
 
                             let instance = ctor.Invoke args
                             do! objDef.Validator instance
-                                |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputObjectPath objDef.Name)
+                                |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputSource inputObjectPath originalInputDef)
                             return instance
                         | null ->
                             return null
@@ -207,7 +209,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
     | List (Input innerDef) ->
         let isArray = inputDef.Type.IsArray
         // TODO: Improve creation of inner
-        let inner index = compileByType ((box index)::inputObjectPath) innerDef
+        let inner index = compileByType ((box index)::inputObjectPath) inputSource (innerDef, innerDef)
         let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
         fun value variables ->
@@ -242,7 +244,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputDef : InputDef
                 }
 
     | Nullable (Input innerDef) ->
-        let inner = compileByType inputObjectPath innerDef
+        let inner = compileByType inputObjectPath inputSource (inputDef, innerDef)
         match innerDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inner
         | _ -> ()
@@ -275,46 +277,57 @@ let rec internal coerceVariableValue
         isNullable
         inputObjectPath
         (objectFieldErrorDetails: ObjectFieldErrorDetails voption)
-        typeDef (varDef : VarDef)
+        (originalTypeDef, typeDef) (varDef : VarDef)
         (input : JsonElement)
     : Result<obj, IGQLError list> =
 
-    let getNullErrorMessage (typeDef: TypeDef) =
-        match objectFieldErrorDetails with
-        | ValueSome details -> $"Non-nullable field '%s{details.FieldDef.Value.Name}' expected value of type '%s{typeDef.ToString ()}', but got 'null'."
-        | ValueNone -> $"Non-nullable variable '%s{varDef.Name}' expected value of type '%s{typeDef.ToString ()}', but got 'null'."
+    let createVariableCoercionError message =
+        Error [ {
+            InputSource = Variable varDef
+            Message = message
+            ErrorKind = InputCoercion
+            Path = inputObjectPath
+            FieldErrorDetails = objectFieldErrorDetails
+        } :> IGQLError ]
+
+    let createNullError typeDef =
+        let message =
+            match objectFieldErrorDetails with
+            | ValueSome details -> $"Non-nullable field '%s{details.FieldDef.Value.Name}' expected value of type '%s{string typeDef}', but got 'null'."
+            | ValueNone -> $"Non-nullable variable '$%s{varDef.Name}' expected value of type '%s{string typeDef}', but got 'null'."
+        createVariableCoercionError message
+
+    let mapInputError varDef inputObjectPath (objectFieldErrorDetails: ObjectFieldErrorDetails voption) (err : IGQLError) : IGQLError = {
+        InnerError = err
+        ErrorKind = InputCoercion
+        InputSource = Variable varDef
+        Path = inputObjectPath
+        FieldErrorDetails = objectFieldErrorDetails
+    }
 
     match typeDef with
     | Scalar scalardef ->
         if input.ValueKind = JsonValueKind.Null then
-            Error [ { new IGQLError with member _.Message = getNullErrorMessage scalardef } ]
+            createNullError originalTypeDef
         else
-            match scalardef.CoerceInput (Variable input) with
+            match scalardef.CoerceInput (InputParameterValue.Variable input) with
             | Ok null when isNullable -> Ok null
             // TODO: Capture position in the JSON document
-            | Ok null -> Error [ { new IGQLError with member _.Message = getNullErrorMessage scalardef } ]
+            | Ok null -> createNullError originalTypeDef
             | result ->
                 result |> Result.mapError (List.map (mapInputError varDef inputObjectPath objectFieldErrorDetails))
     | Nullable (InputObject innerdef) ->
         if input.ValueKind = JsonValueKind.Null then Ok null
-        else coerceVariableValue true inputObjectPath ValueNone (innerdef :> InputDef) varDef input
+        else coerceVariableValue true inputObjectPath ValueNone (typeDef, innerdef :> InputDef) varDef input
     | Nullable (Input innerdef) ->
         if input.ValueKind = JsonValueKind.Null then Ok null
-        else coerceVariableValue true inputObjectPath ValueNone innerdef varDef input
+        else coerceVariableValue true inputObjectPath ValueNone (typeDef, innerdef) varDef input
     | List (Input innerDef) ->
         let cons, nil = ReflectionHelper.listOfType innerDef.Type
 
         match input with
         | _ when input.ValueKind = JsonValueKind.Null && isNullable -> Ok null
-        | _ when input.ValueKind = JsonValueKind.Null ->
-            let message = getNullErrorMessage typeDef
-            Error [ {
-                Message = message
-                ErrorKind = InputCoercion
-                Variable = varDef
-                Path = inputObjectPath
-                FieldErrorDetails = objectFieldErrorDetails
-            } ]
+        | _ when input.ValueKind = JsonValueKind.Null -> createNullError typeDef
         | _ -> result {
                 let areItemsNullable =
                     match innerDef with
@@ -326,8 +339,7 @@ let rec internal coerceVariableValue
                         result {
                             let! items =
                                 input.EnumerateArray()
-                                |> Seq.mapi (fun i elem -> coerceVariableValue areItemsNullable ((box i)::inputObjectPath) ValueNone innerDef varDef elem)
-                                |> Seq.rev
+                                |> Seq.mapi (fun i elem -> coerceVariableValue areItemsNullable ((box i)::inputObjectPath) ValueNone (originalTypeDef, innerDef) varDef elem)
                                 |> splitSeqErrorsList
                             if areItemsNullable then
                                 let some, none, _ = ReflectionHelper.optionOfType innerDef.Type.GenericTypeArguments[0]
@@ -337,7 +349,7 @@ let rec internal coerceVariableValue
                         }
                     else
                         result {
-                            let! single = coerceVariableValue areItemsNullable inputObjectPath ValueNone innerDef varDef input
+                            let! single = coerceVariableValue areItemsNullable inputObjectPath ValueNone (innerDef, innerDef) varDef input
 
                             if areItemsNullable then
                                 let some, none, _ = ReflectionHelper.optionOfType innerDef.Type.GenericTypeArguments[0]
@@ -352,23 +364,23 @@ let rec internal coerceVariableValue
                 else
                     return List.foldBack cons items nil
             }
-    | InputObject objdef -> coerceVariableInputObject inputObjectPath objdef varDef input
+    | InputObject objdef -> coerceVariableInputObject inputObjectPath (originalTypeDef, objdef) varDef input
     | Enum enumdef ->
         match input with
         | _ when input.ValueKind = JsonValueKind.Null && isNullable -> Ok null
         | _ when input.ValueKind = JsonValueKind.Null ->
-            Error [ { new IGQLError with member _.Message = $"Variable '%s{varDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found." } ]
+            createVariableCoercionError $"Variable '$%s{varDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found."
         | _ when input.ValueKind = JsonValueKind.String ->
             let value = input.GetString()
             match enumdef.Options |> Array.tryFind (fun o -> o.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) with
             | Some option -> Ok option.Value
-            | None -> Error [ { new IGQLError with member _.Message = $"Value '%s{value}' is not defined in Enum '%s{enumdef.Name}'." } ]
+            | None -> createVariableCoercionError $"Value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
         | _ ->
-            Error [ { new IGQLError with member _.Message = $"Enum values must be strings but got '%O{input.ValueKind}'." } ]
+            createVariableCoercionError $"Enum values must be strings but got '%O{input.ValueKind}'."
     | _ ->
-        failwith $"Variable '%s{varDef.Name}': Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
+        failwith $"Variable '$%s{varDef.Name}': Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
-and private coerceVariableInputObject inputObjectPath (objDef) (varDef : VarDef) (input : JsonElement) =
+and private coerceVariableInputObject inputObjectPath (originalObjDef, objDef) (varDef : VarDef) (input : JsonElement) =
     match input.ValueKind with
     | JsonValueKind.Object -> result {
             let mappedResult =
@@ -377,10 +389,11 @@ and private coerceVariableInputObject inputObjectPath (objDef) (varDef : VarDef)
                     let inline coerce value =
                         let inputObjectPath' = (box field.Name)::inputObjectPath
                         let objectFieldErrorDetails = ValueSome <| {
-                            ObjectDef = objDef
+                            ObjectDef = originalObjDef
                             FieldDef = ValueSome field
                         }
-                        let value = coerceVariableValue false inputObjectPath' objectFieldErrorDetails field.TypeDef varDef value
+                        let fieldTypeDef = field.TypeDef
+                        let value = coerceVariableValue false inputObjectPath' objectFieldErrorDetails (fieldTypeDef, fieldTypeDef) varDef value
                         KeyValuePair (field.Name, value)
                     match input.TryGetProperty field.Name with
                     | true, value -> coerce value
@@ -399,4 +412,11 @@ and private coerceVariableInputObject inputObjectPath (objDef) (varDef : VarDef)
             return! objDef.ExecuteInput (VariableName varDef.Name) variables
         }
     | JsonValueKind.Null -> Ok null
-    | valueKind -> Error [ { new IGQLError with member _.Message = $"Variable '%s{varDef.Name}' expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'." } ]
+    | valueKind ->
+        Error [ {
+            InputSource = Variable varDef
+            Message = $"Variable '$%s{varDef.Name}' expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'."
+            ErrorKind = InputCoercion
+            Path = inputObjectPath
+            FieldErrorDetails = ValueSome { ObjectDef = originalObjDef; FieldDef = ValueNone }
+        } :> IGQLError ]

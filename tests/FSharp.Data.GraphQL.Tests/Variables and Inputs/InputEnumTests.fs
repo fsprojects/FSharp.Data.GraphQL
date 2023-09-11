@@ -57,14 +57,11 @@ let ``Execute handles enum input as variable`` () =
 
     let testInputValue = "\"Foo\""
     let params' = paramsWithEnumInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Foo\"" ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nullable null enum input as variable`` () =
@@ -76,14 +73,11 @@ let ``Execute handles nullable null enum input as variable`` () =
 
     let testInputValue = "null"
     let params' = paramsWithEnumInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles union enum input as variable`` () =
@@ -95,14 +89,11 @@ let ``Execute handles union enum input as variable`` () =
 
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithEnumInput", upcast "\"Bar\"" ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles Some union enum input as variable`` () =
@@ -114,14 +105,11 @@ let ``Execute handles Some union enum input as variable`` () =
 
     let testInputValue = "\"Bar\""
     let params' = paramsWithEnumInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast "\"Bar\"" ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles None enum input as variable`` () =
@@ -133,11 +121,8 @@ let ``Execute handles None enum input as variable`` () =
 
     let testInputValue = "null"
     let params' = paramsWithEnumInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "fieldWithNullableEnumInput", upcast testInputValue ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

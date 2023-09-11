@@ -16,6 +16,7 @@ open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.ValidationResult
 open FSharp.Data.GraphQL.Samples.StarWarsApi
+open ErrorHelpers
 
 type InputRecord = { Country : string; ZipCode : string; City : string }
 
@@ -127,9 +128,7 @@ let ``Execute handles validation of valid inline input records with all fields``
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
 let ``Execute handles validation of invalid inline input records with all fields`` () =
@@ -142,9 +141,9 @@ let ``Execute handles validation of invalid inline input records with all fields
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
-    | RequestError errors ->
-        hasError "Object 'Query': field 'recordInputs': argument 'record': ZipCode must be 5 characters for US" errors
-        hasError "Object 'Query': field 'recordInputs': argument 'recordNested': HomeAddress and MailingAddress must be different" errors
+    | RequestError [ zipCodeError ; addressError ] ->
+        zipCodeError |> ensureInputObjectValidationError (Argument "record") "ZipCode must be 5 characters for US" [] "InputRecord!"
+        addressError |> ensureInputObjectValidationError (Argument "recordNested") "HomeAddress and MailingAddress must be different" [] "InputRecordNested"
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 
@@ -177,13 +176,11 @@ let ``Execute handles validation of valid input records from variables with all 
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """null"""
         ) |> paramsWithValues
-    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
-    match actual with
-    | Direct(data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         //data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles validation of invalid input records from variables with all fields`` () =
@@ -201,13 +198,11 @@ let ``Execute handles validation of invalid input records from variables with al
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """{ "country": "US", "zipCode": "12345", "city": "Miami" }"""
         ) |> paramsWithValues
-    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
-    match actual with
-    | RequestError errors ->
-        hasError "Input object 'InputRecordNested': in field 'mailingAddress': ZipCode must be 5 characters for US" errors
-        hasError "Object 'Query': field 'recordInputs': argument 'recordNested': HomeAddress and MailingAddress must be different" errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    ensureRequestError result <| fun [ zipCodeError ; addressError ] ->
+        zipCodeError |> ensureInputObjectValidationError (Variable "record") "ZipCode must be 5 characters for US" [ box "mailingAddress" ] "InputRecord"
+        addressError |> ensureInputObjectValidationError (Variable "recordNested") "HomeAddress and MailingAddress must be different" [] "InputRecordNested"
 
 let variablesWithAllNestedInputs (record1, record2, record3) =
     $"""
@@ -233,13 +228,11 @@ let ``Execute handles validation of valid input records from variables with all 
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }""",
             """null"""
         ) |> paramsWithValues
-    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
-    match actual with
-    | Direct(data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         //data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles validation of invalid input records from variables with all nested fields`` () =
@@ -256,13 +249,10 @@ let ``Execute handles validation of invalid input records from variables with al
             """{ "country": "US", "zipCode": "12345", "city": "Miami" }""",
             """{ "country": "US", "zipCode": "67890", "city": "Miami" }"""
         ) |> paramsWithValues
-    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
-    match actual with
-    | RequestError errors ->
-        hasError "Input object 'InputRecordNested': in field 'mailingAddress': ZipCode must be 5 characters for US" errors
+    ensureRequestError result <| fun [ error ] ->
+        error |> ensureInputObjectValidationError (Variable "record1") "ZipCode must be 5 characters for US" [ box "mailingAddress" ] "InputRecord"
         // Because all variables are coerced together validation of the inline object that contains variables do not happen
         // as total variables coercion failed
         //hasError "Object 'Query': field 'recordInputs': argument 'recordNested': HomeAddress and MailingAddress must be different" errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
-

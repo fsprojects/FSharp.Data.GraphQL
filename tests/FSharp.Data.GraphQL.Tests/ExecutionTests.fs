@@ -6,9 +6,11 @@ module FSharp.Data.GraphQL.Tests.ExecutionTests
 open Xunit
 open System
 open System.Text.Json
+open System.Text.Json.Serialization
 open System.Collections.Immutable
 
-#nowarn "40"
+#nowarn "0025"
+#nowarn "0040"
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -131,11 +133,9 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let schemaProcessor = Executor(schema)
     let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
     let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = params', operationName = "Example")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 type TestThing = { mutable Thing: string }
 
@@ -143,15 +143,15 @@ type TestThing = { mutable Thing: string }
 let ``Execution handles basic tasks: merges parallel fragments`` () =
     let ast = parse """{ a, ...FragOne, ...FragTwo }
 
-      fragment FragOne on Type {
-        b
-        deep { b, deeper: deep { b } }
-      }
+        fragment FragOne on Type {
+          b
+          deep { b, deeper: deep { b } }
+        }
 
-      fragment FragTwo on Type {
-        c
-        deep { c, deeper: deep { c } }
-      }"""
+        fragment FragTwo on Type {
+          c
+          deep { c, deeper: deep { c } }
+        }"""
 
     let rec Type =
       Define.Object(
@@ -167,25 +167,23 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     let schema = Schema(Type)
     let schemaProcessor = Executor(schema)
     let expected =
-      NameValueLookup.ofList [
-        "a", upcast "Apple"
-        "b", upcast "Banana"
-        "deep", upcast NameValueLookup.ofList [
+        NameValueLookup.ofList [
+            "a", upcast "Apple"
             "b", upcast "Banana"
-            "deeper", upcast NameValueLookup.ofList [
-                "b", "Banana" :> obj
+            "deep", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+                "deeper", upcast NameValueLookup.ofList [
+                    "b", "Banana" :> obj
+                    "c", upcast "Cherry"
+                ]
                 "c", upcast "Cherry"
             ]
             "c", upcast "Cherry"
         ]
-        "c", upcast "Cherry"
-    ]
     let result = sync <| schemaProcessor.AsyncExecute(ast, obj())
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () =
@@ -193,10 +191,7 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     let data = { Thing = "" }
     let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", StringType, fun _ value -> value.Thing <- "thing"; value.Thing) ])
     let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
     equals "thing" data.Thing
 
 type TestTarget =
@@ -218,10 +213,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
                      value.Str) ])
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -251,10 +243,7 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
                      value.Str
                  | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -282,10 +271,7 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
                       value.Str
                   | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -298,11 +284,9 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
                     Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", { A = "b" })
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
@@ -312,11 +296,9 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
                     Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", { A = "b" })
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
@@ -327,11 +309,9 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
                 ]))
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| Executor(schema).AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: list of scalars`` () =
@@ -341,11 +321,9 @@ let ``Execution handles basic tasks: list of scalars`` () =
                     Define.Field("strings", ListOf StringType, fun _ _ -> ["foo"; "bar"; "baz"])
                 ]))
     let result = sync <| Executor(schema).AsyncExecute("query Example { strings }")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
 
 type TwiceTest = { A : string; B : int }
 
@@ -363,11 +341,9 @@ let ``Execution when querying the same field twice will return it`` () =
       NameValueLookup.ofList [
         "a", upcast "aa"
         "b", upcast 2]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execution when querying returns unique document id with response`` () =
@@ -406,14 +382,14 @@ let ``Execution handles errors: properly propagates errors`` () =
         NameValueLookup.ofList [
             "inner", null
         ]
-    let expectedErrors = [ GQLProblemDetails.Create ("Non-Null field kaboom resolved as a null!", [ box "inner"; "kaboom" ]) ]
+    let expectedErrors = [
+        GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", Execution, [ box "inner"; "kaboom" ])
+    ]
     let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
-    match result with
-    | Direct(data, errors) ->
+    ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles errors: exceptions`` () =
@@ -422,12 +398,9 @@ let ``Execution handles errors: exceptions`` () =
                  "Type", [
                      Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
                  ]))
-    let expectedErrors = [ GQLProblemDetails.Create ("Resolver Error!", [ box "a" ]) ]
+    let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
-    match result with
-    | RequestError errors ->
-        errors |> equals expectedErrors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    ensureRequestError result <| fun [ error ] -> error |> equals expectedError
 
 [<Fact>]
 let ``Execution handles errors: nullable list fields`` () =
@@ -447,8 +420,8 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let expectedErrors =
         [
-            GQLProblemDetails.Create ("Resolver Error!", [ box "list"; 0; "error" ])
-            GQLProblemDetails.Create ("Resolver Error!", [ box "list"; 1; "error" ])
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 0; "error" ])
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 1; "error" ])
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->

@@ -1,8 +1,11 @@
 namespace FSharp.Data.GraphQL.Validation
 
+open System.Collections.Generic
 open System.Text.Json.Serialization
-open FSharp.Data.GraphQL
 open FsToolkit.ErrorHandling
+
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Extensions
 
 [<Struct>]
 type ValidationResult<'Err> =
@@ -50,5 +53,8 @@ module GQLValidator =
 type AstError =
 
     static member AsResult(message : string, ?path : FieldPath) =
-        [ { Message = message; Path = path |> Skippable.ofOption |> Skippable.map List.rev; Locations = Skip; Extensions = Skip  } ]
+        [
+            let extensions = Dictionary<string, obj>() |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
+            { Message = message; Path = path |> Skippable.ofOption |> Skippable.map List.rev; Locations = Skip; Extensions = Include extensions }
+        ]
         |> ValidationResult.ValidationError

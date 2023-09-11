@@ -9,13 +9,13 @@ open System.Text.Json
 open FSharp.Control.Reactive
 open FsToolkit.ErrorHandling
 
-open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Helpers
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open FSharp.Data.GraphQL
 
 type Output = IDictionary<string, obj>
 
@@ -269,8 +269,9 @@ type StreamOutput =
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
 /// Given an error e, call ParseError in the given context's Schema to convert it into
-/// a list of one or more <see herf="IGQLErrors">IGQLErrors</see>, then convert those to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
-let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
+/// a list of one or more <see herf="IGQLErrors">IGQLErrors</see>, then convert those
+/// to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
+let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (path |> List.rev))
 // Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
@@ -643,7 +644,8 @@ let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun inputField ->
         // TODO: Implement compilation cache to reuse for the same type
-        inputField.ExecuteInput <- compileByType [inputField.Name |> box] inputField.TypeDef
+        let inputFieldTypeDef = inputField.TypeDef
+        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputField.TypeDef)
         match inputField.TypeDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
         | _ -> ()
@@ -661,7 +663,8 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
         |> Array.iter (fun arg ->
             //let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
             // TODO: Pass arg name
-            arg.ExecuteInput <- compileByType [fieldDef.Name |> box] arg.TypeDef
+            let argTypeDef = arg.TypeDef
+            arg.ExecuteInput <- compileByType [] (Argument arg) (argTypeDef, argTypeDef)
             match arg.TypeDef with
             | InputObject inputObjDef -> inputObjDef.ExecuteInput <- arg.ExecuteInput
             | _ -> ()
@@ -702,7 +705,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                             | Named typeDef -> Error [ {
                                     Message = $"Variable '$%s{varDef.Name}' of type '%s{typeDef.Name}!' is not nullable but neither value was provided, nor a default value was specified."
                                     ErrorKind = InputCoercion
-                                    Variable = varDef
+                                    InputSource = Variable varDef
                                     Path = []
                                     FieldErrorDetails = ValueNone
                                 } :> IGQLError ]
@@ -718,10 +721,22 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         variables
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> validation {
-                    let! value = coerceVariableValue false [] ValueNone vardef.TypeDef vardef jsonElement
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, jsonElement) -> validation {
+                    let! value =
+                        let varTypeDef = varDef.TypeDef
+                        coerceVariableValue false [] ValueNone (varTypeDef, varTypeDef) varDef jsonElement
+                        |> Result.mapError (
+                            List.map (fun err ->
+                                match err with
+                                | :? IInputSourceError as err ->
+                                    match err.InputSource with
+                                    | Variable _ -> ()
+                                    | _ -> err.InputSource <- Variable varDef
+                                | _ -> ()
+                                err)
+                        )
                     and! acc = acc
-                    acc.Add(vardef.Name, value)
+                    acc.Add(varDef.Name, value)
                     return acc
                 })
                 (ImmutableDictionary.CreateBuilder<string, obj>() |> Ok)
@@ -733,11 +748,12 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         inlineValues
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> validation {
-                    let executeInput = compileByType [] vardef.TypeDef
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, defaultValue) -> validation {
+                    let varTypeDef = varDef.TypeDef
+                    let executeInput = compileByType [] (Variable varDef) (varTypeDef, varTypeDef)
                     let! value = executeInput defaultValue suppliedVaribles
                     and! acc = acc
-                    acc.Add(vardef.Name, value)
+                    acc.Add (varDef.Name, value)
                     return acc
                 })
                 (variablesBuilder |> Ok)

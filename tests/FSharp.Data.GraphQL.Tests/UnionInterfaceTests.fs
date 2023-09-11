@@ -113,7 +113,7 @@ let ``Execute can introspect on union and intersection types`` () =
           inputFields { name }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast)
+    let result = sync <| Executor(schema).AsyncExecute(ast)
     let expected =
       NameValueLookup.ofList [
         "Named", upcast NameValueLookup.ofList [
@@ -138,11 +138,9 @@ let ``Execute can introspect on union and intersection types`` () =
                 upcast NameValueLookup.ofList ["name", box "Dog"]]
             "enumValues", null
             "inputFields", null]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes union types`` () =
@@ -157,7 +155,7 @@ let ``Executes union types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -171,11 +169,9 @@ let ``Executes union types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -195,7 +191,7 @@ let ``Executes union types with inline fragments`` () =
           }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -209,11 +205,9 @@ let ``Executes union types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
@@ -228,7 +222,7 @@ let ``Executes interface types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -241,11 +235,9 @@ let ``Executes interface types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true ]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -264,7 +256,7 @@ let ``Executes interface types with inline fragments`` () =
           }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -277,11 +269,9 @@ let ``Executes interface types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -314,7 +304,7 @@ let ``Execute allows fragment conditions to be abstract types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -336,8 +326,6 @@ let ``Execute allows fragment conditions to be abstract types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)

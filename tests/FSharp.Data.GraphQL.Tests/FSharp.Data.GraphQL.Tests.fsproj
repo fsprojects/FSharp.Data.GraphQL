@@ -26,8 +26,8 @@
     <Compile Include="..\..\samples\star-wars-api\JSON.fs" Link="JSON.fs" />
     <Compile Include="TestAttributes.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="ErrorHelpers.fs" />
     <Compile Include="Literals.fs" />
-    <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />
     <Compile Include="Relay\CursorTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />
@@ -35,6 +35,7 @@
     <Compile Include="Helpers and Extensions\AsyncValTests.fs" />
     <Compile Include="Helpers and Extensions\NameValueLookupTests.fs" />
     <Compile Include="Helpers and Extensions\ObservableExtensionsTests.fs" />
+    <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AbstractionTests.fs" />
     <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="DirectivesTests.fs" />

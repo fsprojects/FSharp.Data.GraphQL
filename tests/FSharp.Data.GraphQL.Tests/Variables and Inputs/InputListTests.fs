@@ -15,6 +15,7 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Samples.StarWarsApi
+open ErrorHelpers
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
@@ -52,14 +53,11 @@ let ``Execute handles list inputs and nullability and allows lists to be null`` 
 
     let testInputValue = "null"
     let params' = paramsWithValueInput testInputValue
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputValue ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain values`` () =
@@ -71,14 +69,11 @@ let ``Execute handles list inputs and nullability and allows lists to contain va
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to contain null`` () =
@@ -90,14 +85,11 @@ let ``Execute handles list inputs and nullability and allows lists to contain nu
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "list", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists to be null`` () =
@@ -109,12 +101,10 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-
-    match actual with
-    | RequestError errors ->
-        hasError "Variable '$input': expected value of type '[String]!', but no value was found." errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    ensureRequestError result <| fun [ error ] ->
+        let message = "Non-nullable variable '$input' expected value of type '[String]!', but got 'null'."
+        error |> ensureInputCoercionError (Variable "input") message "[String]!"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain values`` () =
@@ -126,14 +116,11 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows non-null lists to contain null`` () =
@@ -145,14 +132,11 @@ let ``Execute handles list inputs and nullability and allows non-null lists to c
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "nnList", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to be null`` () =
@@ -164,14 +148,11 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists of non-nulls to contain values`` () =
@@ -183,14 +164,11 @@ let ``Execute handles list inputs and nullability and allows lists of non-nulls 
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "listNN", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow lists of non-nulls to contain null`` () =
@@ -202,12 +180,10 @@ let ``Execute handles list inputs and nullability and does not allow lists of no
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-
-    match actual with
-    | RequestError errors ->
-        hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    ensureRequestError result <| fun [ error ] ->
+        let message = "Non-nullable variable '$input' expected value of type '[String!]', but got 'null'."
+        error |> ensureInputCoercionError (Variable "input") message "[String!]"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to be null`` () =
@@ -219,12 +195,10 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "null"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-
-    match actual with
-    | RequestError errors ->
-        hasError "Variable '$input': expected value of type '[String!]!', but no value was found." errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    ensureRequestError result <| fun [ error ] ->
+        let message = "Non-nullable variable '$input' expected value of type '[String!]!', but got 'null'."
+        error |> ensureInputCoercionError (Variable "input") message "[String!]!"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain values`` () =
@@ -236,14 +210,11 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "[\"A\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expected = NameValueLookup.ofList [ "nnListNN", upcast testInputList ]
-
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow non-null lists of non-nulls to contain null`` () =
@@ -255,9 +226,7 @@ let ``Execute handles list inputs and nullability and does not allow non-null li
 
     let testInputList = "[\"A\",null,\"B\"]"
     let params' = paramsWithValueInput testInputList
-    let actual = sync <| Executor(schema).AsyncExecute (ast, variables = params')
-
-    match actual with
-    | RequestError errors ->
-        hasError "Variable '$input': list element expected value of type 'String!' but got 'null'." errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
+    ensureRequestError result <| fun [ error ] ->
+        let message = "Non-nullable variable '$input' expected value of type '[String!]!', but got 'null'."
+        error |> ensureInputCoercionError (Variable "input") message "[String!]!"

@@ -5,14 +5,12 @@ module FSharp.Data.GraphQL.Tests.InputRecordTests
 #nowarn "25"
 
 open Xunit
-open System
 open System.Collections.Immutable
 open System.Text.Json
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Samples.StarWarsApi
 
 type InputRecord = { a : string; b : string; c : string }
@@ -106,9 +104,7 @@ let ``Execute handles creation of inline input records with all fields`` () =
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
 let ``Execute handles creation of inline input records with optional null fields`` () =
@@ -121,9 +117,7 @@ let ``Execute handles creation of inline input records with optional null fields
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
 let ``Execute handles creation of inline input records with mandatory only fields`` () =
@@ -135,9 +129,7 @@ let ``Execute handles creation of inline input records with mandatory only field
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
 
 let variablesWithAllInputs (record, optRecord) =
     $"""
@@ -165,13 +157,11 @@ let ``Execute handles creation of input records from variables with all fields``
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let params' = variablesWithAllInputs(testInputObject, testInputObject) |> paramsWithValues
-    let actual = sync <| schema.AsyncExecute(parse query, variables = params')
+    let result = sync <| schema.AsyncExecute(parse query, variables = params')
     //let expected = NameValueLookup.ofList [ "recordInputs", upcast testInputObject ]
-    match actual with
-    | Direct(data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         //data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with optional null fields`` () =
@@ -186,9 +176,7 @@ let ``Execute handles creation of input records from variables with optional nul
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let params' = variablesWithAllInputs(testInputObject, "null") |> paramsWithValues
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with mandatory only fields`` () =
@@ -202,6 +190,4 @@ let ``Execute handles creation of input records from variables with mandatory on
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
     let params' = variablesWithAllInputs(testInputObject, "null") |> paramsWithValues
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
-    match result with
-    | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors -> empty errors

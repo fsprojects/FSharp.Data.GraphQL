@@ -187,15 +187,13 @@ let ``Execute handles nullable auto-fields in input and output record fields coe
       }
     }"""
 
-    let actual = sync <| schema.Value.AsyncExecute (parse query)
+    let result = sync <| schema.Value.AsyncExecute (parse query)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c"] ]
 
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nullable auto-fields in input and output object fields coercion`` () =
@@ -208,13 +206,11 @@ let ``Execute handles nullable auto-fields in input and output object fields coe
       }
     }"""
 
-    let actual = sync <| schema.Value.AsyncExecute (parse query)
+    let result = sync <| schema.Value.AsyncExecute (parse query)
     let expected =
         NameValueLookup.ofList [ "record", upcast NameValueLookup.ofList [ "a", "a" :> obj; "b", "b"; "c", "c" ] ]
 
-    match actual with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 

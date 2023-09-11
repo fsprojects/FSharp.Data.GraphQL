@@ -1,6 +1,8 @@
 namespace FSharp.Data.GraphQL
 
 open System.Collections.Immutable
+open System.Collections.Generic
+open System.Runtime.InteropServices
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
@@ -10,7 +12,6 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
-open System.Runtime.InteropServices
 
 /// A function signature that represents a middleware for schema compile phase.
 /// I takes two arguments: A schema compile context, containing all the data used for the
@@ -110,7 +111,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let root = data |> Option.map box |> Option.toObj
                 match coerceVariables executionPlan.Variables variables with
-                | Error errs -> return prepareOutput (GQLExecutionResult.Error(documentId, errs, executionPlan.Metadata))
+                | Error errs -> return prepareOutput (GQLExecutionResult.Error (documentId, errs, executionPlan.Metadata))
                 | Ok variables ->
                     let executionCtx =
                         { Schema = schema
@@ -142,11 +143,17 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     | Mutation ->
                         match schema.Mutation with
                         | Some m -> Ok m
-                        | None -> Error <| [ GQLProblemDetails.Create "Operation to be executed is of type mutation, but no mutation root object was defined in current schema" ]
+                        | None -> Error <| [ GQLProblemDetails.CreateWithKind (
+                            "Operation to be executed is of type mutation, but no mutation root object was defined in current schema",
+                            ErrorKind.Validation
+                        )]
                     | Subscription ->
                         match schema.Subscription with
                         | Some s -> Ok <| upcast s
-                        | None -> Error <| [ GQLProblemDetails.Create "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema" ]
+                        | None -> Error <| [ GQLProblemDetails.CreateWithKind (
+                            "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema",
+                            ErrorKind.Validation
+                        )]
                 do!
                     let schemaId = schema.Introspected.GetHashCode()
                     let key = { DocumentId = documentId; SchemaId = schemaId }
@@ -160,7 +167,10 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                       Operation = operation
                       DocumentId = documentId }
                 return runMiddlewares (fun x -> x.PlanOperation) planningCtx planOperation
-            | None -> return! Error <| [ GQLProblemDetails.Create "No operation with specified name has been found for provided document" ]
+            | None -> return! Error <| [ GQLProblemDetails.CreateWithKind (
+                "No operation with specified name has been found for provided document",
+                ErrorKind.Validation
+            )]
         }
         |> Result.mapError (fun errs -> struct (documentId, errs))
 

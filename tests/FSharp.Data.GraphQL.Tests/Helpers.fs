@@ -69,22 +69,6 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
-let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
-    match result.Content with
-    | Deferred(data, errors, deferred) -> onDeferred data errors deferred
-    | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
-
-let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
-    match result.Content with
-    | Direct(data, errors) -> onDirect data errors
-    | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
-
-let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProblemDetails list -> unit) : unit =
-    match result.Content with
-    | RequestError errors -> onRequestError errors
-    | _ -> fail <| sprintf "Expected RequestError GQLResponse but received '%O'" result
-
-
 open System.Text.Json
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Samples.StarWarsApi
