@@ -15,12 +15,11 @@ let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
 let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
 let isNameValueDict actual = isDict<string, obj> actual
-let fail (message: string) =
-    Assert.True(false, message)
+let fail (message: string) = Assert.Fail message
 let equals (expected : 'x) (actual : 'x) =
-    Assert.True((actual = expected), sprintf "expected %O\nbut got %O" expected actual)
+    if not (actual = expected) then fail <| $"expected %A{expected}{Environment.NewLine}but got %A{actual}"
 let notEquals (expected : 'x) (actual : 'x) =
-    Assert.True((actual <> expected), sprintf "unexpected %+A" expected)
+    if actual = expected then fail <| $"unexpected %+A{expected}"
 let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> fail <| sprintf "expected ExecutionResult to have no errors but got %+A" errors
