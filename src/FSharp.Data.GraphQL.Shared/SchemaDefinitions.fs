@@ -60,7 +60,7 @@ module SchemaDefinitions =
             Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType} of range from {minValue} to {maxValue}" }]
 
         let getParseError destinationType value =
-            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be paprsed into %s{destinationType}" }]
+            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType}" }]
 
 
     open System.Globalization
