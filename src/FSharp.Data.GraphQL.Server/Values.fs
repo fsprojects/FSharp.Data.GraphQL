@@ -13,6 +13,7 @@ open System.Reflection
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
