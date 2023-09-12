@@ -269,7 +269,7 @@ type StreamOutput =
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
 /// Given an error e, call ParseError in the given context's Schema to convert it into
-/// a list of one or more <see herf="IGQLErrors">IGQLErrors</see>, then convert those
+/// a list of one or more <see href="IGQLErrors">IGQLErrors</see>, then convert those
 /// to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (path |> List.rev))
 // Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
