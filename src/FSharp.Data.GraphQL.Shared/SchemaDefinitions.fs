@@ -530,7 +530,7 @@ module SchemaDefinitions =
     type Define =
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
@@ -544,7 +544,7 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
@@ -558,7 +558,7 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
@@ -572,7 +572,7 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
@@ -586,13 +586,13 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined value object scalars.
+        /// Creates GraphQL type definition for user defined wrapped scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member ValueObjectScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string>,
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string>,
                              coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
@@ -600,13 +600,13 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined value object scalars.
+        /// Creates GraphQL type definition for user defined wrapped scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member ValueObjectScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string list>,
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string list>,
                              coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
@@ -614,13 +614,13 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined value object scalars.
+        /// Creates GraphQL type definition for user defined wrapped scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member ValueObjectScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError>,
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError>,
                              coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
@@ -628,13 +628,13 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined value object scalars.
+        /// Creates GraphQL type definition for user defined wrapped scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member ValueObjectScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError list>,
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError list>,
                              coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
