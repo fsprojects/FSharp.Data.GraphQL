@@ -5,13 +5,14 @@ namespace FSharp.Data.GraphQL.Validation
 
 open System.Collections.Generic
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types.Introspection
 
 module Types =
+
     let validateImplements (objdef: ObjectDef) (idef: InterfaceDef) =
         let objectFields =
             objdef.Fields

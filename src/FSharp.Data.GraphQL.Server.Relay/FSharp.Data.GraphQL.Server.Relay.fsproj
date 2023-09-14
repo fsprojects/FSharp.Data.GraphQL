@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>net6.0;net7.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
 
     <Description>FSharp implementation of Relay GraphQL Cursor Connections Specification for Facebook GraphQL query language (Server)</Description>

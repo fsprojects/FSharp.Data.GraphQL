@@ -93,7 +93,11 @@ let inline private flip fn a b = fn b a
 
 let inline private argVal vars argDef argOpt  =
     match argOpt with
-    | Some arg -> Execution.argumentValue vars argDef arg
+    | Some arg ->
+        Execution.argumentValue vars argDef arg
+        // TODO: Improve error propagation
+        |> Result.defaultWith (failwithf "%A")
+        |> Some
     | None -> argDef.DefaultValue
 
 /// Resolves an object representing one of the supported arguments

@@ -10,6 +10,7 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Planning
+open System.Runtime.InteropServices
 
 /// A function signature that represents a middleware for schema compile phase.
 /// I takes two arguments: A schema compile context, containing all the data used for the
@@ -60,8 +61,8 @@ type ExecutorMiddleware(?compile, ?postCompile, ?plan, ?execute) =
 /// It compiles the schema and offers an interface for planning and executing queries.
 /// The execution process can be customized through usage of middlewares.
 /// An optional pre-existing validation cache can be supplied.  If not, one is created and used internally.
-type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, ?validationCache : IValidationResultCache) =
-    let validationCache = defaultArg validationCache (upcast MemoryValidationResultCache())
+type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware seq, [<Optional>] validationCache : IValidationResultCache voption) =
+    let validationCache = validationCache |> ValueOption.defaultWith (fun () -> upcast MemoryValidationResultCache())
 
     let fieldExecuteMap = FieldExecuteMap(compileField)
 
@@ -108,17 +109,19 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             try
                 let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let root = data |> Option.map box |> Option.toObj
-                let variables = coerceVariables executionPlan.Variables variables
-                let executionCtx =
-                    { Schema = schema
-                      RootValue = root
-                      ExecutionPlan = executionPlan
-                      Variables = variables
-                      Errors = errors
-                      FieldExecuteMap = fieldExecuteMap
-                      Metadata = executionPlan.Metadata }
-                let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation |> AsyncVal.toAsync
-                return prepareOutput res
+                match coerceVariables executionPlan.Variables variables with
+                | Error errs -> return prepareOutput (GQLExecutionResult.Error(documentId, errs, executionPlan.Metadata))
+                | Ok variables ->
+                    let executionCtx =
+                        { Schema = schema
+                          RootValue = root
+                          ExecutionPlan = executionPlan
+                          Variables = variables
+                          Errors = errors
+                          FieldExecuteMap = fieldExecuteMap
+                          Metadata = executionPlan.Metadata }
+                    let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation |> AsyncVal.toAsync
+                    return prepareOutput res
             with
             | :? GraphQLException as ex -> return prepareOutput(GQLExecutionResult.Error (documentId, ex, executionPlan.Metadata))
             | ex -> return prepareOutput (GQLExecutionResult.Error(documentId, ex.ToString(), executionPlan.Metadata)) // TODO: Handle better
@@ -161,7 +164,8 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         }
         |> Result.mapError (fun errs -> struct (documentId, errs))
 
-    new(schema) = Executor(schema, middlewares = Seq.empty)
+    new(schema) =
+        Executor(schema, middlewares = Seq.empty)
 
     /// <summary>
     /// Asynchronously executes a provided execution plan. In case of repetitive queries, execution plan may be preprocessed

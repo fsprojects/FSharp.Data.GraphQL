@@ -1,5 +1,16 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
+open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+
+type Root(ctx : HttpContext) =
+
+    member _.RequestId = ctx.TraceIdentifier
+    member _.RequestAborted: System.Threading.CancellationToken = ctx.RequestAborted
+    member _.ServiceProvider: IServiceProvider = ctx.RequestServices
+    member root.GetRequiredService<'t>() = root.ServiceProvider.GetRequiredService<'t>()
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
@@ -34,8 +45,6 @@ type Planet =
     member x.SetMoon b =
         x.IsMoon <- b
         x
-
-type Root = { RequestId : string }
 
 type Character =
     | Human of Human

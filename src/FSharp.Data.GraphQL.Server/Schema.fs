@@ -163,17 +163,6 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let initialTypes: NamedDef list =
-        [ IntType
-          StringType
-          BooleanType
-          FloatType
-          IDType
-          DateTimeOffsetType
-          DateOnlyType
-          UriType
-          __Schema
-          query ]
 
     let schemaConfig =
         match config with
@@ -181,9 +170,22 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Some c -> c
 
     let typeMap : TypeMap =
+
+        let initialTypes: NamedDef list =
+            [ IntType
+              StringType
+              BooleanType
+              FloatType
+              IDType
+              DateTimeOffsetType
+              DateOnlyType
+              UriType
+              __Schema
+              query ]
+
         let m = mutation |> function Some (Named n) -> [n] | _ -> []
         let s = subscription |> function Some (Named n) -> [n] | _ -> []
-        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
+        seq { initialTypes; s; m; schemaConfig.Types } |> Seq.collect id |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
         typeMap.ToSeq()

@@ -1,11 +1,18 @@
-namespace FSharp.Data.GraphQL.IntegrationTests.Server
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
 open System.Text
+open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+
+type Root(ctx : HttpContext) =
+
+    member _.RequestAborted: System.Threading.CancellationToken = ctx.RequestAborted
+    member _.ServiceProvider: IServiceProvider = ctx.RequestServices
+    member root.GetRequiredService<'t>() = root.ServiceProvider.GetRequiredService<'t>()
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-
-type Root =
-    { RequestId : string }
 
 type InputField =
     { String : string
@@ -116,7 +123,7 @@ module Schema =
                     typedef = Nullable OutputType,
                     description = "Enters an input type and get it back.",
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("input") |> Option.flatten) ])
+                    resolve = fun ctx _ -> ctx.TryArg("input")) ])
 
     let MutationType =
         let contentAsText (stream : System.IO.Stream) =

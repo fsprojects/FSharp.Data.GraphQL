@@ -1,7 +1,7 @@
 // The MIT License (MIT)
 // Copyright (c) 2016 Bazinga Technologies Inc
 [<AutoOpen>]
-module Helpers
+module internal Helpers
 
 open System
 open System.Linq
@@ -72,6 +72,18 @@ let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProble
     match result.Content with
     | RequestError errors -> onRequestError errors
     | _ -> fail <| sprintf "Expected RequestError GQLResponse but received '%O'" result
+
+
+open System.Text.Json
+open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Samples.StarWarsApi
+
+let stringifyArg name (ctx : ResolveFieldContext) () =
+    let arg = ctx.TryArg name |> Option.toObj
+    JsonSerializer.Serialize (arg, Json.serializerOptions)
+
+let stringifyInput = stringifyArg "input"
+
 
 open FSharp.Data.GraphQL.Parser
 

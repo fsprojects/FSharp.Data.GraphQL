@@ -2,11 +2,11 @@ module FSharp.Data.GraphQL.Tests.DeferredTests
 
 open System
 open Xunit
+open System.Threading
 open FSharp.Control
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open System.Threading
 open FSharp.Data.GraphQL.Types
 
 #nowarn "40"

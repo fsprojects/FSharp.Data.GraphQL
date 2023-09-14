@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
@@ -80,35 +81,48 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
             let fieldArgs field =
-                field.Ast.Arguments
-                |> Seq.map (fun x ->
-                    match x.Name with
-                    | "filter" -> ObjectListFilter.CoerceInput (InlineConstant x.Value)
-                    | _ -> None)
-                |> Seq.choose id
-                |> Seq.map (fun x -> field.Ast.AliasOrName, x)
-                |> List.ofSeq
+                let filterResults =
+                    field.Ast.Arguments
+                    |> Seq.map (fun x ->
+                        match x.Name with
+                        | "filter" -> ObjectListFilter.CoerceInput (InlineConstant x.Value)
+                        | _ -> Ok NoFilter)
+                match filterResults |> splitSeqErrorsList with
+                | Error errs -> Error errs
+                | Ok filters ->
+                    filters
+                    |> removeNoFilter
+                    |> Seq.map (fun x -> field.Ast.AliasOrName, x)
+                    |> Seq.toList
+                    |> Ok
             match fields with
-            | [] -> acc
+            | [] -> Ok acc
             | x :: xs ->
-                match x.Kind with
-                | SelectFields fields ->
-                    let acc = collectArgs acc fields
-                    collectArgs acc xs
-                | ResolveCollection field ->
-                    let acc = fieldArgs field
-                    collectArgs acc xs
-                | ResolveAbstraction typeFields ->
-                    let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
-                    let acc = collectArgs acc fields
-                    collectArgs acc xs
-                | _ -> collectArgs acc xs
-        let ctx =
+                let accResult =
+                    match x.Kind with
+                    | SelectFields fields ->
+                        collectArgs acc fields
+                    | ResolveCollection field ->
+                        fieldArgs field
+                    | ResolveAbstraction typeFields ->
+                        let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
+                        collectArgs acc fields
+                    | _ -> Ok acc
+                match accResult with
+                | Error errs -> Error errs
+                | Ok acc -> collectArgs acc xs
+        let ctxResult = result {
             match reportToMetadata with
             | true ->
-                { ctx with Metadata = ctx.Metadata.Add("filters", collectArgs [] ctx.ExecutionPlan.Fields) }
-            | false -> ctx
-        next ctx
+                let! args = collectArgs [] ctx.ExecutionPlan.Fields
+                return { ctx with Metadata = ctx.Metadata.Add("filters", args) }
+            | false -> return ctx
+        }
+        match ctxResult with
+        | Ok ctx -> next ctx
+        | Error errs -> asyncVal {
+                return GQLExecutionResult.Direct(ctx.ExecutionPlan.DocumentId, null, (errs |> List.map GQLProblemDetails.OfError), ctx.Metadata)
+            }
     interface IExecutorMiddleware with
         member _.CompileSchema = Some compileMiddleware
         member _.PostCompileSchema = None

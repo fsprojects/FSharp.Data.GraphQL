@@ -18,6 +18,7 @@
     <PackageReference Update="FSharp.Control.Reactive" Version="5.0.*" />
     <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
+    <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />

@@ -25,6 +25,7 @@ type TestSubject = {
     pic: int option -> string
     promise: Async<TestSubject>
 }
+
 and DeepTestSubject = {
     a: string
     b: string
@@ -119,7 +120,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             Define.Field("d", StringType, fun _ dt -> dt.d)
             Define.Field("e", StringType, fun _ dt -> dt.e)
             Define.Field("f", StringType, fun _ dt -> dt.f)
-            Define.Field("pic", StringType, "Picture resizer", [ Define.Input("size", Nullable IntType) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
+            Define.Field("pic", StringType, "Picture resizer", [ Define.Input("size", Nullable IntType) ], fun ctx dt -> dt.pic(ctx.TryArg("size")))
             Define.AsyncField("promise", DataType, fun _ dt -> dt.promise)
             Define.Field("deep", DeepDataType, fun _ dt -> dt.deep)
         ])

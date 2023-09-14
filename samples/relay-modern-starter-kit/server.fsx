@@ -20,8 +20,8 @@ let viewer =
           { Id = "2"; Name = "Who's it" }
           { Id = "3"; Name = "How's it" } ] }
 
-let getUser id = if viewer.Id = id then Some viewer else None
-let getWidget id = viewer.Widgets |> List.tryFind (fun w -> w.Id = id)
+let tryGetUser id = if viewer.Id = id then Some viewer else None
+let tryGetWidget id = viewer.Widgets |> List.tryFind (fun w -> w.Id = id)
 
 // Schema definition
 open FSharp.Data.GraphQL

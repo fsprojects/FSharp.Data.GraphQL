@@ -14,10 +14,10 @@ open FSharp.Data.GraphQL.Types.Patterns
 
 let private testCoercion graphQLType (expected: 't) actual =
     let (Scalar scalar) = graphQLType
-    let result = (scalar.CoerceInput actual) |> Option.map (fun x -> downcast x)
+    let result = (scalar.CoerceInput actual) |> Result.map (fun x -> downcast x)
     match result with
-    | Some x -> equals expected x
-    | None -> raise (Exception(sprintf "Expected %A to be able to be coerced to %A" actual expected))
+    | Ok x -> equals expected x
+    | Error _ -> raise (Exception(sprintf "Expected %A to be able to be coerced to %A" actual expected))
 
 
 [<Fact>]

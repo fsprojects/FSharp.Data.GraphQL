@@ -5,6 +5,8 @@ module FSharp.Data.GraphQL.Planning
 
 open System
 open System.Diagnostics
+open FsToolkit.ErrorHandling
+
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
@@ -30,7 +32,7 @@ let TypeMetaFieldDef =
               Description = None
               TypeDef = StringType
               DefaultValue = None
-              ExecuteInput = variableOrElse(InlineConstant >> coerceStringInput >> Option.map box >> Option.toObj) }
+              ExecuteInput = variableOrElse(InlineConstant >> coerceStringInput >> Result.map box) }
         ],
         resolve = fun ctx (_:obj) ->
             ctx.Schema.Introspected.Types
@@ -121,24 +123,27 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
 let private directiveIncluder (directive: Directive) : Includer =
     fun variables ->
         match directive.If.Value with
-        | VariableName vname -> downcast variables.[vname]
-        | other ->
-            match coerceBoolInput (InlineConstant other) with
-            | Some s -> s
-            | None ->
-                Debug.Fail "Must be prevented by validation"
-                failwith $"Expected 'if' argument of directive '@%s{directive.Name}' to have boolean value but got %A{other}"
+        | VariableName vname -> Ok <| downcast variables.[vname]
+        | other -> coerceBoolInput (InlineConstant other)
 
-let private incl: Includer = fun _ -> true
-let private excl: Includer = fun _ -> false
+let private incl: Includer = fun _ -> Ok true
+let private excl: Includer = fun _ -> Ok false
 let private getIncluder (directives: Directive list) parentIncluder : Includer =
     directives
     |> List.fold (fun acc directive ->
         match directive.Name with
         | "skip" ->
-            fun vars -> acc vars && not(directiveIncluder directive vars)
+            fun vars -> result {
+                let! accValue = acc vars
+                and! skipValue = directiveIncluder directive vars
+                return accValue && not(skipValue)
+            }
         | "include" ->
-            fun vars -> acc vars && (directiveIncluder directive vars)
+            fun vars -> result {
+                let! accValue = acc vars
+                and! includeValue = directiveIncluder directive vars
+                return accValue && includeValue
+            }
         | _ -> acc) parentIncluder
 
 let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: ObjectDef) =
@@ -337,16 +342,14 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
         match Values.tryConvertAst schema vdef.Type with
         | None ->
             Debug.Fail "Must be prevented by validation"
-            raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not known in the current schema" vname (vdef.Type.ToString()) ))
+            raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{vdef.Type.ToString()}' which is not known in the current schema")
         | Some tdef ->
             match tdef with
             | :? InputDef as idef ->
                 { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
             | _ ->
                 Debug.Fail "Must be prevented by validation"
-                raise (MalformedQueryException (sprintf "GraphQL query defined variable '$%s' of type '%s' which is not an input type definition" vname (tdef.ToString()))))
-
-open FSharp.Data.GraphQL.Validation
+                raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{tdef.ToString()}' which is not an input type definition"))
 
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // Create artificial plan info to start with

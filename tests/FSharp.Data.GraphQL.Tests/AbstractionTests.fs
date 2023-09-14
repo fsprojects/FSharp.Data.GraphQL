@@ -5,13 +5,13 @@ module FSharp.Data.GraphQL.Tests.AbstractionTests
 #nowarn "40"
 
 open Xunit
+open System
 open System.Text.Json.Serialization
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.Relay
 
 type IPet =
     interface
@@ -112,7 +112,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Interface`` () =
@@ -244,7 +244,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected a direct GQLResponse"
+    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Union`` () =

@@ -55,6 +55,8 @@ type GQLExecutionResult =
         GQLExecutionResult.RequestError(documentId, [ error ], meta)
     static member Error(documentId, error, meta) =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.OfError error ], meta)
+    static member Error(documentId, errors, meta) =
+        GQLExecutionResult.RequestError(documentId, errors |> List.map GQLProblemDetails.OfError, meta)
     static member Error(documentId, msg, meta) =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create msg ], meta)
     static member Invalid(documentId, errors, meta) =

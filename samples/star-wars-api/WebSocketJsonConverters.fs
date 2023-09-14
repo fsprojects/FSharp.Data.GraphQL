@@ -1,20 +1,19 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
+open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
 open System.Text.Json.Nodes
 open System.Text.Json.Serialization
-open Microsoft.FSharp.Reflection
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Types.Patterns
 
 type private GQLEditableRequestContent =
     { Query : string
-      OperationName : string voption
-      Variables : JsonObject voption }
+      OperationName : string Skippable
+      Variables : JsonObject Skippable }
 
 [<AutoOpen>]
 module JsonNodeExtensions =
@@ -23,10 +22,10 @@ module JsonNodeExtensions =
 
     type JsonNode with
 
-        static member Create object =
+        static member Create (object: 'T) =
             let bufferWriter = new ArrayBufferWriter<byte>();
             use writer = new Utf8JsonWriter(bufferWriter)
-            JsonSerializer.Serialize(writer, object, Json.serializerOptions)
+            JsonSerializer.Serialize<'T>(writer, object, Json.serializerOptions)
             JsonSerializer.Deserialize<JsonNode>(bufferWriter.WrittenSpan, Json.serializerOptions)
 
         member node.AsJsonElement() =
@@ -60,11 +59,14 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
             | Some meta -> executor.CreateExecutionPlan(query, meta = meta)
             | None -> executor.CreateExecutionPlan(query)
         match result with
-        | Result.Error struct (_, errors) -> failwith (String.concat Environment.NewLine (errors |> Seq.map (fun error -> error.Message)))
-        | Ok executionPlan when executionPlan.Variables  = [] -> { ExecutionPlan = executionPlan; Variables = ImmutableDictionary.Empty }
+        | Result.Error struct (_, errors) ->
+            failwith (String.concat Environment.NewLine (errors |> Seq.map (fun error -> error.Message)))
+        | Ok executionPlan when executionPlan.Variables = [] -> { ExecutionPlan = executionPlan; Variables = ImmutableDictionary.Empty }
         | Ok executionPlan ->
+            match request.Variables with
+            | Skip -> failwith "No variables provided"
+            | Include vars ->
             // For multipart requests, we need to replace some variables
-            let vars = request.Variables.Value
             // TODO: Implement JSON path
             Map.iter (fun path rep ->
                           vars.Remove path |> ignore
@@ -86,9 +88,6 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
                     acc)
                     (ImmutableDictionary.CreateBuilder<string, JsonElement>())
             { ExecutionPlan = executionPlan; Variables = variables.ToImmutable() }
-
-open System
-open System.Collections.Generic
 
 [<AutoOpen>]
 module private GraphQLSubscriptionFields =

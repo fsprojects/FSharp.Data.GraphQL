@@ -6,29 +6,37 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Reflection
 open System.Collections.Generic
+open System.Collections.Immutable
+
+type InvalidInputTypeException (msg, unmatchedOptionalFields) =
+    inherit Exception(msg)
+
+    member _.UnmatchedOptionalFields : string ImmutableHashSet = unmatchedOptionalFields
 
 type GraphQLException(msg) =
     inherit Exception(msg)
     interface IGQLError with
         member _.Message = msg
 
-type MalformedQueryException(msg) =
+type MalformedGQLQueryException(msg) =
     inherit GraphQLException(msg)
 
 /// General helper functions and types.
 module Helpers =
-    /// Executes a function that returns unit, and then return its parameter again.
-    let tee f x = f x; x
 
     /// Casts a System.Object to an option to a System.Object option.
     let optionCast (value: obj) =
-        let optionDef = typedefof<option<_>>
         if isNull value then None
         else
             let t = value.GetType()
-            let p = t.GetProperty("Value")
-            if t.IsGenericType && t.GetGenericTypeDefinition() = optionDef then
+            if t.FullName.StartsWith  "Microsoft.FSharp.Core.FSharpOption`1" then
+                let p = t.GetProperty("Value")
                 Some (p.GetValue(value, [||]))
+            elif t.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" then
+                if value = Activator.CreateInstance t then None
+                else
+                    let p = t.GetProperty("Value")
+                    Some (p.GetValue(value, [||]))
             else None
 
     /// Matches a System.Object with an option.
@@ -51,14 +59,14 @@ module internal Array =
     /// <param name="keyf">Function, which output is used to determine uniqueness of input elements.</param>
     /// <param name="array">Array of elements.</param>
     let distinctBy keyf (array:'T[]) =
-            let temp = Array.zeroCreate array.Length
-            let mutable i = 0
-            let hashSet = HashSet<_>(HashIdentity.Structural<_>)
-            for v in array do
-                if hashSet.Add(keyf v) then
-                    temp.[i] <- v
-                    i <- i + 1
-            Array.sub temp 0 i
+        let temp = Array.zeroCreate array.Length
+        let mutable i = 0
+        let hashSet = HashSet<_>(HashIdentity.Structural<_>)
+        for v in array do
+            if hashSet.Add(keyf v) then
+                temp.[i] <- v
+                i <- i + 1
+        Array.sub temp 0 i
 
 module internal List =
 
@@ -166,7 +174,7 @@ module internal ReflectionHelper =
                 else input
         (some, none, value)
 
-            /// <summary>
+    /// <summary>
     /// Returns pair of function constructors for `some(value)` and `none`
     /// used to create option of type <paramref name="t"/> given at runtime.
     /// </summary>
