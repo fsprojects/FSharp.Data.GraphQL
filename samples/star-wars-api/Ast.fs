@@ -23,16 +23,16 @@ let findOperationByName operationName (astDoc: Ast.Document)  =
 
 let containsFieldsBeyond
     (allowedFields: ImmutableHashSet<_>)
-    (onSuccess: Ast.Field -> unit)
-    (onFail: unit -> unit)
+    (whenContains: Ast.Field -> unit)
+    (whenNotContains: unit -> unit)
     (astOpDef: Ast.OperationDefinition)
     =
     astOpDef.SelectionSet
     |> List.exists (fun def ->
         match def with
         | Ast.Field fd ->
-            onSuccess fd
+            whenContains fd
             not <| allowedFields.Contains fd.Name
         | _ ->
-            onFail ()
+            whenNotContains ()
             false)
