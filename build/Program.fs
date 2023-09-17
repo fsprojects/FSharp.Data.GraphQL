@@ -17,7 +17,9 @@ Path.Combine(__SOURCE_DIRECTORY__, "..")
 |> Path.GetFullPath
 |> Directory.SetCurrentDirectory
 
-let execContext = Fake.Core.Context.FakeExecutionContext.Create false "build.fsx" [ ]
+let execContext =
+    let args = Environment.GetCommandLineArgs() |> Seq.skip 1 |> Seq.toList
+    Fake.Core.Context.FakeExecutionContext.Create false "build.fsx" args
 execContext
 |> Fake.Core.Context.RuntimeContext.Fake
 |> Fake.Core.Context.setExecutionContext
