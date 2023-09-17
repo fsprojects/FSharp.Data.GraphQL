@@ -273,7 +273,7 @@ Target.create "PackAll" ignore
     ==> "UpdateIntrospectionFile"
     ==> "RunIntegrationTests"
     ==> "All"
-    =?> ("GenerateDocs", Environment.environVar "APPVEYOR" = "True")
+    =?> ("GenerateDocs", Environment.environVar "GITHUB_ACTIONS" = "True")
     |> ignore
 
 "CleanDocs"
