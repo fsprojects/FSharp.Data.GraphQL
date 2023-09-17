@@ -21,14 +21,27 @@ module SchemaDefinitions =
         type InputValue with
 
             member inputValue.GetCoerceError(destinationType) =
-                let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted to %s{destinationType}"
+                let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted into %s{destinationType}"
                 let message =
                     match inputValue with
                     | IntValue value -> getMessage "integer" value
                     | FloatValue value -> getMessage "float" value
                     | BooleanValue value -> getMessage "boolean" value
                     | StringValue value -> getMessage "string" value
-                    | NullValue ->  $"Inline null value cannot be converted to {destinationType}"
+                    | NullValue ->  $"Inline value 'null' cannot be converted into {destinationType}"
+                    | EnumValue value ->  getMessage "enum" value
+                    | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
+                Error [{ new IGQLError with member _.Message = message }]
+
+            member inputValue.GetCoerceRangeError(destinationType, minValue, maxValue) =
+                let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted into %s{destinationType} of range from {minValue} to {maxValue}"
+                let message =
+                    match inputValue with
+                    | IntValue value -> getMessage "integer" value
+                    | FloatValue value -> getMessage "float" value
+                    | BooleanValue value -> getMessage "boolean" value
+                    | StringValue value -> getMessage "string" value
+                    | NullValue ->  $"Inline value 'null' cannot be converted into {destinationType}"
                     | EnumValue value ->  getMessage "enum" value
                     | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
                 Error [{ new IGQLError with member _.Message = message }]
@@ -36,16 +49,18 @@ module SchemaDefinitions =
         type JsonElement with
 
             member e.GetDeserializeError(destinationType, minValue, maxValue ) =
-                Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+                let jsonValue = match e.ValueKind with JsonValueKind.String -> e.GetString() | _ -> e.GetRawText()
+                Error [{ new IGQLError with member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType} of range from {minValue} to {maxValue}" }]
 
             member e.GetDeserializeError(destinationType) =
-                Error [{ new IGQLError with member _.Message = $"Cannot deserialize JSON value '{e.GetRawText()}' into %s{destinationType}" }]
+                let jsonValue = match e.ValueKind with JsonValueKind.String -> e.GetString() | _ -> e.GetRawText()
+                Error [{ new IGQLError with member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType}" }]
 
         let getParseRangeError (destinationType, minValue, maxValue) value =
-            Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType} of range from {minValue} to {maxValue}" }]
+            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType} of range from {minValue} to {maxValue}" }]
 
         let getParseError destinationType value =
-            Error [{ new IGQLError with member _.Message = $"Cannot parse '%s{value}' into %s{destinationType}" }]
+            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType}" }]
 
 
     open System.Globalization
@@ -173,12 +188,12 @@ module SchemaDefinitions =
         | _ -> Some(x.ToString())
 
     /// Tries to convert any value to generic type parameter.
-    let coerceIdValue (x : obj) : 't option =
+    let coerceIdValue (x : obj) : string option =
         match x with
         | null -> None
-        | :? string as s -> Some (downcast Convert.ChangeType(s, typeof<'t>))
-        | Option o -> Some(downcast Convert.ChangeType(o, typeof<'t>))
-        | _ -> Some(downcast Convert.ChangeType(x, typeof<'t>))
+        | :? string as s -> Some s
+        | Option o -> Some(string o)
+        | _ -> Some(string x)
 
 
     /// Tries to resolve AST query input to int.
@@ -189,45 +204,40 @@ module SchemaDefinitions =
             match e.TryGetInt32() with
             | true, value -> Ok value
             | false, _ -> e.GetDeserializeError(destinationType, Int32.MinValue, Int32.MaxValue)
-        | Variable e -> e.GetDeserializeError destinationType
+        | Variable e when e.ValueKind = JsonValueKind.True -> Ok 1
+        | Variable e when e.ValueKind = JsonValueKind.False -> Ok 0
+        | Variable e -> e.GetDeserializeError (destinationType, Int32.MinValue, Int32.MaxValue)
         | InlineConstant (IntValue i) -> Ok (int i)
-        | InlineConstant (FloatValue f) -> Ok (int f)
-        | InlineConstant (StringValue s) ->
-            match Int32.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Ok i
-            | false, _ -> getParseRangeError(destinationType, Int32.MinValue, Int32.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok (if b then 1 else 0)
-        | InlineConstant value -> value.GetCoerceError destinationType
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, Int32.MinValue, Int32.MaxValue)
 
     /// Tries to resolve AST query input to int64.
     let coerceLongInput =
         let destinationType = "integer"
         function
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (e.GetInt64())
-        | Variable e -> e.GetDeserializeError destinationType
+        | Variable e when e.ValueKind = JsonValueKind.Number ->
+            match e.TryGetInt64() with
+            | true, value -> Ok value
+            | false, _ -> e.GetDeserializeError(destinationType, Int64.MinValue, Int64.MaxValue)
+        | Variable e when e.ValueKind = JsonValueKind.True -> Ok 1L
+        | Variable e when e.ValueKind = JsonValueKind.False -> Ok 0L
+        | Variable e -> e.GetDeserializeError (destinationType, Int64.MinValue, Int64.MaxValue)
         | InlineConstant (IntValue i) -> Ok (int64 i)
-        | InlineConstant (FloatValue f) -> Ok(int64 f)
-        | InlineConstant (StringValue s) ->
-            match Int64.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Ok i
-            | false, _ -> getParseRangeError(destinationType, Int64.MinValue, Int64.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok(if b then 1L else 0L)
-        | InlineConstant value -> value.GetCoerceError destinationType
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, Int64.MinValue, Int64.MaxValue)
 
     /// Tries to resolve AST query input to double.
     let coerceFloatInput =
         let destinationType = "float"
         function
         | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (e.GetDouble())
-        | Variable e -> e.GetDeserializeError destinationType
+        | Variable e when e.ValueKind = JsonValueKind.True -> Ok 1.
+        | Variable e when e.ValueKind = JsonValueKind.False -> Ok 0.
+        | Variable e -> e.GetDeserializeError (destinationType, Double.MinValue, Double.MaxValue)
         | InlineConstant (IntValue i) -> Ok(double i)
         | InlineConstant (FloatValue f) -> Ok f
-        | InlineConstant (StringValue s) ->
-            match Double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Ok i
-            | false, _ -> getParseRangeError(destinationType, Double.MinValue, Double.MaxValue) s
         | InlineConstant (BooleanValue b) -> Ok(if b then 1. else 0.)
-        | InlineConstant value -> value.GetCoerceError destinationType
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, Double.MinValue, Double.MaxValue)
 
     /// Tries to resolve AST query input to string.
     let coerceStringInput =
@@ -244,6 +254,7 @@ module SchemaDefinitions =
         | InlineConstant (FloatValue f) -> Ok(f.ToString(CultureInfo.InvariantCulture))
         | InlineConstant (StringValue s) -> Ok s
         | InlineConstant (BooleanValue b) -> Ok (if b then "true" else "false")
+        | InlineConstant (EnumValue e) -> Ok e
         | InlineConstant value -> value.GetCoerceError destinationType
 
     let coerceEnumInput =
@@ -257,25 +268,29 @@ module SchemaDefinitions =
         function
         | Variable e when e.ValueKind = JsonValueKind.True -> Ok true
         | Variable e when e.ValueKind = JsonValueKind.False -> Ok false
+        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (if e.GetDouble() = 0. then false else true)
         | Variable e -> e.GetDeserializeError destinationType
         | InlineConstant (IntValue i) -> Ok(if i = 0L then false else true)
         | InlineConstant (FloatValue f) -> Ok(if f = 0. then false else true)
-        | InlineConstant (StringValue s) ->
-            match Boolean.TryParse(s) with
-            | true, i -> Ok i
-            | false, _ -> getParseError destinationType s
         | InlineConstant (BooleanValue b) -> Ok b
         | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to provided generic type.
-    let coerceIdInput input : Result<'t, IGQLError list> =
+    let coerceIdInput input : Result<string, IGQLError list> =
+        let destinationType = "identifier"
         match input with
-        | Variable e when e.ValueKind = JsonValueKind.String -> Ok (downcast Convert.ChangeType(e.GetString() , typeof<'t>))
-        | Variable e when e.ValueKind = JsonValueKind.Number -> Ok (downcast Convert.ChangeType(e.GetInt32() , typeof<'t>))
-        | Variable e -> e.GetDeserializeError typeof<'t>.Name
-        | InlineConstant (IntValue i) -> Ok(downcast Convert.ChangeType(i, typeof<'t>))
-        | InlineConstant (StringValue s) -> Ok(downcast Convert.ChangeType(s, typeof<'t>))
-        | InlineConstant value -> value.GetCoerceError "id"
+        | Variable e when e.ValueKind = JsonValueKind.String -> Ok (e.GetString())
+        | Variable e when e.ValueKind = JsonValueKind.Number ->
+            try
+                e.GetInt64() |> ignore
+                Ok (e.GetRawText())
+            with :? FormatException ->
+                e.GetDeserializeError(destinationType, Int64.MinValue, Int64.MaxValue)
+        | Variable e -> e.GetDeserializeError destinationType
+        | InlineConstant (IntValue i) -> Ok(string i)
+        | InlineConstant (FloatValue i) -> (FloatValue i).GetCoerceRangeError(destinationType, Int64.MinValue, Int64.MaxValue)
+        | InlineConstant (StringValue s) -> Ok s
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to URI.
     let coerceUriInput =
@@ -305,7 +320,7 @@ module SchemaDefinitions =
             match DateTimeOffset.TryParse(s) with
             | true, date -> Ok date
             | false, _ -> getParseRangeError(destinationType, DateTimeOffset.MinValue, DateTimeOffset.MaxValue) s
-        | InlineConstant value -> value.GetCoerceError destinationType
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, DateTimeOffset.MinValue, DateTimeOffset.MaxValue)
 
     /// Tries to resolve AST query input to DateOnly.
     let coerceDateOnlyInput =
@@ -321,7 +336,7 @@ module SchemaDefinitions =
             match DateOnly.TryParse(s) with
             | true, date -> Ok date
             | false, _ -> getParseRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue) s
-        | InlineConstant value -> value.GetCoerceError destinationType
+        | InlineConstant value -> value.GetCoerceRangeError(destinationType, DateOnly.MinValue, DateOnly.MaxValue)
 
     /// Tries to resolve AST query input to Guid.
     let coerceGuidInput =
@@ -402,7 +417,7 @@ module SchemaDefinitions =
           CoerceOutput = coerceStringValue }
 
     /// GraphQL type for custom identifier
-    let IDType<'Val> : ScalarDefinition<'Val> =
+    let IDType : ScalarDefinition<string> =
         { Name = "ID"
           Description =
               Some
@@ -515,10 +530,38 @@ module SchemaDefinitions =
     type Define =
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, string>,
+                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, string list>,
+                             coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError>,
@@ -529,14 +572,70 @@ module SchemaDefinitions =
               CoerceOutput = coerceOutput }
 
         /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
+        /// Creates GraphQL type definition for user defined scalar.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member Scalar(name : string, coerceInput : InputParameterValue -> Result<'T, IGQLError list>,
                              coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined wrapped scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string>,
+                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined wrapped scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string list>,
+                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined wrapped scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError>,
+                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+            { Name = name
+              Description = description
+              CoerceInput = coerceInput >> Result.mapError List.singleton
+              CoerceOutput = coerceOutput }
+
+        /// <summary>
+        /// Creates GraphQL type definition for user defined wrapped scalar.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST or variable.</param>
+        /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
+        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
+        static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError list>,
+                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput

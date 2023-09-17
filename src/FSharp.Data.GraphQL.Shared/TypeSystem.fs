@@ -1001,17 +1001,17 @@ and ScalarDef =
         inherit LeafDef
     end
 
-/// Concrete representation of the scalar types.
-and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
+/// Concrete representation of the scalar types wrapped into a value object.
+and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> =
     { /// Name of the scalar type.
       Name : string
       /// Optional type description.
       Description : string option
-      /// A function used to retrieve a .NET object from provided GraphQL query.
+      /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
       CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
       /// A function used to set a surrogate representation to be
       /// returned as a query result.
-      CoerceOutput : obj -> 'Val option }
+      CoerceOutput : obj -> 'Primitive option }
 
     interface TypeDef with
         member _.Type = typeof<'Val>
@@ -1042,11 +1042,13 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
 
     override x.Equals y =
         match y with
-        | :? ScalarDefinition<'Val> as s -> x.Name = s.Name
+        | :? ScalarDefinition<'Primitive, 'Val> as s -> x.Name = s.Name
         | _ -> false
 
     override x.GetHashCode() = x.Name.GetHashCode()
     override x.ToString() = x.Name + "!"
+
+and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
 
 /// A GraphQL representation of single case of the enum type.
 /// Enum value return value is always represented as string.
