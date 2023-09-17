@@ -3,7 +3,8 @@ root = true
 # Core EditorConfig Options   #
 ###############################
 # All files
-# [*]                            # Do not apply to all files not to break something
+[*]                            # Do not apply to all files not to break something
+guidelines = 120 dashed, 150
 # Either crlf | lf, default is system-dependent (when not specified at all)
 # end_of_line=crlf
 # Remove whitespace at the end of any line
@@ -200,10 +201,12 @@ fsharp_multiline_bracket_style=stroustrup
 
 # whether to move the beginning of compuitation expression to the new line
 # true:  let x =
-#			 computation {
-#			 }
+#            computation {
+#                ...
+#            }
 # false: let x = computation {
-#			 }
+#            ..
+#        }
 fsharp_newline_before_multiline_computation_expression=false
 
 # whether a newline should be placed before members
