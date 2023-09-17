@@ -3,9 +3,14 @@ Microsoft Visual Studio Solution File, Format Version 12.00
 # Visual Studio Version 17
 VisualStudioVersion = 17.5.33312.197
 MinimumVisualStudioVersion = 15.0.26124.0
-Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.IntegrationTests", "tests\FSharp.Data.GraphQL.IntegrationTests\FSharp.Data.GraphQL.IntegrationTests.fsproj", "{09D910E6-94EF-46AF-94DF-10A9FEC837C0}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6D52DCCB-1899-47FB-9F7A-1571E444B4CE}"
+	ProjectSection(SolutionItems) = preProject
+		Packages.props = Packages.props
+	EndProjectSection
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.IntegrationTests.Server", "tests\FSharp.Data.GraphQL.IntegrationTests.Server\FSharp.Data.GraphQL.IntegrationTests.Server.fsproj", "{E6754A20-FA5E-4C76-AB1B-D35DF9526889}"
+EndProject
+Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.IntegrationTests", "tests\FSharp.Data.GraphQL.IntegrationTests\FSharp.Data.GraphQL.IntegrationTests.fsproj", "{09D910E6-94EF-46AF-94DF-10A9FEC837C0}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Server", "src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj", "{CA16AC10-9FF2-4894-AC73-99FBD35BB8CC}"
 EndProject
@@ -14,11 +19,6 @@ EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BDE03396-2ED6-4153-B94C-351BAB3F67BD}"
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{BA7F22E2-D411-4229-826B-F55FF171D12A}"
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Solution Items", "Solution Items", "{6D52DCCB-1899-47FB-9F7A-1571E444B4CE}"
-	ProjectSection(SolutionItems) = preProject
-		Packages.props = Packages.props
-	EndProjectSection
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
