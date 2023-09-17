@@ -4,6 +4,8 @@
 module FSharp.Data.GraphQL.Tests.UnionInterfaceTests
 
 open Xunit
+open System
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -140,7 +142,7 @@ let ``Execute can introspect on union and intersection types`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes union types`` () =
@@ -173,7 +175,7 @@ let ``Executes union types`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -211,7 +213,7 @@ let ``Executes union types with inline fragments`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
@@ -243,7 +245,7 @@ let ``Executes interface types`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -279,7 +281,7 @@ let ``Executes interface types with inline fragments`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -338,4 +340,4 @@ let ``Execute allows fragment conditions to be abstract types`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

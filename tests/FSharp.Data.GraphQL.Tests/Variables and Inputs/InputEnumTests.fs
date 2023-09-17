@@ -3,12 +3,13 @@
 
 module FSharp.Data.GraphQL.Tests.InputEnumTests
 
+open Xunit
+open System
 open System.Collections.Immutable
 open System.Text.Json
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -63,7 +64,7 @@ let ``Execute handles enum input as variable`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nullable null enum input as variable`` () =
@@ -82,7 +83,7 @@ let ``Execute handles nullable null enum input as variable`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles union enum input as variable`` () =
@@ -101,7 +102,7 @@ let ``Execute handles union enum input as variable`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles Some union enum input as variable`` () =
@@ -120,7 +121,7 @@ let ``Execute handles Some union enum input as variable`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles None enum input as variable`` () =
@@ -139,4 +140,4 @@ let ``Execute handles None enum input as variable`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

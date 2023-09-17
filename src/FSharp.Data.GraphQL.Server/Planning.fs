@@ -8,6 +8,7 @@ open System.Diagnostics
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Ast
+open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection

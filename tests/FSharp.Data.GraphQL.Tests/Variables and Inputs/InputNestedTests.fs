@@ -3,11 +3,12 @@
 
 module FSharp.Data.GraphQL.Tests.InputNestedTests
 
+open Xunit
+open System
 open System.Text.Json
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -84,18 +85,18 @@ let schema = Schema (TestType)
 
 [<Fact>]
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types`` () =
-    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}})}"""
+    let ast = parse """{ fieldWithNestedInputObject(input: {n:"optSeq", no:{mand:"mand"}, nvo:{mand:"mand"}, nl: []})}"""
     let actual = sync <| Executor(schema).AsyncExecute (ast)
     let expected =
         NameValueLookup.ofList
             [ "fieldWithNestedInputObject",
-                 upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}}""" ]
+                 upcast """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":null,"nlvo":null}""" ]
 
     match actual with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with empty lists`` () =
@@ -110,7 +111,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles nested input objects and nullability using inline structs and properly coerces complex scalar types with lists`` () =
@@ -125,7 +126,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles recursive input objects and nullability using inline structs and properly coerces complex scalar types`` () =
@@ -138,4 +139,4 @@ let ``Execute handles recursive input objects and nullability using inline struc
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

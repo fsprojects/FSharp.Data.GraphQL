@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Linq
 open System.Linq.Expressions
 open FSharp.Reflection
+open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Quotations

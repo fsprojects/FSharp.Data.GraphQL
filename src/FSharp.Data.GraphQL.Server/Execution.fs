@@ -182,14 +182,14 @@ let private getArgumentValues (argDefs: InputFieldDef []) (args: Argument list) 
     argDefs
     |> Array.fold (fun acc argdef ->
         match List.tryFind (fun (a: Argument) -> a.Name = argdef.Name) args with
-        | Some argument -> result {
+        | Some argument -> validation {
                 let! acc = acc
                 and! arg = argumentValue variables argdef argument
                 match arg with
                 | null -> return acc
                 | v -> return Map.add argdef.Name v acc
             }
-        | None -> result {
+        | None -> validation {
                 let! acc = acc
                 return collectDefaultArgValue acc argdef
             }
@@ -357,7 +357,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
     | Nullable (Output innerDef) ->
         let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
         executeResolvers innerCtx path parent (toOption value |> AsyncVal.wrap)
-        |> AsyncVal.map(Result.catchError (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
+        |> AsyncVal.map(Result.valueOr (fun errs -> (KeyValuePair(name, null), None, errs)) >> Ok)
 
     | Interface iDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
@@ -608,7 +608,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
         match! resultSet |> Array.map executeRootOperation |> collectFields ctx.ExecutionPlan.Strategy with
         | Ok (data, Some deferred, errs) -> return GQLExecutionResult.Deferred(documentId, NameValueLookup(data), errs, deferred, ctx.Metadata)
         | Ok (data, None, errs) -> return GQLExecutionResult.Direct(documentId, NameValueLookup(data), errs, ctx.Metadata)
-        | Error errs -> return GQLExecutionResult.Direct(documentId, null, errs, ctx.Metadata)
+        | Error errs -> return GQLExecutionResult.RequestError(documentId, errs, ctx.Metadata)
     }
 
 let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: ExecutionContext) (objdef: SubscriptionObjectDef) value = result {
@@ -699,7 +699,8 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                         let item =
                             match vardef.TypeDef with
                             | Nullable _ -> Ok <| KeyValuePair(vardef.Name, null)
-                            | _ -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{vardef.TypeDef.ToString ()}!' was not provided." } ]
+                            | Named typeDef -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{typeDef.Name}!' was not provided." } ]
+                            | _ -> System.Diagnostics.Debug.Fail $"{vardef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
                         (valiables, inlineValues, item::missing)
                 | true, jsonElement ->
                     let item = struct(vardef, jsonElement)
@@ -711,7 +712,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         variables
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> result {
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> validation {
                     let! value = coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vardef.Name}': "
                     and! acc = acc
                     acc.Add(vardef.Name, value)
@@ -721,11 +722,12 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
 
     let suppliedVaribles = variablesBuilder.ToImmutable()
 
-    // Having variables we can coerce inline values that are also
+    // TODO: consider how to execute inline objects validation having some variables coercion or validation failed
+    // Having variables we can coerce inline values that contain on variables
     let! variablesBuilder =
         inlineValues
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> result {
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> validation {
                     let executeInput = compileByType $"Variable '%s{vardef.Name}': " vardef.TypeDef
                     let! value = executeInput defaultValue suppliedVaribles
                     and! acc = acc

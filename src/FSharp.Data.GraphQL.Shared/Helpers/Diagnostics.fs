@@ -1,7 +1,8 @@
-﻿namespace FSharp.Data.GraphQL
+namespace FSharp.Data.GraphQL
 
 /// Contains tracing operations to use when DEBUG constant is defined.
 module Tracer =
+
     let private print (debugMessage : string) (elapsed : int64) =
         if elapsed > 0L then
             printfn "GraphQLProvider debug: %s (time to execute: %ims)" debugMessage elapsed

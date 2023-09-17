@@ -3,12 +3,13 @@
 
 module FSharp.Data.GraphQL.Tests.InputComplexTests
 
+open Xunit
+open System
 open System.Collections.Immutable
 open System.Text.Json
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
@@ -81,7 +82,7 @@ let ``Execute handles objects and nullability using inline structs with complex 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 // See https://spec.graphql.org/October2021/#sec-List
 [<Fact(Skip = "This test does not pass yet as this feature is not yet implemented.")>]
@@ -95,7 +96,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and properly coerces complex scalar types`` () =
@@ -110,7 +111,7 @@ let ``Execute handles objects and nullability using inline structs and properly 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 let variablesWithInput inputName input = $"""{{"%s{inputName}":%s{input}}}"""
 
@@ -138,7 +139,7 @@ let ``Execute handles variables with complex inputs`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables with default value when no value was provided`` () =
@@ -155,7 +156,7 @@ let ``Execute handles variables with default value when no value was provided`` 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and errors on null for nested non-nulls`` () =
@@ -172,7 +173,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
     match actual with
     | RequestError errors ->
         hasError "Variable '$input' of type 'TestInputObject': in field 'mand': expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and errors on incorrect type`` () =
@@ -191,7 +192,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
 
     match actual with
     | RequestError errors -> hasError errMsg errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and errors on omission of nested non-nulls`` () =
@@ -209,7 +210,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
     | RequestError errors ->
         List.length errors |> equals 1
         hasError "Variable '$input' of type 'TestInputObject': in field 'mand': expected value of type 'String!' but got 'null'." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow invalid types to be used as values`` () =
@@ -226,7 +227,7 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
     match result with
     | RequestError errors ->
         hasError "Variable 'input' in operation 'q' has a type that is not an input type defined by the schema (TestType!)." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and does not allow unknown types to be used as values`` () =
@@ -243,4 +244,4 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
     match actual with
     | RequestError errors ->
         hasError "Variable 'input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)." errors
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"

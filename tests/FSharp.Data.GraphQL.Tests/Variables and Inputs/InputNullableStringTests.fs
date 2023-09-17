@@ -3,12 +3,13 @@
 
 module FSharp.Data.GraphQL.Tests.InputNullableStringTests
 
+open Xunit
+open System
 open System.Collections.Immutable
 open System.Text.Json
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -57,7 +58,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted in a variable`` () =
@@ -74,7 +75,7 @@ let ``Execute handles variables and allows nullable inputs to be omitted in a va
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to null in a variable`` () =
@@ -97,7 +98,7 @@ let ``Execute handles variables and allows nullable inputs to be set to null in 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value in a variable`` () =
@@ -125,7 +126,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be set to a value directly`` () =
@@ -137,7 +138,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles non-nullable scalars and does not allow non-nullable inputs to be omitted in a variable`` () =
@@ -161,7 +162,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
 
     match actual with
     | RequestError errors -> errors |> hasError "Variable '$value': expected value of type 'String!' but got 'null'."
-    | _ -> fail "Expected RequestError GQResponse"
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value in a variable`` () =
@@ -189,7 +190,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles non-nullable scalars and allows non-nullable inputs to be set to a value directly`` () =
@@ -201,7 +202,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute uses argument default value when no argument was provided`` () =
@@ -213,7 +214,7 @@ let ``Execute uses argument default value when no argument was provided`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 let paramsWithOptionalInput input =
     JsonDocument
@@ -237,4 +238,4 @@ let ``Execute uses argument default value when nullable variable provided`` () =
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

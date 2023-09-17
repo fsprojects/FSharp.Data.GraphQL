@@ -43,18 +43,20 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Diagnostics.fs" />
-    <Compile Include="ObjAndStructConversions.fs" />
+    <Compile Include="Helpers\Diagnostics.fs" />
+    <Compile Include="Helpers\ObjAndStructConversions.fs" />
+    <Compile Include="Helpers\Extensions.fs" />
+    <Compile Include="Helpers\Reflection.fs" />
+    <Compile Include="Helpers\MemoryCache.fs" />
     <Compile Include="Errors.fs" />
+    <Compile Include="Exceptions.fs" />
     <Compile Include="ValidationTypes.fs" />
-    <Compile Include="Extensions.fs" />
-    <Compile Include="Prolog.fs" />
-    <Compile Include="MemoryCache.fs" />
+    <Compile Include="AsyncVal.fs" />
     <Compile Include="Ast.fs" />
     <Compile Include="AstExtensions.fs" />
-    <Compile Include="AsyncVal.fs" />
     <Compile Include="TypeSystem.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
+    <Compile Include="SchemaDefinitions.fs" />
+    <Compile Include="SchemaDefinitionsExtensions.fs" />
     <Compile Include="IntrospectionQuery.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />

@@ -76,7 +76,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles mutation execution ordering: evaluates mutations correctly in the presense of failures`` () =
@@ -117,7 +117,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
     | Direct(data, errors) ->
       data |> equals (upcast expected)
       List.length errors |> equals 2
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 //[<Fact>]
 //let ``Execute handles mutation with multiple arguments`` () =
@@ -136,4 +136,4 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
 //    | Direct(data, errors) ->
 //      empty errors
 //      data |> equals (upcast expected)
-//    | _ -> fail "Expected Direct GQResponse"
+//    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

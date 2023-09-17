@@ -160,7 +160,7 @@ let ``Connection definition includes connection and edge fields for simple cases
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected a direct GQLResponse"
+    | _ ->  fail "Expected a Direct GQLResponse"
 
 [<Fact>]
 let ``Connection definition includes connection and edge fields for complex cases`` () =
@@ -210,7 +210,7 @@ let ``Connection definition includes connection and edge fields for complex case
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected a direct GQLResponse"
+    | _ ->  fail "Expected a Direct GQLResponse"
 
 
 [<Fact>]

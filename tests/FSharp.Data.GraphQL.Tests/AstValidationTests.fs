@@ -6,6 +6,7 @@ open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.Ast
+open FSharp.Data.GraphQL.Validation.ValidationResult
 open FSharp.Data.GraphQL.Types
 
 type Command =
@@ -275,7 +276,7 @@ fragment multipleSubscriptions on Subscription {
         ValidationError [ GQLProblemDetails.Create "Subscription operations should have only one root field. Operation 'sub1' has 2 fields (disallowedSecondRootField, newMessage)."
                           GQLProblemDetails.Create "Subscription operations should have only one root field. Operation 'sub2' has 2 fields (disallowedSecondRootField, newMessage)."
                           GQLProblemDetails.Create "Subscription operations should have only one root field. Operation 'sub3' has 2 fields (__typename, newMessage)."]
-    let actual = [query1; query2; query3] |> collectResults (getContext >> Validation.Ast.validateSubscriptionSingleRootField)
+    let actual = [query1; query2; query3] |> ValidationResult.collect (getContext >> Validation.Ast.validateSubscriptionSingleRootField)
     actual |> equals expected
 
 [<Fact>]
@@ -303,7 +304,7 @@ fragment aliasedLyingFieldTargetNotDefined on Dog {
                           GQLProblemDetails.Create ("Field 'nickname' is not defined in schema type 'Pet'.", path = ["definedOnImplementorsButNotInterface"; "nickname"])
                           GQLProblemDetails.Create ("Field 'name' is not defined in schema type 'CatOrDog'.", path = ["directFieldSelectionOnUnion"; "name"])
                           GQLProblemDetails.Create ("Field 'barkVolume' is not defined in schema type 'CatOrDog'.", path = ["directFieldSelectionOnUnion"; "barkVolume"]) ]
-    let actual = [query1; query2; query3] |> collectResults (getContext >> Validation.Ast.validateSelectionFieldTypes)
+    let actual = [query1; query2; query3] |> ValidationResult.collect (getContext >> Validation.Ast.validateSelectionFieldTypes)
     actual |> equals expected
 
 [<Fact>]
@@ -355,7 +356,7 @@ fragment differingArgs on Dog {
                             path = ["differingArgs"; "doesKnowCommand"])
                           GQLProblemDetails.Create ("Field name or alias 'someValue' appears two times, but they do not have the same return types in the scope of the parent type.",
                             path = ["conflictingDifferingResponses"; "someValue"]) ]
-    let shouldFail = [query1; query2; query3] |> collectResults (getContext >> Validation.Ast.validateFieldSelectionMerging)
+    let shouldFail = [query1; query2; query3] |> ValidationResult.collect (getContext >> Validation.Ast.validateFieldSelectionMerging)
     shouldFail |> equals expectedFailureResult
     let query4 =
         """fragment mergeIdenticalFields on Dog {
@@ -395,7 +396,7 @@ fragment safeDifferingArgs on Pet {
     doesKnowCommand(catCommand: JUMP)
   }
 }"""
-    let shouldPass = [query4; query5; query6] |> collectResults (getContext >> Validation.Ast.validateFieldSelectionMerging)
+    let shouldPass = [query4; query5; query6] |> ValidationResult.collect (getContext >> Validation.Ast.validateFieldSelectionMerging)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -427,7 +428,7 @@ query directQueryOnUnionWithoutSubFields {
                             path = ["directQueryOnInterfaceWithoutSubFields"; "pet"])
                           GQLProblemDetails.Create ("Field 'catOrDog' of 'Root' type is of type kind UNION, and therefore should have inner fields in its selection.",
                             path = ["directQueryOnUnionWithoutSubFields"; "catOrDog"]) ]
-    let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateLeafFieldSelections)
+    let shouldFail = [query1; query2] |> ValidationResult.collect (getContext >> Validation.Ast.validateLeafFieldSelections)
     shouldFail |> equals expectedFailureResult
     let query4 =
         """fragment scalarSelection on Dog {
@@ -453,7 +454,7 @@ let ``Validation should grant that arguments passed to fields exists in their de
                             path = ["invalidArgName"; "isHouseTrained"])
                           GQLProblemDetails.Create ("Directive 'skip' of field 'isHouseTrained' of type 'Dog' does not have an argument named 'jaca' in its definition.",
                             path = ["invalidArgName"; "isHouseTrained"]) ]
-    let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateArgumentNames)
+    let shouldFail = [query1; query2] |> ValidationResult.collect (getContext >> Validation.Ast.validateArgumentNames)
     shouldFail |> equals expectedFailureResult
     let query3 =
         """fragment argOnRequiredArg on Dog {
@@ -499,7 +500,7 @@ let ``Validation should grant that required arguments with no default values are
                             path = ["missingRequiredArg"; "nonNullBooleanArgField"])
                           GQLProblemDetails.Create ("Argument 'nonNullBooleanArg' of field 'nonNullBooleanArgField' of type 'Arguments' is required and does not have a default value.",
                             path = ["missingRequiredArg"; "nonNullBooleanArgField"]) ]
-    let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateRequiredArguments)
+    let shouldFail = [query1; query2] |> ValidationResult.collect (getContext >> Validation.Ast.validateRequiredArguments)
     shouldFail |> equals expectedFailureResult
     let query3 =
         """fragment goodBooleanArg on Arguments {
@@ -513,7 +514,7 @@ fragment goodNonNullArg on Arguments {
         """fragment goodBooleanArgDefault on Arguments {
   booleanArgField
 }"""
-    let shouldPass = [query3; query4] |> collectResults (getContext >> Validation.Ast.validateRequiredArguments)
+    let shouldPass = [query3; query4] |> ValidationResult.collect (getContext >> Validation.Ast.validateRequiredArguments)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -660,7 +661,7 @@ fragment ownerFragment on Dog {
                           GQLProblemDetails.Create "Fragment 'barkVolumeFragment' is making a cyclic reference."
                           GQLProblemDetails.Create "Fragment 'dogFragment' is making a cyclic reference."
                           GQLProblemDetails.Create "Fragment 'ownerFragment' is making a cyclic reference." ]
-    let shouldFail = [query1;query2] |> collectResults (getContext >> Validation.Ast.validateFragmentsMustNotFormCycles)
+    let shouldFail = [query1;query2] |> ValidationResult.collect (getContext >> Validation.Ast.validateFragmentsMustNotFormCycles)
     shouldFail |> equals expectedFailureResult
 
 [<Fact>]
@@ -716,7 +717,7 @@ fragment humanOrAlienFragment on HumanOrAlien {
                             path = ["sentientFragment"; "barkVolume"])
                           GQLProblemDetails.Create ("Fragment type condition 'Cat' is not applicable to the parent type of the field 'HumanOrAlien'.",
                             path = ["humanOrAlienFragment"; "meowVolume"]) ]
-    let shouldFail = [query1;query2;query3;query4] |> collectResults (getContext >> Validation.Ast.validateFragmentSpreadIsPossible)
+    let shouldFail = [query1;query2;query3;query4] |> ValidationResult.collect (getContext >> Validation.Ast.validateFragmentSpreadIsPossible)
     shouldFail |> equals expectedFailureResult
     let query5 =
         """fragment dogFragment on Dog {
@@ -765,7 +766,7 @@ fragment dogOrHumanFragment on DogOrHuman {
     barkVolume
   }
 }"""
-    let shouldPass = [query5;query6;query7;query8;query9] |> collectResults (getContext >> Validation.Ast.validateFragmentSpreadIsPossible)
+    let shouldPass = [query5;query6;query7;query8;query9] |> ValidationResult.collect (getContext >> Validation.Ast.validateFragmentSpreadIsPossible)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -791,7 +792,7 @@ fragment nullRequiredBooleanArg on Arguments {
                          GQLProblemDetails.Create ("Argument 'nonNullBooleanArg' value can not be coerced. It's type is non-nullable but the argument has a null value.", path = ["nullRequiredBooleanArg"; "nonNullBooleanArgField"])
                          GQLProblemDetails.Create ("Argument field or value named 'name' can not be coerced. It does not match a valid literal representation for the type.", path = ["badComplexValue"; "findDog"])
                          GQLProblemDetails.Create ("Can not coerce argument 'complex'. The field 'favoriteCookieFlavor' is not a valid field in the argument definition.", path = ["findDog"]) ]
-    let shouldFail = [query1; query2] |> collectResults (getContext >> Validation.Ast.validateInputValues)
+    let shouldFail = [query1; query2] |> ValidationResult.collect (getContext >> Validation.Ast.validateInputValues)
     shouldFail |> equals expectedFailureResult
     let query2 =
         """fragment goodBooleanArg on Arguments {
@@ -816,7 +817,7 @@ query goodComplexDefaultValue($search: ComplexInput = { name: "Fido" }) {
 fragment validList on Arguments {
   booleanListArgField(booleanListArg: [false, null, true])
 }"""
-    let shouldPass = [query2;query3; query4] |> collectResults (getContext >> Validation.Ast.validateInputValues)
+    let shouldPass = [query2;query3; query4] |> ValidationResult.collect (getContext >> Validation.Ast.validateInputValues)
     shouldPass |> equals Success
 
 [<Fact>]
@@ -1049,7 +1050,7 @@ fragment isHouseTrainedCyclic on Dog {
                           GQLProblemDetails.Create "Variable definition 'extra' is not used in operation 'unusedCyclic'. Every variable must be used." ]
 
     [query1; query2; query3; query4]
-    |> collectResults (getContext >> Validation.Ast.validateAllVariablesUsed)
+    |> ValidationResult.collect (getContext >> Validation.Ast.validateAllVariablesUsed)
     |> equals expectedFailureResult
 
     let query4 =
@@ -1072,7 +1073,7 @@ query nestedVariables($name: String) {
 """
 
     [query4; query5]
-    |> collectResults (getContext >> Validation.Ast.validateAllVariablesUsed)
+    |> ValidationResult.collect (getContext >> Validation.Ast.validateAllVariablesUsed)
     |> equals Success
 
 [<Fact>]
@@ -1191,5 +1192,5 @@ fragment ownerFragment on Dog {
                           GQLProblemDetails.Create ("Field 'owner' is not defined in schema type 'Dog'.", path = ["dogFragment"; "owner"])
                           GQLProblemDetails.Create ("Field 'pets' is not defined in schema type 'Dog'.", path = ["ownerFragment"; "pets"])
                           GQLProblemDetails.Create ("Field 'dog' is not defined in schema type 'Root'.", path = ["dog"]) ]
-    let shouldFail = [query1; query2] |> collectResults(Parser.parse >> Validation.Ast.validateDocument schema.Introspected)
+    let shouldFail = [query1; query2] |> ValidationResult.collect(Parser.parse >> Validation.Ast.validateDocument schema.Introspected)
     shouldFail |> equals expectedFailureResult

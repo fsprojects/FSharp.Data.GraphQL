@@ -108,7 +108,7 @@ let ``Execute handles creation of inline input records with all fields`` () =
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
     | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of inline input records with optional null fields`` () =
@@ -123,7 +123,7 @@ let ``Execute handles creation of inline input records with optional null fields
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
     | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of inline input records with mandatory only fields`` () =
@@ -137,7 +137,7 @@ let ``Execute handles creation of inline input records with mandatory only field
     let result = sync <| schema.AsyncExecute(parse query)
     match result with
     | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 let variablesWithAllInputs (record, optRecord) =
     $"""
@@ -171,7 +171,7 @@ let ``Execute handles creation of input records from variables with all fields``
     | Direct(data, errors) ->
         empty errors
         //data |> equals (upcast expected)
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with optional null fields`` () =
@@ -188,7 +188,7 @@ let ``Execute handles creation of input records from variables with optional nul
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
     match result with
     | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with mandatory only fields`` () =
@@ -204,4 +204,4 @@ let ``Execute handles creation of input records from variables with mandatory on
     let result = sync <| schema.AsyncExecute(parse query, variables = params')
     match result with
     | Direct (data, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

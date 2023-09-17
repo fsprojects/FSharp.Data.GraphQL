@@ -99,4 +99,4 @@ let ``Relay cursor works for types with nested fileds`` () =
 
     match result with
     | Direct (_, errors) -> empty errors
-    | response -> fail $"Expected a direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

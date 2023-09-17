@@ -3,13 +3,14 @@
 
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
+open Xunit
+open System
 open System.Text.Json
 open System.Text.Json.Serialization
 open FSharp.Data.GraphQL.Samples.StarWarsApi
 
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -72,7 +73,7 @@ let ``Input field must be marked as nullable when defaultValue is provided`` () 
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Input field must be marked as non-nullable when defaultValue is not provided`` () =
@@ -106,7 +107,7 @@ let ``Input field must be marked as non-nullable when defaultValue is not provid
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Input field must be marked as nullable when its type is nullable`` () =
@@ -140,7 +141,7 @@ let ``Input field must be marked as nullable when its type is nullable`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Input field must be marked as nullable when its type is nullable and have default value provided`` () =
@@ -174,7 +175,7 @@ let ``Input field must be marked as nullable when its type is nullable and have 
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Introspection schema must be serializable back and forth using json`` () =
@@ -295,7 +296,7 @@ let ``Introspection schema must be serializable back and forth using json`` () =
         let deserialized = JsonSerializer.Deserialize<IntrospectionResult>(json, skippableOptions)
         let expected = (schema :> ISchema).Introspected
         deserialized.__schema |> equals expected
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =
@@ -328,7 +329,7 @@ let ``Core type definitions are considered nullable`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
@@ -394,7 +395,7 @@ let ``Default field type definitions are considered non-null`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
@@ -436,7 +437,7 @@ let ``Nullabe field type definitions are considered nullable`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
@@ -485,7 +486,7 @@ let ``Default field args type definitions are considered non-null`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
@@ -531,7 +532,7 @@ let ``Nullable field args type definitions are considered nullable`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Introspection executes an introspection query`` () =
@@ -1413,4 +1414,4 @@ let ``Introspection executes an introspection query`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

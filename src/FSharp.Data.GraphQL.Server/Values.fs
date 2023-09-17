@@ -17,6 +17,7 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open FSharp.Data.GraphQL.Validation
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
@@ -46,6 +47,19 @@ let private wrapOptional (outputType: Type) value=
                 value
         else
             value
+
+let mapCoercionError parentErrorMessage (err : IGQLError) : IGQLError =
+    match err with
+    | :? IGQLErrorExtensions as ext ->
+        { new ICoerceGQLError with
+            member _.Message = err.Message
+            member _.VariableMessage = parentErrorMessage
+          interface IGQLErrorExtensions with
+            member _.Extensions = ext.Extensions }
+    | _ ->
+        { new ICoerceGQLError with
+            member _.Message = err.Message
+            member _.VariableMessage = parentErrorMessage }
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
@@ -123,7 +137,8 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
 
         fun value variables ->
             match value with
-            | ObjectValue props -> result {
+            | ObjectValue props ->
+                result {
                     let argResults =
                         mapper
                         |> Seq.map (fun struct (field, param) ->
@@ -137,9 +152,12 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                     let! args = argResults |> splitSeqErrorsList
 
                     let instance = ctor.Invoke args
+                    do! objdef.Validator instance
                     return instance
                 }
-            | VariableName variableName -> result {
+                |> Result.mapError (fun errs -> errs |> List.map (mapCoercionError errMsg))
+            | VariableName variableName ->
+                result {
                     match variables.TryGetValue variableName with
                     | true, found ->
                         match found with
@@ -158,6 +176,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                             let! args = argResults |> splitSeqErrorsList
 
                             let instance = ctor.Invoke args
+                            do! objdef.Validator instance
                             return instance
                         | null ->
                             return null
@@ -170,6 +189,7 @@ let rec internal compileByType (errMsg : string) (inputDef : InputDef) : Execute
                                 return! Error [{ new IGQLError with member _.Message = $"Variable '{variableName}' is not an object" }]
                     | false, _ -> return null
                 }
+                |> Result.mapError (fun errs -> errs |> List.map (mapCoercionError errMsg))
             | _ -> Ok null
 
     | List (Input innerdef) ->
@@ -246,19 +266,7 @@ let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input
             // TODO: Capture position in the JSON document
             | Ok null -> Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected value of type '%s{scalardef.Name}!' but got 'null'." } ]
             | result ->
-                let mapError (err : IGQLError) : IGQLError =
-                    match err with
-                    | :? IGQLErrorExtensions as ext ->
-                        { new ICoerceGQLError with
-                            member _.Message = err.Message
-                            member _.VariableMessage = errMsg
-                          interface IGQLErrorExtensions with
-                            member _.Extensions = ext.Extensions }
-                    | _ ->
-                        { new ICoerceGQLError with
-                            member _.Message = err.Message
-                            member _.VariableMessage = errMsg }
-                result |> Result.mapError (fun errs -> errs |> List.map mapError)
+                result |> Result.mapError (fun errs -> errs |> List.map (mapCoercionError errMsg))
     | Nullable (InputObject innerdef) ->
         if input.ValueKind = JsonValueKind.Null then Ok null
         else coerceVariableValue true (innerdef :> InputDef) vardef input errMsg
@@ -308,26 +316,28 @@ let rec internal coerceVariableValue isNullable typedef (vardef : VarDef) (input
         failwith $"%s{errMsg}Only Scalars, Nullables, Lists, and InputObjects are valid type definitions."
 
 and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : JsonElement) errMsg =
-    if input.ValueKind = JsonValueKind.Object then result {
-        let mappedResult =
-            objdef.Fields
-            |> Array.map (fun field ->
-                let inline coerce value =
-                    let value = coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "
-                    KeyValuePair (field.Name, value)
-                match input.TryGetProperty field.Name with
-                | true, value -> coerce value
-                | false, _ ->
-                    match field.DefaultValue with
-                    | Some value -> KeyValuePair (field.Name, Ok value)
-                    | None -> coerce (JsonDocument.Parse("null").RootElement)
-            )
-            |> ImmutableDictionary.CreateRange
+    match input.ValueKind with
+    | JsonValueKind.Object -> result {
+            let mappedResult =
+                objdef.Fields
+                |> Array.map (fun field ->
+                    let inline coerce value =
+                        let value = coerceVariableValue false field.TypeDef vardef value $"%s{errMsg}in field '%s{field.Name}': "
+                        KeyValuePair (field.Name, value)
+                    match input.TryGetProperty field.Name with
+                    | true, value -> coerce value
+                    | false, _ ->
+                        match field.DefaultValue with
+                        | Some value -> KeyValuePair (field.Name, Ok value)
+                        | None -> coerce (JsonDocument.Parse("null").RootElement)
+                )
+                |> ImmutableDictionary.CreateRange
 
-        let! mapped = mappedResult |> splitObjectErrorsList
-        let variables = seq { KeyValuePair (vardef.Name, mapped :> obj) } |> ImmutableDictionary.CreateRange
+            let! mapped = mappedResult |> splitObjectErrorsList
+            // TODO: Improve without creating a dictionary
+            let variables = seq { KeyValuePair (vardef.Name, mapped :> obj) } |> ImmutableDictionary.CreateRange
 
-        return! objdef.ExecuteInput (VariableName vardef.Name) variables
-    }
-    else
-        Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{input.ValueKind}'." } ]
+            return! objdef.ExecuteInput (VariableName vardef.Name) variables
+        }
+    | JsonValueKind.Null -> Ok null
+    | valueKind -> Error [ { new IGQLError with member _.Message = $"%s{errMsg}expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'." } ]

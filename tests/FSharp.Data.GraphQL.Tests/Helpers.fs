@@ -4,10 +4,10 @@
 module internal Helpers
 
 open System
-open System.Linq
 open System.Collections.Generic
-open Xunit
+open System.Linq
 open System.Threading
+open Xunit
 open FSharp.Data.GraphQL
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)

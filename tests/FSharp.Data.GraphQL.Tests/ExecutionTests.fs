@@ -4,15 +4,17 @@
 module FSharp.Data.GraphQL.Tests.ExecutionTests
 
 open Xunit
+open System
+open System.Text.Json
+open System.Collections.Immutable
+
+#nowarn "40"
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Samples.StarWarsApi
-open System.Text.Json
-open System.Collections.Immutable
-
-#nowarn "40"
 
 type TestSubject = {
     a: string
@@ -133,7 +135,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type TestThing = { mutable Thing: string }
 
@@ -183,7 +185,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () =
@@ -194,7 +196,7 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
     equals "thing" data.Thing
 
 type TestTarget =
@@ -219,7 +221,7 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -252,7 +254,7 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
     match result with
     | Direct(data, errors) ->
       empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -283,7 +285,7 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -300,7 +302,7 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
@@ -314,7 +316,7 @@ let ``Execution handles basic tasks: uses the only operation if no operation nam
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
@@ -329,7 +331,7 @@ let ``Execution handles basic tasks: uses the named operation if operation name 
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles basic tasks: list of scalars`` () =
@@ -343,7 +345,7 @@ let ``Execution handles basic tasks: list of scalars`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type TwiceTest = { A : string; B : int }
 
@@ -365,7 +367,7 @@ let ``Execution when querying the same field twice will return it`` () =
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution when querying returns unique document id with response`` () =
@@ -383,7 +385,7 @@ let ``Execution when querying returns unique document id with response`` () =
     | Direct(data1, errors1), Direct(data2, errors2) ->
         equals data1 data2
         equals errors1 errors2
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type InnerNullableTest = { Kaboom : string }
 type NullableTest = { Inner : InnerNullableTest }
@@ -411,7 +413,7 @@ let ``Execution handles errors: properly propagates errors`` () =
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
-    | _ -> fail "Expected Direct GQResponse"
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles errors: exceptions`` () =
@@ -422,10 +424,10 @@ let ``Execution handles errors: exceptions`` () =
                  ]))
     let expectedErrors = [ GQLProblemDetails.Create ("Resolver Error!", [ box "a" ]) ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
-    ensureDirect result <| fun data errors ->
-        data |> equals null
+    match result with
+    | RequestError errors ->
         errors |> equals expectedErrors
-
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execution handles errors: nullable list fields`` () =
