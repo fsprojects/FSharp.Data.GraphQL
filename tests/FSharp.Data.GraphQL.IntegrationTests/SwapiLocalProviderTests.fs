@@ -4,6 +4,7 @@ open Xunit
 open Helpers
 open FSharp.Data.GraphQL
 open System.Net.Http
+open System.Threading.Tasks
 
 // Local provider should be able to be created from local introspection json file.
 type Provider = GraphQLProvider<"introspection.json">
@@ -92,11 +93,11 @@ let ``Should be able to start a simple query operation synchronously`` () =
     |> SimpleOperation.validateResult
 
 [<Fact>]
-let ``Should be able to start a simple query operation asynchronously`` () =
+let ``Should be able to start a simple query operation asynchronously`` () : Task = task {
     use context = getContext()
-    SimpleOperation.operation.AsyncRun(context)
-    |> Async.RunSynchronously
-    |> SimpleOperation.validateResult
+    let! result = SimpleOperation.operation.AsyncRun(context)
+    result |> SimpleOperation.validateResult
+}
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an union type`` () =
@@ -164,11 +165,11 @@ let ``Should be able to run a mutation synchronously`` () =
     |> MutationOperation.validateResult
 
 [<Fact>]
-let ``Should be able to run a mutation asynchronously`` () =
+let ``Should be able to run a mutation asynchronously`` () : Task = task {
     use context = getContext()
-    MutationOperation.operation.AsyncRun(context)
-    |> Async.RunSynchronously
-    |> MutationOperation.validateResult
+    let! result = MutationOperation.operation.AsyncRun(context)
+    result |> MutationOperation.validateResult
+}
 
 module FileOperation =
 

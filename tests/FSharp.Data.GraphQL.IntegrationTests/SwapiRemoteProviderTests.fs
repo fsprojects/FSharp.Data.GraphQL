@@ -3,6 +3,7 @@ module FSharp.Data.GraphQL.IntegrationTests.SwapiRemoteProviderTests
 open Xunit
 open Helpers
 open FSharp.Data.GraphQL
+open System.Threading.Tasks
 
 type Provider = GraphQLProvider<"http://localhost:8086">
 
@@ -83,10 +84,10 @@ let ``Should be able to start a simple query operation synchronously`` () =
     |> SimpleOperation.validateResult
 
 [<Fact>]
-let ``Should be able to start a simple query operation asynchronously`` () =
-    SimpleOperation.operation.AsyncRun()
-    |> Async.RunSynchronously
-    |> SimpleOperation.validateResult
+let ``Should be able to start a simple query operation asynchronously`` () : Task = task {
+    let! result = SimpleOperation.operation.AsyncRun()
+    result |> SimpleOperation.validateResult
+}
 
 [<Fact>]
 let ``Should be able to use pattern matching methods on an union type`` () =
@@ -152,10 +153,10 @@ let ``Should be able to run a mutation synchronously`` () =
     |> MutationOperation.validateResult
 
 [<Fact>]
-let ``Should be able to run a mutation asynchronously`` () =
-    MutationOperation.operation.AsyncRun()
-    |> Async.RunSynchronously
-    |> MutationOperation.validateResult
+let ``Should be able to run a mutation asynchronously`` () : Task = task {
+    let! result = MutationOperation.operation.AsyncRun()
+    result |> MutationOperation.validateResult
+}
 
 module FileOperation =
 
