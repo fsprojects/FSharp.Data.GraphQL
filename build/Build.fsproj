@@ -26,6 +26,8 @@
     <PackageReference Include="Fake.Tools.Git" />
     <PackageReference Include="Mono.Posix.NETStandard" />
     <PackageReference Include="MSBuild.StructuredLogger" />
+    <PackageReference Include="NuGet.Common" VersionOverride="6.*" />
+    <PackageReference Include="NuGet.Protocol" VersionOverride="6.*" />
   </ItemGroup>
 
 </Project>
