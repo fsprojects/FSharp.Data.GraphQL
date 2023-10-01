@@ -368,7 +368,7 @@ module SchemaDefinitions =
         | VariableName variableName ->
             match variables.TryGetValue variableName with
             | true, value -> Ok value
-            | false, _ -> Error [{ new IGQLError with member _.Message = $"Variable '%s{variableName}' not found" }]
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"A variable '$%s{variableName}' not found" }]
         | v -> other v
 
     /// GraphQL type of int

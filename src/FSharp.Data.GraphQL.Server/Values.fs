@@ -12,9 +12,7 @@ open System.Linq
 open System.Text.Json
 open FsToolkit.ErrorHandling
 
-open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Validation
@@ -201,7 +199,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
                                 return found
                             else
                                 Debugger.Break()
-                                return! Error [{ new IGQLError with member _.Message = $"Variable '{variableName}' is not an object" }]
+                                return! Error [{ new IGQLError with member _.Message = $"A variable '${variableName}' is not an object" }]
                     | false, _ -> return null
                 }
             | _ -> Ok null
@@ -256,7 +254,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
             | VariableName variableName ->
                 match variables.TryGetValue variableName with
                 | true, var -> Ok var
-                | false, _ -> Error [ { new IGQLError with member _.Message = $"Variable '{variableName}' not found" } ]
+                | false, _ -> Error [ { new IGQLError with member _.Message = $"A variable '${variableName}' not found" } ]
             | _ -> result {
                     let! coerced = coerceEnumInput value
 
@@ -283,11 +281,11 @@ let rec internal coerceVariableValue
 
     let createVariableCoercionError message =
         Error [ {
-            InputSource = Variable varDef
-            Message = message
-            ErrorKind = InputCoercion
-            Path = inputObjectPath
-            FieldErrorDetails = objectFieldErrorDetails
+            CoercionError.InputSource = Variable varDef
+            CoercionError.Message = message
+            CoercionError.ErrorKind = InputCoercion
+            CoercionError.Path = inputObjectPath
+            CoercionError.FieldErrorDetails = objectFieldErrorDetails
         } :> IGQLError ]
 
     let createNullError typeDef =
@@ -369,12 +367,12 @@ let rec internal coerceVariableValue
         match input with
         | _ when input.ValueKind = JsonValueKind.Null && isNullable -> Ok null
         | _ when input.ValueKind = JsonValueKind.Null ->
-            createVariableCoercionError $"Variable '$%s{varDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found."
+            createVariableCoercionError $"A variable '$%s{varDef.Name}' expected value of type '%s{enumdef.Name}!', but no value was found."
         | _ when input.ValueKind = JsonValueKind.String ->
             let value = input.GetString()
             match enumdef.Options |> Array.tryFind (fun o -> o.Name.Equals(value, StringComparison.InvariantCultureIgnoreCase)) with
             | Some option -> Ok option.Value
-            | None -> createVariableCoercionError $"Value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
+            | None -> createVariableCoercionError $"A value '%s{value}' is not defined in Enum '%s{enumdef.Name}'."
         | _ ->
             createVariableCoercionError $"Enum values must be strings but got '%O{input.ValueKind}'."
     | _ ->
@@ -415,7 +413,7 @@ and private coerceVariableInputObject inputObjectPath (originalObjDef, objDef) (
     | valueKind ->
         Error [ {
             InputSource = Variable varDef
-            Message = $"Variable '$%s{varDef.Name}' expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'."
+            Message = $"A variable '$%s{varDef.Name}' expected to be '%O{JsonValueKind.Object}' but got '%O{valueKind}'."
             ErrorKind = InputCoercion
             Path = inputObjectPath
             FieldErrorDetails = ValueSome { ObjectDef = originalObjDef; FieldDef = ValueNone }

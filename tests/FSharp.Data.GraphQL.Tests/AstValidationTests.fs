@@ -1165,7 +1165,7 @@ let ``Validation should grant that variables are unique in their operations`` ()
     |> equals (
         ValidationError [
             GQLProblemDetails.CreateValidation
-                "Variable '$atOtherHomes' in operation 'houseTrainedQuery' is declared 2 times. Variables must be unique in their operations."
+                "A variable '$atOtherHomes' in operation 'houseTrainedQuery' is declared 2 times. Variables must be unique in their operations."
         ]
     )
     let query2 =
@@ -1208,13 +1208,13 @@ query takesCatOrDog($catOrDog: CatOrDog) {
     let expectedFailureResult =
         ValidationError [
             GQLProblemDetails.CreateValidation
-                "Variable '$cat' in operation 'takesCat' has a type that is not an input type defined by the schema (Cat)."
+                "A variable '$cat' in operation 'takesCat' has a type that is not an input type defined by the schema (Cat)."
             GQLProblemDetails.CreateValidation
-                "Variable '$dog' in operation 'takesDogBang' has a type that is not an input type defined by the schema (Dog!)."
+                "A variable '$dog' in operation 'takesDogBang' has a type that is not an input type defined by the schema (Dog!)."
             GQLProblemDetails.CreateValidation
-                "Variable '$pets' in operation 'takesListOfPet' has a type that is not an input type defined by the schema ([Pet])."
+                "A variable '$pets' in operation 'takesListOfPet' has a type that is not an input type defined by the schema ([Pet])."
             GQLProblemDetails.CreateValidation
-                "Variable '$catOrDog' in operation 'takesCatOrDog' has a type that is not an input type defined by the schema (CatOrDog)."
+                "A variable '$catOrDog' in operation 'takesCatOrDog' has a type that is not an input type defined by the schema (CatOrDog)."
         ]
     let shouldFail =
         getContext query1
@@ -1256,7 +1256,7 @@ let ``Validation should grant that all referenced variables are defined variable
     |> equals (
         ValidationError [
             GQLProblemDetails.CreateValidation
-                "Variable '$atOtherHomes' is referenced in argument 'atOtherHomes' of field with alias or name 'isHousetrained', but that variable is not defined in the operation."
+                "A variable '$atOtherHomes' is referenced in argument 'atOtherHomes' of field with alias or name 'isHousetrained', but that variable is not defined in the operation."
         ]
     )
     let query2 =
@@ -1320,10 +1320,10 @@ fragment isHouseTrainedCyclic on Dog {
 }"""
     let expectedFailureResult =
         ValidationError [
-            GQLProblemDetails.CreateValidation "Variable '$atOtherHomes' is not used in operation 'variableUnused'. Every variable must be used."
-            GQLProblemDetails.CreateValidation "Variable '$atOtherHomes' is not used in operation 'variableNotUsedWithinFragment'. Every variable must be used."
-            GQLProblemDetails.CreateValidation "Variable '$extra' is not used in operation 'queryWithExtraVar'. Every variable must be used."
-            GQLProblemDetails.CreateValidation "Variable '$extra' is not used in operation 'unusedCyclic'. Every variable must be used."
+            GQLProblemDetails.CreateValidation "A variable '$atOtherHomes' is not used in operation 'variableUnused'. Every variable must be used."
+            GQLProblemDetails.CreateValidation "A variable '$atOtherHomes' is not used in operation 'variableNotUsedWithinFragment'. Every variable must be used."
+            GQLProblemDetails.CreateValidation "A variable '$extra' is not used in operation 'queryWithExtraVar'. Every variable must be used."
+            GQLProblemDetails.CreateValidation "A variable '$extra' is not used in operation 'unusedCyclic'. Every variable must be used."
         ]
 
     [ query1; query2; query3; query4 ]
@@ -1393,13 +1393,13 @@ query listToNonNullList($booleanList: [Boolean]) {
     let expectedFailureResult =
         ValidationError [
             (GQLProblemDetails.CreateValidationFor [ "intCannotGoIntoBoolean"; "arguments"; "booleanArgField" ])
-                "Variable '$intArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                "A variable '$intArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
             (GQLProblemDetails.CreateValidationFor [ "booleanListCannotGoIntoBoolean"; "arguments"; "booleanArgField" ])
-                "Variable '$booleanListArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                "A variable '$booleanListArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
             (GQLProblemDetails.CreateValidationFor [ "booleanArgQuery"; "arguments"; "nonNullBooleanArgField" ])
-                "Variable '$booleanArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                "A variable '$booleanArg' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
             (GQLProblemDetails.CreateValidationFor [ "listToNonNullList"; "arguments"; "nonNullBooleanListField" ])
-                "Variable '$booleanList' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
+                "A variable '$booleanList' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference."
         ]
     let shouldFail =
         getContext query1

@@ -84,7 +84,7 @@ type GraphQLQueryConverter<'a>(executor : Executor<'a>, replacements: Map<string
                         match vdef.DefaultValue, vdef.TypeDef with
                         | Some _, _ -> ()
                         | _, Nullable _ -> ()
-                        | None, _ -> failwithf "Variable %s has no default value and is missing!" vdef.Name
+                        | None, _ -> failwithf "A variable '$%s' has no default value and is missing!" vdef.Name
                     acc)
                     (ImmutableDictionary.CreateBuilder<string, JsonElement>())
             { ExecutionPlan = executionPlan; Variables = variables.ToImmutable() }

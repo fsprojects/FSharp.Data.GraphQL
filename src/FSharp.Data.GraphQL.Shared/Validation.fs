@@ -909,8 +909,8 @@ module Ast =
                     match def.Name with
                     | _ when count < 2 -> Success
                     | Some operationName ->
-                        AstError.AsResult $"Variable '$%s{var.VariableName}' in operation '%s{operationName}' is declared %i{count} times. Variables must be unique in their operations."
-                    | None -> AstError.AsResult $"Variable '$%s{var.VariableName}' is declared %i{count} times in the operation. Variables must be unique in their operations.")
+                        AstError.AsResult $"A variable '$%s{var.VariableName}' in operation '%s{operationName}' is declared %i{count} times. Variables must be unique in their operations."
+                    | None -> AstError.AsResult $"A variable '$%s{var.VariableName}' is declared %i{count} times in the operation. Variables must be unique in their operations.")
             | _ -> Success)
 
     let internal validateVariablesAsInputTypes (ctx : ValidationContext) =
@@ -921,9 +921,9 @@ module Ast =
                 |> ValidationResult.collect (fun var ->
                     match def.Name, ctx.Schema.TryGetInputType(var.Type) with
                     | Some operationName, None ->
-                        AstError.AsResult($"Variable '$%s{var.VariableName}' in operation '%s{operationName}' has a type that is not an input type defined by the schema (%s{var.Type.ToString ()}).")
+                        AstError.AsResult($"A variable '$%s{var.VariableName}' in operation '%s{operationName}' has a type that is not an input type defined by the schema (%s{var.Type.ToString ()}).")
                     | None, None ->
-                        AstError.AsResult($"Variable '$%s{var.VariableName}' has a type is not an input type defined by the schema (%s{var.Type.ToString ()}).")
+                        AstError.AsResult($"A variable '$%s{var.VariableName}' has a type is not an input type defined by the schema (%s{var.Type.ToString ()}).")
                     | _ -> Success)
             | _ -> Success)
 
@@ -934,7 +934,7 @@ module Ast =
             | VariableName varName ->
                 if variableDefinitions |> Set.contains varName
                 then Success
-                else AstError.AsResult($"Variable '%s{varName}' is referenced in an argument '%s{arg.Name}' of directive '%s{directive.Name}' of field with alias or name '%O{path.Head}', but that variable is not defined in the operation.", path)
+                else AstError.AsResult($"A variable '%s{varName}' is referenced in an argument '%s{arg.Name}' of directive '%s{directive.Name}' of field with alias or name '%O{path.Head}', but that variable is not defined in the operation.", path)
             | _ -> Success)
 
     let rec private checkVariablesDefinedInSelection (fragmentDefinitions : FragmentDefinition list) (variableDefinitions : Set<string>) (path : FieldPath) =
@@ -948,7 +948,7 @@ module Ast =
                     | VariableName varName ->
                         if variableDefinitions |> Set.contains varName
                         then Success
-                        else AstError.AsResult($"Variable '$%s{varName}' is referenced in argument '%s{arg.Name}' of field with alias or name '%s{field.AliasOrName}', but that variable is not defined in the operation.")
+                        else AstError.AsResult($"A variable '$%s{varName}' is referenced in argument '%s{arg.Name}' of field with alias or name '%s{field.AliasOrName}', but that variable is not defined in the operation.")
                     | _ -> Success)
             variablesValid
             @@ (field.SelectionSet |> ValidationResult.collect (checkVariablesDefinedInSelection fragmentDefinitions variableDefinitions path))
@@ -1013,8 +1013,8 @@ module Ast =
                         let isUsed = def.SelectionSet |> List.exists (variableIsUsedInSelection varDef.VariableName fragmentDefinitions [])
                         match def.Name, isUsed with
                         | _, true -> Success
-                        | Some operationName, _ -> AstError.AsResult $"Variable '$%s{varDef.VariableName}' is not used in operation '%s{operationName}'. Every variable must be used."
-                        | None, _ -> AstError.AsResult $"Variable '$%s{varDef.VariableName}' is not used in operation. Every variable must be used.")
+                        | Some operationName, _ -> AstError.AsResult $"A variable '$%s{varDef.VariableName}' is not used in operation '%s{operationName}'. Every variable must be used."
+                        | None, _ -> AstError.AsResult $"A variable '$%s{varDef.VariableName}' is not used in operation. Every variable must be used.")
             | _ -> Success)
 
     let rec private areTypesCompatible (variableTypeRef : IntrospectionTypeRef) (locationTypeRef : IntrospectionTypeRef) =
@@ -1041,7 +1041,7 @@ module Ast =
             | VariableName varName ->
                 match varNamesAndTypeRefs.TryFind(varName) with
                 | Some (varDef, variableTypeRef) ->
-                    let err = AstError.AsResult($"Variable '$%s{varName}' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference.", path)
+                    let err = AstError.AsResult($"A variable '$%s{varName}' can not be used in its reference. The type of the variable definition is not compatible with the type of its reference.", path)
                     match inputs |> Array.tryFind (fun x -> x.Name = arg.Name) with
                     | Some input ->
                         let locationTypeRef = input.Type

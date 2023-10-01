@@ -703,7 +703,7 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
                             match varDef.TypeDef with
                             | Nullable _ -> Ok <| KeyValuePair(varDef.Name, null)
                             | Named typeDef -> Error [ {
-                                    Message = $"Variable '$%s{varDef.Name}' of type '%s{typeDef.Name}!' is not nullable but neither value was provided, nor a default value was specified."
+                                    Message = $"A variable '$%s{varDef.Name}' of type '%s{typeDef.Name}!' is not nullable but neither value was provided, nor a default value was specified."
                                     ErrorKind = InputCoercion
                                     InputSource = Variable varDef
                                     Path = []

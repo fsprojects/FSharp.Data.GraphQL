@@ -174,7 +174,7 @@ let ``Execute handles variables and errors on incorrect type`` () =
     let params' = paramsWithValueInput testInputObject
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     ensureRequestError result <| fun [ error ] ->
-        let message = $"Variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.String}'."
+        let message = $"A variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.String}'."
         error |> ensureInputCoercionError (Variable "input") message "TestInputObject"
 
 [<Fact>]
@@ -204,7 +204,7 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
     let params' = paramsWithValueInput testInputList
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     ensureRequestError result <| fun [ error ] ->
-        let message = $"Variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.Array}'."
+        let message = $"A variable '$input' expected to be '%O{JsonValueKind.Object}' but got '%O{JsonValueKind.Array}'."
         error |> ensureInputCoercionError (Variable "input") message "TestInputObject!"
         match error.Extensions with
         | Include extensions -> equals (box "TestInputObject!") extensions[CustomErrorFields.ObjectType]
@@ -222,6 +222,6 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
     let params' = paramsWithValueInput testInputValue
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expectedError =
-        let message = "Variable '$input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)."
+        let message = "A variable '$input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)."
         GQLProblemDetails.CreateWithKind (message, Validation)
     ensureRequestError result <| fun [ error ] -> error |> equals expectedError

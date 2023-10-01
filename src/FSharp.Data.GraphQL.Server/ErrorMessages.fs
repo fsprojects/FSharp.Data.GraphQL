@@ -2,4 +2,4 @@
 
 module FSharp.Data.GraphQL.ErrorMessagess
 
-let variableNotFound variableName  = $"Variable '%s{variableName}' not provided"
+let variableNotFound variableName  = $"A variable '$%s{variableName}' was not provided"
