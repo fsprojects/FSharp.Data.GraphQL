@@ -645,7 +645,7 @@ let private compileInputObject (indef: InputObjectDef) =
     |> Array.iter(fun inputField ->
         // TODO: Implement compilation cache to reuse for the same type
         let inputFieldTypeDef = inputField.TypeDef
-        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputField.TypeDef)
+        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputFieldTypeDef)
         match inputField.TypeDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
         | _ -> ()

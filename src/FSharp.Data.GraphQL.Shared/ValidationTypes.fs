@@ -22,7 +22,7 @@ module Result =
 
     type ResultBuilder with
 
-        member inline _.Source(result: ValidationResult<'error>) = result.AsResult
+        member inline _.Source (result : ValidationResult<'error>) = result.AsResult
 
 module ValidationResult =
 
@@ -52,9 +52,17 @@ module GQLValidator =
 [<AbstractClass; Sealed>]
 type AstError =
 
-    static member AsResult(message : string, ?path : FieldPath) =
+    static member AsResult (message : string, ?path : FieldPath) =
         [
-            let extensions = Dictionary<string, obj>() |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
-            { Message = message; Path = path |> Skippable.ofOption |> Skippable.map List.rev; Locations = Skip; Extensions = Include extensions }
+            {
+                Message = message
+                Path = path |> Skippable.ofOption |> Skippable.map List.rev
+                Locations = Skip
+                Extensions =
+                    Include (
+                        Dictionary<string, obj> ()
+                        |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
+                    )
+            }
         ]
         |> ValidationResult.ValidationError
