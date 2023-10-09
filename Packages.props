@@ -10,7 +10,6 @@
   </PropertyGroup>
   <ItemGroup Label="Common">
     <PackageReference Update="FParsec" Version="1.1.1" />
-    <!--<PackageReference Update="FSharp.Core" Version="4.7.2">-->
     <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)">
       <ExcludeAssets>contentFiles</ExcludeAssets>
     </PackageReference>
@@ -20,9 +19,11 @@
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageReference Update="Microsoft.NETCore.Platforms" Version="$(SystemVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
     <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Diagnostics.DiagnosticSource" Version="$(SystemVersion)" />
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" NoWarn="NU1608" />
     <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />

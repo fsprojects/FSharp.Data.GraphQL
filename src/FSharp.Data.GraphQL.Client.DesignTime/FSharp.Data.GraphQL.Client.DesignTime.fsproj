@@ -14,7 +14,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core" VersionOverride="4.7.2">
+    <PackageReference Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)">
       <ExcludeAssets>all</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2">
