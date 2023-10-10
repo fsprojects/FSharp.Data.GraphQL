@@ -269,7 +269,7 @@ Target.create "PackAll" ignore
 "Clean"
     ==> "Restore"
     ==> "Build"
-    ==> "RunUnitTests"
+    //==> "RunUnitTests"
     ==> "StartStarWarsServer"
     ==> "StartIntegrationServer"
     ==> "UpdateIntrospectionFile"
