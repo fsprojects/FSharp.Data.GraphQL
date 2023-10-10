@@ -5,11 +5,11 @@ on:
     branches:
     - master
     - dev
+    - 'fix-CI-hang'
   pull_request:
     branches:
     - master
     - dev
-    - 'fix-CI-hang'
 
 jobs:
   build:
