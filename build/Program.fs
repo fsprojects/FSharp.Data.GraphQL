@@ -172,7 +172,7 @@ Target.create "RunUnitTests" <| fun _ ->
     runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" ""
 
 Target.create "RunIntegrationTests" <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" "--filter Execution=Async"
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" "--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
