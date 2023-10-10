@@ -1,4 +1,6 @@
 {
+  "$schema": "https://xunit.net/schema/current/xunit.runner.schema.json",
   "appDomain": "denied",
-  "maxParallelThreads": -1
+  "maxParallelThreads": -1,
+  "parallelizeAssembly": true
 }
