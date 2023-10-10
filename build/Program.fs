@@ -13,7 +13,7 @@ open Fake.IO.FileSystemOperators
 open Fake.IO.Globbing.Operators
 open Fake.Tools
 
-Path.Combine(__SOURCE_DIRECTORY__, "..")
+Path.Combine (__SOURCE_DIRECTORY__, "..")
 |> Path.GetFullPath
 |> Directory.SetCurrentDirectory
 
@@ -25,8 +25,8 @@ execContext
 |> Fake.Core.Context.setExecutionContext
 
 module DotNetCli =
-    let setVersion (o: DotNet.Options) = { o with Version = Some "7.0.401" }
-    let setRestoreOptions (o: DotNet.RestoreOptions)= o.WithCommon  setVersion
+    let setVersion (o : DotNet.Options) = { o with Version = Some "7.0.401" }
+    let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
 let configuration =
@@ -66,17 +66,19 @@ Target.create "Restore" <| fun _ ->
 
 Target.create "Build" <| fun _ ->
     "FSharp.Data.GraphQL.sln"
-    |> DotNet.build (fun o ->
-        { o with
+    |> DotNet.build (fun o -> {
+        o with
             Configuration = configuration
-            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true } })
+            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true }
+    })
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     DotNet.build
-        (fun options ->
-            { options with
+        (fun options -> {
+            options with
                 Configuration = configuration
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+        })
         project
 
     let projectName = Path.GetFileNameWithoutExtension (project)
@@ -96,20 +98,27 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
 
     System.Threading.Thread.Sleep (2000)
 
-let runTests (project : string) =
+let runTests (project : string) (args : string) =
     DotNet.build
-        (fun options ->
-            { options with
+        (fun options -> {
+            options with
                 Configuration = configuration
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
+                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+        })
         project
+
+    let customParams = String.Join (' ', "--no-build -v=normal", args)
 
     DotNet.test
         (fun options ->
-            { options with
-                Configuration = configuration
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-                Common = { options.Common with CustomParams = Some "--no-build -v=normal" } }.WithCommon DotNetCli.setVersion)
+            {
+                options with
+                    Configuration = configuration
+                    MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+                    Common = { options.Common with CustomParams = Some customParams }
+            }
+                .WithCommon
+                DotNetCli.setVersion)
         project
 
 let starWarsServerStream = StreamRef.Empty
@@ -150,27 +159,29 @@ Target.createFinal "StopIntegrationServer" <| fun _ ->
 
 Target.create "UpdateIntrospectionFile" <| fun _ ->
     let client = new HttpClient ()
-    (task{
-        let! result = client.GetAsync("http://localhost:8086")
-        let! contentStream = result.Content.ReadAsStreamAsync()
+    (task {
+        let! result = client.GetAsync ("http://localhost:8086")
+        let! contentStream = result.Content.ReadAsStreamAsync ()
         let! jsonDocument = JsonDocument.ParseAsync contentStream
-        let file = new FileStream("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
+        let file =
+            new FileStream ("tests/FSharp.Data.GraphQL.IntegrationTests/introspection.json", FileMode.Create, FileAccess.Write, FileShare.None)
         let encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-        let jsonWriterOptions = JsonWriterOptions(Indented = true, Encoder = encoder)
-        let writer = new Utf8JsonWriter(file, jsonWriterOptions)
+        let jsonWriterOptions = JsonWriterOptions (Indented = true, Encoder = encoder)
+        let writer = new Utf8JsonWriter (file, jsonWriterOptions)
         jsonDocument.WriteTo writer
-        do! writer.FlushAsync()
-        do! writer.DisposeAsync()
-        do! file.DisposeAsync()
-        result.Dispose()
-    }).Wait()
-    client.Dispose()
+        do! writer.FlushAsync ()
+        do! writer.DisposeAsync ()
+        do! file.DisposeAsync ()
+        result.Dispose ()
+    })
+        .Wait ()
+    client.Dispose ()
 
 Target.create "RunUnitTests" <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" ""
 
 Target.create "RunIntegrationTests" <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" "" //"--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
@@ -224,9 +235,13 @@ let pack id =
 
     projectPath
     |> DotNet.pack (fun p ->
-        { p with
-            Common = { p.Common with Version = Some release.NugetVersion }
-            OutputPath = Some packageDir }.WithCommon DotNetCli.setVersion)
+        {
+            p with
+                Common = { p.Common with Version = Some release.NugetVersion }
+                OutputPath = Some packageDir
+        }
+            .WithCommon
+            DotNetCli.setVersion)
 
 let publishPackage id =
     let packageName = getPackageName id
