@@ -72,7 +72,7 @@ module GraphQLClient =
     }
 
     /// Sends a request to a GraphQL server.
-    let sendRequest client request = (sendRequestAsync CancellationToken.None client request).Result
+    let sendRequest client request = (sendRequestAsync CancellationToken.None client request).GetAwaiter().GetResult()
 
     /// Executes an introspection schema request to a GraphQL server asynchronously.
     let sendIntrospectionRequestAsync ct (connection : GraphQLClientConnection) (serverUrl : string) httpHeaders =
@@ -102,7 +102,7 @@ module GraphQLClient =
 
     /// Executes an introspection schema request to a GraphQL server.
     let sendIntrospectionRequest client serverUrl httpHeaders =
-        (sendIntrospectionRequestAsync CancellationToken.None client serverUrl httpHeaders).Result
+        (sendIntrospectionRequestAsync CancellationToken.None client serverUrl httpHeaders).GetAwaiter().GetResult()
 
     /// Executes a multipart request to a GraphQL server asynchronously.
     let sendMultipartRequestAsync ct (connection : GraphQLClientConnection) (request : GraphQLRequest) = task {
@@ -167,4 +167,4 @@ module GraphQLClient =
 
     /// Executes a multipart request to a GraphQL server.
     let sendMultipartRequest connection request =
-        (sendMultipartRequestAsync CancellationToken.None connection request).Result
+        (sendMultipartRequestAsync CancellationToken.None connection request).GetAwaiter().GetResult()

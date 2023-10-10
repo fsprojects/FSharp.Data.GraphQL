@@ -412,7 +412,7 @@ module internal ProvidedOperation =
                                 if shouldUseMultipartRequest
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                                 else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                            let responseString = response.Content.ReadAsStringAsync().Result
+                            let responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
                             let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
