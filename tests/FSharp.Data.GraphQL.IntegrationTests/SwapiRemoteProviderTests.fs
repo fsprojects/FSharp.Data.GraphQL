@@ -78,18 +78,18 @@ hero (id: "1000") {
             Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to start a simple query operation synchronously`` () =
     SimpleOperation.operation.Run()
     |> SimpleOperation.validateResult
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to start a simple query operation asynchronously`` () : Task = task {
     let! result = SimpleOperation.operation.AsyncRun()
     result |> SimpleOperation.validateResult
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to use pattern matching methods on an union type`` () =
     let result = SimpleOperation.operation.Run()
     result.Data.IsSome |> equals true
@@ -147,12 +147,12 @@ module MutationOperation =
         result.Data.Value.SetMoon.Value.Name |> equals (Some "Tatooine")
         result.Data.Value.SetMoon.Value.IsMoon |> equals (Some true)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a mutation synchronously`` () =
     MutationOperation.operation.Run()
     |> MutationOperation.validateResult
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to run a mutation asynchronously`` () : Task = task {
     let! result = MutationOperation.operation.AsyncRun()
     result |> MutationOperation.validateResult
@@ -200,7 +200,7 @@ module FileOperation =
             Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a query from a query file`` () =
     FileOperation.fileOp.Run()
     |> FileOperation.validateResult
