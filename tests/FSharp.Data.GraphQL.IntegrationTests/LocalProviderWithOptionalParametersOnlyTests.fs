@@ -56,69 +56,69 @@ module SimpleOperation =
                 let output = result.Data.Value.Echo.Value.Single.Value |> map (fun x -> x.Int, x.IntOption, x.String, x.StringOption, x.Uri, x.Guid)
                 input |> equals output))
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query without sending input field``() =
     SimpleOperation.operation.Run()
     |> SimpleOperation.validateResult None
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query using context, without sending input field``() =
     SimpleOperation.operation.Run(context)
     |> SimpleOperation.validateResult None
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending input field asynchronously``() =
     SimpleOperation.operation.AsyncRun()
     |> Async.RunSynchronously
     |> SimpleOperation.validateResult None
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query using context, without sending input field, asynchronously``() : Task = task {
     let! result = SimpleOperation.operation.AsyncRun(context)
     result |> SimpleOperation.validateResult None
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query sending an empty input field``() =
     let input = Input()
     SimpleOperation.operation.Run(Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query using context, sending an empty input field``() =
     let input = Input()
     SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending an empty input field asynchronously``() : Task = task {
     let input = Input()
     let! result = SimpleOperation.operation.AsyncRun(Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query using context, sending an empty input field, asynchronously``() : Task = task {
     let input = Input()
     let! result = SimpleOperation.operation.AsyncRun(context, Some input)
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query sending an input field with single field``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let input = Input(Some single)
     SimpleOperation.operation.Run(Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query using context, sending an input field with single field``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"),  EmptyGuidAsString)
     let input = Input(Some single)
     SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending an input field with single field asynchronously``() : Task = task {
     let single = InputField("A", 2, System.Uri("http://localhost:1234"),  EmptyGuidAsString)
     let input = Input(Some single)
@@ -126,7 +126,7 @@ let ``Should be able to execute a query without sending an input field with sing
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query using context, sending an input field with single field, asynchronously``() : Task = task {
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let input = Input(Some single)
@@ -134,21 +134,21 @@ let ``Should be able to execute a query using context, sending an input field wi
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query sending an input field with list field``() =
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(list = Some list)
     SimpleOperation.operation.Run(Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query using context, sending an input field with list field``() =
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(list = Some list)
     SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending an input field with list field asynchronously``() : Task = task {
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"),  EmptyGuidAsString)|]
     let input = Input(list = Some list)
@@ -156,7 +156,7 @@ let ``Should be able to execute a query without sending an input field with list
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query using context, sending an input field with list field, asynchronously``() : Task = task {
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
     let input = Input(list = Some list)
@@ -164,7 +164,7 @@ let ``Should be able to execute a query using context, sending an input field wi
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query sending an input field with single and list fields``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
@@ -172,7 +172,7 @@ let ``Should be able to execute a query sending an input field with single and l
     SimpleOperation.operation.Run(Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to execute a query using context, sending an input field with single and list fields``() =
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
@@ -180,7 +180,7 @@ let ``Should be able to execute a query using context, sending an input field wi
     SimpleOperation.operation.Run(context, Some input)
     |> SimpleOperation.validateResult (Some input)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query without sending an input field with single and list fields asynchronously``() : Task = task {
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]
@@ -189,7 +189,7 @@ let ``Should be able to execute a query without sending an input field with sing
     result |> SimpleOperation.validateResult (Some input)
 }
 
-[<Fact>]
+[<Fact; Trait("Execution", "Async")>]
 let ``Should be able to execute a query using context, sending an input field with single and list fields, asynchronously``() : Task = task {
     let single = InputField("A", 2, System.Uri("http://localhost:1234"), EmptyGuidAsString)
     let list = [|InputField("A", 2, System.Uri("http://localhost:4321"), EmptyGuidAsString)|]

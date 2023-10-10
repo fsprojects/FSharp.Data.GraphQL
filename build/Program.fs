@@ -96,7 +96,7 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
 
     System.Threading.Thread.Sleep (2000)
 
-let runTests (project : string) =
+let runTests (project : string) (args : string) =
     DotNet.build
         (fun options ->
             { options with
@@ -104,12 +104,14 @@ let runTests (project : string) =
                 MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true } })
         project
 
+    let customParams = String.Join(' ', "--no-build -v=normal", args)
+
     DotNet.test
         (fun options ->
             { options with
                 Configuration = configuration
                 MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-                Common = { options.Common with CustomParams = Some "--no-build -v=normal" } }.WithCommon DotNetCli.setVersion)
+                Common = { options.Common with CustomParams = Some customParams } }.WithCommon DotNetCli.setVersion)
         project
 
 let starWarsServerStream = StreamRef.Empty
@@ -167,10 +169,10 @@ Target.create "UpdateIntrospectionFile" <| fun _ ->
     client.Dispose()
 
 Target.create "RunUnitTests" <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.Tests/FSharp.Data.GraphQL.Tests.fsproj" ""
 
 Target.create "RunIntegrationTests" <| fun _ ->
-    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj"
+    runTests "tests/FSharp.Data.GraphQL.IntegrationTests/FSharp.Data.GraphQL.IntegrationTests.fsproj" "--filter Execution=Sync"
 
 let prepareDocGen () =
     Shell.rm "docs/release-notes.md"
