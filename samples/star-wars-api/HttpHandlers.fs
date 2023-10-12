@@ -1,115 +1,281 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
+open System.Collections.Immutable
 open System.IO
-open System.Text
-open Giraffe
+open System.Text.Json
+open System.Text.Json.Serialization
+open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
-open Newtonsoft.Json
-open Newtonsoft.Json.Linq
-open FSharp.Data.GraphQL.Execution
+open Microsoft.AspNetCore.Http.Json
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
+
+open FsToolkit.ErrorHandling
+open Giraffe
+
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Ast
+
+module Constants =
+
+    let [<Literal>] Idented = "Idented"
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
+// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
+type MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions
+// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.json.jsonoptions
+type HttpClientJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions
+
 module HttpHandlers =
 
-    let private converters : JsonConverter[] = [| OptionConverter () |]
-    let private jsonSettings = jsonSerializerSettings converters
+    let rec private moduleType = getModuleType <@ moduleType @>
 
-    let internalServerError : HttpHandler = setStatusCode 500
+    let ofTaskIResult ctx (taskRes: Task<IResult>) : HttpFuncResult = task {
+        let! res = taskRes
+        do! res.ExecuteAsync(ctx)
+        return Some ctx
+    }
 
-    let okWithStr str : HttpHandler = setStatusCode 200 >=> text str
+    let ofTaskIResult2 ctx (taskRes: Task<Result<IResult, IResult>>) : HttpFuncResult =
+        taskRes
+        |> TaskResult.defaultWith id
+        |> ofTaskIResult ctx
 
+    /// Set CORS to allow external servers (React samples) to call this API
     let setCorsHeaders : HttpHandler =
         setHttpHeader "Access-Control-Allow-Origin" "*"
         >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
 
-    let setContentTypeAsJson : HttpHandler = setHttpHeader "Content-Type" "application/json"
+    let private graphQL (next : HttpFunc) (ctx : HttpContext) =
+        let sp = ctx.RequestServices
 
-    // TODO: Rewrite completely to async code
-    let private graphQL (next : HttpFunc) (ctx : HttpContext) = task {
-        let serialize d = JsonConvert.SerializeObject (d, jsonSettings)
+        let logger = sp.CreateLogger moduleType
 
-        let deserialize (data : string) =
-            let getMap (token : JToken) =
-                let rec mapper (name : string) (token : JToken) =
-                    match name, token.Type with
-                    | "variables", JTokenType.Object -> token.Children<JProperty> () |> Seq.map (fun x -> x.Name, mapper x.Name x.Value) |> Map.ofSeq   |> box
-                    | name       , JTokenType.Array  -> token                        |> Seq.map (fun x -> mapper name x)                 |> Array.ofSeq |> box
-                    | _ -> (token :?> JValue).Value
+        let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
-                token.Children<JProperty> ()
-                |> Seq.map (fun x -> x.Name, mapper x.Name x.Value)
-                |> Map.ofSeq
+            let serializeIdented value =
+                let jsonSerializerOptions =
+                    sp
+                        .GetRequiredService<IOptionsMonitor<HttpClientJsonOptions>>()
+                        .Get(Constants.Idented)
+                        .SerializerOptions
+                JsonSerializer.Serialize(value, jsonSerializerOptions)
 
-            if System.String.IsNullOrWhiteSpace (data)
-            then None
-            else data |> JToken.Parse |> getMap |> Some
+            match content with
+            | RequestError errs ->
+                logger.LogInformation(
+                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    documentId,
+                    metadata
+                )
 
-        let json =
-            function
-            | Direct   (data, _) ->
-                JsonConvert.SerializeObject (data, jsonSettings)
-            | Deferred (data, _, deferred) ->
-                deferred |> Observable.add (fun d -> printfn "Deferred: %s" (serialize d))
-                JsonConvert.SerializeObject (data, jsonSettings)
-            | Stream data ->
-                data |> Observable.add (fun d -> printfn "Subscription data: %s" (serialize d))
-                "{}"
+                GQLResponse.RequestError(documentId, errs)
+            | Direct(data, errs) ->
+                logger.LogInformation(
+                    $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    documentId,
+                    metadata
+                )
 
-        let removeWhitespacesAndLineBreaks (str : string) = str.Trim().Replace ("\r\n", " ")
+                if logger.IsEnabled LogLevel.Trace then
+                    logger.LogTrace($"GraphQL response data:{Environment.NewLine}:{{data}}", serializeIdented data)
 
-        let readStream (s : Stream) =
-            use ms = new MemoryStream (4096)
-            s.CopyTo (ms)
-            ms.ToArray ()
+                GQLResponse.Direct(documentId, data, errs)
+            | Deferred(data, errs, deferred) ->
+                logger.LogInformation(
+                    $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    documentId,
+                    metadata
+                )
 
-        let data = Encoding.UTF8.GetString (readStream ctx.Request.Body) |> deserialize
+                if logger.IsEnabled LogLevel.Information then
+                    deferred
+                    |> Observable.add (function
+                        | DeferredResult(data, path) ->
+                            logger.LogInformation(
+                                "Produced GraphQL deferred result for path: {path}",
+                                path |> Seq.map string |> Seq.toArray |> Path.Join
+                            )
 
-        let query =
-            data
-            |> Option.bind (fun data ->
-                if data.ContainsKey ("query")
-                then
-                    match data.["query"] with
-                    | :? string as x -> Some x
-                    | _ -> failwith "Failure deserializing repsonse. Could not read query - it is not stringified in request."
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace(
+                                    $"GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    serializeIdented data
+                                )
+                        | DeferredErrors(null, errors, path) ->
+                            logger.LogInformation(
+                                "Produced GraphQL deferred errors for path: {path}",
+                                path |> Seq.map string |> Seq.toArray |> Path.Join
+                            )
+
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace($"GraphQL deferred errors:{Environment.NewLine}{{errors}}", errors)
+                        | DeferredErrors(data, errors, path) ->
+                            logger.LogInformation(
+                                "Produced GraphQL deferred result with errors for path: {path}",
+                                path |> Seq.map string |> Seq.toArray |> Path.Join
+                            )
+
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace(
+                                    $"GraphQL deferred errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    errors,
+                                    serializeIdented data
+                                ))
+
+                GQLResponse.Direct(documentId, data, errs)
+            | Stream stream ->
+                logger.LogInformation(
+                    $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    documentId,
+                    metadata
+                )
+
+                if logger.IsEnabled LogLevel.Information then
+                    stream
+                    |> Observable.add (function
+                        | SubscriptionResult data ->
+                            logger.LogInformation("Produced GraphQL subscription result")
+
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace(
+                                    $"GraphQL subscription data:{Environment.NewLine}{{data}}",
+                                    serializeIdented data
+                                )
+                        | SubscriptionErrors(null, errors) ->
+                            logger.LogInformation("Produced GraphQL subscription errors")
+
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace($"GraphQL subscription errors:{Environment.NewLine}{{errors}}", errors)
+                        | SubscriptionErrors(data, errors) ->
+                            logger.LogInformation("Produced GraphQL subscription result with errors")
+
+                            if logger.IsEnabled LogLevel.Trace then
+                                logger.LogTrace(
+                                    $"GraphQL subscription errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    errors,
+                                    serializeIdented data
+                                ))
+
+                GQLResponse.Stream documentId
+
+        /// Checks if the request contains a body
+        let checkIfHasBody (request: HttpRequest) = task {
+            if request.Body.CanSeek then
+                return (request.Body.Length > 0L)
+            else
+                request.EnableBuffering()
+                let body = request.Body
+                let buffer = Array.zeroCreate 1
+                let! bytesRead = body.ReadAsync(buffer, 0, 1)
+                body.Seek(0, SeekOrigin.Begin) |> ignore
+                return bytesRead > 0
+        }
+
+        /// <summary>Check if the request is an introspection query
+        /// by first checking on such properties as `GET` method or `empty request body`
+        /// and lastly by parsing document AST for introspection operation definition.
+        /// </summary>
+        /// <returns>Result of check of <see cref="Lula.RiskAssessment.WebHost.GraphQL.OperationType"/></returns>
+        let checkOperationType (ctx: HttpContext) = taskResult {
+
+            let checkAnonymousFieldsOnly (ctx: HttpContext) = taskResult {
+                let! gqlRequest = ctx.TryBindJsonAsync<GQLRequestContent>(GQLRequestContent.expectedJSON)
+                let! ast = Parser.parseOrIResult ctx.Request.Path.Value gqlRequest.Query
+                let operationName = gqlRequest.OperationName |> Skippable.toOption
+
+                let createParsedContent() = {
+                    Query = gqlRequest.Query
+                    Ast = ast
+                    OperationName = gqlRequest.OperationName
+                    Variables = gqlRequest.Variables
+                }
+                if ast.IsEmpty then
+                    logger.LogTrace(
+                        "Request is not GET, but 'query' field is an empty string. Must be an introspection query"
+                    )
+                    return IntrospectionQuery <| ValueNone
                 else
-                    None)
+                    match Ast.findOperationByName operationName ast with
+                    | None ->
+                        logger.LogTrace "Document has no operation"
+                        return IntrospectionQuery <| ValueNone
+                    | Some op ->
+                        if not (op.OperationType = Ast.Query) then
+                            logger.LogTrace "Document operation is not of type Query"
+                            return createParsedContent () |> OperationQuery
+                        else
+                            let hasNonMetaFields =
+                                Ast.containsFieldsBeyond
+                                    Ast.metaTypeFields
+                                    (fun x ->
+                                        logger.LogTrace($"Operation Selection in Field with name: {{fieldName}}", x.Name))
+                                    (fun _ -> logger.LogTrace "Operation Selection is non-Field type")
+                                    op
 
-        let variables =
-            data
-            |> Option.bind (fun data ->
-                if data.ContainsKey ("variables")
-                then
-                    match data.["variables"] with
-                    | null -> None
-                    | :? string as x -> deserialize x
-                    | :? Map<string, obj> as x -> Some x
-                    | _ -> failwith "Failure deserializing response. Could not read variables - it is not a object in the request."
+                            if hasNonMetaFields then
+                                return createParsedContent() |> OperationQuery
+                            else
+                                return IntrospectionQuery <| ValueSome ast
+            }
+
+            let request = ctx.Request
+
+            if HttpMethods.Get = request.Method then
+                logger.LogTrace("Request is GET. Must be an introspection query")
+                return IntrospectionQuery <| ValueNone
+            else
+                let! hasBody = checkIfHasBody request
+
+                if not hasBody then
+                    logger.LogTrace("Request is not GET, but has no body. Must be an introspection query")
+                    return IntrospectionQuery <| ValueNone
                 else
-                    None)
+                    return! checkAnonymousFieldsOnly ctx
+        }
 
-        match query, variables with
-        | Some query, Some variables ->
-            printfn "Received query: %s" query
-            printfn "Received variables: %A" variables
-            let query = removeWhitespacesAndLineBreaks query
-            let root = { RequestId = System.Guid.NewGuid().ToString () }
-            let result = Schema.executor.AsyncExecute (query, root, variables) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-        | Some query, None ->
-            printfn "Received query: %s" query
-            let query = removeWhitespacesAndLineBreaks query
-            let result = Schema.executor.AsyncExecute (query) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-        | None, _ ->
-            let result = Schema.executor.AsyncExecute (Introspection.IntrospectionQuery) |> Async.RunSynchronously
-            printfn "Result metadata: %A" result.Metadata
-            return! okWithStr (json result) next ctx
-    }
+        /// Execute default or custom introspection query
+        let executeIntrospectionQuery (executor: Executor<_>) (ast: Ast.Document voption) = task {
+            let! result =
+                match ast with
+                | ValueNone -> executor.AsyncExecute IntrospectionQuery.Definition
+                | ValueSome ast -> executor.AsyncExecute ast
 
-    let webApp : HttpHandler = setCorsHeaders >=> graphQL >=> setContentTypeAsJson
+            let response = result |> toResponse
+            return Results.Ok response
+        }
+
+        /// Execute the operation for given request
+        let executeOperation (executor: Executor<_>) content = task {
+            let operationName = content.OperationName |> Skippable.filter (not << isNull) |> Skippable.toOption
+            let variables = content.Variables |> Skippable.filter (not << isNull) |> Skippable.toOption
+
+            operationName
+            |> Option.iter (fun on -> logger.LogTrace("GraphQL operation name: '{operationName}'", on))
+
+            logger.LogTrace($"Executing GraphQL query:{Environment.NewLine}{{query}}", content.Query)
+
+            variables
+            |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
+
+            let root = Root ctx
+
+            let! result = executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName)
+
+            let response = result |> toResponse
+            return Results.Ok response
+        }
+
+        taskResult {
+            let executor = Schema.executor
+            ctx.Response.Headers.Add("Request-Type", "Classic") // For integration testing purposes
+            match! checkOperationType ctx with
+            | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
+            | OperationQuery content -> return! executeOperation executor content
+        }
+        |> ofTaskIResult2 ctx
+
+    let webApp : HttpHandler = setCorsHeaders >=> choose [ POST; GET ] >=> graphQL

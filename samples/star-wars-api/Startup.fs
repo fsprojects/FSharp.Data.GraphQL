@@ -3,11 +3,13 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
+open Microsoft.AspNetCore.Http.Json
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open Giraffe
 
 type Startup private () =
@@ -16,9 +18,29 @@ type Startup private () =
         this.Configuration <- configuration
 
     member _.ConfigureServices(services: IServiceCollection) =
-        services.AddGiraffe()
-                .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
-                .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+        services
+            .AddGiraffe()
+            .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+            .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
+            // Surprisingly minimal APIs use Microsoft.AspNetCore.Http.Json.JsonOptions
+            // Use if you want to return HTTP responses using minmal APIs IResult interface
+            .Configure<HttpClientJsonOptions>(
+                Action<HttpClientJsonOptions>(fun o ->
+                    Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
+                )
+            )
+            // Use for pretty printing in logs
+            .Configure<HttpClientJsonOptions>(
+                Constants.Idented,
+                Action<HttpClientJsonOptions>(fun o ->
+                    Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
+                    o.SerializerOptions.WriteIndented <- true
+                )
+            )
+            // Replace Newtonsoft.Json and use the same settings in Giraffe
+            .AddSingleton<Json.ISerializer, SystemTextJson.Serializer>(fun sp ->
+                let options = sp.GetService<IOptions<HttpClientJsonOptions>>()
+                SystemTextJson.Serializer(options.Value.SerializerOptions))
         |> ignore
 
     member _.Configure(app: IApplicationBuilder, env: IHostEnvironment) =
@@ -30,12 +52,12 @@ type Startup private () =
             app.UseGraphQLPlayground("/playground") |> ignore
             app.UseGraphQLVoyager("/voyager") |> ignore
             app.UseRouting() |> ignore
-            app.UseEndpoints(fun endpoints -> endpoints.MapBananaCakePop(PathString("/cakePop")) |> ignore) |> ignore
+            app.UseEndpoints(fun endpoints -> endpoints.MapBananaCakePop(PathString "/cakePop") |> ignore) |> ignore
 
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
-            .UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, fun () -> { RequestId = Guid.NewGuid().ToString() })
+            //.UseMiddleware<GraphQLWebSocketMiddleware<Root>>(Schema.executor, fun () -> { RequestId = Guid.NewGuid().ToString() })
             .UseGiraffe HttpHandlers.webApp
 
     member val Configuration : IConfiguration = null with get, set

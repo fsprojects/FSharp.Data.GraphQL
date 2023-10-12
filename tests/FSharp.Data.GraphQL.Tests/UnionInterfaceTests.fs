@@ -3,10 +3,10 @@
 
 module FSharp.Data.GraphQL.Tests.UnionInterfaceTests
 
-open System
 open Xunit
+open System
+
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
@@ -38,7 +38,7 @@ type Person =
 let NamedType =
   Define.Interface<INamed>(
     name = "Named",
-    fields = [ Define.Field("name", String) ])
+    fields = [ Define.Field("name", StringType) ])
 
 let DogType =
   Define.Object<Dog>(
@@ -46,8 +46,8 @@ let DogType =
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("barks", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("barks", BooleanType)
     ])
 
 let CatType =
@@ -56,8 +56,8 @@ let CatType =
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("meows", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("meows", BooleanType)
     ])
 
 let PetType =
@@ -79,7 +79,7 @@ let PersonType =
     isTypeOf = is<Person>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
+        Define.AutoField("name", StringType)
         Define.Field("pets", ListOf PetType, fun _ person -> person.Pets)
         Define.AutoField("friends", ListOf NamedType)
     ])
@@ -141,8 +141,8 @@ let ``Execute can introspect on union and intersection types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes union types`` () =
@@ -174,8 +174,8 @@ let ``Executes union types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -212,8 +212,8 @@ let ``Executes union types with inline fragments`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
@@ -244,8 +244,8 @@ let ``Executes interface types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -280,8 +280,8 @@ let ``Executes interface types with inline fragments`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -339,5 +339,5 @@ let ``Execute allows fragment conditions to be abstract types`` () =
     match actual with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

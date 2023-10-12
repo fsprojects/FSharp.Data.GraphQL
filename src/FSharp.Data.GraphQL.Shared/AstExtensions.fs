@@ -2,11 +2,11 @@
 module FSharp.Data.GraphQL.Ast.Extensions
 
 open System
-open System.Text
-open FSharp.Data.GraphQL.Ast
 open System.Globalization
+open System.Text
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 
-type Path = string list
 type OperationName = string
 
 type AstTypeFieldInfo =
@@ -26,10 +26,10 @@ and internal AstSelectionInfo =
     { TypeCondition : string option
       Name : string
       Alias : string option
-      Path : Path
+      Path : FieldPath
       mutable Fields : AstSelectionInfo list }
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
-    static member Create(typeCondition : string option, path : Path, name : string, alias : string option, ?fields : AstSelectionInfo list) =
+    static member Create(typeCondition : string option, path : FieldPath, name : string, alias : string option, ?fields : AstSelectionInfo list) =
         { TypeCondition = typeCondition
           Name = name
           Alias = alias
@@ -113,7 +113,7 @@ type Document with
             | NullValue -> sb.Append("null")
             | ListValue x -> printCompound "[]" printValue x
             | ObjectValue x -> printCompound "{}" printObjectValue (Map.toList x)
-            | Variable x -> sb.Append("$" + x)
+            | VariableName x -> sb.Append("$" + x)
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
                 sb.Append("$")
@@ -235,7 +235,7 @@ type Document with
             |> List.choose (function | FragmentDefinition _ -> None | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)
         let mapper (selectionSet : Selection list) =
-            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : string list) (selectionSet : Selection list) =
+            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : FieldPath) (selectionSet : Selection list) =
                 match selectionSet with
                 | [] -> acc
                 | selection :: tail ->

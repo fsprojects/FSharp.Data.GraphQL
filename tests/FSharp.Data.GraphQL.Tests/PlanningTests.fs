@@ -39,18 +39,18 @@ let animals =
 let rec Person =
     Define.Object(name = "Person",
                   fieldsFn = (fun () ->
-                  [ Define.Field("firstName", String, fun _ person -> person.firstName)
-                    Define.Field("lastName", String, fun _ person -> person.lastName)
-                    Define.Field("age", Int, fun _ person -> person.age)
-                    Define.Field("name", String, fun _ person -> person.firstName + " " + person.lastName)
+                  [ Define.Field("firstName", StringType, fun _ person -> person.firstName)
+                    Define.Field("lastName", StringType, fun _ person -> person.lastName)
+                    Define.Field("age", IntType, fun _ person -> person.age)
+                    Define.Field("name", StringType, fun _ person -> person.firstName + " " + person.lastName)
                     Define.Field("friends", ListOf Person, fun _ _ -> []) ]), interfaces = [ INamed ])
 
 and Animal =
     Define.Object(name = "Animal",
-                  fields = [ Define.Field("name", String, fun _ animal -> animal.name)
-                             Define.Field("species", String, fun _ animal -> animal.species) ], interfaces = [ INamed ])
+                  fields = [ Define.Field("name", StringType, fun _ animal -> animal.name)
+                             Define.Field("species", StringType, fun _ animal -> animal.species) ], interfaces = [ INamed ])
 
-and INamed = Define.Interface<obj>("INamed", [ Define.Field("name", String) ])
+and INamed = Define.Interface<obj>("INamed", [ Define.Field("name", StringType) ])
 
 and UNamed =
     Define.Union("UNamed", [ Person; Animal ],
@@ -59,7 +59,7 @@ and UNamed =
                  | Person p -> upcast p)
 
 [<Fact>]
-let ``Planning should retain correct types for leafs``() =
+let ``Planning must retain correct types for leafs``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """{
@@ -67,17 +67,17 @@ let ``Planning should retain correct types for leafs``() =
         lastName
         age
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should work with fragments``() =
+let ``Planning must work with fragments``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """query Example {
@@ -88,17 +88,17 @@ let ``Planning should work with fragments``() =
         firstName
         lastName
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should work with parallel fragments``() =
+let ``Planning must work with parallel fragments``() =
     let schema = Schema(Person)
     let schemaProcessor = Executor(schema)
     let query = """query Example {
@@ -113,17 +113,17 @@ let ``Planning should work with parallel fragments``() =
         lastName
     }
     """
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     plan.RootDef |> equals (upcast Person)
     equals 3 plan.Fields.Length
     plan.Fields
     |> List.map (fun info -> (info.Identifier, info.ParentDef, info.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
-                ("age", upcast Person, upcast Int) ]
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
+                ("age", upcast Person, upcast IntType) ]
 
 [<Fact>]
-let ``Planning should retain correct types for lists``() =
+let ``Planning must retain correct types for lists``() =
     let Query = Define.Object("Query", [ Define.Field("people", ListOf Person, fun _ () -> people) ])
     let schema = Schema(Query)
     let schemaProcessor = Executor(schema)
@@ -131,11 +131,14 @@ let ``Planning should retain correct types for lists``() =
         people {
             firstName
             lastName
-            friends
+            friends {
+                firstName
+                lastName
+            }
         }
     }"""
     let PersonList : ListOfDef<Person, Person list> = ListOf Person
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
     listInfo.Identifier |> equals "people"
@@ -147,15 +150,15 @@ let ``Planning should retain correct types for lists``() =
     equals 3 innerFields.Length
     innerFields
     |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef))
-    |> equals [ ("firstName", upcast Person, upcast String)
-                ("lastName", upcast Person, upcast String)
+    |> equals [ ("firstName", upcast Person, upcast StringType)
+                ("lastName", upcast Person, upcast StringType)
                 ("friends", upcast Person, upcast PersonList) ]
     let (ResolveCollection(friendInfo)) = (innerFields |> List.find (fun i -> i.Identifier = "friends")).Kind
     friendInfo.ParentDef |> equals (upcast PersonList)
     friendInfo.ReturnDef |> equals (upcast Person)
 
 [<Fact>]
-let ``Planning should work with interfaces``() =
+let ``Planning must work with interfaces``() =
     let Query = Define.Object("Query", [ Define.Field("names", ListOf INamed, fun _ () -> []) ])
     let schema = Schema(query = Query, config = { SchemaConfig.Default with Types = [ Person; Animal ] })
     let schemaProcessor = Executor(schema)
@@ -171,7 +174,7 @@ let ``Planning should work with interfaces``() =
     fragment ageFragment on Person {
         age
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let INamedList : ListOfDef<obj, obj list> = ListOf INamed
     let listInfo = plan.Fields.Head
@@ -184,14 +187,14 @@ let ``Planning should work with interfaces``() =
     innerFields
     |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef)))
     |> equals (Map.ofList [ "Person",
-                            [ ("name", upcast INamed, upcast String)
-                              ("age", upcast INamed, upcast Int) ]
+                            [ ("name", upcast INamed, upcast StringType)
+                              ("age", upcast INamed, upcast IntType) ]
                             "Animal",
-                            [ ("name", upcast INamed, upcast String)
-                              ("species", upcast INamed, upcast String) ] ])
+                            [ ("name", upcast INamed, upcast StringType)
+                              ("species", upcast INamed, upcast StringType) ] ])
 
 [<Fact>]
-let ``Planning should work with unions``() =
+let ``Planning must work with unions``() =
     let Query = Define.Object("Query", [ Define.Field("names", ListOf UNamed, fun _ () -> []) ])
     let schema = Schema(Query)
     let schemaProcessor = Executor(schema)
@@ -207,7 +210,7 @@ let ``Planning should work with unions``() =
             }
         }
     }"""
-    let plan = schemaProcessor.CreateExecutionPlan(query)
+    let plan = schemaProcessor.CreateExecutionPlanOrFail(query)
     equals 1 plan.Fields.Length
     let listInfo = plan.Fields.Head
     let UNamedList : ListOfDef<Named, Named list> = ListOf UNamed
@@ -220,8 +223,8 @@ let ``Planning should work with unions``() =
     innerFields
     |> Map.map (fun typeName fields -> fields |> List.map (fun i -> (i.Identifier, i.ParentDef, i.ReturnDef)))
     |> equals (Map.ofList [ "Animal",
-                            [ ("name", upcast UNamed, upcast String)
-                              ("species", upcast UNamed, upcast String) ]
+                            [ ("name", upcast UNamed, upcast StringType)
+                              ("species", upcast UNamed, upcast StringType) ]
                             "Person",
-                            [ ("name", upcast UNamed, upcast String)
-                              ("age", upcast UNamed, upcast Int) ] ])
+                            [ ("name", upcast UNamed, upcast StringType)
+                              ("age", upcast UNamed, upcast IntType) ] ])

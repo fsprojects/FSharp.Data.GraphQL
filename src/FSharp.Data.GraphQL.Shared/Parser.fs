@@ -4,9 +4,9 @@
 
 module FSharp.Data.GraphQL.Parser
 
-open FSharp.Data.GraphQL.Ast
 open System
 open FParsec
+open FSharp.Data.GraphQL.Ast
 
 [<AutoOpen>]
 module internal Internal =
@@ -177,7 +177,7 @@ module internal Internal =
   //   Variable|IntValue|FloatValue|StringValue|
   //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
   inputValueRef.Value <-
-    choice [ variable |>> Variable <?> "Variable"
+    choice [ variable |>> VariableName <?> "Variable"
              (attempt floatValue) |>> FloatValue <?> "Float"
              integerValue |>> IntValue <?> "Integer"
              stringValue |>> StringValue <?> "String"
@@ -325,3 +325,9 @@ let parse query =
   match run documents query with
   | Success(result, _, _) -> result
   | Failure(errorMsg, _, _) -> raise (System.FormatException(errorMsg))
+
+/// Parses a GraphQL Document. Throws exception on invalid formats.
+let tryParse query =
+  match run documents query with
+  | Success(result, _, _) -> Result.Ok result
+  | Failure(errorMsg, _, _) -> Result.Error errorMsg

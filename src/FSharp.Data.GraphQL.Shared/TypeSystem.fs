@@ -7,10 +7,12 @@ open System.Reflection
 open System.Collections
 open System.Collections.Concurrent
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.Text.Json
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
+open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
@@ -285,9 +287,9 @@ module Introspection =
           SubscriptionType : IntrospectionTypeRef option
           /// Array of all introspection types defined within current schema.
           /// Includes types for queries, mutations and subscriptions.
-          Types : IntrospectionType []
+          Types : IntrospectionType array
           /// Array of all directives supported by current schema.
-          Directives : IntrospectionDirective [] }
+          Directives : IntrospectionDirective array }
 
 /// Represents a subscription as described in the schema.
 type Subscription = {
@@ -431,7 +433,7 @@ and ISchema =
         /// Returns a function called when errors occurred during query execution.
         /// It's used to retrieve messages shown as output to the client.
         /// May be also used to log messages before returning them.
-        abstract ParseError : exn -> string
+        abstract ParseError : FieldPath -> exn -> IGQLError list
 
         /// Returns the subscription provider implementation for this schema.
         abstract SubscriptionProvider : ISubscriptionProvider
@@ -621,12 +623,11 @@ and PlanningContext =
       Document : Document
       Operation : OperationDefinition
       DocumentId : int
-      Metadata : Metadata
-      ValidationResult : ValidationResult<AstError> }
+      Metadata : Metadata }
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
-and Includer = Map<string, obj> -> bool
+and Includer = ImmutableDictionary<string, obj> -> Result<bool, IGQLError list>
 
 /// A node representing part of the current GraphQL query execution plan.
 /// It contains info about both document AST fragment of incoming query as well,
@@ -676,6 +677,7 @@ and ExecutionInfo =
                     |> Seq.tryFind (fun f -> f.Identifier = head)
                     |> Option.bind (fun f -> path f tail)
         path this keys
+
     override this.ToString () =
         let pad indent (sb: Text.StringBuilder) = for i = 0 to indent do sb.Append '\t' |> ignore
         let nameAs info =
@@ -810,7 +812,7 @@ and VarDef =
       /// Type definition in corresponding GraphQL schema.
       TypeDef: InputDef
       /// Optional default value.
-      DefaultValue: Value option }
+      DefaultValue: InputValue option }
 
 
 /// The context used to hold all the information for a schema compiling proccess.
@@ -836,10 +838,10 @@ and ExecutionPlan =
       /// List of variables defined within executed query.
       Variables : VarDef list
       /// A dictionary of metadata associated with custom operations on the planning of this plan.
-      Metadata : Metadata
-      /// The validation result for the document being processed.
-      ValidationResult : ValidationResult<AstError> }
+      Metadata : Metadata }
+
     member x.Item with get(id) = x.Fields |> List.find (fun f -> f.Identifier = id)
+
 
 /// Execution context of the current GraphQL operation. It contains a full
 /// knowledge about which fields will be accessed, what types are associated
@@ -852,7 +854,7 @@ and ExecutionContext =
       /// Execution plan describing, what fiedls are going to be resolved.
       ExecutionPlan : ExecutionPlan
       /// Collection of variables provided to execute current operation.
-      Variables : Map<string, obj>
+      Variables : ImmutableDictionary<string, obj>
       /// Collection of errors that occurred while executing current operation.
       Errors : ConcurrentBag<exn>
       /// A map of all fields of the query and their respective execution operations.
@@ -878,9 +880,9 @@ and ResolveFieldContext =
       /// parametrized inputs.
       Args : Map<string, obj>
       /// Variables provided by the operation caller.
-      Variables : Map<string, obj>
+      Variables : ImmutableDictionary<string, obj>
       /// Field path
-      Path : obj list }
+      Path : FieldPath }
 
     /// Remembers an exception, so it can be included in the final response.
     member x.AddError(error : exn) = x.Context.Errors.Add error
@@ -888,15 +890,15 @@ and ResolveFieldContext =
     /// Tries to find an argument by provided name.
     member x.TryArg(name : string) : 't option =
         match Map.tryFind name x.Args with
-        | Some o -> Some(o :?> 't)
+        | Some o -> Some(o :?> 't) // TODO: Use Convert.ChangeType
         | None -> None
 
-    /// Returns an argument by provided name. If argument was not found
-    /// and exception will be thrown.
+    /// Returns an argument by provided name. If argument was not found a GraphQL exception will be thrown.
+    /// <exception cref="GraphQLException">When argument with the name not found in the Args.</exception>
     member x.Arg(name : string) : 't =
         match Map.tryFind name x.Args with
         | Some found -> downcast found
-        | None -> raise (System.Collections.Generic.KeyNotFoundException(sprintf "Argument '%s' was not provided within context of a field '%s'. Check if it was supplied within GraphQL query." name x.ExecutionInfo.Identifier))
+        | None -> raise (GraphQLException $"Argument '%s{name}' was not provided within context of a field '%s{x.ExecutionInfo.Identifier}'. Check if it was supplied within GraphQL query.")
 
 /// Function type for the compiled field executor.
 and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
@@ -945,8 +947,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
       /// Optional field deprecation warning.
       DeprecationReason : string option
       /// Field metadata definition.
-      Metadata : Metadata
-      }
+      Metadata : Metadata }
 
     interface FieldDef with
         member x.Name = x.Name
@@ -978,6 +979,10 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
         then x.Name + "(" + String.Join(", ", x.Args) + "): " + x.TypeDef.ToString()
         else x.Name + ": " + x.TypeDef.ToString()
 
+and InputParameterValue =
+    | InlineConstant of InputValue
+    | Variable of JsonElement
+
 /// An untyped representation of GraphQL scalar type.
 and ScalarDef =
     interface
@@ -985,11 +990,10 @@ and ScalarDef =
         abstract Name : string
         /// Optional scalar type description.
         abstract Description : string option
-        /// A function used to retrieve a .NET object from provided GraphQL query.
-        abstract CoerceInput : Value -> obj option
-        /// A function used to set a surrogate representation to be
-        /// returned as a query result.
-        abstract CoerceValue : obj -> obj option
+        /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+        abstract CoerceInput : InputParameterValue -> Result<obj, IGQLError list>
+        /// A function used to serialize a .NET object and coerce its value to JSON compatible if needed.
+        abstract CoerceOutput : obj -> obj option
         inherit TypeDef
         inherit NamedDef
         inherit InputDef
@@ -997,17 +1001,17 @@ and ScalarDef =
         inherit LeafDef
     end
 
-/// Concrete representation of the scalar types.
-and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
+/// Concrete representation of the scalar types wrapped into a value object.
+and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> =
     { /// Name of the scalar type.
       Name : string
       /// Optional type description.
       Description : string option
-      /// A function used to retrieve a .NET object from provided GraphQL query.
-      CoerceInput : Value -> 'Val option
+      /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+      CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
       /// A function used to set a surrogate representation to be
       /// returned as a query result.
-      CoerceValue : obj -> 'Val option }
+      CoerceOutput : obj -> 'Primitive option }
 
     interface TypeDef with
         member _.Type = typeof<'Val>
@@ -1026,8 +1030,8 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
     interface ScalarDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input = x.CoerceInput input |> Option.map box
-        member x.CoerceValue value = (x.CoerceValue value) |> Option.map box
+        member x.CoerceInput input = x.CoerceInput input |> Result.map box
+        member x.CoerceOutput value = (x.CoerceOutput value) |> Option.map box
 
     interface InputDef<'Val>
     interface OutputDef<'Val>
@@ -1038,11 +1042,13 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> =
 
     override x.Equals y =
         match y with
-        | :? ScalarDefinition<'Val> as s -> x.Name = s.Name
+        | :? ScalarDefinition<'Primitive, 'Val> as s -> x.Name = s.Name
         | _ -> false
 
     override x.GetHashCode() = x.Name.GetHashCode()
     override x.ToString() = x.Name + "!"
+
+and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
 
 /// A GraphQL representation of single case of the enum type.
 /// Enum value return value is always represented as string.
@@ -1517,6 +1523,11 @@ and InputObjectDef =
         abstract Description : string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef []
+        /// Validates if input object has a a valid combination of filed values.
+        abstract Validator: GQLValidator<obj>
+        /// INTERNAL API: input execution function -
+        /// compiled by the runtime.
+        abstract ExecuteInput : ExecuteInput with get, set
         inherit NamedDef
         inherit InputDef
     end
@@ -1530,13 +1541,23 @@ and InputObjectDefinition<'Val> =
       Description : string option
       /// Lazy resolver for the input object fields. It must be lazy in
       /// order to allow self-recursive type references.
-      Fields : Lazy<InputFieldDef[]> }
+      Fields : Lazy<InputFieldDef[]>
+      /// Validates if input object has a a valid combination of filed values.
+      Validator: GQLValidator<'Val>
+      /// INTERNAL API: input execution function -
+      /// compiled by the runtime.
+      mutable ExecuteInput : ExecuteInput }
+
     interface InputDef
 
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
         member x.Fields = x.Fields.Force()
+        member x.Validator = unbox >> x.Validator
+        member x.ExecuteInput
+            with get () = x.ExecuteInput
+            and set v = x.ExecuteInput <- v
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -1556,7 +1577,7 @@ and InputObjectDefinition<'Val> =
             upcast list
 
 /// Function type used for resolving input object field values.
-and ExecuteInput = Value -> Map<string, obj> -> obj
+and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -1573,6 +1594,7 @@ and InputFieldDef =
         /// INTERNAL API: input execution function -
         /// compiled by the runtime.
         abstract ExecuteInput : ExecuteInput with get, set
+
         inherit IEquatable<InputFieldDef>
     end
 
@@ -2267,1192 +2289,3 @@ module Patterns =
 
     /// Active pattern to match GraphQL type defintion with named types.
     let rec (|Named|_|) (tdef : TypeDef) = named tdef
-
-[<AutoOpen>]
-module SchemaDefinitions =
-    open System.Globalization
-    open System.Reflection
-
-    /// Tries to convert any value to int.
-    let private coerceIntValue (x : obj) : int option =
-        match x with
-        | null -> None
-        | :? int as i -> Some i
-        | :? int64 as l -> Some(int l)
-        | :? double as d -> Some(int d)
-        | :? string as s ->
-            match Int32.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | :? bool as b ->
-            Some(if b then 1
-                 else 0)
-        | other ->
-            try
-                Some(System.Convert.ToInt32 other)
-            with _ -> None
-
-    /// Tries to convert any value to int64.
-    let private coerceLongValue (x : obj) : int64 option =
-        match x with
-        | null -> None
-        | :? int as i -> Some (int64 i)
-        | :? int64 as l -> Some(l)
-        | :? double as d -> Some(int64 d)
-        | :? string as s ->
-            match Int64.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | :? bool as b ->
-            Some(if b then 1L else 0L)
-        | other ->
-            try
-                Some(System.Convert.ToInt64 other)
-            with _ -> None
-
-    /// Tries to convert any value to double.
-    let private coerceFloatValue (x : obj) : double option =
-        match x with
-        | null -> None
-        | :? int as i -> Some(double i)
-        | :? int64 as l -> Some(double l)
-        | :? double as d -> Some d
-        | :? string as s ->
-            match Double.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | :? bool as b ->
-            Some(if b then 1.
-                 else 0.)
-        | other ->
-            try
-                Some(System.Convert.ToDouble other)
-            with _ -> None
-
-    /// Tries to convert any value to bool.
-    let private coerceBoolValue (x : obj) : bool option =
-        match x with
-        | null -> None
-        | :? int as i -> Some(i <> 0)
-        | :? int64 as l -> Some(l <> 0L)
-        | :? double as d -> Some(d <> 0.)
-        | :? string as s ->
-            match Boolean.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | :? bool as b -> Some b
-        | other ->
-            try
-                Some(System.Convert.ToBoolean other)
-            with _ -> None
-
-    /// Tries to convert any value to URI.
-    let private coerceUriValue (x : obj) : Uri option =
-        match x with
-        | null -> None
-        | :? Uri as u -> Some u
-        | :? string as s ->
-            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
-            | true, uri -> Some uri
-            | false, _ -> None
-        | other -> None
-
-    /// Tries to convert any value to DateTime.
-    let private coerceDateValue (x : obj) : DateTime option =
-        match x with
-        | null -> None
-        | :? DateTime as d -> Some d
-        | :? string as s ->
-            match DateTime.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
-        | other -> None
-
-    /// Tries to convert any value to Guid.
-    let private coerceGuidValue (x : obj) : Guid option =
-        match x with
-        | null -> None
-        | :? Guid as g -> Some g
-        | :? string as s ->
-            match Guid.TryParse(s) with
-            | true, guid -> Some guid
-            | false, _ -> None
-        | other -> None
-
-    /// Check if provided obj value is an Option and extract its wrapped value as object if possible
-    let private (|Option|_|) (x : obj) =
-        if x = null then None
-        else
-            let t = x.GetType().GetTypeInfo()
-            if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> then
-                t.GetDeclaredProperty("Value").GetValue(x) |> Some
-            else None
-
-    /// Tries to convert any value to string.
-    let coerceStringValue (x : obj) : string option =
-        match x with
-        | null -> None
-        | :? string as s -> Some s
-        | :? bool as b ->
-            Some(if b then "true"
-                 else "false")
-        | Option o -> Some(o.ToString())
-        | _ -> Some(x.ToString())
-
-    /// Tries to convert any value to generic type parameter.
-    let private coerceIDValue (x : obj) : 't option =
-        match x with
-        | null -> None
-        | :? string as s -> Some (downcast Convert.ChangeType(s, typeof<'t>))
-        | Option o -> Some(downcast Convert.ChangeType(o, typeof<'t>))
-        | _ -> Some(downcast Convert.ChangeType(x, typeof<'t>))
-
-    /// Tries to resolve AST query input to int.
-    let private coerceIntInput =
-        function
-        | IntValue i -> Some (int i)
-        | FloatValue f -> Some(int f)
-        | StringValue s ->
-            match Int32.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | BooleanValue b ->
-            Some(if b then 1
-                 else 0)
-        | _ -> None
-
-    /// Tries to resolve AST query input to int64.
-    let private coerceLongInput =
-        function
-        | IntValue i -> Some (int64 i)
-        | FloatValue f -> Some(int64 f)
-        | StringValue s ->
-            match Int64.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | BooleanValue b ->
-            Some(if b then 1L else 0L)
-        | _ -> None
-
-    /// Tries to resolve AST query input to double.
-    let private coerceFloatInput =
-        function
-        | IntValue i -> Some(double i)
-        | FloatValue f -> Some f
-        | StringValue s ->
-            match Double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture) with
-            | true, i -> Some i
-            | false, _ -> None
-        | BooleanValue b ->
-            Some(if b then 1.
-                 else 0.)
-        | _ -> None
-
-    /// Tries to resolve AST query input to string.
-    let coerceStringInput =
-        function
-        | IntValue i -> Some(i.ToString(CultureInfo.InvariantCulture))
-        | FloatValue f -> Some(f.ToString(CultureInfo.InvariantCulture))
-        | StringValue s -> Some s
-        | BooleanValue b ->
-            Some(if b then "true"
-                 else "false")
-        | _ -> None
-
-    let coerceEnumInput =
-        function
-        | EnumValue e -> Some e
-        | _ -> None
-
-    /// Tries to resolve AST query input to bool.
-    let coerceBoolInput =
-        function
-        | IntValue i ->
-            Some(if i = 0L then false
-                 else true)
-        | FloatValue f ->
-            Some(if f = 0. then false
-                 else true)
-        | StringValue s ->
-            match Boolean.TryParse(s) with
-            | true, i -> Some i
-            | false, _ -> None
-        | BooleanValue b -> Some b
-        | _ -> None
-
-    /// Tries to resolve AST query input to provided generic type.
-    let private coerceIdInput input : 't option=
-        match input with
-        | IntValue i -> Some(downcast Convert.ChangeType(i, typeof<'t>))
-        | StringValue s -> Some(downcast Convert.ChangeType(s, typeof<'t>))
-        | _ -> None
-
-    /// Tries to resolve AST query input to URI.
-    let private coerceUriInput =
-        function
-        | StringValue s ->
-            match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
-            | true, uri -> Some uri
-            | false, _ -> None
-        | _ -> None
-
-    /// Tries to resolve AST query input to DateTime.
-    let private coerceDateInput =
-        function
-        | StringValue s ->
-            match DateTime.TryParse(s) with
-            | true, date -> Some date
-            | false, _ -> None
-        | _ -> None
-
-    /// Tries to resolve AST query input to Guid.
-    let private coerceGuidInput =
-        function
-        | StringValue s ->
-            match Guid.TryParse(s) with
-            | true, guid -> Some guid
-            | false, _ -> None
-        | _ -> None
-
-    /// Wraps a GraphQL type definition, allowing defining field/argument
-    /// to take option of provided value.
-    let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
-
-    /// Wraps a GraphQL type definition, allowing defining field/argument
-    /// to take collection of provided value.
-    let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
-
-    let private ignoreInputResolve (_ : unit) (input : 'T) = ()
-
-    let variableOrElse other value variables =
-        match value with
-        | Variable variableName -> Map.tryFind variableName variables |> Option.toObj
-        | v -> other v
-
-    /// GraphQL type of int
-    let Int : ScalarDefinition<int> =
-        { Name = "Int"
-          Description =
-              Some
-                  "The `Int` scalar type represents non-fractional signed whole numeric values. Int can represent values between -(2^31) and 2^31 - 1."
-          CoerceInput = coerceIntInput
-          CoerceValue = coerceIntValue }
-
-    /// GraphQL type of long
-    let Long : ScalarDefinition<int64> =
-        { Name = "Long"
-          Description =
-              Some
-                  "The `Long` scalar type represents non-fractional signed whole numeric values. Long can represent values between -(2^63) and 2^63 - 1."
-          CoerceInput = coerceLongInput
-          CoerceValue = coerceLongValue }
-
-    /// GraphQL type of boolean
-    let Boolean : ScalarDefinition<bool> =
-        { Name = "Boolean"
-          Description = Some "The `Boolean` scalar type represents `true` or `false`."
-          CoerceInput = coerceBoolInput
-          CoerceValue = coerceBoolValue }
-
-    /// GraphQL type of float
-    let Float : ScalarDefinition<double> =
-        { Name = "Float"
-          Description =
-              Some
-                  "The `Float` scalar type represents signed double-precision fractional values as specified by [IEEE 754](http://en.wikipedia.org/wiki/IEEE_floating_point)."
-          CoerceInput = coerceFloatInput
-          CoerceValue = coerceFloatValue }
-
-    /// GraphQL type of string
-    let String : ScalarDefinition<string> =
-        { Name = "String"
-          Description =
-              Some
-                  "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
-          CoerceInput = coerceStringInput
-          CoerceValue = coerceStringValue }
-
-    /// GraphQL type for custom identifier
-    let ID<'Val> : ScalarDefinition<'Val> =
-        { Name = "ID"
-          Description =
-              Some
-                  "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
-          CoerceInput = coerceIdInput
-          CoerceValue = coerceIDValue }
-
-    let Obj : ScalarDefinition<obj> = {
-            Name = "Object"
-            Description =
-               Some
-                  "The `Object` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
-            CoerceInput = (fun (o: Value) -> Some (o:>obj))
-            CoerceValue = (fun (o: obj) -> Some (o))
-        }
-
-    /// GraphQL type for System.Uri
-    let Uri : ScalarDefinition<Uri> =
-        { Name = "URI"
-          Description =
-              Some
-                  "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String."
-          CoerceInput = coerceUriInput
-          CoerceValue = coerceUriValue }
-
-    /// GraphQL type for System.DateTime
-    let Date : ScalarDefinition<DateTime> =
-        { Name = "Date"
-          Description =
-              Some
-                  "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
-          CoerceInput = coerceDateInput
-          CoerceValue = coerceDateValue }
-
-    /// GraphQL type for System.Guid
-    let Guid : ScalarDefinition<Guid> =
-        { Name = "Guid"
-          Description =
-              Some
-                  "The `Guid` scalar type represents a Globaly Unique Identifier value. It's a 128-bit long byte key, that can be serialized to string."
-          CoerceInput = coerceGuidInput
-          CoerceValue = coerceGuidValue }
-
-    /// GraphQL @include directive.
-    let IncludeDirective : DirectiveDef =
-        { Name = "include"
-          Description =
-              Some "Directs the executor to include this field or fragment only when the `if` argument is true."
-          Locations =
-              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
-          Args =
-              [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Included when true."
-                   TypeDef = Boolean
-                   DefaultValue = None
-                   ExecuteInput =
-                       variableOrElse (coerceBoolInput
-                                       >> Option.map box
-                                       >> Option.toObj) } |] }
-
-    /// GraphQL @skip directive.
-    let SkipDirective : DirectiveDef =
-        { Name = "skip"
-          Description = Some "Directs the executor to skip this field or fragment when the `if` argument is true."
-          Locations =
-              DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT
-          Args =
-              [| { InputFieldDefinition.Name = "if"
-                   Description = Some "Skipped when true."
-                   TypeDef = Boolean
-                   DefaultValue = None
-                   ExecuteInput =
-                       variableOrElse (coerceBoolInput
-                                       >> Option.map box
-                                       >> Option.toObj) } |] }
-
-    /// GraphQL @defer directive.
-    let DeferDirective : DirectiveDef =
-        { Name = "defer"
-          Description = Some "Defers the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
-
-    /// GraphQL @stream directive.
-    let StreamDirective : DirectiveDef =
-        { Name = "stream"
-          Description = Some "Streams the resolution of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
-
-    /// GraphQL @live directive.
-    let LiveDirective : DirectiveDef =
-        { Name = "live"
-          Description = Some "Subscribes for live updates of this field or fragment"
-          Locations =
-            DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
-          Args = [||] }
-
-    let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) =
-        methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
-    let inline internal strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
-
-    /// Common space for all definition helper methods.
-    [<AbstractClass; Sealed>]
-    type Define =
-
-        /// <summary>
-        /// Creates GraphQL type definition for user defined scalars.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="coerceInput">Function used to resolve .NET object from GraphQL query AST.</param>
-        /// <param name="coerceValue">Function used to cross cast to .NET types.</param>
-        /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
-        static member Scalar(name : string, coerceInput : Value -> 'T option,
-                             coerceValue : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
-            { Name = name
-              Description = description
-              CoerceInput = coerceInput
-              CoerceValue = coerceValue }
-
-        /// <summary>
-        /// Creates GraphQL type definition for user defined enums.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="options">List of enum value cases.</param>
-        /// <param name="description">Optional enum description. Usefull for generating documentation.</param>
-        static member Enum(name : string, options : EnumValue<'Val> list, ?description : string) : EnumDef<'Val> =
-            upcast { EnumDefinition.Name = name
-                     Description = description
-                     Options = options |> List.toArray }
-
-        /// <summary>
-        /// Creates a single enum option to be used as argument in <see cref="Schema.Enum"/>.
-        /// </summary>
-        /// <param name="name">Enum value name. Must be unique in scope of the defining enum.</param>
-        /// <param name="value">
-        /// .NET value associated with target enum value. All enum values are represented as strings in GraphQL type system.
-        /// Enum value will be stringified using `ToString()` method when passing to a client.
-        /// </param>
-        /// <param name="description">Optional enum value description. Usefull for generating documentation.</param>
-        /// <param name="deprecationReason">If set, marks an enum value as deprecated.</param>
-        static member EnumValue(name : string, value : 'Val, ?description : string, ?deprecationReason : string) : EnumValue<'Val> =
-            { Name = name
-              Description = description
-              Value = value
-              DeprecationReason = deprecationReason }
-
-        /// <summary>
-        /// Creates GraphQL custom output object type. It can be used as a valid output but not an input object
-        /// (see <see cref="InputObject"/> for more details).
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of fields defined by the current object. Usefull, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional object description. Usefull for generating documentation.</param>
-        /// <param name="interfaces">
-        /// List of implemented interfaces. Object must explicitly define all fields from all interfaces it implements.
-        /// </param>
-        /// <param name="isTypeOf">
-        /// Optional function used to determine if provided .NET object instance matches current object definition.
-        /// </param>
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
-            upcast { ObjectDefinition.Name = name
-                     Description = description
-                     FieldsFn =
-                         lazy (fieldsFn()
-                               |> List.map (fun f -> f.Name, f)
-                               |> Map.ofList)
-                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
-                     IsTypeOf = isTypeOf }
-
-        /// <summary>
-        /// Creates GraphQL custom output object type. It can be used as a valid output but not an input object
-        /// (see <see cref="InputObject"/> for more details).
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fields">List of fields defined by the current object. </param>
-        /// <param name="description">Optional object description. Usefull for generating documentation.</param>
-        /// <param name="interfaces">
-        /// List of implemented interfaces. Object must explicitly define all fields from all interfaces it implements.
-        /// </param>
-        /// <param name="isTypeOf">
-        /// Optional function used to determine if provided .NET object instance matches current object definition.
-        /// </param>
-        static member Object(name : string, fields : FieldDef<'Val> list, ?description : string,
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
-            upcast { ObjectDefinition.Name = name
-                     Description = description
-                     FieldsFn =
-                         lazy (fields
-                               |> List.map (fun f -> f.Name, f)
-                               |> Map.ofList)
-                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
-                     IsTypeOf = isTypeOf }
-
-        /// <summary>
-        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
-        /// .NET class or struct, or a F# record.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
-              Fields = lazy (fieldsFn () |> List.toArray)
-              Description = description }
-
-        /// <summary>
-        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
-        /// .NET class or struct, or a F# record.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fields">List of input fields defined by the current input object. </param>
-        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
-              Description = description
-              Fields = lazy (fields |> List.toArray) }
-
-        /// <summary>
-        /// Creates the top level subscription object that holds all of the possible subscriptions as fields.
-        /// </summary>
-        /// <param name="name">Top level name. Must be unique in scope of the current schema.</param>
-        /// <param name="fields">List of subscription fields to be defined for the schema. </param>
-        /// <param name="description">Optional description. Usefull for generating documentation.</param>
-        static member SubscriptionObject<'Val>(name: string, fields: SubscriptionFieldDef<'Val> list, ?description: string):SubscriptionObjectDefinition<'Val> =
-            { Name = name
-              Fields = (fields |> List.map (fun f -> f.Name, f) |> Map.ofList)
-              Description = description }
-
-        /// <summary>
-        /// Creates field defined inside object types with automatically generated field resolve function.
-        /// Field name must match object's property or field.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
-        /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = description
-                     TypeDef = typedef
-                     Resolve = Resolve.defaultResolve<'Val, 'Res> name
-                     Args = defaultArg args [] |> Array.ofList
-                     DeprecationReason = deprecationReason
-                     Metadata = Metadata.Empty
-                     }
-
-        /// <summary>
-        /// Creates field defined inside interfaces. When used for objects may cause runtime exceptions due to
-        /// lack of resolve function supplied. To use auto generated resolvers use <see cref="AutoField"/>.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = None
-                     TypeDef = typedef
-                     Resolve = Undefined
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty
-                     }
-
-        /// <summary>
-        /// Creates field defined inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = None
-                     TypeDef = typedef
-                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
-
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = None
-                     TypeDef = typedef
-                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = args |> List.toArray
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = args |> List.toArray
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type. Fields is marked as deprecated.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
-                            [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            deprecationReason : string) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Sync(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = args |> List.toArray
-                     DeprecationReason = Some deprecationReason
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = None
-                     TypeDef = typedef
-                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 args : InputFieldDef list,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = args |> List.toArray
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates field defined inside object type with asynchronously resolved value. Fields is marked as deprecated.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 args : InputFieldDef list,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 deprecationReason : string) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = Some description
-                     TypeDef = typedef
-                     Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
-                     Args = args |> List.toArray
-                     DeprecationReason = Some deprecationReason
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates a custom defined field using a custom field execution function.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="execField">Expression used to execute the field.</param>
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
-            upcast { FieldDefinition.Name = name
-                     Description = None
-                     TypeDef = Obj
-                     Resolve = ResolveExpr(execField)
-                     Args = [||]
-                     DeprecationReason = None
-                     Metadata = Metadata.Empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = None
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
-                                        tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = None
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
-                                        tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = args |> List.toArray
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
-                                        tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = args |> List.toArray
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type. Field is marked as deprecated.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
-                                        deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
-                     Args = args |> List.toArray
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member SubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                        description: string,
-                                        args: InputFieldDef list,
-                                        [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> 'Output option>,
-                                        tagsResolver : TagsResolver,
-                                        deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
-                     Args = args |> List.toArray
-                     Filter = Resolve.Filter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = None
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
-                                             tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = None
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
-                                             tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = [||]
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             args: InputFieldDef list,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = args |> List.toArray
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             args: InputFieldDef list,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
-                                             tagsResolver : TagsResolver): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = None
-                     Args = args |> List.toArray
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value. Field is marked as deprecated.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             args: InputFieldDef list,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
-                                             deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
-                     Args = args |> List.toArray
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = fun _ -> Seq.empty }
-
-        /// <summary>
-        /// Creates a subscription field inside object type, with asynchronously resolved value.
-        /// </summary>
-        /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
-        /// <param name="rootdef">GraphQL type definition of the root field's type.</param>
-        /// <param name="outputdef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
-        /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
-        /// <param name="filter">A filter function which decides if the field should be published to clients or not, by returning it as Some or None.</param>
-        /// <param name="tagsResolver">A function that resolves subscription tags, used to choose which filter functions will be used when publishing to subscribers.</param>
-        /// <param name="deprecationReason">Deprecation reason.</param>
-        static member AsyncSubscriptionField(name: string, rootdef: #OutputDef<'Root>, outputdef: #OutputDef<'Output>,
-                                             description: string,
-                                             args: InputFieldDef list,
-                                             [<ReflectedDefinition(true)>] filter: Expr<ResolveFieldContext -> 'Root -> 'Input -> Async<'Output option>>,
-                                             tagsResolver : TagsResolver,
-                                             deprecationReason : string): SubscriptionFieldDef<'Root, 'Input, 'Output> =
-            upcast { Name = name
-                     Description = Some description
-                     RootTypeDef = rootdef
-                     OutputTypeDef = outputdef
-                     DeprecationReason = Some deprecationReason
-                     Args = args |> List.toArray
-                     Filter = Resolve.AsyncFilter(typeof<'Root>, typeof<'Input>, typeof<'Output>, filter)
-                     Metadata = Metadata.Empty
-                     TagsResolver = tagsResolver }
-
-
-        /// <summary>
-        /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,
-        /// and can be used to define arguments to objects and interfaces fields.
-        /// </summary>
-        /// <param name="name">
-        /// Field name. Must be unique in scope of the defining input object or withing field's argument list.
-        /// </param>
-        /// <param name="typedef">GraphQL type definition of the current input type</param>
-        /// <param name="defaultValue">If defined, this value will be used when no matching input has been provided by the requester.</param>
-        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        static member Input(name : string, typedef : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef =
-            upcast { InputFieldDefinition.Name = name
-                     Description = description
-                     TypeDef = typedef
-                     DefaultValue = defaultValue
-                     ExecuteInput = Unchecked.defaultof<ExecuteInput> }
-
-        /// <summary>
-        /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of fields defined by the current interface. Usefull, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
-            upcast { InterfaceDefinition.Name = name
-                     Description = description
-                     FieldsFn = fun () -> fieldsFn() |> List.toArray
-                     ResolveType = resolveType }
-
-        /// <summary>
-        /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fields">List of fields defined by the current interface.</param>
-        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fields : FieldDef<'Val> list, ?description : string,
-                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
-            upcast { InterfaceDefinition.Name = name
-                     Description = description
-                     FieldsFn = fun () -> fields |> List.toArray
-                     ResolveType = resolveType }
-
-        /// <summary>
-        /// Creates a custom GraphQL union type, materialized as one of the types defined. It can be used as interface/object type field.
-        /// In order to work with F# discriminated unions, <paramref name="resolveValue"/> function may be used to unwrap objects
-        /// nested as discriminated union cases.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="options">Interfaces or objects used as union cases.</param>
-        /// <param name="resolveValue">Given F# discriminated union as input, returns .NET object valid with one of the defined GraphQL union cases.</param>
-        /// <param name="resolveType">Resolves an Object definition of one of possible types, give input object.</param>
-        /// <param name="description">Optional union description. Usefull for generating documentation.</param>
-        static member Union(name : string, options : ObjectDef list, resolveValue : 'In -> 'Out,
-                            ?resolveType : 'In -> ObjectDef, ?description : string) : UnionDef<'In> =
-            upcast { UnionDefinition.Name = name
-                     Description = description
-                     Options = options |> List.toArray
-                     ResolveType = resolveType
-                     ResolveValue = resolveValue }

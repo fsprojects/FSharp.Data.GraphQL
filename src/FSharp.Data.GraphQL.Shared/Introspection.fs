@@ -13,108 +13,6 @@ let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if isNull property then null else property.GetValue(o, null)
 
-/// Common GraphQL query that may be used to retrieve overall data
-/// about schema type system itself.
-let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
-__schema {
-  queryType {
-    name
-  }
-  mutationType {
-    name
-  }
-  subscriptionType {
-    name
-  }
-  types {
-    ...FullType
-  }
-  directives {
-    name
-    description
-    locations
-    args {
-      ...InputValue
-    }
-  }
-}
-}
-
-fragment FullType on __Type {
-kind
-name
-description
-fields(includeDeprecated: true) {
-  name
-  description
-  args {
-    ...InputValue
-  }
-  type {
-    ...TypeRef
-  }
-  isDeprecated
-  deprecationReason
-}
-inputFields {
-  ...InputValue
-}
-interfaces {
-  ...TypeRef
-}
-enumValues(includeDeprecated: true) {
-  name
-  description
-  isDeprecated
-  deprecationReason
-}
-possibleTypes {
-  ...TypeRef
-}
-}
-
-fragment InputValue on __InputValue {
-name
-description
-type {
-  ...TypeRef
-}
-defaultValue
-}
-
-fragment TypeRef on __Type {
-kind
-name
-ofType {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-            }
-          }
-        }
-      }
-    }
-  }
-}
-}"""
-
 /// GraphQL enum describing kind of the GraphQL type definition.
 /// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,
 /// NON_NULL or INPUT_OBJECT.
@@ -181,10 +79,10 @@ let rec __Type =
     fieldsFn = fun () ->
     [
         Define.Field("kind", __TypeKind, fun _ t -> t.Kind)
-        Define.Field("name", Nullable String, resolve = fun _ t -> t.Name)
-        Define.Field("description", Nullable String, resolve = fun _ t -> t.Description)
+        Define.Field("name", Nullable StringType, resolve = fun _ t -> t.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ t -> t.Description)
         Define.Field("fields", Nullable (ListOf __Field),
-            args = [Define.Input("includeDeprecated", Boolean, false) ],
+            args = [Define.Input("includeDeprecated", BooleanType, false) ],
             resolve = fun ctx t ->
                 match t.Name with
                 | None -> None
@@ -206,7 +104,7 @@ let rec __Type =
                 let found = findIntrospected ctx name
                 found.PossibleTypes |> Option.map Array.toSeq)
         Define.Field("enumValues", Nullable (ListOf __EnumValue),
-            args = [Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
+            args = [Define.Input("includeDeprecated", BooleanType, false) ], resolve = fun ctx t ->
             match t.Name with
             | None -> None
             | Some name ->
@@ -232,10 +130,10 @@ and __InputValue =
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ f -> f.Name)
-        Define.Field("description", Nullable String, resolve = fun _ f -> f.Description)
+        Define.Field("name", StringType, resolve = fun _ f -> f.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ f -> f.Description)
         Define.Field("type", __Type, resolve = fun _ f -> f.Type)
-        Define.Field("defaultValue", Nullable String, fun _ f -> f.DefaultValue)
+        Define.Field("defaultValue", Nullable StringType, fun _ f -> f.DefaultValue)
     ])
 
 /// Object and Interface types are described by a list of Fields, each of
@@ -246,12 +144,12 @@ and __Field =
     description = "Object and Interface types are described by a list of Fields, each of which has a name, potentially a list of arguments, and a return type.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, fun _ f -> f.Name)
-        Define.Field("description", Nullable String, fun _ f -> f.Description)
+        Define.Field("name", StringType, fun _ f -> f.Name)
+        Define.Field("description", Nullable StringType, fun _ f -> f.Description)
         Define.Field("args", ListOf __InputValue, fun _ f -> f.Args)
         Define.Field("type", __Type, fun _ f -> f.Type)
-        Define.Field("isDeprecated", Boolean, resolve = fun _ f -> f.IsDeprecated)
-        Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
+        Define.Field("isDeprecated", BooleanType, resolve = fun _ f -> f.IsDeprecated)
+        Define.Field("deprecationReason", Nullable StringType, fun _ f -> f.DeprecationReason)
     ])
 
 /// One possible value for a given Enum. Enum values are unique values,
@@ -263,10 +161,10 @@ and __EnumValue =
     description = "One possible value for a given Enum. Enum values are unique values, not a placeholder for a string or numeric value. However an Enum value is returned in a JSON response as a string.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ e -> e.Name)
-        Define.Field("description", Nullable String, resolve = fun _ e -> e.Description)
-        Define.Field("isDeprecated", Boolean, resolve = fun _ e -> Option.isSome e.DeprecationReason)
-        Define.Field("deprecationReason", Nullable String, resolve = fun _ e -> e.DeprecationReason)
+        Define.Field("name", StringType, resolve = fun _ e -> e.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ e -> e.Description)
+        Define.Field("isDeprecated", BooleanType, resolve = fun _ e -> Option.isSome e.DeprecationReason)
+        Define.Field("deprecationReason", Nullable StringType, resolve = fun _ e -> e.DeprecationReason)
     ])
 
 and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation) =
@@ -284,13 +182,13 @@ and __Directive =
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ directive -> directive.Name)
-        Define.Field("description", Nullable String, resolve = fun _ directive -> directive.Description)
+        Define.Field("name", StringType, resolve = fun _ directive -> directive.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ directive -> directive.Description)
         Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> directive.Locations)
         Define.Field("args", ListOf __InputValue, resolve = fun _ directive -> directive.Args)
-        Define.Field("onOperation", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.QUERY; DirectiveLocation.MUTATION; DirectiveLocation.SUBSCRIPTION |]))
-        Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FRAGMENT_SPREAD; DirectiveLocation.INLINE_FRAGMENT; DirectiveLocation.FRAGMENT_DEFINITION |]))
-        Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
+        Define.Field("onOperation", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.QUERY; DirectiveLocation.MUTATION; DirectiveLocation.SUBSCRIPTION |]))
+        Define.Field("onFragment", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FRAGMENT_SPREAD; DirectiveLocation.INLINE_FRAGMENT; DirectiveLocation.FRAGMENT_DEFINITION |]))
+        Define.Field("onField", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
     ])
 
 /// GraphQL object defining capabilities of GraphQL server. It exposes

@@ -73,15 +73,18 @@ module AsyncVal =
 
 
     /// Applies rescue fn in case when contained Async value throws an exception.
-    let rescue (fn: exn -> 'T) (x: AsyncVal<'T>) =
+    let rescue path (fn: FieldPath -> exn -> IGQLError list) (x: AsyncVal<'t>) =
         match x with
-        | Value v -> Value(v)
+        | Value v -> Value(Ok v)
         | Async a ->
             Async(async {
-                try return! a
-                with e -> return fn e
+                try
+                    let! v = a
+                    return Ok v
+                with e -> return fn path e |> Error
             })
-        | Failure f -> Value(fn f)
+        | Failure f -> Value(fn path f |> Error)
+        |> map (Result.mapError (List.map (GQLProblemDetails.OfFieldError (path |> List.rev))))
 
 
     /// Folds content of AsyncVal over provided initial state zero using provided fn.

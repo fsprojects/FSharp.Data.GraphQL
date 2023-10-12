@@ -3,9 +3,14 @@
 
 module FSharp.Data.GraphQL.Tests.IntrospectionTests
 
+open Xunit
+open System
+open System.Text.Json
+open System.Text.Json.Serialization
+open FSharp.Data.GraphQL.Samples.StarWarsApi
+
 #nowarn "25"
 
-open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
@@ -37,10 +42,10 @@ let inputFieldQuery = """{
 """
 
 [<Fact>]
-let ``Input field should be marked as nullable when defaultValue is provided`` () =
+let ``Input field must be marked as nullable when defaultValue is provided`` () =
     let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "The only field", [
-            Define.Input("in", String, defaultValue = "1")
+        Define.Field("onlyField", StringType, "The only field", [
+            Define.Input("in", StringType, defaultValue = "1")
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
@@ -67,14 +72,14 @@ let ``Input field should be marked as nullable when defaultValue is provided`` (
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
-let ``Input field should be marked as non-nullable when defaultValue is not provided`` () =
+let ``Input field must be marked as non-nullable when defaultValue is not provided`` () =
     let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "The only field", [
-            Define.Input("in", String)
+        Define.Field("onlyField", StringType, "The only field", [
+            Define.Input("in", StringType)
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
@@ -101,14 +106,14 @@ let ``Input field should be marked as non-nullable when defaultValue is not prov
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
-let ``Input field should be marked as nullable when its type is nullable`` () =
+let ``Input field must be marked as nullable when its type is nullable`` () =
     let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "The only field", [
-            Define.Input("in", Nullable String)
+        Define.Field("onlyField", StringType, "The only field", [
+            Define.Input("in", Nullable StringType)
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
@@ -135,14 +140,14 @@ let ``Input field should be marked as nullable when its type is nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
-let ``Input field should be marked as nullable when its type is nullable and have default value provided`` () =
+let ``Input field must be marked as nullable when its type is nullable and have default value provided`` () =
     let root = Define.Object("Query", [
-        Define.Field("onlyField", String, "The only field", [
-            Define.Input("in", Nullable String, defaultValue = Some "1")
+        Define.Field("onlyField", StringType, "The only field", [
+            Define.Input("in", Nullable StringType, defaultValue = Some "1")
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
@@ -169,12 +174,12 @@ let ``Input field should be marked as nullable when its type is nullable and hav
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
-let ``Introspection schema should be serializable back and forth using json`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
+let ``Introspection schema must be serializable back and forth using json`` () =
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let query = """query IntrospectionQuery {
       __schema {
@@ -280,15 +285,22 @@ let ``Introspection schema should be serializable back and forth using json`` ()
     match result with
     | Direct (data, errors) ->
         empty errors
-        let json = toJson data
-        let deserialized : IntrospectionData = Helpers.fromJson json
+        let additionalConverters = Seq.empty //seq { NameValueLookupConverter() :> JsonConverter }
+        let json = JsonSerializer.Serialize(data, Json.getSerializerOptions additionalConverters)
+        let skippableOptions =
+            // Use .NET 6 built-in deserialization of F# types to prevent `Some null` deserialization to happen
+            let skippableOptions = Json.defaultJsonFSharpOptions.WithTypes(JsonFSharpTypes.Minimal)
+            let options = JsonSerializerOptions ()
+            options |> Json.configureSerializerOptions skippableOptions additionalConverters
+            options
+        let deserialized = JsonSerializer.Deserialize<IntrospectionResult>(json, skippableOptions)
         let expected = (schema :> ISchema).Introspected
-        deserialized.Data.__schema |> equals expected
-    | _ -> fail "Expected Direct GQResponse"
+        deserialized.__schema |> equals expected
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let query = """{ __type(name: "String") {
       kind
@@ -316,8 +328,8 @@ let ``Core type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
@@ -326,11 +338,11 @@ type UserInput = { Name: string }
 let ``Introspection works with query and mutation sharing same generic param`` =
     let user =
         Define.Object<User>("User",
-            [ Define.AutoField("firstName", String)
-              Define.AutoField("lastName", String) ])
+            [ Define.AutoField("firstName", StringType)
+              Define.AutoField("lastName", StringType) ])
     let userInput =
         Define.InputObject<UserInput>("UserInput",
-            [ Define.Input("name", String) ])
+            [ Define.Input("name", StringType) ])
     let query =
         Define.Object<User list>("Query",
             [ Define.Field("users", ListOf user, "Query object", [ Define.Input("input", userInput) ], fun _ u -> u) ])
@@ -338,11 +350,11 @@ let ``Introspection works with query and mutation sharing same generic param`` =
         Define.Object<User list>("Mutation",
             [ Define.Field("addUser", user, "Adds an user", [ Define.Input("input", userInput) ], fun _ u -> u |> List.head)])
     let schema = Schema(query, mutation)
-    Executor(schema).AsyncExecute(Introspection.IntrospectionQuery) |> sync |> ignore
+    Executor(schema).AsyncExecute(IntrospectionQuery.Definition) |> sync |> ignore
 
 [<Fact>]
 let ``Default field type definitions are considered non-null`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -382,12 +394,12 @@ let ``Default field type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", Nullable String) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", Nullable StringType) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -424,12 +436,12 @@ let ``Nullabe field type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Int) ], fun _ () -> null) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "", [ Define.Input("onlyArg", IntType) ], fun _ () -> null) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -473,12 +485,12 @@ let ``Default field args type definitions are considered non-null`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
-    let root = Define.Object("Query", [ Define.Field("onlyField", String, "", [ Define.Input("onlyArg", Nullable Int) ], fun _ () -> null) ])
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "", [ Define.Input("onlyArg", Nullable IntType) ], fun _ () -> null) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
@@ -519,15 +531,15 @@ let ``Nullable field args type definitions are considered nullable`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Introspection executes an introspection query`` () =
-    let root = Define.Object("QueryRoot", [ Define.Field("onlyField", String) ])
+    let root = Define.Object("QueryRoot", [ Define.Field("onlyField", StringType) ])
     let schema = Schema(root)
     let (Patterns.Object raw) = root
-    let result = sync <| Executor(schema).AsyncExecute(parse Introspection.IntrospectionQuery, raw)
+    let result = sync <| Executor(schema).AsyncExecute(parse IntrospectionQuery.Definition, raw)
     let expected =
       NameValueLookup.ofList [
         "__schema", upcast NameValueLookup.ofList [
@@ -549,7 +561,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "String"
-                            "description", upcast "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The String type is most often used by GraphQL to represent free-form human-readable text."
+                            "description", upcast "The `String` scalar type represents textual data, represented as UTF-8 character sequences. The `String` type is most often used by GraphQL to represent free-form human-readable text."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -579,7 +591,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "ID"
-                            "description", upcast "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The ID type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
+                            "description", upcast "The `ID` scalar type represents a unique identifier, often used to refetch an object or as key for a cache. The `ID` type appears in a JSON response as a String; however, it is not intended to be human-readable. When expected as an input type, any string (such as `\"4\"`) or integer (such as `4`) input value will be accepted as an ID."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -588,8 +600,18 @@ let ``Introspection executes an introspection query`` () =
                     ]
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
-                            "name", upcast "Date"
-                            "description", upcast "The `Date` scalar type represents a Date value with Time component. The Date type appears in a JSON response as a String representation compatible with ISO-8601 format."
+                            "name", upcast "DateTimeOffset"
+                            "description", upcast "The `DateTimeOffset` scalar type represents a Date value with Time component. The `DateTimeOffset` type appears in a JSON response as a String representation compatible with ISO-8601 format."
+                            "fields", null
+                            "inputFields", null
+                            "interfaces", null
+                            "enumValues", null
+                            "possibleTypes", null
+                    ]
+                    box <| NameValueLookup.ofList [
+                            "kind", upcast "SCALAR"
+                            "name", upcast "DateOnly"
+                            "description", upcast "The `DateOnly` scalar type represents a Date value without Time component. The `DateOnly` type appears in a JSON response as a `String` representation of full-date value as specified by [IETF 3339](https://www.ietf.org/rfc/rfc3339.txt)."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -599,7 +621,7 @@ let ``Introspection executes an introspection query`` () =
                     box <| NameValueLookup.ofList [
                             "kind", upcast "SCALAR"
                             "name", upcast "URI"
-                            "description", upcast "The `URI` scalar type represents a string resource identifier compatible with URI standard. The URI type appears in a JSON response as a String."
+                            "description", upcast "The `URI` scalar type represents a string resource identifier compatible with URI standard. The `URI` type appears in a JSON response as a String."
                             "fields", null
                             "inputFields", null
                             "interfaces", null
@@ -1391,5 +1413,5 @@ let ``Introspection executes an introspection query`` () =
     match result with
     | Direct(data, errors) ->
       empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+      data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

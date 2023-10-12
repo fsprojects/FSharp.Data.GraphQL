@@ -3,6 +3,7 @@
   <PropertyGroup>
     <TargetFrameworks>netstandard2.0;net6.0;net7.0</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
 
     <Description>Shared library for FSharp.Data.GraphQL.Server and FSharp.Data.GraphQL.Cient</Description>
@@ -33,23 +34,34 @@
 
   <ItemGroup>
     <PackageReference Include="FParsec" />
+    <PackageReference Include="FSharp.SystemTextJson" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="System.Collections.Immutable" />
+    <PackageReference Include="System.Text.Json" />
+    <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Portable.System.DateTimeOnly" VersionOverride="7.*" />
     <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)" />
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Diagnostics.fs" />
-    <Compile Include="Extensions.fs" />
-    <Compile Include="Prolog.fs" />
-    <Compile Include="MemoryCache.fs" />
-    <Compile Include="Ast.fs" />
-    <Compile Include="AsyncVal.fs" />
+    <Compile Include="Helpers\Diagnostics.fs" />
+    <Compile Include="Helpers\ObjAndStructConversions.fs" />
+    <Compile Include="Helpers\Extensions.fs" />
+    <Compile Include="Helpers\Reflection.fs" />
+    <Compile Include="Helpers\MemoryCache.fs" />
+    <Compile Include="Errors.fs" />
+    <Compile Include="Exceptions.fs" />
     <Compile Include="ValidationTypes.fs" />
+    <Compile Include="AsyncVal.fs" />
+    <Compile Include="Ast.fs" />
+    <Compile Include="AstExtensions.fs" />
     <Compile Include="TypeSystem.fs" />
+    <Compile Include="SchemaDefinitions.fs" />
+    <Compile Include="SchemaDefinitionsExtensions.fs" />
+    <Compile Include="IntrospectionQuery.fs" />
     <Compile Include="Introspection.fs" />
     <Compile Include="Validation.fs" />
     <Compile Include="ValidationResultCache.fs" />
     <Compile Include="Parser.fs" />
-    <Compile Include="TypeSystemExtensions.fs" />
-    <Compile Include="AstExtensions.fs" />
   </ItemGroup>
+
 </Project>

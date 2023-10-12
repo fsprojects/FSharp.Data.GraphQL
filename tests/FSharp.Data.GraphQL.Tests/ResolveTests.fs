@@ -20,7 +20,7 @@ let testSchema testFields : Schema<TestData> = Schema (Define.Object ("Query", f
 
 [<Fact>]
 let ``Execute uses default resolve to accesses properties`` () =
-    let schema = testSchema [ Define.AutoField ("test", String) ]
+    let schema = testSchema [ Define.AutoField ("test", StringType) ]
     let expected = NameValueLookup.ofList [ "test", "testValue" :> obj ]
 
     let actual =
@@ -30,13 +30,13 @@ let ``Execute uses default resolve to accesses properties`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+        data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute uses provided resolve function to accesses properties`` () =
     let schema =
-        testSchema [ Define.Field ("test", String, "", [ Define.Input ("a", String) ], resolve = fun ctx d -> d.Test + ctx.Arg ("a")) ]
+        testSchema [ Define.Field ("test", StringType, "", [ Define.Input ("a", StringType) ], resolve = fun ctx d -> d.Test + ctx.Arg ("a")) ]
 
     let expected = NameValueLookup.ofList [ "test", "testValueString" :> obj ]
 
@@ -48,8 +48,8 @@ let ``Execute uses provided resolve function to accesses properties`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+        data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type private Fruit =
     | Apple
@@ -89,15 +89,15 @@ let ``Execute resolves enums to their names`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+        data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Execute resolves enums arguments from their names`` () =
     let schema =
         testSchema [ Define.Field (
                          "foo",
-                         String,
+                         StringType,
                          "",
                          [ Define.Input ("fruit", fruitType, defaultValue = Cherry) ],
                          resolve =
@@ -115,5 +115,5 @@ let ``Execute resolves enums arguments from their names`` () =
     match actual with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+        data |> equals (upcast expected)
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"

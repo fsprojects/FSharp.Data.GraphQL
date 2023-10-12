@@ -60,14 +60,14 @@ let ``AsyncVal computation defines zero value`` () =
 
 [<Fact>]
 let ``AsyncVal can be returned from Async computation`` () =
-    let a = async { return! asyncVal { return 1 } }
+    let a = async { return! asyncVal.Return 1 }
     let res = a |> sync
     res |> equals 1
 
 [<Fact>]
 let ``AsyncVal can be bound inside Async computation`` () =
     let a = async {
-        let! v = asyncVal { return 1 }
+        let! v = asyncVal.Return 1
         return v }
     let res = a |> sync
     res |> equals 1
