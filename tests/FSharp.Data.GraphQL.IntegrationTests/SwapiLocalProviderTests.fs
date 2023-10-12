@@ -4,6 +4,7 @@ open Xunit
 open Helpers
 open FSharp.Data.GraphQL
 open System.Net.Http
+open System.Threading.Tasks
 
 // Local provider should be able to be created from local introspection json file.
 type Provider = GraphQLProvider<"introspection.json">
@@ -85,20 +86,20 @@ hero (id: "1000") {
             Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to start a simple query operation synchronously`` () =
     use context = getContext()
     SimpleOperation.operation.Run(context)
     |> SimpleOperation.validateResult
 
-[<Fact>]
-let ``Should be able to start a simple query operation asynchronously`` () =
+[<Fact; Trait("Execution", "Async")>]
+let ``Should be able to start a simple query operation asynchronously`` () : Task = task {
     use context = getContext()
-    SimpleOperation.operation.AsyncRun(context)
-    |> Async.RunSynchronously
-    |> SimpleOperation.validateResult
+    let! result = SimpleOperation.operation.AsyncRun(context)
+    result |> SimpleOperation.validateResult
+}
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to use pattern matching methods on an union type`` () =
     use context = getContext()
     let result = SimpleOperation.operation.Run(context)
@@ -157,18 +158,18 @@ module MutationOperation =
         result.Data.Value.SetMoon.Value.Name |> equals (Some "Tatooine")
         result.Data.Value.SetMoon.Value.IsMoon |> equals (Some true)
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a mutation synchronously`` () =
     use context = getContext()
     MutationOperation.operation.Run(context)
     |> MutationOperation.validateResult
 
-[<Fact>]
-let ``Should be able to run a mutation asynchronously`` () =
+[<Fact; Trait("Execution", "Async")>]
+let ``Should be able to run a mutation asynchronously`` () : Task = task {
     use context = getContext()
-    MutationOperation.operation.AsyncRun(context)
-    |> Async.RunSynchronously
-    |> MutationOperation.validateResult
+    let! result = MutationOperation.operation.AsyncRun(context)
+    result |> MutationOperation.validateResult
+}
 
 module FileOperation =
 
@@ -211,7 +212,7 @@ module FileOperation =
             Name = Some "Luke Skywalker";};}"""
         actual |> equals expected
 
-[<Fact>]
+[<Fact; Trait("Execution", "Sync")>]
 let ``Should be able to run a query from a query file`` () =
     use context = getContext()
     FileOperation.fileop.Run(context)

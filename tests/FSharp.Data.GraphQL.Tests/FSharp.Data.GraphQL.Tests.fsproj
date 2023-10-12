@@ -67,8 +67,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Content Condition="$(OS) != Unix" Include="xunit.runner.json" />
-    <Content Condition="$(OS) == Unix" Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
