@@ -45,7 +45,8 @@ let inputFieldQuery = """{
 let ``Input field must be marked as nullable when defaultValue is provided`` () =
     let root = Define.Object("Query", [
         Define.Field("onlyField", StringType, "The only field", [
-            Define.Input("in", StringType, defaultValue = "1")
+            Define.Input("inInt", IntType, defaultValue = 1)
+            Define.Input("inString", StringType, defaultValue = "this is a default value")
         ], fun _ _ -> "Only value")
     ])
     let schema = Schema(root)
@@ -57,23 +58,29 @@ let ``Input field must be marked as nullable when defaultValue is provided`` () 
                     "name", upcast "onlyField"
                     "args", upcast [
                         NameValueLookup.ofList [
-                            "name", upcast "in"
+                            "name", upcast "inInt"
+                            "type", upcast NameValueLookup.ofList [
+                                "kind", upcast "SCALAR"
+                                "name", upcast "Int"
+                            ]
+                            "defaultValue", upcast "1"
+                        ]
+                        NameValueLookup.ofList [
+                            "name", upcast "inString"
                             "type", upcast NameValueLookup.ofList [
                                 "kind", upcast "SCALAR"
                                 "name", upcast "String"
                             ]
-                            "defaultValue", upcast "1"
+                            "defaultValue", upcast "\"this is a default value\""
                         ]
                     ]
                 ]
             ]
         ]
     ]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Input field must be marked as non-nullable when defaultValue is not provided`` () =
@@ -103,11 +110,9 @@ let ``Input field must be marked as non-nullable when defaultValue is not provid
             ]
         ]
     ]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Input field must be marked as nullable when its type is nullable`` () =
@@ -137,11 +142,9 @@ let ``Input field must be marked as nullable when its type is nullable`` () =
             ]
         ]
     ]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Input field must be marked as nullable when its type is nullable and have default value provided`` () =
@@ -164,18 +167,16 @@ let ``Input field must be marked as nullable when its type is nullable and have 
                                 "kind", upcast "SCALAR"
                                 "name", upcast "String"
                             ]
-                            "defaultValue", upcast "1"
+                            "defaultValue", upcast "\"1\""
                         ]
                     ]
                 ]
             ]
         ]
     ]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Introspection schema must be serializable back and forth using json`` () =
@@ -282,8 +283,7 @@ let ``Introspection schema must be serializable back and forth using json`` () =
       }
     }"""
     let result = Executor(schema).AsyncExecute(query) |> sync
-    match result with
-    | Direct (data, errors) ->
+    ensureDirect result <| fun data errors ->
         empty errors
         let additionalConverters = Seq.empty //seq { NameValueLookupConverter() :> JsonConverter }
         let json = JsonSerializer.Serialize(data, Json.getSerializerOptions additionalConverters)
@@ -296,7 +296,6 @@ let ``Introspection schema must be serializable back and forth using json`` () =
         let deserialized = JsonSerializer.Deserialize<IntrospectionResult>(json, skippableOptions)
         let expected = (schema :> ISchema).Introspected
         deserialized.__schema |> equals expected
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 [<Fact>]
 let ``Core type definitions are considered nullable`` () =
@@ -325,11 +324,9 @@ let ``Core type definitions are considered nullable`` () =
             "kind", upcast "SCALAR"
             "name", upcast "String"
             "ofType", null]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
@@ -391,11 +388,9 @@ let ``Default field type definitions are considered non-null`` () =
                             "kind", upcast "SCALAR"
                             "name", upcast "String"
                             "ofType", null]]]]]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Nullabe field type definitions are considered nullable`` () =
@@ -433,11 +428,9 @@ let ``Nullabe field type definitions are considered nullable`` () =
                         "kind", upcast "SCALAR"
                         "name", upcast "String"
                         "ofType", null]]]]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
@@ -482,11 +475,9 @@ let ``Default field args type definitions are considered non-null`` () =
                                     "kind", upcast "SCALAR"
                                     "name", upcast "Int"
                                     "ofType", null]]]]]]]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
@@ -528,11 +519,9 @@ let ``Nullable field args type definitions are considered nullable`` () =
                                 "kind", upcast "SCALAR"
                                 "name", upcast "Int"
                                 "ofType", null ]]]]]]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Introspection executes an introspection query`` () =
@@ -910,7 +899,7 @@ let ``Introspection executes an introspection query`` () =
                                                      "kind", upcast "SCALAR"
                                                      "name", upcast "Boolean"
                                                      "ofType", null]
-                                                   "defaultValue", upcast "False"];]
+                                                   "defaultValue", upcast "false"];]
                                       "type", upcast NameValueLookup.ofList [
                                               "kind", upcast "LIST"
                                               "name", null
@@ -934,7 +923,7 @@ let ``Introspection executes an introspection query`` () =
                                                      "kind", upcast "SCALAR"
                                                      "name", upcast "Boolean"
                                                      "ofType", null]
-                                                   "defaultValue", upcast "False"];]
+                                                   "defaultValue", upcast "false"];]
                                       "type", upcast NameValueLookup.ofList [
                                               "kind", upcast "LIST"
                                               "name", null
@@ -1410,8 +1399,6 @@ let ``Introspection executes an introspection query`` () =
                             upcast "FRAGMENT_SPREAD";
                             upcast "INLINE_FRAGMENT";]
                         "args", upcast []]]]]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data |> equals (upcast expected)
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
