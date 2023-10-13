@@ -11,7 +11,7 @@ open System.Collections.Immutable
 /// General helper functions and types.
 module Helpers =
 
-    /// Casts a System.Object to an option to a System.Object option.
+    /// Casts a System.Object to a System.Object option.
     let optionCast (value: obj) =
         if isNull value then None
         else

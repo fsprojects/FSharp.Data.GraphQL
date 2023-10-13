@@ -12,6 +12,7 @@ open FSharp.Control.Reactive
 open System.Collections.Generic
 open System.Reactive.Linq
 open System.Reactive.Subjects
+open System.Text.Json
 
 type private Channel = ISubject<obj>
 
@@ -62,6 +63,8 @@ type SchemaConfig =
       SubscriptionProvider : ISubscriptionProvider
       /// Provider for the back-end of the live query subscription system.
       LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
+      /// JSON serialization options
+      JsonOptions : JsonSerializerOptions
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() =
@@ -131,7 +134,8 @@ type SchemaConfig =
                 | :? GraphQLException as ex -> [ex]
                 | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
-          LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
+          LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider()
+          JsonOptions = JsonSerializerOptions.Default }
     /// <summary>
     /// Default SchemaConfig with buffered stream support.
     /// This config modifies the stream directive to have two optional arguments: 'interval' and 'preferredBatchSize'.
@@ -223,14 +227,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         // We need this so a default value that is an option is not printed as "Some"
-        let stringify =
+        let unwrap =
             function
-            | ObjectOption x -> string x
-            | x -> string x
+            | ObjectOption x -> x
+            | x -> x
+        let defaultValue =
+            inputDef.DefaultValue
+            |> Option.map (fun value -> JsonSerializer.Serialize(unwrap value, schemaConfig.JsonOptions))
         { Name = inputDef.Name
           Description = inputDef.Description
           Type = introspectTypeRef (Option.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
-          DefaultValue = inputDef.DefaultValue |> Option.map stringify }
+          DefaultValue = defaultValue }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
