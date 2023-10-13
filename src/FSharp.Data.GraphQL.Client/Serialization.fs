@@ -23,7 +23,7 @@ module Serialization =
     let private downcastNone<'T> t =
         match t with
         | Option t -> downcast (makeOption t null)
-        | _ -> failwithf "Error parsing JSON value: %O is not an option value." t
+        | _ -> failwith $"Error parsing JSON value: %O{t} is not an option value."
 
     let private downcastType (t : Type) x =
         match t with
@@ -44,30 +44,30 @@ module Serialization =
         | t when isUriType t ->
             match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
             | (true, uri) -> downcastType t uri
-            | _ -> failwithf "Error parsing JSON value: %O is an URI type, but parsing of value \"%s\" failed." t s
+            | _ -> failwith $"Error parsing JSON value: %O{t} is an URI type, but parsing of value \"%s{s}\" failed."
         | t when isDateTimeType t ->
             match DateTime.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
-            | _ -> failwithf "Error parsing JSON value: %O is a date type, but parsing of value \"%s\" failed." t s
+            | _ -> failwith $"Error parsing JSON value: %O{t} is a date type, but parsing of value \"%s{s}\" failed."
         | t when isDateTimeOffsetType t ->
             match DateTimeOffset.TryParse(s, CultureInfo.InvariantCulture, DateTimeStyles.None) with
             | (true, d) -> downcastType t d
-            | _ -> failwithf "Error parsing JSON value: %O is a date time offset type, but parsing of value \"%s\" failed." t s
+            | _ -> failwith $"Error parsing JSON value: %O{t} is a date time offset type, but parsing of value \"%s{s}\" failed."
         | t when isGuidType t ->
             match Guid.TryParse(s) with
             | (true, g) -> downcastType t g
-            | _ -> failwithf "Error parsing JSON value: %O is a Guid type, but parsing of value \"%s\" failed." t s
+            | _ -> failwith $"Error parsing JSON value: %O{t} is a Guid type, but parsing of value \"%s{s}\" failed."
         | t when isEnumType t ->
             match t with
             | (Option et | et) ->
                 try Enum.Parse(et, s) |> downcastType t
-                with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
-        | _ -> failwithf "Error parsing JSON value: %O is not a string type." t
+                with _ -> failwith $"Error parsing JSON value: %O{t} is a Enum type, but parsing of value \"%s{s}\" failed."
+        | _ -> failwith $"Error parsing JSON value: %O{t} is not a string type."
 
     let private downcastBoolean (t : Type) b =
         match t with
         | t when isBooleanType t -> downcastType t b
-        | _ -> failwithf "Error parsing JSON value: %O is not a boolean type." t
+        | _ -> failwith $"Error parsing JSON value: %O{t} is not a boolean type."
 
     let rec private getArrayValue (t : Type) (converter : Type -> JsonValue -> obj) (items : JsonValue []) =
         let castArray itemType (items : obj []) : obj =
@@ -93,15 +93,15 @@ module Serialization =
             | Option t -> getArrayValue t converter items |> makeOption t
             | Array itype | Seq itype -> items |> Array.map (converter itype) |> castArray itype
             | List itype -> items |> Array.map (converter itype) |> Array.toList |> castList itype
-            | _ -> failwithf "Error parsing JSON value: %O is not an array type." t)
+            | _ -> failwith $"Error parsing JSON value: %O{t} is not an array type.")
 
     let private downcastNumber (t : Type) n =
         match t with
         | t when isNumericType t -> downcastType t n
-        | _ -> failwithf "Error parsing JSON value: %O is not a numeric type." t
+        | _ -> failwith $"Error parsing JSON value: %O{t} is not a numeric type."
 
     let rec private convert t parsed : obj =
-        Tracer.runAndMeasureExecutionTime (sprintf "Converted JsonValue to %O type." t) (fun _ ->
+        Tracer.runAndMeasureExecutionTime $"Converted JsonValue to %O{t} type." (fun _ ->
             match parsed with
             | JsonValue.Null -> downcastNone t
             | JsonValue.String s -> downcastString t s
@@ -133,7 +133,7 @@ module Serialization =
 
     let deserializeRecord<'T> (json : string) : 'T =
         let t = typeof<'T>
-        Tracer.runAndMeasureExecutionTime (sprintf "Deserialized JSON string to record type %s." (t.ToString())) (fun _ ->
+        Tracer.runAndMeasureExecutionTime $"Deserialized JSON string to record type %O{t}." (fun _ ->
         downcast (JsonValue.Parse(json) |> convert t))
 
     let deserializeMap values =
@@ -159,7 +159,7 @@ module Serialization =
         then JsonValue.Null
         else
             let t = x.GetType()
-            Tracer.runAndMeasureExecutionTime (sprintf "Converted object type %s to JsonValue" (t.ToString())) (fun _ ->
+            Tracer.runAndMeasureExecutionTime $"Converted object type %O{t} to JsonValue" (fun _ ->
                 match x with
                 | null -> JsonValue.Null
                 | OptionValue None -> JsonValue.Null
@@ -190,7 +190,7 @@ module Serialization =
                     JsonValue.Record items)
 
     let serializeRecord (x : obj) =
-        Tracer.runAndMeasureExecutionTime (sprintf "Serialized object type %s to a JSON string" (x.GetType().ToString())) (fun _ ->
+        Tracer.runAndMeasureExecutionTime $"Serialized object type %O{x.GetType()} to a JSON string" (fun _ ->
             (toJsonValue x).ToString())
 
     let deserializeSchema (json : string) =
