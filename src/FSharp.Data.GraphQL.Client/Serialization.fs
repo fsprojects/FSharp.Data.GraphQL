@@ -62,7 +62,6 @@ module Serialization =
             | (Option et | et) ->
                 try Enum.Parse(et, s) |> downcastType t
                 with _ -> failwithf "Error parsing JSON value: %O is a Enum type, but parsing of value \"%s\" failed." t s
-            | _ -> failwithf "Error parsing JSON value: %O is not a enum type." t
         | _ -> failwithf "Error parsing JSON value: %O is not a string type." t
 
     let private downcastBoolean (t : Type) b =
