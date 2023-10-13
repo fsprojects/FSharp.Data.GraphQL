@@ -33,7 +33,10 @@
 
   <ItemGroup>
     <Compile Include="ReflectionHelper.fs" />
-    <Compile Include="Errors.fs" />
+    <Compile Include="ErrorTypes.fs" />
+    <Compile Include="ErrorMessages.fs" />
+    <Compile Include="ErrorsProcessing.fs" />
+    <Compile Include="Exceptions.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />

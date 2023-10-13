@@ -1,5 +1,6 @@
 module FSharp.Data.GraphQL.Tests.MiddlewareTests
 
+open System
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -189,10 +190,8 @@ let ``Simple query: Should not pass when above threshold``() =
                     ...on B { ...AllB }
         }"""
     let result = execute query
-    match result with
-    | RequestError errors ->
+    result |> ensureRequestError <| fun errors ->
         errors |> equals expectedErrors
-    | _ -> fail "Expected RequestError GQLResponse"
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
 
@@ -454,6 +453,10 @@ let ``Inline fragment query : Should not pass when above threshold``() =
                 }
         }"""
     let result = execute query
+    match result with
+    | RequestError errors -> errors |> equals expectedErrors
+    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+
     ensureRequestError result <| fun errors ->
         errors |> equals expectedErrors
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)

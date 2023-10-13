@@ -9,13 +9,13 @@ open System.Text.Json
 open FSharp.Control.Reactive
 open FsToolkit.ErrorHandling
 
-open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Helpers
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
+open FSharp.Data.GraphQL
 
 type Output = IDictionary<string, obj>
 
@@ -269,8 +269,9 @@ type StreamOutput =
 let private raiseErrors errs = AsyncVal.wrap <| Error errs
 
 /// Given an error e, call ParseError in the given context's Schema to convert it into
-/// a list of one or more <see herf="IGQLErrors">IGQLErrors</see>, then convert those to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
-let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldError (path |> List.rev))
+/// a list of one or more <see href="IGQLErrors">IGQLErrors</see>, then convert those
+/// to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
+let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (path |> List.rev))
 // Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
@@ -642,9 +643,9 @@ let private executeSubscription (resultSet: (string * ExecutionInfo) []) (ctx: E
 let private compileInputObject (indef: InputObjectDef) =
     indef.Fields
     |> Array.iter(fun inputField ->
-        // TODO: Implement compilaiton cache to reuse for the same type
-        let errMsg = $"Input object '%s{indef.Name}': in field '%s{inputField.Name}': "
-        inputField.ExecuteInput <- compileByType errMsg inputField.TypeDef
+        // TODO: Implement compilation cache to reuse for the same type
+        let inputFieldTypeDef = inputField.TypeDef
+        inputField.ExecuteInput <- compileByType [ box inputField.Name ] Unknown (inputFieldTypeDef, inputFieldTypeDef)
         match inputField.TypeDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inputField.ExecuteInput
         | _ -> ()
@@ -660,8 +661,10 @@ let private compileObject (objdef: ObjectDef) (executeFields: FieldDef -> unit) 
         executeFields fieldDef
         fieldDef.Args
         |> Array.iter (fun arg ->
-            let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
-            arg.ExecuteInput <- compileByType errMsg arg.TypeDef
+            //let errMsg = $"Object '%s{objdef.Name}': field '%s{fieldDef.Name}': argument '%s{arg.Name}': "
+            // TODO: Pass arg name
+            let argTypeDef = arg.TypeDef
+            arg.ExecuteInput <- compileByType [] (Argument arg) (argTypeDef, argTypeDef)
             match arg.TypeDef with
             | InputObject inputObjDef -> inputObjDef.ExecuteInput <- arg.ExecuteInput
             | _ -> ()
@@ -688,22 +691,28 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let variables, inlineValues, nulls =
         variables
         |> List.fold
-            (fun (valiables, inlineValues, missing) vardef ->
-                match vars.TryGetValue vardef.Name with
+            (fun (valiables, inlineValues, missing) varDef ->
+                match vars.TryGetValue varDef.Name with
                 | false, _ ->
-                    match vardef.DefaultValue with
+                    match varDef.DefaultValue with
                     | Some defaultValue ->
-                        let item = struct(vardef, defaultValue)
+                        let item = struct(varDef, defaultValue)
                         (valiables, item::inlineValues, missing)
                     | None ->
                         let item =
-                            match vardef.TypeDef with
-                            | Nullable _ -> Ok <| KeyValuePair(vardef.Name, null)
-                            | Named typeDef -> Error [ { new IGQLError with member _.Message = $"Variable '$%s{vardef.Name}' of required type '%s{typeDef.Name}!' was not provided." } ]
-                            | _ -> System.Diagnostics.Debug.Fail $"{vardef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
+                            match varDef.TypeDef with
+                            | Nullable _ -> Ok <| KeyValuePair(varDef.Name, null)
+                            | Named typeDef -> Error [ {
+                                    Message = $"A variable '$%s{varDef.Name}' of type '%s{typeDef.Name}!' is not nullable but neither value was provided, nor a default value was specified."
+                                    ErrorKind = InputCoercion
+                                    InputSource = Variable varDef
+                                    Path = []
+                                    FieldErrorDetails = ValueNone
+                                } :> IGQLError ]
+                            | _ -> System.Diagnostics.Debug.Fail $"{varDef.TypeDef.GetType().Name} is not Named"; failwith "Impossible case"
                         (valiables, inlineValues, item::missing)
                 | true, jsonElement ->
-                    let item = struct(vardef, jsonElement)
+                    let item = struct(varDef, jsonElement)
                     (item::valiables, inlineValues, missing)
                 )
             ([], [], [])
@@ -712,10 +721,22 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         variables
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, jsonElement) -> validation {
-                    let! value = coerceVariableValue false vardef.TypeDef vardef jsonElement $"Variable '$%s{vardef.Name}': "
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, jsonElement) -> validation {
+                    let! value =
+                        let varTypeDef = varDef.TypeDef
+                        coerceVariableValue false [] ValueNone (varTypeDef, varTypeDef) varDef jsonElement
+                        |> Result.mapError (
+                            List.map (fun err ->
+                                match err with
+                                | :? IInputSourceError as err ->
+                                    match err.InputSource with
+                                    | Variable _ -> ()
+                                    | _ -> err.InputSource <- Variable varDef
+                                | _ -> ()
+                                err)
+                        )
                     and! acc = acc
-                    acc.Add(vardef.Name, value)
+                    acc.Add(varDef.Name, value)
                     return acc
                 })
                 (ImmutableDictionary.CreateBuilder<string, obj>() |> Ok)
@@ -727,11 +748,12 @@ let internal coerceVariables (variables: VarDef list) (vars: ImmutableDictionary
     let! variablesBuilder =
         inlineValues
         |> List.fold (
-            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(vardef, defaultValue) -> validation {
-                    let executeInput = compileByType $"Variable '%s{vardef.Name}': " vardef.TypeDef
+            fun (acc : Result<ImmutableDictionary<string, obj>.Builder, IGQLError list>) struct(varDef, defaultValue) -> validation {
+                    let varTypeDef = varDef.TypeDef
+                    let executeInput = compileByType [] (Variable varDef) (varTypeDef, varTypeDef)
                     let! value = executeInput defaultValue suppliedVaribles
                     and! acc = acc
-                    acc.Add(vardef.Name, value)
+                    acc.Add (varDef.Name, value)
                     return acc
                 })
                 (variablesBuilder |> Ok)

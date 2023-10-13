@@ -1,8 +1,11 @@
 namespace FSharp.Data.GraphQL.Validation
 
+open System.Collections.Generic
 open System.Text.Json.Serialization
-open FSharp.Data.GraphQL
 open FsToolkit.ErrorHandling
+
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Extensions
 
 [<Struct>]
 type ValidationResult<'Err> =
@@ -19,7 +22,7 @@ module Result =
 
     type ResultBuilder with
 
-        member inline _.Source(result: ValidationResult<'error>) = result.AsResult
+        member inline _.Source (result : ValidationResult<'error>) = result.AsResult
 
 module ValidationResult =
 
@@ -35,6 +38,11 @@ module ValidationResult =
         // TODO: Use PSeq
         Seq.fold (fun acc t -> acc @@ (f t)) Success xs
 
+    let mapErrors (f : 'Err1 -> 'Err2) (res : ValidationResult<'Err1>) : ValidationResult<'Err2> =
+        match res with
+        | Success -> Success
+        | ValidationError errors -> ValidationError (List.map f errors)
+
 type internal GQLValidator<'Val> = 'Val -> ValidationResult<IGQLError>
 
 module GQLValidator =
@@ -44,6 +52,17 @@ module GQLValidator =
 [<AbstractClass; Sealed>]
 type AstError =
 
-    static member AsResult(message : string, ?path : FieldPath) =
-        [ { Message = message; Path = path |> Skippable.ofOption |> Skippable.map List.rev; Locations = Skip; Extensions = Skip  } ]
+    static member AsResult (message : string, ?path : FieldPath) =
+        [
+            {
+                Message = message
+                Path = path |> Skippable.ofOption |> Skippable.map List.rev
+                Locations = Skip
+                Extensions =
+                    Include (
+                        Dictionary<string, obj> ()
+                        |> GQLProblemDetails.SetErrorKind ErrorKind.Validation
+                    )
+            }
+        ]
         |> ValidationResult.ValidationError

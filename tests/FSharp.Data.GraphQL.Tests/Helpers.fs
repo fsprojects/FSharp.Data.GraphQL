@@ -6,6 +6,7 @@ module internal Helpers
 open System
 open System.Collections.Generic
 open System.Linq
+open System.Text.Json.Serialization
 open System.Threading
 open Xunit
 open FSharp.Data.GraphQL
@@ -14,12 +15,11 @@ let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
 let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
 let isNameValueDict actual = isDict<string, obj> actual
-let fail (message: string) =
-    Assert.True(false, message)
+let fail (message: string) = Assert.Fail message
 let equals (expected : 'x) (actual : 'x) =
-    Assert.True((actual = expected), sprintf "expected %O\nbut got %O" expected actual)
+    if not (actual = expected) then fail <| $"expected %A{expected}{Environment.NewLine}but got %A{actual}"
 let notEquals (expected : 'x) (actual : 'x) =
-    Assert.True((actual <> expected), sprintf "unexpected %+A" expected)
+    if actual = expected then fail <| $"unexpected %+A{expected}"
 let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> fail <| sprintf "expected ExecutionResult to have no errors but got %+A" errors
@@ -36,9 +36,20 @@ let single (xs : 'a seq) =
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
+
 let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
     let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
+
+let hasErrorAtPath path (errMsg : string) (errors: GQLProblemDetails seq) =
+    match errors |> Seq.where (fun pd -> pd.Message.Contains(errMsg)) |> Seq.tryHead with
+    | Some error ->
+        error.Path
+        |> Skippable.filter (fun pathValue -> Assert.True((pathValue = path), $"Expected that message '%s{errMsg}' has path {path}, but path {pathValue} found."); true)
+        |> Skippable.defaultWith (fun () -> Assert.Fail($"Expected that message '%s{errMsg}' has path {path}, but no path found."); []) |> ignore
+    | None ->
+        Assert.Fail ($"Expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
+
 let (<??) opt other =
     match opt with
     | None -> Some other
@@ -57,22 +68,6 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
-
-let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
-    match result.Content with
-    | Deferred(data, errors, deferred) -> onDeferred data errors deferred
-    | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
-
-let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
-    match result.Content with
-    | Direct(data, errors) -> onDirect data errors
-    | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
-
-let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProblemDetails list -> unit) : unit =
-    match result.Content with
-    | RequestError errors -> onRequestError errors
-    | _ -> fail <| sprintf "Expected RequestError GQLResponse but received '%O'" result
-
 
 open System.Text.Json
 open FSharp.Data.GraphQL.Types

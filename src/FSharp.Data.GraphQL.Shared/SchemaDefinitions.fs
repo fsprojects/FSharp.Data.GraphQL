@@ -362,15 +362,13 @@ module SchemaDefinitions =
     /// to take collection of provided value.
     let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
 
-    let private ignoreInputResolve (_ : unit) (input : 'T) = ()
-
     let internal variableOrElse other value (variables : IReadOnlyDictionary<string, obj>) =
         match value with
         // TODO: Use FSharp.Collection.Immutable
         | VariableName variableName ->
             match variables.TryGetValue variableName with
             | true, value -> Ok value
-            | false, _ -> Error [{ new IGQLError with member _.Message = $"Variable '%s{variableName}' not found" }]
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"A variable '$%s{variableName}' not found" }]
         | v -> other v
 
     /// GraphQL type of int

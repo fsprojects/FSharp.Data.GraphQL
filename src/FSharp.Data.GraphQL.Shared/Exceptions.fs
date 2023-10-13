@@ -4,17 +4,14 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Collections.Immutable
-
-type InvalidInputTypeException (msg, unmatchedOptionalFields) =
-    inherit Exception(msg)
-
-    member _.UnmatchedOptionalFields : string ImmutableHashSet = unmatchedOptionalFields
+open System.Collections.Generic
 
 type GraphQLException(msg) =
     inherit Exception(msg)
     interface IGQLError with
         member _.Message = msg
-
-type MalformedGQLQueryException(msg) =
-    inherit GraphQLException(msg)
+    interface IGQLErrorExtensions with
+        member _.Extensions =
+            Dictionary<string, obj> 1
+            |> GQLProblemDetails.SetErrorKind Execution
+            |> ValueSome

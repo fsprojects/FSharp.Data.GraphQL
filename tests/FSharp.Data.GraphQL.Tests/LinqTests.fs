@@ -51,7 +51,7 @@ let data =
         Contact = { Email = "j.trif@gmail.com" }
         Friends = [ { Email = "j.abrams@gmail.com" } ] } ]
 
-let undefined<'t> = Unchecked.defaultof<'t>
+let internal undefined<'t> = Unchecked.defaultof<'t>
 
 let resolveRoot ctx () =
     let info = ctx.ExecutionInfo
