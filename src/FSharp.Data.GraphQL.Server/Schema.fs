@@ -13,6 +13,7 @@ open System.Collections.Generic
 open System.Reactive.Linq
 open System.Reactive.Subjects
 open System.Text.Json
+open System.Text.Json.Serialization
 
 type private Channel = ISubject<obj>
 
@@ -135,7 +136,7 @@ type SchemaConfig =
                 | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider()
-          JsonOptions = JsonSerializerOptions.Default }
+          JsonOptions = JsonFSharpOptions.Default().ToJsonSerializerOptions() }
     /// <summary>
     /// Default SchemaConfig with buffered stream support.
     /// This config modifies the stream directive to have two optional arguments: 'interval' and 'preferredBatchSize'.
