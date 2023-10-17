@@ -108,7 +108,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
             | Stream (stream) -> GQLExecutionResult.Stream (documentId, stream, res.Metadata)
         async {
             try
-                let errors = System.Collections.Concurrent.ConcurrentBag<exn>()
                 let root = data |> Option.map box |> Option.toObj
                 match coerceVariables executionPlan.Variables variables with
                 | Error errs -> return prepareOutput (GQLExecutionResult.Error (documentId, errs, executionPlan.Metadata))
@@ -118,7 +117,6 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                           RootValue = root
                           ExecutionPlan = executionPlan
                           Variables = variables
-                          Errors = errors
                           FieldExecuteMap = fieldExecuteMap
                           Metadata = executionPlan.Metadata }
                     let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation |> AsyncVal.toAsync

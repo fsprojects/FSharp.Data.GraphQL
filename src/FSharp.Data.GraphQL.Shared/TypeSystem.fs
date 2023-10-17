@@ -855,8 +855,6 @@ and ExecutionContext =
       ExecutionPlan : ExecutionPlan
       /// Collection of variables provided to execute current operation.
       Variables : ImmutableDictionary<string, obj>
-      /// Collection of errors that occurred while executing current operation.
-      Errors : ConcurrentBag<exn>
       /// A map of all fields of the query and their respective execution operations.
       FieldExecuteMap : FieldExecuteMap
       /// A simple dictionary to hold metadata that can be used by execution customizations.
@@ -883,9 +881,6 @@ and ResolveFieldContext =
       Variables : ImmutableDictionary<string, obj>
       /// Field path
       Path : FieldPath }
-
-    /// Remembers an exception, so it can be included in the final response.
-    member x.AddError(error : exn) = x.Context.Errors.Add error
 
     /// Tries to find an argument by provided name.
     member x.TryArg(name : string) : 't option =
