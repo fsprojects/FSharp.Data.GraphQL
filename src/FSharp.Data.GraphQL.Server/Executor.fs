@@ -96,7 +96,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
         runMiddlewares (fun x -> x.PostCompileSchema) (upcast schema) ignore
         match Validation.Types.validateTypeMap schema.TypeMap with
         | Success -> ()
-        | ValidationError errors -> raise (GraphQLException (System.String.Join("\n", errors)))
+        | ValidationError errors -> raise (GQLMessageException (System.String.Join("\n", errors)))
 
     let eval (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement>): Async<GQLExecutionResult> =
         let documentId = executionPlan.DocumentId
@@ -124,7 +124,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     let! res = runMiddlewares (fun x -> x.ExecuteOperationAsync) executionCtx executeOperation |> AsyncVal.toAsync
                     return prepareOutput res
             with
-            | :? GraphQLException as ex -> return prepareOutput(GQLExecutionResult.Error (documentId, ex, executionPlan.Metadata))
+            | :? GQLMessageException as ex -> return prepareOutput(GQLExecutionResult.Error (documentId, ex, executionPlan.Metadata))
             | ex -> return prepareOutput (GQLExecutionResult.Error(documentId, ex.ToString(), executionPlan.Metadata)) // TODO: Handle better
         }
 

@@ -37,6 +37,7 @@
     <Compile Include="ErrorMessages.fs" />
     <Compile Include="ErrorsProcessing.fs" />
     <Compile Include="Exceptions.fs" />
+    <Compile Include="TypeSystem.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />

@@ -519,8 +519,6 @@ module SchemaDefinitions =
             DirectiveLocation.FIELD ||| DirectiveLocation.FRAGMENT_SPREAD ||| DirectiveLocation.INLINE_FRAGMENT ||| DirectiveLocation.FRAGMENT_DEFINITION
           Args = [||] }
 
-    let internal matchParameters (methodInfo : MethodInfo) (ctx : ResolveFieldContext) =
-        methodInfo.GetParameters() |> Array.map (fun param -> ctx.Arg<obj>(param.Name))
     let inline internal strip (fn : 'In -> 'Out) : obj -> obj = fun i -> upcast fn (i :?> 'In)
 
     /// Common space for all definition helper methods.
