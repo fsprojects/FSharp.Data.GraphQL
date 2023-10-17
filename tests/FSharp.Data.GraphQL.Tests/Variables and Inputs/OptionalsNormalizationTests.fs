@@ -174,29 +174,28 @@ let schema =
             query =
                 Define.Object (
                     "Query",
-                    fun () ->
-                        [ Define.Field (
-                              "recordInputs",
-                              StringType,
-                              [ Define.Input ("record", InputAddressRecordType)
-                                Define.Input ("recordOptional", Nullable InputAddressRecordType)
-                                Define.Input ("recordNested", Nullable InputRecordNestedType) ],
-                              stringifyInput
-                          ) // TODO: add all args stringificaiton
-                          Define.Field (
-                              "objectInputs",
-                              StringType,
-                              [ Define.Input ("object", InputAddressClassType)
-                                Define.Input ("objectOptional", Nullable InputAddressClassType) ],
-                              stringifyInput
-                          ) // TODO: add all args stringificaiton
-                          Define.Field (
-                              "structInputs",
-                              StringType,
-                              [ Define.Input ("struct", InputAddressStructType)
-                                Define.Input ("structOptional", Nullable InputAddressStructType) ],
-                              stringifyInput
-                          ) ] // TODO: add all args stringificaiton
+                    [ Define.Field (
+                          "recordInputs",
+                          StringType,
+                          [ Define.Input ("record", InputAddressRecordType)
+                            Define.Input ("recordOptional", Nullable InputAddressRecordType)
+                            Define.Input ("recordNested", Nullable InputRecordNestedType) ],
+                          stringifyInput
+                      ) // TODO: add all args stringificaiton
+                      Define.Field (
+                          "objectInputs",
+                          StringType,
+                          [ Define.Input ("object", InputAddressClassType)
+                            Define.Input ("objectOptional", Nullable InputAddressClassType) ],
+                          stringifyInput
+                      ) // TODO: add all args stringificaiton
+                      Define.Field (
+                          "structInputs",
+                          StringType,
+                          [ Define.Input ("struct", InputAddressStructType)
+                            Define.Input ("structOptional", Nullable InputAddressStructType) ],
+                          stringifyInput
+                      ) ] // TODO: add all args stringificaiton
                 )
         )
 

@@ -95,7 +95,7 @@ let schema =
     let schema =
         Schema (
             query =
-                Define.Object (
+                DefineRec.Object (
                     "Query",
                     fun () ->
                         [ Define.Field (

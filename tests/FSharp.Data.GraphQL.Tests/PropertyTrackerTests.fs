@@ -22,7 +22,7 @@ let ben = { Id = 2; FirstName = "Ben"; LastName = "Adams"; Friends = [ john ] }
 let at22 = { Id = 3; Number = "AT22"; Function = "combat wombat" }
 
 let rec Person =
-    Define.Object<Person> (
+    DefineRec.Object<Person>(
         name = "Person",
         interfaces = [ Node ],
         fieldsFn =
@@ -71,15 +71,14 @@ let rec Person =
             ]
     )
 and Droid =
-    Define.Object<Droid> (
+    Define.Object<Droid>(
         name = "Droid",
         interfaces = [ Node ],
-        fieldsFn =
-            fun () -> [
-                Define.GlobalIdField (fun _ d -> string d.Id)
-                Define.Field ("number", StringType, (fun _ d -> d.Number))
-                Define.Field ("function", StringType, (fun _ d -> d.Function))
-            ]
+        fields = [
+            Define.GlobalIdField (fun _ d -> string d.Id)
+            Define.Field ("number", StringType, (fun _ d -> d.Number))
+            Define.Field ("function", StringType, (fun _ d -> d.Function))
+        ]
     )
 and Node = Define.Node<obj> (fun () -> [ Person; Droid ])
 and Query =

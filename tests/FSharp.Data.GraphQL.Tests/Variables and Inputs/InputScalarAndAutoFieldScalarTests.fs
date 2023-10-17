@@ -85,7 +85,7 @@ let ``Object Nullable to Nullable Type`` =
 let ``Schema can be created for unmatched input nullable fields on record`` () =
     Schema (
         query =
-            Define.Object (
+            DefineRec.Object (
                 "Query",
                 fun () ->
                     [ Define.Field (
@@ -104,7 +104,6 @@ let ``Schema cannot be created for unmatched input nullable fields on record`` (
             query =
                 Define.Object (
                     "Query",
-                    fun () ->
                         [ Define.Field (
                                 "wrongRecord",
                                 StringType,
@@ -121,7 +120,6 @@ let ``Schema can be created for matched input nullable fields on class`` () =
         query =
             Define.Object (
                 "Query",
-                fun () ->
                     [ Define.Field (
                             "rightObject",
                             ``Object Nullable to Nullable Type``,
@@ -138,7 +136,6 @@ let ``Schema cannot be created for unmatched input nullable fields on class`` ()
             query =
                 Define.Object (
                     "Query",
-                    fun () ->
                         [ Define.Field (
                                 "wrongObject",
                                 StringType,
@@ -157,7 +154,6 @@ let schema =
                 query =
                     Define.Object (
                         "Query",
-                        fun () ->
                             [
                               Define.Field (
                                   "record",

@@ -148,7 +148,7 @@ module TestSchema =
         )
 
     and HumanType : ObjectDef<Human> =
-        Define.Object<Human> (
+        DefineRec.Object<Human> (
             name = "Human",
             description = "A humanoid creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Human),
@@ -168,7 +168,7 @@ module TestSchema =
         )
 
     and DroidType =
-        Define.Object<Droid> (
+        DefineRec.Object<Droid> (
             name = "Droid",
             description = "A mechanical creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Droid),
@@ -192,8 +192,7 @@ module TestSchema =
             name = "Planet",
             description = "A planet in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Planet),
-            fieldsFn =
-                fun () -> [
+            fields = [
                     Define.Field ("id", StringType, "The id of the planet", (fun _ p -> p.Id))
                     Define.Field ("name", Nullable StringType, "The name of the planet.", (fun _ p -> p.Name))
                     Define.Field ("isMoon", Nullable BooleanType, "Is that a moon?", (fun _ p -> p.IsMoon))
@@ -205,8 +204,7 @@ module TestSchema =
             name = "Root",
             description = "The Root type to be passed to all our resolvers.",
             isTypeOf = (fun o -> o :? Root),
-            fieldsFn =
-                fun () -> [
+            fields = [
                     Define.Field ("requestId", StringType, "The ID of the client.", (fun _ (r : Root) -> r.RequestId))
                 ]
         )

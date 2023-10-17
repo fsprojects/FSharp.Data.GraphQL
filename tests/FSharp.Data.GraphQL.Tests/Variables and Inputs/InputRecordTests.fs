@@ -71,22 +71,21 @@ let schema =
             query =
                 Define.Object (
                     "Query",
-                    fun () ->
-                        [ Define.Field (
-                              "recordInputs",
-                              StringType,
-                              [ Define.Input ("record", InputRecordType)
-                                Define.Input ("recordOptional", Nullable InputRecordOptionalType)
-                                Define.Input ("recordNested", Nullable InputRecordNestedType) ],
-                              stringifyInput
-                          ) // TODO: add all args stringificaiton
-                          Define.Field (
-                              "objectInputs",
-                              StringType,
-                              [ Define.Input ("object", InputObjectType)
-                                Define.Input ("objectOptional", Nullable InputObjectOptionalType) ],
-                              stringifyInput
-                          ) ] // TODO: add all args stringificaiton
+                    [ Define.Field (
+                          "recordInputs",
+                          StringType,
+                          [ Define.Input ("record", InputRecordType)
+                            Define.Input ("recordOptional", Nullable InputRecordOptionalType)
+                            Define.Input ("recordNested", Nullable InputRecordNestedType) ],
+                          stringifyInput
+                      ) // TODO: add all args stringificaiton
+                      Define.Field (
+                          "objectInputs",
+                          StringType,
+                          [ Define.Input ("object", InputObjectType)
+                            Define.Input ("objectOptional", Nullable InputObjectOptionalType) ],
+                          stringifyInput
+                      ) ] // TODO: add all args stringificaiton
                 )
         )
 

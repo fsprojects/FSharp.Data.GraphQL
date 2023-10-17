@@ -968,22 +968,26 @@ and FieldDef<'Val> =
         inherit FieldDef
     end
 
-and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> = {
-    /// Name of the field.
-    Name : string
-    /// Optional field description.
-    Description : string option
-    /// Field's GraphQL type definition.
-    TypeDef : OutputDef<'Res>
-    /// Field resolution function.
-    Resolve : Resolve
-    /// Field's arguments list.
-    Args : InputFieldDef[]
-    /// Optional field deprecation warning.
-    DeprecationReason : string option
-    /// Field metadata definition.
-    Metadata : Metadata
-} with
+and FieldDef<'Val, 'Res> =
+    interface
+        inherit FieldDef<'Val>
+    end
+
+and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
+    { /// Name of the field.
+      Name : string
+      /// Optional field description.
+      Description : string option
+      /// Field's GraphQL type definition.
+      TypeDef : OutputDef<'Res>
+      /// Field resolution function.
+      Resolve : Resolve
+      /// Field's arguments list.
+      Args : InputFieldDef []
+      /// Optional field deprecation warning.
+      DeprecationReason : string option
+      /// Field metadata definition.
+      Metadata : Metadata }
 
     interface FieldDef with
         member x.Name = x.Name
@@ -994,7 +998,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> = {
         member x.Resolve = x.Resolve
         member x.Metadata = x.Metadata
 
-    interface FieldDef<'Val>
+    interface FieldDef<'Val, 'Res>
 
     interface IEquatable<FieldDef> with
         member x.Equals f =
@@ -1741,8 +1745,8 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
     interface SubscriptionFieldDef with
         member x.OutputTypeDef = x.OutputTypeDef :> OutputDef
         member x.TagsResolver = x.TagsResolver
-    interface FieldDef<'Root>
-    member x.TypeDef = x.RootTypeDef
+    interface FieldDef<'Root, 'Output>
+        member x.TypeDef = x.RootTypeDef
     interface SubscriptionFieldDef<'Root, 'Input, 'Output>
     interface IEquatable<FieldDef> with
         member x.Equals f =
