@@ -14,7 +14,7 @@ type Root =
     { ClientId : string }
 
 let ValueType =
-    Define.Object<Value>(
+    Define.ObjectRec<Value>(
         name = "Value",
         fieldsFn = fun () ->
         [
@@ -23,7 +23,7 @@ let ValueType =
         ])
 
 let RootType =
-    Define.Object<Root>(
+    Define.ObjectRec<Root>(
         name = "Query",
         description = "Root object",
         isTypeOf = (fun o -> o :? Root),
@@ -36,7 +36,7 @@ let getValue id =
     values |> Seq.tryFind (fun x -> x.Id = id)
 
 let Query =
-    Define.Object<Root>(
+    Define.ObjectRec<Root>(
         name = "Query",
         fieldsFn = fun () -> [ Define.Field("values", ListOf ValueType, (fun _ _ -> values)) ] )
 

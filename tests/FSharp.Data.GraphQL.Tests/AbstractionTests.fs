@@ -44,7 +44,7 @@ let resolvePet =
 
 let schemaWithInterface =
     lazy
-        let PetType = Define.Interface ("Pet", (fun () -> [ Define.Field ("name", StringType) ]))
+        let PetType = Define.InterfaceRec ("Pet", (fun () -> [ Define.Field ("name", StringType) ]))
 
         let DogType =
             Define.Object<Dog> (
@@ -69,7 +69,7 @@ let schemaWithInterface =
         let schema =
             Schema (
                 query =
-                    Define.Object (
+                    Define.ObjectRec (
                         "Query",
                         fun () ->
                             [ Define.Field (
@@ -239,7 +239,7 @@ let schemaWithUnion =
         let schema =
             Schema (
                 query =
-                    Define.Object (
+                    Define.ObjectRec (
                         "Query",
                         fun () ->
                             [ Define.Field (

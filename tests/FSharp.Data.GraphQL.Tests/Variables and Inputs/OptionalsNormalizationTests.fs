@@ -172,7 +172,7 @@ let schema =
     let schema =
         Schema (
             query =
-                Define.Object (
+                Define.ObjectRec (
                     "Query",
                     fun () ->
                         [ Define.Field (

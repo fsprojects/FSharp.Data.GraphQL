@@ -53,7 +53,7 @@ let executor =
             resolveValue = (fun u -> match u with A a -> box a | B b -> box b),
             resolveType = (fun u -> match u with A _ -> upcast AType | B _ -> upcast BType))
     and AType =
-        Define.Object<A>(
+        Define.ObjectRec<A>(
             name = "A",
             isTypeOf = (fun o -> o :? A),
             fieldsFn = fun () ->
@@ -63,7 +63,7 @@ let executor =
                     resolve = fun _ (a : A) -> a.subjects |> List.map getSubject |> List.toSeq |> Some)
                     .WithQueryWeight(1.0) ])
     and BType =
-        Define.Object<B>(
+        Define.ObjectRec<B>(
             name = "B",
             isTypeOf = (fun o -> o :? B),
             fieldsFn = fun () ->

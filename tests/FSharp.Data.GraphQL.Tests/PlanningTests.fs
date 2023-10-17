@@ -37,13 +37,14 @@ let animals =
         species = "Dog" } ]
 
 let rec Person =
-    Define.Object(name = "Person",
-                  fieldsFn = (fun () ->
-                  [ Define.Field("firstName", StringType, fun _ person -> person.firstName)
-                    Define.Field("lastName", StringType, fun _ person -> person.lastName)
-                    Define.Field("age", IntType, fun _ person -> person.age)
-                    Define.Field("name", StringType, fun _ person -> person.firstName + " " + person.lastName)
-                    Define.Field("friends", ListOf Person, fun _ _ -> []) ]), interfaces = [ INamed ])
+    Define.ObjectRec(
+        name = "Person",
+        fieldsFn = (fun () ->
+            [ Define.Field("firstName", StringType, fun _ person -> person.firstName)
+              Define.Field("lastName", StringType, fun _ person -> person.lastName)
+              Define.Field("age", IntType, fun _ person -> person.age)
+              Define.Field("name", StringType, fun _ person -> person.firstName + " " + person.lastName)
+              Define.Field("friends", ListOf Person, fun _ _ -> []) ]), interfaces = [ INamed ])
 
 and Animal =
     Define.Object(name = "Animal",
@@ -53,10 +54,11 @@ and Animal =
 and INamed = Define.Interface<obj>("INamed", [ Define.Field("name", StringType) ])
 
 and UNamed =
-    Define.Union("UNamed", [ Person; Animal ],
-                 function
-                 | Animal a -> box a
-                 | Person p -> upcast p)
+    Define.Union(
+        "UNamed", [ Person; Animal ],
+        function
+        | Animal a -> box a
+        | Person p -> upcast p)
 
 [<Fact>]
 let ``Planning must retain correct types for leafs``() =

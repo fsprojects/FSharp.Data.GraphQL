@@ -22,7 +22,7 @@ let ben = { Id = 2; FirstName = "Ben"; LastName = "Adams"; Friends = [ john ] }
 let at22 = { Id = 3; Number = "AT22"; Function = "combat wombat" }
 
 let rec Person =
-    Define.Object<Person> (
+    Define.ObjectRec<Person>(
         name = "Person",
         interfaces = [ Node ],
         fieldsFn =
@@ -71,7 +71,7 @@ let rec Person =
             ]
     )
 and Droid =
-    Define.Object<Droid> (
+    Define.ObjectRec<Droid>(
         name = "Droid",
         interfaces = [ Node ],
         fieldsFn =

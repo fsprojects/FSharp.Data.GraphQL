@@ -113,7 +113,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
                 Define.Field("c", (ListOf (Nullable StringType)), (fun _ dt -> dt.c))
             ])
     let rec DataType =
-      Define.Object<TestSubject>(
+      Define.ObjectRec<TestSubject>(
           "DataType",
           fieldsFn = fun () ->
           [
@@ -153,7 +153,7 @@ let ``Execution handles basic tasks: merges parallel fragments`` () =
         }"""
 
     let rec Type =
-      Define.Object(
+      Define.ObjectRec(
         name = "Type",
         fieldsFn = fun () ->
         [

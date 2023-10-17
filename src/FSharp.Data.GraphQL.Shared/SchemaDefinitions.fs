@@ -666,7 +666,8 @@ module SchemaDefinitions =
               DeprecationReason = deprecationReason }
 
         /// <summary>
-        /// Creates GraphQL custom output object type. It can be used as a valid output but not an input object
+        /// Creates a GraphQL custom output object type that has a field of a type that references this object type recursively.
+        /// It can be used as a valid output but not as an input object
         /// (see <see cref="InputObject"/> for more details).
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
@@ -680,7 +681,7 @@ module SchemaDefinitions =
         /// <param name="isTypeOf">
         /// Optional function used to determine if provided .NET object instance matches current object definition.
         /// </param>
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
+        static member ObjectRec(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
                              ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
             upcast { ObjectDefinition.Name = name
                      Description = description
@@ -800,15 +801,14 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
         /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> =
+        static member AutoField(name : string, typedef : OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
-                     Metadata = Metadata.Empty
-                     }
+                     Metadata = Metadata.Empty }
 
         /// <summary>
         /// Creates field defined inside interfaces. When used for objects may cause runtime exceptions due to
@@ -817,7 +817,7 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, ?deprecationReason : string) : FieldDef<'Val> =
+        static member Field(name : string, typedef : #OutputDef<'Res>, ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -835,7 +835,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -854,7 +854,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
 
             upcast { FieldDefinition.Name = name
                      Description = Some description
@@ -874,7 +874,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -893,7 +893,7 @@ module SchemaDefinitions =
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -911,7 +911,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -930,7 +930,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -949,7 +949,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -970,7 +970,7 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -984,7 +984,7 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="execField">Expression used to execute the field.</param>
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
+        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val, obj> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = ObjType
@@ -1380,7 +1380,8 @@ module SchemaDefinitions =
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
         /// <summary>
-        /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
+        /// Creates a custom GraphQL interface type that has a field of type that refernces this interface type recurively.
+        /// It's needs to be implemented by object types and should not be used alone.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fieldsFn">
@@ -1388,7 +1389,7 @@ module SchemaDefinitions =
         /// </param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
         /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
+        static member InterfaceRec(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
                                 ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
             upcast { InterfaceDefinition.Name = name
                      Description = description

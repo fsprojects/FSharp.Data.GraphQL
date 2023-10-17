@@ -147,7 +147,7 @@ module Schema =
         )
 
     let MemberType =
-        Define.Object<Member> (
+        Define.ObjectRec<Member> (
             name = nameof Member,
             description = "An organization member",
             isTypeOf = (fun o -> o :? Member),
@@ -166,7 +166,7 @@ module Schema =
         )
 
     let MeAsAMemberType =
-        Define.Object<MeAsAMember> (
+        Define.ObjectRec<MeAsAMember> (
             name = nameof MeAsAMember,
             description = "An organization member",
             isTypeOf = (fun o -> o :? MeAsAMember),
@@ -193,7 +193,7 @@ module Schema =
         )
 
     let ChatMemberType =
-        Define.Object<ChatMember> (
+        Define.ObjectRec<ChatMember> (
             name = nameof ChatMember,
             description = "A chat member is an organization member participating in a chat room",
             isTypeOf = (fun o -> o :? ChatMember),
@@ -213,7 +213,7 @@ module Schema =
         )
 
     let MeAsAChatMemberType =
-        Define.Object<MeAsAChatMember> (
+        Define.ObjectRec<MeAsAChatMember> (
             name = nameof MeAsAChatMember,
             description = "A chat member is an organization member participating in a chat room",
             isTypeOf = (fun o -> o :? MeAsAChatMember),
@@ -241,7 +241,7 @@ module Schema =
         )
 
     let ChatRoomStatsType =
-        Define.Object<ChatRoom> (
+        Define.ObjectRec<ChatRoom> (
             name = nameof ChatRoom,
             description = "A chat room as viewed from the outside",
             isTypeOf = (fun o -> o :? ChatRoom),
@@ -261,7 +261,7 @@ module Schema =
         )
 
     let ChatRoomDetailsType =
-        Define.Object<ChatRoomForMember> (
+        Define.ObjectRec<ChatRoomForMember> (
             name = nameof ChatRoomForMember,
             description = "A chat room as viewed by a chat room member",
             isTypeOf = (fun o -> o :? ChatRoomForMember),
@@ -292,7 +292,7 @@ module Schema =
         )
 
     let OrganizationStatsType =
-        Define.Object<Organization> (
+        Define.ObjectRec<Organization> (
             name = nameof Organization,
             description = "An organization as seen from the outside",
             isTypeOf = (fun o -> o :? Organization),
@@ -313,7 +313,7 @@ module Schema =
         )
 
     let OrganizationDetailsType =
-        Define.Object<OrganizationForMember> (
+        Define.ObjectRec<OrganizationForMember> (
             name = nameof OrganizationForMember,
             description = "An organization as seen by one of the organization's members",
             isTypeOf = (fun o -> o :? OrganizationForMember),
@@ -350,7 +350,7 @@ module Schema =
         )
 
     let aChatRoomMessageTypeWith description name =
-        Define.Object<ChatRoomMessage> (
+        Define.ObjectRec<ChatRoomMessage> (
             name = name,
             description = description,
             isTypeOf = (fun o -> o :? ChatRoomMessage),
@@ -395,8 +395,7 @@ module Schema =
             name = name,
             description = description,
             isTypeOf = (fun o -> o :? unit),
-            fieldsFn =
-                fun () -> [
+            fields = [
                     Define.Field ("doNotUse", BooleanType, "this is just to satify the expected structure of this type", (fun _ _ -> true))
                 ]
         )
@@ -406,8 +405,7 @@ module Schema =
             name = name,
             description = description,
             isTypeOf = (fun o -> o :? MessageId),
-            fieldsFn =
-                (fun () -> [
+            fields = [
                     Define.Field (
                         "messageId",
                         GuidType,
@@ -416,7 +414,7 @@ module Schema =
                             match x with
                             | MessageId theId -> theId
                     )
-                ])
+                ]
         )
 
     let aChatRoomEventForMemberIdAndName description name =
@@ -424,8 +422,7 @@ module Schema =
             name = name,
             description = description,
             isTypeOf = (fun o -> o :? (MemberId * string)),
-            fieldsFn =
-                (fun () -> [
+            fields = [
                     Define.Field (
                         "memberId",
                         GuidType,
@@ -435,7 +432,7 @@ module Schema =
                             | MemberId theId -> theId
                     )
                     Define.Field ("memberName", StringType, "this is the member's name", (fun _ (_ : MemberId, name : string) -> name))
-                ])
+                ]
         )
 
     let newMessageDef =
@@ -478,7 +475,7 @@ module Schema =
         )
 
     let ChatRoomEventType =
-        Define.Object<ChatRoomEvent> (
+        Define.ObjectRec<ChatRoomEvent> (
             name = nameof ChatRoomEvent,
             description = "Something that happened in the chat room, like a new message sent",
             isTypeOf = (fun o -> o :? ChatRoomEvent),
@@ -831,8 +828,7 @@ module Schema =
             name = "Root",
             description = "contains general request information",
             isTypeOf = (fun o -> o :? Root),
-            fieldsFn =
-                fun () -> [
+            fields = [
                     Define.Field ("requestId", StringType, "The request's unique ID.", (fun _ (r : Root) -> r.RequestId))
                 ]
         )
