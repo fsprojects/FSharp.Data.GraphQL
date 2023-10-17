@@ -23,7 +23,7 @@ let data =
       c = "Cookie" }
 
 let DataType =
-    Define.Object<TestSubject>(
+    Define.ObjectRec<TestSubject>(
         "Data",
         fieldsFn = fun () ->
         [
@@ -33,7 +33,7 @@ let DataType =
             Define.Field("d", BooleanType, "Returns its argument", [ Define.Input("input", BooleanType) ], fun ctx _ -> ctx.Arg<bool> "input")
         ])
 let Query =
-    Define.Object<TestSubject>(
+    Define.ObjectRec<TestSubject>(
         "Query",
         fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
 

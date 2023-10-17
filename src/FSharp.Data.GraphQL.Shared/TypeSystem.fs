@@ -5,7 +5,6 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open System.Reflection
 open System.Collections
-open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
@@ -921,6 +920,11 @@ and FieldDef<'Val> =
         inherit FieldDef
     end
 
+and FieldDef<'Val, 'Res> =
+    interface
+        inherit FieldDef<'Val>
+    end
+
 and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
     { /// Name of the field.
       Name : string
@@ -946,7 +950,7 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> =
         member x.Resolve = x.Resolve
         member x.Metadata = x.Metadata
 
-    interface FieldDef<'Val>
+    interface FieldDef<'Val, 'Res>
 
     interface IEquatable<FieldDef> with
         member x.Equals f = x.Name = f.Name && x.TypeDef :> OutputDef = f.TypeDef && x.Args = f.Args
@@ -1674,7 +1678,7 @@ and [<CustomEquality; NoComparison>] SubscriptionFieldDefinition<'Root, 'Input, 
     interface SubscriptionFieldDef with
         member x.OutputTypeDef = x.OutputTypeDef :> OutputDef
         member x.TagsResolver = x.TagsResolver
-    interface FieldDef<'Root>
+    interface FieldDef<'Root, 'Output>
         member x.TypeDef = x.RootTypeDef
     interface SubscriptionFieldDef<'Root, 'Input, 'Output>
     interface IEquatable<FieldDef> with
