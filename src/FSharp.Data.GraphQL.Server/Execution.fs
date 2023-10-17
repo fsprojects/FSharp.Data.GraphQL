@@ -273,12 +273,12 @@ let private raiseErrors errs = AsyncVal.wrap <| Error errs
 /// to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (path |> List.rev))
 // Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
-let private nullResolverError name path ctx = resolverError path ctx (GraphQLException <| sprintf "Non-Null field %s resolved as a null!" name)
-let private coercionError value tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
-let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GraphQLException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)
-let private unionImplError unionName tyName path ctx = resolverError path ctx (GraphQLException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" unionName tyName))
-let private deferredNullableError name tyName path ctx = resolverError path ctx (GraphQLException (sprintf "Deferred field %s of type '%s' must be nullable" name tyName))
-let private streamListError name tyName path ctx = resolverError path ctx (GraphQLException (sprintf "Streamed field %s of type '%s' must be list" name tyName))
+let private nullResolverError name path ctx = resolverError path ctx (GQLMessageException <| sprintf "Non-Null field %s resolved as a null!" name)
+let private coercionError value tyName path ctx = resolverError path ctx (GQLMessageException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
+let private interfaceImplError ifaceName tyName path ctx = resolverError path ctx (GQLMessageException <| sprintf "GraphQL Interface '%s' is not implemented by the type '%s'" ifaceName tyName)
+let private unionImplError unionName tyName path ctx = resolverError path ctx (GQLMessageException (sprintf "GraphQL Union '%s' is not implemented by the type '%s'" unionName tyName))
+let private deferredNullableError name tyName path ctx = resolverError path ctx (GQLMessageException (sprintf "Deferred field %s of type '%s' must be nullable" name tyName))
+let private streamListError name tyName path ctx = resolverError path ctx (GQLMessageException (sprintf "Streamed field %s of type '%s' must be list" name tyName))
 
 let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = AsyncVal.wrap <| Ok(KeyValuePair(name, box v), None, [])
 
@@ -353,7 +353,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             |> Array.mapi resolveItem
             |> collectFields Parallel
             |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
-        | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
+        | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
     | Nullable (Output innerDef) ->
         let innerCtx = { ctx with ExecutionInfo = { ctx.ExecutionInfo with IsNullable = true; ReturnDef = innerDef } }
@@ -445,7 +445,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
             |> Observable.ofAsyncValSeq
             |> buffer
         AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, box [||]), Some stream, [])
-    | _ -> raise <| GraphQLException (sprintf "Expected to have enumerable value in field '%s' but got '%O'" ctx.ExecutionInfo.Identifier (value.GetType()))
+    | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
 and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
@@ -549,7 +549,7 @@ let internal compileSubscriptionField (subfield: SubscriptionFieldDef) =
     match subfield.Resolve with
     | Resolve.BoxedFilterExpr(_, _, _, filter) -> fun ctx a b -> filter ctx a b |> AsyncVal.wrap |> AsyncVal.toAsync
     | Resolve.BoxedAsyncFilterExpr(_, _, _, filter) -> filter
-    | _ -> raise <| GraphQLException ("Invalid filter expression for subscription field!")
+    | _ -> raise <| GQLMessageException ("Invalid filter expression for subscription field!")
 
 let internal compileField (fieldDef: FieldDef) : ExecuteField =
     match fieldDef.Resolve with

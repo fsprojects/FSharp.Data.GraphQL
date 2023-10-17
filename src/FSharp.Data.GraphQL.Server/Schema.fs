@@ -132,7 +132,7 @@ type SchemaConfig =
           ParseError =
             fun path ex ->
                 match ex with
-                | :? GraphQLException as ex -> [ex]
+                | :? GQLMessageException as ex -> [ex]
                 | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider()
