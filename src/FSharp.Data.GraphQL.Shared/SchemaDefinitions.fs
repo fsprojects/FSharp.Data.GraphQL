@@ -294,17 +294,18 @@ module SchemaDefinitions =
 
     /// Tries to resolve AST query input to URI.
     let coerceUriInput =
+        let destinationType = "URI"
         function
         | Variable e when e.ValueKind = JsonValueKind.String ->
             match Uri.TryCreate(e.GetString(), UriKind.RelativeOrAbsolute) with
             | true, uri -> Ok uri
-            | false, _ -> Error [{ new IGQLError with member _.Message = $"Cannot deserialize '{e.GetRawText()}' into URI" }]
-        | Variable e -> e.GetDeserializeError "URI"
+            | false, _ -> e.GetDeserializeError destinationType
+        | Variable e -> e.GetDeserializeError destinationType
         | InlineConstant (StringValue s) ->
             match Uri.TryCreate(s, UriKind.RelativeOrAbsolute) with
             | true, uri -> Ok uri
-            | false, _ -> Error [{ new IGQLError with member _.Message = $"Cannot parse '{s}' into URI" }]
-        | InlineConstant value -> value.GetCoerceError "URI"
+            | false, _ -> getParseError destinationType s
+        | InlineConstant value -> value.GetCoerceError destinationType
 
     /// Tries to resolve AST query input to DateTimeOffset.
     let coerceDateTimeOffsetInput =
