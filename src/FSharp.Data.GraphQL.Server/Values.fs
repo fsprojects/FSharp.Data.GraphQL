@@ -29,7 +29,7 @@ let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     else
         null
 
-let private wrapOptional (outputType: Type) value=
+let private normalizeOptional (outputType: Type) value=
     match value with
     | null -> wrapOptionalNone outputType typeof<obj>
     | value ->
@@ -43,7 +43,17 @@ let private wrapOptional (outputType: Type) value=
                 let valuesome, _, _ = ReflectionHelper.vOptionOfType expectedOutputType
                 valuesome value
             else
-                value
+                let realInputType = inputType.GenericTypeArguments[0]
+                if inputType.FullName.StartsWith ReflectionHelper.OptionTypeName && outputType.IsAssignableFrom realInputType then
+                    let _, _, getValue = ReflectionHelper.optionOfType realInputType
+                    // none is null so it is already covered above
+                    getValue value
+                elif inputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName && outputType.IsAssignableFrom realInputType then
+                    let _, valueNone, getValue = ReflectionHelper.vOptionOfType realInputType
+                    if value = valueNone then null
+                    else getValue value
+                else
+                    value
         else
             value
 
@@ -154,7 +164,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
                                 match Map.tryFind field.Name props with
                                 | None -> Ok <| wrapOptionalNone param.ParameterType field.TypeDef.Type
                                 | Some prop ->
-                                    field.ExecuteInput prop variables |> Result.map (wrapOptional param.ParameterType)
+                                    field.ExecuteInput prop variables |> Result.map (normalizeOptional param.ParameterType)
                                     |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                             | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
 
@@ -181,7 +191,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
                                             field.ExecuteInput (VariableName field.Name) objectFields
                                             // TODO: Take into account variable name
                                             |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
-                                        return wrapOptional param.ParameterType value
+                                        return normalizeOptional param.ParameterType value
                                     | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                                 })
 
@@ -220,7 +230,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
                         |> splitSeqErrorsList
                     let mappedValues =
                         mappedValues
-                        |> Seq.map (wrapOptional innerDef.Type)
+                        |> Seq.map (normalizeOptional innerDef.Type)
                         |> Seq.toList
 
                     if isArray then
