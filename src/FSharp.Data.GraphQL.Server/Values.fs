@@ -322,6 +322,16 @@ let rec internal coerceVariableValue
             | Ok null when isNullable -> Ok null
             // TODO: Capture position in the JSON document
             | Ok null -> createNullError originalTypeDef
+            | Ok value when not isNullable ->
+                let ``type`` = value.GetType()
+                if
+                    ``type``.IsValueType &&
+                    ``type``.FullName.StartsWith ReflectionHelper.ValueOptionTypeName &&
+                    value = Activator.CreateInstance ``type``
+                then
+                    createNullError originalTypeDef
+                else
+                    Ok value
             | result ->
                 result |> Result.mapError (List.map (mapInputError varDef inputObjectPath objectFieldErrorDetails))
     | Nullable (InputObject innerdef) ->
