@@ -20,7 +20,7 @@ open FSharp.Data.GraphQL
 
 let private wrapOptionalNone (outputType: Type) (inputType: Type) =
     if inputType.Name <> outputType.Name then
-        if outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" then
+        if outputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName then
             let _, valuenone, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
             valuenone
         elif outputType.IsValueType then
@@ -35,12 +35,12 @@ let private wrapOptional (outputType: Type) value=
     | value ->
         let inputType = value.GetType()
         if inputType.Name <> outputType.Name then
-            let expectedType = outputType.GenericTypeArguments[0]
-            if outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1" && expectedType.IsAssignableFrom inputType then
-                let some, _, _ = ReflectionHelper.optionOfType outputType.GenericTypeArguments[0]
+            let expectedOutputType = outputType.GenericTypeArguments[0]
+            if outputType.FullName.StartsWith ReflectionHelper.OptionTypeName && expectedOutputType.IsAssignableFrom inputType then
+                let some, _, _ = ReflectionHelper.optionOfType expectedOutputType
                 some value
-            elif outputType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1" && expectedType.IsAssignableFrom inputType then
-                let valuesome, _, _ = ReflectionHelper.vOptionOfType outputType.GenericTypeArguments[0]
+            elif outputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName && expectedOutputType.IsAssignableFrom inputType then
+                let valuesome, _, _ = ReflectionHelper.vOptionOfType expectedOutputType
                 valuesome value
             else
                 value
