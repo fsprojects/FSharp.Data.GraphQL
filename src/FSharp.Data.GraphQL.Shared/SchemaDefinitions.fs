@@ -590,7 +590,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string>,
-                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
@@ -604,7 +604,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, string list>,
-                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
@@ -618,7 +618,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError>,
-                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput >> Result.mapError List.singleton
@@ -632,7 +632,7 @@ module SchemaDefinitions =
         /// <param name="coerceOutput">Function used to cross cast to .NET types.</param>
         /// <param name="description">Optional scalar description. Usefull for generating documentation.</param>
         static member WrappedScalar(name : string, coerceInput : InputParameterValue -> Result<'Wrapper, IGQLError list>,
-                             coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
+                                    coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
               CoerceInput = coerceInput
