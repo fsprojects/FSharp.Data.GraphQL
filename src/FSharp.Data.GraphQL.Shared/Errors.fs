@@ -112,7 +112,7 @@ type GQLProblemDetails = {
     static member SetErrorKind (errorKind : ErrorKind) (extensions : IReadOnlyDictionary<string, obj>) =
         let mutableExtensions =
             match extensions with
-            | :? IDictionary<string, obj> as extensions -> extensions
+            | :? IDictionary<string, obj> as extensions when not extensions.IsReadOnly -> extensions
             | _ ->
 #if NETSTANDARD2_0
                 let dictionary = Dictionary<string, obj> (extensions.Count)
