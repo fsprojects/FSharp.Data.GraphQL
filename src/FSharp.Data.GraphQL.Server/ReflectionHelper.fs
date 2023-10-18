@@ -130,10 +130,13 @@ module internal Gen =
 
 module internal ReflectionHelper =
 
+    let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
+    let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
+
     let isParameterOptional (p: ParameterInfo) =
         p.IsOptional
-        || p.ParameterType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1"
-        || p.ParameterType.FullName.StartsWith "Microsoft.FSharp.Core.FSharpValueOption`1"
+        || p.ParameterType.FullName.StartsWith OptionTypeName
+        || p.ParameterType.FullName.StartsWith ValueOptionTypeName
 
     let isPrameterMandatory = not << isParameterOptional
 
