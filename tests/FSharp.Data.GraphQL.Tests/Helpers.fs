@@ -8,6 +8,7 @@ open System.Collections.Generic
 open System.Linq
 open System.Text.Json.Serialization
 open System.Threading
+open System.Threading.Tasks
 open Xunit
 open FSharp.Data.GraphQL
 
@@ -34,6 +35,8 @@ let single (xs : 'a seq) =
     then fail <| sprintf "Expected single item in sequence, but found %i items.\n%A" length xs
     Seq.head xs
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
+let throwsAsync<'e when 'e :> exn> (action : unit Async) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action))
+let throwsAsyncVal<'e when 'e :> exn> (action : unit AsyncVal) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action |> AsyncVal.toAsync))
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
 
