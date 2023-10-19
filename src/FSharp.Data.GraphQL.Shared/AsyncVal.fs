@@ -41,7 +41,7 @@ module AsyncVal =
         match x with
         | Value v -> v
         | Async a -> a |> Async.RunSynchronously
-        | Failure f -> raise f
+        | Failure f -> f.Reraise()
 
     /// Create new AsyncVal from Async computation.
     let inline ofAsync (a: Async<'T>) = Async(a)
@@ -54,7 +54,7 @@ module AsyncVal =
         match x with
         | Value v -> async.Return v
         | Async a -> a
-        | Failure f -> async.Return (raise f)
+        | Failure f -> async.Return (f.Reraise())
 
     /// Returns an empty AsyncVal with immediatelly executed value.
     let inline empty<'T> : AsyncVal<'T> = AsyncVal<'T>.Zero
@@ -111,7 +111,7 @@ module AsyncVal =
                 match bound with
                 | Value v -> return v
                 | Async a -> return! a
-                | Failure f -> return raise f
+                | Failure f -> return f.Reraise()
             })
         | Failure f -> Failure(f)
 
@@ -133,7 +133,7 @@ module AsyncVal =
                         let! r = a
                         results.[i] <- r
                     | Failure f ->
-                        results.[i] <- raise f
+                        results.[i] <- f.Reraise()
                 return results })
         else Value (values |> Array.map (fun (Value v) -> v))
 
@@ -156,7 +156,7 @@ module AsyncVal =
                     indexes.Add i
                     continuations.Add a
                 | Failure f ->
-                    results.[i] <- raise f
+                    results.[i] <- f.Reraise()
             if indexes.Count = 0
             then Value(results)
             else Async(async {
@@ -193,7 +193,7 @@ type AsyncValBuilder () =
             match bound with
             | Value v -> return v
             | Async a -> return! a
-            | Failure f -> return raise f })
+            | Failure f -> return f.Reraise() })
 
 
 [<AutoOpen>]
