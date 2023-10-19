@@ -146,7 +146,7 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
         member _.OnCompleted() =
             isCompleted <- true
             mre.Set() |> ignore
-        member _.OnError(error) = raise error
+        member _.OnError(error) = error.Reraise()
         member _.OnNext(value) =
             received.Add(value)
             onReceived |> Option.iter (fun evt -> evt this value)

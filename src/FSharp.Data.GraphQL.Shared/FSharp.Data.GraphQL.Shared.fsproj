@@ -49,6 +49,7 @@
     <Compile Include="Helpers\Reflection.fs" />
     <Compile Include="Helpers\MemoryCache.fs" />
     <Compile Include="Errors.fs" />
+    <Compile Include="Exception.fs" />
     <Compile Include="ValidationTypes.fs" />
     <Compile Include="AsyncVal.fs" />
     <Compile Include="Ast.fs" />
