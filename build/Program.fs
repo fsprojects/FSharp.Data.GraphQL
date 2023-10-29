@@ -243,24 +243,51 @@ let pack id =
             .WithCommon
             DotNetCli.setVersion)
 
-let publishPackage id =
+type PushSource =
+    | NuGet
+    | GitHub
+
+let push id =
     let packageName = getPackageName id
     let packageDir = getPackageDir packageName
     let projectPath = getProjectPath packageName
 
+    let source =
+#if NuGet
+        NuGet
+#else
+        GitHub
+#endif
+
+    let apiKeyVariableName, source =
+        match source with
+        | GitHub -> "GITHUB_TOKEN", Some "github"
+        | NuGet -> "NUGET_SECRET", None
+
     projectPath
-    |> DotNet.publish (fun p ->
-        { p with Common = { p.Common with WorkingDirectory = packageDir } }.WithCommon DotNetCli.setVersion)
+    |> DotNet.nugetPush (fun p ->
+        {
+            p with
+                Common = { p.Common with WorkingDirectory = packageDir }
+                SkipDuplicate = true
+                PushParams = {
+                    p.PushParams
+                        with
+                            ApiKey = Some (Environment.environVar apiKeyVariableName)
+                            Source = source
+                }
+        }
+            .WithCommon DotNetCli.setVersion)
 
-Target.create "PublishShared" <| fun _ -> publishPackage "Shared"
+Target.create "PushShared" <| fun _ -> push "Shared"
 
-Target.create "PublishServer" <| fun _ -> publishPackage "Server"
+Target.create "PushServer" <| fun _ -> push "Server"
 
-Target.create "PublishClient" <| fun _ -> publishPackage "Client"
+Target.create "PushClient" <| fun _ -> push "Client"
 
-Target.create "PublishMiddleware" <| fun _ -> publishPackage "Server.Middleware"
+Target.create "PushMiddleware" <| fun _ -> push "Server.Middleware"
 
-Target.create "PublishRelay" <| fun _ -> publishPackage "Server.Relay"
+Target.create "PushRelay" <| fun _ -> push "Server.Relay"
 
 Target.create "PackShared" <| fun _ -> pack "Shared"
 
@@ -296,8 +323,8 @@ Target.create "PackAll" ignore
     |> ignore
 
 "PackShared"
-    ==> "PackServer"
     ==> "PackClient"
+    ==> "PackServer"
     ==> "PackMiddleware"
     ==> "PackRelay"
     ==> "PackAll"
