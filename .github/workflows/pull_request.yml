@@ -32,4 +32,4 @@ jobs:
       run: dotnet tool restore
 
     - name: Build and run integration tests
-      run: dotnet run --project build/Build.fsproj
+      run: dotnet run --project build/Build.fsproj --launch-profile BuildAndTest

@@ -238,7 +238,9 @@ let pack id =
         {
             p with
                 Common = { p.Common with Version = Some release.NugetVersion }
+                NoLogo = true
                 OutputPath = Some packageDir
+                MSBuildParams = { p.MSBuildParams with Properties = [("IsNuget", "true")] }
         }
             .WithCommon
             DotNetCli.setVersion)
@@ -250,7 +252,7 @@ type PushSource =
 let push id =
     let packageName = getPackageName id
     let packageDir = getPackageDir packageName
-    let projectPath = getProjectPath packageName
+    let packageFile = packageName + ".nupkg"
 
     let source =
 #if NuGet
@@ -264,17 +266,17 @@ let push id =
         | GitHub -> "GITHUB_TOKEN", Some "github"
         | NuGet -> "NUGET_SECRET", None
 
-    projectPath
+    packageFile
     |> DotNet.nugetPush (fun p ->
         {
             p with
                 Common = { p.Common with WorkingDirectory = packageDir }
-                SkipDuplicate = true
                 PushParams = {
                     p.PushParams
                         with
-                            ApiKey = Some (Environment.environVar apiKeyVariableName)
+                            ApiKey = Some (Environment.GetEnvironmentVariable apiKeyVariableName)
                             Source = source
+                            SkipDuplicate = true
                 }
         }
             .WithCommon DotNetCli.setVersion)
@@ -304,7 +306,7 @@ Target.create "PackRelay" <| fun _ -> pack "Server.Relay"
 // Run all targets by default. Invoke 'build --target <Target>' to override
 
 Target.create "All" ignore
-Target.create "PackAll" ignore
+Target.create "PackAndPush" ignore
 
 "Clean"
     ==> "Restore"
@@ -323,11 +325,16 @@ Target.create "PackAll" ignore
     |> ignore
 
 "PackShared"
+    ==> "PublishShared"
     ==> "PackClient"
+    ==> "PublishClient"
     ==> "PackServer"
+    ==> "PublishServer"
     ==> "PackMiddleware"
+    ==> "PublishMiddleware"
     ==> "PackRelay"
-    ==> "PackAll"
+    ==> "PublishRelay"
+    ==> "Publish"
     |> ignore
 
 Target.runOrDefaultWithArguments "All"
