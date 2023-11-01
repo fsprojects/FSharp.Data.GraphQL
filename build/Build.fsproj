@@ -9,6 +9,7 @@
     <None Include="Properties\launchSettings.json" />
     <Compile Include="BinLog.fs" />
     <Compile Include="MSBuild.fs" />
+    <Compile Include="NuGet.fs" />
     <Compile Include="DotNet.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="Program.fs" />

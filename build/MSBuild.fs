@@ -1,4 +1,4 @@
-﻿namespace Fake.DotNet
+namespace Fake.DotNet
 
 open System
 open System.IO
@@ -18,12 +18,12 @@ type MSBuildProject = XDocument
 /// An exception type to signal build errors.
 /// </summary>
 exception MSBuildException of string * list<string> with
-    override x.ToString() =
-        x.Data0.ToString()
+    override x.ToString () =
+        x.Data0.ToString ()
         + Environment.NewLine
         + (String.separated Environment.NewLine x.Data1)
 
-type MSBuildEntry = { Version: string; Paths: string list }
+type MSBuildEntry = { Version : string; Paths : string list }
 
 /// MSBuild verbosity option
 type MSBuildVerbosity =
@@ -80,19 +80,21 @@ type MSBuildLogParameter =
 /// <summary>
 /// A type for MSBuild configuration
 /// </summary>
-type MSBuildFileLoggerConfig =
-    { Number: int
-      Filename: string option
-      Verbosity: MSBuildVerbosity option
-      Parameters: MSBuildLogParameter list option }
+type MSBuildFileLoggerConfig = {
+    Number : int
+    Filename : string option
+    Verbosity : MSBuildVerbosity option
+    Parameters : MSBuildLogParameter list option
+}
 
 /// <summary>
 /// A type for MSBuild distributed logger configuration
 /// </summary>
-type MSBuildDistributedLoggerConfig =
-    { ClassName: string option
-      AssemblyPath: string
-      Parameters: (string * string) list option }
+type MSBuildDistributedLoggerConfig = {
+    ClassName : string option
+    AssemblyPath : string
+    Parameters : (string * string) list option
+}
 
 type MSBuildLoggerConfig = MSBuildDistributedLoggerConfig
 
@@ -105,19 +107,20 @@ module private MSBuildExeFromVsWhere =
         |> List.map (fun vs -> vs.InstallationPath)
 
     let private getAllMsBuildPaths vsPath =
-        let msBuildDir = Path.Combine(vsPath, "MSBuild")
+        let msBuildDir = Path.Combine (vsPath, "MSBuild")
 
-        if Directory.Exists(msBuildDir) then
-            Directory.EnumerateDirectories(msBuildDir)
-            |> Seq.map (fun dir -> Path.Combine(dir, "Bin", "MSBuild.exe"))
+        if Directory.Exists (msBuildDir) then
+            Directory.EnumerateDirectories (msBuildDir)
+            |> Seq.map (fun dir -> Path.Combine (dir, "Bin", "MSBuild.exe"))
             |> Seq.choose (fun exe ->
-                if File.Exists(exe) then
-                    let v = FileVersionInfo.GetVersionInfo(exe)
+                if File.Exists (exe) then
+                    let v = FileVersionInfo.GetVersionInfo (exe)
 
-                    Some
-                        {| IsPreRelease = v.IsPreRelease
-                           FileMajorPart = v.FileMajorPart
-                           Path = Path.GetDirectoryName(exe) |}
+                    Some {|
+                        IsPreRelease = v.IsPreRelease
+                        FileMajorPart = v.FileMajorPart
+                        Path = Path.GetDirectoryName (exe)
+                    |}
                 else
                     None)
             |> List.ofSeq
@@ -131,56 +134,66 @@ module private MSBuildExeFromVsWhere =
              |> List.sortBy (fun x -> x.IsPreRelease)
              |> List.groupBy (fun x -> x.FileMajorPart)
              |> List.sortByDescending fst
-             |> List.map (fun (v, dirs) ->
-                 { Version = sprintf "%d.0" v
-                   Paths = dirs |> List.map (fun x -> x.Path) }))
+             |> List.map (fun (v, dirs) -> { Version = sprintf "%d.0" v; Paths = dirs |> List.map (fun x -> x.Path) }))
 
     let getOrdered () : MSBuildEntry list = all.Value
 
 module private MSBuildExe =
-    let knownMSBuildEntries =
-        [ { Version = "17.0"
-            Paths =
-              [ @"\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin"
+    let knownMSBuildEntries = [
+        {
+            Version = "17.0"
+            Paths = [
+                @"\Microsoft Visual Studio\2022\Enterprise\MSBuild\Current\Bin"
                 @"\Microsoft Visual Studio\2022\Professional\MSBuild\Current\Bin"
                 @"\Microsoft Visual Studio\2022\Community\MSBuild\Current\Bin"
                 @"\MSBuild\Current\Bin"
-                @"\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin" ] }
-          { Version = "16.0"
-            Paths =
-              [ @"\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin"
+                @"\Microsoft Visual Studio\2022\BuildTools\MSBuild\Current\Bin"
+            ]
+        }
+        {
+            Version = "16.0"
+            Paths = [
+                @"\Microsoft Visual Studio\2019\Enterprise\MSBuild\Current\Bin"
                 @"\Microsoft Visual Studio\2019\Professional\MSBuild\Current\Bin"
                 @"\Microsoft Visual Studio\2019\Community\MSBuild\Current\Bin"
                 @"\MSBuild\Current\Bin"
-                @"\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin" ] }
-          { Version = "15.0"
-            Paths =
-              [ @"\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin"
+                @"\Microsoft Visual Studio\2019\BuildTools\MSBuild\Current\Bin"
+            ]
+        }
+        {
+            Version = "15.0"
+            Paths = [
+                @"\Microsoft Visual Studio\2017\Enterprise\MSBuild\15.0\Bin"
                 @"\Microsoft Visual Studio\2017\Professional\MSBuild\15.0\Bin"
                 @"\Microsoft Visual Studio\2017\Community\MSBuild\15.0\Bin"
                 @"\MSBuild\15.0\Bin"
-                @"\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin" ] }
-          { Version = "14.0"
-            Paths = [ @"\MSBuild\14.0\Bin" ] }
-          { Version = "12.0"
-            Paths = [ @"\MSBuild\12.0\Bin"; @"\MSBuild\12.0\Bin\amd64" ] } ]
+                @"\Microsoft Visual Studio\2017\BuildTools\MSBuild\15.0\Bin"
+            ]
+        }
+        { Version = "14.0"; Paths = [ @"\MSBuild\14.0\Bin" ] }
+        {
+            Version = "12.0"
+            Paths = [ @"\MSBuild\12.0\Bin"; @"\MSBuild\12.0\Bin\amd64" ]
+        }
+    ]
 
-    let oldMSBuildLocations =
-        [ @"c:\Windows\Microsoft.NET\Framework\v4.0.30319\"
-          @"c:\Windows\Microsoft.NET\Framework\v4.0.30128\"
-          @"c:\Windows\Microsoft.NET\Framework\v3.5\" ]
+    let oldMSBuildLocations = [
+        @"c:\Windows\Microsoft.NET\Framework\v4.0.30319\"
+        @"c:\Windows\Microsoft.NET\Framework\v4.0.30128\"
+        @"c:\Windows\Microsoft.NET\Framework\v3.5\"
+    ]
 
-    let private toDict items =
-        items |> Seq.map (fun f -> f.Version, f.Paths) |> Map.ofSeq
+    let private toDict items = items |> Seq.map (fun f -> f.Version, f.Paths) |> Map.ofSeq
 
     let private getAllKnownPaths =
-        (knownMSBuildEntries |> List.collect (fun m -> m.Paths)) @ oldMSBuildLocations
+        (knownMSBuildEntries |> List.collect (fun m -> m.Paths))
+        @ oldMSBuildLocations
 
     /// <summary>
     /// Versions of Mono prior to this one have faulty implementations of MSBuild
     /// NOTE: in System.Version 5.0 &gt;= 5.0.0.0 is false while 5.0.0.0 &gt;= 5.0 is true...
     /// </summary>
-    let monoVersionToUseMSBuildOn = Version("5.0")
+    let monoVersionToUseMSBuildOn = Version ("5.0")
 
     /// <summary>
     /// Tries to detect the right version of MSBuild.
@@ -270,19 +283,23 @@ module private MSBuildExe =
         let foundExe =
             match Environment.isUnix, preferMSBuildOnNetCore || preferMSBuildOnMono with
             | true, true ->
-                let sources =
-                    [ msbuildEnvironVar |> Option.map (exactPathOrBinaryOnPath "msbuild")
-                      msbuildEnvironVar |> Option.bind which
-                      which "msbuild"
-                      which "xbuild" ]
+                let sources = [
+                    msbuildEnvironVar
+                    |> Option.map (exactPathOrBinaryOnPath "msbuild")
+                    msbuildEnvironVar |> Option.bind which
+                    which "msbuild"
+                    which "xbuild"
+                ]
 
                 defaultArg (sources |> List.choose id |> List.tryHead) "msbuild"
             | true, _ ->
-                let sources =
-                    [ msbuildEnvironVar |> Option.map (exactPathOrBinaryOnPath "xbuild")
-                      msbuildEnvironVar |> Option.bind which
-                      which "xbuild"
-                      which "msbuild" ]
+                let sources = [
+                    msbuildEnvironVar
+                    |> Option.map (exactPathOrBinaryOnPath "xbuild")
+                    msbuildEnvironVar |> Option.bind which
+                    which "xbuild"
+                    which "msbuild"
+                ]
 
                 defaultArg (sources |> List.choose id |> List.tryHead) "xbuild"
             | false, _ ->
@@ -291,10 +308,7 @@ module private MSBuildExe =
 #if !FX_NO_SYSTEM_CONFIGURATION
                     if
                         "true"
-                            .Equals(
-                                System.Configuration.ConfigurationManager.AppSettings.["IgnoreMSBuild"],
-                                StringComparison.OrdinalIgnoreCase
-                            )
+                            .Equals (System.Configuration.ConfigurationManager.AppSettings.["IgnoreMSBuild"], StringComparison.OrdinalIgnoreCase)
                     then
                         Some ""
                     else
@@ -307,7 +321,8 @@ module private MSBuildExe =
                     // with VS 2022 Visual Studio can also be installed in "Program Files" instead of "Program Files (x86)"
                     // so we need to search both paths for every version of Visual Studio
                     let withProgramFiles paths =
-                        (paths |> List.map ((@@) Fake.Core.Environment.ProgramFilesX86))
+                        (paths
+                         |> List.map ((@@) Fake.Core.Environment.ProgramFilesX86))
                         @ (paths |> List.map ((@@) Fake.Core.Environment.ProgramFiles))
 
                     let vsVersionPaths =
@@ -319,7 +334,8 @@ module private MSBuildExe =
                         with
                         | Some x -> x |> withProgramFiles
                         | None ->
-                            (knownMSBuildEntries |> List.collect (fun x -> x.Paths |> withProgramFiles))
+                            (knownMSBuildEntries
+                             |> List.collect (fun x -> x.Paths |> withProgramFiles))
                             @ oldMSBuildLocations
 
                     let vsWhereVersionPaths =
@@ -332,11 +348,13 @@ module private MSBuildExe =
 
                     ProcessUtils.tryFindFile fullList "MSBuild.exe"
 
-                let sources =
-                    [ msbuildEnvironVar |> Option.map (exactPathOrBinaryOnPath "MSBuild.exe")
-                      msbuildEnvironVar |> Option.bind which
-                      configIgnoreMSBuild
-                      findOnVSPathsThenSystemPath ]
+                let sources = [
+                    msbuildEnvironVar
+                    |> Option.map (exactPathOrBinaryOnPath "MSBuild.exe")
+                    msbuildEnvironVar |> Option.bind which
+                    configIgnoreMSBuild
+                    findOnVSPathsThenSystemPath
+                ]
 
                 defaultArg (sources |> List.choose id |> List.tryHead) "MSBuild.exe"
 
@@ -362,19 +380,136 @@ module private MSBuildExe =
 /// A type for MSBuild task parameters
 /// Please see <a href="https://docs.microsoft.com/en-us/previous-versions/visualstudio/visual-studio-2015/msbuild/msbuild-command-line-reference?view=vs-2015">MSBuild command line reference</a>
 /// </summary>
-type MSBuildParams =
-    {
-        /// Set the MSBuild executable to use. Defaults to the latest installed MSBuild.
-        ToolPath: string
+type MSBuildParams = {
+    /// Set the MSBuild executable to use. Defaults to the latest installed MSBuild.
+    ToolPath : string
 
-        /// The working directory to execute MSBuild in
-        WorkingDirectory: string
+    /// The working directory to execute MSBuild in
+    WorkingDirectory : string
 
+    /// The list of targets to use
+    Targets : string list
+
+    /// The list of properties to pass to MSBuild
+    Properties : (string * string) list
+
+    /// <summary>
+    /// corresponds to the msbuild option <c>/m</c>:
+    /// <list type="number">
+    /// <item>
+    /// <c>None</c> will omit the option.
+    /// </item>
+    /// <item>
+    /// <c>Some None</c> will emit <c>/m</c>.
+    /// </item>
+    /// <item>
+    /// <c>Some 2</c> will emit <c>/m:2</c>.
+    /// </item>
+    /// </list>
+    /// </summary>
+    MaxCpuCount : int option option
+
+    /// Execute a restore before executing the targets (<c>/restore</c> flag)
+    DoRestore : bool
+
+    /// Don't display the startup banner or the copyright message.
+    NoLogo : bool
+
+    /// Enable or disable the re-use of MSBuild nodes. You can specify the following values
+    NodeReuse : bool
+
+    /// mark if to restore the packages or not
+    RestorePackagesFlag : bool
+
+    /// Specifies the version of the Toolset to use to build the project
+    ToolsVersion : string option
+
+    /// Specifies the amount of information to display in the build log. Each logger displays events based on
+    /// the verbosity level that you set for that logger
+    Verbosity : MSBuildVerbosity option
+
+    /// Disable the default console logger, and don't log events to the console.
+    NoConsoleLogger : bool
+
+    /// The list of warnings to treat as errors
+    WarnAsError : string list option
+
+    /// The list of warning to ignore
+    NoWarn : string list option
+
+    /// corresponds to the msbuild option <c>/consoleloggerparameters</c>
+    ConsoleLogParameters : MSBuildLogParameter list
+
+    /// Fake attaches a binlog-logger in order to report errors and warnings. You can disable this behavior
+    /// with this flag
+    DisableInternalBinLog : bool
+
+    /// corresponds to the msbuild option <c>/fl</c>
+    FileLoggers : MSBuildFileLoggerConfig list option
+
+    /// corresponds to the msbuild option <c>/bl</c>
+    BinaryLoggers : string list option
+
+    /// corresponds to the msbuild option <c>/l</c>
+    Loggers : MSBuildLoggerConfig list option
+
+    /// corresponds to the msbuild option <c>/dl</c>
+    DistributedLoggers : (MSBuildLoggerConfig * MSBuildLoggerConfig option) list option
+
+    Environment : Map<string, string>
+} with
+
+    /// Defines a default for MSBuild task parameters
+    static member Create () = {
+        ToolPath = MSBuildExe.msBuildExe
+        Targets = []
+        WorkingDirectory = Directory.GetCurrentDirectory ()
+        Properties = []
+        MaxCpuCount = Some None
+        DoRestore = false
+        NoLogo = false
+        NodeReuse = false
+        ToolsVersion = None
+        Verbosity = None
+        NoConsoleLogger = false
+        WarnAsError = None
+        NoWarn = None
+        RestorePackagesFlag = false
+        DisableInternalBinLog = false
+        ConsoleLogParameters =
+            if BuildServer.ansiColorSupport then
+                [ ForceConsoleColor ]
+            else
+                []
+        FileLoggers = None
+        BinaryLoggers = None
+        DistributedLoggers = None
+        Loggers = None
+        Environment =
+            Process.createEnvironmentMap ()
+            |> Map.remove "MSBUILD_EXE_PATH"
+            |> Map.remove "MSBuildExtensionsPath"
+            |> Map.remove "MSBuildLoadMicrosoftTargetsReadOnly"
+            |> Map.remove "MSBuildSDKsPath"
+    }
+
+    /// Sets the current environment variables.
+    member x.WithEnvironment map = { x with Environment = map }
+
+/// <summary>
+/// Contains tasks which allow to use MSBuild (or xBuild on Linux/Unix) to build .NET project files or solution files.
+/// </summary>
+[<RequireQualifiedAccess>]
+module MSBuild =
+    /// <summary>
+    /// A type for MSBuild task parameters
+    /// </summary>
+    type CliArguments = {
         /// The list of targets to use
-        Targets: string list
+        Targets : string list
 
-        /// The list of properties to pass to MSBuild
-        Properties: (string * string) list
+        /// Set or override the specified project-level properties
+        Properties : (string * string) list
 
         /// <summary>
         /// corresponds to the msbuild option <c>/m</c>:
@@ -390,215 +525,101 @@ type MSBuildParams =
         /// </item>
         /// </list>
         /// </summary>
-        MaxCpuCount: int option option
+        MaxCpuCount : int option option
 
         /// Execute a restore before executing the targets (<c>/restore</c> flag)
-        DoRestore: bool
+        DoRestore : bool
 
         /// Don't display the startup banner or the copyright message.
-        NoLogo: bool
+        NoLogo : bool
 
         /// Enable or disable the re-use of MSBuild nodes. You can specify the following values
-        NodeReuse: bool
-
-        /// mark if to restore the packages or not
-        RestorePackagesFlag: bool
+        NodeReuse : bool
 
         /// Specifies the version of the Toolset to use to build the project
-        ToolsVersion: string option
+        ToolsVersion : string option
 
         /// Specifies the amount of information to display in the build log. Each logger displays events based on
         /// the verbosity level that you set for that logger
-        Verbosity: MSBuildVerbosity option
+        Verbosity : MSBuildVerbosity option
 
         /// Disable the default console logger, and don't log events to the console.
-        NoConsoleLogger: bool
+        NoConsoleLogger : bool
 
         /// The list of warnings to treat as errors
-        WarnAsError: string list option
+        WarnAsError : string list option
 
         /// The list of warning to ignore
-        NoWarn: string list option
-
-        /// corresponds to the msbuild option <c>/consoleloggerparameters</c>
-        ConsoleLogParameters: MSBuildLogParameter list
+        NoWarn : string list option
 
         /// Fake attaches a binlog-logger in order to report errors and warnings. You can disable this behavior
         /// with this flag
-        DisableInternalBinLog: bool
+        DisableInternalBinLog : bool
 
         /// corresponds to the msbuild option <c>/fl</c>
-        FileLoggers: MSBuildFileLoggerConfig list option
+        FileLoggers : MSBuildFileLoggerConfig list option
 
         /// corresponds to the msbuild option <c>/bl</c>
-        BinaryLoggers: string list option
+        BinaryLoggers : string list option
+
+        /// corresponds to the msbuild option <c>/consoleloggerparameters</c>
+        ConsoleLogParameters : MSBuildLogParameter list
 
         /// corresponds to the msbuild option <c>/l</c>
-        Loggers: MSBuildLoggerConfig list option
+        Loggers : MSBuildLoggerConfig list option
 
         /// corresponds to the msbuild option <c>/dl</c>
-        DistributedLoggers: (MSBuildLoggerConfig * MSBuildLoggerConfig option) list option
+        DistributedLoggers : (MSBuildLoggerConfig * MSBuildLoggerConfig option) list option
+    } with
 
-        Environment: Map<string, string>
-    }
-
-    /// Defines a default for MSBuild task parameters
-    static member Create() =
-        { ToolPath = MSBuildExe.msBuildExe
-          Targets = []
-          WorkingDirectory = Directory.GetCurrentDirectory()
-          Properties = []
-          MaxCpuCount = Some None
-          DoRestore = false
-          NoLogo = false
-          NodeReuse = false
-          ToolsVersion = None
-          Verbosity = None
-          NoConsoleLogger = false
-          WarnAsError = None
-          NoWarn = None
-          RestorePackagesFlag = false
-          DisableInternalBinLog = false
-          ConsoleLogParameters =
-            if BuildServer.ansiColorSupport then
-                [ ForceConsoleColor ]
-            else
-                []
-          FileLoggers = None
-          BinaryLoggers = None
-          DistributedLoggers = None
-          Loggers = None
-          Environment =
-            Process.createEnvironmentMap ()
-            |> Map.remove "MSBUILD_EXE_PATH"
-            |> Map.remove "MSBuildExtensionsPath"
-            |> Map.remove "MSBuildLoadMicrosoftTargetsReadOnly"
-            |> Map.remove "MSBuildSDKsPath" }
-
-    /// Sets the current environment variables.
-    member x.WithEnvironment map = { x with Environment = map }
-
-/// <summary>
-/// Contains tasks which allow to use MSBuild (or xBuild on Linux/Unix) to build .NET project files or solution files.
-/// </summary>
-[<RequireQualifiedAccess>]
-module MSBuild =
-    /// <summary>
-    /// A type for MSBuild task parameters
-    /// </summary>
-    type CliArguments =
-        {
-            /// The list of targets to use
-            Targets: string list
-
-            /// Set or override the specified project-level properties
-            Properties: (string * string) list
-
-            /// <summary>
-            /// corresponds to the msbuild option <c>/m</c>:
-            /// <list type="number">
-            /// <item>
-            /// <c>None</c> will omit the option.
-            /// </item>
-            /// <item>
-            /// <c>Some None</c> will emit <c>/m</c>.
-            /// </item>
-            /// <item>
-            /// <c>Some 2</c> will emit <c>/m:2</c>.
-            /// </item>
-            /// </list>
-            /// </summary>
-            MaxCpuCount: int option option
-
-            /// Execute a restore before executing the targets (<c>/restore</c> flag)
-            DoRestore: bool
-
-            /// Don't display the startup banner or the copyright message.
-            NoLogo: bool
-
-            /// Enable or disable the re-use of MSBuild nodes. You can specify the following values
-            NodeReuse: bool
-
-            /// Specifies the version of the Toolset to use to build the project
-            ToolsVersion: string option
-
-            /// Specifies the amount of information to display in the build log. Each logger displays events based on
-            /// the verbosity level that you set for that logger
-            Verbosity: MSBuildVerbosity option
-
-            /// Disable the default console logger, and don't log events to the console.
-            NoConsoleLogger: bool
-
-            /// The list of warnings to treat as errors
-            WarnAsError: string list option
-
-            /// The list of warning to ignore
-            NoWarn: string list option
-
-            /// Fake attaches a binlog-logger in order to report errors and warnings. You can disable this behavior
-            /// with this flag
-            DisableInternalBinLog: bool
-
-            /// corresponds to the msbuild option <c>/fl</c>
-            FileLoggers: MSBuildFileLoggerConfig list option
-
-            /// corresponds to the msbuild option <c>/bl</c>
-            BinaryLoggers: string list option
-
-            /// corresponds to the msbuild option <c>/consoleloggerparameters</c>
-            ConsoleLogParameters: MSBuildLogParameter list
-
-            /// corresponds to the msbuild option <c>/l</c>
-            Loggers: MSBuildLoggerConfig list option
-
-            /// corresponds to the msbuild option <c>/dl</c>
-            DistributedLoggers: (MSBuildLoggerConfig * MSBuildLoggerConfig option) list option
-        }
-
-        static member Create() : CliArguments =
-            { Targets = []
-              Properties = []
-              MaxCpuCount = None
-              DoRestore = false
-              NoLogo = false
-              NodeReuse = false
-              ToolsVersion = None
-              Verbosity = None
-              NoConsoleLogger = false
-              WarnAsError = None
-              NoWarn = None
-              DisableInternalBinLog = false
-              ConsoleLogParameters =
+        static member Create () : CliArguments = {
+            Targets = []
+            Properties = []
+            MaxCpuCount = None
+            DoRestore = false
+            NoLogo = false
+            NodeReuse = false
+            ToolsVersion = None
+            Verbosity = None
+            NoConsoleLogger = false
+            WarnAsError = None
+            NoWarn = None
+            DisableInternalBinLog = false
+            ConsoleLogParameters =
                 if BuildServer.ansiColorSupport then
                     [ ForceConsoleColor ]
                 else
                     []
-              FileLoggers = None
-              BinaryLoggers = None
-              DistributedLoggers = None
-              Loggers = None }
+            FileLoggers = None
+            BinaryLoggers = None
+            DistributedLoggers = None
+            Loggers = None
+        }
 
-    let internal asCliArguments (x: MSBuildParams) : CliArguments =
-        { Targets = x.Targets
-          Properties = ("RestorePackages", x.RestorePackagesFlag.ToString()) :: x.Properties
-          MaxCpuCount = x.MaxCpuCount
-          NoLogo = x.NoLogo
-          NodeReuse = x.NodeReuse
-          DoRestore = x.DoRestore
-          ToolsVersion = x.ToolsVersion
-          Verbosity = x.Verbosity
-          NoConsoleLogger = x.NoConsoleLogger
-          WarnAsError = x.WarnAsError
-          NoWarn = x.NoWarn
-          DisableInternalBinLog = x.DisableInternalBinLog
-          ConsoleLogParameters = x.ConsoleLogParameters
-          FileLoggers = x.FileLoggers
-          Loggers = x.Loggers
-          BinaryLoggers = x.BinaryLoggers
-          DistributedLoggers = x.DistributedLoggers }
+    let internal asCliArguments (x : MSBuildParams) : CliArguments = {
+        Targets = x.Targets
+        Properties =
+            ("RestorePackages", x.RestorePackagesFlag.ToString ())
+            :: x.Properties
+        MaxCpuCount = x.MaxCpuCount
+        NoLogo = x.NoLogo
+        NodeReuse = x.NodeReuse
+        DoRestore = x.DoRestore
+        ToolsVersion = x.ToolsVersion
+        Verbosity = x.Verbosity
+        NoConsoleLogger = x.NoConsoleLogger
+        WarnAsError = x.WarnAsError
+        NoWarn = x.NoWarn
+        DisableInternalBinLog = x.DisableInternalBinLog
+        ConsoleLogParameters = x.ConsoleLogParameters
+        FileLoggers = x.FileLoggers
+        Loggers = x.Loggers
+        BinaryLoggers = x.BinaryLoggers
+        DistributedLoggers = x.DistributedLoggers
+    }
 
-    let internal withCliArguments (oldObj: MSBuildParams) (x: CliArguments) =
-        { oldObj with
+    let internal withCliArguments (oldObj : MSBuildParams) (x : CliArguments) = {
+        oldObj with
             Targets = x.Targets
             Properties = x.Properties
             MaxCpuCount = x.MaxCpuCount
@@ -621,12 +642,13 @@ module MSBuild =
             ConsoleLogParameters = x.ConsoleLogParameters
             FileLoggers = x.FileLoggers
             BinaryLoggers = x.BinaryLoggers
-            DistributedLoggers = x.DistributedLoggers }
+            DistributedLoggers = x.DistributedLoggers
+    }
 
     type MSBuildParams with
 
         member internal x.CliArguments = asCliArguments x
-        member internal oldObj.WithCliArguments(x: CliArguments) = withCliArguments oldObj x
+        member internal oldObj.WithCliArguments (x : CliArguments) = withCliArguments oldObj x
 
     /// <summary>
     /// Exposing MSBuild executable
@@ -638,19 +660,18 @@ module MSBuild =
     let msbuildNamespace = "http://schemas.microsoft.com/developer/msbuild/2003"
 
     /// [omit]
-    let xName name = XName.Get(name, msbuildNamespace)
+    let xName name = XName.Get (name, msbuildNamespace)
 
     /// [omit]
-    let loadProject (projectFileName: string) : MSBuildProject =
-        MSBuildProject.Load(projectFileName, LoadOptions.PreserveWhitespace)
+    let loadProject (projectFileName : string) : MSBuildProject = MSBuildProject.Load (projectFileName, LoadOptions.PreserveWhitespace)
 
     // See: http://msdn.microsoft.com/en-us/library/ms228186.aspx
     let internal unescapeMSBuildSpecialChars s =
-        let replExpr = Text.RegularExpressions.Regex("%..")
+        let replExpr = Text.RegularExpressions.Regex ("%..")
 
-        replExpr.Replace(
+        replExpr.Replace (
             s,
-            Text.RegularExpressions.MatchEvaluator(fun _match ->
+            Text.RegularExpressions.MatchEvaluator (fun _match ->
                 match _match.Value with
                 | "%24" -> "$"
                 | "%25" -> "%"
@@ -662,22 +683,24 @@ module MSBuild =
                 | _ -> _match.Value)
         )
 
-    let internal getReferenceElements elementName projectFileName (doc: XDocument) =
+    let internal getReferenceElements elementName projectFileName (doc : XDocument) =
         let fi = FileInfo.ofPath projectFileName
 
         doc
             .Descendants(xName "Project")
             .Descendants(xName "ItemGroup")
-            .Descendants(xName elementName)
+            .Descendants (xName elementName)
         |> Seq.map (fun e ->
-            let a = e.Attribute(XName.Get "Include")
+            let a = e.Attribute (XName.Get "Include")
 
             let value =
-                a.Value |> unescapeMSBuildSpecialChars |> Path.convertWindowsToCurrentPath
+                a.Value
+                |> unescapeMSBuildSpecialChars
+                |> Path.convertWindowsToCurrentPath
 
             let fileName =
                 if
-                    value.StartsWith(".." + Path.directorySeparator)
+                    value.StartsWith (".." + Path.directorySeparator)
                     || (not <| value.Contains Path.directorySeparator)
                 then
                     fi.Directory.FullName @@ value
@@ -687,11 +710,11 @@ module MSBuild =
             a, fileName |> Path.getFullName)
 
     let internal quoteString str =
-        StringBuilder()
+        StringBuilder ()
         |> StringBuilder.appendQuotedIfNotNull Some str
         |> StringBuilder.toText
 
-    let rec private getProjectReferences (projectFileName: string) =
+    let rec private getProjectReferences (projectFileName : string) =
         match projectFileName.EndsWith ".sln" with
         | true -> Set.empty
         | false ->
@@ -707,7 +730,7 @@ module MSBuild =
             |> Seq.append references
             |> Set.ofSeq
 
-    let internal fromCliArguments (p: CliArguments) =
+    let internal fromCliArguments (p : CliArguments) =
         let verbosityName v =
             match v with
             | Quiet -> "q"
@@ -719,10 +742,16 @@ module MSBuild =
         let targets =
             match p.Targets with
             | [] -> None
-            | t -> Some("t", t |> Seq.map (String.replace "." "_") |> String.separated ";")
+            | t ->
+                Some (
+                    "t",
+                    t
+                    |> Seq.map (String.replace "." "_")
+                    |> String.separated ";"
+                )
 
         // see https://github.com/fsharp/FAKE/issues/2112
-        let escapePropertyValue (v: string) =
+        let escapePropertyValue (v : string) =
             // https://docs.microsoft.com/en-us/visualstudio/msbuild/msbuild-special-characters?view=vs-2017
             v
                 .Replace("%", "%25")
@@ -734,50 +763,50 @@ module MSBuild =
                 .Replace("@", "%40")
                 .Replace("'", "%27")
                 .Replace("?", "%3F")
-                .Replace("*", "%2A")
+                .Replace ("*", "%2A")
 
         let properties =
             p.Properties
-            |> List.map (fun (k, v) -> Some("p", sprintf "%s=%s" k (escapePropertyValue v)))
+            |> List.map (fun (k, v) -> Some ("p", sprintf "%s=%s" k (escapePropertyValue v)))
 
         let maxCpu =
             match p.MaxCpuCount with
             | None -> None
             | Some x ->
-                Some(
+                Some (
                     "m",
                     match x with
-                    | Some v -> v.ToString()
+                    | Some v -> v.ToString ()
                     | _ -> ""
                 )
 
-        let restoreFlag = if p.DoRestore then Some("restore", "") else None
+        let restoreFlag = if p.DoRestore then Some ("restore", "") else None
 
-        let noLogo = if p.NoLogo then Some("nologo", "") else None
+        let noLogo = if p.NoLogo then Some ("nologo", "") else None
 
-        let nodeReuse = if p.NodeReuse then None else Some("nodeReuse", "False")
+        let nodeReuse = if p.NodeReuse then None else Some ("nodeReuse", "False")
 
         let tools =
             match p.ToolsVersion with
             | None -> None
-            | Some t -> Some("tv", t)
+            | Some t -> Some ("tv", t)
 
         let verbosity =
             match p.Verbosity with
             | None -> None
-            | Some v -> Some("v", verbosityName v)
+            | Some v -> Some ("v", verbosityName v)
 
-        let noConsoleLogger = if p.NoConsoleLogger then Some("noconlog", "") else None
+        let noConsoleLogger = if p.NoConsoleLogger then Some ("noconlog", "") else None
 
         let warnAsError =
             match p.WarnAsError with
             | None -> None
-            | Some w -> Some("warnaserror", w |> String.concat ";")
+            | Some w -> Some ("warnaserror", w |> String.concat ";")
 
         let nowarn =
             match p.NoWarn with
             | None -> None
-            | Some w -> Some("nowarn", w |> String.concat ";")
+            | Some w -> Some ("nowarn", w |> String.concat ";")
 
         let loggerParams paramList =
             let logParams param =
@@ -799,12 +828,14 @@ module MSBuild =
                 | EnableMPLogging -> "EnableMPLogging"
                 | LogParameter o -> o
 
-            paramList |> List.map (logParams >> (sprintf "%s")) |> String.concat ";"
+            paramList
+            |> List.map (logParams >> (sprintf "%s"))
+            |> String.concat ";"
 
         let consoleLogParams =
             match p.ConsoleLogParameters with
             | [] -> None
-            | ps -> Some("clp", loggerParams ps)
+            | ps -> Some ("clp", loggerParams ps)
 
         let fileLoggers =
             let serializeLogger fl =
@@ -822,14 +853,16 @@ module MSBuild =
 
             match p.FileLoggers with
             | None -> []
-            | Some fls -> fls |> List.map (fun fl -> Some("flp" + (string fl.Number), serializeLogger fl))
+            | Some fls ->
+                fls
+                |> List.map (fun fl -> Some ("flp" + (string fl.Number), serializeLogger fl))
 
         let binaryLoggers =
             match p.BinaryLoggers with
             | None -> []
-            | Some bls -> bls |> List.map (fun bl -> Some("bl", bl))
+            | Some bls -> bls |> List.map (fun bl -> Some ("bl", bl))
 
-        let serializeLogger (dLogger: MSBuildLoggerConfig) =
+        let serializeLogger (dLogger : MSBuildLoggerConfig) =
             sprintf
                 "%s%s%s"
                 (match dLogger.ClassName with
@@ -846,7 +879,7 @@ module MSBuild =
         let loggers =
             match p.Loggers with
             | None -> []
-            | Some ls -> ls |> List.map (fun l -> Some("l", serializeLogger l))
+            | Some ls -> ls |> List.map (fun l -> Some ("l", serializeLogger l))
 
         let distributedFileLoggers =
             let createLoggerString cl fl =
@@ -856,39 +889,43 @@ module MSBuild =
 
             match p.DistributedLoggers with
             | None -> []
-            | Some dfls -> dfls |> List.map (fun (cl, fl) -> Some("dl", createLoggerString cl fl))
+            | Some dfls ->
+                dfls
+                |> List.map (fun (cl, fl) -> Some ("dl", createLoggerString cl fl))
 
-        [ yield restoreFlag
-          yield targets
-          if not Environment.isUnix then
-              yield maxCpu
-              yield noLogo
-              yield nodeReuse
-          yield tools
-          yield verbosity
-          yield noConsoleLogger
-          yield warnAsError
-          yield nowarn
-          yield consoleLogParams
-          yield! fileLoggers
-          yield! binaryLoggers
-          yield! loggers
-          yield! distributedFileLoggers
-          yield! properties ]
+        [
+            yield restoreFlag
+            yield targets
+            if not Environment.isUnix then
+                yield maxCpu
+                yield noLogo
+                yield nodeReuse
+            yield tools
+            yield verbosity
+            yield noConsoleLogger
+            yield warnAsError
+            yield nowarn
+            yield consoleLogParams
+            yield! fileLoggers
+            yield! binaryLoggers
+            yield! loggers
+            yield! distributedFileLoggers
+            yield! properties
+        ]
         |> Seq.choose id
         |> Seq.map (fun (k, v) -> "/" + k + (if String.isNullOrEmpty v then "" else ":" + v))
         |> Args.toWindowsCommandLine
 
     /// [omit]
-    let buildArgs (setParams: MSBuildParams -> MSBuildParams) =
-        let p = MSBuildParams.Create() |> setParams
+    let buildArgs (setParams : MSBuildParams -> MSBuildParams) =
+        let p = MSBuildParams.Create () |> setParams
         p, fromCliArguments p.CliArguments
 
 
     let internal getVersion =
-        let cache = System.Collections.Concurrent.ConcurrentDictionary<string, Version>()
+        let cache = System.Collections.Concurrent.ConcurrentDictionary<string, Version> ()
 
-        fun (exePath: string) (callMsbuildExe: string -> string) ->
+        fun (exePath : string) (callMsbuildExe : string -> string) ->
             let getFromCall () =
                 try
                     let result =
@@ -898,33 +935,30 @@ module MSBuild =
 
                     let line =
                         if result.Contains "DOTNET_CLI_TELEMETRY_OPTOUT" then
-                            result.Split('\n') |> Seq.filter (String.IsNullOrWhiteSpace >> not) |> Seq.last
+                            result.Split ('\n')
+                            |> Seq.filter (String.IsNullOrWhiteSpace >> not)
+                            |> Seq.last
                         else
                             result
 
-                    Version.Parse(line)
+                    Version.Parse (line)
                 with e ->
                     Trace.traceFAKE "Could not detect msbuild version from '%s': %O" exePath e
-                    Version(13, 0, 0, 0)
+                    Version (13, 0, 0, 0)
 
-            cache.GetOrAdd(exePath, System.Func<string, _>(fun _ -> getFromCall ()))
+            cache.GetOrAdd (exePath, System.Func<string, _> (fun _ -> getFromCall ()))
 
-    let private versionToUseBinLog = Version("15.3")
-    let private versionToUseStructuredLogger = Version("14.0")
+    let private versionToUseBinLog = Version ("15.3")
+    let private versionToUseStructuredLogger = Version ("14.0")
 
-    let internal addBinaryLogger
-        (exePath: string)
-        (callMsbuildExe: string -> string)
-        (args: string)
-        (disableFakeBinLogger: bool)
-        =
+    let internal addBinaryLogger (exePath : string) (callMsbuildExe : string -> string) (args : string) (disableFakeBinLogger : bool) =
 #if !NO_MSBUILD_BINLOG
         if disableFakeBinLogger then
             None, args
         else
             let argList = Args.fromWindowsCommandLine args |> Seq.toList
-            let path = Path.GetTempFileName()
-            File.Delete(path)
+            let path = Path.GetTempFileName ()
+            File.Delete (path)
             let path = path + ".binlog"
             //let path = Path.GetFullPath <| sprintf "fake-msbuild-%s.binlog" (System.Guid.NewGuid().ToString())
             let v = getVersion exePath callMsbuildExe
@@ -934,15 +968,18 @@ module MSBuild =
             elif v >= versionToUseStructuredLogger then
                 let assemblyPath =
                     let currentPath = MSBuildBinLog.structuredLogAssemblyPath
-                    let libFolder = Path.GetDirectoryName(Path.GetDirectoryName currentPath)
+                    let libFolder = Path.GetDirectoryName (Path.GetDirectoryName currentPath)
 
                     if exePath.EndsWith " msbuild" then
                         currentPath
                     else
-                        Path.Combine(libFolder, "net46", "StructuredLogger.dll")
+                        Path.Combine (libFolder, "net46", "StructuredLogger.dll")
 
                 Some path,
-                Args.toWindowsCommandLine (argList @ [ sprintf "/logger:BinaryLogger,%s;%s" assemblyPath path ])
+                Args.toWindowsCommandLine (
+                    argList
+                    @ [ sprintf "/logger:BinaryLogger,%s;%s" assemblyPath path ]
+                )
             else
                 Trace.traceFAKE
                     "msbuild version '%O' doesn't support binary logger, please set the msbuild argument 'DisableInternalBinLog' to 'true' to disable this warning."
@@ -962,7 +999,7 @@ module MSBuild =
                     let r = MSBuildBinLog.getErrorsAndWarnings f
 
                     try
-                        File.Delete(f)
+                        File.Delete (f)
                     with e ->
                         Trace.traceFAKE "Could not delete '%s': %O" f e
 
@@ -981,17 +1018,17 @@ module MSBuild =
 #endif
         if exitCode <> 0 then
             let errors =
-                msgs |> List.choose (fun m -> if m.IsError then Some m.Message else None)
+                msgs
+                |> List.choose (fun m -> if m.IsError then Some m.Message else None)
 
-            let errorMessage =
-                sprintf "'%s %s' failed with exit code %d." command project exitCode
+            let errorMessage = sprintf "'%s %s' failed with exit code %d." command project exitCode
 
-            raise (MSBuildException(errorMessage, errors))
+            raise (MSBuildException (errorMessage, errors))
 
     // used for detection
     let private callMsBuildExe msBuildParams args =
 
-        let results = System.Collections.Generic.List<string>()
+        let results = System.Collections.Generic.List<string> ()
 
         let errorF msg = results.Add msg
 
@@ -1008,7 +1045,7 @@ module MSBuild =
         if processResult.ExitCode <> 0 then
             failwithf "msbuild failed with exit code '%d'" processResult.ExitCode
 
-        String.Join("\n", results)
+        String.Join ("\n", results)
 
     /// <summary>
     /// Run MSBuild and collect output results and return it.
@@ -1022,27 +1059,21 @@ module MSBuild =
         let args = quoteString (project + " " + argsString)
 
         let binlogPath, args =
-            addBinaryLogger
-                msBuildParams.ToolPath
-                (callMsBuildExe msBuildParams)
-                args
-                msBuildParams.DisableInternalBinLog
+            addBinaryLogger msBuildParams.ToolPath (callMsBuildExe msBuildParams) args msBuildParams.DisableInternalBinLog
 
         let wd =
-            if msBuildParams.WorkingDirectory = Directory.GetCurrentDirectory() then
+            if msBuildParams.WorkingDirectory = Directory.GetCurrentDirectory () then
                 ""
             else
                 sprintf "%s>" msBuildParams.WorkingDirectory
 
         Trace.tracefn "%s%s %s" wd msBuildParams.ToolPath args
 
-        let results = System.Collections.Generic.List<ConsoleMessage>()
+        let results = System.Collections.Generic.List<ConsoleMessage> ()
 
-        let errorF msg =
-            results.Add(ConsoleMessage.CreateError msg)
+        let errorF msg = results.Add (ConsoleMessage.CreateError msg)
 
-        let messageF msg =
-            results.Add(ConsoleMessage.CreateOut msg)
+        let messageF msg = results.Add (ConsoleMessage.CreateOut msg)
 
         let processResult =
             CreateProcess.fromRawCommandLine msBuildParams.ToolPath args
@@ -1091,14 +1122,10 @@ module MSBuild =
         let args = quoteString (project + " " + argsString)
 
         let binlogPath, args =
-            addBinaryLogger
-                msBuildParams.ToolPath
-                (callMsBuildExe msBuildParams)
-                args
-                msBuildParams.DisableInternalBinLog
+            addBinaryLogger msBuildParams.ToolPath (callMsBuildExe msBuildParams) args msBuildParams.DisableInternalBinLog
 
         let wd =
-            if msBuildParams.WorkingDirectory = Directory.GetCurrentDirectory() then
+            if msBuildParams.WorkingDirectory = Directory.GetCurrentDirectory () then
                 ""
             else
                 sprintf "%s>" msBuildParams.WorkingDirectory
@@ -1113,7 +1140,7 @@ module MSBuild =
             |> Proc.run
 
         handleAfterRun "msbuild" binlogPath processResult.ExitCode project
-        __.MarkSuccess()
+        __.MarkSuccess ()
 
     /// <summary>
     /// Builds the given project files and collects the output files.
@@ -1125,17 +1152,17 @@ module MSBuild =
     /// <param name="properties">A list with tuples of property name and property values.</param>
     /// <param name="projects">A list of project or solution files.</param>
     let runWithProperties
-        (setParams: MSBuildParams -> MSBuildParams)
+        (setParams : MSBuildParams -> MSBuildParams)
         outputPath
-        (targets: string)
-        (properties: string -> (string * string) list)
+        (targets : string)
+        (properties : string -> (string * string) list)
         projects
         =
         let projects = projects |> Seq.toList
 
         let output =
             match String.liftString outputPath with
-            | Some path -> Some(Path.getFullName path)
+            | Some path -> Some (Path.getFullName path)
             | None -> None
 
         let properties =
@@ -1150,11 +1177,16 @@ module MSBuild =
 
         let setBuildParam project defaultParams =
             let projectParams = setParams defaultParams
-            let targets = targets |> String.split ';' |> List.filter String.isNotNullOrEmpty
+            let targets =
+                targets
+                |> String.split ';'
+                |> List.filter String.isNotNullOrEmpty
 
-            { projectParams with
-                Targets = projectParams.Targets @ targets
-                Properties = projectParams.Properties @ properties project }
+            {
+                projectParams with
+                    Targets = projectParams.Targets @ targets
+                    Properties = projectParams.Properties @ properties project
+            }
 
         projects
         |> List.filter (fun project -> not <| Set.contains project dependencies)
@@ -1174,8 +1206,7 @@ module MSBuild =
     /// <param name="targets">A string with the target names which should be run by MSBuild.</param>
     /// <param name="properties">A list with tuples of property name and property values.</param>
     /// <param name="projects">A list of project or solution files.</param>
-    let run setParams outputPath targets properties projects =
-        runWithProperties setParams outputPath targets (fun _ -> properties) projects
+    let run setParams outputPath targets properties projects = runWithProperties setParams outputPath targets (fun _ -> properties) projects
 
     /// <summary>
     /// Builds the given project files or solution files and collects the output files.
@@ -1185,8 +1216,7 @@ module MSBuild =
     /// <param name="outputPath">If it is null or empty then the project settings are used.</param>
     /// <param name="targets">A string with the target names which should be run by MSBuild.</param>
     /// <param name="projects">A list of project or solution files.</param>
-    let runDebug setParams outputPath targets projects =
-        run setParams outputPath targets [ "Configuration", "Debug" ] projects
+    let runDebug setParams outputPath targets projects = run setParams outputPath targets [ "Configuration", "Debug" ] projects
 
     /// <summary>
     /// Builds the given project files or solution files and collects the output files.
@@ -1196,8 +1226,7 @@ module MSBuild =
     /// <param name="outputPath">If it is null or empty then the project settings are used.</param>
     /// <param name="targets">A string with the target names which should be run by MSBuild.</param>
     /// <param name="projects">A list of project or solution files.</param>
-    let runRelease setParams outputPath targets projects =
-        run setParams outputPath targets [ "Configuration", "Release" ] projects
+    let runRelease setParams outputPath targets projects = run setParams outputPath targets [ "Configuration", "Release" ] projects
 
     /// <summary>
     /// Builds the given project files or solution files in release mode to the default outputs.
@@ -1205,8 +1234,7 @@ module MSBuild =
     ///
     /// <param name="targets">A string with the target names which should be run by MSBuild.</param>
     /// <param name="projects">A list of project or solution files.</param>
-    let runWithDefaults targets projects =
-        run id null targets [ "Configuration", "Release" ] projects
+    let runWithDefaults targets projects = run id null targets [ "Configuration", "Release" ] projects
 
     /// <summary>
     /// Builds the given project files or solution files in release mode and collects the output files.
@@ -1229,12 +1257,14 @@ module MSBuild =
     /// <param name="outputPath">The output path.</param>
     /// <param name="configuration">MSBuild configuration.</param>
     /// <param name="projectFile">The project file path.</param>
-    let buildWebsiteConfig setParams (outputPath: string) configuration projectFile =
+    let buildWebsiteConfig setParams (outputPath : string) configuration projectFile =
         use __ = Trace.traceTask "BuildWebsite" projectFile
         let projectName = Path.GetFileNameWithoutExtension projectFile
 
-        let slashes (dir: string) =
-            dir.Replace("\\", "/").TrimEnd('/') |> Seq.filter ((=) '/') |> Seq.length
+        let slashes (dir : string) =
+            dir.Replace("\\", "/").TrimEnd ('/')
+            |> Seq.filter ((=) '/')
+            |> Seq.length
 
         let currentDir = (DirectoryInfo.ofPath ".").FullName
         let projectDir = (FileInfo.ofPath projectFile).Directory.FullName
@@ -1250,20 +1280,17 @@ module MSBuild =
         run setParams null "Build" [ "Configuration", configuration ] [ projectFile ]
         |> ignore
 
-        run
-            setParams
-            null
-            "_CopyWebApplication;_BuiltWebOutputGroupOutput"
-            [ "Configuration", configuration
-              "OutDir", prefix + outputPath
-              "WebProjectOutputDir", prefix + outputPath + "/" + projectName ]
-            [ projectFile ]
+        run setParams null "_CopyWebApplication;_BuiltWebOutputGroupOutput" [
+            "Configuration", configuration
+            "OutDir", prefix + outputPath
+            "WebProjectOutputDir", prefix + outputPath + "/" + projectName
+        ] [ projectFile ]
         |> ignore
 
         !!(projectDir + "/bin/*.*")
         |> Shell.copy (outputPath + "/" + projectName + "/bin/")
 
-        __.MarkSuccess()
+        __.MarkSuccess ()
 
     /// <summary>
     /// Builds the given web project file with debug configuration and copies it to the given outputPath.
@@ -1271,8 +1298,7 @@ module MSBuild =
     ///
     /// <param name="outputPath">The output path.</param>
     /// <param name="projectFile">The project file path.</param>
-    let buildWebsite outputPath projectFile =
-        buildWebsiteConfig id outputPath "Debug" projectFile
+    let buildWebsite outputPath projectFile = buildWebsiteConfig id outputPath "Debug" projectFile
 
     /// <summary>
     /// Builds the given web project files in specified configuration and copies them to the given outputPath.
@@ -1291,12 +1317,11 @@ module MSBuild =
     ///
     /// <param name="outputPath">The output path.</param>
     /// <param name="projectFiles">The project file paths.</param>
-    let buildWebsites outputPath projectFiles =
-        buildWebsitesConfig outputPath "Debug" projectFiles
+    let buildWebsites outputPath projectFiles = buildWebsitesConfig outputPath "Debug" projectFiles
 
 [<AutoOpen>]
 module internal MSBuildParamExtensions =
     type MSBuildParams with
 
         member internal x.CliArguments = MSBuild.asCliArguments x
-        member internal oldObj.WithCliArguments(x: MSBuild.CliArguments) = MSBuild.withCliArguments oldObj x
+        member internal oldObj.WithCliArguments (x : MSBuild.CliArguments) = MSBuild.withCliArguments oldObj x
