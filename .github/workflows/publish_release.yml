@@ -41,7 +41,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Shared project
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared project to NuGet
       run: |
         dotnet nuget push nuget/*Shared*.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
@@ -49,7 +49,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client project to NuGet
       run: |
         dotnet nuget push nuget/*Client*.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
@@ -57,7 +57,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server project to NuGet
       run: |
         dotnet nuget push nuget/*Server*.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
@@ -65,7 +65,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Relay project to NuGet
       run: |
         dotnet nuget push nuget/*Server.Relay*.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
@@ -73,7 +73,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware project to NuGet
       run: |
         dotnet nuget push nuget/*Server.Middleware*.nupkg -k ${{secrets.NUGET_SECRET}} --skip-duplicate
@@ -86,7 +86,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.ProjectTemplates template project
       run: |
         cd samples
-        dotnet pack --nologo --configuration Release -o ../nuget
+        dotnet pack --nologo --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
     - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
       run: |
         $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.$Env:VERSION.nupkg"
