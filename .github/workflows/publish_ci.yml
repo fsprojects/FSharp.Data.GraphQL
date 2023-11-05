@@ -50,7 +50,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client project to GitHub
       run: |
         dotnet nuget push nuget/*Client*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
