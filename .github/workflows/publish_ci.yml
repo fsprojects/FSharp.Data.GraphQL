@@ -42,7 +42,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Shared project
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared project to GitHub
       run: |
         dotnet nuget push nuget/*Shared*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -50,7 +50,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client project to GitHub
       run: |
         dotnet nuget push nuget/*Client*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -58,7 +58,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server project to GitHub
       run: |
         dotnet nuget push nuget/*Server*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -66,7 +66,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Relay project to GitHub
       run: |
         dotnet nuget push nuget/*Server.Relay*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -74,7 +74,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware project to GitHub
       run: |
         dotnet nuget push nuget/*Server.Middleware*.nupkg -s "github" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
