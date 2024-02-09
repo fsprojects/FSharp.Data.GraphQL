@@ -1,5 +1,7 @@
 namespace Fake.DotNet.NuGet
 
+#nowarn "0044"
+
 /// <summary>
 /// Contains helper functions and task which allow to inspect, create and publish
 /// <a href="https://www.nuget.org/">NuGet</a> packages.
