@@ -89,13 +89,13 @@ let asts query =
     ["defer"; "stream"]
     |> Seq.map (query >> parse)
 
-let set (mre : ManualResetEvent) =
+let setEvent (mre : ManualResetEvent) =
     mre.Set() |> ignore
 
-let reset (mre : ManualResetEvent) =
+let resetEvent (mre : ManualResetEvent) =
     mre.Reset() |> ignore
 
-let wait (mre : ManualResetEvent) errorMsg =
+let waitEvent (mre : ManualResetEvent) errorMsg =
     if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
     then fail errorMsg
 
