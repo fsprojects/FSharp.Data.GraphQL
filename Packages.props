@@ -73,5 +73,6 @@
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="6.0.*" />
     <PackageReference Update="Newtonsoft.Json" Version="13.*" />
+    <PackageReference Update="Validus" Version="4.1.*" />
   </ItemGroup>
 </Project>

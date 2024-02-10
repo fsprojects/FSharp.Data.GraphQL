@@ -17,6 +17,7 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Validus" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.utility" />
     <PackageReference Include="xunit.runner.visualstudio" />
@@ -51,6 +52,8 @@
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
     <Compile Include="Variables and Inputs\CoercionTests.fs" />
+    <Compile Include="Variables and Inputs\OptionalsNormalizationTests.ValidString.fs" />
+    <Compile Include="Variables and Inputs\OptionalsNormalizationTests.fs" />
     <Compile Include="Variables and Inputs\InputRecordTests.fs" />
     <Compile Include="Variables and Inputs\InputObjectValidatorTests.fs" />
     <Compile Include="Variables and Inputs\InputScalarAndAutoFieldScalarTests.fs" />
