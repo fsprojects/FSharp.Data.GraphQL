@@ -26,7 +26,7 @@ let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProble
     | RequestError errors -> onRequestError errors
     | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
 
-let ensureValidationError (message : string) (path : FieldPath) (error) =
+let ensureValidationError (message : string) (path : FieldPath) (error : GQLProblemDetails) =
     equals message error.Message
     equals (Include path) error.Path
     match error.Extensions with
@@ -34,7 +34,7 @@ let ensureValidationError (message : string) (path : FieldPath) (error) =
     | Include extensions ->
         equals Validation (unbox extensions[CustomErrorFields.Kind])
 
-let ensureExecutionError (message : string) (path : FieldPath) (error) =
+let ensureExecutionError (message : string) (path : FieldPath) (error : GQLProblemDetails) =
     equals message error.Message
     equals (Include path) error.Path
     match error.Extensions with
@@ -42,7 +42,7 @@ let ensureExecutionError (message : string) (path : FieldPath) (error) =
     | Include extensions ->
         equals Execution (unbox extensions[CustomErrorFields.Kind])
 
-let ensureInputCoercionError (errorSource : ErrorSource) (message : string) (``type`` : string) (error) =
+let ensureInputCoercionError (errorSource : ErrorSource) (message : string) (``type`` : string) (error : GQLProblemDetails) =
     equals message error.Message
     match error.Extensions with
     | Skip -> fail "Expected extensions to be present"
@@ -56,7 +56,7 @@ let ensureInputCoercionError (errorSource : ErrorSource) (message : string) (``t
             equals name (unbox extensions[CustomErrorFields.ArgumentName])
             equals ``type`` (unbox extensions[CustomErrorFields.ArgumentType])
 
-let ensureInputObjectFieldCoercionError (errorSource : ErrorSource) (message : string) (inputObjectPath : FieldPath) (objectType : string) (fieldType : string) (error) =
+let ensureInputObjectFieldCoercionError (errorSource : ErrorSource) (message : string) (inputObjectPath : FieldPath) (objectType : string) (fieldType : string) (error : GQLProblemDetails) =
     equals message error.Message
     match error.Extensions with
     | Skip -> fail "Expected extensions to be present"
@@ -70,7 +70,7 @@ let ensureInputObjectFieldCoercionError (errorSource : ErrorSource) (message : s
         equals objectType (unbox extensions[CustomErrorFields.ObjectType])
         equals fieldType (unbox extensions[CustomErrorFields.FieldType])
 
-let ensureInputObjectValidationError (errorSource : ErrorSource) (message : string) (inputObjectPath : FieldPath) (objectType : string) (error) =
+let ensureInputObjectValidationError (errorSource : ErrorSource) (message : string) (inputObjectPath : FieldPath) (objectType : string) (error : GQLProblemDetails) =
     equals message error.Message
     match error.Extensions with
     | Skip -> fail "Expected extensions to be present"
