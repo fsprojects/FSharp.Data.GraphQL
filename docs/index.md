@@ -1,4 +1,3 @@
-
 FSharp.Data.GraphQL
 ======================
 
