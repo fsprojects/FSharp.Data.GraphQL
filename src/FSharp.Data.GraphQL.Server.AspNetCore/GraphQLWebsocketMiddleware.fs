@@ -167,7 +167,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
   let tryToGracefullyCloseSocketWithDefaultBehavior =
     tryToGracefullyCloseSocket (WebSocketCloseStatus.NormalClosure, "Normal Closure")
 
-  let handleMessages (cancellationToken: CancellationToken) (serializerOptions: JsonSerializerOptions) (executor : Executor<'Root>) (root: unit -> 'Root) (pingHandler : PingHandler option) (socket : WebSocket) =
+  let handleMessages (cancellationToken: CancellationToken) (httpContext: HttpContext) (serializerOptions: JsonSerializerOptions) (executor : Executor<'Root>) (root: HttpContext -> 'Root) (pingHandler : PingHandler option) (socket : WebSocket) =
     let subscriptions = new Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>()
     // ---------->
     // Helpers -->
@@ -274,7 +274,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                         CancellationToken.None)
                     else
                       let! planExecutionResult =
-                        executor.AsyncExecute(query.ExecutionPlan, root(), query.Variables)
+                        executor.AsyncExecute(query.ExecutionPlan, root(httpContext), query.Variables)
                         |> Async.StartAsTask
                       do! planExecutionResult
                           |> applyPlanExecutionResult id socket
@@ -365,7 +365,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             let safe_HandleMessages = handleMessages longRunningCancellationToken
             try
               do! socket
-                |> safe_HandleMessages options.SerializerOptions options.SchemaExecutor options.RootFactory options.WebsocketOptions.CustomPingHandler
+                |> safe_HandleMessages ctx options.SerializerOptions options.SchemaExecutor options.RootFactory options.WebsocketOptions.CustomPingHandler
             with
               | ex ->
                 logger.LogError(ex, "Cannot handle Websocket message.")

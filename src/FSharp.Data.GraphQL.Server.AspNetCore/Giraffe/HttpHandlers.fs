@@ -136,7 +136,7 @@ module HttpHandlers =
                                         logger.LogDebug(sprintf "Received query: %A" query)
                                     else
                                         ()
-                                    let root = rootFactory()
+                                    let root = rootFactory(ctx)
                                     let! result =
                                         executor.AsyncExecute(
                                             query.ExecutionPlan,

@@ -5,6 +5,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.Extensions.DependencyInjection
 open System.Runtime.CompilerServices
 open System.Text.Json
+open Microsoft.AspNetCore.Http
 
 [<Extension>]
 type ServiceCollectionExtensions() =
@@ -22,14 +23,14 @@ type ServiceCollectionExtensions() =
     }
 
   [<Extension>]
-  static member AddGraphQLOptions<'Root>(this : IServiceCollection, executor : Executor<'Root>, rootFactory : unit -> 'Root, endpointUrl : string) =
+  static member AddGraphQLOptions<'Root>(this : IServiceCollection, executor : Executor<'Root>, rootFactory : HttpContext -> 'Root, endpointUrl : string) =
     this.AddSingleton<GraphQLOptions<'Root>>(createStandardOptions executor rootFactory endpointUrl)
 
   [<Extension>]
   static member AddGraphQLOptionsWith<'Root>
     ( this : IServiceCollection,
       executor : Executor<'Root>,
-      rootFactory : unit -> 'Root,
+      rootFactory : HttpContext -> 'Root,
       endpointUrl : string,
       extraConfiguration : GraphQLOptions<'Root> -> GraphQLOptions<'Root>
     ) =
