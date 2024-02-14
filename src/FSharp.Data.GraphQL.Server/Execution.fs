@@ -376,7 +376,6 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path value
         | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
-        //| None -> raiseErrors <| interfaceImplError iDef.Name resolvedDef.Name path ctx
 
     | Union uDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
@@ -389,7 +388,6 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path (uDef.ResolveValue value)
         | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
-        //| None -> raiseErrors <| unionImplError uDef.Name resolvedDef.Name path ctx
 
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
@@ -451,7 +449,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
             |> Array.mapi resolveItem
             |> Observable.ofAsyncValSeq
             |> buffer
-        ResolverResult.defered (KeyValuePair (info.Identifier, null)) stream |> AsyncVal.wrap
+        ResolverResult.defered (KeyValuePair (info.Identifier, box [])) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
 and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
@@ -511,18 +509,21 @@ and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (par
         | Ok None when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, [])
         | Error errs -> return Error errs
         | Ok None -> return Error (nullResolverError name path ctx)
-        | Ok (Some v) -> return! onSuccess ctx path parent v
+        | Ok (Some v) ->
+            match! onSuccess ctx path parent v with
+            | Ok (kvp, _, _) when not ctx.ExecutionInfo.IsNullable && kvp.Value = null -> return Error (nullResolverError name path ctx)
+            | result -> return result
     }
 
     match info.Kind, returnDef with
     | ResolveDeferred innerInfo, _ when innerInfo.IsNullable -> // We can only defer nullable fields
         deferred
-        |> resolveWith { ctx with ExecutionInfo = { innerInfo with IsNullable = false } }
+        |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | ResolveDeferred innerInfo, _ ->
         raiseErrors <| deferredNullableError (innerInfo.Identifier) (innerInfo.ReturnDef.ToString()) path ctx
     | ResolveStreamed (innerInfo, mode), HasList innerDef -> // We can only stream lists
         streamed mode innerDef
-        |> resolveWith { ctx with ExecutionInfo = innerInfo; }
+        |> resolveWith { ctx with ExecutionInfo = innerInfo }
     | ResolveStreamed (innerInfo, _), _ ->
         raiseErrors <| streamListError innerInfo.Identifier (returnDef.ToString()) path ctx
     | ResolveLive innerInfo, _ ->
