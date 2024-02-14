@@ -75,7 +75,12 @@ let schemaWithInterface =
                             [ Define.Field (
                                   "pets",
                                   ListOf PetType,
-                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet; upcast { Name = "Garfield"; Meows = false } ]
+                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet; { Name = "Garfield"; Meows = false } ]
+                              )
+                              Define.Field (
+                                  "nullablePets",
+                                  ListOf (Nullable PetType),
+                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet |> Some; { Name = "Garfield"; Meows = false } :> IPet |> Some ]
                               ) ]
                     ),
                 config = { SchemaConfig.Default with Types = [ CatType; DogType ] }
@@ -106,6 +111,79 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
               upcast
                   [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj
                     NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] ] ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact(Skip = "Not implemented")>]
+let ``Execute handles execution of abstract types: not specified Interface types produce error`` () =
+    let query =
+        """{
+      pets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ petsError ] ->
+        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+
+    let query =
+        """{
+      pets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ petsError ] ->
+        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+
+[<Fact>]
+let ``Execute handles execution of abstract types: not specified Interface types must be filtered out if they allow null`` () =
+    let query =
+        """{
+      nullablePets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+
+    let expected =
+        NameValueLookup.ofList
+            [ "nullablePets", upcast [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj; null ] ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+    let query =
+        """{
+      nullablePets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+
+    let expected =
+        NameValueLookup.ofList
+            [ "nullablePets",
+              upcast [ null; NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] :> obj ] ]
 
     ensureDirect result <| fun data errors ->
         empty errors
@@ -155,6 +233,26 @@ let ``Execute handles execution of abstract types: absent type resolution produc
         catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
         dogError |> ensureValidationError "Inline fragment has type condition 'UnknownDog', but that type does not exist in the schema." [ "pets" ]
 
+    let query =
+        """{
+      pets {
+        name
+        ... on Dog {
+          woofs
+          unknownField1
+        }
+        ... on UnknownCat {
+          meows
+          unknownField2
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ catError; dogError ] ->
+        catError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
+        dogError |> ensureValidationError "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema." [ "pets" ]
+
 
 let schemaWithUnion =
     lazy
@@ -184,6 +282,11 @@ let schemaWithUnion =
                                   "pets",
                                   ListOf PetType,
                                   fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ]
+                              )
+                              Define.Field (
+                                  "nullablePets",
+                                  ListOf (Nullable PetType),
+                                  fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true } |> Some; CatCase { Name = "Garfield"; Meows = false } |> Some ]
                               ) ]
                     )
             )
@@ -214,6 +317,79 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
               upcast
                   [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj
                     NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] ] ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact(Skip = "Not implemented")>]
+let ``Execute handles execution of abstract types: not specified Union types produce error`` () =
+    let query =
+        """{
+      pets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ petsError ] ->
+        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+
+    let query =
+        """{
+      pets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ petsError ] ->
+        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+
+[<Fact>]
+let ``Execute handles execution of abstract types: not specified Union types must be filtered out`` () =
+    let query =
+        """{
+      nullablePets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+
+    let expected =
+        NameValueLookup.ofList
+            [ "nullablePets", upcast [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj; null ] ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+    let query =
+        """{
+      nullablePets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+
+    let expected =
+        NameValueLookup.ofList
+            [ "nullablePets",
+              upcast [ null; NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] :> obj ] ]
 
     ensureDirect result <| fun data errors ->
         empty errors

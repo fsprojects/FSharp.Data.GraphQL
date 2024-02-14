@@ -256,7 +256,12 @@ let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (par
 
 type ResolverResult<'T> = Result<'T * IObservable<GQLDeferredResponseContent> option * GQLProblemDetails list, GQLProblemDetails list>
 
+[<RequireQualifiedAccess>]
 module ResolverResult =
+
+    let data data  = Ok (data, None, [])
+    let defered data deferred = Ok (data, Some deferred, [])
+
     let mapValue (f : 'T -> 'U) (r : ResolverResult<'T>) : ResolverResult<'U> =
         Result.map(fun (data, deferred, errs) -> (f data, deferred, errs)) r
 
@@ -280,7 +285,7 @@ let private unionImplError unionName tyName path ctx = resolverError path ctx (G
 let private deferredNullableError name tyName path ctx = resolverError path ctx (GQLMessageException (sprintf "Deferred field %s of type '%s' must be nullable" name tyName))
 let private streamListError name tyName path ctx = resolverError path ctx (GQLMessageException (sprintf "Streamed field %s of type '%s' must be list" name tyName))
 
-let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = AsyncVal.wrap <| Ok(KeyValuePair(name, box v), None, [])
+let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = KeyValuePair(name, box v) |> ResolverResult.data |> AsyncVal.wrap
 
 let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
     let formattedPath = path |> List.rev
@@ -370,7 +375,8 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path value
-        | None -> raiseErrors <| interfaceImplError iDef.Name resolvedDef.Name path ctx
+        | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
+        //| None -> raiseErrors <| interfaceImplError iDef.Name resolvedDef.Name path ctx
 
     | Union uDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
@@ -382,7 +388,8 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path (uDef.ResolveValue value)
-        | None -> raiseErrors <| unionImplError uDef.Name resolvedDef.Name path ctx
+        | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
+        //| None -> raiseErrors <| unionImplError uDef.Name resolvedDef.Name path ctx
 
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
@@ -393,7 +400,7 @@ and deferred (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (valu
         executeResolvers ctx path parent (toOption value |> AsyncVal.wrap)
         |> Observable.ofAsyncVal
         |> Observable.bind(ResolverResult.mapValue(fun d -> d.Value) >> deferResults path)
-    AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, null), Some deferred, [])
+    ResolverResult.defered (KeyValuePair (info.Identifier, null)) deferred |> AsyncVal.wrap
 
 and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
     let info = ctx.ExecutionInfo
@@ -444,7 +451,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
             |> Array.mapi resolveItem
             |> Observable.ofAsyncValSeq
             |> buffer
-        AsyncVal.wrap <| Ok(KeyValuePair(info.Identifier, box [||]), Some stream, [])
+        ResolverResult.defered (KeyValuePair (info.Identifier, null)) stream |> AsyncVal.wrap
     | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
 
 and private live (ctx : ResolveFieldContext) (path : FieldPath) (parent : obj) (value : obj) =
