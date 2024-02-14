@@ -116,7 +116,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         empty errors
         data |> equals (upcast expected)
 
-[<Fact(Skip = "Not implemented")>]
+[<Fact>]
 let ``Execute handles execution of abstract types: not specified Interface types produce error`` () =
     let query =
         """{
@@ -130,7 +130,7 @@ let ``Execute handles execution of abstract types: not specified Interface types
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
     ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 1 ]
 
     let query =
         """{
@@ -144,7 +144,7 @@ let ``Execute handles execution of abstract types: not specified Interface types
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
     ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 0 ]
 
 [<Fact>]
 let ``Execute handles execution of abstract types: not specified Interface types must be filtered out if they allow null`` () =
@@ -322,7 +322,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         empty errors
         data |> equals (upcast expected)
 
-[<Fact(Skip = "Not implemented")>]
+[<Fact>]
 let ``Execute handles execution of abstract types: not specified Union types produce error`` () =
     let query =
         """{
@@ -336,7 +336,7 @@ let ``Execute handles execution of abstract types: not specified Union types pro
 
     let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
     ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 1 ]
 
     let query =
         """{
@@ -350,7 +350,7 @@ let ``Execute handles execution of abstract types: not specified Union types pro
 
     let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
     ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureValidationError "Field 'pets' does not allow nulls and list values." [ "pets"; "0" ]
+        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 0 ]
 
 [<Fact>]
 let ``Execute handles execution of abstract types: not specified Union types must be filtered out`` () =
