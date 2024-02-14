@@ -167,7 +167,7 @@ let Guid = Define.Scalar(
         (fun value ->
             let destinationType = "GUID"
             function
-            // Handle variable value aS JsonElement
+            // Handle variable value as JsonElement
             | Variable e when e.ValueKind = JsonValueKind.String ->
                 let s = e.GetString()
                 match Guid.TryParse(s) with
