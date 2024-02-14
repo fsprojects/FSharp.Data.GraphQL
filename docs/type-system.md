@@ -187,7 +187,7 @@ let Guid = Define.Scalar(
 
 This example shows how to create a scalar definition for the .NET `Guid` type. It requires two functions to be defined:
 
-1. `coerceInput` function, which will be used to resolve your scalar value from a variable or directly from a value encoded in a GraphQL query string (in this case StringValue is just a part of parsed query AST).
+1. `coerceInput` function, which will be used to resolve your scalar value from a variable or directly from a value encoded in a GraphQL query string (in this case StringValue is just a part of the parsed query AST).
 2. `coerceValue` function, which will return `Some` only if the value falls under the scalar's allowed values range, otherwise `None`. Applied while producing the return object graph from the resolver's output.
 
 ## Defining an Input Object
