@@ -27,10 +27,10 @@ let DataType =
         "Data",
         fieldsFn = fun () ->
         [
-            Define.Field("a", String, resolve = fun _ dt -> dt.a)
-            Define.Field("b", String, resolve = fun _ dt -> dt.b)
-            Define.Field("c", String, resolve = fun _ dt -> dt.c)
-            Define.Field("d", Boolean, "Returns its argument", [ Define.Input("input", Boolean) ], fun ctx _ -> ctx.Arg<bool> "input")
+            Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
+            Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
+            Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
+            Define.Field("d", BooleanType, "Returns its argument", [ Define.Input("input", BooleanType) ], fun ctx _ -> ctx.Arg<bool> "input")
         ])
 let Query =
     Define.Object<TestSubject>(
@@ -44,13 +44,13 @@ let ast = parse """{
             a
             b
             c
-            d(input : true )
+            d(input : true)
         }
     }"""
 
 // On the schema compile phase, we hack the compiling to make the field a return the value of c
 let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
-    let fieldDef = Define.Field("a", String, fun _ dt -> dt.c)
+    let fieldDef = Define.Field("a", StringType, fun _ dt -> dt.c)
     ctx.FieldExecuteMap.SetExecute("Data", fieldDef)
     next ctx
 
@@ -80,7 +80,7 @@ let planningMiddleware (ctx : PlanningContext) (next : PlanningContext -> Execut
     { result with Metadata = metadata }
 
 // On the execution phase, we remove the evaluation of the c field
-let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLResponse>) =
+let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
     let chooserS set =
         set |> List.choose (fun x -> match x with Field f when f.Name <> "c" -> Some x | _ -> None)
     let chooserK kind =
@@ -94,7 +94,7 @@ let executionMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> Asy
         ctx.ExecutionPlan.Fields
         |> List.map (fun x -> { x with Ast = { x.Ast with SelectionSet = chooserS x.Ast.SelectionSet }; Kind = chooserK x.Kind })
     let operation = { ctx.ExecutionPlan.Operation with SelectionSet = selection }
-    let plan = { ctx.ExecutionPlan with Operation = operation; Fields = fields  }
+    let plan = { ctx.ExecutionPlan with Operation = operation; Fields = fields }
     let ctx' = { ctx with ExecutionPlan = plan }
     next ctx'
 
@@ -120,7 +120,7 @@ let ``Executor middleware: change fields and measure planning time`` () =
     match result with
     | Direct (data, errors) ->
         empty errors
-        data.["data"] |> equals (upcast expected)
+        data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
     match result.Metadata.TryFind<int64>("planningTime") with
     | Some time -> time |> greaterThanOrEqual 5L

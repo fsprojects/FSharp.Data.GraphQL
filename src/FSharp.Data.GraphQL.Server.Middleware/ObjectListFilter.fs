@@ -17,6 +17,8 @@ type ObjectListFilter =
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<string>
     | FilterField of FieldFilter<ObjectListFilter>
+    | NoFilter
+
 
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =

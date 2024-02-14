@@ -14,15 +14,13 @@ type Data = { A: string; B: string }
 let data = { A = "a"; B = "b" }
 
 let schema =
-    Schema(Define.Object("TestType", [ Define.AutoField("a", String); Define.AutoField("b", String) ])) :> Schema<Data>
+    Schema(Define.Object("TestType", [ Define.AutoField("a", StringType); Define.AutoField("b", StringType) ])) :> Schema<Data>
 
 let private execAndCompare query expected =
-    let actual = sync <| Executor(schema).AsyncExecute(parse query, data)
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail ""
+    let result = sync <| Executor(schema).AsyncExecute(parse query, data)
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute works without directives``() =

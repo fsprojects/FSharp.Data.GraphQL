@@ -4,13 +4,15 @@
 namespace FSharp.Data.GraphQL
 
 open System
+open System.ComponentModel
 open System.Globalization
+open System.Net.Http
+open System.Text
+
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
-open System.Text
-open System.ComponentModel
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
@@ -395,7 +397,7 @@ module internal JsonValueHelper =
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
     let rawData =
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
@@ -427,6 +429,8 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
 
     /// Gets all the custom data returned by the operation on server as a map of names and values.
     member _.CustomData = customData
+
+    member _.Headers = rawResponse.Headers
 
     member x.Equals(other : OperationResultBase) =
         x.ResponseJson = other.ResponseJson

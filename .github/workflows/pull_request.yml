@@ -17,7 +17,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        dotnet: [6.0.400]
+        dotnet: [7.0.401]
     runs-on: ${{ matrix.os }}
 
     steps:
@@ -32,4 +32,4 @@ jobs:
       run: dotnet tool restore
 
     - name: Build and run integration tests
-      run: dotnet fsi build.fsx
+      run: dotnet run --project build/Build.fsproj --launch-profile BuildAndTest

@@ -130,21 +130,42 @@ module internal Gen =
 
 module internal ReflectionHelper =
 
+    let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
+    let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
+
+    let isParameterOptional (p: ParameterInfo) =
+        p.IsOptional
+        || p.ParameterType.FullName.StartsWith OptionTypeName
+        || p.ParameterType.FullName.StartsWith ValueOptionTypeName
+
+    let isPrameterMandatory = not << isParameterOptional
+
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
         else
             let constructors = t.GetConstructors(BindingFlags.NonPublic|||BindingFlags.Public|||BindingFlags.Instance)
-            let fieldNames =
+            let inputFieldNames =
                 fields
                 |> Set.ofArray
-            let (ctor, _) =
+
+            let constructorsWithParameters =
                 constructors
-                |> Array.map (fun ctor -> (ctor, ctor.GetParameters() |> Array.map (fun param -> param.Name)))
+                |> Seq.map (fun ctor -> struct(ctor, ctor.GetParameters()))
                 // start from most complete constructors
-                |> Array.sortBy (fun (_, paramNames) -> -paramNames.Length)
+                |> Seq.sortBy (fun struct(_, parameters) -> -parameters.Length)
+
+            let getMandatoryParammeters = Seq.where isPrameterMandatory
+
+            let struct(ctor, _) =
+                seq {
+                    // match all constructors with all parameters
+                    yield! constructorsWithParameters |> Seq.map (fun struct(ctor, parameters) -> struct(ctor, parameters |> Seq.map (fun p -> p.Name)))
+                    // match all constructors with non optional parameters
+                    yield! constructorsWithParameters |> Seq.map (fun struct(ctor, parameters) -> struct(ctor, parameters |> getMandatoryParammeters |> Seq.map (fun p -> p.Name)))
+                }
                 // try match field with params by name
                 // at last, default constructor should be used if defined
-                |> Array.find (fun (_, paramNames) -> Set.isSubset (Set.ofArray paramNames) fieldNames)
+                |> Seq.find (fun struct(_, ctorParamsNames) -> Set.isSubset (Set.ofSeq ctorParamsNames) inputFieldNames)
             ctor
 
     let parseUnion (t: Type) (u: string) =

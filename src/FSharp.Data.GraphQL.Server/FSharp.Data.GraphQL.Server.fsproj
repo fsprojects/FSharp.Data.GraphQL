@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Server)</Description>
@@ -26,14 +27,21 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="ReflectionHelper.fs" />
+    <Compile Include="ErrorTypes.fs" />
+    <Compile Include="ErrorMessages.fs" />
+    <Compile Include="ErrorsProcessing.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="TypeSystem.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />
+    <Compile Include="IO.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Executor.fs" />
     <Compile Include="Schema.fs" />
@@ -42,8 +50,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Condition="$(IsNuget) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
-    <ProjectReference Condition="$(IsNuget) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 
 </Project>

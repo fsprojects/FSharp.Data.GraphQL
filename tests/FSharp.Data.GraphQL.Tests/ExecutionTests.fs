@@ -4,13 +4,19 @@
 module FSharp.Data.GraphQL.Tests.ExecutionTests
 
 open Xunit
+open System
+open System.Text.Json
+open System.Text.Json.Serialization
+open System.Collections.Immutable
+
+#nowarn "0025"
+#nowarn "0040"
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open Helpers
-
-#nowarn "40"
+open FSharp.Data.GraphQL.Samples.StarWarsApi
 
 type TestSubject = {
     a: string
@@ -23,6 +29,7 @@ type TestSubject = {
     pic: int option -> string
     promise: Async<TestSubject>
 }
+
 and DeepTestSubject = {
     a: string
     b: string
@@ -102,34 +109,33 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
     let DeepDataType =
         Define.Object<DeepTestSubject>(
             "DeepDataType", [
-                Define.Field("a", String, (fun _ dt -> dt.a))
-                Define.Field("b", String, (fun _ dt -> dt.b))
-                Define.Field("c", (ListOf (Nullable String)), (fun _ dt -> dt.c))
+                Define.Field("a", StringType, (fun _ dt -> dt.a))
+                Define.Field("b", StringType, (fun _ dt -> dt.b))
+                Define.Field("c", (ListOf (Nullable StringType)), (fun _ dt -> dt.c))
             ])
     let rec DataType =
       Define.Object<TestSubject>(
           "DataType",
           fieldsFn = fun () ->
           [
-            Define.Field("a", String, resolve = fun _ dt -> dt.a)
-            Define.Field("b", String, resolve = fun _ dt -> dt.b)
-            Define.Field("c", String, resolve = fun _ dt -> dt.c)
-            Define.Field("d", String, fun _ dt -> dt.d)
-            Define.Field("e", String, fun _ dt -> dt.e)
-            Define.Field("f", String, fun _ dt -> dt.f)
-            Define.Field("pic", String, "Picture resizer", [ Define.Input("size", Nullable Int) ], fun ctx dt -> dt.pic(ctx.Arg("size")))
+            Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
+            Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
+            Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
+            Define.Field("d", StringType, fun _ dt -> dt.d)
+            Define.Field("e", StringType, fun _ dt -> dt.e)
+            Define.Field("f", StringType, fun _ dt -> dt.f)
+            Define.Field("pic", StringType, "Picture resizer", [ Define.Input("size", Nullable IntType) ], fun ctx dt -> dt.pic(ctx.TryArg("size")))
             Define.AsyncField("promise", DataType, fun _ dt -> dt.promise)
             Define.Field("deep", DeepDataType, fun _ dt -> dt.deep)
         ])
 
     let schema = Schema(DataType)
     let schemaProcessor = Executor(schema)
-    let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = Map.ofList [ "size", 100 :> obj], operationName = "Example")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = params', operationName = "Example")
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 type TestThing = { mutable Thing: string }
 
@@ -137,60 +143,55 @@ type TestThing = { mutable Thing: string }
 let ``Execution handles basic tasks: merges parallel fragments`` () =
     let ast = parse """{ a, ...FragOne, ...FragTwo }
 
-      fragment FragOne on Type {
-        b
-        deep { b, deeper: deep { b } }
-      }
+        fragment FragOne on Type {
+          b
+          deep { b, deeper: deep { b } }
+        }
 
-      fragment FragTwo on Type {
-        c
-        deep { c, deeper: deep { c } }
-      }"""
+        fragment FragTwo on Type {
+          c
+          deep { c, deeper: deep { c } }
+        }"""
 
     let rec Type =
       Define.Object(
         name = "Type",
         fieldsFn = fun () ->
         [
-            Define.Field("a", String, fun _ _ -> "Apple")
-            Define.Field("b", String, fun _ _ -> "Banana")
-            Define.Field("c", String, fun _ _ -> "Cherry")
+            Define.Field("a", StringType, fun _ _ -> "Apple")
+            Define.Field("b", StringType, fun _ _ -> "Banana")
+            Define.Field("c", StringType, fun _ _ -> "Cherry")
             Define.Field("deep", Type, fun _ v -> v)
         ])
 
     let schema = Schema(Type)
     let schemaProcessor = Executor(schema)
     let expected =
-      NameValueLookup.ofList [
-        "a", upcast "Apple"
-        "b", upcast "Banana"
-        "deep", upcast NameValueLookup.ofList [
+        NameValueLookup.ofList [
+            "a", upcast "Apple"
             "b", upcast "Banana"
-            "deeper", upcast NameValueLookup.ofList [
-                "b", "Banana" :> obj
+            "deep", upcast NameValueLookup.ofList [
+                "b", upcast "Banana"
+                "deeper", upcast NameValueLookup.ofList [
+                    "b", "Banana" :> obj
+                    "c", upcast "Cherry"
+                ]
                 "c", upcast "Cherry"
             ]
             "c", upcast "Cherry"
         ]
-        "c", upcast "Cherry"
-    ]
     let result = sync <| schemaProcessor.AsyncExecute(ast, obj())
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execution handles basic tasks: threads root value context correctly`` () =
     let query = "query Example { a }"
     let data = { Thing = "" }
-    let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", String, fun _ value -> value.Thing <- "thing"; value.Thing) ])
+    let Thing = Define.Object<TestThing>("Type", [  Define.Field("a", StringType, fun _ value -> value.Thing <- "thing"; value.Thing) ])
     let result = sync <| Executor(Schema(Thing)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors -> empty errors
     equals "thing" data.Thing
 
 type TestTarget =
@@ -205,17 +206,14 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("numArg", Int); Define.Input("stringArg", String) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("numArg", IntType); Define.Input("stringArg", StringType) ],
                  fun ctx value ->
                      value.Num <- ctx.TryArg("numArg")
                      value.Str <- ctx.TryArg("stringArg")
                      value.Str) ])
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -235,7 +233,7 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                  fun ctx value ->
                  let arg = ctx.TryArg("enumArg")
                  match arg with
@@ -245,10 +243,7 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
                      value.Str
                  | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -266,7 +261,7 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
     let data = { Num = None; Str = None }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable String, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                   fun ctx value ->
                   let arg = ctx.TryArg("enumArg")
                   match arg with
@@ -276,10 +271,7 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
                       value.Str
                   | _ -> None) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors -> empty errors
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
@@ -289,57 +281,49 @@ let ``Execution handles basic tasks: uses the inline operation if no operation n
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "{ a }", { A = "b" })
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the only operation if no operation name is provided`` () =
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let result = sync <| Executor(schema).AsyncExecute(parse "query Example { a }", { A = "b" })
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["a", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: uses the named operation if operation name is provided`` () =
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
+                    Define.Field("a", StringType, fun _ x -> x.A)
                 ]))
     let query = "query Example { first: a } query OtherExample { second: a }"
     let result = sync <| Executor(schema).AsyncExecute(parse query, { A = "b" }, operationName = "OtherExample")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["second", "b" :> obj])
 
 [<Fact>]
 let ``Execution handles basic tasks: list of scalars`` () =
     let schema =
         Schema(Define.Object<InlineTest>(
                 "Type", [
-                    Define.Field("strings", ListOf String, fun _ _ -> ["foo"; "bar"; "baz"])
+                    Define.Field("strings", ListOf StringType, fun _ _ -> ["foo"; "bar"; "baz"])
                 ]))
     let result = sync <| Executor(schema).AsyncExecute("query Example { strings }")
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast NameValueLookup.ofList ["strings", box [ box "foo"; upcast "bar"; upcast "baz" ]])
 
 type TwiceTest = { A : string; B : int }
 
@@ -348,8 +332,8 @@ let ``Execution when querying the same field twice will return it`` () =
     let schema =
       Schema(Define.Object<TwiceTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
-                    Define.Field("b", Int, fun _ x -> x.B)
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let query = "query Example { a, b, a }"
     let result = sync <| Executor(schema).AsyncExecute(query, { A = "aa"; B = 2 });
@@ -357,28 +341,27 @@ let ``Execution when querying the same field twice will return it`` () =
       NameValueLookup.ofList [
         "a", upcast "aa"
         "b", upcast 2]
-    match result with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execution when querying returns unique document id with response`` () =
     let schema =
       Schema(Define.Object<TwiceTest>(
                 "Type", [
-                    Define.Field("a", String, fun _ x -> x.A)
-                    Define.Field("b", Int, fun _ x -> x.B)
+                    Define.Field("a", StringType, fun _ x -> x.A)
+                    Define.Field("b", IntType, fun _ x -> x.B)
                 ]))
     let result1 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
+    result1.DocumentId |> notEquals Unchecked.defaultof<int>
+    result1.DocumentId |> equals result2.DocumentId
     match result1,result2 with
     | Direct(data1, errors1), Direct(data2, errors2) ->
-      data1.["documentId"] |> notEquals (null)
-      data1.["documentId"] |> notEquals (upcast Unchecked.defaultof<int>)
-      data1.["documentId"] |> equals (data2.["documentId"])
-    | _ -> fail "Expected Direct GQResponse"
+        equals data1 data2
+        equals errors1 errors2
+    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
 
 type InnerNullableTest = { Kaboom : string }
 type NullableTest = { Inner : InnerNullableTest }
@@ -388,7 +371,7 @@ let ``Execution handles errors: properly propagates errors`` () =
     let InnerObj =
         Define.Object<InnerNullableTest>(
             "Inner", [
-                Define.Field("kaboom", String, fun _ x -> x.Kaboom)
+                Define.Field("kaboom", StringType, fun _ x -> x.Kaboom)
             ])
     let schema =
         Schema(Define.Object<NullableTest>(
@@ -399,47 +382,32 @@ let ``Execution handles errors: properly propagates errors`` () =
         NameValueLookup.ofList [
             "inner", null
         ]
-    let expectedErrors =
-        [
-            NameValueLookup.ofList [
-                "message", upcast "Non-Null field kaboom resolved as a null!"
-                "path", upcast [ "inner"; "kaboom" ]
-            ]
-        ]
+    let expectedErrors = [
+        GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", Execution, [ box "inner"; "kaboom" ])
+    ]
     let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
-    match result with
-    | Direct(data, errors) ->
-        data.["documentId"] |> notEquals null
-        // data.["data"] |> equals (upcast expectedData)
-        data.["errors"] |> equals (upcast expectedErrors)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
 
 [<Fact>]
 let ``Execution handles errors: exceptions`` () =
     let schema =
         Schema(Define.Object<unit>(
                  "Type", [
-                     Define.Field("a", String, fun _ _ -> failwith "Resolver Error!")
+                     Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
                  ]))
-    let expectedErrors =
-        [ NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast ["a"]
-            ]
-        ]
+    let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
-    ensureDirect result <| fun data errors ->
-        // data.["data"] |> equals null
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
-
+    ensureRequestError result <| fun [ error ] -> error |> equals expectedError
 
 [<Fact>]
 let ``Execution handles errors: nullable list fields`` () =
     let InnerObject =
         Define.Object<int>(
             "Inner", [
-                Define.Field("error", String, fun _ _ -> failwith "Resolver Error!")
+                Define.Field("error", StringType, fun _ _ -> failwith "Resolver Error!")
             ])
     let schema =
         Schema(Define.Object<unit>(
@@ -452,18 +420,11 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let expectedErrors =
         [
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 0; upcast "error"]
-            ]
-            NameValueLookup.ofList [
-                "message", upcast "Resolver Error!"
-                "path", upcast [box "list"; upcast 1; upcast "error"]
-            ]
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 0; "error" ])
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 1; "error" ])
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->
-        data.["documentId"] |> notEquals null
-        data.["data"] |> equals (upcast expectedData)
-        errors |> nonEmpty
-        data.["errors"] |> equals (upcast expectedErrors)
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors

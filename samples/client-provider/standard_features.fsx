@@ -26,7 +26,7 @@ type MyProvider = GraphQLProvider<"http://localhost:8086">
 // at design time. Just provide a file in the path of the project or a literal containing
 // the introspection query result.
 // WARNING: the introspection query result must contain all fields requested by the
-// standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
+// standard introspection query string in FSharp.Data.GraphQL.IntrospectionQuery.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
 //type MyProvider = GraphQLProvider<"swapi_schema.json">
 
 // The operation method can be used to make queries, mutations, and subscriptions.

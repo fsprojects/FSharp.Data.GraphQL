@@ -4,22 +4,27 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open FSharp.Core
+open System.Collections
+open System.Collections.Generic
 open System.Reflection
+open System.Text.Json.Serialization
+open FSharp.Core
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Ast
-open FSharp.Data.GraphQL.Validation
-open System.Collections.Generic
-open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Ast.Extensions
+open FSharp.Data.GraphQL.Types.Introspection
+open FSharp.Data.GraphQL.Validation
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
-open System.Collections
+open System.Net.Http
+
+type internal FieldStringPath = string list
 
 module internal QuotationHelpers =
+
     let rec coerceValues fieldTypeLookup fields =
         let arrayExpr (arrayType : Type) (v : obj) =
             let typ = arrayType.GetElementType()
@@ -133,7 +138,7 @@ type internal ProvidedRecordTypeDefinition(className, baseType) =
 [<AutoOpen>]
 module internal Failures =
     let uploadTypeIsNotScalar uploadTypeName =
-        failwithf "Upload type \"%s\" was found on the schema, but it is not a Scalar type. Upload types can only be used if they are defined as scalar types." uploadTypeName
+        failwith $"""Upload type "%s{uploadTypeName}" was found on the schema, but it is not a Scalar type. Upload types can only be used if they are defined as scalar types."""
 
 module internal ProvidedRecord =
     let ctor = typeof<RecordBase>.GetConstructors().[0]
@@ -147,7 +152,7 @@ module internal ProvidedRecord =
                     <@@ let this = %%args.[0] : RecordBase
                         match this.GetProperties() |> List.tryFind (fun prop -> prop.Name = pname) with
                         | Some prop -> prop.Value
-                        | None -> failwithf "Expected to find property \"%s\", but the property was not found." pname @@>
+                        | None -> failwith $"""Expected to find property "%s{pname}", but the property was not found."""  @@>
                 let pdef = ProvidedProperty(pname, metadata.Type, getterCode)
                 metadata.Description |> Option.iter pdef.AddXmlDoc
                 metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
@@ -310,7 +315,7 @@ module internal ProvidedOperation =
                             | None ->
                                 match schemaProvidedTypes.TryFind(typeName) with
                                 | Some t -> variableName, TypeMapping.makeOption t
-                                | None -> failwithf "Unable to find variable type \"%s\" in the schema definition." typeName
+                                | None -> failwith $"""Unable to find variable type "%s{typeName}" in the schema definition."""
                     | ListType itype ->
                         let name, t = mapVariable variableName itype
                         name, t |> TypeMapping.makeArray |> TypeMapping.makeOption
@@ -407,10 +412,11 @@ module internal ProvidedOperation =
                                 if shouldUseMultipartRequest
                                 then Tracer.runAndMeasureExecutionTime "Ran a multipart GraphQL query request" (fun _ -> GraphQLClient.sendMultipartRequest context.Connection request)
                                 else Tracer.runAndMeasureExecutionTime "Ran a GraphQL query request" (fun _ -> GraphQLClient.sendRequest context.Connection request)
-                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                            let responseString = response.Content.ReadAsStringAsync().GetAwaiter().GetResult()
+                            let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                             // If the user does not provide a context, we should dispose the default one after running the query
                             if isDefaultContext then (context :> IDisposable).Dispose()
-                            OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName) @@>
+                            OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName) @@>
                     let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("Run", methodParameters, operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
@@ -445,22 +451,27 @@ module internal ProvidedOperation =
                                   Query = actualQuery
                                   Variables = %%variables }
                             async {
+                                let! ct = Async.CancellationToken
                                 let! response =
                                     if shouldUseMultipartRequest
-                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync context.Connection request)
-                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync context.Connection request)
-                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse response)
+                                    then Tracer.asyncRunAndMeasureExecutionTime "Ran a multipart GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendMultipartRequestAsync ct context.Connection request |> Async.AwaitTask)
+                                    else Tracer.asyncRunAndMeasureExecutionTime "Ran a GraphQL query request asynchronously" (fun _ -> GraphQLClient.sendRequestAsync ct context.Connection request |> Async.AwaitTask)
+                                let! responseString = response.Content.ReadAsStringAsync() |> Async.AwaitTask
+                                let responseJson = Tracer.runAndMeasureExecutionTime "Parsed a GraphQL response to a JsonValue" (fun _ -> JsonValue.Parse responseString)
                                 // If the user does not provide a context, we should dispose the default one after running the query
                                 if isDefaultContext then (context :> IDisposable).Dispose()
-                                return OperationResultBase(responseJson, %%operationFieldsExpr, operationTypeName)
+                                return OperationResultBase(response, responseJson, %%operationFieldsExpr, operationTypeName)
                             } @@>
                     let methodParameters = overloadParameters |> List.map (fun (name, t) -> ProvidedParameter(name, t, ?optionalValue = if isOption t then Some null else None))
                     let methodDef = ProvidedMethod("AsyncRun", methodParameters, TypeMapping.makeAsync operationResultDef, invoker)
                     methodDef.AddXmlDoc("Executes the operation asynchronously on the server and fetch its results.")
                     upcast methodDef)
             let parseResultDef =
-                let invoker (args : Expr list) = <@@ OperationResultBase(JsonValue.Parse %%args.[1], %%operationFieldsExpr, operationTypeName) @@>
-                let parameters = [ProvidedParameter("responseJson", typeof<string>)]
+                let invoker (args : Expr list) = <@@ OperationResultBase(%%args.[1], JsonValue.Parse %%args.[2], %%operationFieldsExpr, operationTypeName) @@>
+                let parameters = [
+                    ProvidedParameter("rawResponse", typeof<HttpResponseMessage>)
+                    ProvidedParameter("responseJson", typeof<string>)
+                ]
                 let methodDef = ProvidedMethod("ParseResult", parameters, operationResultDef, invoker)
                 methodDef.AddXmlDoc("Parses a JSON response that matches the response pattern of the current operation into a OperationResult type.")
                 methodDef
@@ -474,6 +485,7 @@ type internal ProvidedOperationMetadata =
       TypeWrapper : ProvidedTypeDefinition }
 
 module internal Provider =
+
     let getOperationMetadata (schemaTypes : Map<TypeName, IntrospectionType>, uploadInputTypeName : string option, enumProvidedTypes : Map<TypeName, ProvidedTypeDefinition>, operationAstFields, operationTypeRef, explicitOptionalParameters: bool) =
         let generateWrapper name =
             let rec resolveWrapperName actual =
@@ -481,10 +493,10 @@ module internal Provider =
                 then resolveWrapperName (actual + "Fields")
                 else actual
             ProvidedTypeDefinition(resolveWrapperName name, None, isSealed = true)
-        let wrappersByPath = Dictionary<string list, ProvidedTypeDefinition>()
+        let wrappersByPath = Dictionary<FieldStringPath, ProvidedTypeDefinition>()
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
-        let rec getWrapper (path : string list) =
+        let rec getWrapper (path : FieldStringPath) =
             if wrappersByPath.ContainsKey path
             then wrappersByPath.[path]
             else
@@ -497,11 +509,11 @@ module internal Provider =
                 upperWrapper.AddMember(wrapper)
                 wrappersByPath.Add(path, wrapper)
                 wrapper
-        let includeType (path : string list) (t : ProvidedTypeDefinition) =
+        let includeType (path : FieldStringPath) (t : ProvidedTypeDefinition) =
             let wrapper = getWrapper path
             wrapper.AddMember(t)
-        let providedTypes = Dictionary<Path * TypeName, ProvidedTypeDefinition>()
-        let rec getProvidedType (providedTypes : Dictionary<Path * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : Path) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
+        let providedTypes = Dictionary<FieldStringPath * TypeName, ProvidedTypeDefinition>()
+        let rec getProvidedType (providedTypes : Dictionary<FieldStringPath * TypeName, ProvidedTypeDefinition>) (schemaTypes : Map<TypeName, IntrospectionType>) (path : FieldStringPath) (astFields : AstFieldInfo list) (tref : IntrospectionTypeRef) : Type =
             match tref.Kind with
             | TypeKind.SCALAR when tref.Name.IsSome -> TypeMapping.mapScalarType uploadInputTypeName tref.Name.Value |> TypeMapping.makeOption
             | _ when uploadInputTypeName.IsSome && tref.Name.IsSome && uploadInputTypeName.Value = tref.Name.Value -> uploadTypeIsNotScalar uploadInputTypeName.Value
@@ -510,7 +522,7 @@ module internal Provider =
             | TypeKind.ENUM when tref.Name.IsSome ->
                 match enumProvidedTypes.TryFind(tref.Name.Value) with
                 | Some providedEnum -> TypeMapping.makeOption providedEnum
-                | None -> failwithf "Could not find a enum type based on a type reference. The reference is an \"%s\" enum, but that enum was not found in the introspection schema." tref.Name.Value
+                | None -> failwith $"""Could not find a enum type based on a type reference. The reference is an "%s{tref.Name.Value}" enum, but that enum was not found in the introspection schema."""
             | (TypeKind.OBJECT | TypeKind.INTERFACE | TypeKind.UNION) when tref.Name.IsSome ->
                 if providedTypes.ContainsKey(path, tref.Name.Value)
                 then TypeMapping.makeOption providedTypes.[path, tref.Name.Value]
@@ -518,12 +530,12 @@ module internal Provider =
                     let getIntrospectionFields typeName =
                         if schemaTypes.ContainsKey(typeName)
                         then schemaTypes.[typeName].Fields |> Option.defaultValue [||]
-                        else failwithf "Could not find a schema type based on a type reference. The reference is to a \"%s\" type, but that type was not found in the schema types." typeName
+                        else failwith $"""Could not find a schema type based on a type reference. The reference is to a "%s{typeName}" type, but that type was not found in the schema types."""
                     let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
                         let ifield =
                             match getIntrospectionFields typeName |> Array.tryFind(fun f -> f.Name = info.Name) with
                             | Some ifield -> ifield
-                            | None -> failwithf "Could not find field \"%s\" of type \"%s\". The schema type does not have a field with the specified name." info.Name tref.Name.Value
+                            | None -> failwith $"""Could not find field "%s{info.Name}" of type "%s{tref.Name.Value}". The schema type does not have a field with the specified name."""
                         let path = info.AliasOrName :: path
                         let astFields = info.Fields
                         let ftype = getProvidedType providedTypes schemaTypes path astFields ifield.Type
@@ -714,9 +726,11 @@ module internal Provider =
                             match introspectionLocation with
                             | Uri serverUrl ->
                                 use connection = new GraphQLClientConnection()
-                                GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
+                                let response = GraphQLClient.sendIntrospectionRequest connection serverUrl httpHeaders
+                                response.Content.ReadAsStringAsync().Result
                             | IntrospectionFile path ->
                                 System.IO.File.ReadAllText path
+                        // TODO: Deserialize directly from stream
                         let schema = Serialization.deserializeSchema schemaJson
 
                         let schemaProvidedTypes = getSchemaProvidedTypes(schema, uploadInputTypeName, explicitOptionalParameters)
@@ -763,16 +777,16 @@ module internal Provider =
                                     | File path -> System.IO.File.ReadAllText(path)
                                 let queryAst = Parser.parse query
                                 #if IS_DESIGNTIME
-                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<AstError>) =
-                                    let rec formatValidationExceptionMessage(errors : AstError list) =
+                                let throwExceptionIfValidationFailed (validationResult : ValidationResult<GQLProblemDetails>) =
+                                    let rec formatValidationExceptionMessage(errors : GQLProblemDetails list) =
                                         match errors with
                                         | [] -> "Query validation resulted in invalid query, but no validation messages were produced."
                                         | errors ->
                                             errors
                                             |> List.map (fun err ->
                                                 match err.Path with
-                                                | Some path -> sprintf "%s Path: %A" err.Message path
-                                                | None -> err.Message)
+                                                | Include path -> $"%s{err.Message} Path: %A{path}"
+                                                | Skip -> err.Message)
                                             |> List.reduce (fun x y -> x + Environment.NewLine + y)
                                     match validationResult with
                                     | ValidationError msgs -> failwith (formatValidationExceptionMessage msgs)

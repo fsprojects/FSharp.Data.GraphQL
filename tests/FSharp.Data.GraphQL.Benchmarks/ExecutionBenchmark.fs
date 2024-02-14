@@ -33,9 +33,9 @@ type SimpleExecutionBenchmark() =
         simpleAst <- parse QueryStrings.simple
         flatAst <- parse QueryStrings.flat
         nestedAst <- parse QueryStrings.nested
-        simpleExecutionPlan <- schemaProcessor.CreateExecutionPlan(simpleAst)
-        flatExecutionPlan <- schemaProcessor.CreateExecutionPlan(flatAst)
-        nestedExecutionPlan <- schemaProcessor.CreateExecutionPlan(nestedAst)
+        simpleExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(simpleAst)
+        flatExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(flatAst)
+        nestedExecutionPlan <- schemaProcessor.CreateExecutionPlanOrFail(nestedAst)
 
     [<Benchmark>]
     member _.BenchmarkSimpleQueryUnparsed() = schemaProcessor.AsyncExecute(QueryStrings.simple) |> Async.RunSynchronously

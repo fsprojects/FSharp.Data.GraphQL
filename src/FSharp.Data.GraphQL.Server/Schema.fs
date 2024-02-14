@@ -3,14 +3,17 @@
 
 namespace FSharp.Data.GraphQL
 
-open System.Collections.Generic
-open System.Reactive.Linq
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
+open FSharp.Control.Reactive
+open System.Collections.Generic
+open System.Reactive.Linq
 open System.Reactive.Subjects
+open System.Text.Json
+open System.Text.Json.Serialization
 
 type private Channel = ISubject<obj>
 
@@ -56,11 +59,13 @@ type SchemaConfig =
       /// Function called when errors occurred during query execution.
       /// It's used to retrieve messages shown as output to the client.
       /// May be also used to log messages before returning them.
-      ParseError : exn -> string
+      ParseError : FieldPath -> exn -> IGQLError list
       /// Provider for the back-end of the subscription system.
       SubscriptionProvider : ISubscriptionProvider
       /// Provider for the back-end of the live query subscription system.
       LiveFieldSubscriptionProvider : ILiveFieldSubscriptionProvider
+      /// JSON serialization options
+      JsonOptions : JsonSerializerOptions
     }
     /// Returns the default Subscription Provider, backed by Observable streams.
     static member DefaultSubscriptionProvider() =
@@ -74,7 +79,8 @@ type SchemaConfig =
                 match subscriptionManager.TryGet(subdef.Name) with
                 | Some (sub, channels) ->
                     channels.AddNew(tags)
-                    |> Observable.mapAsync (fun o -> sub.Filter ctx root o)
+                    // TODO: See notes on flatmapAsync in ObservableExtensionsTests.
+                    |> Observable.flatmapAsync (fun o -> sub.Filter ctx root o)
                     |> Observable.choose id
                 | None -> Observable.Empty()
 
@@ -123,9 +129,14 @@ type SchemaConfig =
     static member Default =
         { Types = []
           Directives = [ IncludeDirective; SkipDirective; DeferDirective; StreamDirective; LiveDirective ]
-          ParseError = fun e -> e.Message
+          ParseError =
+            fun path ex ->
+                match ex with
+                | :? GQLMessageException as ex -> [ex]
+                | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
-          LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider() }
+          LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider()
+          JsonOptions = JsonFSharpOptions.Default().ToJsonSerializerOptions() }
     /// <summary>
     /// Default SchemaConfig with buffered stream support.
     /// This config modifies the stream directive to have two optional arguments: 'interval' and 'preferredBatchSize'.
@@ -139,14 +150,14 @@ type SchemaConfig =
             let args = [|
                 Define.Input(
                     "interval",
-                    Nullable Int,
+                    Nullable IntType,
                     defaultValue = streamOptions.Interval,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered for milliseconds equal to the value, then sent to the client. " +
                         "After that, starts buffering again until all results are streamed.")
                 Define.Input(
                     "preferredBatchSize",
-                    Nullable Int,
+                    Nullable IntType,
                     defaultValue = streamOptions.PreferredBatchSize,
                     description = "An optional argument used to buffer stream results. " +
                         "When it's value is greater than zero, stream results will be buffered until item count reaches this value, then sent to the client. " +
@@ -157,16 +168,6 @@ type SchemaConfig =
 
 /// GraphQL server schema. Defines the complete type system to be used by GraphQL queries.
 type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subscription: SubscriptionObjectDef<'Root>, ?config: SchemaConfig) =
-    let initialTypes: NamedDef list =
-        [ Int
-          String
-          Boolean
-          Float
-          ID
-          Date
-          Uri
-          __Schema
-          query ]
 
     let schemaConfig =
         match config with
@@ -174,9 +175,22 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         | Some c -> c
 
     let typeMap : TypeMap =
+
+        let initialTypes: NamedDef list =
+            [ IntType
+              StringType
+              BooleanType
+              FloatType
+              IDType
+              DateTimeOffsetType
+              DateOnlyType
+              UriType
+              __Schema
+              query ]
+
         let m = mutation |> function Some (Named n) -> [n] | _ -> []
         let s = subscription |> function Some (Named n) -> [n] | _ -> []
-        initialTypes @ s @ m @ schemaConfig.Types |> TypeMap.FromSeq
+        seq { initialTypes; s; m; schemaConfig.Types } |> Seq.collect id |> TypeMap.FromSeq
 
     let getImplementations (typeMap : TypeMap) =
         typeMap.ToSeq()
@@ -214,14 +228,17 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
 
     let introspectInput (namedTypes: Map<string, IntrospectionTypeRef>) (inputDef: InputFieldDef) : IntrospectionInputVal =
         // We need this so a default value that is an option is not printed as "Some"
-        let stringify =
+        let unwrap =
             function
-            | ObjectOption x -> string x
-            | x -> string x
+            | ObjectOption x -> x
+            | x -> x
+        let defaultValue =
+            inputDef.DefaultValue
+            |> Option.map (fun value -> JsonSerializer.Serialize(unwrap value, schemaConfig.JsonOptions))
         { Name = inputDef.Name
           Description = inputDef.Description
           Type = introspectTypeRef (Option.isSome inputDef.DefaultValue) namedTypes inputDef.TypeDef
-          DefaultValue = inputDef.DefaultValue |> Option.map stringify }
+          DefaultValue = defaultValue }
 
     let introspectField (namedTypes: Map<string, IntrospectionTypeRef>) (fdef: FieldDef) =
         { Name = fdef.Name
@@ -342,7 +359,7 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
         member _.Subscription = subscription |> Option.map (fun x -> upcast x)
         member _.TryFindType typeName = typeMap.TryFind(typeName, includeDefaultTypes = true)
         member _.GetPossibleTypes typedef = getPossibleTypes typedef
-        member _.ParseError exn = schemaConfig.ParseError exn
+        member _.ParseError path exn = schemaConfig.ParseError path exn
         member x.IsPossibleType abstractdef (possibledef: ObjectDef) =
             match (x :> ISchema).GetPossibleTypes abstractdef with
             | [||] -> false

@@ -1,11 +1,18 @@
-﻿namespace FSharp.Data.GraphQL.IntegrationTests.Server
+namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System
 open System.Text
+open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+
+type Root(ctx : HttpContext) =
+
+    member _.RequestAborted: System.Threading.CancellationToken = ctx.RequestAborted
+    member _.ServiceProvider: IServiceProvider = ctx.RequestServices
+    member root.GetRequiredService<'t>() = root.ServiceProvider.GetRequiredService<'t>()
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-
-type Root =
-    { RequestId : string }
 
 type InputField =
     { String : string
@@ -41,12 +48,12 @@ module Schema =
         Define.InputObject<InputField>(
             name = "InputField",
             fields =
-                [ Define.Input("string", String, description = "A string value.")
-                  Define.Input("int", Int, description = "An integer value.")
-                  Define.Input("stringOption", Nullable String, description = "A string option value.")
-                  Define.Input("intOption", Nullable Int, description = "An integer option value.")
-                  Define.Input("uri", Uri, description = "An URI value.")
-                  Define.Input("guid", Guid, description = "A Guid value.") ])
+                [ Define.Input("string", StringType, description = "A string value.")
+                  Define.Input("int", IntType, description = "An integer value.")
+                  Define.Input("stringOption", Nullable StringType, description = "A string option value.")
+                  Define.Input("intOption", Nullable IntType, description = "An integer option value.")
+                  Define.Input("uri", UriType, description = "An URI value.")
+                  Define.Input("guid", GuidType, description = "A Guid value.") ])
 
     let InputType =
         Define.InputObject<Input>(
@@ -61,22 +68,22 @@ module Schema =
             name = "OutputField",
             description = "The output for a field input.",
             fields =
-                [ Define.Field("string", String, resolve = (fun _ x -> x.String), description = "A string value.")
-                  Define.AutoField("int", Int, description = "An integer value.")
-                  Define.AutoField("stringOption", Nullable String, description = "A string option value.")
-                  Define.AutoField("intOption", Nullable Int, description = "An integer option value.")
-                  Define.AutoField("uri", Uri, description = "An URI value.")
-                  Define.AutoField("guid", Guid, description = "A Guid value.")
-                  Define.Field("deprecated", String, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
+                [ Define.Field("string", StringType, resolve = (fun _ x -> x.String), description = "A string value.")
+                  Define.AutoField("int", IntType, description = "An integer value.")
+                  Define.AutoField("stringOption", Nullable StringType, description = "A string option value.")
+                  Define.AutoField("intOption", Nullable IntType, description = "An integer option value.")
+                  Define.AutoField("uri", UriType, description = "An URI value.")
+                  Define.AutoField("guid", GuidType, description = "A Guid value.")
+                  Define.Field("deprecated", StringType, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
 
     let UploadedFileType =
         Define.Object<UploadedFile>(
             name = "UploadedFile",
             description = "Contains data of an uploaded file.",
             fields =
-                [ Define.AutoField("name", String, description = "The name of the file.")
-                  Define.AutoField("contentType", String, description = "The content type of the file.")
-                  Define.AutoField("contentAsText", String, description = "The content of the file as text.") ])
+                [ Define.AutoField("name", StringType, description = "The name of the file.")
+                  Define.AutoField("contentType", StringType, description = "The content type of the file.")
+                  Define.AutoField("contentAsText", StringType, description = "The content of the file as text.") ])
 
     let UploadRequestType =
         Define.InputObject<UploadRequest>(
@@ -116,7 +123,7 @@ module Schema =
                     typedef = Nullable OutputType,
                     description = "Enters an input type and get it back.",
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("input") |> Option.flatten) ])
+                    resolve = fun ctx _ -> ctx.TryArg("input")) ])
 
     let MutationType =
         let contentAsText (stream : System.IO.Stream) =
