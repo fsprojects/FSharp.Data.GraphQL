@@ -61,9 +61,9 @@ type GQLExecutionResult =
     static member Invalid(documentId, errors, meta) =
         GQLExecutionResult.RequestError(documentId, errors, meta)
     static member ErrorAsync(documentId, msg : string, meta) =
-        asyncVal.Return (GQLExecutionResult.Error (documentId, msg, meta))
+        AsyncVal.wrap (GQLExecutionResult.Error (documentId, msg, meta))
     static member ErrorAsync(documentId, error : IGQLError, meta) =
-        asyncVal.Return (GQLExecutionResult.Error (documentId, error, meta))
+        AsyncVal.wrap (GQLExecutionResult.Error (documentId, error, meta))
 
 // TODO: Rename to PascalCase
 and GQLResponseContent =
