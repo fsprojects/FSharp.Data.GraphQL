@@ -375,7 +375,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path value
-        | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
+        | None -> KeyValuePair(name, obj()) |> ResolverResult.data |> AsyncVal.wrap
 
     | Union uDef ->
         let possibleTypesFn = ctx.Schema.GetPossibleTypes
@@ -387,7 +387,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
             | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
         match Map.tryFind resolvedDef.Name typeMap with
         | Some fields -> executeObjectFields fields name resolvedDef ctx path (uDef.ResolveValue value)
-        | None -> KeyValuePair(name, null) |> ResolverResult.data |> AsyncVal.wrap
+        | None -> KeyValuePair(name, obj()) |> ResolverResult.data |> AsyncVal.wrap
 
     | _ -> failwithf "Unexpected value of returnDef: %O" returnDef
 
@@ -509,10 +509,7 @@ and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (par
         | Ok None when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, [])
         | Error errs -> return Error errs
         | Ok None -> return Error (nullResolverError name path ctx)
-        | Ok (Some v) ->
-            match! onSuccess ctx path parent v with
-            | Ok (kvp, _, _) when not ctx.ExecutionInfo.IsNullable && kvp.Value = null -> return Error (nullResolverError name path ctx)
-            | result -> return result
+        | Ok (Some v) -> return! onSuccess ctx path parent v
     }
 
     match info.Kind, returnDef with
