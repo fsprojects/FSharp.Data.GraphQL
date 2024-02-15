@@ -76,11 +76,6 @@ let schemaWithInterface =
                                   "pets",
                                   ListOf PetType,
                                   fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet; { Name = "Garfield"; Meows = false } ]
-                              )
-                              Define.Field (
-                                  "nullablePets",
-                                  ListOf (Nullable PetType),
-                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet |> Some; { Name = "Garfield"; Meows = false } :> IPet |> Some ]
                               ) ]
                     ),
                 config = { SchemaConfig.Default with Types = [ CatType; DogType ] }
@@ -117,7 +112,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         data |> equals (upcast expected)
 
 [<Fact>]
-let ``Execute handles execution of abstract types: not specified Interface types produce error`` () =
+let ``Execute handles execution of abstract types: not specified Interface types must be empty objects`` () =
     let query =
         """{
       pets {
@@ -129,8 +124,14 @@ let ``Execute handles execution of abstract types: not specified Interface types
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-    ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 1 ]
+
+    let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| dog; emptyObj |] = data["pets"] :?> obj array
+        dog |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
     let query =
         """{
@@ -143,51 +144,14 @@ let ``Execute handles execution of abstract types: not specified Interface types
     }"""
 
     let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-    ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 0 ]
 
-[<Fact>]
-let ``Execute handles execution of abstract types: not specified Interface types must be filtered out if they allow null`` () =
-    let query =
-        """{
-      nullablePets {
-        ... on Dog {
-          name
-          woofs
-        }
-      }
-    }"""
-
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        NameValueLookup.ofList
-            [ "nullablePets", upcast [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj; null ] ]
+    let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
 
     ensureDirect result <| fun data errors ->
         empty errors
-        data |> equals (upcast expected)
-
-    let query =
-        """{
-      nullablePets {
-        ... on Cat {
-          name
-          meows
-        }
-      }
-    }"""
-
-    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
-
-    let expected =
-        NameValueLookup.ofList
-            [ "nullablePets",
-              upcast [ null; NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] :> obj ] ]
-
-    ensureDirect result <| fun data errors ->
-        empty errors
-        data |> equals (upcast expected)
+        let [| emptyObj; cat|] = data["pets"] :?> obj array
+        cat |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Interface`` () =
@@ -282,11 +246,6 @@ let schemaWithUnion =
                                   "pets",
                                   ListOf PetType,
                                   fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true }; CatCase { Name = "Garfield"; Meows = false } ]
-                              )
-                              Define.Field (
-                                  "nullablePets",
-                                  ListOf (Nullable PetType),
-                                  fun _ _ -> [ DogCase { Name = "Odie"; Woofs = true } |> Some; CatCase { Name = "Garfield"; Meows = false } |> Some ]
                               ) ]
                     )
             )
@@ -323,7 +282,7 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
         data |> equals (upcast expected)
 
 [<Fact>]
-let ``Execute handles execution of abstract types: not specified Union types produce error`` () =
+let ``Execute handles execution of abstract types: not specified Union types must be empty objects`` () =
     let query =
         """{
       pets {
@@ -335,8 +294,14 @@ let ``Execute handles execution of abstract types: not specified Union types pro
     }"""
 
     let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
-    ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 1 ]
+
+    let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| dog; emptyObj |] = data["pets"] :?> obj array
+        dog |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
     let query =
         """{
@@ -349,51 +314,14 @@ let ``Execute handles execution of abstract types: not specified Union types pro
     }"""
 
     let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
-    ensureRequestError result <| fun [ petsError ] ->
-        petsError |> ensureExecutionError "Non-Null field pets resolved as a null!" [ "pets"; 0 ]
 
-[<Fact>]
-let ``Execute handles execution of abstract types: not specified Union types must be filtered out`` () =
-    let query =
-        """{
-      nullablePets {
-        ... on Dog {
-          name
-          woofs
-        }
-      }
-    }"""
-
-    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
-
-    let expected =
-        NameValueLookup.ofList
-            [ "nullablePets", upcast [ NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ] :> obj; null ] ]
+    let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
 
     ensureDirect result <| fun data errors ->
         empty errors
-        data |> equals (upcast expected)
-
-    let query =
-        """{
-      nullablePets {
-        ... on Cat {
-          name
-          meows
-        }
-      }
-    }"""
-
-    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
-
-    let expected =
-        NameValueLookup.ofList
-            [ "nullablePets",
-              upcast [ null; NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ] :> obj ] ]
-
-    ensureDirect result <| fun data errors ->
-        empty errors
-        data |> equals (upcast expected)
+        let [| emptyObj; cat|] = data["pets"] :?> obj array
+        cat |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Union`` () =
