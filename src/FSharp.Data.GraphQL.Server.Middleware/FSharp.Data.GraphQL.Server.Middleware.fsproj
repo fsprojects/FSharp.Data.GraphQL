@@ -15,10 +15,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
-  </ItemGroup>
-
-  <ItemGroup>
     <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
