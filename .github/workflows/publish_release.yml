@@ -89,6 +89,6 @@ jobs:
         dotnet pack --nologo --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
     - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
       run: |
-        $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.{nupkg,snupkg}"
+        $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.nupkg"
         dotnet nuget push $path -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
       shell: pwsh
