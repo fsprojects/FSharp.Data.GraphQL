@@ -154,8 +154,25 @@ type RawServerMessageConverter() =
 
 
 module JsonConverterUtils =
+
+  let [<Literal>] UnionTag = "kind"
+
+  let private defaultJsonFSharpOptions =
+    JsonFSharpOptions(
+        JsonUnionEncoding.InternalTag
+        ||| JsonUnionEncoding.AllowUnorderedTag
+        ||| JsonUnionEncoding.NamedFields
+        ||| JsonUnionEncoding.UnwrapSingleCaseUnions
+        ||| JsonUnionEncoding.UnwrapRecordCases
+        ||| JsonUnionEncoding.UnwrapOption
+        ||| JsonUnionEncoding.UnwrapFieldlessTags,
+        UnionTag,
+        allowOverride = true)
   let configureSerializer (executor : Executor<'Root>) (jsonSerializerOptions : JsonSerializerOptions) =
     jsonSerializerOptions.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
+    jsonSerializerOptions.PropertyNameCaseInsensitive <- true
+    jsonSerializerOptions.Converters.Add(new JsonStringEnumConverter())
     jsonSerializerOptions.Converters.Add(new ClientMessageConverter<'Root>(executor))
     jsonSerializerOptions.Converters.Add(new RawServerMessageConverter())
+    jsonSerializerOptions |> defaultJsonFSharpOptions.AddToJsonSerializerOptions
     jsonSerializerOptions

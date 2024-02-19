@@ -14,7 +14,7 @@ type ServiceCollectionExtensions() =
     { SchemaExecutor = executor
       RootFactory = rootFactory
       SerializerOptions =
-        JsonSerializerOptions()
+        JsonSerializerOptions(IgnoreNullValues = true)
         |> JsonConverterUtils.configureSerializer executor
       WebsocketOptions =
         { EndpointUrl = endpointUrl

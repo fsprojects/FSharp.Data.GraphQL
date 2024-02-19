@@ -63,6 +63,14 @@ module GraphQLQueryDecoding =
 
     executionPlanResult
     |> bindR
+        (function
+          | Ok x -> Success (x, [])
+          | Result.Error (_, problemDetails) ->
+              Failure <|
+                (problemDetails
+                 |> List.map (fun (x: GQLProblemDetails) -> x.Message))
+        )
+    |> bindR
       (fun executionPlan ->
           match variables with
           | None -> succeed <| (executionPlan, Map.empty) // it's none of our business here if some variables are expected. If that's the case, execution of the ExecutionPlan will take care of that later (and issue an error).

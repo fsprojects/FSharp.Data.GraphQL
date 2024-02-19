@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
+    <TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Deterministic>true</Deterministic>
     <Description>FSharp implementation of Facebook GraphQL query language (Application Infrastructure)</Description>

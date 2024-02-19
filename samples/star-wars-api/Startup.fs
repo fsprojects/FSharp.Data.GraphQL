@@ -13,11 +13,19 @@ open Microsoft.Extensions.Logging
 open System
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Hosting
+open Microsoft.Extensions.Options
+
+// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
+type MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions
+// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.json.jsonoptions
+type HttpClientJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions
+
+module Constants =
+  let [<Literal>] Indented = "Indented"
 
 type Startup private () =
 
-    let rootFactory (ctx) : Root =
-        { RequestId = Guid.NewGuid().ToString() }
+    let rootFactory (ctx) : Root = Root(ctx)
 
     new (configuration: IConfiguration) as this =
         Startup() then
@@ -37,7 +45,7 @@ type Startup private () =
             )
             // Use for pretty printing in logs
             .Configure<HttpClientJsonOptions>(
-                Constants.Idented,
+                Constants.Indented,
                 Action<HttpClientJsonOptions>(fun o ->
                     Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
                     o.SerializerOptions.WriteIndented <- true
@@ -69,9 +77,10 @@ type Startup private () =
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>()
-            .UseGiraffe (HttpHandlers.handleGraphQL<Root>
-                            applicationLifetime.ApplicationStopping
-                            (loggerFactory.CreateLogger("HttpHandlers.handlerGraphQL"))
-                        )
+            .UseGiraffe
+              (HttpHandlers.handleGraphQLWithResponseInterception<Root>
+                applicationLifetime.ApplicationStopping
+                (loggerFactory.CreateLogger("HttpHandlers.handlerGraphQL"))
+                (setHttpHeader "Request-Type" "Classic"))
 
     member val Configuration : IConfiguration = null with get, set

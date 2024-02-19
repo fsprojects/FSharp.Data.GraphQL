@@ -12,6 +12,7 @@ open System.Threading.Tasks
 open FSharp.Data.GraphQL.Execution
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open System.Collections.Immutable
 
 type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifetime : IHostApplicationLifetime, serviceProvider : IServiceProvider, logger : ILogger<GraphQLWebSocketMiddleware<'Root>>, options : GraphQLOptions<'Root>) =
 
@@ -125,12 +126,12 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
 
   let addClientSubscription
       (id : SubscriptionId)
-      (howToSendDataOnNext: SubscriptionId -> Output -> Task<unit>)
+      (howToSendDataOnNext: SubscriptionId -> 'ResponseContent -> Task<unit>)
       ( subscriptions : SubscriptionsDict,
         socket : WebSocket,
-        streamSource: IObservable<Output>,
+        streamSource: IObservable<'ResponseContent>,
         jsonSerializerOptions : JsonSerializerOptions )  =
-    let observer = new Reactive.AnonymousObserver<Output>(
+    let observer = new Reactive.AnonymousObserver<'ResponseContent>(
       onNext =
         (fun theOutput ->
           theOutput
@@ -179,9 +180,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       socket
       |> rcvMsgViaSocket serializerOptions
 
-    let sendOutput id output =
-      let outputAsDict = output :> IDictionary<string, obj>
-      match outputAsDict.TryGetValue("errors") with
+    let sendOutput id (output : Output) =
+      match output.TryGetValue("errors") with
       | true, theValue ->
         // The specification says: "This message terminates the operation and no further messages will be sent."
         subscriptions
@@ -190,20 +190,39 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       | false, _ ->
         sendMsg (Next (id, output))
 
-    let sendOutputDelayedBy (cancToken: CancellationToken) (ms: int) id output =
+    let sendSubscriptionResponseOutput id subscriptionResult =
+      match subscriptionResult with
+      | SubscriptionResult output ->
+        output
+        |> sendOutput id
+      | SubscriptionErrors (output, errors) ->
+        printfn "Subscription errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> sprintf "- %s" x.Message)))
+        Task.FromResult(())
+
+    let sendDeferredResponseOutput id deferredResult =
+      match deferredResult with
+      | DeferredResult (obj, path) ->
+        let output = obj :?> Dictionary<string, obj>
+        output
+        |> sendOutput id
+      | DeferredErrors (obj, errors, _) ->
+        printfn "Deferred response errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> sprintf "- %s" x.Message)))
+        Task.FromResult(())
+
+    let sendDeferredResultDelayedBy (cancToken: CancellationToken) (ms: int) id deferredResult =
       task {
             do! Async.StartAsTask(Async.Sleep ms, cancellationToken = cancToken)
-            do! output
-                |> sendOutput id
+            do! deferredResult
+                |> sendDeferredResponseOutput id
         }
-    let sendQueryOutputDelayedBy = sendOutputDelayedBy cancellationToken
+    let sendQueryOutputDelayedBy = sendDeferredResultDelayedBy cancellationToken
 
-    let applyPlanExecutionResult (id: SubscriptionId) (socket) (executionResult: GQLResponse)  =
+    let applyPlanExecutionResult (id: SubscriptionId) (socket) (executionResult: GQLExecutionResult)  =
       task {
             match executionResult with
             | Stream observableOutput ->
                 (subscriptions, socket, observableOutput, serializerOptions)
-                |> addClientSubscription id sendOutput
+                |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
                 do! data
                     |> sendOutput id
@@ -215,6 +234,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             | Direct (data, _) ->
                 do! data
                     |> sendOutput id
+            | RequestError problemDetails ->
+                printfn "Request error: %s" (String.Join('\n', problemDetails |> Seq.map (fun x -> sprintf "- %s" x.Message)))
         }
 
     let getStrAddendumOfOptionalPayload optionalPayload =
@@ -273,8 +294,9 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                         sprintf "Subscriber for %s already exists" id,
                         CancellationToken.None)
                     else
+                      let variables = ImmutableDictionary.CreateRange(query.Variables |> Map.map (fun _ value -> value :?> JsonElement))
                       let! planExecutionResult =
-                        executor.AsyncExecute(query.ExecutionPlan, root(httpContext), query.Variables)
+                        executor.AsyncExecute(query.ExecutionPlan, root(httpContext), variables)
                         |> Async.StartAsTask
                       do! planExecutionResult
                           |> applyPlanExecutionResult id socket
