@@ -256,7 +256,10 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
         match innerDef with
         | InputObject inputObjDef -> inputObjDef.ExecuteInput <- inner
         | _ -> ()
-        fun value variables -> inner value variables
+        fun value variables ->
+            match value with
+            | NullValue -> Ok null
+            | _ -> inner value variables
 
     | Enum enumDef ->
         fun value variables ->
