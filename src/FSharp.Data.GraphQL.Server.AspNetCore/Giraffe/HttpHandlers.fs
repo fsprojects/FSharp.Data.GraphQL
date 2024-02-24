@@ -4,12 +4,13 @@ open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL
 open Giraffe
 open FSharp.Data.GraphQL.Server.AspNetCore
-open FSharp.Data.GraphQL.Server.AspNetCore.Rop
+open FsToolkit.ErrorHandling
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open System.Collections.Generic
 open System.Text.Json
+open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
 
@@ -46,135 +47,110 @@ module HttpHandlers =
             ]
         )
 
-    let private addToErrorsInData (theseNew: GQLProblemDetails list) (data : IDictionary<string, obj>) =
-        let toNameValueLookupList (errors : GQLProblemDetails list) =
-            errors
-            |> List.map
-                (fun (error) ->
-                    NameValueLookup.ofList
-                      ["message", upcast error.Message
-                       "path", upcast error.Path]
-                )
-        let result =
-            data
-            |> Seq.map(fun x -> (x.Key, x.Value))
-            |> Map.ofSeq
-
-        if theseNew |> List.isEmpty then
-            result // because we want to avoid having an "errors" property as an empty list (according to specification)
-        else
-            match data.TryGetValue("errors") with
-            | (true, (:? list<NameValueLookup> as nameValueLookups)) ->
-                result
-                |> Map.change
-                    "errors"
-                    (fun _ -> Some <| upcast (nameValueLookups @ (theseNew |> toNameValueLookupList) |> List.distinct))
-            | (true, _) ->
-                result
-            | (false, _) ->
-                result
-                |> Map.add
-                    "errors"
-                    (upcast (theseNew |> toNameValueLookupList))
-
     let handleGraphQLWithResponseInterception<'Root>
       (cancellationToken : CancellationToken)
       (logger : ILogger)
       (interceptor : HttpHandler)
       (next : HttpFunc) (ctx : HttpContext) =
       task {
-            let cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, ctx.RequestAborted).Token
-            if cancellationToken.IsCancellationRequested then
-                return (fun _ -> None) ctx
-            else
-                let options = ctx.RequestServices.GetRequiredService<GraphQLOptions<'Root>>()
-                let executor = options.SchemaExecutor
-                let rootFactory = options.RootFactory
-                let serializerOptions = options.SerializerOptions
-                let deserializeGraphQLRequest () =
-                    try
-                        JsonSerializer.DeserializeAsync<GraphQLRequest>(
-                            ctx.Request.Body,
-                            serializerOptions
-                        ).AsTask()
-                         .ContinueWith<RopResult<GraphQLRequest, string>>(fun (x : Task<GraphQLRequest>) -> succeed x.Result)
-                    with
-                    | :? GraphQLException as ex ->
-                        Task.FromResult(fail (sprintf "%s" (ex.Message)))
+        let cancellationToken = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, ctx.RequestAborted).Token
+        if cancellationToken.IsCancellationRequested then
+            return (fun _ -> None) ctx
+        else
+            let options = ctx.RequestServices.GetRequiredService<GraphQLOptions<'Root>>()
+            let executor = options.SchemaExecutor
+            let rootFactory = options.RootFactory
+            let serializerOptions = options.SerializerOptions
+            let deserializeGraphQLRequest () =
+              task {
+                try
+                  let! deserialized =
+                    JsonSerializer.DeserializeAsync<GraphQLRequest>(
+                      ctx.Request.Body,
+                      serializerOptions
+                    )
+                  return Ok deserialized
+                with
+                | :? GraphQLException as ex ->
+                  return Result.Error [sprintf "%s" (ex.Message)]
+              }
 
-                let applyPlanExecutionResult (result : GQLExecutionResult) =
-                    task {
-                        let gqlResponse =
-                          match result.Content with
-                          | Direct (data, errs) ->
-                              GQLResponse.Direct(result.DocumentId, data, errs)
-                          | _ ->
-                                GQLResponse.RequestError(
-                                  result.DocumentId,
-                                  [ GQLProblemDetails.Create(
-                                      "subscriptions are not supported here (use the websocket endpoint instead)."
-                                  )]
-                                )
-                        return! httpOk cancellationToken interceptor serializerOptions gqlResponse next ctx
-                    }
+            let applyPlanExecutionResult (result : GQLExecutionResult) =
+                task {
+                    let gqlResponse =
+                      match result.Content with
+                      | Direct (data, errs) ->
+                          GQLResponse.Direct(result.DocumentId, data, errs)
+                      | _ ->
+                            GQLResponse.RequestError(
+                              result.DocumentId,
+                              [ GQLProblemDetails.Create(
+                                  "subscriptions are not supported here (use the websocket endpoint instead)."
+                              )]
+                            )
+                    return! httpOk cancellationToken interceptor serializerOptions gqlResponse next ctx
+                }
 
-                let handleDeserializedGraphQLRequest (graphqlRequest : GraphQLRequest) =
-                    task {
-                        match graphqlRequest.Query with
-                            | None ->
-                                let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
+            let handleDeserializedGraphQLRequest (graphqlRequest : GraphQLRequest) =
+                task {
+                    match graphqlRequest.Query with
+                        | None ->
+                            let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
+                            if logger.IsEnabled(LogLevel.Debug) then
+                                logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
+                            else
+                                ()
+                            return! result |> applyPlanExecutionResult
+                        | Some queryAsStr ->
+                            let graphQLQueryDecodingResult =
+                                queryAsStr
+                                |> GraphQLQueryDecoding.decodeGraphQLQuery
+                                    serializerOptions
+                                    executor
+                                    graphqlRequest.OperationName
+                                    graphqlRequest.Variables
+                            match graphQLQueryDecodingResult with
+                            | Result.Error struct (docId, probDetails) ->
+                                return!
+                                    httpOk cancellationToken interceptor serializerOptions (GQLResponse.RequestError (docId, probDetails)) next ctx
+                            | Ok query ->
+                                if logger.IsEnabled(LogLevel.Debug) then
+                                    logger.LogDebug(sprintf "Received query: %A" query)
+                                else
+                                    ()
+                                let root = rootFactory(ctx)
+                                let! result =
+                                  let variables = ImmutableDictionary.CreateRange(
+                                    query.Variables
+                                    |> Map.map (fun _ value ->  value :?> JsonElement)
+                                  )
+                                  executor.AsyncExecute(
+                                      query.ExecutionPlan,
+                                      data = root,
+                                      variables = variables
+                                  )|> Async.StartAsTask
                                 if logger.IsEnabled(LogLevel.Debug) then
                                     logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
                                 else
                                     ()
                                 return! result |> applyPlanExecutionResult
-                            | Some queryAsStr ->
-                                let graphQLQueryDecodingResult =
-                                    queryAsStr
-                                    |> GraphQLQueryDecoding.decodeGraphQLQuery
-                                        serializerOptions
-                                        executor
-                                        graphqlRequest.OperationName
-                                        graphqlRequest.Variables
-                                match graphQLQueryDecodingResult with
-                                | Failure errMsgs ->
-                                    return!
-                                        httpOk cancellationToken interceptor serializerOptions (prepareGenericErrors errMsgs) next ctx
-                                | Success (query, _) ->
-                                    if logger.IsEnabled(LogLevel.Debug) then
-                                        logger.LogDebug(sprintf "Received query: %A" query)
-                                    else
-                                        ()
-                                    let root = rootFactory(ctx)
-                                    let! result =
-                                      let variables = ImmutableDictionary.CreateRange(
-                                        query.Variables
-                                        |> Map.map (fun _ value ->  value :?> JsonElement)
-                                      )
-                                      executor.AsyncExecute(
-                                          query.ExecutionPlan,
-                                          data = root,
-                                          variables = variables
-                                      )|> Async.StartAsTask
-                                    if logger.IsEnabled(LogLevel.Debug) then
-                                        logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
-                                    else
-                                        ()
-                                    return! result |> applyPlanExecutionResult
-                        }
-                if ctx.Request.Headers.ContentLength.GetValueOrDefault(0) = 0 then
-                    let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
-                    if logger.IsEnabled(LogLevel.Debug) then
-                        logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
-                    else
-                        ()
-                    return! result |> applyPlanExecutionResult
+                    }
+            if ctx.Request.Headers.ContentLength.GetValueOrDefault(0) = 0 then
+                let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
+                if logger.IsEnabled(LogLevel.Debug) then
+                    logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
                 else
-                    match! deserializeGraphQLRequest() with
-                    | Failure errMsgs ->
-                        return! httpOk cancellationToken interceptor serializerOptions (prepareGenericErrors errMsgs) next ctx
-                    | Success (graphqlRequest, _) ->
-                        return! handleDeserializedGraphQLRequest graphqlRequest
+                    ()
+                return! result |> applyPlanExecutionResult
+            else
+              match! deserializeGraphQLRequest() with
+              | Result.Error errMsgs ->
+                let probDetails =
+                  errMsgs
+                  |> List.map (fun msg -> GQLProblemDetails.Create(msg, Skip))
+                return! httpOk cancellationToken interceptor serializerOptions (GQLResponse.RequestError(-1, probDetails)) next ctx
+              | Ok graphqlRequest ->
+                return! handleDeserializedGraphQLRequest graphqlRequest
         }
 
     let handleGraphQL<'Root>

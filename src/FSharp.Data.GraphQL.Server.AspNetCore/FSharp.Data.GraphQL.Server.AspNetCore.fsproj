@@ -12,8 +12,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Rop/Rop.fs" />
-    <Compile Include="Rop/RopAsync.fs" />
     <Compile Include="Exceptions.fs" />
     <Compile Include="Messages.fs" />
     <Compile Include="Serialization/GraphQLQueryDecoding.fs" />
@@ -30,6 +28,8 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
     <PackageReference Include="Giraffe" />
   </ItemGroup>
 

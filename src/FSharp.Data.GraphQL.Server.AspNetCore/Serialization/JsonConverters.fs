@@ -1,7 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
-open Rop
+// open Rop
 open System
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -17,14 +17,16 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
   /// The &lt;error-message&gt; can be vaguely descriptive on why the received message is invalid."
   let invalidMsg (explanation : string) =
     InvalidMessage (4400, explanation)
-    |> fail
+    |> Result.Error
+
+  let errMsgToStr (struct (docId: int, graphQLErrorMsgs: GQLProblemDetails list)) =
+   String.Join('\n', graphQLErrorMsgs |> Seq.map (fun err -> err.Message))
 
   let unpackRopResult ropResult =
     match ropResult with
-    | Success (x, _) -> x
-    | Failure (failures : ClientMessageProtocolFailure list) ->
-      System.String.Join("\n\n", (failures |> Seq.map (fun (InvalidMessage (_, explanation)) -> explanation)))
-      |> raiseInvalidMsg
+    | Ok x -> x
+    | Result.Error (InvalidMessage (_, explanation: string)) ->
+      raiseInvalidMsg explanation
 
   let getOptionalString (reader : byref<Utf8JsonReader>) =
     if reader.TokenType.Equals(JsonTokenType.Null) then
@@ -38,12 +40,12 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
     else
       raiseInvalidMsg <| sprintf "was expecting a value for property \"%s\"" propertyName
 
-  let requireId (raw : RawMessage) : RopResult<string, ClientMessageProtocolFailure> =
+  let requireId (raw : RawMessage) : Result<string, ClientMessageProtocolFailure> =
     match raw.Id with
-    | Some s -> succeed s
+    | Some s -> Ok s
     | None -> invalidMsg <| "property \"id\" is required for this message but was not present."
 
-  let requireSubscribePayload (serializerOptions : JsonSerializerOptions) (executor : Executor<'a>) (payload : JsonDocument option) : RopResult<GraphQLQuery, ClientMessageProtocolFailure> =
+  let requireSubscribePayload (serializerOptions : JsonSerializerOptions) (executor : Executor<'a>) (payload : JsonDocument option) : Result<GraphQLQuery, ClientMessageProtocolFailure> =
     match payload with
     | None ->
       invalidMsg <| "payload is required for this message, but none was present."
@@ -59,7 +61,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
         | Some query ->
           query
           |> GraphQLQueryDecoding.decodeGraphQLQuery serializerOptions executor subscribePayload.OperationName subscribePayload.Variables
-          |> mapMessagesR (fun errMsg -> InvalidMessage (CustomWebSocketStatus.invalidMessage, errMsg))
+          |> Result.mapError (fun errMsg -> InvalidMessage (CustomWebSocketStatus.invalidMessage, errMsg |> errMsgToStr))
 
 
   let readRawMessage (reader : byref<Utf8JsonReader>, options: JsonSerializerOptions) : RawMessage =
@@ -100,18 +102,18 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
     | "complete" ->
       raw
       |> requireId
-      |> mapR ClientComplete
+      |> Result.map ClientComplete
       |> unpackRopResult
     | "subscribe" ->
       raw
       |> requireId
-      |> bindR
+      |> Result.bind
         (fun id ->
           raw.Payload
           |> requireSubscribePayload options executor
-          |> mapR (fun payload -> (id, payload))
+          |> Result.map (fun payload -> (id, payload))
         )
-      |> mapR Subscribe
+      |> Result.map Subscribe
       |> unpackRopResult
     | other ->
       raiseInvalidMsg <| sprintf "invalid type \"%s\" specified by client." other
