@@ -1,7 +1,6 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
-// open Rop
 open System
 open System.Text.Json
 open System.Text.Json.Serialization
