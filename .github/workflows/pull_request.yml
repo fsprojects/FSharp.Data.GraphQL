@@ -10,6 +10,10 @@ on:
     - master
     - dev
 
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
 jobs:
   build:
 
@@ -27,6 +31,19 @@ jobs:
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet }}
+
+    - name: Add version to global.json
+      run: |
+        $version = "${{ matrix.dotnet }}"
+        $globalJsonPath = "global.json"
+        $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
+        if ($null -eq $globalJson.sdk.version) {
+          $globalJson.sdk | Add-Member -Type NoteProperty -Name version -Value $version
+        } else {
+          $globalJson.sdk.version = $version
+        }
+        $globalJson | ConvertTo-Json -Depth 10 | Set-Content -Path $globalJsonPath
+      shell: pwsh
 
     - name: Install local tools
       run: dotnet tool restore
