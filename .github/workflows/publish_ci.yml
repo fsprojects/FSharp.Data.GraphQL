@@ -12,7 +12,7 @@ jobs:
 
     steps:
     - name: Checkout
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
 
     - name: Set Build Version
       run: |
@@ -26,9 +26,9 @@ jobs:
       shell: pwsh
 
     - name: Install .NET Core
-      uses: actions/setup-dotnet@v3
+      uses: actions/setup-dotnet@v4
       with:
-        dotnet-version: 7.0.401
+        dotnet-version: 7.0.406
 
     - name: Add the GitHub source
       run: dotnet nuget add source --username USERNAME --password ${{secrets.GITHUB_TOKEN}} --store-password-in-clear-text --name "github.com" "https://nuget.pkg.github.com/fsprojects/index.json"
