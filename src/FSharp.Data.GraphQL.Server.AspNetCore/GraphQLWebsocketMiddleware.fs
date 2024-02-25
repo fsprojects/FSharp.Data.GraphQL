@@ -2,7 +2,6 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open FSharp.Data.GraphQL
 open Microsoft.AspNetCore.Http
-open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 open System
 open System.Collections.Generic
 open System.Net.WebSockets
@@ -10,6 +9,7 @@ open System.Text.Json
 open System.Threading
 open System.Threading.Tasks
 open FSharp.Data.GraphQL.Execution
+open FsToolkit.ErrorHandling
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open System.Collections.Immutable
@@ -48,22 +48,20 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
       }
 
   let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg: string) =
-    task {
+    taskResult {
         try
-          return
-            JsonSerializer.Deserialize<ClientMessage>(msg, serializerOptions)
-            |> succeed
+          return JsonSerializer.Deserialize<ClientMessage>(msg, serializerOptions)
         with
         | :? InvalidMessageException as e ->
-          return
-            fail <| InvalidMessage(4400, e.Message.ToString())
+          return! Result.Error <|
+            InvalidMessage(4400, e.Message.ToString())
         | :? JsonException as e ->
           if logger.IsEnabled(LogLevel.Debug) then
             logger.LogDebug(e.ToString())
           else
             ()
-          return
-            fail <| InvalidMessage(4400, "invalid json in client message")
+          return! Result.Error <|
+            InvalidMessage(4400, "invalid json in client message")
     }
 
   let isSocketOpen (theSocket : WebSocket) =
@@ -75,8 +73,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     not (theSocket.State = WebSocketState.Aborted) &&
     not (theSocket.State = WebSocketState.Closed)
 
-  let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions: JsonSerializerOptions) (socket : WebSocket) : Task<RopResult<ClientMessage, ClientMessageProtocolFailure> option> =
-    task {
+  let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions: JsonSerializerOptions) (socket : WebSocket) =
+    taskResult {
       let buffer = Array.zeroCreate 4096
       let completeMessage = new List<byte>()
       let mutable segmentResponse : WebSocketReceiveResult = null
@@ -261,48 +259,50 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         while not cancellationToken.IsCancellationRequested && socket |> isSocketOpen do
             let! receivedMessage = rcv()
             match receivedMessage with
-            | None ->
-              logger.LogTrace("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
-            | Some msg ->
-                match msg with
-                | Failure failureMsgs ->
-                    "InvalidMessage" |> logMsgReceivedWithOptionalPayload None
-                    match failureMsgs |> List.head with
-                    | InvalidMessage (code, explanation) ->
-                      do! socket.CloseAsync(enum code, explanation, CancellationToken.None)
-                | Success (ConnectionInit p, _) ->
-                    "ConnectionInit" |> logMsgReceivedWithOptionalPayload p
-                    do! socket.CloseAsync(
-                      enum CustomWebSocketStatus.tooManyInitializationRequests,
-                      "too many initialization requests",
-                      CancellationToken.None)
-                | Success (ClientPing p, _) ->
-                    "ClientPing" |> logMsgReceivedWithOptionalPayload p
-                    match pingHandler with
-                    | Some func ->
-                      let! customP = p |> func serviceProvider
-                      do! ServerPong customP |> sendMsg
-                    | None ->
-                      do! ServerPong p |> sendMsg
-                | Success (ClientPong p, _) ->
-                    "ClientPong" |> logMsgReceivedWithOptionalPayload p
-                | Success (Subscribe (id, query), _) ->
-                    "Subscribe" |> logMsgWithIdReceived id
-                    if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+            | Result.Error failureMsgs ->
+              "InvalidMessage" |> logMsgReceivedWithOptionalPayload None
+              match failureMsgs with
+              | InvalidMessage (code, explanation) ->
+                do! socket.CloseAsync(enum code, explanation, CancellationToken.None)
+            | Ok maybeMsg ->
+              match maybeMsg with
+              | None ->
+                logger.LogTrace("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
+              | Some msg ->
+                  match msg with
+                  | ConnectionInit p ->
+                      "ConnectionInit" |> logMsgReceivedWithOptionalPayload p
                       do! socket.CloseAsync(
-                        enum CustomWebSocketStatus.subscriberAlreadyExists,
-                        sprintf "Subscriber for %s already exists" id,
+                        enum CustomWebSocketStatus.tooManyInitializationRequests,
+                        "too many initialization requests",
                         CancellationToken.None)
-                    else
-                      let variables = ImmutableDictionary.CreateRange(query.Variables |> Map.map (fun _ value -> value :?> JsonElement))
-                      let! planExecutionResult =
-                        executor.AsyncExecute(query.ExecutionPlan, root(httpContext), variables)
-                        |> Async.StartAsTask
-                      do! planExecutionResult
-                          |> applyPlanExecutionResult id socket
-                | Success (ClientComplete id, _) ->
-                    "ClientComplete" |> logMsgWithIdReceived id
-                    subscriptions |> GraphQLSubscriptionsManagement.removeSubscription (id)
+                  | ClientPing p ->
+                      "ClientPing" |> logMsgReceivedWithOptionalPayload p
+                      match pingHandler with
+                      | Some func ->
+                        let! customP = p |> func serviceProvider
+                        do! ServerPong customP |> sendMsg
+                      | None ->
+                        do! ServerPong p |> sendMsg
+                  | ClientPong p ->
+                      "ClientPong" |> logMsgReceivedWithOptionalPayload p
+                  | Subscribe (id, query) ->
+                      "Subscribe" |> logMsgWithIdReceived id
+                      if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                        do! socket.CloseAsync(
+                          enum CustomWebSocketStatus.subscriberAlreadyExists,
+                          sprintf "Subscriber for %s already exists" id,
+                          CancellationToken.None)
+                      else
+                        let variables = ImmutableDictionary.CreateRange(query.Variables |> Map.map (fun _ value -> value :?> JsonElement))
+                        let! planExecutionResult =
+                          executor.AsyncExecute(query.ExecutionPlan, root(httpContext), variables)
+                          |> Async.StartAsTask
+                        do! planExecutionResult
+                            |> applyPlanExecutionResult id socket
+                  | ClientComplete id ->
+                      "ClientComplete" |> logMsgWithIdReceived id
+                      subscriptions |> GraphQLSubscriptionsManagement.removeSubscription (id)
         logger.LogTrace "Leaving graphql-ws connection loop..."
         do! socket |> tryToGracefullyCloseSocketWithDefaultBehavior
       with
@@ -318,8 +318,8 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
     // <-- Main
     // <--------
 
-  let waitForConnectionInitAndRespondToClient (serializerOptions : JsonSerializerOptions) (connectionInitTimeoutInMs : int) (socket : WebSocket) : Task<RopResult<unit, string>> =
-    task {
+  let waitForConnectionInitAndRespondToClient (serializerOptions : JsonSerializerOptions) (connectionInitTimeoutInMs : int) (socket : WebSocket) : TaskResult<unit, string> =
+    taskResult {
       let timerTokenSource = new CancellationTokenSource()
       timerTokenSource.CancelAfter(connectionInitTimeoutInMs)
       let detonationRegistration = timerTokenSource.Token.Register(fun _ ->
@@ -327,22 +327,23 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.connectionTimeout, "Connection initialization timeout")
         |> Task.WaitAll
       )
-      let! connectionInitSucceeded = Task.Run<bool>((fun _ ->
+
+      let! connectionInitSucceeded = TaskResult.Run<bool>((fun _ ->
         task {
           logger.LogDebug("Waiting for ConnectionInit...")
           let! receivedMessage = receiveMessageViaSocket (CancellationToken.None) serializerOptions socket
           match receivedMessage with
-          | Some (Success (ConnectionInit payload, _)) ->
+          | Ok (Some (ConnectionInit _)) ->
             logger.LogDebug("Valid connection_init received! Responding with ACK!")
             detonationRegistration.Unregister() |> ignore
             do! ConnectionAck |> sendMessageViaSocket serializerOptions socket
             return true
-          | Some (Success (Subscribe _, _)) ->
+          | Ok (Some (Subscribe _)) ->
             do!
               socket
               |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.unauthorized, "Unauthorized")
             return false
-          | Some (Failure [InvalidMessage (code, explanation)]) ->
+          | Result.Error (InvalidMessage (code, explanation)) ->
             do!
               socket
               |> tryToGracefullyCloseSocket (enum code, explanation)
@@ -355,11 +356,11 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         }), timerTokenSource.Token)
       if (not timerTokenSource.Token.IsCancellationRequested) then
         if connectionInitSucceeded then
-          return (succeed ())
+          return ()
         else
-          return (fail "ConnectionInit failed (not because of timeout)")
+          return! Result.Error <| "ConnectionInit failed (not because of timeout)"
       else
-        return (fail "ConnectionInit timeout")
+        return! Result.Error <| "ConnectionInit timeout"
     }
 
   member __.InvokeAsync(ctx : HttpContext) =
@@ -373,9 +374,9 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             socket
             |> waitForConnectionInitAndRespondToClient options.SerializerOptions options.WebsocketOptions.ConnectionInitTimeoutInMs
           match connectionInitResult with
-          | Failure errMsg ->
+          | Result.Error errMsg ->
             logger.LogWarning("{warningmsg}", (sprintf "%A" errMsg))
-          | Success _ ->
+          | Ok _ ->
             let longRunningCancellationToken =
               (CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping).Token)
             longRunningCancellationToken.Register(fun _ ->
