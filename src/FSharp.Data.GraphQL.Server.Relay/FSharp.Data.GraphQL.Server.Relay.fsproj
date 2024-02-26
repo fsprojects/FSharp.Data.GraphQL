@@ -10,10 +10,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Compile Include="Node.fs" />
     <Compile Include="Connections.fs" />
   </ItemGroup>

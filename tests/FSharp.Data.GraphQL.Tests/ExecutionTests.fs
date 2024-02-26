@@ -217,6 +217,25 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
     equals (Some 123) data.Num
     equals (Some "foo") data.Str
 
+[<Fact>]
+let ``Execution handles basic tasks: correctly handles null arguments`` () =
+    let query = """query Example {
+        b(numArg: null, stringArg: null)
+      }"""
+    let data = { Num = None; Str = None }
+    let Type =
+        Define.Object("Type",
+            [ Define.Field("b", Nullable StringType, "", [ Define.Input("numArg", Nullable IntType); Define.Input("stringArg", Nullable StringType) ],
+                 fun ctx value ->
+                     value.Num <- ctx.TryArg("numArg")
+                     value.Str <- ctx.TryArg("stringArg")
+                     value.Str) ])
+
+    let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
+    ensureDirect result <| fun data errors -> empty errors
+    equals None data.Num
+    equals None data.Str
+
 type InlineTest = { A: string }
 
 [<Fact>]

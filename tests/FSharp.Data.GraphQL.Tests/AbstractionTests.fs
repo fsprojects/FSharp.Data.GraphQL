@@ -75,7 +75,7 @@ let schemaWithInterface =
                             [ Define.Field (
                                   "pets",
                                   ListOf PetType,
-                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet; upcast { Name = "Garfield"; Meows = false } ]
+                                  fun _ _ -> [ { Name = "Odie"; Woofs = true } :> IPet; { Name = "Garfield"; Meows = false } ]
                               ) ]
                     ),
                 config = { SchemaConfig.Default with Types = [ CatType; DogType ] }
@@ -110,6 +110,48 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
+
+[<Fact>]
+let ``Execute handles execution of abstract types: not specified Interface types must be empty objects`` () =
+    let query =
+        """{
+      pets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+
+    let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| dog; emptyObj |] = data["pets"] :?> obj array
+        dog |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
+
+    let query =
+        """{
+      pets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+
+    let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| emptyObj; cat|] = data["pets"] :?> obj array
+        cat |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Interface`` () =
@@ -154,6 +196,26 @@ let ``Execute handles execution of abstract types: absent type resolution produc
     ensureRequestError result <| fun [ catError; dogError ] ->
         catError |> ensureValidationError "Field 'unknownField2' is not defined in schema type 'Cat'." [ "pets"; "unknownField2" ]
         dogError |> ensureValidationError "Inline fragment has type condition 'UnknownDog', but that type does not exist in the schema." [ "pets" ]
+
+    let query =
+        """{
+      pets {
+        name
+        ... on Dog {
+          woofs
+          unknownField1
+        }
+        ... on UnknownCat {
+          meows
+          unknownField2
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithInterface.Value.AsyncExecute (parse query)
+    ensureRequestError result <| fun [ catError; dogError ] ->
+        catError |> ensureValidationError "Field 'unknownField1' is not defined in schema type 'Dog'." [ "pets"; "unknownField1" ]
+        dogError |> ensureValidationError "Inline fragment has type condition 'UnknownCat', but that type does not exist in the schema." [ "pets" ]
 
 
 let schemaWithUnion =
@@ -218,6 +280,48 @@ let ``Execute handles execution of abstract types: isTypeOf is used to resolve r
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
+
+[<Fact>]
+let ``Execute handles execution of abstract types: not specified Union types must be empty objects`` () =
+    let query =
+        """{
+      pets {
+        ... on Dog {
+          name
+          woofs
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+
+    let expected = NameValueLookup.ofList [ "name", "Odie" :> obj; "woofs", upcast true ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| dog; emptyObj |] = data["pets"] :?> obj array
+        dog |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
+
+    let query =
+        """{
+      pets {
+        ... on Cat {
+          name
+          meows
+        }
+      }
+    }"""
+
+    let result = sync <| schemaWithUnion.Value.AsyncExecute (parse query)
+
+    let expected = NameValueLookup.ofList [ "name", "Garfield" :> obj; "meows", upcast false ]
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        let [| emptyObj; cat|] = data["pets"] :?> obj array
+        cat |> equals (upcast expected)
+        emptyObj.GetType() |> equals typeof<obj>
 
 [<Fact>]
 let ``Execute handles execution of abstract types: absent field resolution produces errors for Union`` () =

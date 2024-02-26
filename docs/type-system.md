@@ -7,12 +7,12 @@ Each schema definition requires to have something called *root query* - it's a G
 
 GraphQL type system categorizes several custom types, that can be defined by programmer, including:
 
-- [Objects](#Defining-an-Object)
-- [Interfaces](#Defining-an-Interface)
-- [Unions](#Defining-a-Union)
-- [Enums](#Defining-an-Enum)
-- [Scalars](#Defining-a-Scalar)
-- [InputObjects](#Defining-an-Input-Object)
+- [Objects](#defining-an-object)
+- [Interfaces](#defining-an-interface)
+- [Unions](#defining-a-union)
+- [Enums](#defining-an-enum)
+- [Scalars](#defining-a-scalar)
+- [InputObjects](#defining-an-input-object)
 
 Beside them, FSharp.Data.GraphQL defines two others:
 
@@ -150,7 +150,8 @@ type Ord =
 let Ord = Define.Enum("Ord", [
     Define.EnumValue("Lesser", Ord.Lt)
     Define.EnumValue("Equal", Ord.Eq)
-    Define.EnumValue("Greater", Ord.Greater) ])
+    Define.EnumValue("Greater", Ord.Greater)
+])
 ```
 
 The major difference from .NET here is that GraphQL expects, that enum values are serialized as **strings**. Therefore, upon serialization, given enum value will be projected using `ToString()` method.
@@ -162,24 +163,61 @@ Just like enums, GraphQL scalars are leaf types, that should be able to be seria
 ```fsharp
 let Guid = Define.Scalar(
     name = "Guid",
-    coerceInput = (fun (StringValue s) -> match Guid.TryParse(s) with true, g -> Some g | false, _ -> None),
-    coerceValue = fun v -> match v with | :? Guid g -> Some g | _ -> None)
+    coerceInput = // Returns Result<Guid, IGQLError list>
+        (fun value ->
+            let destinationType = "GUID"
+            function
+            // Handle variable value as JsonElement
+            | Variable e when e.ValueKind = JsonValueKind.String ->
+                let s = e.GetString()
+                match Guid.TryParse(s) with
+                | true, guid -> Ok guid
+                | false, _ -> e.GetDeserializeError destinationType
+            | Variable e -> e.GetDeserializeError destinationType
+            // Handle inline value as AST discriminated union object
+            | InlineConstant (StringValue s) ->
+                match Guid.TryParse(s) with
+                | true, guid -> Ok guid
+                | false, _ -> getParseError destinationType s
+            | InlineConstant value -> value.GetCoerceError destinationType),
+    coerceValue = // Returns Guid option
+        fun v -> match v with | :? Guid g -> Some g | _ -> None
+)
 ```
 
-This examples shows how to create a scalar definition for .NET `Guid` type. It requires two functions to be defines:
+This example shows how to create a scalar definition for the .NET `Guid` type. It requires two functions to be defined:
 
-1. `coerceInput` function, which will be used to resolve your scalar value directly from values encoded in GraphQL query string (in this case StringValue is just part of parsed query AST).
-2. `coerceValue` function, which will be used to apply something like "implicit casts" between two .NET types in conflicting cases - like when value is passed in variables query string part - which should be tolerated.
+1. `coerceInput` function, which will be used to resolve your scalar value from a variable or directly from a value encoded in a GraphQL query string (in this case StringValue is just a part of the parsed query AST).
+2. `coerceValue` function, which will return `Some` only if the value falls under the scalar's allowed values range, otherwise `None`. Applied while producing the return object graph from the resolver's output.
 
 ## Defining an Input Object
 
-Just like objects, input objects describe a complex data types - however while Objects are designed to work as **output** types, Input Objects are **input** types only. 
+Just like objects, input objects describe a complex data types - however while Objects are designed to work as **output** types, Input Objects are **input** types only.
 
 ```fsharp
 type CreateAccountData = { Email: string; Password: string }
-let CreateAccountData = Define.InputObject("CreateAccountData", [
+let CreateAccountDataType = Define.InputObject("CreateAccountData", [
     Define.Input("email", String)
-    Define.Input("password", String) ])
+    Define.Input("password", String)
+])
 ```
 
 Unlike the objects, you neither define input object field resolver nor provide any arguments for it. They also don't work together with abstract types like interfaces or unions.
+
+Validate individual properties at scalar definition level, but use validator to validate the whole input object or several dependant properties like this:
+
+```fsharp
+type InputAddress = { Country : string; ZipCode : string; City : string }
+let InputAddressType =
+    Define.InputObject<InputAddress> ("InputAddress", [
+            Define.Input ("country", StringType)
+            Define.Input ("zipCode", StringType)
+            Define.Input ("city", StringType)
+        ],
+        fun inputAddress ->
+            match inputAddress.Country with
+            | "US" when inputAddress.ZipCode.Length <> 5 -> ValidationError <| createSingleError "ZipCode must be 5 characters for US"
+            | "US" -> Success
+            | _ -> ValidationError <| createSingleError "Unsupported country"
+    )
+```

@@ -5,7 +5,7 @@
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
     <FsToolkitVersion>4.9.*</FsToolkitVersion>
-    <XUnitVersion>2.5.0</XUnitVersion>
+    <XUnitVersion>2.6.6</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
@@ -41,11 +41,15 @@
     <PackageReference Update="FSharp.Compiler.Service" Version="43.7.300" />
     <PackageReference Update="Mono.Posix.NETStandard" Version="1.0.0" />
     <PackageReference Update="MSBuild.StructuredLogger" Version="2.*" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
+      <PrivateAssets>all</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
   </ItemGroup>
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.13.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.7.0" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.9.0" />
     <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
     <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
@@ -56,7 +60,7 @@
     <PackageReference Update="xunit.extensibility.execution" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.visualstudio" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="2.5.6" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="CommandLineParser" Version="2.9.*" />
