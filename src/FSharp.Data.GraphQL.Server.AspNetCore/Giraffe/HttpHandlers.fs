@@ -81,13 +81,18 @@ module HttpHandlers =
                       match result.Content with
                       | Direct (data, errs) ->
                           GQLResponse.Direct(result.DocumentId, data, errs)
+                      | RequestError (problemDetailsList) ->
+                        GQLResponse.RequestError(
+                            result.DocumentId,
+                            problemDetailsList
+                        )
                       | _ ->
-                            GQLResponse.RequestError(
-                              result.DocumentId,
-                              [ GQLProblemDetails.Create(
-                                  "subscriptions are not supported here (use the websocket endpoint instead)."
-                              )]
-                            )
+                        GQLResponse.RequestError(
+                            result.DocumentId,
+                            [ GQLProblemDetails.Create(
+                                "subscriptions are not supported here (use the websocket endpoint instead)."
+                            )]
+                        )
                     return! httpOk cancellationToken interceptor serializerOptions gqlResponse next ctx
                 }
 
