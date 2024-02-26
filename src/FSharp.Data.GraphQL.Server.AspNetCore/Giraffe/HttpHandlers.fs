@@ -47,6 +47,10 @@ module HttpHandlers =
             ]
         )
 
+    /// HttpHandler for handling GraphQL requests with Giraffe.
+    /// This one is for specifying an interceptor when you need to
+    /// do a custom handling on the response. For example, when you want
+    /// to add custom headers.
     let handleGraphQLWithResponseInterception<'Root>
       (cancellationToken : CancellationToken)
       (logger : ILogger)
@@ -158,6 +162,7 @@ module HttpHandlers =
                 return! handleDeserializedGraphQLRequest graphqlRequest
         }
 
+    /// HttpHandler for handling GraphQL requests with Giraffe
     let handleGraphQL<'Root>
         (cancellationToken : CancellationToken)
         (logger : ILogger)
