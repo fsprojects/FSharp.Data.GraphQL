@@ -5,6 +5,7 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 open System
 open Microsoft.AspNetCore.Builder
+open Microsoft.AspNetCore.Http
 open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Hosting
@@ -12,8 +13,8 @@ open Microsoft.Extensions.Logging
 
 module Program =
 
-    let rootFactory () : Root =
-        { RequestId = Guid.NewGuid().ToString() }
+    let rootFactory (ctx : HttpContext) : Root =
+        { RequestId = ctx.TraceIdentifier }
 
     let errorHandler (ex : Exception) (log : ILogger) =
         log.LogError(EventId(), ex, "An unhandled exception has occurred while executing this request.")

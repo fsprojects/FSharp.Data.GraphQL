@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Samples.ChatApp
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
+open FsToolkit.ErrorHandling
 open System
 
 type Root =
@@ -76,46 +77,44 @@ module MapFrom =
 
 
 module Schema =
-  open FSharp.Data.GraphQL.Server.AspNetCore.Rop
 
-  let authenticateMemberInOrganization (organizationId : OrganizationId) (memberPrivId : MemberPrivateId) : RopResult<(Organization_In_Db * Member_In_Db), GraphQLException> =
+  let authenticateMemberInOrganization (organizationId : OrganizationId) (memberPrivId : MemberPrivateId) : Result<(Organization_In_Db * Member_In_Db), GraphQLException> =
     let maybeOrganization = FakePersistence.Organizations |> Map.tryFind organizationId
     let maybeMember = FakePersistence.Members.Values |> Seq.tryFind (fun x -> x.PrivId = memberPrivId)
 
     match (maybeOrganization, maybeMember) with
     | None, _ ->
-      fail <| (organizationId |> Exceptions.Organization_Doesnt_Exist)
+        Error (organizationId |> Exceptions.Organization_Doesnt_Exist)
     | _, None ->
-      fail <| (memberPrivId |> Exceptions.PrivMember_Doesnt_Exist)
+        Error (memberPrivId |> Exceptions.PrivMember_Doesnt_Exist)
     | Some organization, Some theMember ->
-      if not (organization.Members |> List.contains theMember.Id) then
-        fail <| (Exceptions.Member_Isnt_Part_Of_Org())
-      else
-        succeed (organization, theMember)
+        if not (organization.Members |> List.contains theMember.Id) then
+          Error (Exceptions.Member_Isnt_Part_Of_Org())
+        else
+          Ok (organization, theMember)
 
-  let validateChatRoomExistence (organization : Organization_In_Db) (chatRoomId : ChatRoomId) : RopResult<ChatRoom_In_Db, GraphQLException> =
+  let validateChatRoomExistence (organization : Organization_In_Db) (chatRoomId : ChatRoomId) : Result<ChatRoom_In_Db, GraphQLException> =
     match FakePersistence.ChatRooms |> Map.tryFind chatRoomId with
     | None ->
-      fail <| Exceptions.ChatRoom_Doesnt_Exist chatRoomId
+        Error <| Exceptions.ChatRoom_Doesnt_Exist chatRoomId
     | Some chatRoom ->
-      if not (organization.ChatRooms |> List.contains chatRoom.Id) then
-        fail <| Exceptions.ChatRoom_Isnt_Part_Of_Org()
-      else
-        succeed <| chatRoom
+        if not (organization.ChatRooms |> List.contains chatRoom.Id) then
+          Error <| Exceptions.ChatRoom_Isnt_Part_Of_Org()
+        else
+          Ok chatRoom
 
-  let validateMessageExistence (chatRoom : ChatRoom_In_Db) (messageId : MessageId) : RopResult<ChatRoomMessage, GraphQLException> =
+  let validateMessageExistence (chatRoom : ChatRoom_In_Db) (messageId : MessageId) : Result<ChatRoomMessage, GraphQLException> =
     match FakePersistence.ChatRoomMessages |> Map.tryFind (chatRoom.Id, messageId) with
     | None ->
-      fail (GraphQLException("chat message doesn't exist (anymore)"))
+        Error (GQLMessageException("chat message doesn't exist (anymore)"))
     | Some chatMessage ->
-      succeed chatMessage
+        Ok chatMessage
 
-  let succeedOrRaiseGraphQLEx<'T> (ropResult : RopResult<'T, GraphQLException>) : 'T =
-    match ropResult with
-    | Failure exs ->
-      let firstEx = exs |> List.head
-      raise firstEx
-    | Success (s, _) ->
+  let succeedOrRaiseGraphQLEx<'T> (result : Result<'T, GraphQLException>) : 'T =
+    match result with
+    | Error ex ->
+        raise ex
+    | Ok s ->
       s
 
   let chatRoomEvents_subscription_name = "chatRoomEvents"
@@ -135,8 +134,8 @@ module Schema =
       description = "An organization member",
       isTypeOf = (fun o -> o :? Member),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the member's ID", fun _ (x : Member) -> match x.Id with MemberId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the member's name", fun _ (x : Member) -> x.Name)
+        Define.Field("id", GuidType, "the member's ID", fun _ (x : Member) -> match x.Id with MemberId theId -> theId)
+        Define.Field("name", StringType, "the member's name", fun _ (x : Member) -> x.Name)
       ]
     )
 
@@ -146,9 +145,9 @@ module Schema =
       description = "An organization member",
       isTypeOf = (fun o -> o :? MeAsAMember),
       fieldsFn = fun () -> [
-        Define.Field("privId", SchemaDefinitions.Guid, "the member's private ID used for authenticating their requests", fun _ (x : MeAsAMember) -> match x.PrivId with MemberPrivateId theId -> theId)
-        Define.Field("id", SchemaDefinitions.Guid, "the member's ID", fun _ (x : MeAsAMember) -> match x.Id with MemberId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the member's name", fun _ (x : MeAsAMember) -> x.Name)
+        Define.Field("privId", GuidType, "the member's private ID used for authenticating their requests", fun _ (x : MeAsAMember) -> match x.PrivId with MemberPrivateId theId -> theId)
+        Define.Field("id", GuidType, "the member's ID", fun _ (x : MeAsAMember) -> match x.Id with MemberId theId -> theId)
+        Define.Field("name", StringType, "the member's name", fun _ (x : MeAsAMember) -> x.Name)
       ]
     )
 
@@ -158,8 +157,8 @@ module Schema =
       description = "A chat member is an organization member participating in a chat room",
       isTypeOf = (fun o -> o :? ChatMember),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the member's ID", fun _ (x : ChatMember) -> match x.Id with MemberId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the member's name", fun _ (x : ChatMember) -> x.Name)
+        Define.Field("id", GuidType, "the member's ID", fun _ (x : ChatMember) -> match x.Id with MemberId theId -> theId)
+        Define.Field("name", StringType, "the member's name", fun _ (x : ChatMember) -> x.Name)
         Define.Field("role", memberRoleInChatEnumDef, "the member's role in the chat", fun _ (x : ChatMember) -> x.Role)
       ]
     )
@@ -170,9 +169,9 @@ module Schema =
       description = "A chat member is an organization member participating in a chat room",
       isTypeOf = (fun o -> o :? MeAsAChatMember),
       fieldsFn = fun () -> [
-        Define.Field("privId", SchemaDefinitions.Guid, "the member's private ID used for authenticating their requests", fun _ (x : MeAsAChatMember) -> match x.PrivId with MemberPrivateId theId -> theId)
-        Define.Field("id", SchemaDefinitions.Guid, "the member's ID", fun _ (x : MeAsAChatMember) -> match x.Id with MemberId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the member's name", fun _ (x : MeAsAChatMember) -> x.Name)
+        Define.Field("privId", GuidType, "the member's private ID used for authenticating their requests", fun _ (x : MeAsAChatMember) -> match x.PrivId with MemberPrivateId theId -> theId)
+        Define.Field("id", GuidType, "the member's ID", fun _ (x : MeAsAChatMember) -> match x.Id with MemberId theId -> theId)
+        Define.Field("name", StringType, "the member's name", fun _ (x : MeAsAChatMember) -> x.Name)
         Define.Field("role", memberRoleInChatEnumDef, "the member's role in the chat", fun _ (x : MeAsAChatMember) -> x.Role)
       ]
     )
@@ -183,8 +182,8 @@ module Schema =
       description = "A chat room as viewed from the outside",
       isTypeOf = (fun o -> o :? ChatRoom),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the chat room's ID", fun _ (x : ChatRoom) -> match x.Id with ChatRoomId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the chat room's name", fun _ (x : ChatRoom) -> x.Name)
+        Define.Field("id", GuidType, "the chat room's ID", fun _ (x : ChatRoom) -> match x.Id with ChatRoomId theId -> theId)
+        Define.Field("name", StringType, "the chat room's name", fun _ (x : ChatRoom) -> x.Name)
         Define.Field("members", ListOf chatMemberDef, "the members in the chat room", fun _ (x : ChatRoom) -> x.Members)
       ]
     )
@@ -195,8 +194,8 @@ module Schema =
       description = "A chat room as viewed by a chat room member",
       isTypeOf = (fun o -> o :? ChatRoomForMember),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the chat room's ID", fun _ (x : ChatRoomForMember) -> match x.Id with ChatRoomId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the chat room's name", fun _ (x : ChatRoomForMember) -> x.Name)
+        Define.Field("id", GuidType, "the chat room's ID", fun _ (x : ChatRoomForMember) -> match x.Id with ChatRoomId theId -> theId)
+        Define.Field("name", StringType, "the chat room's name", fun _ (x : ChatRoomForMember) -> x.Name)
         Define.Field("meAsAChatMember", meAsAChatMemberDef, "the chat member that queried the details", fun _ (x : ChatRoomForMember) -> x.MeAsAChatMember)
         Define.Field("otherChatMembers", ListOf chatMemberDef, "the chat members excluding the one who queried the details", fun _ (x : ChatRoomForMember) -> x.OtherChatMembers)
       ]
@@ -208,8 +207,8 @@ module Schema =
       description = "An organization as seen from the outside",
       isTypeOf = (fun o -> o :? Organization),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the organization's ID", fun _ (x : Organization) -> match x.Id with OrganizationId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the organization's name", fun _ (x : Organization) -> x.Name)
+        Define.Field("id", GuidType, "the organization's ID", fun _ (x : Organization) -> match x.Id with OrganizationId theId -> theId)
+        Define.Field("name", StringType, "the organization's name", fun _ (x : Organization) -> x.Name)
         Define.Field("members", ListOf memberDef, "members of this organization", fun _ (x : Organization) -> x.Members)
         Define.Field("chatRooms", ListOf chatRoomStatsDef, "chat rooms in this organization", fun _ (x : Organization) -> x.ChatRooms)
       ]
@@ -221,8 +220,8 @@ module Schema =
       description = "An organization as seen by one of the organization's members",
       isTypeOf = (fun o -> o :? OrganizationForMember),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the organization's ID", fun _ (x : OrganizationForMember) -> match x.Id with OrganizationId theId -> theId)
-        Define.Field("name", SchemaDefinitions.String, "the organization's name", fun _ (x : OrganizationForMember) -> x.Name)
+        Define.Field("id", GuidType, "the organization's ID", fun _ (x : OrganizationForMember) -> match x.Id with OrganizationId theId -> theId)
+        Define.Field("name", StringType, "the organization's name", fun _ (x : OrganizationForMember) -> x.Name)
         Define.Field("meAsAMember", meAsAMemberDef, "the member that queried the details", fun _ (x : OrganizationForMember) -> x.MeAsAMember)
         Define.Field("otherMembers", ListOf memberDef, "members of this organization", fun _ (x : OrganizationForMember) -> x.OtherMembers)
         Define.Field("chatRooms", ListOf chatRoomStatsDef, "chat rooms in this organization", fun _ (x : OrganizationForMember) -> x.ChatRooms)
@@ -235,11 +234,11 @@ module Schema =
       description = description,
       isTypeOf = (fun o -> o :? ChatRoomMessage),
       fieldsFn = fun () -> [
-        Define.Field("id", SchemaDefinitions.Guid, "the message's ID", fun _ (x : ChatRoomMessage) -> match x.Id with MessageId theId -> theId)
-        Define.Field("chatRoomId", SchemaDefinitions.Guid, "the ID of the chat room the message belongs to", fun _ (x : ChatRoomMessage) -> match x.ChatRoomId with ChatRoomId theId -> theId)
-        Define.Field("date", SchemaDefinitions.Date, "the time the message was received at the server", fun _ (x : ChatRoomMessage) -> x.Date)
-        Define.Field("authorId", SchemaDefinitions.Guid, "the member ID of the message's author", fun _ (x : ChatRoomMessage) -> match x.AuthorId with MemberId theId -> theId)
-        Define.Field("text", SchemaDefinitions.String, "the message's text", fun _ (x : ChatRoomMessage) -> x.Text)
+        Define.Field("id", GuidType, "the message's ID", fun _ (x : ChatRoomMessage) -> match x.Id with MessageId theId -> theId)
+        Define.Field("chatRoomId", GuidType, "the ID of the chat room the message belongs to", fun _ (x : ChatRoomMessage) -> match x.ChatRoomId with ChatRoomId theId -> theId)
+        Define.Field("date", DateTimeOffsetType, "the time the message was received at the server", fun _ (x : ChatRoomMessage) -> DateTimeOffset(x.Date, TimeSpan.Zero))
+        Define.Field("authorId", GuidType, "the member ID of the message's author", fun _ (x : ChatRoomMessage) -> match x.AuthorId with MemberId theId -> theId)
+        Define.Field("text", StringType, "the message's text", fun _ (x : ChatRoomMessage) -> x.Text)
       ]
     )
 
@@ -249,7 +248,7 @@ module Schema =
       description = description,
       isTypeOf = (fun o -> o :? unit),
       fieldsFn = fun () -> [
-        Define.Field("doNotUse", SchemaDefinitions.Boolean, "this is just to satify the expected structure of this type", fun _ _ -> true)
+        Define.Field("doNotUse", BooleanType, "this is just to satify the expected structure of this type", fun _ _ -> true)
       ]
     )
 
@@ -259,7 +258,7 @@ module Schema =
       description = description,
       isTypeOf = (fun o -> o :? MessageId),
       fieldsFn = (fun () -> [
-        Define.Field("messageId", SchemaDefinitions.Guid, "this is the message ID", fun _ (x : MessageId) -> match x with MessageId theId -> theId)
+        Define.Field("messageId", GuidType, "this is the message ID", fun _ (x : MessageId) -> match x with MessageId theId -> theId)
       ])
     )
 
@@ -269,8 +268,8 @@ module Schema =
       description = description,
       isTypeOf = (fun o -> o :? (MemberId * string)),
       fieldsFn = (fun () -> [
-        Define.Field("memberId", SchemaDefinitions.Guid, "this is the member's ID", fun _ (mId : MemberId, _ : string) -> match mId with MemberId theId -> theId)
-        Define.Field("memberName", SchemaDefinitions.String, "this is the member's name", fun _ (_ : MemberId, name : string) -> name)
+        Define.Field("memberId", GuidType, "this is the member's ID", fun _ (mId : MemberId, _ : string) -> match mId with MemberId theId -> theId)
+        Define.Field("memberName", StringType, "this is the member's name", fun _ (_ : MemberId, name : string) -> name)
       ])
     )
 
@@ -316,8 +315,8 @@ module Schema =
       description = "Something that happened in the chat room, like a new message sent",
       isTypeOf = (fun o -> o :? ChatRoomEvent),
       fieldsFn = (fun () -> [
-        Define.Field("chatRoomId", SchemaDefinitions.Guid, "the ID of the chat room in which the event happened", fun _ (x : ChatRoomEvent) -> match x.ChatRoomId with ChatRoomId theId -> theId)
-        Define.Field("time", SchemaDefinitions.Date, "the time the message was received at the server", fun _ (x : ChatRoomEvent) -> x.Time)
+        Define.Field("chatRoomId", GuidType, "the ID of the chat room in which the event happened", fun _ (x : ChatRoomEvent) -> match x.ChatRoomId with ChatRoomId theId -> theId)
+        Define.Field("time", DateTimeOffsetType, "the time the message was received at the server", fun _ (x : ChatRoomEvent) -> DateTimeOffset(x.Time, TimeSpan.Zero))
         Define.Field("specificData", chatRoomSpecificEventDef, "the event's specific data", fun _ (x : ChatRoomEvent) -> x.SpecificData)
       ])
     )
@@ -354,8 +353,8 @@ module Schema =
           "enterOrganization",
           organizationDetailsDef,
           "makes a new member enter an organization",
-          [ Define.Input ("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization")
-            Define.Input ("member", SchemaDefinitions.String, description = "the new member's name")
+          [ Define.Input ("organizationId", GuidType, description = "the ID of the organization")
+            Define.Input ("member", StringType, description = "the new member's name")
           ],
           fun ctx root ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
@@ -394,7 +393,7 @@ module Schema =
               |> Option.flatten
             match maybeResult with
             | None ->
-              raise (GraphQLException("couldn't enter organization (maybe the ID is incorrect?)"))
+              raise (GQLMessageException("couldn't enter organization (maybe the ID is incorrect?)"))
             | Some res ->
               res
         )
@@ -402,9 +401,9 @@ module Schema =
           "createChatRoom",
           chatRoomDetailsDef,
           "creates a new chat room for a user",
-          [ Define.Input ("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization in which the chat room will be created")
-            Define.Input ("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
-            Define.Input ("name", SchemaDefinitions.String, description = "the chat room's name")
+          [ Define.Input ("organizationId", GuidType, description = "the ID of the organization in which the chat room will be created")
+            Define.Input ("memberId", GuidType, description = "the member's private ID")
+            Define.Input ("name", StringType, description = "the chat room's name")
           ],
           fun ctx root ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
@@ -413,7 +412,7 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> mapR
+            |> Result.map
                 (fun (organization, theMember) ->
                   let newChatRoomId = ChatRoomId (Guid.NewGuid())
                   let newChatMember : ChatMember_In_Db =
@@ -445,9 +444,9 @@ module Schema =
           "enterChatRoom",
           chatRoomDetailsDef,
           "makes a member enter a chat room",
-          [ Define.Input ("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization the chat room and member are in")
-            Define.Input ("chatRoomId", SchemaDefinitions.Guid, description = "the ID of the chat room")
-            Define.Input ("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
+          [ Define.Input ("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
+            Define.Input ("chatRoomId", GuidType, description = "the ID of the chat room")
+            Define.Input ("memberId", GuidType, description = "the member's private ID")
           ],
           fun ctx root ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
@@ -456,13 +455,13 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> bindR
+            |> Result.bind
                 (fun (organization, theMember) ->
                   chatRoomId
                   |> validateChatRoomExistence organization
-                  |> mapR (fun chatRoom -> (organization, chatRoom, theMember)) 
+                  |> Result.map (fun chatRoom -> (organization, chatRoom, theMember)) 
                 )
-            |> mapR
+            |> Result.map
                 (fun (_, chatRoom, theMember) ->
                   let newChatMember : ChatMember_In_Db =
                     { ChatRoomId = chatRoom.Id
@@ -498,11 +497,11 @@ module Schema =
         )
         Define.Field(
           "leaveChatRoom",
-          SchemaDefinitions.Boolean,
+          BooleanType,
           "makes a member leave a chat room",
-          [ Define.Input ("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization the chat room and member are in")
-            Define.Input ("chatRoomId", SchemaDefinitions.Guid, description = "the ID of the chat room")
-            Define.Input ("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
+          [ Define.Input ("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
+            Define.Input ("chatRoomId", GuidType, description = "the ID of the chat room")
+            Define.Input ("memberId", GuidType, description = "the member's private ID")
           ],
           fun ctx root ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
@@ -511,13 +510,13 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> bindR
+            |> Result.bind
                 (fun (organization, theMember) ->
                   chatRoomId
                   |> validateChatRoomExistence organization
-                  |> mapR (fun chatRoom -> (organization, chatRoom, theMember)) 
+                  |> Result.map (fun chatRoom -> (organization, chatRoom, theMember)) 
                 )
-            |> mapR
+            |> Result.map
                 (fun (_, chatRoom, theMember) ->
                   FakePersistence.ChatMembers <-
                     FakePersistence.ChatMembers |> Map.remove (chatRoom.Id, theMember.Id)
@@ -532,11 +531,11 @@ module Schema =
         )
         Define.Field(
           "sendChatMessage",
-          SchemaDefinitions.Boolean,
-          [ Define.Input("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization the chat room and member are in")
-            Define.Input("chatRoomId", SchemaDefinitions.Guid, description = "the chat room's ID")
-            Define.Input("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
-            Define.Input("text", SchemaDefinitions.String, description = "the chat message's contents")],
+          BooleanType,
+          [ Define.Input("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
+            Define.Input("chatRoomId", GuidType, description = "the chat room's ID")
+            Define.Input("memberId", GuidType, description = "the member's private ID")
+            Define.Input("text", StringType, description = "the chat message's contents")],
           fun ctx _ ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
             let chatRoomId = ChatRoomId (ctx.Arg("chatRoomId"))
@@ -545,13 +544,13 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> bindR
+            |> Result.bind
                 (fun (organization, theMember) ->
                   chatRoomId
                   |> validateChatRoomExistence organization
-                  |> mapR (fun chatRoom -> (organization, chatRoom, theMember))
+                  |> Result.map (fun chatRoom -> (organization, chatRoom, theMember))
                 )
-            |> mapR
+            |> Result.map
                 (fun (_, chatRoom, theMember) ->
                   let newChatRoomMessage =
                     { Id = MessageId (Guid.NewGuid())
@@ -574,12 +573,12 @@ module Schema =
         )
         Define.Field(
           "editChatMessage",
-          SchemaDefinitions.Boolean,
-          [ Define.Input("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization the chat room and member are in")
-            Define.Input("chatRoomId", SchemaDefinitions.Guid, description = "the chat room's ID")
-            Define.Input("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
-            Define.Input("messageId", SchemaDefinitions.Guid, description = "the existing message's ID")
-            Define.Input("text", SchemaDefinitions.String, description = "the chat message's contents")],
+          BooleanType,
+          [ Define.Input("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
+            Define.Input("chatRoomId", GuidType, description = "the chat room's ID")
+            Define.Input("memberId", GuidType, description = "the member's private ID")
+            Define.Input("messageId", GuidType, description = "the existing message's ID")
+            Define.Input("text", StringType, description = "the chat message's contents")],
           fun ctx _ ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
             let chatRoomId = ChatRoomId (ctx.Arg("chatRoomId"))
@@ -589,14 +588,14 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> bindR
+            |> Result.bind
                 (fun (organization, theMember) ->
                   chatRoomId
                   |> validateChatRoomExistence organization
-                  |> bindR (fun chatRoom -> messageId |> validateMessageExistence chatRoom |> mapR (fun x -> (chatRoom, x)))
-                  |> mapR (fun (chatRoom, chatMessage) -> (organization, chatRoom, theMember, chatMessage))
+                  |> Result.bind (fun chatRoom -> messageId |> validateMessageExistence chatRoom |> Result.map (fun x -> (chatRoom, x)))
+                  |> Result.map (fun (chatRoom, chatMessage) -> (organization, chatRoom, theMember, chatMessage))
                 )
-            |> mapR
+            |> Result.map
                 (fun (_, chatRoom, theMember, chatMessage) ->
                   let newChatRoomMessage =
                     { Id = chatMessage.Id
@@ -619,11 +618,11 @@ module Schema =
         )
         Define.Field(
           "deleteChatMessage",
-          SchemaDefinitions.Boolean,
-          [ Define.Input("organizationId", SchemaDefinitions.Guid, description = "the ID of the organization the chat room and member are in")
-            Define.Input("chatRoomId", SchemaDefinitions.Guid, description = "the chat room's ID")
-            Define.Input("memberId", SchemaDefinitions.Guid, description = "the member's private ID")
-            Define.Input("messageId", SchemaDefinitions.Guid, description = "the existing message's ID")],
+          BooleanType,
+          [ Define.Input("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
+            Define.Input("chatRoomId", GuidType, description = "the chat room's ID")
+            Define.Input("memberId", GuidType, description = "the member's private ID")
+            Define.Input("messageId", GuidType, description = "the existing message's ID")],
           fun ctx _ ->
             let organizationId = OrganizationId (ctx.Arg("organizationId"))
             let chatRoomId = ChatRoomId (ctx.Arg("chatRoomId"))
@@ -632,14 +631,14 @@ module Schema =
 
             memberPrivId
             |> authenticateMemberInOrganization organizationId
-            |> bindR
+            |> Result.bind
                 (fun (organization, theMember) ->
                   chatRoomId
                   |> validateChatRoomExistence organization
-                  |> bindR (fun chatRoom -> messageId |> validateMessageExistence chatRoom |> mapR (fun x -> (chatRoom, x)))
-                  |> mapR (fun (chatRoom, chatMessage) -> (organization, chatRoom, theMember, chatMessage))
+                  |> Result.bind (fun chatRoom -> messageId |> validateMessageExistence chatRoom |> Result.map (fun x -> (chatRoom, x)))
+                  |> Result.map (fun (chatRoom, chatMessage) -> (organization, chatRoom, theMember, chatMessage))
                 )
-            |> mapR
+            |> Result.map
                 (fun (_, chatRoom, theMember, chatMessage) ->
                   FakePersistence.ChatRoomMessages <-
                     FakePersistence.ChatRoomMessages
@@ -661,7 +660,7 @@ module Schema =
       description = "contains general request information",
       isTypeOf = (fun o -> o :? Root),
       fieldsFn = fun () ->
-      [ Define.Field("requestId", SchemaDefinitions.String, "The request's unique ID.", fun _ (r : Root) -> r.RequestId) ]
+      [ Define.Field("requestId", StringType, "The request's unique ID.", fun _ (r : Root) -> r.RequestId) ]
     )
 
   let subscription =
@@ -673,8 +672,8 @@ module Schema =
           rootDef,
           chatRoomEventDef,
           "events related to a specific chat room",
-          [ Define.Input("chatRoomId", SchemaDefinitions.Guid, description = "the ID of the chat room to listen to events from")
-            Define.Input("memberId", SchemaDefinitions.Guid, description = "the member's private ID")],
+          [ Define.Input("chatRoomId", GuidType, description = "the ID of the chat room to listen to events from")
+            Define.Input("memberId", GuidType, description = "the member's private ID")],
           (fun ctx _ (chatRoomEvent : ChatRoomEvent) ->
             let chatRoomIdOfInterest = ChatRoomId (ctx.Arg("chatRoomId"))
             let memberId = MemberPrivateId (ctx.Arg("memberId"))
