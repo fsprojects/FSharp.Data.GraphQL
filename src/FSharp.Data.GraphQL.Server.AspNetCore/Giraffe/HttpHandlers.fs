@@ -131,7 +131,7 @@ module HttpHandlers =
                                 let! result =
                                   let variables = ImmutableDictionary.CreateRange(
                                     query.Variables
-                                    |> Map.map (fun _ value ->  value :?> JsonElement)
+                                    |> Map.map (fun _ value ->  JsonSerializer.SerializeToElement(value))
                                   )
                                   executor.AsyncExecute(
                                       query.ExecutionPlan,
