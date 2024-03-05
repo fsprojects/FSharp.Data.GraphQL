@@ -45,7 +45,7 @@ module Program =
             .UseGiraffe
                 (HttpHandlers.handleGraphQL<Root>
                     applicationLifetime.ApplicationStopping
-                    (loggerFactory.CreateLogger("HttpHandlers.handlerGraphQL"))
+                    (loggerFactory.CreateLogger("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
                 )
 
         app.Run()
