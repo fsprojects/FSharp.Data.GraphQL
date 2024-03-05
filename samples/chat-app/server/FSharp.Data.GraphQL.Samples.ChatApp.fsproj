@@ -5,7 +5,7 @@
     <RootNamespace>FSharp.Data.GraphQL.Samples.ChatApp</RootNamespace>
   </PropertyGroup>
 
-  <ItemGroup Label="PackageReferences">
+  <ItemGroup>
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
   </ItemGroup>
 
