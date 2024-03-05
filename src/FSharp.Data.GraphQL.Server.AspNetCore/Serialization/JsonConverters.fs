@@ -37,7 +37,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
     if reader.Read() then
       getOptionalString(&reader)
     else
-      raiseInvalidMsg <| sprintf "was expecting a value for property \"%s\"" propertyName
+      raiseInvalidMsg <| $"was expecting a value for property \"%s{propertyName}\""
 
   let requireId (raw : RawMessage) : Result<string, ClientMessageProtocolFailure> =
     match raw.Id with
@@ -56,7 +56,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
       | Some subscribePayload ->
         match subscribePayload.Query with
         | None ->
-          invalidMsg <| sprintf "there was no query in the client's subscribe message!"
+          invalidMsg <| "there was no query in the client's subscribe message!"
         | Some query ->
           query
           |> GraphQLQueryDecoding.decodeGraphQLQuery serializerOptions executor subscribePayload.OperationName subscribePayload.Variables
@@ -65,7 +65,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
 
   let readRawMessage (reader : byref<Utf8JsonReader>, options: JsonSerializerOptions) : RawMessage =
     if not (reader.TokenType.Equals(JsonTokenType.StartObject))
-      then raise (new JsonException((sprintf "reader's first token was not \"%A\", but \"%A\"" JsonTokenType.StartObject reader.TokenType)))
+      then raise (new JsonException($"reader's first token was not \"%A{JsonTokenType.StartObject}\", but \"%A{reader.TokenType}\""))
     else
       let mutable id : string option = None
       let mutable theType : string option = None
@@ -79,7 +79,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
         | "payload" ->
           payload <- Some <| JsonDocument.ParseValue(&reader)
         | other ->
-          raiseInvalidMsg <| sprintf "unknown property \"%s\"" other
+          raiseInvalidMsg <| $"unknown property \"%s{other}\""
 
       match theType with
       | None ->
@@ -115,7 +115,7 @@ type ClientMessageConverter<'Root>(executor : Executor<'Root>) =
       |> Result.map Subscribe
       |> unpackRopResult
     | other ->
-      raiseInvalidMsg <| sprintf "invalid type \"%s\" specified by client." other
+      raiseInvalidMsg <| $"invalid type \"%s{other}\" specified by client."
 
 
 

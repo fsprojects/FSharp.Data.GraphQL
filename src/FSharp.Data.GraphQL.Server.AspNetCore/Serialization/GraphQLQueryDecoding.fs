@@ -8,7 +8,7 @@ module GraphQLQueryDecoding =
   open FsToolkit.ErrorHandling
 
   let genericErrorContentForDoc (docId: int) (message: string) =
-    struct (docId, [GQLProblemDetails.Create ((sprintf "%s" message), Skip)])
+    struct (docId, [GQLProblemDetails.Create (message, Skip)])
 
   let genericFinalErrorForDoc (docId: int) (message: string) =
     Result.Error (genericErrorContentForDoc docId message)
@@ -22,7 +22,7 @@ module GraphQLQueryDecoding =
         try
           if (not (variableValuesObj.RootElement.ValueKind.Equals(JsonValueKind.Object))) then
             let offendingValueKind = variableValuesObj.RootElement.ValueKind
-            return! Result.Error (sprintf "\"variables\" must be an object, but here it is \"%A\" instead" offendingValueKind)
+            return! Result.Error ($"\"variables\" must be an object, but here it is \"%A{offendingValueKind}\" instead")
           else
             let providedVariableValues = variableValuesObj.RootElement.EnumerateObject() |> List.ofSeq
             return! Ok
@@ -46,9 +46,9 @@ module GraphQLQueryDecoding =
               |> Map.ofList)
         with
           | :? JsonException as ex ->
-            return! Result.Error (sprintf "%s" (ex.Message))
+            return! Result.Error (ex.Message)
           | :? GraphQLException as ex ->
-            return! Result.Error (sprintf "%s" (ex.Message))
+            return! Result.Error (ex.Message)
           | ex ->
             printfn "%s" (ex.ToString())
             return! Result.Error ("Something unexpected happened during the parsing of this request.")
@@ -67,9 +67,9 @@ module GraphQLQueryDecoding =
               return! executor.CreateExecutionPlan(query)
         with
           | :? JsonException as ex ->
-            return! genericFinalError (sprintf "%s" (ex.Message))
+            return! genericFinalError (ex.Message)
           | :? GraphQLException as ex ->
-            return! genericFinalError (sprintf "%s" (ex.Message))
+            return! genericFinalError (ex.Message)
       }
 
     executionPlanResult
@@ -81,7 +81,7 @@ module GraphQLQueryDecoding =
             variableValuesObj
             |> resolveVariables serializerOptions executionPlan.Variables
             |> Result.map (fun variableValsObj -> (executionPlan, variableValsObj))
-            |> Result.mapError (fun x -> sprintf "%s" x |> genericErrorContentForDoc executionPlan.DocumentId)
+            |> Result.mapError (genericErrorContentForDoc executionPlan.DocumentId)
       )
     |> Result.map (fun (executionPlan, variables) ->
               { ExecutionPlan = executionPlan

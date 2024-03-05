@@ -194,7 +194,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         output
         |> sendOutput id
       | SubscriptionErrors (output, errors) ->
-        printfn "Subscription errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> sprintf "- %s" x.Message)))
+        printfn "Subscription errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
         Task.FromResult(())
 
     let sendDeferredResponseOutput id deferredResult =
@@ -204,7 +204,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
         output
         |> sendOutput id
       | DeferredErrors (obj, errors, _) ->
-        printfn "Deferred response errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> sprintf "- %s" x.Message)))
+        printfn "Deferred response errors: %s" (String.Join('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
         Task.FromResult(())
 
     let sendDeferredResultDelayedBy (cancToken: CancellationToken) (ms: int) id deferredResult =
@@ -233,12 +233,12 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                 do! data
                     |> sendOutput id
             | RequestError problemDetails ->
-                printfn "Request error: %s" (String.Join('\n', problemDetails |> Seq.map (fun x -> sprintf "- %s" x.Message)))
+                printfn "Request error: %s" (String.Join('\n', problemDetails |> Seq.map (fun x -> $"- %s{x.Message}")))
         }
 
     let getStrAddendumOfOptionalPayload optionalPayload =
         optionalPayload
-        |> Option.map (fun payloadStr -> sprintf " with payload: %A" payloadStr)
+        |> Option.map (fun payloadStr -> $" with payload: %A{payloadStr}")
         |> Option.defaultWith (fun () -> "")
 
     let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
@@ -291,7 +291,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
                       if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
                         do! socket.CloseAsync(
                           enum CustomWebSocketStatus.subscriberAlreadyExists,
-                          sprintf "Subscriber for %s already exists" id,
+                          $"Subscriber for %s{id} already exists",
                           CancellationToken.None)
                       else
                         let variables = ImmutableDictionary.CreateRange(query.Variables |> Map.map (fun _ value -> value :?> JsonElement))
@@ -375,7 +375,7 @@ type GraphQLWebSocketMiddleware<'Root>(next : RequestDelegate, applicationLifeti
             |> waitForConnectionInitAndRespondToClient options.SerializerOptions options.WebsocketOptions.ConnectionInitTimeoutInMs
           match connectionInitResult with
           | Result.Error errMsg ->
-            logger.LogWarning("{warningmsg}", (sprintf "%A" errMsg))
+            logger.LogWarning("{warningmsg}", ($"%A{errMsg}"))
           | Ok _ ->
             let longRunningCancellationToken =
               (CancellationTokenSource.CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping).Token)

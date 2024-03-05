@@ -76,7 +76,8 @@ module HttpHandlers =
                   return Ok deserialized
                 with
                 | :? GraphQLException as ex ->
-                  return Result.Error [sprintf "%s" (ex.Message)]
+                  logger.LogError(``exception`` = ex, message = "Error while deserializing request.")
+                  return Result.Error [$"%s{ex.Message}\n%s{ex.ToString()}"]
               }
 
             let applyPlanExecutionResult (result : GQLExecutionResult) =
@@ -106,7 +107,7 @@ module HttpHandlers =
                         | None ->
                             let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
                             if logger.IsEnabled(LogLevel.Debug) then
-                                logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
+                                logger.LogDebug($"Result metadata: %A{result.Metadata}")
                             else
                                 ()
                             return! result |> applyPlanExecutionResult
@@ -124,7 +125,7 @@ module HttpHandlers =
                                     httpOk cancellationToken interceptor serializerOptions (GQLResponse.RequestError (docId, probDetails)) next ctx
                             | Ok query ->
                                 if logger.IsEnabled(LogLevel.Debug) then
-                                    logger.LogDebug(sprintf "Received query: %A" query)
+                                    logger.LogDebug($"Received query: %A{query}")
                                 else
                                     ()
                                 let root = rootFactory(ctx)
@@ -139,7 +140,7 @@ module HttpHandlers =
                                       variables = variables
                                   )|> Async.StartAsTask
                                 if logger.IsEnabled(LogLevel.Debug) then
-                                    logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
+                                    logger.LogDebug($"Result metadata: %A{result.Metadata}")
                                 else
                                     ()
                                 return! result |> applyPlanExecutionResult
@@ -147,7 +148,7 @@ module HttpHandlers =
             if ctx.Request.Headers.ContentLength.GetValueOrDefault(0) = 0 then
                 let! result = executor.AsyncExecute (IntrospectionQuery.Definition) |> Async.StartAsTask
                 if logger.IsEnabled(LogLevel.Debug) then
-                    logger.LogDebug(sprintf "Result metadata: %A" result.Metadata)
+                    logger.LogDebug($"Result metadata: %A{result.Metadata}")
                 else
                     ()
                 return! result |> applyPlanExecutionResult

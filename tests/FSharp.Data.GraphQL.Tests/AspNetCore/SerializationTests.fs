@@ -22,7 +22,7 @@ let ``Deserializes ConnectionInit correctly`` () =
     match result with
     | ConnectionInit None -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A'" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ConnectionInit with payload correctly`` () =
@@ -35,7 +35,7 @@ let ``Deserializes ConnectionInit with payload correctly`` () =
     match result with
     | ConnectionInit _ -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A'" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ClientPing correctly`` () =
@@ -48,7 +48,7 @@ let ``Deserializes ClientPing correctly`` () =
     match result with
     | ClientPing None -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value '%A'" other)
+        Assert.Fail($"unexpected actual value '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ClientPing with payload correctly`` () =
@@ -61,7 +61,7 @@ let ``Deserializes ClientPing with payload correctly`` () =
     match result with
     | ClientPing _ -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value '%A" other)
+        Assert.Fail($"unexpected actual value '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ClientPong correctly`` () =
@@ -74,7 +74,7 @@ let ``Deserializes ClientPong correctly`` () =
     match result with
     | ClientPong None -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A'" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ClientPong with payload correctly`` () =
@@ -87,7 +87,7 @@ let ``Deserializes ClientPong with payload correctly`` () =
     match result with
     | ClientPong _ -> () // <-- expected
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A'" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
 let ``Deserializes ClientComplete correctly``() =
@@ -101,7 +101,7 @@ let ``Deserializes ClientComplete correctly``() =
     | ClientComplete id ->
         Assert.Equal("65fca2b5-f149-4a70-a055-5123dea4628f", id)
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A'" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
 let ``Deserializes client subscription correctly`` () =
@@ -134,24 +134,24 @@ let ``Deserializes client subscription correctly`` () =
             | StringValue theValue ->
                 Assert.Equal("1", theValue)
             | other ->
-                Assert.Fail(sprintf "expected arg to be a StringValue, but it was: %A" other)
+                Assert.Fail($"expected arg to be a StringValue, but it was: %A{other}")
             Assert.Equal(3, watchMoonField.SelectionSet.Length)
             match watchMoonField.SelectionSet.[0] with
             | Field firstField ->
                 Assert.Equal("id", firstField.Name)
             | other ->
-                Assert.Fail(sprintf "expected field to be a Field, but it was: %A" other)
+                Assert.Fail($"expected field to be a Field, but it was: %A{other}")
             match watchMoonField.SelectionSet.[1] with
             | Field secondField ->
                 Assert.Equal("name", secondField.Name)
             | other ->
-                Assert.Fail(sprintf "expected field to be a Field, but it was: %A" other)
+                Assert.Fail($"expected field to be a Field, but it was: %A{other}")
             match watchMoonField.SelectionSet.[2] with
             | Field thirdField ->
                 Assert.Equal("isMoon", thirdField.Name)
             | other ->
-                Assert.Fail(sprintf "expected field to be a Field, but it was: %A" other)
+                Assert.Fail($"expected field to be a Field, but it was: %A{other}")
         | somethingElse ->
-            Assert.Fail(sprintf "expected it to be a field, but it was: %A" somethingElse)
+            Assert.Fail($"expected it to be a field, but it was: %A{somethingElse}")
     | other ->
-        Assert.Fail(sprintf "unexpected actual value: '%A" other)
+        Assert.Fail($"unexpected actual value: '%A{other}'")
