@@ -9,7 +9,7 @@
   },
   "profiles": {
     "http": {
-      "commandName": "Project",
+      "commandName": "http",
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "applicationUrl": "http://localhost:5092",
@@ -18,7 +18,7 @@
       }
     },
     "https": {
-      "commandName": "Project",
+      "commandName": "https",
       "dotnetRunMessages": true,
       "launchBrowser": true,
       "applicationUrl": "https://localhost:7122;http://localhost:5092",
