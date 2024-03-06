@@ -6,33 +6,26 @@ open System.Text.Json
 open Xunit
 
 let toClientMessage (theInput : string) =
-    let serializerOptions = new JsonSerializerOptions()
+    let serializerOptions = new JsonSerializerOptions ()
     serializerOptions.PropertyNameCaseInsensitive <- true
-    serializerOptions.Converters.Add(new ClientMessageConverter<Root>(TestSchema.executor))
-    serializerOptions.Converters.Add(new RawServerMessageConverter())
-    JsonSerializer.Deserialize<ClientMessage>(theInput, serializerOptions)
+    serializerOptions.Converters.Add (new ClientMessageConverter<Root> (TestSchema.executor))
+    serializerOptions.Converters.Add (new RawServerMessageConverter ())
+    JsonSerializer.Deserialize<ClientMessage> (theInput, serializerOptions)
 
 let willResultInInvalidMessage expectedExplanation input =
     try
-        let result =
-            input
-            |> toClientMessage
-        Assert.Fail(sprintf "should have failed, but succeeded with result: '%A'" result)
+        let result = input |> toClientMessage
+        Assert.Fail (sprintf "should have failed, but succeeded with result: '%A'" result)
     with
-    | :? JsonException as ex ->
-        Assert.Equal(expectedExplanation, ex.Message)
-    | :? InvalidMessageException as ex ->
-        Assert.Equal(expectedExplanation, ex.Message)
+    | :? JsonException as ex -> Assert.Equal (expectedExplanation, ex.Message)
+    | :? InvalidMessageException as ex -> Assert.Equal (expectedExplanation, ex.Message)
 
 let willResultInJsonException input =
     try
-        input
-        |> toClientMessage
-        |> ignore
-        Assert.Fail("expected that a JsonException would have already been thrown at this point")
-    with
-    | :? JsonException as ex ->
-        Assert.True(true)
+        input |> toClientMessage |> ignore
+        Assert.Fail ("expected that a JsonException would have already been thrown at this point")
+    with :? JsonException as ex ->
+        Assert.True (true)
 
 [<Fact>]
 let ``Unknown message type will result in invalid message`` () =
@@ -77,7 +70,8 @@ let ``Payload type of number in subscribe message will result in invalid message
         "payload": 42
     }
     """
-    |> willResultInInvalidMessage "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 2."
+    |> willResultInInvalidMessage
+        "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 2."
 
 [<Fact>]
 let ``No id in subscribe message will result in invalid message`` () =
@@ -98,7 +92,8 @@ let ``String payload wrongly used in subscribe will result in invalid message`` 
           "payload": "{\"query\": \"subscription { watchMoon(id: \\\"1\\\") { id name isMoon } }\"}"
        }
     """
-    |> willResultInInvalidMessage "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 79."
+    |> willResultInInvalidMessage
+        "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 79."
 
 [<Fact>]
 let ``Id is incorrectly a number in a subscribe message will result in JsonException`` () =
@@ -140,8 +135,3 @@ let ``Complete message with a null id will result in invalid message`` () =
        }
     """
     |> willResultInInvalidMessage "property \"id\" is required for this message but was not present."
-
-
-
-
-

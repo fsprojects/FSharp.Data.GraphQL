@@ -8,34 +8,44 @@ open System.Text.Json
 open Microsoft.AspNetCore.Http
 
 [<Extension>]
-type ServiceCollectionExtensions() =
+type ServiceCollectionExtensions () =
 
-  static let createStandardOptions executor rootFactory endpointUrl =
-    { SchemaExecutor = executor
-      RootFactory = rootFactory
-      SerializerOptions =
-        JsonSerializerOptions(IgnoreNullValues = true)
-        |> JsonConverterUtils.configureSerializer executor
-      WebsocketOptions =
-        { EndpointUrl = endpointUrl
-          ConnectionInitTimeoutInMs = 3000
-          CustomPingHandler = None }
+    static let createStandardOptions executor rootFactory endpointUrl = {
+        SchemaExecutor = executor
+        RootFactory = rootFactory
+        SerializerOptions =
+            JsonSerializerOptions (IgnoreNullValues = true)
+            |> JsonConverterUtils.configureSerializer executor
+        WebsocketOptions = {
+            EndpointUrl = endpointUrl
+            ConnectionInitTimeoutInMs = 3000
+            CustomPingHandler = None
+        }
     }
 
-  [<Extension>]
-  static member AddGraphQLOptions<'Root>(this : IServiceCollection, executor : Executor<'Root>, rootFactory : HttpContext -> 'Root, endpointUrl : string) =
-    this.AddSingleton<GraphQLOptions<'Root>>(createStandardOptions executor rootFactory endpointUrl)
+    [<Extension>]
+    static member AddGraphQLOptions<'Root>
+        (
+            this : IServiceCollection,
+            executor : Executor<'Root>,
+            rootFactory : HttpContext -> 'Root,
+            endpointUrl : string
+        ) =
+        this.AddSingleton<GraphQLOptions<'Root>> (createStandardOptions executor rootFactory endpointUrl)
 
-  [<Extension>]
-  static member AddGraphQLOptionsWith<'Root>
-    ( this : IServiceCollection,
-      executor : Executor<'Root>,
-      rootFactory : HttpContext -> 'Root,
-      endpointUrl : string,
-      extraConfiguration : GraphQLOptions<'Root> -> GraphQLOptions<'Root>
-    ) =
-    this.AddSingleton<GraphQLOptions<'Root>>(createStandardOptions executor rootFactory endpointUrl |> extraConfiguration)
+    [<Extension>]
+    static member AddGraphQLOptionsWith<'Root>
+        (
+            this : IServiceCollection,
+            executor : Executor<'Root>,
+            rootFactory : HttpContext -> 'Root,
+            endpointUrl : string,
+            extraConfiguration : GraphQLOptions<'Root> -> GraphQLOptions<'Root>
+        ) =
+        this.AddSingleton<GraphQLOptions<'Root>> (
+            createStandardOptions executor rootFactory endpointUrl
+            |> extraConfiguration
+        )
 
-  [<Extension>]
-  static member UseWebSocketsForGraphQL<'Root>(this : IApplicationBuilder) =
-    this.UseMiddleware<GraphQLWebSocketMiddleware<'Root>>()
+    [<Extension>]
+    static member UseWebSocketsForGraphQL<'Root> (this : IApplicationBuilder) = this.UseMiddleware<GraphQLWebSocketMiddleware<'Root>> ()

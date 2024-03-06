@@ -13,42 +13,36 @@ open Microsoft.Extensions.Logging
 
 module Program =
 
-    let rootFactory (ctx : HttpContext) : Root =
-        { RequestId = ctx.TraceIdentifier }
+    let rootFactory (ctx : HttpContext) : Root = { RequestId = ctx.TraceIdentifier }
 
     let errorHandler (ex : Exception) (log : ILogger) =
-        log.LogError(EventId(), ex, "An unhandled exception has occurred while executing this request.")
+        log.LogError (EventId (), ex, "An unhandled exception has occurred while executing this request.")
         clearResponse >=> setStatusCode 500
 
     [<EntryPoint>]
     let main args =
-        let builder = WebApplication.CreateBuilder(args)
+        let builder = WebApplication.CreateBuilder (args)
         builder.Services
             .AddGiraffe()
-            .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
-            .AddGraphQLOptions<Root>(
-                Schema.executor,
-                rootFactory,
-                "/ws"
-            )
+            .Configure(Action<KestrelServerOptions> (fun x -> x.AllowSynchronousIO <- true))
+            .AddGraphQLOptions<Root> (Schema.executor, rootFactory, "/ws")
         |> ignore
 
-        let app = builder.Build()
+        let app = builder.Build ()
 
-        let applicationLifetime = app.Services.GetRequiredService<IHostApplicationLifetime>()
-        let loggerFactory = app.Services.GetRequiredService<ILoggerFactory>()
+        let applicationLifetime = app.Services.GetRequiredService<IHostApplicationLifetime> ()
+        let loggerFactory = app.Services.GetRequiredService<ILoggerFactory> ()
 
         app
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>()
-            .UseGiraffe
-                (HttpHandlers.handleGraphQL<Root>
+            .UseGiraffe (
+                HttpHandlers.handleGraphQL<Root>
                     applicationLifetime.ApplicationStopping
-                    (loggerFactory.CreateLogger("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
-                )
+                    (loggerFactory.CreateLogger ("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
+            )
 
-        app.Run()
+        app.Run ()
 
         0 // Exit code
-
