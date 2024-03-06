@@ -24,7 +24,6 @@ module Program =
         let builder = WebApplication.CreateBuilder (args)
         builder.Services
             .AddGiraffe()
-            .Configure(Action<KestrelServerOptions> (fun x -> x.AllowSynchronousIO <- true))
             .AddGraphQLOptions<Root> (Schema.executor, rootFactory, "/ws")
         |> ignore
 

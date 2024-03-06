@@ -26,8 +26,6 @@ type Startup private () =
     member _.ConfigureServices(services: IServiceCollection) =
         services
             .AddGiraffe()
-            .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
-            .Configure(Action<IISServerOptions>(fun x -> x.AllowSynchronousIO <- true))
             .AddGraphQLOptions<Root>(
                 Schema.executor,
                 rootFactory,
