@@ -29,7 +29,6 @@ type Startup private () =
 
     member _.ConfigureServices(services: IServiceCollection) =
         services.AddGiraffe()
-                .Configure(Action<KestrelServerOptions>(fun x -> x.AllowSynchronousIO <- true))
                 .AddGraphQLOptions<Root>( // STEP 1: Setting the options
                     Schema.executor, // --> Schema.executor is defined by you somewhere else (in another file)
                     rootFactory,
@@ -48,7 +47,7 @@ type Startup private () =
             .UseGiraffe
                 (HttpHandlers.handleGraphQL<Root>
                     applicationLifetime.ApplicationStopping
-                    (loggerFactory.CreateLogger("HttpHandlers.handlerGraphQL"))
+                    (loggerFactory.CreateLogger("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
                 )
 
     member val Configuration : IConfiguration = null with get, set
@@ -94,7 +93,7 @@ Don't forget to notify subscribers about new values:
 Finally run the server (e.g. make it listen at `localhost:8086`).
 
 There's a demo chat application backend in the `samples/chat-app` folder that showcases the use of `FSharp.Data.GraphQL.Server.AspNetCore` in a real-time application scenario, that is: with usage of GraphQL subscriptions (but not only).
-The tried and trusted `star-wars-api` also shows how to use subscriptions, but is a more basic example. As a side note, the implementation in `star-wars-api` was used as a starting point for the development of `FSharp.Data.GraphQL.Server.AspNetCore`.
+The tried and trusted `star-wars-api` also shows how to use subscriptions, but is a more basic example in that regard. As a side note, the implementation in `star-wars-api` was used as a starting point for the development of `FSharp.Data.GraphQL.Server.AspNetCore`.
 
 ### Client
 Using your favorite (or not :)) client library (e.g.: [Apollo Client](https://www.apollographql.com/docs/react/get-started), [Relay](https://relay.dev), [Strawberry Shake](https://chillicream.com/docs/strawberryshake/v13), [elm-graphql](https://github.com/dillonkearns/elm-graphql) ❤️), just point to `localhost:8086/graphql` (as per the example above) and, as long as the client implements the `graphql-transport-ws` subprotocol, subscriptions should work.
