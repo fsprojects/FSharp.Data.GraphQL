@@ -24,7 +24,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\..\samples\star-wars-api\JSON.fs" Link="JSON.fs" />
     <Compile Include="TestAttributes.fs" />
     <Compile Include="Helpers.fs" />
     <Compile Include="ErrorHelpers.fs" />

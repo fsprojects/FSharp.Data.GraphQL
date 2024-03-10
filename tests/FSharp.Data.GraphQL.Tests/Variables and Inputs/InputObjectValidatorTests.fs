@@ -15,7 +15,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.ValidationResult
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 type InputRecord = { Country : string; ZipCode : string; City : string }

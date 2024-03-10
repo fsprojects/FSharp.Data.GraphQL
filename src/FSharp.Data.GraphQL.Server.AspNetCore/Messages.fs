@@ -1,9 +1,10 @@
-namespace FSharp.Data.GraphQL.Server.AspNetCore
+namespace FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 
 open System
 open System.Collections.Generic
 open System.Text.Json
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 type SubscriptionId = string
 type SubscriptionUnsubscriber = IDisposable

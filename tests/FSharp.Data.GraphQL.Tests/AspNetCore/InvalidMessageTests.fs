@@ -1,14 +1,14 @@
 module FSharp.Data.GraphQL.Tests.AspNetCore.InvalidMessageTests
 
-open FSharp.Data.GraphQL.Tests.AspNetCore
-open FSharp.Data.GraphQL.Server.AspNetCore
 open System.Text.Json
 open Xunit
+open FSharp.Data.GraphQL.Server.AspNetCore
+open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 
 let toClientMessage (theInput : string) =
     let serializerOptions = new JsonSerializerOptions ()
     serializerOptions.PropertyNameCaseInsensitive <- true
-    serializerOptions.Converters.Add (new ClientMessageConverter<Root> (TestSchema.executor))
+    serializerOptions.Converters.Add (new ClientMessageConverter())
     serializerOptions.Converters.Add (new RawServerMessageConverter ())
     JsonSerializer.Deserialize<ClientMessage> (theInput, serializerOptions)
 

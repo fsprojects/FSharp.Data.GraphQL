@@ -74,7 +74,7 @@ let greaterThanOrEqual expected actual =
 
 open System.Text.Json
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
@@ -167,7 +167,6 @@ module Observer =
         new TestObserver<'T>(sub, onReceive)
 
 open System.Runtime.CompilerServices
-open FSharp.Data.GraphQL.Types
 
 [<Extension>]
 type ExecutorExtensions =

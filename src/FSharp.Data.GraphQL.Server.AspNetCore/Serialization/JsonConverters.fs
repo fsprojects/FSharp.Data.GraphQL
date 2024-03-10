@@ -1,9 +1,11 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
-open FSharp.Data.GraphQL
 open System
 open System.Text.Json
 open System.Text.Json.Serialization
+
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 
 [<Sealed>]
 type ClientMessageConverter () =

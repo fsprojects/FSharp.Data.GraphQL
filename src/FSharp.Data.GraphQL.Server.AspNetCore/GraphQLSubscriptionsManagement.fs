@@ -1,5 +1,7 @@
 module internal FSharp.Data.GraphQL.Server.AspNetCore.GraphQLSubscriptionsManagement
 
+open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
+
 let addSubscription
     (id : SubscriptionId, unsubscriber : SubscriptionUnsubscriber, onUnsubscribe : OnUnsubscribeAction)
     (subscriptions : SubscriptionsDict)
