@@ -43,10 +43,6 @@ type Startup private () =
         let loggerFactory = app.ApplicationServices.GetRequiredService<ILoggerFactory>()
         app
             .UseGiraffeErrorHandler(errorHandler)
-            .UseGiraffe
-              (HttpHandlers.handleGraphQLWithResponseInterception<Root>
-                applicationLifeTime.ApplicationStopping
-                (loggerFactory.CreateLogger("HttpHandlers.handleGraphQL"))
-                (setHttpHeader "Request-Type" "Classic"))
+            .UseGiraffe (HttpHandlers.graphQL<Root> >=> (setHttpHeader "Request-Type" "Classic"))
 
     member val Configuration : IConfiguration = null with get, set

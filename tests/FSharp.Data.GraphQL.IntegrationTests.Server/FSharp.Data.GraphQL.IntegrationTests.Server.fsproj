@@ -16,14 +16,9 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
-    <Compile Include="..\..\samples\star-wars-api\JSON.fs" Link="JSON.fs" />
     <Compile Include="CustomSchemaTypes.fs" />
     <Compile Include="Schema.fs" />
-    <Compile Include="..\..\samples\star-wars-api\Ast.fs" Link="Ast.fs" />
-    <Compile Include="..\..\samples\star-wars-api\Parser.fs" Link="Parser.fs" />
-    <Compile Include="..\..\samples\star-wars-api\GQLRequest.fs" Link="GQLRequest.fs" />
     <None Include="..\..\samples\star-wars-api\MultipartRequest.fs" Link="MultipartRequest.fs" />
-    <Compile Include="..\..\samples\star-wars-api\HttpContext.fs" Link="HttpContext.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
