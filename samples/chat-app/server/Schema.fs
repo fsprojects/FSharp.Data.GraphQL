@@ -1,13 +1,15 @@
 namespace FSharp.Data.GraphQL.Samples.ChatApp
 
+open System
+open FsToolkit.ErrorHandling
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
-open FsToolkit.ErrorHandling
-open System
 
 type Root = { RequestId : string }
 
 module MapFrom =
+
     let memberInDb_To_Member (x : Member_In_Db) : Member = { Id = x.Id; Name = x.Name }
 
     let memberInDb_To_MeAsAMember (x : Member_In_Db) : MeAsAMember = { PrivId = x.PrivId; Id = x.Id; Name = x.Name }
