@@ -19,4 +19,9 @@ type GraphQLOptions<'Root> = {
     RootFactory : HttpContext -> 'Root
     SerializerOptions : JsonSerializerOptions
     WebsocketOptions : GraphQLTransportWSOptions
-}
+} with
+
+    member options.GetSerializerOptionsIdented () =
+        let options = JsonSerializerOptions (options.SerializerOptions)
+        options.WriteIndented <- true
+        options
