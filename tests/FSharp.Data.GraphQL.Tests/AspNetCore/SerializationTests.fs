@@ -7,16 +7,11 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 open System.Text.Json.Serialization
 
-let getStdSerializerOptions () =
-    let serializerOptions = new JsonSerializerOptions ()
-    serializerOptions.PropertyNameCaseInsensitive <- true
-    serializerOptions.Converters.Add (new ClientMessageConverter ())
-    serializerOptions.Converters.Add (new RawServerMessageConverter ())
-    serializerOptions
+let serializerOptions = Json.serializerOptions
 
 [<Fact>]
 let ``Deserializes ConnectionInit correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
+
     let input = "{\"type\":\"connection_init\"}"
 
     let result = JsonSerializer.Deserialize<ClientMessage> (input, serializerOptions)
@@ -27,7 +22,6 @@ let ``Deserializes ConnectionInit correctly`` () =
 
 [<Fact>]
 let ``Deserializes ConnectionInit with payload correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"type\":\"connection_init\", \"payload\":\"hello\"}"
 
@@ -39,7 +33,6 @@ let ``Deserializes ConnectionInit with payload correctly`` () =
 
 [<Fact>]
 let ``Deserializes ClientPing correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"type\":\"ping\"}"
 
@@ -51,7 +44,6 @@ let ``Deserializes ClientPing correctly`` () =
 
 [<Fact>]
 let ``Deserializes ClientPing with payload correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"type\":\"ping\", \"payload\":\"ping!\"}"
 
@@ -63,7 +55,6 @@ let ``Deserializes ClientPing with payload correctly`` () =
 
 [<Fact>]
 let ``Deserializes ClientPong correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"type\":\"pong\"}"
 
@@ -75,7 +66,6 @@ let ``Deserializes ClientPong correctly`` () =
 
 [<Fact>]
 let ``Deserializes ClientPong with payload correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"type\":\"pong\", \"payload\": \"pong!\"}"
 
@@ -87,7 +77,6 @@ let ``Deserializes ClientPong with payload correctly`` () =
 
 [<Fact>]
 let ``Deserializes ClientComplete correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input = "{\"id\": \"65fca2b5-f149-4a70-a055-5123dea4628f\", \"type\":\"complete\"}"
 
@@ -99,7 +88,6 @@ let ``Deserializes ClientComplete correctly`` () =
 
 [<Fact>]
 let ``Deserializes client subscription correctly`` () =
-    let serializerOptions = getStdSerializerOptions ()
 
     let input =
         """{

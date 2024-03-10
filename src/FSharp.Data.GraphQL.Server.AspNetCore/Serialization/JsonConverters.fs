@@ -36,14 +36,14 @@ type ClientMessageConverter () =
             getOptionalString (&reader)
         else
             raiseInvalidMsg
-            <| $"was expecting a value for property \"%s{propertyName}\""
+            <| $"Was expecting a value for property \"%s{propertyName}\""
 
     let requireId (raw : RawMessage) : Result<string, ClientMessageProtocolFailure> =
         match raw.Id with
         | Some s -> Ok s
         | None ->
             invalidMsg
-            <| "property \"id\" is required for this message but was not present."
+            <| "Property \"id\" is required for this message but was not present."
 
     let requireSubscribePayload
         (serializerOptions : JsonSerializerOptions)
@@ -52,14 +52,14 @@ type ClientMessageConverter () =
         match payload with
         | None ->
             invalidMsg
-            <| "payload is required for this message, but none was present."
+            <| "Payload is required for this message, but none was present."
         | Some p ->
             try
                 JsonSerializer.Deserialize<GQLRequestContent>(p, serializerOptions) |> Ok
             with
             | :? JsonException as ex ->
                 invalidMsg
-                <| $"invalid payload received: {ex.Message}."
+                <| $"Invalid payload received: {ex.Message}."
 
     let readRawMessage (reader : byref<Utf8JsonReader>, options : JsonSerializerOptions) : RawMessage =
         if not (reader.TokenType.Equals (JsonTokenType.StartObject)) then
@@ -74,10 +74,10 @@ type ClientMessageConverter () =
                 | "id" -> id <- readPropertyValueAsAString "id" &reader
                 | "type" -> theType <- readPropertyValueAsAString "type" &reader
                 | "payload" -> payload <- Some <| JsonDocument.ParseValue (&reader)
-                | other -> raiseInvalidMsg <| $"unknown property \"%s{other}\""
+                | other -> raiseInvalidMsg <| $"Unknown property \"%s{other}\""
 
             match theType with
-            | None -> raiseInvalidMsg "property \"type\" is missing"
+            | None -> raiseInvalidMsg "Property \"type\" is missing"
             | Some msgType -> { Id = id; Type = msgType; Payload = payload }
 
     override __.Read (reader : byref<Utf8JsonReader>, typeToConvert : Type, options : JsonSerializerOptions) : ClientMessage =
@@ -102,18 +102,18 @@ type ClientMessageConverter () =
             |> unpackRopResult
         | other ->
             raiseInvalidMsg
-            <| $"invalid type \"%s{other}\" specified by client."
+            <| $"Invalid type \"%s{other}\" specified by client."
 
 
     override __.Write (writer : Utf8JsonWriter, value : ClientMessage, options : JsonSerializerOptions) =
-        failwith "serializing a WebSocketClientMessage is not supported (yet(?))"
+        raise (NotSupportedException "Serializing a WebSocketClientMessage is not supported (yet(?))")
 
 [<Sealed>]
 type RawServerMessageConverter () =
     inherit JsonConverter<RawServerMessage> ()
 
     override __.Read (reader : byref<Utf8JsonReader>, typeToConvert : Type, options : JsonSerializerOptions) : RawServerMessage =
-        failwith "deserializing a RawServerMessage is not supported (yet(?))"
+        raise (NotSupportedException "deserializing a RawServerMessage is not supported (yet(?))")
 
     override __.Write (writer : Utf8JsonWriter, value : RawServerMessage, options : JsonSerializerOptions) =
         writer.WriteStartObject ()

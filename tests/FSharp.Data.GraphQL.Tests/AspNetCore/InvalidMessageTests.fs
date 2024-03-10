@@ -6,10 +6,7 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 
 let toClientMessage (theInput : string) =
-    let serializerOptions = new JsonSerializerOptions ()
-    serializerOptions.PropertyNameCaseInsensitive <- true
-    serializerOptions.Converters.Add (new ClientMessageConverter())
-    serializerOptions.Converters.Add (new RawServerMessageConverter ())
+    let serializerOptions = Json.serializerOptions
     JsonSerializer.Deserialize<ClientMessage> (theInput, serializerOptions)
 
 let willResultInInvalidMessage expectedExplanation input =
@@ -23,7 +20,7 @@ let willResultInInvalidMessage expectedExplanation input =
 let willResultInJsonException input =
     try
         input |> toClientMessage |> ignore
-        Assert.Fail ("expected that a JsonException would have already been thrown at this point")
+        Assert.Fail ("Expected that a JsonException would have already been thrown at this point")
     with :? JsonException as ex ->
         Assert.True (true)
 
@@ -33,7 +30,7 @@ let ``Unknown message type will result in invalid message`` () =
           "type": "connection_start"
        }
     """
-    |> willResultInInvalidMessage "invalid type \"connection_start\" specified by client."
+    |> willResultInInvalidMessage "Invalid type \"connection_start\" specified by client."
 
 [<Fact>]
 let ``Type not specified will result in invalid message`` () =
@@ -41,7 +38,7 @@ let ``Type not specified will result in invalid message`` () =
           "payload": "hello, let us connect"
        }
     """
-    |> willResultInInvalidMessage "property \"type\" is missing"
+    |> willResultInInvalidMessage "Property \"type\" is missing"
 
 [<Fact>]
 let ``No payload in subscribe message will result in invalid message`` () =
@@ -50,7 +47,7 @@ let ``No payload in subscribe message will result in invalid message`` () =
           "id": "b5d4d2ff-d262-4882-a7b9-d6aec5e4faa6"
        }
     """
-    |> willResultInInvalidMessage "payload is required for this message, but none was present."
+    |> willResultInInvalidMessage "Payload is required for this message, but none was present."
 
 [<Fact>]
 let ``Null payload json in subscribe message will result in invalid message`` () =
@@ -60,7 +57,7 @@ let ``Null payload json in subscribe message will result in invalid message`` ()
           "payload": null
        }
     """
-    |> willResultInInvalidMessage "payload is required for this message, but none was present."
+    |> willResultInInvalidMessage "Invalid payload received: Failed to parse type FSharp.Data.GraphQL.Server.AspNetCore.GQLRequestContent: expected JSON object, found Null."
 
 [<Fact>]
 let ``Payload type of number in subscribe message will result in invalid message`` () =
@@ -71,7 +68,7 @@ let ``Payload type of number in subscribe message will result in invalid message
     }
     """
     |> willResultInInvalidMessage
-        "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 2."
+        "Invalid payload received: Failed to parse type FSharp.Data.GraphQL.Server.AspNetCore.GQLRequestContent: expected JSON object, found Number."
 
 [<Fact>]
 let ``No id in subscribe message will result in invalid message`` () =
@@ -82,7 +79,7 @@ let ``No id in subscribe message will result in invalid message`` () =
           }
        }
     """
-    |> willResultInInvalidMessage "property \"id\" is required for this message but was not present."
+    |> willResultInInvalidMessage "Property \"id\" is required for this message but was not present."
 
 [<Fact>]
 let ``String payload wrongly used in subscribe will result in invalid message`` () =
@@ -93,7 +90,7 @@ let ``String payload wrongly used in subscribe will result in invalid message`` 
        }
     """
     |> willResultInInvalidMessage
-        "The JSON value could not be converted to FSharp.Data.GraphQL.Server.AspNetCore.GraphQLRequest. Path: $ | LineNumber: 0 | BytePositionInLine: 79."
+        "Invalid payload received: Failed to parse type FSharp.Data.GraphQL.Server.AspNetCore.GQLRequestContent: expected JSON object, found String."
 
 [<Fact>]
 let ``Id is incorrectly a number in a subscribe message will result in JsonException`` () =
@@ -117,7 +114,7 @@ let ``Typo in one of the messages root properties will result in invalid message
         }
     }
     """
-    |> willResultInInvalidMessage "unknown property \"typo\""
+    |> willResultInInvalidMessage "Unknown property \"typo\""
 
 [<Fact>]
 let ``Complete message without an id will result in invalid message`` () =
@@ -125,7 +122,7 @@ let ``Complete message without an id will result in invalid message`` () =
         "type": "complete"
        }
     """
-    |> willResultInInvalidMessage "property \"id\" is required for this message but was not present."
+    |> willResultInInvalidMessage "Property \"id\" is required for this message but was not present."
 
 [<Fact>]
 let ``Complete message with a null id will result in invalid message`` () =
@@ -134,4 +131,4 @@ let ``Complete message with a null id will result in invalid message`` () =
         "id": null
        }
     """
-    |> willResultInInvalidMessage "property \"id\" is required for this message but was not present."
+    |> willResultInInvalidMessage "Property \"id\" is required for this message but was not present."
