@@ -1,18 +1,19 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
-open FSharp.Data.GraphQL
-open Microsoft.AspNetCore.Http
 open System
 open System.Collections.Generic
 open System.Net.WebSockets
 open System.Text.Json
+open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
-open FSharp.Data.GraphQL.Execution
-open FsToolkit.ErrorHandling
+open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
-open System.Collections.Immutable
+open FsToolkit.ErrorHandling
+
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Execution
 
 type GraphQLWebSocketMiddleware<'Root>
     (
@@ -87,7 +88,7 @@ type GraphQLWebSocketMiddleware<'Root>
             return Some result
     }
 
-    let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) = task {
+    let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) : Task = task {
         if not (socket.State = WebSocketState.Open) then
             logger.LogTrace ("Ignoring message to be sent via socket, since its state is not 'Open', but '{state}'", socket.State)
         else
@@ -104,7 +105,7 @@ type GraphQLWebSocketMiddleware<'Root>
 
     let addClientSubscription
         (id : SubscriptionId)
-        (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Task<unit>)
+        (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Task)
         (subscriptions : SubscriptionsDict,
          socket : WebSocket,
          streamSource : IObservable<'ResponseContent>,
@@ -112,14 +113,11 @@ type GraphQLWebSocketMiddleware<'Root>
         =
         let observer =
             new Reactive.AnonymousObserver<'ResponseContent> (
-                onNext = (fun theOutput -> theOutput |> howToSendDataOnNext id |> Task.WaitAll),
+                onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait()),
                 onError = (fun ex -> logger.LogError (ex, "Error on subscription with id='{id}'", id)),
                 onCompleted =
                     (fun () ->
-                        Complete id
-                        |> sendMessageViaSocket jsonSerializerOptions (socket)
-                        |> Async.AwaitTask
-                        |> Async.RunSynchronously
+                        (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait ()
                         subscriptions
                         |> GraphQLSubscriptionsManagement.removeSubscription (id))
             )
@@ -181,13 +179,13 @@ type GraphQLWebSocketMiddleware<'Root>
                 printfn "Deferred response errors: %s" (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 Task.FromResult (())
 
-        let sendDeferredResultDelayedBy (cancToken : CancellationToken) (ms : int) id deferredResult = task {
+        let sendDeferredResultDelayedBy (cancToken : CancellationToken) (ms : int) id deferredResult : Task = task {
             do! Async.StartAsTask (Async.Sleep ms, cancellationToken = cancToken)
             do! deferredResult |> sendDeferredResponseOutput id
         }
         let sendQueryOutputDelayedBy = sendDeferredResultDelayedBy cancellationToken
 
-        let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) = task {
+        let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
             match executionResult with
             | Stream observableOutput ->
                 (subscriptions, socket, observableOutput, serializerOptions)
@@ -261,14 +259,9 @@ type GraphQLWebSocketMiddleware<'Root>
                                             CancellationToken.None
                                         )
                                 else
-                                    let variables =
-                                        ImmutableDictionary.CreateRange (
-                                            query.Variables
-                                            |> Map.map (fun _ value -> value :?> JsonElement)
-                                        )
+                                    let variables = query.Variables |> Skippable.toOption
                                     let! planExecutionResult =
-                                        executor.AsyncExecute (query.ExecutionPlan, root (httpContext), variables)
-                                        |> Async.StartAsTask
+                                        executor.AsyncExecute (query.Query, root (httpContext), ?variables = variables)
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             | ClientComplete id ->
                                 "ClientComplete" |> logMsgWithIdReceived id

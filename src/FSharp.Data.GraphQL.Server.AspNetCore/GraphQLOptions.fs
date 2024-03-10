@@ -14,6 +14,11 @@ type GraphQLTransportWSOptions = {
     CustomPingHandler : PingHandler option
 }
 
+type IGraphQLOptions =
+    abstract member SerializerOptions : JsonSerializerOptions
+    abstract member WebsocketOptions : GraphQLTransportWSOptions
+    abstract member GetSerializerOptionsIdented : unit -> JsonSerializerOptions
+
 type GraphQLOptions<'Root> = {
     SchemaExecutor : Executor<'Root>
     RootFactory : HttpContext -> 'Root
@@ -25,3 +30,8 @@ type GraphQLOptions<'Root> = {
         let options = JsonSerializerOptions (options.SerializerOptions)
         options.WriteIndented <- true
         options
+
+    interface IGraphQLOptions with
+        member this.SerializerOptions = this.SerializerOptions
+        member this.WebsocketOptions = this.WebsocketOptions
+        member this.GetSerializerOptionsIdented () = this.GetSerializerOptionsIdented ()

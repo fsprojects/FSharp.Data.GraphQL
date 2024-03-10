@@ -8,7 +8,6 @@
 
   <ItemGroup Label="PackageReferences">
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
-    <PackageReference Include="Giraffe" />
     <PackageReference Include="GraphQL.Server.Ui.Playground" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />
@@ -17,12 +16,7 @@
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
     <Compile Include="Schema.fs" />
-    <Compile Include="JSON.fs" />
-    <Compile Include="Ast.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="GQLRequest.fs" />
     <None Include="MultipartRequest.fs" />
-    <Compile Include="HttpContext.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>

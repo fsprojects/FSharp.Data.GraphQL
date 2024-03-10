@@ -6,7 +6,7 @@ open System.Text.Json
 open System.Text.Json.Serialization
 
 [<Sealed>]
-type ClientMessageConverter<'Root> (executor : Executor<'Root>) =
+type ClientMessageConverter () =
     inherit JsonConverter<ClientMessage> ()
 
     let raiseInvalidMsg explanation = raise <| InvalidMessageException explanation
@@ -45,29 +45,19 @@ type ClientMessageConverter<'Root> (executor : Executor<'Root>) =
 
     let requireSubscribePayload
         (serializerOptions : JsonSerializerOptions)
-        (executor : Executor<'a>)
         (payload : JsonDocument option)
-        : Result<GraphQLQuery, ClientMessageProtocolFailure> =
+        : Result<GQLRequestContent, ClientMessageProtocolFailure> =
         match payload with
         | None ->
             invalidMsg
             <| "payload is required for this message, but none was present."
         | Some p ->
-            let rawSubsPayload = JsonSerializer.Deserialize<GraphQLRequest option> (p, serializerOptions)
-            match rawSubsPayload with
-            | None ->
+            try
+                JsonSerializer.Deserialize<GQLRequestContent>(p, serializerOptions) |> Ok
+            with
+            | :? JsonException as ex ->
                 invalidMsg
-                <| "payload is required for this message, but none was present."
-            | Some subscribePayload ->
-                match subscribePayload.Query with
-                | None ->
-                    invalidMsg
-                    <| "there was no query in the client's subscribe message!"
-                | Some query ->
-                    query
-                    |> GraphQLQueryDecoding.decodeGraphQLQuery serializerOptions executor subscribePayload.OperationName subscribePayload.Variables
-                    |> Result.mapError (fun errMsg -> InvalidMessage (CustomWebSocketStatus.invalidMessage, errMsg |> errMsgToStr))
-
+                <| $"invalid payload received: {ex.Message}."
 
     let readRawMessage (reader : byref<Utf8JsonReader>, options : JsonSerializerOptions) : RawMessage =
         if not (reader.TokenType.Equals (JsonTokenType.StartObject)) then
@@ -104,7 +94,7 @@ type ClientMessageConverter<'Root> (executor : Executor<'Root>) =
             |> requireId
             |> Result.bind (fun id ->
                 raw.Payload
-                |> requireSubscribePayload options executor
+                |> requireSubscribePayload options
                 |> Result.map (fun payload -> (id, payload)))
             |> Result.map Subscribe
             |> unpackRopResult
@@ -141,31 +131,3 @@ type RawServerMessageConverter () =
             | CustomResponse jsonDocument -> jsonDocument.WriteTo (writer)
 
         writer.WriteEndObject ()
-
-
-module JsonConverterUtils =
-
-    [<Literal>]
-    let UnionTag = "kind"
-
-    let private defaultJsonFSharpOptions =
-        JsonFSharpOptions (
-            JsonUnionEncoding.InternalTag
-            ||| JsonUnionEncoding.AllowUnorderedTag
-            ||| JsonUnionEncoding.NamedFields
-            ||| JsonUnionEncoding.UnwrapSingleCaseUnions
-            ||| JsonUnionEncoding.UnwrapRecordCases
-            ||| JsonUnionEncoding.UnwrapOption
-            ||| JsonUnionEncoding.UnwrapFieldlessTags,
-            UnionTag,
-            allowOverride = true
-        )
-    let configureSerializer (executor : Executor<'Root>) (jsonSerializerOptions : JsonSerializerOptions) =
-        jsonSerializerOptions.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-        jsonSerializerOptions.PropertyNameCaseInsensitive <- true
-        jsonSerializerOptions.Converters.Add (new JsonStringEnumConverter ())
-        jsonSerializerOptions.Converters.Add (new ClientMessageConverter<'Root> (executor))
-        jsonSerializerOptions.Converters.Add (new RawServerMessageConverter ())
-        jsonSerializerOptions
-        |> defaultJsonFSharpOptions.AddToJsonSerializerOptions
-        jsonSerializerOptions
