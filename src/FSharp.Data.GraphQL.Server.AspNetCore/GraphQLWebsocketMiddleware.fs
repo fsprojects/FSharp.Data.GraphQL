@@ -237,7 +237,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                 "ConnectionInit" |> logMsgReceivedWithOptionalPayload p
                                 do!
                                     socket.CloseAsync (
-                                        enum CustomWebSocketStatus.tooManyInitializationRequests,
+                                        enum CustomWebSocketStatus.TooManyInitializationRequests,
                                         "too many initialization requests",
                                         CancellationToken.None
                                     )
@@ -254,7 +254,7 @@ type GraphQLWebSocketMiddleware<'Root>
                                 if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
                                     do!
                                         socket.CloseAsync (
-                                            enum CustomWebSocketStatus.subscriberAlreadyExists,
+                                            enum CustomWebSocketStatus.SubscriberAlreadyExists,
                                             $"Subscriber for %s{id} already exists",
                                             CancellationToken.None
                                         )
@@ -292,7 +292,7 @@ type GraphQLWebSocketMiddleware<'Root>
             let detonationRegistration =
                 timerTokenSource.Token.Register (fun _ ->
                     socket
-                    |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.connectionTimeout, "Connection initialization timeout")
+                    |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.ConnectionTimeout, "Connection initialization timeout")
                     |> Task.WaitAll)
 
             let! connectionInitSucceeded =
@@ -311,7 +311,7 @@ type GraphQLWebSocketMiddleware<'Root>
                         | Ok (Some (Subscribe _)) ->
                             do!
                                 socket
-                                |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.unauthorized, "Unauthorized")
+                                |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
                             return false
                         | Result.Error (InvalidMessage (code, explanation)) ->
                             do!

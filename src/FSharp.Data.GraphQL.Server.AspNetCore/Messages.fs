@@ -1,9 +1,9 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
-open FSharp.Data.GraphQL.Execution
 open System
-open System.Text.Json
 open System.Collections.Generic
+open System.Text.Json
+open FSharp.Data.GraphQL.Execution
 
 type SubscriptionId = string
 type SubscriptionUnsubscriber = IDisposable
@@ -38,8 +38,8 @@ type ServerMessage =
 
 module CustomWebSocketStatus =
 
-    let invalidMessage = 4400
-    let unauthorized = 4401
-    let connectionTimeout = 4408
-    let subscriberAlreadyExists = 4409
-    let tooManyInitializationRequests = 4429
+    let InvalidMessage = 4400
+    let Unauthorized = 4401
+    let ConnectionTimeout = 4408
+    let SubscriberAlreadyExists = 4409
+    let TooManyInitializationRequests = 4429
