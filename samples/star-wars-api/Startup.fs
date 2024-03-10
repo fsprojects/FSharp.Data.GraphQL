@@ -3,17 +3,13 @@ namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 open Giraffe
 open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 open FSharp.Data.GraphQL.Server.AspNetCore
+open System
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
-open Microsoft.AspNetCore.Server.Kestrel.Core
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
-open System
 open Microsoft.Extensions.Hosting
-
-module Constants =
-  let [<Literal>] Indented = "Indented"
 
 type Startup private () =
 
@@ -51,7 +47,7 @@ type Startup private () =
             .UseGiraffe
               (HttpHandlers.handleGraphQLWithResponseInterception<Root>
                 applicationLifetime.ApplicationStopping
-                (loggerFactory.CreateLogger("HttpHandlers.handlerGraphQL"))
+                (loggerFactory.CreateLogger("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
                 (setHttpHeader "Request-Type" "Classic"))
 
     member val Configuration : IConfiguration = null with get, set
