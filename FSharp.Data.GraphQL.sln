@@ -40,6 +40,10 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "star-wars-api", "star-wars-
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Samples.StarWarsApi", "samples\star-wars-api\FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj", "{B837B3ED-83CE-446F-A4E5-44CB06AA6505}"
 EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "chat-app", "chat-app", "{24AB1F5A-4996-4DDA-87E0-B82B3A24C13F}"
+EndProject
+Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Samples.ChatApp", "samples\chat-app\server\FSharp.Data.GraphQL.Samples.ChatApp.fsproj", "{225B0790-C6B6-425C-9093-F359A4C635D3}"
+EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{BEFD8748-2467-45F9-A4AD-B450B12D5F78}"
 EndProject
 Project("{6EC3EE1D-3C4E-46DD-8F32-0CC8E7565705}") = "FSharp.Data.GraphQL.Shared", "src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj", "{6768EA38-1335-4B8E-BC09-CCDED1F9AAF6}"
@@ -169,10 +173,6 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "components", "components", 
 		user.jsx = user.jsx
 		samples\relay-modern-starter-kit\src\components\user.jsx = samples\relay-modern-starter-kit\src\components\user.jsx
 	EndProjectSection
-EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "chat-app", "chat-app", "{24AB1F5A-4996-4DDA-87E0-B82B3A24C13F}"
-EndProject
-Project("{F2A71F9B-5D33-465A-A702-920D77279786}") = "FSharp.Data.GraphQL.Samples.ChatApp", "samples\chat-app\server\FSharp.Data.GraphQL.Samples.ChatApp.fsproj", "{225B0790-C6B6-425C-9093-F359A4C635D3}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
