@@ -53,7 +53,7 @@ module HttpHandlers =
 
             match content with
             | RequestError errs ->
-                logger.LogInformation(
+                logger.LogDebug(
                     $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
                     documentId,
                     metadata
@@ -61,7 +61,7 @@ module HttpHandlers =
 
                 GQLResponse.RequestError(documentId, errs)
             | Direct(data, errs) ->
-                logger.LogInformation(
+                logger.LogDebug(
                     $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
                     documentId,
                     metadata
@@ -72,17 +72,17 @@ module HttpHandlers =
 
                 GQLResponse.Direct(documentId, data, errs)
             | Deferred(data, errs, deferred) ->
-                logger.LogInformation(
+                logger.LogDebug(
                     $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
                     documentId,
                     metadata
                 )
 
-                if logger.IsEnabled LogLevel.Information then
+                if logger.IsEnabled LogLevel.Debug then
                     deferred
                     |> Observable.add (function
                         | DeferredResult(data, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred result for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
@@ -93,7 +93,7 @@ module HttpHandlers =
                                     serializeIdented data
                                 )
                         | DeferredErrors(null, errors, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred errors for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
@@ -101,7 +101,7 @@ module HttpHandlers =
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace($"GraphQL deferred errors:{Environment.NewLine}{{errors}}", errors)
                         | DeferredErrors(data, errors, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred result with errors for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
@@ -115,17 +115,17 @@ module HttpHandlers =
 
                 GQLResponse.Direct(documentId, data, errs)
             | Stream stream ->
-                logger.LogInformation(
+                logger.LogDebug(
                     $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
                     documentId,
                     metadata
                 )
 
-                if logger.IsEnabled LogLevel.Information then
+                if logger.IsEnabled LogLevel.Debug then
                     stream
                     |> Observable.add (function
                         | SubscriptionResult data ->
-                            logger.LogInformation("Produced GraphQL subscription result")
+                            logger.LogDebug("Produced GraphQL subscription result")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
@@ -133,12 +133,12 @@ module HttpHandlers =
                                     serializeIdented data
                                 )
                         | SubscriptionErrors(null, errors) ->
-                            logger.LogInformation("Produced GraphQL subscription errors")
+                            logger.LogDebug("Produced GraphQL subscription errors")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace($"GraphQL subscription errors:{Environment.NewLine}{{errors}}", errors)
                         | SubscriptionErrors(data, errors) ->
-                            logger.LogInformation("Produced GraphQL subscription result with errors")
+                            logger.LogDebug("Produced GraphQL subscription result with errors")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
@@ -166,7 +166,7 @@ module HttpHandlers =
         /// by first checking on such properties as `GET` method or `empty request body`
         /// and lastly by parsing document AST for introspection operation definition.
         /// </summary>
-        /// <returns>Result of check of <see cref="Lula.RiskAssessment.WebHost.GraphQL.OperationType"/></returns>
+        /// <returns>Result of check of <see cref="OperationType"/></returns>
         let checkOperationType (ctx: HttpContext) = taskResult {
 
             let checkAnonymousFieldsOnly (ctx: HttpContext) = taskResult {
