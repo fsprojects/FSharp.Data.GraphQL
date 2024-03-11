@@ -245,18 +245,25 @@ module HttpHandlers =
 
             let root = options.RootFactory ctx
 
-            let! result = executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName)
+            let! result =
+                Async.StartAsTask(
+                    executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName),
+                    cancellationToken = ctx.RequestAborted
+                )
 
             let response = result |> toResponse
             return Results.Ok response
         }
 
-        taskResult {
-            let executor = options.SchemaExecutor
-            match! checkOperationType ctx with
-            | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
-            | OperationQuery content -> return! executeOperation executor content
-        }
-        |> ofTaskIResult2 ctx
+        if ctx.RequestAborted.IsCancellationRequested then
+            Task.FromResult None
+        else
+            taskResult {
+                let executor = options.SchemaExecutor
+                match! checkOperationType ctx with
+                | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
+                | OperationQuery content -> return! executeOperation executor content
+            }
+            |> ofTaskIResult2 ctx
 
     let graphQL<'Root> : HttpHandler = choose [ POST; GET ] >=> handleGraphQL<'Root>
