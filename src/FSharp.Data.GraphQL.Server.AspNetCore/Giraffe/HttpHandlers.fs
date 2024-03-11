@@ -33,11 +33,6 @@ module HttpHandlers =
         |> TaskResult.defaultWith id
         |> ofTaskIResult ctx
 
-    /// Set CORS to allow external servers (React samples) to call this API
-    let setCorsHeaders : HttpHandler =
-        setHttpHeader "Access-Control-Allow-Origin" "*"
-        >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
-
     let private handleGraphQL<'Root> (next : HttpFunc) (ctx : HttpContext) =
         let sp = ctx.RequestServices
 
@@ -258,11 +253,10 @@ module HttpHandlers =
 
         taskResult {
             let executor = options.SchemaExecutor
-            ctx.Response.Headers.Add("Request-Type", "Classic") // For integration testing purposes
             match! checkOperationType ctx with
             | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
             | OperationQuery content -> return! executeOperation executor content
         }
         |> ofTaskIResult2 ctx
 
-    let graphQL<'Root> : HttpHandler = setCorsHeaders >=> choose [ POST; GET ] >=> handleGraphQL<'Root>
+    let graphQL<'Root> : HttpHandler = choose [ POST; GET ] >=> handleGraphQL<'Root>

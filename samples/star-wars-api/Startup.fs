@@ -46,8 +46,11 @@ type Startup private () =
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>()
             .UseGiraffe (
-                HttpHandlers.graphQL<Root>
-                >=> (setHttpHeader "Request-Type" "Classic")
+                // Set CORS to allow external servers (React samples) to call this API
+                setHttpHeader "Access-Control-Allow-Origin" "*"
+                >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
+                >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
+                >=> HttpHandlers.graphQL<Root>
             )
 
     member val Configuration : IConfiguration = null with get, set
