@@ -11,7 +11,7 @@ open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 type ClientMessageConverter () =
     inherit JsonConverter<ClientMessage> ()
 
-    let raiseInvalidMsg explanation = raise <| InvalidMessageException explanation
+    let raiseInvalidMsg explanation = raise <| InvalidWebsocketMessageException explanation
 
     /// From the spec: "Receiving a message of a type or format which is not specified in this document will result in an immediate socket closure with the event 4400: &lt;error-message&gt;.
     /// The &lt;error-message&gt; can be vaguely descriptive on why the received message is invalid."

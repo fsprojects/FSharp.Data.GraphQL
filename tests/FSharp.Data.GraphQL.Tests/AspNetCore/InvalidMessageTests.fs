@@ -15,7 +15,7 @@ let willResultInInvalidMessage expectedExplanation input =
         Assert.Fail (sprintf "should have failed, but succeeded with result: '%A'" result)
     with
     | :? JsonException as ex -> Assert.Equal (expectedExplanation, ex.Message)
-    | :? InvalidMessageException as ex -> Assert.Equal (expectedExplanation, ex.Message)
+    | :? InvalidWebsocketMessageException as ex -> Assert.Equal (expectedExplanation, ex.Message)
 
 let willResultInJsonException input =
     try

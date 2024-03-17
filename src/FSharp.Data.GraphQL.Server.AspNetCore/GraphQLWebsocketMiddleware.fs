@@ -48,7 +48,7 @@ type GraphQLWebSocketMiddleware<'Root>
         try
             return JsonSerializer.Deserialize<ClientMessage> (msg, serializerOptions)
         with
-        | :? InvalidMessageException as e -> return! Result.Error <| InvalidMessage (4400, e.Message.ToString ())
+        | :? InvalidWebsocketMessageException as e -> return! Result.Error <| InvalidMessage (4400, e.Message.ToString ())
         | :? JsonException as e ->
             if logger.IsEnabled (LogLevel.Debug) then
                 logger.LogDebug (e.ToString ())
