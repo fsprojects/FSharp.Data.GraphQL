@@ -10,6 +10,7 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -22,18 +23,24 @@ type GraphQLWebSocketMiddleware<'Root>
         applicationLifetime : IHostApplicationLifetime,
         serviceProvider : IServiceProvider,
         logger : ILogger<GraphQLWebSocketMiddleware<'Root>>,
-        options : GraphQLOptions<'Root>
+        options : IOptions<GraphQLOptions<'Root>>
     ) =
+
+    let options = options.Value
+    let serializerOptions = options.SerializerOptions
+    let pingHandler = options.WebsocketOptions.CustomPingHandler
+    let endpointUrl = PathString options.WebsocketOptions.EndpointUrl
+    let connectionInitTimeout = options.WebsocketOptions.ConnectionInitTimeoutInMs
 
     let serializeServerMessage (jsonSerializerOptions : JsonSerializerOptions) (serverMessage : ServerMessage) = task {
         let raw =
             match serverMessage with
-            | ConnectionAck -> { Id = None; Type = "connection_ack"; Payload = None }
-            | ServerPing -> { Id = None; Type = "ping"; Payload = None }
-            | ServerPong p -> { Id = None; Type = "pong"; Payload = p |> Option.map CustomResponse }
-            | Next (id, payload) -> { Id = Some id; Type = "next"; Payload = Some <| ExecutionResult payload }
-            | Complete id -> { Id = Some id; Type = "complete"; Payload = None }
-            | Error (id, errMsgs) -> { Id = Some id; Type = "error"; Payload = Some <| ErrorMessages errMsgs }
+            | ConnectionAck -> { Id = ValueNone; Type = "connection_ack"; Payload = ValueNone }
+            | ServerPing -> { Id = ValueNone; Type = "ping"; Payload = ValueNone }
+            | ServerPong p -> { Id = ValueNone; Type = "pong"; Payload = p |> ValueOption.map CustomResponse }
+            | Next (id, payload) -> { Id = ValueSome id; Type = "next"; Payload = ValueSome <| ExecutionResult payload }
+            | Complete id -> { Id = ValueSome id; Type = "complete"; Payload = ValueNone }
+            | Error (id, errMsgs) -> { Id = ValueSome id; Type = "error"; Payload = ValueSome <| ErrorMessages errMsgs }
         return JsonSerializer.Serialize (raw, jsonSerializerOptions)
     }
 
@@ -83,10 +90,10 @@ type GraphQLWebSocketMiddleware<'Root>
             |> Array.ofSeq
             |> System.Text.Encoding.UTF8.GetString
         if String.IsNullOrWhiteSpace message then
-            return None
+            return ValueNone
         else
             let! result = message |> deserializeClientMessage serializerOptions
-            return Some result
+            return ValueSome result
     }
 
     let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) : Task = task {
@@ -137,15 +144,7 @@ type GraphQLWebSocketMiddleware<'Root>
     let tryToGracefullyCloseSocketWithDefaultBehavior =
         tryToGracefullyCloseSocket (WebSocketCloseStatus.NormalClosure, "Normal Closure")
 
-    let handleMessages
-        (cancellationToken : CancellationToken)
-        (httpContext : HttpContext)
-        (serializerOptions : JsonSerializerOptions)
-        (executor : Executor<'Root>)
-        (root : HttpContext -> 'Root)
-        (pingHandler : PingHandler option)
-        (socket : WebSocket)
-        =
+    let handleMessages (cancellationToken : CancellationToken) (httpContext : HttpContext) (socket : WebSocket) : Task =
         let subscriptions = new Dictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction> ()
         // ---------->
         // Helpers -->
@@ -204,8 +203,8 @@ type GraphQLWebSocketMiddleware<'Root>
 
         let getStrAddendumOfOptionalPayload optionalPayload =
             optionalPayload
-            |> Option.map (fun payloadStr -> $" with payload: %A{payloadStr}")
-            |> Option.defaultWith (fun () -> "")
+            |> ValueOption.map (fun payloadStr -> $" with payload: %A{payloadStr}")
+            |> ValueOption.defaultWith (fun () -> "")
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
             logger.LogTrace ("{message}{messageaddendum}", msgAsStr, (optionalPayload |> getStrAddendumOfOptionalPayload))
@@ -226,13 +225,13 @@ type GraphQLWebSocketMiddleware<'Root>
                     let! receivedMessage = rcv ()
                     match receivedMessage with
                     | Result.Error failureMsgs ->
-                        "InvalidMessage" |> logMsgReceivedWithOptionalPayload None
+                        "InvalidMessage" |> logMsgReceivedWithOptionalPayload ValueNone
                         match failureMsgs with
                         | InvalidMessage (code, explanation) -> do! socket.CloseAsync (enum code, explanation, CancellationToken.None)
                     | Ok maybeMsg ->
                         match maybeMsg with
-                        | None -> logger.LogTrace ("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
-                        | Some msg ->
+                        | ValueNone -> logger.LogTrace ("Websocket socket received empty message! (socket state = {socketstate})", socket.State)
+                        | ValueSome msg ->
                             match msg with
                             | ConnectionInit p ->
                                 "ConnectionInit" |> logMsgReceivedWithOptionalPayload p
@@ -245,10 +244,10 @@ type GraphQLWebSocketMiddleware<'Root>
                             | ClientPing p ->
                                 "ClientPing" |> logMsgReceivedWithOptionalPayload p
                                 match pingHandler with
-                                | Some func ->
+                                | ValueSome func ->
                                     let! customP = p |> func serviceProvider
                                     do! ServerPong customP |> sendMsg
-                                | None -> do! ServerPong p |> sendMsg
+                                | ValueNone -> do! ServerPong p |> sendMsg
                             | ClientPong p -> "ClientPong" |> logMsgReceivedWithOptionalPayload p
                             | Subscribe (id, query) ->
                                 "Subscribe" |> logMsgWithIdReceived id
@@ -262,7 +261,8 @@ type GraphQLWebSocketMiddleware<'Root>
                                 else
                                     let variables = query.Variables |> Skippable.toOption
                                     let! planExecutionResult =
-                                        executor.AsyncExecute (query.Query, root (httpContext), ?variables = variables)
+                                        let root = options.RootFactory httpContext
+                                        options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
                                     do! planExecutionResult |> applyPlanExecutionResult id socket
                             | ClientComplete id ->
                                 "ClientComplete" |> logMsgWithIdReceived id
@@ -282,14 +282,10 @@ type GraphQLWebSocketMiddleware<'Root>
     // <-- Main
     // <--------
 
-    let waitForConnectionInitAndRespondToClient
-        (serializerOptions : JsonSerializerOptions)
-        (connectionInitTimeoutInMs : int)
-        (socket : WebSocket)
-        : TaskResult<unit, string> =
-        taskResult {
+    let waitForConnectionInitAndRespondToClient (socket : WebSocket) : TaskResult<unit, string> =
+        task {
             let timerTokenSource = new CancellationTokenSource ()
-            timerTokenSource.CancelAfter (connectionInitTimeoutInMs)
+            timerTokenSource.CancelAfter connectionInitTimeout
             let detonationRegistration =
                 timerTokenSource.Token.Register (fun _ ->
                     socket
@@ -302,14 +298,14 @@ type GraphQLWebSocketMiddleware<'Root>
                         logger.LogDebug ("Waiting for ConnectionInit...")
                         let! receivedMessage = receiveMessageViaSocket (CancellationToken.None) serializerOptions socket
                         match receivedMessage with
-                        | Ok (Some (ConnectionInit _)) ->
+                        | Ok (ValueSome (ConnectionInit _)) ->
                             logger.LogDebug ("Valid connection_init received! Responding with ACK!")
                             detonationRegistration.Unregister () |> ignore
                             do!
                                 ConnectionAck
                                 |> sendMessageViaSocket serializerOptions socket
                             return true
-                        | Ok (Some (Subscribe _)) ->
+                        | Ok (ValueSome (Subscribe _)) ->
                             do!
                                 socket
                                 |> tryToGracefullyCloseSocket (enum CustomWebSocketStatus.Unauthorized, "Unauthorized")
@@ -327,46 +323,30 @@ type GraphQLWebSocketMiddleware<'Root>
                 )
             if (not timerTokenSource.Token.IsCancellationRequested) then
                 if connectionInitSucceeded then
-                    return ()
+                    return Ok ()
                 else
-                    return!
-                        Result.Error
-                        <| "ConnectionInit failed (not because of timeout)"
+                    return Result.Error ("ConnectionInit failed (not because of timeout)")
             else
-                return! Result.Error <| "ConnectionInit timeout"
+                return Result.Error <| "ConnectionInit timeout"
         }
 
     member __.InvokeAsync (ctx : HttpContext) = task {
-        if not (ctx.Request.Path = PathString (options.WebsocketOptions.EndpointUrl)) then
+        if not (ctx.Request.Path = endpointUrl) then
             do! next.Invoke (ctx)
         else if ctx.WebSockets.IsWebSocketRequest then
             use! socket = ctx.WebSockets.AcceptWebSocketAsync ("graphql-transport-ws")
             let! connectionInitResult =
-                socket
-                |> waitForConnectionInitAndRespondToClient options.SerializerOptions options.WebsocketOptions.ConnectionInitTimeoutInMs
+                socket |> waitForConnectionInitAndRespondToClient
             match connectionInitResult with
-            | Result.Error errMsg -> logger.LogWarning ("{warningmsg}", ($"%A{errMsg}"))
+            | Result.Error errMsg -> logger.LogWarning ("{warningmsg}", errMsg)
             | Ok _ ->
                 let longRunningCancellationToken =
                     (CancellationTokenSource
                         .CreateLinkedTokenSource(ctx.RequestAborted, applicationLifetime.ApplicationStopping)
                         .Token)
-                longRunningCancellationToken.Register (fun _ ->
-                    socket
-                    |> tryToGracefullyCloseSocketWithDefaultBehavior
-                    |> Async.AwaitTask
-                    |> Async.RunSynchronously)
-                |> ignore
-                let safe_HandleMessages = handleMessages longRunningCancellationToken
+                longRunningCancellationToken.Register (fun _ -> (socket |> tryToGracefullyCloseSocketWithDefaultBehavior).Wait()) |> ignore
                 try
-                    do!
-                        socket
-                        |> safe_HandleMessages
-                            ctx
-                            options.SerializerOptions
-                            options.SchemaExecutor
-                            options.RootFactory
-                            options.WebsocketOptions.CustomPingHandler
+                    do! socket |> handleMessages longRunningCancellationToken ctx
                 with ex ->
                     logger.LogError (ex, "Cannot handle Websocket message.")
         else

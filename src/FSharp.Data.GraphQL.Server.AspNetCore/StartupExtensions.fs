@@ -7,6 +7,7 @@ open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open FSharp.Data.GraphQL
+open Microsoft.Extensions.Options
 
 [<AutoOpen; Extension>]
 module ServiceCollectionExtensions =
@@ -18,7 +19,7 @@ module ServiceCollectionExtensions =
         WebsocketOptions = {
             EndpointUrl = endpointUrl
             ConnectionInitTimeoutInMs = 3000
-            CustomPingHandler = None
+            CustomPingHandler = ValueNone
         }
     }
 
@@ -51,8 +52,18 @@ module ServiceCollectionExtensions =
                         Json.configureDefaultSerializerOptions Seq.empty o.SerializerOptions
                     )
                 )
-                .AddSingleton<GraphQLOptions<'Root>>(options)
-                .AddSingleton<IGraphQLOptions, GraphQLOptions<'Root>>(fun sp -> sp.GetRequiredService<GraphQLOptions<'Root>>())
+                .AddSingleton<IOptionsFactory<GraphQLOptions<'Root>>>(
+                    { new IOptionsFactory<GraphQLOptions<'Root>> with
+                        member this.Create name = options
+                    }
+                )
+                .Configure<GraphQLOptions<'Root>>(Giraffe.HttpHandlers.IdentedOptionsName, (fun o -> o.SerializerOptions.WriteIndented <- true))
+                .AddSingleton<IOptionsFactory<IGraphQLOptions>>(fun sp ->
+                    { new IOptionsFactory<IGraphQLOptions> with
+                        member this.Create name =
+                            sp.GetRequiredService<IOptionsMonitor<GraphQLOptions<'Root>>>().Get(name)
+                    }
+                )
 
 [<AutoOpen; Extension>]
 module ApplicationBuilderExtensions =

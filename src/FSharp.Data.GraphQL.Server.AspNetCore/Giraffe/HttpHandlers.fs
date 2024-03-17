@@ -8,6 +8,7 @@ open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Options
 
 open FsToolkit.ErrorHandling
 open Giraffe
@@ -19,6 +20,8 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+
+    let [<Literal>] internal IdentedOptionsName = "Idented"
 
     let rec private moduleType = getModuleType <@ moduleType @>
 
@@ -38,12 +41,12 @@ module HttpHandlers =
 
         let logger = sp.CreateLogger moduleType
 
-        let options = sp.GetRequiredService<GraphQLOptions<'Root>>()
+        let options = sp.GetRequiredService<IOptionsMonitor<GraphQLOptions<'Root>>>()
 
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
             let serializeIdented value =
-                let jsonSerializerOptions = options.GetSerializerOptionsIdented()
+                let jsonSerializerOptions = options.Get(IdentedOptionsName).SerializerOptions
                 JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
@@ -243,7 +246,7 @@ module HttpHandlers =
             variables
             |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
 
-            let root = options.RootFactory ctx
+            let root = options.CurrentValue.RootFactory ctx
 
             let! result =
                 Async.StartAsTask(
@@ -259,7 +262,7 @@ module HttpHandlers =
             Task.FromResult None
         else
             taskResult {
-                let executor = options.SchemaExecutor
+                let executor = options.CurrentValue.SchemaExecutor
                 match! checkOperationType ctx with
                 | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
                 | OperationQuery content -> return! executeOperation executor content

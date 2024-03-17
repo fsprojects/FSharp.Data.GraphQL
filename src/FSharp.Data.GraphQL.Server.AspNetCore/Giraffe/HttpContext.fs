@@ -8,6 +8,7 @@ open System.Runtime.CompilerServices
 open System.Text.Json
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Options
 
 open FSharp.Core
 open FsToolkit.ErrorHandling
@@ -26,7 +27,7 @@ type HttpContext with
     /// </returns>
     [<Extension>]
     member ctx.TryBindJsonAsync<'T>(expectedJson) = taskResult {
-        let serializerOptions = ctx.RequestServices.GetRequiredService<IGraphQLOptions>().SerializerOptions
+        let serializerOptions = ctx.RequestServices.GetRequiredService<IOptions<IGraphQLOptions>>().Value.SerializerOptions
         let request = ctx.Request
 
         try

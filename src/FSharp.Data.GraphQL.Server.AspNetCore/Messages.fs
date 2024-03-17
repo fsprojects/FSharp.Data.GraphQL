@@ -11,19 +11,19 @@ type SubscriptionUnsubscriber = IDisposable
 type OnUnsubscribeAction = SubscriptionId -> unit
 type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>
 
-type RawMessage = { Id : string option; Type : string; Payload : JsonDocument option }
+type RawMessage = { Id : string voption; Type : string; Payload : JsonDocument voption }
 
 type ServerRawPayload =
     | ExecutionResult of Output
     | ErrorMessages of NameValueLookup list
     | CustomResponse of JsonDocument
 
-type RawServerMessage = { Id : string option; Type : string; Payload : ServerRawPayload option }
+type RawServerMessage = { Id : string voption; Type : string; Payload : ServerRawPayload voption }
 
 type ClientMessage =
-    | ConnectionInit of payload : JsonDocument option
-    | ClientPing of payload : JsonDocument option
-    | ClientPong of payload : JsonDocument option
+    | ConnectionInit of payload : JsonDocument voption
+    | ClientPing of payload : JsonDocument voption
+    | ClientPong of payload : JsonDocument voption
     | Subscribe of id : string * query : GQLRequestContent
     | ClientComplete of id : string
 
@@ -32,7 +32,7 @@ type ClientMessageProtocolFailure = InvalidMessage of code : int * explanation :
 type ServerMessage =
     | ConnectionAck
     | ServerPing
-    | ServerPong of JsonDocument option
+    | ServerPong of JsonDocument voption
     | Next of id : string * payload : Output
     | Error of id : string * err : NameValueLookup list
     | Complete of id : string

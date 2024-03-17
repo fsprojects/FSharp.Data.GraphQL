@@ -27,9 +27,9 @@ type ClientMessageConverter () =
 
     let getOptionalString (reader : byref<Utf8JsonReader>) =
         if reader.TokenType.Equals (JsonTokenType.Null) then
-            None
+            ValueNone
         else
-            Some (reader.GetString ())
+            ValueSome (reader.GetString ())
 
     let readPropertyValueAsAString (propertyName : string) (reader : byref<Utf8JsonReader>) =
         if reader.Read () then
@@ -40,20 +40,20 @@ type ClientMessageConverter () =
 
     let requireId (raw : RawMessage) : Result<string, ClientMessageProtocolFailure> =
         match raw.Id with
-        | Some s -> Ok s
-        | None ->
+        | ValueSome s -> Ok s
+        | ValueNone ->
             invalidMsg
             <| "Property \"id\" is required for this message but was not present."
 
     let requireSubscribePayload
         (serializerOptions : JsonSerializerOptions)
-        (payload : JsonDocument option)
+        (payload : JsonDocument voption)
         : Result<GQLRequestContent, ClientMessageProtocolFailure> =
         match payload with
-        | None ->
+        | ValueNone ->
             invalidMsg
             <| "Payload is required for this message, but none was present."
-        | Some p ->
+        | ValueSome p ->
             try
                 JsonSerializer.Deserialize<GQLRequestContent>(p, serializerOptions) |> Ok
             with
@@ -65,20 +65,20 @@ type ClientMessageConverter () =
         if not (reader.TokenType.Equals (JsonTokenType.StartObject)) then
             raise (new JsonException ($"reader's first token was not \"%A{JsonTokenType.StartObject}\", but \"%A{reader.TokenType}\""))
         else
-            let mutable id : string option = None
-            let mutable theType : string option = None
-            let mutable payload : JsonDocument option = None
+            let mutable id : string voption = ValueNone
+            let mutable theType : string voption = ValueNone
+            let mutable payload : JsonDocument voption = ValueNone
             while reader.Read ()
                   && (not (reader.TokenType.Equals (JsonTokenType.EndObject))) do
                 match reader.GetString () with
                 | "id" -> id <- readPropertyValueAsAString "id" &reader
                 | "type" -> theType <- readPropertyValueAsAString "type" &reader
-                | "payload" -> payload <- Some <| JsonDocument.ParseValue (&reader)
+                | "payload" -> payload <- ValueSome <| JsonDocument.ParseValue (&reader)
                 | other -> raiseInvalidMsg <| $"Unknown property \"%s{other}\""
 
             match theType with
-            | None -> raiseInvalidMsg "Property \"type\" is missing"
-            | Some msgType -> { Id = id; Type = msgType; Payload = payload }
+            | ValueNone -> raiseInvalidMsg "Property \"type\" is missing"
+            | ValueSome msgType -> { Id = id; Type = msgType; Payload = payload }
 
     override __.Read (reader : byref<Utf8JsonReader>, typeToConvert : Type, options : JsonSerializerOptions) : ClientMessage =
         let raw = readRawMessage (&reader, options)
@@ -119,12 +119,12 @@ type RawServerMessageConverter () =
         writer.WriteStartObject ()
         writer.WriteString ("type", value.Type)
         match value.Id with
-        | None -> ()
-        | Some id -> writer.WriteString ("id", id)
+        | ValueNone -> ()
+        | ValueSome id -> writer.WriteString ("id", id)
 
         match value.Payload with
-        | None -> ()
-        | Some serverRawPayload ->
+        | ValueNone -> ()
+        | ValueSome serverRawPayload ->
             match serverRawPayload with
             | ExecutionResult output ->
                 writer.WritePropertyName ("payload")

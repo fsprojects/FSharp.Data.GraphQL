@@ -17,7 +17,7 @@ let ``Deserializes ConnectionInit correctly`` () =
     let result = JsonSerializer.Deserialize<ClientMessage> (input, serializerOptions)
 
     match result with
-    | ConnectionInit None -> () // <-- expected
+    | ConnectionInit ValueNone -> () // <-- expected
     | other -> Assert.Fail ($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
@@ -39,7 +39,7 @@ let ``Deserializes ClientPing correctly`` () =
     let result = JsonSerializer.Deserialize<ClientMessage> (input, serializerOptions)
 
     match result with
-    | ClientPing None -> () // <-- expected
+    | ClientPing ValueNone -> () // <-- expected
     | other -> Assert.Fail ($"unexpected actual value '%A{other}'")
 
 [<Fact>]
@@ -61,7 +61,7 @@ let ``Deserializes ClientPong correctly`` () =
     let result = JsonSerializer.Deserialize<ClientMessage> (input, serializerOptions)
 
     match result with
-    | ClientPong None -> () // <-- expected
+    | ClientPong ValueNone -> () // <-- expected
     | other -> Assert.Fail ($"unexpected actual value: '%A{other}'")
 
 [<Fact>]
