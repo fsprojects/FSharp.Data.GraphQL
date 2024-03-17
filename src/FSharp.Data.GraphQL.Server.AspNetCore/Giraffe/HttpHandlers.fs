@@ -47,14 +47,6 @@ module HttpHandlers =
                 JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
-            | RequestError errs ->
-                logger.LogDebug(
-                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
-                    documentId,
-                    metadata
-                )
-
-                GQLResponse.RequestError(documentId, errs)
             | Direct(data, errs) ->
                 logger.LogDebug(
                     $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
@@ -143,6 +135,14 @@ module HttpHandlers =
                                 ))
 
                 GQLResponse.Stream documentId
+            | RequestError errs ->
+                logger.LogWarning(
+                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    documentId,
+                    metadata
+                )
+
+                GQLResponse.RequestError(documentId, errs)
 
         /// Checks if the request contains a body
         let checkIfHasBody (request: HttpRequest) = task {
