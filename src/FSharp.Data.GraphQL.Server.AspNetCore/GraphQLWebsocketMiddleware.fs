@@ -45,18 +45,23 @@ type GraphQLWebSocketMiddleware<'Root>
     }
 
     let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : string) = taskResult {
+        let invalidJsonInClientMessageError() =
+            Result.Error <| InvalidMessage (4400, "invalid json in client message")
         try
             return JsonSerializer.Deserialize<ClientMessage> (msg, serializerOptions)
         with
-        | :? InvalidWebsocketMessageException as e -> return! Result.Error <| InvalidMessage (4400, e.Message.ToString ())
-        | :? JsonException as e ->
-            if logger.IsEnabled (LogLevel.Debug) then
-                logger.LogDebug (e.ToString ())
-            else
-                ()
-            return!
-                Result.Error
-                <| InvalidMessage (4400, "Invalid JSON in the client message")
+        | :? InvalidWebsocketMessageException as ex ->
+            logger.LogError(ex, $"Invalid websocket message:{Environment.NewLine}{{payload}}", msg)
+            return! Result.Error <| InvalidMessage (4400, ex.Message.ToString ())
+        | :? JsonException as ex when logger.IsEnabled(LogLevel.Trace) ->
+            logger.LogError(ex, $"Cannot deserialize WebSocket message:{Environment.NewLine}{{payload}}", msg)
+            return! invalidJsonInClientMessageError()
+        | :? JsonException as ex ->
+            logger.LogError(ex, "Cannot deserialize WebSocket message")
+            return! invalidJsonInClientMessageError()
+        | ex ->
+            logger.LogError(ex, "Unexpected exception \"{exceptionname}\" in GraphQLWebsocketMiddleware.", (ex.GetType().Name))
+            return! invalidJsonInClientMessageError()
     }
 
     let isSocketOpen (theSocket : WebSocket) =
@@ -202,7 +207,7 @@ type GraphQLWebSocketMiddleware<'Root>
             | Direct (data, _) -> do! data |> sendOutput id
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
-                )
+
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
