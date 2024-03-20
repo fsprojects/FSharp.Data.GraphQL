@@ -167,7 +167,10 @@ type GraphQLWebSocketMiddleware<'Root>
             match subscriptionResult with
             | SubscriptionResult output -> output |> sendOutput id
             | SubscriptionErrors (output, errors) ->
-                printfn "Subscription errors: %s" (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                logger.LogWarning(
+                    "Subscription errors: {subscriptionerrors}",
+                    (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                )
                 Task.FromResult (())
 
         let sendDeferredResponseOutput id deferredResult =
@@ -176,7 +179,10 @@ type GraphQLWebSocketMiddleware<'Root>
                 let output = obj :?> Dictionary<string, obj>
                 output |> sendOutput id
             | DeferredErrors (obj, errors, _) ->
-                printfn "Deferred response errors: %s" (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                logger.LogWarning(
+                    "Deferred response errors: {deferrederrors}",
+                    (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
+                )
                 Task.FromResult (())
 
         let sendDeferredResultDelayedBy (cancToken : CancellationToken) (ms : int) id deferredResult : Task = task {
@@ -198,7 +204,11 @@ type GraphQLWebSocketMiddleware<'Root>
                 else
                     ()
             | Direct (data, _) -> do! data |> sendOutput id
-            | RequestError problemDetails -> printfn "Request error: %s" (String.Join ('\n', problemDetails |> Seq.map (fun x -> $"- %s{x.Message}")))
+            | RequestError problemDetails ->
+                logger.LogWarning(
+                    "Request error: %s",
+                    (String.Join ('\n', problemDetails |> Seq.map (fun x -> $"- %s{x.Message}")))
+                )
         }
 
         let getStrAddendumOfOptionalPayload optionalPayload =
