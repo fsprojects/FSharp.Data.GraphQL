@@ -57,7 +57,7 @@ module ServiceCollectionExtensions =
                         member this.Create name = options
                     }
                 )
-                .Configure<GraphQLOptions<'Root>>(Giraffe.HttpHandlers.IdentedOptionsName, (fun o -> o.SerializerOptions.WriteIndented <- true))
+                .Configure<GraphQLOptions<'Root>>(Giraffe.HttpHandlers.IndentedOptionsName, (fun o -> o.SerializerOptions.WriteIndented <- true))
                 .AddSingleton<IOptionsFactory<IGraphQLOptions>>(fun sp ->
                     { new IOptionsFactory<IGraphQLOptions> with
                         member this.Create name =
