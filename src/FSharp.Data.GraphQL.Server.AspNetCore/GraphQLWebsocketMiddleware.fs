@@ -263,9 +263,11 @@ type GraphQLWebSocketMiddleware<'Root>
                                 "Subscribe" |> logMsgWithIdReceived id
                                 if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
                                     do!
+                                        let warningMsg = $"Subscriber for %s{id} already exists"
+                                        logger.LogWarning(warningMsg)
                                         socket.CloseAsync (
                                             enum CustomWebSocketStatus.SubscriberAlreadyExists,
-                                            $"Subscriber for %s{id} already exists",
+                                            warningMsg,
                                             CancellationToken.None
                                         )
                                 else
