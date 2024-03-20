@@ -36,15 +36,6 @@ let defaultJsonFSharpOptions =
         UnionTag,
         allowOverride = true)
 
-let loggerSerializerOptions =
-    let options = JsonSerializerOptions()
-    options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-    options.PropertyNameCaseInsensitive <- true
-    let converters = options.Converters
-    converters.Add (new JsonStringEnumConverter ())
-    defaultJsonFSharpOptions.AddToJsonSerializerOptions options
-    options
-
 let configureDefaultSerializerOptions = configureSerializerOptions defaultJsonFSharpOptions
 let configureDefaultWSSerializerOptions = configureWSSerializerOptions defaultJsonFSharpOptions
 

@@ -20,6 +20,9 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
 module HttpHandlers =
+
+    let [<Literal>] internal IdentedOptionsName = "Idented"
+
     let rec private moduleType = getModuleType <@ moduleType @>
 
     let ofTaskIResult ctx (taskRes: Task<IResult>) : HttpFuncResult = task {
@@ -42,8 +45,9 @@ module HttpHandlers =
 
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
-            let serializeIndented value =
-                JsonSerializer.Serialize(value, Json.loggerSerializerOptions)
+            let serializeIdented value =
+                let jsonSerializerOptions = options.Get(IdentedOptionsName).SerializerOptions
+                JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
             | Direct(data, errs) ->
@@ -54,7 +58,7 @@ module HttpHandlers =
                 )
 
                 if logger.IsEnabled LogLevel.Trace then
-                    logger.LogTrace($"GraphQL response data:{Environment.NewLine}:{{data}}", serializeIndented data)
+                    logger.LogTrace($"GraphQL response data:{Environment.NewLine}:{{data}}", serializeIdented data)
 
                 GQLResponse.Direct(documentId, data, errs)
             | Deferred(data, errs, deferred) ->
@@ -76,7 +80,7 @@ module HttpHandlers =
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
                                     $"GraphQL deferred data:{Environment.NewLine}{{data}}",
-                                    serializeIndented data
+                                    serializeIdented data
                                 )
                         | DeferredErrors(null, errors, path) ->
                             logger.LogDebug(
@@ -96,7 +100,7 @@ module HttpHandlers =
                                 logger.LogTrace(
                                     $"GraphQL deferred errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
                                     errors,
-                                    serializeIndented data
+                                    serializeIdented data
                                 ))
 
                 GQLResponse.Direct(documentId, data, errs)
@@ -116,7 +120,7 @@ module HttpHandlers =
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
                                     $"GraphQL subscription data:{Environment.NewLine}{{data}}",
-                                    serializeIndented data
+                                    serializeIdented data
                                 )
                         | SubscriptionErrors(null, errors) ->
                             logger.LogDebug("Produced GraphQL subscription errors")
@@ -130,7 +134,7 @@ module HttpHandlers =
                                 logger.LogTrace(
                                     $"GraphQL subscription errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
                                     errors,
-                                    serializeIndented data
+                                    serializeIdented data
                                 ))
 
                 GQLResponse.Stream documentId
