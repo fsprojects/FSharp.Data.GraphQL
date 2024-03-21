@@ -201,9 +201,7 @@ type GraphQLWebSocketMiddleware<'Root>
                     ()
             | Direct (data, _) -> do! data |> sendOutput id
             | RequestError problemDetails ->
-                logger.LogWarning(
-                    "Request error: %s",
-                    (String.Join ('\n', problemDetails |> Seq.map (fun x -> $"- %s{x.Message}")))
+                logger.LogWarning("Request errors:\n{errors}", problemDetails)
                 )
         }
 
