@@ -52,18 +52,18 @@ module HttpHandlers =
             match content with
             | Direct(data, errs) ->
                 logger.LogDebug(
-                    $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
 
                 if logger.IsEnabled LogLevel.Trace then
-                    logger.LogTrace($"GraphQL response data:{Environment.NewLine}:{{data}}", serializeIndented data)
+                    logger.LogTrace($"GraphQL response data:\n:{{data}}", serializeIndented data)
 
                 GQLResponse.Direct(documentId, data, errs)
             | Deferred(data, errs, deferred) ->
                 logger.LogDebug(
-                    $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
@@ -79,7 +79,7 @@ module HttpHandlers =
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL deferred data:\n{{data}}",
                                     serializeIndented data
                                 )
                         | DeferredErrors(null, errors, path) ->
@@ -89,7 +89,7 @@ module HttpHandlers =
                             )
 
                             if logger.IsEnabled LogLevel.Trace then
-                                logger.LogTrace($"GraphQL deferred errors:{Environment.NewLine}{{errors}}", errors)
+                                logger.LogTrace($"GraphQL deferred errors:\n{{errors}}", errors)
                         | DeferredErrors(data, errors, path) ->
                             logger.LogDebug(
                                 "Produced GraphQL deferred result with errors for path: {path}",
@@ -98,7 +98,7 @@ module HttpHandlers =
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL deferred errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL deferred errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
                                     errors,
                                     serializeIndented data
                                 ))
@@ -106,7 +106,7 @@ module HttpHandlers =
                 GQLResponse.Direct(documentId, data, errs)
             | Stream stream ->
                 logger.LogDebug(
-                    $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
@@ -119,20 +119,20 @@ module HttpHandlers =
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL subscription data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL subscription data:\n{{data}}",
                                     serializeIndented data
                                 )
                         | SubscriptionErrors(null, errors) ->
                             logger.LogDebug("Produced GraphQL subscription errors")
 
                             if logger.IsEnabled LogLevel.Trace then
-                                logger.LogTrace($"GraphQL subscription errors:{Environment.NewLine}{{errors}}", errors)
+                                logger.LogTrace($"GraphQL subscription errors:\n{{errors}}", errors)
                         | SubscriptionErrors(data, errors) ->
                             logger.LogDebug("Produced GraphQL subscription result with errors")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL subscription errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL subscription errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
                                     errors,
                                     serializeIndented data
                                 ))
@@ -140,7 +140,7 @@ module HttpHandlers =
                 GQLResponse.Stream documentId
             | RequestError errs ->
                 logger.LogWarning(
-                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
@@ -241,10 +241,10 @@ module HttpHandlers =
             operationName
             |> Option.iter (fun on -> logger.LogTrace("GraphQL operation name: '{operationName}'", on))
 
-            logger.LogTrace($"Executing GraphQL query:{Environment.NewLine}{{query}}", content.Query)
+            logger.LogTrace($"Executing GraphQL query:\n{{query}}", content.Query)
 
             variables
-            |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
+            |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:\n{{variables}}", v))
 
             let root = options.CurrentValue.RootFactory ctx
 

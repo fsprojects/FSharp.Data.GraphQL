@@ -380,7 +380,7 @@ let ``Execution when querying returns unique document id with response`` () =
     | Direct(data1, errors1), Direct(data2, errors2) ->
         equals data1 data2
         equals errors1 errors2
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 type InnerNullableTest = { Kaboom : string }
 type NullableTest = { Inner : InnerNullableTest }

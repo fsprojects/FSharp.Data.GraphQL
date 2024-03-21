@@ -14,17 +14,17 @@ type ErrorSource =
 let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
     match result.Content with
     | Deferred(data, errors, deferred) -> onDeferred data errors deferred
-    | response -> fail $"Expected a Deferred GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a 'Deferred' GQLResponse but got\n{response}"
 
 let ensureDirect (result : GQLExecutionResult) (onDirect : Output -> GQLProblemDetails list -> unit) : unit =
     match result.Content with
     | Direct(data, errors) -> onDirect data errors
-    | response -> fail $"Expected a Direct GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 let ensureRequestError (result : GQLExecutionResult) (onRequestError : GQLProblemDetails list -> unit) : unit =
     match result.Content with
     | RequestError errors -> onRequestError errors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected 'RequestError' GQLResponse but got\n{response}"
 
 let ensureValidationError (message : string) (path : FieldPath) (error : GQLProblemDetails) =
     equals message error.Message
