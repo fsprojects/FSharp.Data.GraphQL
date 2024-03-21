@@ -137,7 +137,7 @@ module Schema =
 
     let chatRoomEvents_subscription_name = "chatRoomEvents"
 
-    let memberRoleInChatEnumDef =
+    let MemberRoleInChatEnumType =
         Define.Enum<MemberRoleInChat> (
             name = nameof MemberRoleInChat,
             options = [
@@ -146,7 +146,7 @@ module Schema =
             ]
         )
 
-    let memberDef =
+    let MemberType =
         Define.Object<Member> (
             name = nameof Member,
             description = "An organization member",
@@ -165,7 +165,7 @@ module Schema =
                 ]
         )
 
-    let meAsAMemberDef =
+    let MeAsAMemberType =
         Define.Object<MeAsAMember> (
             name = nameof MeAsAMember,
             description = "An organization member",
@@ -192,7 +192,7 @@ module Schema =
                 ]
         )
 
-    let chatMemberDef =
+    let ChatMemberType =
         Define.Object<ChatMember> (
             name = nameof ChatMember,
             description = "A chat member is an organization member participating in a chat room",
@@ -208,11 +208,11 @@ module Schema =
                             | MemberId theId -> theId
                     )
                     Define.Field ("name", StringType, "the member's name", (fun _ (x : ChatMember) -> x.Name))
-                    Define.Field ("role", memberRoleInChatEnumDef, "the member's role in the chat", (fun _ (x : ChatMember) -> x.Role))
+                    Define.Field ("role", MemberRoleInChatEnumType, "the member's role in the chat", (fun _ (x : ChatMember) -> x.Role))
                 ]
         )
 
-    let meAsAChatMemberDef =
+    let MeAsAChatMemberType =
         Define.Object<MeAsAChatMember> (
             name = nameof MeAsAChatMember,
             description = "A chat member is an organization member participating in a chat room",
@@ -236,11 +236,11 @@ module Schema =
                             | MemberId theId -> theId
                     )
                     Define.Field ("name", StringType, "the member's name", (fun _ (x : MeAsAChatMember) -> x.Name))
-                    Define.Field ("role", memberRoleInChatEnumDef, "the member's role in the chat", (fun _ (x : MeAsAChatMember) -> x.Role))
+                    Define.Field ("role", MemberRoleInChatEnumType, "the member's role in the chat", (fun _ (x : MeAsAChatMember) -> x.Role))
                 ]
         )
 
-    let chatRoomStatsDef =
+    let ChatRoomStatsType =
         Define.Object<ChatRoom> (
             name = nameof ChatRoom,
             description = "A chat room as viewed from the outside",
@@ -256,11 +256,11 @@ module Schema =
                             | ChatRoomId theId -> theId
                     )
                     Define.Field ("name", StringType, "the chat room's name", (fun _ (x : ChatRoom) -> x.Name))
-                    Define.Field ("members", ListOf chatMemberDef, "the members in the chat room", (fun _ (x : ChatRoom) -> x.Members))
+                    Define.Field ("members", ListOf ChatMemberType, "the members in the chat room", (fun _ (x : ChatRoom) -> x.Members))
                 ]
         )
 
-    let chatRoomDetailsDef =
+    let ChatRoomDetailsType =
         Define.Object<ChatRoomForMember> (
             name = nameof ChatRoomForMember,
             description = "A chat room as viewed by a chat room member",
@@ -278,20 +278,20 @@ module Schema =
                     Define.Field ("name", StringType, "the chat room's name", (fun _ (x : ChatRoomForMember) -> x.Name))
                     Define.Field (
                         "meAsAChatMember",
-                        meAsAChatMemberDef,
+                        MeAsAChatMemberType,
                         "the chat member that queried the details",
                         fun _ (x : ChatRoomForMember) -> x.MeAsAChatMember
                     )
                     Define.Field (
                         "otherChatMembers",
-                        ListOf chatMemberDef,
+                        ListOf ChatMemberType,
                         "the chat members excluding the one who queried the details",
                         fun _ (x : ChatRoomForMember) -> x.OtherChatMembers
                     )
                 ]
         )
 
-    let organizationStatsDef =
+    let OrganizationStatsType =
         Define.Object<Organization> (
             name = nameof Organization,
             description = "An organization as seen from the outside",
@@ -307,12 +307,12 @@ module Schema =
                             | OrganizationId theId -> theId
                     )
                     Define.Field ("name", StringType, "the organization's name", (fun _ (x : Organization) -> x.Name))
-                    Define.Field ("members", ListOf memberDef, "members of this organization", (fun _ (x : Organization) -> x.Members))
-                    Define.Field ("chatRooms", ListOf chatRoomStatsDef, "chat rooms in this organization", (fun _ (x : Organization) -> x.ChatRooms))
+                    Define.Field ("members", ListOf MemberType, "members of this organization", (fun _ (x : Organization) -> x.Members))
+                    Define.Field ("chatRooms", ListOf ChatRoomStatsType, "chat rooms in this organization", (fun _ (x : Organization) -> x.ChatRooms))
                 ]
         )
 
-    let organizationDetailsDef =
+    let OrganizationDetailsType =
         Define.Object<OrganizationForMember> (
             name = nameof OrganizationForMember,
             description = "An organization as seen by one of the organization's members",
@@ -330,26 +330,26 @@ module Schema =
                     Define.Field ("name", StringType, "the organization's name", (fun _ (x : OrganizationForMember) -> x.Name))
                     Define.Field (
                         "meAsAMember",
-                        meAsAMemberDef,
+                        MeAsAMemberType,
                         "the member that queried the details",
                         fun _ (x : OrganizationForMember) -> x.MeAsAMember
                     )
                     Define.Field (
                         "otherMembers",
-                        ListOf memberDef,
+                        ListOf MemberType,
                         "members of this organization",
                         fun _ (x : OrganizationForMember) -> x.OtherMembers
                     )
                     Define.Field (
                         "chatRooms",
-                        ListOf chatRoomStatsDef,
+                        ListOf ChatRoomStatsType,
                         "chat rooms in this organization",
                         fun _ (x : OrganizationForMember) -> x.ChatRooms
                     )
                 ]
         )
 
-    let aChatRoomMessageDef description name =
+    let aChatRoomMessageTypeWith description name =
         Define.Object<ChatRoomMessage> (
             name = name,
             description = description,
@@ -440,10 +440,10 @@ module Schema =
 
     let newMessageDef =
         nameof NewMessage
-        |> aChatRoomMessageDef "a new public message has been sent in the chat room"
+        |> aChatRoomMessageTypeWith "a new public message has been sent in the chat room"
     let editedMessageDef =
         nameof EditedMessage
-        |> aChatRoomMessageDef "a public message of the chat room has been edited"
+        |> aChatRoomMessageTypeWith "a public message of the chat room has been edited"
     let deletedMessageDef =
         nameof DeletedMessage
         |> aChatRoomEventForMessageId "a public message of the chat room has been deleted"
@@ -454,7 +454,7 @@ module Schema =
         nameof MemberLeft
         |> aChatRoomEventForMemberIdAndName "a member has left the chat"
 
-    let chatRoomSpecificEventDef =
+    let ChatRoomSpecificEventType =
         Define.Union (
             name = nameof ChatRoomSpecificEvent,
             options = [ newMessageDef; editedMessageDef; deletedMessageDef; memberJoinedDef; memberLeftDef ],
@@ -477,7 +477,7 @@ module Schema =
             description = "data which is specific to a certain type of event"
         )
 
-    let chatRoomEventDef =
+    let ChatRoomEventType =
         Define.Object<ChatRoomEvent> (
             name = nameof ChatRoomEvent,
             description = "Something that happened in the chat room, like a new message sent",
@@ -500,20 +500,20 @@ module Schema =
                     )
                     Define.Field (
                         "specificData",
-                        chatRoomSpecificEventDef,
+                        ChatRoomSpecificEventType,
                         "the event's specific data",
                         fun _ (x : ChatRoomEvent) -> x.SpecificData
                     )
                 ])
         )
 
-    let query =
+    let QueryType =
         Define.Object<Root> (
             name = "Query",
             fields = [
                 Define.Field (
                     "organizations",
-                    ListOf organizationStatsDef,
+                    ListOf OrganizationStatsType,
                     "gets all available organizations",
                     fun _ _ ->
                         FakePersistence.Organizations.Values
@@ -533,13 +533,13 @@ module Schema =
         }
         |> schemaConfig.SubscriptionProvider.Publish<ChatRoomEvent> chatRoomEvents_subscription_name
 
-    let mutation =
+    let MutationType =
         Define.Object<Root> (
             name = "Mutation",
             fields = [
                 Define.Field (
                     "enterOrganization",
-                    organizationDetailsDef,
+                    OrganizationDetailsType,
                     "makes a new member enter an organization",
                     [
                         Define.Input ("organizationId", GuidType, description = "the ID of the organization")
@@ -587,7 +587,7 @@ module Schema =
                 )
                 Define.Field (
                     "createChatRoom",
-                    chatRoomDetailsDef,
+                    ChatRoomDetailsType,
                     "creates a new chat room for a user",
                     [
                         Define.Input ("organizationId", GuidType, description = "the ID of the organization in which the chat room will be created")
@@ -624,7 +624,7 @@ module Schema =
                 )
                 Define.Field (
                     "enterChatRoom",
-                    chatRoomDetailsDef,
+                    ChatRoomDetailsType,
                     "makes a member enter a chat room",
                     [
                         Define.Input ("organizationId", GuidType, description = "the ID of the organization the chat room and member are in")
@@ -826,7 +826,7 @@ module Schema =
             ]
         )
 
-    let rootDef =
+    let RootType =
         Define.Object<Root> (
             name = "Root",
             description = "contains general request information",
@@ -837,14 +837,14 @@ module Schema =
                 ]
         )
 
-    let subscription =
+    let SubscriptionType =
         Define.SubscriptionObject<Root> (
             name = "Subscription",
             fields = [
                 Define.SubscriptionField (
                     chatRoomEvents_subscription_name,
-                    rootDef,
-                    chatRoomEventDef,
+                    RootType,
+                    ChatRoomEventType,
                     "events related to a specific chat room",
                     [
                         Define.Input ("chatRoomId", GuidType, description = "the ID of the chat room to listen to events from")
@@ -872,6 +872,6 @@ module Schema =
             ]
         )
 
-    let schema : ISchema<Root> = Schema (query, mutation, subscription, schemaConfig)
+    let schema : ISchema<Root> = Schema (QueryType, MutationType, SubscriptionType, schemaConfig)
 
     let executor = Executor (schema, [])
