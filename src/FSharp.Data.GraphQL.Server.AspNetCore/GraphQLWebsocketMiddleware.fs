@@ -44,24 +44,25 @@ type GraphQLWebSocketMiddleware<'Root>
         return JsonSerializer.Serialize (raw, jsonSerializerOptions)
     }
 
+    static let invalidJsonInClientMessageError =
+        Result.Error <| InvalidMessage (4400, "Invalid json in client message")
+
     let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : string) = taskResult {
-        let invalidJsonInClientMessageError() =
-            Result.Error <| InvalidMessage (4400, "invalid json in client message")
         try
             return JsonSerializer.Deserialize<ClientMessage> (msg, serializerOptions)
         with
         | :? InvalidWebsocketMessageException as ex ->
-            logger.LogError(ex, $"Invalid websocket message:{Environment.NewLine}{{payload}}", msg)
+            logger.LogError(ex, "Invalid websocket message:\n{payload}", msg)
             return! Result.Error <| InvalidMessage (4400, ex.Message.ToString ())
         | :? JsonException as ex when logger.IsEnabled(LogLevel.Trace) ->
-            logger.LogError(ex, $"Cannot deserialize WebSocket message:{Environment.NewLine}{{payload}}", msg)
-            return! invalidJsonInClientMessageError()
+            logger.LogError(ex, "Cannot deserialize WebSocket message:\n{payload}", msg)
+            return! invalidJsonInClientMessageError
         | :? JsonException as ex ->
             logger.LogError(ex, "Cannot deserialize WebSocket message")
-            return! invalidJsonInClientMessageError()
+            return! invalidJsonInClientMessageError
         | ex ->
-            logger.LogError(ex, "Unexpected exception \"{exceptionname}\" in GraphQLWebsocketMiddleware.", (ex.GetType().Name))
-            return! invalidJsonInClientMessageError()
+            logger.LogError(ex, $"Unexpected exception '{ex.GetType().Name}' in GraphQLWebsocketMiddleware")
+            return! invalidJsonInClientMessageError
     }
 
     let isSocketOpen (theSocket : WebSocket) =
