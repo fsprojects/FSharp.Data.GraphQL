@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open System
+open System.Buffers
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -154,10 +155,13 @@ module HttpHandlers =
             else
                 request.EnableBuffering()
                 let body = request.Body
-                let buffer = Array.zeroCreate 1
-                let! bytesRead = body.ReadAsync(buffer, 0, 1)
-                body.Seek(0, SeekOrigin.Begin) |> ignore
-                return bytesRead > 0
+                let buffer = ArrayPool.Shared.Rent 1
+                try
+                    let! bytesRead = body.ReadAsync(buffer, 0, 1)
+                    body.Seek(0, SeekOrigin.Begin) |> ignore
+                    return bytesRead > 0
+                finally
+                    ArrayPool.Shared.Return buffer
         }
 
         /// <summary>Check if the request is an introspection query
