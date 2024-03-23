@@ -1,0 +1,4 @@
+{ "id": "1",
+  "type": "subscribe",
+  "query": "subscription {     chatRoomEvents (chatRoomId: \"123\", memberId: \"345\") {         chatRoomId         time         specificData {             __typename             ... on MemberJoined {                 memberId                 memberName             }             ... on MemberLeft {                 memberId                 memberName             }             ... on NewMessage {                 id                 chatRoomId                 date                 authorId                 text             }             ... on EditedMessage {                 id                 chatRoomId                 date                 authorId                 text             }             ... on DeletedMessage {                 messageId             }         }     } }"
+}

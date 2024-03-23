@@ -11,7 +11,7 @@ open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 type InputRecord = { a : string; b : string; c : string }
 

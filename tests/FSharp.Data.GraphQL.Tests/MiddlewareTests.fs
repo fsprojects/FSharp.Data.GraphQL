@@ -455,7 +455,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
     let result = execute query
     match result with
     | RequestError errors -> errors |> equals expectedErrors
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected 'RequestError' GQLResponse but got\n{response}"
 
     ensureRequestError result <| fun errors ->
         errors |> equals expectedErrors

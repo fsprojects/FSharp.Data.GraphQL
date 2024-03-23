@@ -299,6 +299,9 @@ Target.create PackSharedTarget <| fun _ -> pack "Shared"
 let [<Literal>] PackServerTarget = "PackServer"
 Target.create PackServerTarget <| fun _ -> pack "Server"
 
+let [<Literal>] PackServerAspNetCore = "PackServerAspNetCore"
+Target.create "PackServerAspNetCore" <| fun _ -> pack "Server.AspNetCore"
+
 let [<Literal>] PackClientTarget = "PackClient"
 Target.create PackClientTarget <| fun _ -> pack "Client"
 
@@ -313,6 +316,9 @@ Target.create PushSharedTarget <| fun _ -> push "Shared"
 
 let [<Literal>] PushServerTarget = "PushServer"
 Target.create PushServerTarget <| fun _ -> push "Server"
+
+let [<Literal>] PushServerAspNetCore = "PushServerAspNetCore"
+Target.create "PushServerAspNetCore" <| fun _ -> push "Server.AspNetCore"
 
 let [<Literal>] PushClientTarget = "PushClient"
 Target.create PushClientTarget <| fun _ -> push "Client"
@@ -352,6 +358,8 @@ PackSharedTarget
     ==> PushClientTarget
     ==> PackServerTarget
     ==> PushServerTarget
+    ==> PackServerAspNetCore
+    ==> PushServerAspNetCore
     ==> PackMiddlewareTarget
     ==> PushMiddlewareTarget
     ==> PackRelayTarget

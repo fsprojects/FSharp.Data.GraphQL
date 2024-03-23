@@ -7,7 +7,7 @@ open Xunit
 open System
 open System.Text.Json
 open System.Text.Json.Serialization
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 #nowarn "25"
 
