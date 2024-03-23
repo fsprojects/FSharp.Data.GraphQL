@@ -18,7 +18,7 @@ let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
 let isNameValueDict actual = isDict<string, obj> actual
 let fail (message: string) = Assert.Fail message
 let equals (expected : 'x) (actual : 'x) =
-    if not (actual = expected) then fail <| $"expected %A{expected}{Environment.NewLine}but got %A{actual}"
+    if not (actual = expected) then fail <| $"expected %A{expected}\nbut got %A{actual}"
 let notEquals (expected : 'x) (actual : 'x) =
     if actual = expected then fail <| $"unexpected %+A{expected}"
 let noErrors (result: IDictionary<string, obj>) =
@@ -74,7 +74,7 @@ let greaterThanOrEqual expected actual =
 
 open System.Text.Json
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
@@ -167,7 +167,6 @@ module Observer =
         new TestObserver<'T>(sub, onReceive)
 
 open System.Runtime.CompilerServices
-open FSharp.Data.GraphQL.Types
 
 [<Extension>]
 type ExecutorExtensions =

@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <RootNamespace>FSharp.Data.GraphQL.Samples.ChatApp</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
+    <PackageReference Include="GraphQL.Server.Ui.Playground" />
+    <PackageReference Include="GraphQL.Server.Ui.Voyager" />
+    <PackageReference Include="HotChocolate.AspNetCore" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="DomainModel.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="FakePersistence.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+  </ItemGroup>
+
+</Project>

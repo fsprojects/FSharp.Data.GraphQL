@@ -79,6 +79,14 @@ jobs:
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.{nupkg,snupkg} -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
 
+    - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.AspNetCore
+        dotnet pack --no-build --nologo --configuration Release /p:IsNuget=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore project to NuGet
+      run: |
+        dotnet nuget push nuget/*Server.AspNetCore*.nupkg -k ${{secrets.NUGET_SECRET}}
+
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
