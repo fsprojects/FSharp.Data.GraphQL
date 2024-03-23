@@ -300,7 +300,7 @@ let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredRespo
     | Error errs -> Observable.singleton <| DeferredErrors (null, errs, formattedPath)
 
 /// Collect together an array of results using the appropriate execution strategy.
-let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> []) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {
+let collectFields (strategy : ExecutionStrategy) (rs : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> seq) : AsyncVal<ResolverResult<KeyValuePair<string, obj> []>> = asyncVal {
         let! collected =
             match strategy with
             | Parallel -> AsyncVal.collectParallel rs
@@ -354,8 +354,7 @@ let rec private direct (returnDef : OutputDef) (ctx : ResolveFieldContext) (path
         | :? System.Collections.IEnumerable as enumerable ->
             enumerable
             |> Seq.cast<obj>
-            |> Seq.toArray
-            |> Array.mapi resolveItem
+            |> Seq.mapi resolveItem
             |> collectFields Parallel
             |> AsyncVal.map(ResolverResult.mapValue(fun items -> KeyValuePair(name, items |> Array.map(fun d -> d.Value) |> box)))
         | _ -> raise <| GQLMessageException (ErrorMessages.expectedEnumerableValue ctx.ExecutionInfo.Identifier (value.GetType()))
@@ -543,7 +542,6 @@ and executeObjectFields (fields : ExecutionInfo list) (objName : string) (objDef
     let! res =
         fields
         |> Seq.map executeField
-        |> Seq.toArray
         |> collectFields Parallel
     match res with
     | Error errs -> return Error errs

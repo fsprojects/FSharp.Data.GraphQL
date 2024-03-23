@@ -18,6 +18,9 @@
       <_Parameter1>FSharp.Data.GraphQL.Server</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Server.AspNetCore</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>FSharp.Data.GraphQL.Client</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
@@ -29,6 +32,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <PackageReference Include="Collections.Pooled" />
     <PackageReference Include="FParsec" />
     <PackageReference Include="FSharp.SystemTextJson" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
@@ -44,6 +48,7 @@
     <Compile Include="Helpers\Extensions.fs" />
     <Compile Include="Helpers\Reflection.fs" />
     <Compile Include="Helpers\MemoryCache.fs" />
+    <Compile Include="Helpers\PooledResizeArray.fs" />
     <Compile Include="Errors.fs" />
     <Compile Include="Exception.fs" />
     <Compile Include="ValidationTypes.fs" />

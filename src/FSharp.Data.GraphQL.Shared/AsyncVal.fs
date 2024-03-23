@@ -130,13 +130,15 @@ module AsyncVal =
     /// executed asynchronously, one by one with regard to their order in array.
     /// Returned array maintain order of values.
     /// If the array contains a Failure, then the entire array will not resolve
-    let collectSequential (values : AsyncVal<'T>[]) : AsyncVal<'T[]> =
-        if values.Length = 0 then Value [||]
-        elif values |> Array.exists isAsync then
+    let collectSequential (values : AsyncVal<'T> seq) : AsyncVal<'T[]> =
+        let values = new PooledResizeArray<_> (values)
+        let length = values.Count
+        if length = 0 then Value [||]
+        elif values.Exists isAsync then
             Async (async {
-                let results = Array.zeroCreate values.Length
-                let exceptions = ResizeArray values.Length
-                for i = 0 to values.Length - 1 do
+                let results = Array.zeroCreate length
+                use exceptions = new PooledResizeArray<_> (length)
+                for i = 0 to length - 1 do
                     let v = values.[i]
                     match v with
                     | Value v -> results.[i] <- v
@@ -144,35 +146,39 @@ module AsyncVal =
                         let! r = a
                         results.[i] <- r
                     | Failure f -> exceptions.Add f
+                values.Dispose()
                 match exceptions.Count with
                 | 0 -> return results
                 | 1 -> return exceptions.First().Reraise ()
-                | _ -> return AggregateException exceptions |> raise
+                | _ -> return AggregateException (exceptions.AsReadOnly()) |> raise
             })
         else
-            let exceptions =
+            use values = values
+            use exceptions =
                 values
-                |> Array.choose (function
-                    | Failure f -> Some f
-                    | _ -> None)
-            match exceptions.Length with
-            | 0 -> Value (values |> Array.map (fun (Value v) -> v))
+                |> PooledResizeArray.vChoose (function
+                    | Failure f -> ValueSome f
+                    | _ -> ValueNone)
+            match exceptions.Count with
+            | 0 -> Value (values |> Seq.map (fun (Value v) -> v) |> Seq.toArray)
             | 1 -> Failure (exceptions.First ())
-            | _ -> Failure (AggregateException exceptions)
+            | _ -> Failure (AggregateException (exceptions.AsReadOnly()))
 
     /// Converts array of AsyncVals into AsyncVal with array results.
     /// In case when are non-immediate values in provided array, they are
     /// executed all in parallel, in unordered fashion. Order of values
     /// inside returned array is maintained.
     /// If the array contains a Failure, then the entire array will not resolve
-    let collectParallel (values : AsyncVal<'T>[]) : AsyncVal<'T[]> =
-        if values.Length = 0 then Value [||]
+    let collectParallel (values : AsyncVal<'T> seq) : AsyncVal<'T[]> =
+        use values = new PooledResizeArray<_> (values)
+        let length = values.Count
+        if length = 0 then Value [||]
         else
-            let indexes = List<_> (0)
-            let continuations = List<_> (0)
-            let results = Array.zeroCreate values.Length
-            let exceptions = ResizeArray values.Length
-            for i = 0 to values.Length - 1 do
+            let indexes = new PooledResizeArray<_> (length)
+            let continuations = new PooledResizeArray<_> (length)
+            let results = Array.zeroCreate length
+            use exceptions = new PooledResizeArray<_> (length)
+            for i = 0 to length - 1 do
                 let value = values.[i]
                 match value with
                 | Value v -> results.[i] <- v
@@ -182,13 +188,15 @@ module AsyncVal =
                 | Failure f -> exceptions.Add f
             match exceptions.Count with
             | 1 -> AsyncVal.Failure (exceptions.First ())
-            | count when count > 1 -> AsyncVal.Failure (AggregateException exceptions)
+            | count when count > 1 -> AsyncVal.Failure (AggregateException (exceptions.AsReadOnly()))
             | _ ->
                 if indexes.Count = 0 then Value (results)
                 else Async (async {
                     let! vals = continuations |> Async.Parallel
                     for i = 0 to indexes.Count - 1 do
                         results.[indexes.[i]] <- vals.[i]
+                    indexes.Dispose()
+                    continuations.Dispose()
                     return results
                 })
 
