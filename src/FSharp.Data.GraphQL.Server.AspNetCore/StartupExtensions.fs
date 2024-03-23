@@ -6,8 +6,8 @@ open System.Runtime.CompilerServices
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.DependencyInjection
-open FSharp.Data.GraphQL
 open Microsoft.Extensions.Options
+open FSharp.Data.GraphQL
 
 [<AutoOpen; Extension>]
 module ServiceCollectionExtensions =
@@ -15,6 +15,7 @@ module ServiceCollectionExtensions =
     let createStandardOptions executor rootFactory endpointUrl = {
         SchemaExecutor = executor
         RootFactory = rootFactory
+        ReadBufferSize = 4096
         SerializerOptions = Json.serializerOptions
         WebsocketOptions = {
             EndpointUrl = endpointUrl

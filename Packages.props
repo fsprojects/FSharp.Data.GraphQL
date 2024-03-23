@@ -9,6 +9,7 @@
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
+    <PackageReference Update="Collections.Pooled" Version="1.0.*" />
     <PackageReference Update="FParsec" Version="1.1.1" />
     <PackageReference Include="FSharp.Core" Version="$(FSharpCoreVersion)">
       <ExcludeAssets>contentFiles</ExcludeAssets>
