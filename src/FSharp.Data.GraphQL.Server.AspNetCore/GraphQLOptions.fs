@@ -21,6 +21,8 @@ type IGraphQLOptions =
 type GraphQLOptions<'Root> = {
     SchemaExecutor : Executor<'Root>
     RootFactory : HttpContext -> 'Root
+    /// The minimum rented array size to read a message from WebSocket
+    ReadBufferSize : int
     SerializerOptions : JsonSerializerOptions
     WebsocketOptions : GraphQLTransportWSOptions
 } with

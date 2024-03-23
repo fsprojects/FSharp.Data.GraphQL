@@ -1,7 +1,10 @@
 namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open System
+open System.Buffers
 open System.Collections.Generic
+open System.Diagnostics
+open System.Linq
 open System.Net.WebSockets
 open System.Text.Json
 open System.Text.Json.Serialization
@@ -11,6 +14,8 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
+
+open Collections.Pooled
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -47,9 +52,9 @@ type GraphQLWebSocketMiddleware<'Root>
     static let invalidJsonInClientMessageError =
         Result.Error <| InvalidMessage (4400, "Invalid json in client message")
 
-    let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : string) = taskResult {
+    let deserializeClientMessage (serializerOptions : JsonSerializerOptions) (msg : IReadOnlyPooledList<byte>) = taskResult {
         try
-            return JsonSerializer.Deserialize<ClientMessage> (msg, serializerOptions)
+            return JsonSerializer.Deserialize<ClientMessage> (msg.Span, serializerOptions)
         with
         | :? InvalidWebsocketMessageException as ex ->
             logger.LogError(ex, "Invalid websocket message:\n{payload}", msg)
@@ -75,31 +80,35 @@ type GraphQLWebSocketMiddleware<'Root>
         && not (theSocket.State = WebSocketState.Closed)
 
     let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions : JsonSerializerOptions) (socket : WebSocket) = taskResult {
-        let buffer = Array.zeroCreate 4096
-        let completeMessage = new List<byte> ()
-        let mutable segmentResponse : WebSocketReceiveResult = null
-        while (not cancellationToken.IsCancellationRequested)
-              && socket |> isSocketOpen
-              && ((segmentResponse = null)
-                  || (not segmentResponse.EndOfMessage)) do
-            try
-                let! r = socket.ReceiveAsync (new ArraySegment<byte> (buffer), cancellationToken)
-                segmentResponse <- r
-                completeMessage.AddRange (new ArraySegment<byte> (buffer, 0, r.Count))
-            with :? OperationCanceledException ->
-                ()
+        let buffer = ArrayPool.Shared.Rent options.ReadBufferSize
+        try
+            let completeMessage = new PooledList<byte> ()
+            let mutable segmentResponse : WebSocketReceiveResult = null
+            while (not cancellationToken.IsCancellationRequested)
+                  && socket |> isSocketOpen
+                  && ((segmentResponse = null)
+                      || (not segmentResponse.EndOfMessage)) do
+                try
+                    let! r = socket.ReceiveAsync (new ArraySegment<byte> (buffer), cancellationToken)
+                    segmentResponse <- r
+                    completeMessage.AddRange (new ArraySegment<byte> (buffer, 0, r.Count))
+                with :? OperationCanceledException ->
+                    ()
 
-        // TODO: Allocate string only if a debugger is attached
-        let message =
-            completeMessage
-            |> Seq.filter (fun x -> x > 0uy)
-            |> Array.ofSeq
-            |> System.Text.Encoding.UTF8.GetString
-        if String.IsNullOrWhiteSpace message then
-            return ValueNone
-        else
-            let! result = message |> deserializeClientMessage serializerOptions
-            return ValueSome result
+            if Debugger.IsAttached then
+                let message =
+                    completeMessage
+                    |> Seq.filter (fun x -> x > 0uy)
+                    |> Array.ofSeq
+                    |> System.Text.Encoding.UTF8.GetString
+                logger.LogInformation ("-> Request: {request}", message)
+            if completeMessage.All(fun b -> b = 0uy) then
+                return ValueNone
+            else
+                let! result = deserializeClientMessage serializerOptions completeMessage
+                return ValueSome result
+        finally
+            ArrayPool.Shared.Return buffer
     }
 
     let sendMessageViaSocket (jsonSerializerOptions) (socket : WebSocket) (message : ServerMessage) : Task = task {
