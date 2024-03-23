@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Server.AspNetCore
 
 open System
 open System.Text

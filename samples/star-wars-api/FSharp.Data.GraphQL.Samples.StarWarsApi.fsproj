@@ -8,7 +8,6 @@
 
   <ItemGroup Label="PackageReferences">
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
-    <PackageReference Include="Giraffe" />
     <PackageReference Include="GraphQL.Server.Ui.Playground" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />
@@ -16,23 +15,14 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
-    <Compile Include="Helpers.fs" />
-    <Compile Include="JSON.fs" />
     <Compile Include="Schema.fs" />
-    <Compile Include="WebSocketMessages.fs" />
-    <Compile Include="WebSocketJsonConverters.fs" />
-    <Compile Include="WebSocketMiddleware.fs" />
-    <Compile Include="Ast.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="GQLRequest.fs" />
     <None Include="MultipartRequest.fs" />
-    <Compile Include="HttpContext.fs" />
-    <Compile Include="HttpHandlers.fs" />
     <Compile Include="Startup.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup Label="ProjectReferences">
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />

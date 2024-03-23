@@ -1,5 +1,5 @@
 [<AutoOpen>]
-module Microsoft.AspNetCore.Http.HttpContextExtensions
+module FSharp.Data.GraphQL.Server.AspNetCore.HttpContextExtensions
 
 open System.Collections.Generic
 open System.Collections.Immutable
@@ -7,10 +7,11 @@ open System.IO
 open System.Runtime.CompilerServices
 open System.Text.Json
 open Microsoft.AspNetCore.Http
+open Microsoft.Extensions.DependencyInjection
+open Microsoft.Extensions.Options
 
 open FSharp.Core
 open FsToolkit.ErrorHandling
-open Giraffe
 
 type HttpContext with
 
@@ -26,14 +27,14 @@ type HttpContext with
     /// </returns>
     [<Extension>]
     member ctx.TryBindJsonAsync<'T>(expectedJson) = taskResult {
-        let serializer = ctx.GetJsonSerializer()
+        let serializerOptions = ctx.RequestServices.GetRequiredService<IOptions<IGraphQLOptions>>().Value.SerializerOptions
         let request = ctx.Request
 
         try
             if not request.Body.CanSeek then
                 request.EnableBuffering()
 
-            return! serializer.DeserializeAsync<'T> request.Body
+            return! JsonSerializer.DeserializeAsync<'T>(request.Body, serializerOptions, ctx.RequestAborted)
         with :? JsonException ->
             let body = request.Body
             body.Seek(0, SeekOrigin.Begin) |> ignore

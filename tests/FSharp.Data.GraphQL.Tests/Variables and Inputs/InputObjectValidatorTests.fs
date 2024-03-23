@@ -15,7 +15,7 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.ValidationResult
-open FSharp.Data.GraphQL.Samples.StarWarsApi
+open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 type InputRecord = { Country : string; ZipCode : string; City : string }
@@ -144,7 +144,7 @@ let ``Execute handles validation of invalid inline input records with all fields
     | RequestError [ zipCodeError ; addressError ] ->
         zipCodeError |> ensureInputObjectValidationError (Argument "record") "ZipCode must be 5 characters for US" [] "InputRecord!"
         addressError |> ensureInputObjectValidationError (Argument "recordNested") "HomeAddress and MailingAddress must be different" [] "InputRecordNested"
-    | response -> fail $"Expected RequestError GQLResponse but got {Environment.NewLine}{response}"
+    | response -> fail $"Expected 'RequestError' GQLResponse but got\n{response}"
 
 
 let variablesWithAllInputs (record, record1, record2, record3) =

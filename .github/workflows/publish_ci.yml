@@ -59,7 +59,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Shared project
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared project to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -67,7 +67,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client project to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -75,15 +75,23 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server project to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
+    - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.AspNetCore
+        dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Relay project to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -91,7 +99,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet pack --no-build --nologo --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware project to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -104,7 +112,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.ProjectTemplates template project
       run: |
         cd samples
-        dotnet pack --nologo --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
+        dotnet pack --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
     - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
       run: |
         $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.nupkg"

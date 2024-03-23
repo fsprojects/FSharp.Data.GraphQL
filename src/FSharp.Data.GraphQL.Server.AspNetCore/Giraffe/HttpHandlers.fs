@@ -1,13 +1,11 @@
-namespace FSharp.Data.GraphQL.Samples.StarWarsApi
+namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open System
-open System.Collections.Immutable
 open System.IO
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading.Tasks
 open Microsoft.AspNetCore.Http
-open Microsoft.AspNetCore.Http.Json
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Options
@@ -17,19 +15,13 @@ open Giraffe
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
-
-module Constants =
-
-    let [<Literal>] Idented = "Idented"
+open FSharp.Data.GraphQL.Server.AspNetCore
 
 type HttpHandler = HttpFunc -> HttpContext -> HttpFuncResult
 
-// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.mvc.jsonoptions
-type MvcJsonOptions = Microsoft.AspNetCore.Mvc.JsonOptions
-// See https://learn.microsoft.com/en-us/dotnet/api/microsoft.aspnetcore.http.json.jsonoptions
-type HttpClientJsonOptions = Microsoft.AspNetCore.Http.Json.JsonOptions
-
 module HttpHandlers =
+
+    let [<Literal>] internal IndentedOptionsName = "Indented"
 
     let rec private moduleType = getModuleType <@ moduleType @>
 
@@ -44,123 +36,116 @@ module HttpHandlers =
         |> TaskResult.defaultWith id
         |> ofTaskIResult ctx
 
-    /// Set CORS to allow external servers (React samples) to call this API
-    let setCorsHeaders : HttpHandler =
-        setHttpHeader "Access-Control-Allow-Origin" "*"
-        >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
-
-    let private graphQL (next : HttpFunc) (ctx : HttpContext) =
+    let private handleGraphQL<'Root> (next : HttpFunc) (ctx : HttpContext) =
         let sp = ctx.RequestServices
 
         let logger = sp.CreateLogger moduleType
 
+        let options = sp.GetRequiredService<IOptionsMonitor<GraphQLOptions<'Root>>>()
+
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
-            let serializeIdented value =
-                let jsonSerializerOptions =
-                    sp
-                        .GetRequiredService<IOptionsMonitor<HttpClientJsonOptions>>()
-                        .Get(Constants.Idented)
-                        .SerializerOptions
+            let serializeIndented value =
+                let jsonSerializerOptions = options.Get(IndentedOptionsName).SerializerOptions
                 JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
-            | RequestError errs ->
-                logger.LogInformation(
-                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
-                    documentId,
-                    metadata
-                )
-
-                GQLResponse.RequestError(documentId, errs)
             | Direct(data, errs) ->
-                logger.LogInformation(
-                    $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                logger.LogDebug(
+                    $"Produced direct GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
 
                 if logger.IsEnabled LogLevel.Trace then
-                    logger.LogTrace($"GraphQL response data:{Environment.NewLine}:{{data}}", serializeIdented data)
+                    logger.LogTrace($"GraphQL response data:\n:{{data}}", serializeIndented data)
 
                 GQLResponse.Direct(documentId, data, errs)
             | Deferred(data, errs, deferred) ->
-                logger.LogInformation(
-                    $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                logger.LogDebug(
+                    $"Produced deferred GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
 
-                if logger.IsEnabled LogLevel.Information then
+                if logger.IsEnabled LogLevel.Debug then
                     deferred
                     |> Observable.add (function
                         | DeferredResult(data, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred result for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL deferred data:{Environment.NewLine}{{data}}",
-                                    serializeIdented data
+                                    $"GraphQL deferred data:\n{{data}}",
+                                    serializeIndented data
                                 )
                         | DeferredErrors(null, errors, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred errors for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
 
                             if logger.IsEnabled LogLevel.Trace then
-                                logger.LogTrace($"GraphQL deferred errors:{Environment.NewLine}{{errors}}", errors)
+                                logger.LogTrace($"GraphQL deferred errors:\n{{errors}}", errors)
                         | DeferredErrors(data, errors, path) ->
-                            logger.LogInformation(
+                            logger.LogDebug(
                                 "Produced GraphQL deferred result with errors for path: {path}",
                                 path |> Seq.map string |> Seq.toArray |> Path.Join
                             )
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL deferred errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL deferred errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
                                     errors,
-                                    serializeIdented data
+                                    serializeIndented data
                                 ))
 
                 GQLResponse.Direct(documentId, data, errs)
             | Stream stream ->
-                logger.LogInformation(
-                    $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:{Environment.NewLine}{{metadata}}",
+                logger.LogDebug(
+                    $"Produced stream GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
                     documentId,
                     metadata
                 )
 
-                if logger.IsEnabled LogLevel.Information then
+                if logger.IsEnabled LogLevel.Debug then
                     stream
                     |> Observable.add (function
                         | SubscriptionResult data ->
-                            logger.LogInformation("Produced GraphQL subscription result")
+                            logger.LogDebug("Produced GraphQL subscription result")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL subscription data:{Environment.NewLine}{{data}}",
-                                    serializeIdented data
+                                    $"GraphQL subscription data:\n{{data}}",
+                                    serializeIndented data
                                 )
                         | SubscriptionErrors(null, errors) ->
-                            logger.LogInformation("Produced GraphQL subscription errors")
+                            logger.LogDebug("Produced GraphQL subscription errors")
 
                             if logger.IsEnabled LogLevel.Trace then
-                                logger.LogTrace($"GraphQL subscription errors:{Environment.NewLine}{{errors}}", errors)
+                                logger.LogTrace($"GraphQL subscription errors:\n{{errors}}", errors)
                         | SubscriptionErrors(data, errors) ->
-                            logger.LogInformation("Produced GraphQL subscription result with errors")
+                            logger.LogDebug("Produced GraphQL subscription result with errors")
 
                             if logger.IsEnabled LogLevel.Trace then
                                 logger.LogTrace(
-                                    $"GraphQL subscription errors:{Environment.NewLine}{{errors}}{Environment.NewLine}GraphQL deferred data:{Environment.NewLine}{{data}}",
+                                    $"GraphQL subscription errors:\n{{errors}}\nGraphQL deferred data:\n{{data}}",
                                     errors,
-                                    serializeIdented data
+                                    serializeIndented data
                                 ))
 
                 GQLResponse.Stream documentId
+            | RequestError errs ->
+                logger.LogWarning(
+                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
+                    documentId,
+                    metadata
+                )
+
+                GQLResponse.RequestError(documentId, errs)
 
         /// Checks if the request contains a body
         let checkIfHasBody (request: HttpRequest) = task {
@@ -179,7 +164,7 @@ module HttpHandlers =
         /// by first checking on such properties as `GET` method or `empty request body`
         /// and lastly by parsing document AST for introspection operation definition.
         /// </summary>
-        /// <returns>Result of check of <see cref="Lula.RiskAssessment.WebHost.GraphQL.OperationType"/></returns>
+        /// <returns>Result of check of <see cref="OperationType"/></returns>
         let checkOperationType (ctx: HttpContext) = taskResult {
 
             let checkAnonymousFieldsOnly (ctx: HttpContext) = taskResult {
@@ -256,26 +241,32 @@ module HttpHandlers =
             operationName
             |> Option.iter (fun on -> logger.LogTrace("GraphQL operation name: '{operationName}'", on))
 
-            logger.LogTrace($"Executing GraphQL query:{Environment.NewLine}{{query}}", content.Query)
+            logger.LogTrace($"Executing GraphQL query:\n{{query}}", content.Query)
 
             variables
-            |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:{Environment.NewLine}{{variables}}", v))
+            |> Option.iter (fun v -> logger.LogTrace($"GraphQL variables:\n{{variables}}", v))
 
-            let root = Root ctx
+            let root = options.CurrentValue.RootFactory ctx
 
-            let! result = executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName)
+            let! result =
+                Async.StartAsTask(
+                    executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName),
+                    cancellationToken = ctx.RequestAborted
+                )
 
             let response = result |> toResponse
             return Results.Ok response
         }
 
-        taskResult {
-            let executor = Schema.executor
-            ctx.Response.Headers.Add("Request-Type", "Classic") // For integration testing purposes
-            match! checkOperationType ctx with
-            | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
-            | OperationQuery content -> return! executeOperation executor content
-        }
-        |> ofTaskIResult2 ctx
+        if ctx.RequestAborted.IsCancellationRequested then
+            Task.FromResult None
+        else
+            taskResult {
+                let executor = options.CurrentValue.SchemaExecutor
+                match! checkOperationType ctx with
+                | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
+                | OperationQuery content -> return! executeOperation executor content
+            }
+            |> ofTaskIResult2 ctx
 
-    let webApp : HttpHandler = setCorsHeaders >=> choose [ POST; GET ] >=> graphQL
+    let graphQL<'Root> : HttpHandler = choose [ POST; GET ] >=> handleGraphQL<'Root>

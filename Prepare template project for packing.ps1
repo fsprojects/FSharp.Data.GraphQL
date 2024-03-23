@@ -9,6 +9,7 @@ $version = $dirBuildTargets.SelectSingleNode("//PropertyGroup[@Label='NuGet']/Ve
 
 [xml]$fsharpPackages = @"
 <ItemGroup Label="PackageReferences">
+    <PackageReference Include="FSharp.Data.GraphQL.Server.AspNetCore" Version="$($version)" />
     <PackageReference Include="FSharp.Data.GraphQL.Server.Middleware" Version="$($version)" />
     <PackageReference Include="FSharp.Data.GraphQL.Server.Relay" Version="$($version)" />
     <PackageReference Include="FSharp.Data.GraphQL.Server" Version="$($version)" />
@@ -18,8 +19,6 @@ $version = $dirBuildTargets.SelectSingleNode("//PropertyGroup[@Label='NuGet']/Ve
 
 $packagesPropsPath = "Packages.props"
 [xml]$packagesProps = Get-Content -Path $packagesPropsPath
-$giraffeVersion = $packagesProps.SelectSingleNode("//PackageReference[@Update='Giraffe']/@Version")
-$starWarsApiProj.SelectSingleNode("//ItemGroup[@Label='PackageReferences']/PackageReference[@Include='Giraffe']").SetAttribute("Version",$giraffeVersion.Value)
 $packageReferences = $starWarsApiProj.SelectSingleNode("//ItemGroup[@Label='PackageReferences']")
 foreach($packageReference in $fsharpPackages.DocumentElement.ChildNodes){
     $innerNode = $starWarsApiProj.ImportNode($packageReference,$true)

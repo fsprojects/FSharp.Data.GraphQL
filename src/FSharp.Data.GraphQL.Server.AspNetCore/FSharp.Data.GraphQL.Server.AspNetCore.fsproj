@@ -1,0 +1,44 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>
+    <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <Deterministic>true</Deterministic>
+    <Description>FSharp implementation of Facebook GraphQL query language (Application Infrastructure)</Description>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="Helpers.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="GQLRequest.fs" />
+    <Compile Include="Messages.fs" />
+    <Compile Include="Serialization/JsonConverters.fs" />
+    <Compile Include="Serialization\JSON.fs" />
+    <Compile Include="GraphQLOptions.fs" />
+    <Compile Include="GraphQLSubscriptionsManagement.fs" />
+    <Compile Include="GraphQLWebsocketMiddleware.fs" />
+    <Compile Include="Giraffe\Ast.fs" />
+    <Compile Include="Giraffe\Parser.fs" />
+    <Compile Include="Giraffe\HttpContext.fs" />
+    <Compile Include="Giraffe/HttpHandlers.fs" />
+    <Compile Include="StartupExtensions.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
+    <PackageReference Include="Giraffe" />
+  </ItemGroup>
+
+</Project>
