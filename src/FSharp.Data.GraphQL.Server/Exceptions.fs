@@ -14,7 +14,6 @@ type GraphQLException =
 
     new () = { inherit Exception () }
     new (msg) = { inherit Exception (msg) }
-    new (info : Runtime.Serialization.SerializationInfo, context : Runtime.Serialization.StreamingContext) = { inherit Exception (info, context) }
 
 [<AbstractClass>]
 type GQLMessageExceptionBase (errorKind, msg, [<Optional>] extensions) =
