@@ -20,7 +20,8 @@ type InputField =
       StringOption : string option
       IntOption : int option
       Uri : System.Uri
-      Guid : System.Guid }
+      Guid : System.Guid
+      GuidOption : System.Guid option }
 
 type Input =
     { Single : InputField option
@@ -74,6 +75,10 @@ module Schema =
                   Define.AutoField("intOption", Nullable IntType, description = "An integer option value.")
                   Define.AutoField("uri", UriType, description = "An URI value.")
                   Define.AutoField("guid", GuidType, description = "A Guid value.")
+                  Define.Field("guidId", IDType, description = "A Guid Id value.", resolve = fun _ o -> o.Guid |> string)
+                  Define.Field("stringId", IDType, description = "A String Id value.", resolve = fun _ o -> o.String)
+                  Define.Field("guidIdOption", Nullable IDType, description = "A Guid Id value.", resolve = fun _ o -> o.GuidOption |> Option.map string)
+                  Define.Field("stringIdOption", Nullable IDType, description = "A String Id value.", resolve = fun _ o -> o.StringOption)
                   Define.Field("deprecated", StringType, resolve = (fun _ x -> x.String), description = "A string value through a deprecated field.", deprecationReason = "This field is deprecated.", args = []) ])
 
     let UploadedFileType =
