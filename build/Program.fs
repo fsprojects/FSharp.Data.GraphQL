@@ -25,7 +25,7 @@ execContext
 |> Fake.Core.Context.setExecutionContext
 
 module DotNetCli =
-    let setVersion (o : DotNet.Options) = { o with Version = Some "7.0.408" }
+    let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.202" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
@@ -43,7 +43,7 @@ let configuration =
 //  - for documentation, you also need to edit info in "docs/tools/generate.fsx"
 
 [<Literal>]
-let DotNetMoniker = "net6.0"
+let DotNetMoniker = "net8.0"
 
 let project = "FSharp.Data.GraphQL"
 let release = ReleaseNotes.load "RELEASE_NOTES.md"
