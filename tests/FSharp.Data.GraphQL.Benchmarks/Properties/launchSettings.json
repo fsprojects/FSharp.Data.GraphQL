@@ -1,5 +1,9 @@
 {
   "profiles": {
+    "All": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter *"
+    },
     "AsyncVal": {
       "commandName": "Project",
       "commandLineArgs": "--filter *AsyncValBenchmark*"
