@@ -1,8 +1,7 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>net6.0</TargetFramework>
-    <RootNamespace>FSharp.Data.GraphQL.Samples.ChatApp</RootNamespace>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
   </PropertyGroup>
 
   <ItemGroup>
