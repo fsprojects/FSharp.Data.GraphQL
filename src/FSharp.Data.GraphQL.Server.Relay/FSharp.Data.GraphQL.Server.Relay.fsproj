@@ -20,5 +20,4 @@
     <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
     <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
   </ItemGroup>
-
 </Project>
