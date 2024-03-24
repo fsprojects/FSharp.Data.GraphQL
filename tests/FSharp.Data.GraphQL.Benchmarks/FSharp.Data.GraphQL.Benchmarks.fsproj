@@ -1,4 +1,4 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -17,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Properties\launchSettings.json" />
     <Compile Include="Prolog.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="AsyncSchema.fs" />
