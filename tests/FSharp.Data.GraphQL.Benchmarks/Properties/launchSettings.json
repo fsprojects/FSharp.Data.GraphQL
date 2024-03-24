@@ -1,0 +1,20 @@
+{
+  "profiles": {
+    "AsyncVal": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter *AsyncValBenchmark*"
+    },
+    "Simple execution": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter *SimpleExecutionBenchmark*"
+    },
+    "Simple execution with middlewares": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter *SimpleExecutionWithMiddlewaresBenchmark*"
+    },
+    "Parsing": {
+      "commandName": "Project",
+      "commandLineArgs": "--filter *ParsingBenchmark*"
+    }
+  }
+}
