@@ -82,7 +82,7 @@ type GraphQLWebSocketMiddleware<'Root>
     let receiveMessageViaSocket (cancellationToken : CancellationToken) (serializerOptions : JsonSerializerOptions) (socket : WebSocket) = taskResult {
         let buffer = ArrayPool.Shared.Rent options.ReadBufferSize
         try
-            let completeMessage = new PooledList<byte> ()
+            use completeMessage = new PooledResizeArray<byte> ()
             let mutable segmentResponse : WebSocketReceiveResult = null
             while (not cancellationToken.IsCancellationRequested)
                   && socket |> isSocketOpen

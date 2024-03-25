@@ -747,7 +747,8 @@ and ExecutionInfoKind =
     /// Reduce the current field as a live query.
     | ResolveLive of ExecutionInfo
 
-/// Buffered stream options. Used to specify how the buffer will behavior in a stream.
+// TODO: Migrate to voption
+/// Buffered stream options. Used to specify how the buffer will behave in a stream.
 and BufferedStreamOptions =
     { /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
       Interval : int option
