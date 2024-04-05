@@ -225,5 +225,5 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     let expectedError =
         let message = "A variable '$input' in operation 'q' has a type that is not an input type defined by the schema (UnknownType!)."
-        GQLProblemDetails.CreateWithKind (message, Validation)
+        GQLProblemDetails.CreateWithKind (message, None, Validation)
     ensureRequestError result <| fun [ error ] -> error |> equals expectedError
