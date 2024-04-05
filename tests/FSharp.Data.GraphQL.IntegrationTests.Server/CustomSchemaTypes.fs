@@ -19,7 +19,9 @@ module SchemaDefinitions =
 
     let private coerceUploadInput (_ : InputParameterValue) : Result<File, IGQLError list> =
         Result.Error [
-            { new IGQLError with member _.Message = "Cannot coerce upload input. The type `Upload` can only be passed as a variable through a multipart request." }
+            { new IGQLError with
+                member _.Message = "Cannot coerce upload input. The type `Upload` can only be passed as a variable through a multipart request."
+                member _.Exception = None }
         ]
 
     let private coerceUploadValue (value : obj) =
