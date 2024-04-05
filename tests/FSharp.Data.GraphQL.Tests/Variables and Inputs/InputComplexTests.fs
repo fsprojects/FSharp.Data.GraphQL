@@ -30,7 +30,9 @@ let TestComplexScalar =
                     | InputParameterValue.InlineConstant (StringValue s) -> s
 
                 if value = "SerializedValue" then Ok "DeserializedValue"
-                else Error { new IGQLError with member _.Message = "" }),
+                else Error { new IGQLError with
+                                member _.Message = ""
+                                member _.Exception = None }),
         coerceOutput =
             (fun value ->
                 if value = upcast "DeserializedValue" then Some "SerializedValue"

@@ -122,7 +122,9 @@ module ValidationErrors =
     let toIGQLErrors (errors: ValidationErrors) : IGQLError list =
         errors
         |> ValidationErrors.toList
-        |> List.map (fun e -> { new IGQLError with member _.Message = e })
+        |> List.map (fun e -> { new IGQLError with
+                                    member _.Message = e
+                                    member _.Exception = None })
 
 module Operators =
 

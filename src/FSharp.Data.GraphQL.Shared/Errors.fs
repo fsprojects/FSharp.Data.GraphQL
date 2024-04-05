@@ -11,6 +11,7 @@ type internal FieldPath = obj list
 
 type IGQLError =
     abstract member Message : string with get
+    abstract member Exception : (Exception option) with get
 
 type internal ICoerceGQLError =
     inherit IGQLError
@@ -65,6 +66,12 @@ type GQLProblemDetails = {
     /// </summary>
     [<JsonPropertyName("message")>]
     Message : string
+
+    /// <summary>
+    /// The possible exception associated with this error. It won't be serialized.
+    /// </summary>
+    [<JsonIgnore>]
+    Exception : Exception option
 
     /// <summary>
     /// An array of fields path segments that that identify the specific field path in a GraphQL query where the resolution problem occurs.
@@ -127,50 +134,57 @@ type GQLProblemDetails = {
         | :? IReadOnlyDictionary<string, obj> as extensions -> extensions
         | _ -> ReadOnlyDictionary<string, obj> mutableExtensions
 
-    static member internal CreateWithKind (message, kind : ErrorKind, ?path) = {
+    static member internal CreateWithKind (message : string, ex : Exception option,  kind : ErrorKind, ?path) = {
         Message = message
+        Exception = ex
         Path = path |> Skippable.ofOption
         Locations = Skip
         Extensions = Dictionary<string, obj> 1 |> GQLProblemDetails.SetErrorKind kind |> Include
     }
 
-    static member Create (message, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member Create (message : string, ex: Exception option, ?extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
+        Exception = ex
         Path = Skip
         Locations = Skip
         Extensions = extensions |> Skippable.ofOption
     }
 
-    static member Create (message, extensions) = {
+    static member Create (message : string, ex: Exception option, extensions : Skippable<IReadOnlyDictionary<string, obj>>) = {
         Message = message
+        Exception = ex
         Path = Skip
         Locations = Skip
         Extensions = extensions
     }
 
-    static member Create (message, path, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member Create (message : string, ex: Exception option, path : FieldPath, ?extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
+        Exception = ex
         Path = Include path
         Locations = Skip
         Extensions = extensions |> Skippable.ofOption
     }
 
-    static member Create (message, path, extensions) = {
+    static member Create (message : string, ex: Exception option, path : FieldPath, extensions : Skippable<IReadOnlyDictionary<string, obj>>) = {
         Message = message
+        Exception = ex
         Path = Include path
         Locations = Skip
         Extensions = extensions
     }
 
-    static member Create (message, locations, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member Create (message : string, ex: Exception option, locations : GQLProblemLocation list, ?extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
+        Exception = ex
         Path = Skip
         Locations = Include locations
         Extensions = extensions |> Skippable.ofOption
     }
 
-    static member Create (message, locations, extensions) = {
+    static member Create (message : string, ex: Exception option, locations : GQLProblemLocation list, extensions : Skippable<IReadOnlyDictionary<string, obj>>) = {
         Message = message
+        Exception = ex
         Path = Skip
         Locations = Include locations
         Extensions = extensions
@@ -187,7 +201,7 @@ type GQLProblemDetails = {
             | :? ICoerceGQLError as error -> error.VariableMessage + error.Message
             | _ -> error.Message
 
-        GQLProblemDetails.Create (message, extensions)
+        GQLProblemDetails.Create (message, error.Exception, extensions)
 
     static member OfFieldError (path : FieldPath) (error : IGQLError) =
         let extensions =
@@ -200,7 +214,7 @@ type GQLProblemDetails = {
             | :? ICoerceGQLError as error -> error.VariableMessage + error.Message
             | _ -> error.Message
 
-        GQLProblemDetails.Create (message, path, extensions)
+        GQLProblemDetails.Create (message, error.Exception, path, extensions)
 
     static member internal OfFieldExecutionError (path : FieldPath) (error : IGQLError) =
         let extensions =
@@ -216,7 +230,7 @@ type GQLProblemDetails = {
             | :? ICoerceGQLError as error -> error.VariableMessage + error.Message
             | _ -> error.Message
 
-        GQLProblemDetails.Create (message, path, extensions)
+        GQLProblemDetails.Create (message, error.Exception, path, extensions)
 
     override this.GetHashCode () =
         let extensionsHashCode =

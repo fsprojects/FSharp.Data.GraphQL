@@ -123,7 +123,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                     return prepareOutput res
             with
             | :? GQLMessageException as ex -> return prepareOutput(GQLExecutionResult.Error (documentId, ex, executionPlan.Metadata))
-            | ex -> return prepareOutput (GQLExecutionResult.Error(documentId, ex.ToString(), executionPlan.Metadata)) // TODO: Handle better
+            | ex -> return prepareOutput (GQLExecutionResult.Error(documentId, ex.ToString(), Some ex, executionPlan.Metadata)) // TODO: Handle better
         }
 
     let execute (executionPlan: ExecutionPlan, data: 'Root option, variables: ImmutableDictionary<string, JsonElement> option) =
@@ -143,6 +143,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                         | Some m -> Ok m
                         | None -> Error <| [ GQLProblemDetails.CreateWithKind (
                             "Operation to be executed is of type mutation, but no mutation root object was defined in current schema",
+                            None,
                             ErrorKind.Validation
                         )]
                     | Subscription ->
@@ -150,6 +151,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                         | Some s -> Ok <| upcast s
                         | None -> Error <| [ GQLProblemDetails.CreateWithKind (
                             "Operation to be executed is of type subscription, but no subscription root object was defined in the current schema",
+                            None,
                             ErrorKind.Validation
                         )]
                 do!
@@ -167,6 +169,7 @@ type Executor<'Root>(schema: ISchema<'Root>, middlewares : IExecutorMiddleware s
                 return runMiddlewares (fun x -> x.PlanOperation) planningCtx planOperation
             | None -> return! Error <| [ GQLProblemDetails.CreateWithKind (
                 "No operation with specified name has been found for provided document",
+                None,
                 ErrorKind.Validation
             )]
         }

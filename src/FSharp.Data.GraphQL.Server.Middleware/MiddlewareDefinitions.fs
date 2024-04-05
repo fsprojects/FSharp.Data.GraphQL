@@ -47,7 +47,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                          | ResolveLive info -> checkThreshold current (info :: xs)
             checkThreshold 0.0 fields
         let error (ctx : ExecutionContext) =
-            GQLExecutionResult.ErrorAsync(ctx.ExecutionPlan.DocumentId, "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", ctx.Metadata)
+            GQLExecutionResult.ErrorAsync(ctx.ExecutionPlan.DocumentId, "Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", None, ctx.Metadata)
         let (pass, totalWeight) = measureThreshold threshold ctx.ExecutionPlan.Fields
         let ctx =
             match reportToMetadata with

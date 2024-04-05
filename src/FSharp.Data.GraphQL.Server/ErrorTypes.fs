@@ -29,6 +29,7 @@ type internal CoercionError = {
     interface IGQLError with
 
         member this.Message = this.Message
+        member this.Exception = None
 
     interface IGQLErrorExtensions with
 
@@ -78,6 +79,7 @@ type internal CoercionErrorWrapper = {
     interface IGQLError with
 
         member this.Message = this.InnerError.Message
+        member this.Exception = this.InnerError.Exception
 
     interface IGQLErrorExtensions with
 

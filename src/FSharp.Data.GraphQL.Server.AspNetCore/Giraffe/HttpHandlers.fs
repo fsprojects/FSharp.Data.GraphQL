@@ -139,11 +139,23 @@ module HttpHandlers =
 
                 GQLResponse.Stream documentId
             | RequestError errs ->
-                logger.LogWarning(
-                    $"Produced request error GraphQL response with documentId = '{{documentId}}' and metadata:\n{{metadata}}",
-                    documentId,
-                    metadata
-                )
+                match errs |> List.choose (fun x -> x.Exception) |> List.tryHead with
+                | Some ex ->
+                    logger.LogError(
+                        ex,
+                        "Error while processing request that generated response with documentId '{documentId}'",
+                        documentId
+                    )
+                | None ->
+                    logger.LogWarning(
+                        (  "Produced request error GraphQL response with:\n"
+                        + "- documentId: '{documentId}'\n"
+                        + "- error(s):\n    {requestError}\n"
+                        + "- metadata:\n    {metadata}\n" ),
+                        documentId,
+                        errs,
+                        metadata
+                    )
 
                 GQLResponse.RequestError(documentId, errs)
 

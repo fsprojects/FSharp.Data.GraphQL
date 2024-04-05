@@ -21,7 +21,9 @@ open ErrorHelpers
 type InputRecord = { Country : string; ZipCode : string; City : string }
 
 let createSingleError message =
-    [{ new IGQLError with member _.Message = message }]
+    [{ new IGQLError with
+        member _.Message = message
+        member _.Exception = None }]
 
 let InputRecordType =
     Define.InputObject<InputRecord> (
