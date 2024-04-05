@@ -376,7 +376,7 @@ let ``Execution when querying returns unique document id with response`` () =
     let result2 = sync <| Executor(schema).AsyncExecute("query Example { a, b, a }", { A = "aa"; B = 2 })
     result1.DocumentId |> notEquals Unchecked.defaultof<int>
     result1.DocumentId |> equals result2.DocumentId
-    match result1,result2 with
+    match result1.Content,result2.Content with
     | Direct(data1, errors1), Direct(data2, errors2) ->
         equals data1 data2
         equals errors1 errors2

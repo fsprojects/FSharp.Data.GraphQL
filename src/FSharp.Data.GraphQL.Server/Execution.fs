@@ -19,14 +19,6 @@ open FSharp.Data.GraphQL
 
 type Output = IDictionary<string, obj>
 
-let (|RequestError|Direct|Deferred|Stream|) (response : GQLExecutionResult) =
-    match response.Content with
-    | RequestError errs -> RequestError errs
-    | Direct (data, errors) -> Direct (data, errors)
-    | Deferred (data, errors, deferred) -> Deferred (data, errors, deferred)
-    | Stream data -> Stream data
-
-
 /// Name value lookup used as output to be serialized into JSON.
 /// It has a form of a dictionary with fixed set of keys. Values under keys
 /// can be set, but no new entry can be added or removed, once lookup

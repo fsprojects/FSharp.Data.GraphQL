@@ -97,6 +97,6 @@ let ``Relay cursor works for types with nested fileds`` () =
 
     let result = sync <| schemaProcessor.AsyncExecute (parse query)
 
-    match result with
+    match result.Content with
     | Direct (_, errors) -> empty errors
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"

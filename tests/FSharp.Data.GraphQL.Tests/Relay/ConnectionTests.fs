@@ -156,7 +156,7 @@ let ``Connection definition includes connection and edge fields for simple cases
                 ]
             ]
         ]
-    match result with
+    match result.Content with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
@@ -206,7 +206,7 @@ let ``Connection definition includes connection and edge fields for complex case
                                     ]
                                 ]
                             ]]]]]]
-    match result with
+    match result.Content with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
