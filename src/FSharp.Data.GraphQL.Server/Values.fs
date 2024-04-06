@@ -112,14 +112,19 @@ let rec internal compileByType
                         { new Reflection.ParameterInfo() with
                             member _.Name = f.Name
                             member _.ParameterType = f.TypeDef.Type
-                            member _.Attributes = Reflection.ParameterAttributes.Optional
+                            member _.Attributes =
+                                match f.TypeDef with
+                                | Nullable _ -> Reflection.ParameterAttributes.Optional
+                                | _ -> Reflection.ParameterAttributes.None
                         }
                 |]
                 let constructor (args:obj[]) =
                     let o = Activator.CreateInstance(objtype)
                     let dict = o :?> IDictionary<string, obj>
                     for fld,arg in Seq.zip objDef.Fields args do
-                        dict.Add(fld.Name, arg)
+                        match arg, fld.TypeDef with
+                        | null, Nullable _ -> () // skip populating Nullable fields with nulls
+                        | _, _ -> dict.Add(fld.Name, arg)
                     box o
                 constructor, parameterInfos
             else
