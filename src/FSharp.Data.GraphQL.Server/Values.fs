@@ -89,10 +89,30 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
 
     | InputObject objDef ->
         let objtype = objDef.Type
-        let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
+        let (constructor : obj[] -> obj), (parameterInfos : Reflection.ParameterInfo[]) =
+            if typeof<IDictionary<string,obj>>.IsAssignableFrom(objtype) then
+                let parameterInfos = [|
+                    for f in objDef.Fields ->
+                        { new Reflection.ParameterInfo() with
+                            member _.Name = f.Name
+                            member _.ParameterType = f.TypeDef.Type
+                            member _.Attributes = Reflection.ParameterAttributes.Optional
+                        }
+                |]
+                let constructor (args:obj[]) =
+                    let o = Activator.CreateInstance(objtype)
+                    let dict = o :?> IDictionary<string, obj>
+                    for fld,arg in Seq.zip objDef.Fields args do
+                        dict.Add(fld.Name, arg)
+                    box o
+                constructor, parameterInfos
+            else
+                let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
+                ctor.Invoke, ctor.GetParameters()
+
 
         let struct (mapper, nullableMismatchParameters, missingParameters) =
-            ctor.GetParameters ()
+            parameterInfos
             |> Array.fold (
                 fun
                     struct(all: ResizeArray<_>, areNullable: HashSet<_>, missing: HashSet<_>)
@@ -170,7 +190,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
 
                     let! args = argResults |> splitSeqErrorsList
 
-                    let instance = ctor.Invoke args
+                    let instance = constructor args
                     do! objDef.Validator instance
                         |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputSource inputObjectPath originalInputDef)
                     return instance
@@ -197,7 +217,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
 
                             let! args = argResults |> splitSeqErrorsList
 
-                            let instance = ctor.Invoke args
+                            let instance = constructor args
                             do! objDef.Validator instance
                                 |> ValidationResult.mapErrors (fun err -> err |> mapInputObjectError inputSource inputObjectPath originalInputDef)
                             return instance

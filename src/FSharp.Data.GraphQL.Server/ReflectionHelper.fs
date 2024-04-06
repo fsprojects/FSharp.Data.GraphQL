@@ -140,8 +140,68 @@ module internal ReflectionHelper =
 
     let isPrameterMandatory = not << isParameterOptional
 
+
+(*
+    let makeConstructor (fields: string[]) =
+        { new ConstructorInfo() as this with
+            let typ = typeof<Dynamic.DynamicObject>
+            let ctor =
+                typ.GetConstructors(BindingFlags.NonPublic|||BindingFlags.Public|||BindingFlags.Instance)
+                |> Seq.filter (fun ctor -> ctor.GetParameters().Length = 0)
+                |> Seq.head
+            override _.GetParameters() = [||]
+            override _.Attributes = ctor.Attributes
+            override _.MethodHandle = ctor.MethodHandle
+            override _.GetMethodImplementationFlags() = ctor.GetMethodImplementationFlags()
+            member _.Invoke(args: obj []) = Activator.CreateInstance(typeof<obj>, args)
+            member _.Name = "DynamicConstructorInfo"
+            member _.DeclaringType = typeof<obj>
+            override _.Invoke(bindingFlags, binder, args, cultureInfo) = obj()
+        }
+*)
+
+    type DynamicConstructorInfo(typ:System.Type, fields: string[]) =
+        inherit ConstructorInfo()
+        let ctor =
+            typ.GetConstructors(BindingFlags.NonPublic|||BindingFlags.Public|||BindingFlags.Instance)
+            |> Seq.filter (fun ctor -> ctor.GetParameters().Length = 0)
+            |> Seq.head
+        override _.GetParameters() =
+            printfn "DynamicConstructorInfo.GetParameters() -> %A" (fields |> String.concat ",")
+            fields
+            |> Array.mapi (fun i fName ->
+                { new ParameterInfo() with
+                    member _.Name = fName
+                    member _.Position = i
+                    member _.ParameterType = typeof<obj>
+                    member _.Attributes = ParameterAttributes.Optional
+                }
+            )
+        override _.Attributes = ctor.Attributes
+        override _.MethodHandle = ctor.MethodHandle
+        override _.GetMethodImplementationFlags() = ctor.GetMethodImplementationFlags()
+        override _.GetCustomAttributes(_inherit) = typ.GetCustomAttributes(_inherit)
+        override _.GetCustomAttributes(x, _inherit) = typ.GetCustomAttributes(x, _inherit)
+        override _.IsDefined(x, _inherit) = typ.IsDefined(x, _inherit)
+        override _.Name = "DynamicConstructorInfo"
+        override _.DeclaringType = typ.DeclaringType
+        override _.ReflectedType = typ.ReflectedType
+        member this.Invoke(args: obj []) =
+            printfn "DynamicConstructorInfo.Invoke(%A) nArgs=%d nFields=%d" args args.Length fields.Length
+            let o = Activator.CreateInstance(typ)
+            let dict = o :?> IDictionary<string, obj>
+            (fields, args)
+            ||> Seq.iter2 (fun k v -> dict.Add(k, v))
+            o
+        override this.Invoke(bindingFlags, binder, args, cultureInfo) = this.Invoke(args)
+        override this.Invoke(o, bindingFlags, binder, args, cultureInfo) = this.Invoke(bindingFlags, binder, args, cultureInfo)
+
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
+        //else if t = typeof<Dynamic.DynamicObject> then
+        else if typeof<Collections.Generic.IDictionary<string,obj>>.IsAssignableFrom(t) then
+            eprintfn "matched DynamicConstructorInfo for type %A" t
+            upcast DynamicConstructorInfo(t, fields)
         else
             let constructors = t.GetConstructors(BindingFlags.NonPublic|||BindingFlags.Public|||BindingFlags.Instance)
             let inputFieldNames =

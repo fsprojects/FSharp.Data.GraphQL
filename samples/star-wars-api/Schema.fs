@@ -153,12 +153,30 @@ module Schema =
                     | Human _ -> upcast HumanType
                     | Droid _ -> upcast DroidType)
         )
+(*
+    and CharacterInfo =
+        Define.Interface<obj> (
+            name = "CharacterInfo",
+            description = "A character common info.",
+            fieldsFn =
+                fun () ->
+                    [ Define.Field ("id", StringType, "The id of the character.")
+                      Define.Field ("name", Nullable StringType, "The name of the character.")
+                      Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.")
+                      Define.Field (
+                          "friends",
+                          ConnectionOf CharacterType,
+                          "The friends of the human, or an empty list if they have none." )
+                    ]
+        )
+*)
 
     and HumanType : ObjectDef<Human> =
         Define.Object<Human> (
             name = "Human",
             description = "A humanoid creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Human),
+            //interfaces = [ CharacterInfo ],
             fieldsFn =
                 fun () ->
                     [ Define.Field ("id", StringType, "The id of the human.", (fun _ (h : Human) -> h.Id))
@@ -206,7 +224,9 @@ module Schema =
                               con
                       )
                       Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))
-                      Define.Field ("homePlanet", Nullable StringType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet)) ]
+                      Define.Field ("homePlanet", Nullable StringType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet))
+                      Define.Field ("planet", Nullable PlanetType, "The home planet of the human, or null if unknown.", (fun _ h -> h.HomePlanet |> Option.bind getPlanet ))
+                    ]
         )
 
     and DroidType =
@@ -250,6 +270,30 @@ module Schema =
             fieldsFn = fun () -> [ Define.Field ("requestId", StringType, "The ID of the client.", (fun _ (r : Root) -> r.RequestId)) ]
         )
 
+            //Define.Input ("range", Nullable (Define.InputObject<Collections.Generic.KeyValuePair<string,int>>("Range", [
+            //Define.Input ("range", Nullable (Define.InputObject<Range>("Range", [
+    type Range = { Min : int; Max : int }
+    let randoms =
+        let inputs = [
+            Define.Input ("count", IntType)
+            //Define.Input ("range", Nullable (Define.InputObject<System.Text.Json.JsonProperty>("Range", [
+            //Define.Input ("range", Nullable (Define.InputObject<System.Collections.Generic.Dictionary<string,obj>>("Range", [
+            Define.Input ("range", Nullable (Define.InputObject<System.Dynamic.ExpandoObject>("Range", [
+            //Define.Input ("range", Nullable (Define.InputObject<System.Collections.Generic.KeyValuePair<string,int>>("Range", [
+                Define.Input ("min", IntType)
+                Define.Input ("max", IntType)
+            ])))
+        ]
+        let renderRandoms (ctx:ResolveFieldContext) (r:Root) =
+            printfn "Random called with count:%A and range:%A" (ctx.Arg "count") (ctx.Arg "range")
+            //let range = ctx.Arg "range" |> unbox<System.Dynamic.DynamicObject>
+            //printfn "members: %A" (range.GetDynamicMemberNames())
+            //range.GetDynamicMemberNames() |> Seq.iter (printfn "Dynamic member: %A")
+            [ for i in 1..ctx.Arg("count") -> System.Random.Shared.Next() ]
+
+        Define.Field ("random", ListOf IntType, "Render random numbers", inputs, renderRandoms)
+
+
     let Query =
         let inputs = [ Define.Input ("id", StringType) ]
         Define.Object<Root> (
@@ -258,7 +302,10 @@ module Schema =
                 [ Define.Field ("hero", Nullable HumanType, "Gets human hero", inputs, fun ctx _ -> getHuman (ctx.Arg ("id")))
                   Define.Field ("droid", Nullable DroidType, "Gets droid", inputs, (fun ctx _ -> getDroid (ctx.Arg ("id"))))
                   Define.Field ("planet", Nullable PlanetType, "Gets planet", inputs, fun ctx _ -> getPlanet (ctx.Arg ("id")))
-                  Define.Field ("characters", ListOf CharacterType, "Gets characters", (fun _ _ -> characters)) ]
+                  Define.Field ("characters", ListOf CharacterType, "Gets characters", (fun _ _ -> characters))
+                  randoms
+                ]
+
         )
 
     let Subscription =
