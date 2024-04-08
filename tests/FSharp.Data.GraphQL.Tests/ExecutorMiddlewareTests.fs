@@ -117,7 +117,7 @@ let ``Executor middleware: change fields and measure planning time`` () =
                         [ "a", upcast "Cookie"
                           "b", upcast "Banana"
                           "d", upcast false ] ]
-    match result.Content with
+    match result with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)

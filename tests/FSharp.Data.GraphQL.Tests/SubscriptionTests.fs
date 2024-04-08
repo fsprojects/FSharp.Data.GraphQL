@@ -116,7 +116,7 @@ let ``Can subscribe to sync field and get results``() =
         }
     }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"
@@ -143,7 +143,7 @@ let ``Can subscribe to tagged sync field and get results with expected tag``() =
         }
     }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"
@@ -163,7 +163,7 @@ let ``Can subscribe to tagged sync field and do not get results with unexpected 
         }
     }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"
@@ -185,7 +185,7 @@ let ``Can subscribe to async field and get results``() =
   }
 }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"
@@ -212,7 +212,7 @@ let ``Can subscribe to tagged async field and get results with expected tag``() 
   }
 }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"
@@ -232,7 +232,7 @@ let ``Can subscribe to tagged async field and do not get results with unexpected
         }
     }"""
     let result = executor.AsyncExecute(query) |> sync
-    match result.Content with
+    match result with
     | Stream data ->
         use sub = Observer.create data
         updateValue 1 "Updated value 1"

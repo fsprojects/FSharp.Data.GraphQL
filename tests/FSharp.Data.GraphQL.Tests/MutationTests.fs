@@ -72,7 +72,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations serially`
         "fourth", upcast NameValueLookup.ofList [ "theNumber", 4 :> obj]
         "fifth",  upcast NameValueLookup.ofList [ "theNumber", 5 :> obj]
     ]
-    match mutationResult.Content with
+    match mutationResult with
     | Direct(data, errors) ->
       empty errors
       data |> equals (upcast expected)
@@ -113,7 +113,7 @@ let ``Execute handles mutation execution ordering: evaluates mutations correctly
         "sixth",  null
     ]
 
-    match mutationResult.Content with
+    match mutationResult with
     | Direct(data, errors) ->
       data |> equals (upcast expected)
       List.length errors |> equals 2

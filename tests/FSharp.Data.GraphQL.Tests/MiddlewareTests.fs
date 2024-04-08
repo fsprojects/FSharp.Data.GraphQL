@@ -130,7 +130,7 @@ let ``Simple query: Should pass when below threshold``() =
             ]
         ]
     let result = execute query
-    match result.Content with
+    match result with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
@@ -453,7 +453,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
                 }
         }"""
     let result = execute query
-    match result.Content with
+    match result with
     | RequestError errors -> errors |> equals expectedErrors
     | response -> fail $"Expected 'RequestError' GQLResponse but got\n{response}"
 

@@ -203,7 +203,7 @@ type GraphQLWebSocketMiddleware<'Root>
         }
 
         let applyPlanExecutionResult (id : SubscriptionId) (socket) (executionResult : GQLExecutionResult) : Task = task {
-            match executionResult.Content with
+            match executionResult with
             | Stream observableOutput ->
                 (subscriptions, socket, observableOutput, serializerOptions)
                 |> addClientSubscription id sendSubscriptionResponseOutput

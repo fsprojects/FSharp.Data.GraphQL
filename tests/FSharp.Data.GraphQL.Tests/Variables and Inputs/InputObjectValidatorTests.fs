@@ -142,7 +142,7 @@ let ``Execute handles validation of invalid inline input records with all fields
       )
     }"""
     let result = sync <| schema.AsyncExecute(parse query)
-    match result.Content with
+    match result with
     | RequestError [ zipCodeError ; addressError ] ->
         zipCodeError |> ensureInputObjectValidationError (Argument "record") "ZipCode must be 5 characters for US" [] "InputRecord!"
         addressError |> ensureInputObjectValidationError (Argument "recordNested") "HomeAddress and MailingAddress must be different" [] "InputRecordNested"
