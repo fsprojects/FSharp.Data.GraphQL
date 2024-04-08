@@ -56,12 +56,12 @@ type GQLExecutionResult =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.OfError error ], meta)
     static member Error(documentId, errors, meta) =
         GQLExecutionResult.RequestError(documentId, errors |> List.map GQLProblemDetails.OfError, meta)
-    static member Error(documentId, msg, ex : Exception option, meta) =
-        GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create (msg, ex) ], meta)
+    static member Error(documentId, msg, meta) =
+        GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create msg ], meta)
     static member Invalid(documentId, errors, meta) =
         GQLExecutionResult.RequestError(documentId, errors, meta)
-    static member ErrorAsync(documentId, msg : string, ex : Exception option, meta) =
-        AsyncVal.wrap (GQLExecutionResult.Error (documentId, msg, ex, meta))
+    static member ErrorAsync(documentId, msg : string, meta) =
+        AsyncVal.wrap (GQLExecutionResult.Error (documentId, msg, meta))
     static member ErrorAsync(documentId, error : IGQLError, meta) =
         AsyncVal.wrap (GQLExecutionResult.Error (documentId, error, meta))
 

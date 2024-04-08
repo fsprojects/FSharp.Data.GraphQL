@@ -89,7 +89,7 @@ let execute (query : Document) =
     executor.AsyncExecute(query) |> sync
 
 let expectedErrors : GQLProblemDetails list =
-    [ GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.", None) ]
+    [ GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.") ]
 
 [<Fact>]
 let ``Simple query: Should pass when below threshold``() =

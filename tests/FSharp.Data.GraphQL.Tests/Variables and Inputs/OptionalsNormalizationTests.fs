@@ -148,9 +148,7 @@ open FSharp.Data.GraphQL.Validation.ValidationResult
 open ErrorHelpers
 
 let createSingleError message =
-    [{ new IGQLError with
-        member _.Message = message
-        member _.Exception = None }]
+    [{ new IGQLError with member _.Message = message }]
 
 type InputRecordNested = { HomeAddress : AddressRecord; WorkAddress : AddressRecord option; MailingAddress : AddressRecord voption }
 

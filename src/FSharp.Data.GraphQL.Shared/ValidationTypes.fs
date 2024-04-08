@@ -56,7 +56,6 @@ type AstError =
         [
             {
                 Message = message
-                Exception = None
                 Path = path |> Skippable.ofOption |> Skippable.map List.rev
                 Locations = Skip
                 Extensions =

@@ -46,9 +46,7 @@ let ``Schema config should be able to override default error handling`` () =
                 (fun path ex ->
                     let i = idx
                     idx <- idx + 1
-                    [ { new IGQLError with
-                            member __.Message = i.ToString ()
-                            member __.Exception = None } ])
+                    [ { new IGQLError with member __.Message = i.ToString () } ])
     }
     let TestType =
         Define.Object<obj> (

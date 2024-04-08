@@ -31,9 +31,7 @@ module SchemaDefinitions =
                     | NullValue ->  $"Inline value 'null' cannot be converted into {destinationType}"
                     | EnumValue value ->  getMessage "enum" value
                     | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
-                Error [{ new IGQLError with
-                            member _.Message = message
-                            member _.Exception = None  }]
+                Error [{ new IGQLError with member _.Message = message }]
 
             member inputValue.GetCoerceRangeError(destinationType, minValue, maxValue) =
                 let getMessage inputType value = $"Inline value '{value}' of type %s{inputType} cannot be converted into %s{destinationType} of range from {minValue} to {maxValue}"
@@ -46,33 +44,23 @@ module SchemaDefinitions =
                     | NullValue ->  $"Inline value 'null' cannot be converted into {destinationType}"
                     | EnumValue value ->  getMessage "enum" value
                     | value -> raise <| NotSupportedException $"{value} cannot be passed as scalar input"
-                Error [{ new IGQLError with
-                            member _.Message = message
-                            member _.Exception = None }]
+                Error [{ new IGQLError with member _.Message = message }]
 
         type JsonElement with
 
             member e.GetDeserializeError(destinationType, minValue, maxValue ) =
                 let jsonValue = match e.ValueKind with JsonValueKind.String -> e.GetString() | _ -> e.GetRawText()
-                Error [{ new IGQLError with
-                            member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType} of range from {minValue} to {maxValue}"
-                            member _.Exception = None }]
+                Error [{ new IGQLError with member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType} of range from {minValue} to {maxValue}" }]
 
             member e.GetDeserializeError(destinationType) =
                 let jsonValue = match e.ValueKind with JsonValueKind.String -> e.GetString() | _ -> e.GetRawText()
-                Error [{ new IGQLError with
-                            member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType}"
-                            member _.Exception = None }]
+                Error [{ new IGQLError with member _.Message = $"JSON value '{jsonValue}' of kind '{e.ValueKind}' cannot be deserialized into %s{destinationType}" }]
 
         let getParseRangeError (destinationType, minValue, maxValue) value =
-            Error [{ new IGQLError with
-                        member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType} of range from {minValue} to {maxValue}"
-                        member _.Exception = None }]
+            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType} of range from {minValue} to {maxValue}" }]
 
         let getParseError destinationType value =
-            Error [{ new IGQLError with
-                        member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType}"
-                        member _.Exception = None }]
+            Error [{ new IGQLError with member _.Message = $"Inline value '%s{value}' cannot be parsed into %s{destinationType}" }]
 
 
     open System.Globalization
@@ -381,9 +369,7 @@ module SchemaDefinitions =
         | VariableName variableName ->
             match variables.TryGetValue variableName with
             | true, value -> Ok value
-            | false, _ -> Error [{ new IGQLError with
-                                        member _.Message = $"A variable '$%s{variableName}' not found"
-                                        member _.Exception = None }]
+            | false, _ -> Error [{ new IGQLError with member _.Message = $"A variable '$%s{variableName}' not found" }]
         | v -> other v
 
     /// GraphQL type of int
@@ -551,9 +537,7 @@ module SchemaDefinitions =
                              coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
-              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with
-                                                                            member _.Message = msg
-                                                                            member _.Exception = None } |> List.singleton)
+              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
               CoerceOutput = coerceOutput }
 
         /// <summary>
@@ -567,9 +551,7 @@ module SchemaDefinitions =
                              coerceOutput : obj -> 'T option, ?description : string) : ScalarDefinition<'T> =
             { Name = name
               Description = description
-              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with
-                                                                                        member _.Message = msg
-                                                                                        member _.Exception = None }))
+              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
               CoerceOutput = coerceOutput }
 
         /// <summary>
@@ -611,9 +593,7 @@ module SchemaDefinitions =
                                     coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
-              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with
-                                                                            member _.Message = msg
-                                                                            member _.Exception = None } |> List.singleton)
+              CoerceInput = coerceInput >> Result.mapError (fun msg -> { new IGQLError with member _.Message = msg } |> List.singleton)
               CoerceOutput = coerceOutput }
 
         /// <summary>
@@ -627,9 +607,7 @@ module SchemaDefinitions =
                                     coerceOutput : obj -> 'Primitive option, ?description : string) : ScalarDefinition<'Primitive, 'Wrapper> =
             { Name = name
               Description = description
-              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with
-                                                                                        member _.Message = msg
-                                                                                        member _.Exception = None }))
+              CoerceInput = coerceInput >> Result.mapError (List.map (fun msg -> { new IGQLError with member _.Message = msg }))
               CoerceOutput = coerceOutput }
 
         /// <summary>

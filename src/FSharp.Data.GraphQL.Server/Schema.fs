@@ -133,9 +133,7 @@ type SchemaConfig =
             fun path ex ->
                 match ex with
                 | :? GQLMessageException as ex -> [ex]
-                | ex -> [{ new IGQLError with
-                                member _.Message = ex.Message
-                                member _.Exception = Some ex }]
+                | ex -> [{ new IGQLError with member _.Message = ex.Message }]
           SubscriptionProvider = SchemaConfig.DefaultSubscriptionProvider()
           LiveFieldSubscriptionProvider = SchemaConfig.DefaultLiveFieldSubscriptionProvider()
           JsonOptions = JsonFSharpOptions.Default().ToJsonSerializerOptions() }

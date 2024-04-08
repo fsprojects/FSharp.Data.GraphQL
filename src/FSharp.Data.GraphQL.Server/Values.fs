@@ -209,9 +209,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
                                 return found
                             else
                                 Debugger.Break()
-                                return! Error [{ new IGQLError with
-                                                    member _.Message = $"A variable '${variableName}' is not an object"
-                                                    member _.Exception = None }]
+                                return! Error [{ new IGQLError with member _.Message = $"A variable '${variableName}' is not an object" }]
                     | false, _ -> return null
                 }
             | _ -> Ok null
@@ -269,9 +267,7 @@ let rec internal compileByType (inputObjectPath: FieldPath) (inputSource : Input
             | VariableName variableName ->
                 match variables.TryGetValue variableName with
                 | true, var -> Ok var
-                | false, _ -> Error [ { new IGQLError with
-                                            member _.Message = $"A variable '${variableName}' not found"
-                                            member _.Exception = None } ]
+                | false, _ -> Error [ { new IGQLError with member _.Message = $"A variable '${variableName}' not found" } ]
             | _ -> result {
                     let! coerced = coerceEnumInput value
 

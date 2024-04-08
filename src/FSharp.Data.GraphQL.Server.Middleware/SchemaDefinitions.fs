@@ -104,9 +104,7 @@ module SchemaDefinitions =
         | ObjectValue x -> mapInput x
         | NullValue -> NoFilter |> Ok
         // TODO: Get union case
-        | _ -> Error [{ new IGQLError with
-                            member _.Message = $"'ObjectListFilter' must be defined as object but got '{x.GetType ()}'"
-                            member _.Exception = None }]
+        | _ -> Error [{ new IGQLError with member _.Message = $"'ObjectListFilter' must be defined as object but got '{x.GetType ()}'" }]
 
     let private coerceObjectListFilterValue (x : obj) : ObjectListFilter option =
         match x with
