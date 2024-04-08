@@ -11,8 +11,8 @@ open FSharp.Data.GraphQL.Types
 
 module internal GQLProblemDetails =
 
-    let CreateValidation message = GQLProblemDetails.CreateWithKind (message, None, Validation)
-    let CreateValidationFor path message = GQLProblemDetails.CreateWithKind (message, None, Validation, path)
+    let CreateValidation message = GQLProblemDetails.CreateWithKind (message, Validation)
+    let CreateValidationFor path message = GQLProblemDetails.CreateWithKind (message, Validation, path)
 
 type Command =
     | SIT = 1

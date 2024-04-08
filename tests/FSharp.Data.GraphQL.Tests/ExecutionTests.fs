@@ -402,7 +402,7 @@ let ``Execution handles errors: properly propagates errors`` () =
             "inner", null
         ]
     let expectedErrors = [
-        GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", None, Execution, [ box "inner"; "kaboom" ])
+        GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", Execution, [ box "inner"; "kaboom" ])
     ]
     let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
     ensureDirect result <| fun data errors ->
@@ -417,7 +417,7 @@ let ``Execution handles errors: exceptions`` () =
                  "Type", [
                      Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
                  ]))
-    let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", None, Execution, [ box "a" ])
+    let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
     ensureRequestError result <| fun [ error ] -> error |> equals expectedError
 
@@ -439,8 +439,8 @@ let ``Execution handles errors: nullable list fields`` () =
         ]
     let expectedErrors =
         [
-            GQLProblemDetails.CreateWithKind ("Resolver Error!", None, Execution, [ box "list"; 0; "error" ])
-            GQLProblemDetails.CreateWithKind ("Resolver Error!", None, Execution, [ box "list"; 1; "error" ])
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 0; "error" ])
+            GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "list"; 1; "error" ])
         ]
     let result = sync <| Executor(schema).AsyncExecute("query Test { list { error } }", ())
     ensureDirect result <| fun data errors ->

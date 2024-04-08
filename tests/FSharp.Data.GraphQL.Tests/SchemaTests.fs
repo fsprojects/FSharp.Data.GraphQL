@@ -75,8 +75,8 @@ let ``Schema config should be able to override default error handling`` () =
     let expected =
         NameValueLookup.ofList [ "test", box <| NameValueLookup.ofList [ "failing1", null; "passing", box "ok"; "failing2", null ] ]
     let expectedErrors = [
-        GQLProblemDetails.CreateWithKind ("0", None, Execution, [ box "test"; "failing1" ])
-        GQLProblemDetails.CreateWithKind ("1", None, Execution, [ box "test"; "failing2" ])
+        GQLProblemDetails.CreateWithKind ("0", Execution, [ box "test"; "failing1" ])
+        GQLProblemDetails.CreateWithKind ("1", Execution, [ box "test"; "failing2" ])
     ]
     ensureDirect result
     <| fun data errors ->
