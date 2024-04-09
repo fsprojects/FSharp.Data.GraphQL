@@ -21,6 +21,8 @@ type GQLMessageExceptionBase (errorKind, msg, [<Optional>] extensions) =
     inherit GraphQLException (msg)
     interface IGQLError with
         member _.Message = msg
+    interface IGQLExceptionError with
+        member this.Exception = this
     interface IGQLErrorExtensions with
         member _.Extensions =
             match extensions with
