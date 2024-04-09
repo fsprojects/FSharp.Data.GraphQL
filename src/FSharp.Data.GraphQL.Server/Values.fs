@@ -205,6 +205,19 @@ let rec internal compileByType
                             | None ->
                                 Ok
                                 <| wrapOptionalNone param.ParameterType field.TypeDef.Type
+                            | Some input when isNull (box field.ExecuteInput) ->
+                                // hack around the case where field.ExecuteInput is null
+                                let rec extract = function
+                                    | NullValue -> null
+                                    | IntValue i -> box i
+                                    | FloatValue f -> box f
+                                    | BooleanValue b -> box b
+                                    | StringValue s -> box s
+                                    | EnumValue e -> box e
+                                    | ListValue l -> box (l |> List.map extract)
+                                    | ObjectValue o -> o |> Map.map (fun k v -> extract v) |> box
+                                    | VariableName v -> failwithf "Todo: extract variable"
+                                extract input |> Ok
                             | Some prop ->
                                 field.ExecuteInput prop variables
                                 |> Result.map (normalizeOptional param.ParameterType)
