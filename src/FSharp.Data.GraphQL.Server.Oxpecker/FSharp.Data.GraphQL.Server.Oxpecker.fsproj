@@ -1,7 +1,8 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>$(DotNetVersion)</TargetFrameworks>
+    <!--<TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>-->
+    <TargetFramework>net8.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Deterministic>true</Deterministic>
     <Description>FSharp implementation of Facebook GraphQL query language (Application Infrastructure)</Description>
@@ -12,32 +13,24 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="Helpers.fs" />
-    <Compile Include="Exceptions.fs" />
-    <Compile Include="GQLRequest.fs" />
-    <Compile Include="Messages.fs" />
-    <Compile Include="Serialization/JsonConverters.fs" />
-    <Compile Include="Serialization\JSON.fs" />
-    <Compile Include="GraphQLOptions.fs" />
-    <Compile Include="GraphQLSubscriptionsManagement.fs" />
-    <Compile Include="GraphQLWebsocketMiddleware.fs" />
-    <Compile Include="Parser.fs" />
-    <Compile Include="HttpContext.fs" />
-    <Compile Include="StartupExtensions.fs" />
+    <Compile Include="HttpEndpoints.fs" />
   </ItemGroup>
 
   <ItemGroup>
     <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
     <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
     <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server" VersionOverride="$(Version)" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Server.AspNetCore" VersionOverride="$(Version)" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Collections.Pooled" />
+    <PackageReference Include="FSharp.Core" VersionOverride="8.0.200" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
-    <PackageReference Include="Giraffe" />
+    <PackageReference Include="Oxpecker" />
   </ItemGroup>
 
 </Project>

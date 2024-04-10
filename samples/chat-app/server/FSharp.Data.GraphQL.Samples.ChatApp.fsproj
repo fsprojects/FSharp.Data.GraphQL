@@ -23,6 +23,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+    <ProjectReference Include="..\..\..\src\FSharp.Data.GraphQL.Server.Giraffe\FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
   </ItemGroup>
 
 </Project>
