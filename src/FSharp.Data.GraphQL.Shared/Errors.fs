@@ -5,6 +5,7 @@ open System.Collections.Generic
 open System.Collections.ObjectModel
 open System.Linq
 open System.Runtime
+open System.Runtime.InteropServices
 open System.Text.Json.Serialization
 
 type internal FieldPath = obj list
@@ -145,15 +146,15 @@ type GQLProblemDetails = {
         Extensions = Dictionary<string, obj> 1 |> GQLProblemDetails.SetErrorKind kind |> Include
     }
 
-    static member Create (message, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member Create (message, extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
         Exception = ValueNone
         Path = Skip
         Locations = Skip
-        Extensions = extensions |> Skippable.ofOption
+        Extensions = Include extensions
     }
 
-    static member Create (message, extensions) = {
+    static member Create (message, [<Optional>] extensions) = {
         Message = message
         Exception = ValueNone
         Path = Skip
@@ -161,23 +162,31 @@ type GQLProblemDetails = {
         Extensions = extensions
     }
 
-    static member CreateOfException (message : string, ex : Exception, ?path : FieldPath, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member CreateOfException (message : string, ex : Exception, [<Optional>] path : FieldPath Skippable, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
         Message = message
         Exception = ValueSome ex
-        Path = path |> Skippable.ofOption
+        Path = path
         Locations = Skip
-        Extensions = extensions |> Skippable.ofOption
+        Extensions = extensions
     }
 
-    static member Create (message, path, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member CreateOfException (message : string, ex : Exception, path : FieldPath, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
+        Message = message
+        Exception = ValueSome ex
+        Path = Include path
+        Locations = Skip
+        Extensions = extensions
+    }
+
+    static member Create (message, path, extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
         Exception = ValueNone
         Path = Include path
         Locations = Skip
-        Extensions = extensions |> Skippable.ofOption
+        Extensions = Include extensions
     }
 
-    static member Create (message, path, extensions) = {
+    static member Create (message, path, [<Optional>] extensions) = {
         Message = message
         Exception = ValueNone
         Path = Include path
@@ -185,12 +194,12 @@ type GQLProblemDetails = {
         Extensions = extensions
     }
 
-    static member Create (message, locations, ?extensions : IReadOnlyDictionary<string, obj>) = {
+    static member Create (message, locations, extensions : IReadOnlyDictionary<string, obj>) = {
         Message = message
         Exception = ValueNone
         Path = Skip
         Locations = Include locations
-        Extensions = extensions |> Skippable.ofOption
+        Extensions = Include extensions
     }
 
     static member Create (message, locations, extensions) = {
@@ -214,11 +223,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            match extensions with
-            | Include x ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, extensions = x)
-            | Skip ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception)
+            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, extensions = extensions)
         | _ ->
             GQLProblemDetails.Create (message, extensions)
 
@@ -235,11 +240,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            match extensions with
-            | Include x ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions = x)
-            | Skip ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path)
+            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions)
         | _ ->
             GQLProblemDetails.Create (message, path, extensions)
 
@@ -259,11 +260,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            match extensions with
-            | Include x ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions = x)
-            | Skip ->
-                GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path)
+            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions)
         | _ ->
             GQLProblemDetails.Create (message, path, extensions)
 
