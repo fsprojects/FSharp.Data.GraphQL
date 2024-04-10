@@ -245,10 +245,6 @@ fsharp_multi_line_lambda_closing_newline=false
 # default false
 fsharp_keep_indent_in_branch=true
 
-# multiline, nested expressions must be surrounded by blank lines
-# default true
-fsharp_blank_lines_around_nested_multiline_expressions=false
-
 # whether a bar is placed before DU
 # false: type MyDU = Short of int
 # true:  type MyDU = | Short of int
