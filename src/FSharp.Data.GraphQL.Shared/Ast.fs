@@ -1,4 +1,4 @@
-﻿// The MIT License (MIT)
+// The MIT License (MIT)
 // Copyright (c) 2016 Bazinga Technologies Inc
 // Copyright (c) 2019 Henrik Feldt
 
@@ -71,11 +71,7 @@ type Value =
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Arguments
 /// https://spec.graphql.org/October2021/#Arguments
-type Argument =
-    {
-        Name: string
-        Value: Value
-    }
+type Argument = { Name : string; Value : Value }
 
 /// 2.12 Directives
 ///
@@ -96,13 +92,13 @@ type Argument =
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Directives
 /// https://spec.graphql.org/October2021/#Directive
-type Directive =
-    {
-        /// https://spec.graphql.org/October2021/#Name
-        Name: string
-        /// https://spec.graphql.org/October2021/#Arguments
-        Arguments: Argument list
-    }
+type Directive = {
+    /// https://spec.graphql.org/October2021/#Name
+    Name : string
+    /// https://spec.graphql.org/October2021/#Arguments
+    Arguments : Argument list
+} with
+
     member x.If = x.Arguments |> List.find (fun arg -> arg.Name = "if")
 
 /// 2.8 Fragments
@@ -115,13 +111,12 @@ type Directive =
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Fragments
 /// https://spec.graphql.org/October2021/#FragmentSpread
-type FragmentSpread =
-    {
-        Name: string
-        /// Maybe empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+type FragmentSpread = {
+    Name : string
+    /// Maybe empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 /// <summary><para>
 /// 2.8 Fragments
@@ -139,32 +134,31 @@ type FragmentSpread =
 ///
 /// <para>https://spec.graphql.org/October2021/#FragmentDefinition</para>
 /// </summary>
-type FragmentDefinition =
-    {
-        /// Name, but not the constant "on"
-        Name: string
+type FragmentDefinition = {
+    /// Name, but not the constant "on"
+    Name : string
 
-        /// 2.8.1 Type Conditions
-        ///
-        /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
-        /// User.
-        ///
-        /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
-        ///
-        /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
-        /// type of the fragment.
-        ///
-        /// Example: `fragment userFragment on User`
-        ///
-        /// https://spec.graphql.org/October2021/#sec-Type-Conditions
-        TypeCondition: string
+    /// 2.8.1 Type Conditions
+    ///
+    /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
+    /// User.
+    ///
+    /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
+    ///
+    /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
+    /// type of the fragment.
+    ///
+    /// Example: `fragment userFragment on User`
+    ///
+    /// https://spec.graphql.org/October2021/#sec-Type-Conditions
+    TypeCondition : string
 
-        /// May be empty
-        Directives: Directive list
+    /// May be empty
+    Directives : Directive list
 
-        /// May not be empty
-        SelectionSet: Selection list
-    }
+    /// May not be empty
+    SelectionSet : Selection list
+}
 
 /// Fragments can be defined inline within a selection set. This is done to conditionally include fields based on their runtime
 /// type. This feature of standard fragment inclusion was demonstrated in the query FragmentTyping example. We could accomplish
@@ -172,29 +166,28 @@ type FragmentDefinition =
 ///
 /// https://spec.graphql.org/October2021/#sec-Inline-Fragments
 /// https://spec.graphql.org/October2021/#InlineFragment
-and InlineFragment =
-    {
-        /// 2.8.1 Type Conditions
-        ///
-        /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
-        /// User.
-        ///
-        /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
-        ///
-        /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
-        /// type of the fragment.
-        ///
-        /// Example: `fragment userFragment on User`
-        ///
-        /// https://spec.graphql.org/October2021/#sec-Type-Conditions
-        TypeCondition: string option
+and InlineFragment = {
+    /// 2.8.1 Type Conditions
+    ///
+    /// Fragments must specify the type they apply to. In this example, friendFields can be used in the context of querying a
+    /// User.
+    ///
+    /// Fragments cannot be specified on any input value (scalar, enumeration, or input object).
+    ///
+    /// Selections within fragments only return values when the concrete type of the object it is operating on matches the
+    /// type of the fragment.
+    ///
+    /// Example: `fragment userFragment on User`
+    ///
+    /// https://spec.graphql.org/October2021/#sec-Type-Conditions
+    TypeCondition : string option
 
-        /// May be empty
-        Directives: Directive list
+    /// May be empty
+    Directives : Directive list
 
-        /// May not be empty
-        SelectionSet: Selection list
-    }
+    /// May not be empty
+    SelectionSet : Selection list
+}
 
 
 /// <summary><para>
@@ -223,6 +216,7 @@ and Selection =
     | FragmentSpread of FragmentSpread
     /// https://spec.graphql.org/October2021/#InlineFragment
     | InlineFragment of InlineFragment
+
     member x.Directives =
         match x with
         | Field f -> f.Directives
@@ -238,33 +232,33 @@ and Selection =
 /// Some fields describe complex data or relationships to other data. In order to further explore this data, a field may itself
 /// contain a selection set, allowing for deeply nested requests. All GraphQL operations must specify their selections down to
 /// fields which return scalar values to ensure an unambiguously shaped response.
-and Field =
-    {
-        /// 2.7 Field Alias
-        ///
-        /// By default a field’s response key in the response object will use that field’s name. However, you can define a
-        /// different response key by specifying an alias.
-        ///
-        /// https://spec.graphql.org/October2021/#sec-Field-Alias
-        /// https://spec.graphql.org/October2021/#Alias
-        Alias: string option
+and Field = {
+    /// 2.7 Field Alias
+    ///
+    /// By default a field’s response key in the response object will use that field’s name. However, you can define a
+    /// different response key by specifying an alias.
+    ///
+    /// https://spec.graphql.org/October2021/#sec-Field-Alias
+    /// https://spec.graphql.org/October2021/#Alias
+    Alias : string option
 
-        /// https://spec.graphql.org/October2021/#Name
-        Name: string
+    /// https://spec.graphql.org/October2021/#Name
+    Name : string
 
-        /// Arguments are unordered.
-        /// https://spec.graphql.org/October2021/#Arguments
-        Arguments: Argument list
+    /// Arguments are unordered.
+    /// https://spec.graphql.org/October2021/#Arguments
+    Arguments : Argument list
 
-        /// May be empty.
-        /// Arguments are ordered.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty.
+    /// Arguments are ordered.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#SelectionSet
-        SelectionSet: Selection list
-    }
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#SelectionSet
+    SelectionSet : Selection list
+} with
+
     member x.AliasOrName =
         match x.Alias with
         | Some alias -> alias
@@ -286,19 +280,16 @@ type TypeReference =
     /// https://spec.graphql.org/October2021/#ListType
     /// https://spec.graphql.org/October2021/#NonNullType
     | NonNullListType of TypeReference list
-    override x.ToString() =
+
+    override x.ToString () =
         let rec str =
             function
             | NamedType name -> name
-            | ListType inner ->
-                String.Concat [ "["
-                                String.concat ", " (List.map str inner)
-                                "]" ]
+            | ListType inner -> String.Concat [ "["; String.concat ", " (List.map str inner); "]" ]
             | NonNullNameType inner -> $"{inner}!"
             | NonNullListType inner -> $"{str (ListType inner)}!"
 
         str x
-
 
 
 /// 2.10 Variables
@@ -317,18 +308,17 @@ type TypeReference =
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Variables
 /// https://spec.graphql.org/October2021/#VariableDefinition
-type VariableDefinition =
-    {
-        /// https://spec.graphql.org/October2021/#Variable
-        VariableName: string
-        /// https://spec.graphql.org/October2021/#Type
-        Type: TypeReference
-        /// https://spec.graphql.org/October2021/#DefaultValue
-        DefaultValue: Value option
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+type VariableDefinition = {
+    /// https://spec.graphql.org/October2021/#Variable
+    VariableName : string
+    /// https://spec.graphql.org/October2021/#Type
+    Type : TypeReference
+    /// https://spec.graphql.org/October2021/#DefaultValue
+    DefaultValue : Value option
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 /// 2.3 Operations
 ///
@@ -341,52 +331,53 @@ type VariableDefinition =
 /// Each operation is represented by an optional operation name and a selection set.
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Operations
-type OperationDefinition =
-    {
-        /// Defaults to `query`; called "query shorthand".
-        OperationType: OperationType
+type OperationDefinition = {
+    /// Defaults to `query`; called "query shorthand".
+    OperationType : OperationType
 
-        /// https://spec.graphql.org/October2021/#Name
-        Name: string option
+    /// https://spec.graphql.org/October2021/#Name
+    Name : string option
 
-        /// May be empty
-        /// https://spec.graphql.org/October2021/#VariableDefinitions
-        VariableDefinitions: VariableDefinition list
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#VariableDefinitions
+    VariableDefinitions : VariableDefinition list
 
-        /// May be empty
-        Directives: Directive list
+    /// May be empty
+    Directives : Directive list
 
-        /// May not be empty
-        SelectionSet: Selection list
-    }
+    /// May not be empty
+    SelectionSet : Selection list
+} with
+
     /// Create a new Operation Definition.
-    static member Create(selectionSet, ?op: OperationType) =
-        {
-            OperationType = defaultArg op Query
-            Name = None
-            VariableDefinitions = []
-            Directives = []
-            SelectionSet = selectionSet
-        }
+    static member Create (selectionSet, ?op : OperationType) = {
+        OperationType = defaultArg op Query
+        Name = None
+        VariableDefinitions = []
+        Directives = []
+        SelectionSet = selectionSet
+    }
 
     member x.IsShortHandQuery =
-        x.OperationType = Query && x.Name.IsNone && x.VariableDefinitions.IsEmpty && x.Directives.IsEmpty
+        x.OperationType = Query
+        && x.Name.IsNone
+        && x.VariableDefinitions.IsEmpty
+        && x.Directives.IsEmpty
 
 type InputDefinition = string
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
-type InputFieldDefinition =
-    {
-        /// Name of the input field / argument.
-        Name: string
-        /// Optional input field / argument description.
-        Description: string option
-        /// GraphQL type definition of the input type.
-        TypeDef: InputDefinition
-        /// Optional default input value - used when no input was provided.
-        DefaultValue: Value option
-    }
+type InputFieldDefinition = {
+    /// Name of the input field / argument.
+    Name : string
+    /// Optional input field / argument description.
+    Description : string option
+    /// GraphQL type definition of the input type.
+    TypeDef : InputDefinition
+    /// Optional default input value - used when no input was provided.
+    DefaultValue : Value option
+}
 
 /// 3.3.1 Root Operation Types
 ///
@@ -418,13 +409,12 @@ type InputFieldDefinition =
 ///
 /// Also see 3.3 Schema.
 /// https://spec.graphql.org/October2021/#RootOperationTypeDefinition
-type RootOperationTypeDefinition =
-    {
-        /// https://spec.graphql.org/October2021/#OperationType
-        Operation: OperationType
-        /// https://spec.graphql.org/October2021/#NamedType
-        NamedType: string
-    }
+type RootOperationTypeDefinition = {
+    /// https://spec.graphql.org/October2021/#OperationType
+    Operation : OperationType
+    /// https://spec.graphql.org/October2021/#NamedType
+    NamedType : string
+}
 
 /// 3.3 Schema
 ///
@@ -446,18 +436,17 @@ type RootOperationTypeDefinition =
 ///
 /// https://spec.graphql.org/October2021/#sec-Schema
 /// https://spec.graphql.org/October2021/#SchemaDefinition
-type SchemaDefinition =
-    {
-        /// https://spec.graphql.org/October2021/#Description
-        Description: string option
+type SchemaDefinition = {
+    /// https://spec.graphql.org/October2021/#Description
+    Description : string option
 
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// https://spec.graphql.org/October2021/#RootOperationTypeDefinition
-        RootOperationTypes: RootOperationTypeDefinition
-    }
+    /// https://spec.graphql.org/October2021/#RootOperationTypeDefinition
+    RootOperationTypes : RootOperationTypeDefinition
+}
 
 /// 3.6.1 Field Arguments
 ///
@@ -469,38 +458,36 @@ type SchemaDefinition =
 /// exclusively by GraphQL’s introspection system.
 ///
 /// https://spec.graphql.org/October2021/#InputValueDefinition
-type InputValueDefinition =
-    {
-        Description: string option
+type InputValueDefinition = {
+    Description : string option
 
-        Name: string
+    Name : string
 
-        /// https://spec.graphql.org/October2021/#Type
-        Type: TypeReference
+    /// https://spec.graphql.org/October2021/#Type
+    Type : TypeReference
 
-        /// https://spec.graphql.org/October2021/#DefaultValue
-        DefaultValue: Value option
+    /// https://spec.graphql.org/October2021/#DefaultValue
+    DefaultValue : Value option
 
-        /// May be empty
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 /// https://spec.graphql.org/October2021/#FieldDefinition
-type FieldDefinition =
-    {
-        /// https://spec.graphql.org/October2021/#Description
-        Description: string option
-        Name: string
-        /// May be empty
-        /// https://spec.graphql.org/October2021/#ArgumentsDefinition
-        Arguments: InputValueDefinition list
-        /// https://spec.graphql.org/October2021/#Type
-        Type: TypeReference
-        /// May be empty
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+type FieldDefinition = {
+    /// https://spec.graphql.org/October2021/#Description
+    Description : string option
+    Name : string
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#ArgumentsDefinition
+    Arguments : InputValueDefinition list
+    /// https://spec.graphql.org/October2021/#Type
+    Type : TypeReference
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 // TypeDefinitions:
 
@@ -527,15 +514,14 @@ type FieldDefinition =
 /// brevity.
 ///
 /// https://spec.graphql.org/October2021/#ScalarTypeDefinition
-type ScalarTypeDefinition =
-    {
-        Description: string option
+type ScalarTypeDefinition = {
+    Description : string option
 
-        Name: string
+    Name : string
 
-        /// May be empty.
-        Directives: Directive list
-    }
+    /// May be empty.
+    Directives : Directive list
+}
 
 /// 3.5.6 Scalar Extensions
 ///
@@ -552,14 +538,13 @@ type ScalarTypeDefinition =
 /// Example: <c>extend scalar [name] directive...</c>
 ///
 /// https://spec.graphql.org/October2021/#sec-Scalar-Extensions
-type ScalarTypeExtension =
-    {
-        Name: string
+type ScalarTypeExtension = {
+    Name : string
 
-        /// May not be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+    /// May not be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 /// 3.6 Objects
 ///
@@ -574,21 +559,20 @@ type ScalarTypeExtension =
 /// exclusively by GraphQL’s introspection system.
 ///
 /// https://spec.graphql.org/October2021/#sec-Objects
-type ObjectTypeDefinition =
-    {
-        Description: string option
-        // "type"
-        Name: string
-        // "implements .. & .. & .."
-        /// May be empty
-        /// https://spec.graphql.org/October2021/#ImplementsInterfaces
-        ImplementsInterfaces: string list
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-        // "{" fields "}"
-        Fields: FieldDefinition list
-    }
+type ObjectTypeDefinition = {
+    Description : string option
+    // "type"
+    Name : string
+    // "implements .. & .. & .."
+    /// May be empty
+    /// https://spec.graphql.org/October2021/#ImplementsInterfaces
+    ImplementsInterfaces : string list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    // "{" fields "}"
+    Fields : FieldDefinition list
+}
 
 /// 3.6.3 Object Extensions
 ///
@@ -599,16 +583,15 @@ type ObjectTypeDefinition =
 ///
 /// https://spec.graphql.org/October2021/#sec-Object-Extensions
 /// https://spec.graphql.org/October2021/#ObjectTypeExtension
-type ObjectTypeExtension =
-    {
-        /// May be empty.
-        Interfaces: string list
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-        /// May be empty.
-        Fields: FieldDefinition list
-    }
+type ObjectTypeExtension = {
+    /// May be empty.
+    Interfaces : string list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    /// May be empty.
+    Fields : FieldDefinition list
+}
 
 /// 3.7 Interfaces
 ///
@@ -625,16 +608,15 @@ type ObjectTypeExtension =
 /// interfaces in the example below.
 ///
 /// https://spec.graphql.org/October2021/#sec-Interfaces
-type InterfaceTypeDefinition =
-    {
-        Description: string option
-        Name: string
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-        /// May not be empty.
-        Fields: FieldDefinition list
-    }
+type InterfaceTypeDefinition = {
+    Description : string option
+    Name : string
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+    /// May not be empty.
+    Fields : FieldDefinition list
+}
 
 /// 3.7.1 Interface Extensions
 ///
@@ -645,21 +627,20 @@ type InterfaceTypeDefinition =
 /// Interface type extensions may choose not to add additional fields, instead only adding directives.
 ///
 /// https://spec.graphql.org/October2021/#sec-Interface-Extensions
-type InterfaceTypeExtension =
-    {
-        Name: string
+type InterfaceTypeExtension = {
+    Name : string
 
-        /// May be empty if fields is non-empty.
-        ///
-        /// May not be empty if fields is empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty if fields is non-empty.
+    ///
+    /// May not be empty if fields is empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// May not empty if directives is empty.
-        ///
-        /// May be empty if directives is not empty.
-        Fields: FieldDefinition list
-    }
+    /// May not empty if directives is empty.
+    ///
+    /// May be empty if directives is not empty.
+    Fields : FieldDefinition list
+}
 
 /// https://spec.graphql.org/October2021/#UnionMemberTypes
 type UnionMemberType = string
@@ -676,22 +657,21 @@ type UnionMemberType = string
 /// field __typename).
 ///
 /// https://spec.graphql.org/October2021/#sec-Unions
-type UnionTypeDefinition =
-    {
-        /// Optional description
-        Description: string option
+type UnionTypeDefinition = {
+    /// Optional description
+    Description : string option
 
-        /// The name of the union
-        Name: string
+    /// The name of the union
+    Name : string
 
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// May be empty. (!)
-        /// https://spec.graphql.org/October2021/#UnionMemberTypes
-        Types: UnionMemberType list
-    }
+    /// May be empty. (!)
+    /// https://spec.graphql.org/October2021/#UnionMemberTypes
+    Types : UnionMemberType list
+}
 
 /// 3.8.1 Union Extensions
 ///
@@ -700,18 +680,17 @@ type UnionTypeDefinition =
 /// GraphQL service.
 ///
 /// https://spec.graphql.org/October2021/#sec-Unions
-type UnionTypeExtension =
-    {
-        Name: string
+type UnionTypeExtension = {
+    Name : string
 
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// May not be empty.
-        /// https://spec.graphql.org/October2021/#UnionMemberTypes
-        Types: UnionMemberType list
-    }
+    /// May not be empty.
+    /// https://spec.graphql.org/October2021/#UnionMemberTypes
+    Types : UnionMemberType list
+}
 
 /// 3.9 Enums
 ///
@@ -723,16 +702,15 @@ type UnionTypeExtension =
 ///
 /// https://spec.graphql.org/October2021/#sec-Enums
 /// https://spec.graphql.org/October2021/#EnumValueDefinition
-type EnumValueDefinition =
-    {
-        Description: string option
+type EnumValueDefinition = {
+    Description : string option
 
-        Name: string
+    Name : string
 
-        /// May be empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
-    }
+    /// May be empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
+}
 
 /// 3.9 Enums
 ///
@@ -744,14 +722,13 @@ type EnumValueDefinition =
 ///
 /// https://spec.graphql.org/October2021/#sec-Enums
 /// https://spec.graphql.org/October2021/#EnumTypeDefinition
-type EnumTypeDefinition =
-    {
-        Description: string option
-        Name: string
+type EnumTypeDefinition = {
+    Description : string option
+    Name : string
 
-        Directives: Directive list
-        Values: EnumValueDefinition list
-    }
+    Directives : Directive list
+    Values : EnumValueDefinition list
+}
 
 /// 3.9.1 Enum Extensions
 ///
@@ -760,21 +737,20 @@ type EnumTypeDefinition =
 /// GraphQL service.
 ///
 /// https://spec.graphql.org/October2021/#sec-Enum-Extensions
-type EnumTypeExtension =
-    {
-        Name: string
+type EnumTypeExtension = {
+    Name : string
 
-        /// May be empty if fields is non-empty.
-        ///
-        /// May not be empty if fields is empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty if fields is non-empty.
+    ///
+    /// May not be empty if fields is empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// May not empty if directives is empty.
-        ///
-        /// May be empty if directives is not empty.
-        Values: EnumValueDefinition list
-    }
+    /// May not empty if directives is empty.
+    ///
+    /// May be empty if directives is not empty.
+    Values : EnumValueDefinition list
+}
 
 
 /// 3.10 Input Objects
@@ -796,29 +772,28 @@ type EnumTypeExtension =
 /// Note: there's a long section on how input values are coerced in the spec.
 ///
 /// https://spec.graphql.org/October2021/#sec-Input-Objects
-type InputObjectTypeDefinition =
-    {
-        Description: string option
+type InputObjectTypeDefinition = {
+    Description : string option
 
-        // "input"
+    // "input"
 
-        Name: string
+    Name : string
 
-        /// May be empty if fields is non-empty.
-        ///
-        /// May not be empty if fields is empty.
-        /// https://spec.graphql.org/October2021/#Directives
-        Directives: Directive list
+    /// May be empty if fields is non-empty.
+    ///
+    /// May not be empty if fields is empty.
+    /// https://spec.graphql.org/October2021/#Directives
+    Directives : Directive list
 
-        /// "{" Fields "}"
-        ///
-        /// May not empty if directives is empty.
-        ///
-        /// May be empty if directives is not empty.
-        ///
-        /// https://spec.graphql.org/October2021/#InputFieldsDefinition
-        Fields: InputValueDefinition list
-    }
+    /// "{" Fields "}"
+    ///
+    /// May not empty if directives is empty.
+    ///
+    /// May be empty if directives is not empty.
+    ///
+    /// https://spec.graphql.org/October2021/#InputFieldsDefinition
+    Fields : InputValueDefinition list
+}
 
 /// 3.10.1 Input Object Extensions
 ///
@@ -826,12 +801,7 @@ type InputObjectTypeDefinition =
 /// object type. For example, this might be used by a GraphQL service which is itself an extension of another GraphQL service.
 ///
 /// https://spec.graphql.org/October2021/#sec-Input-Object-Extensions
-type InputObjectTypeExtension =
-    {
-        Name: string
-        Directives: Directive list
-        Fields: InputValueDefinition []
-    }
+type InputObjectTypeExtension = { Name : string; Directives : Directive list; Fields : InputValueDefinition[] }
 
 type TypeDefinition =
     /// https://spec.graphql.org/October2021/#ScalarTypeExtension
@@ -892,25 +862,24 @@ type DirectiveLocation =
 ///
 /// https://spec.graphql.org/October2021/#sec-Type-System.Directives
 /// https://spec.graphql.org/October2021/#DirectiveDefinition
-type DirectiveDefinition =
-    {
-        /// Optional directive description.
-        Description: string option
+type DirectiveDefinition = {
+    /// Optional directive description.
+    Description : string option
 
-        // "directive" "@"
+    // "directive" "@"
 
-        /// Directive's name - it's NOT '@' prefixed.
-        Name: string
+    /// Directive's name - it's NOT '@' prefixed.
+    Name : string
 
-        /// https://spec.graphql.org/October2021/#ArgumentsDefinition
-        Arguments: InputValueDefinition list
+    /// https://spec.graphql.org/October2021/#ArgumentsDefinition
+    Arguments : InputValueDefinition list
 
-        // [ "repeatable" ] "on"
+    // [ "repeatable" ] "on"
 
-        /// Directive location - describes, which part's of the query AST are valid places to include current directive to.
-        /// https://spec.graphql.org/October2021/#DirectiveLocation
-        Locations: DirectiveLocation
-    }
+    /// Directive location - describes, which part's of the query AST are valid places to include current directive to.
+    /// https://spec.graphql.org/October2021/#DirectiveLocation
+    Locations : DirectiveLocation
+}
 
 
 /// 3.0 Type System
@@ -953,13 +922,12 @@ type TypeSystemDefinition =
 ///
 /// https://spec.graphql.org/October2021/#sec-Schema-Extension
 /// https://spec.graphql.org/October2021/#SchemaExtension
-type SchemaExtension =
-    {
-        /// May be empty if OperationTypes is not, else it may not be empty.
-        Directives: Directive list
-        /// May be empty if the Directives list is not, else it may not be empty.
-        OperationTypes: RootOperationTypeDefinition list
-    }
+type SchemaExtension = {
+    /// May be empty if OperationTypes is not, else it may not be empty.
+    Directives : Directive list
+    /// May be empty if the Directives list is not, else it may not be empty.
+    OperationTypes : RootOperationTypeDefinition list
+}
 
 // Type Extensions:
 
@@ -1016,11 +984,10 @@ type TypeSystemExtension =
 
 
 /// https://spec.graphql.org/October2021/#TypeSystemDocument
-type TypeSystemDocument =
-    {
-        /// https://spec.graphql.org/October2021/#TypeSystemDefinition
-        Definitions: TypeSystemDefinition list
-    }
+type TypeSystemDocument = {
+    /// https://spec.graphql.org/October2021/#TypeSystemDefinition
+    Definitions : TypeSystemDefinition list
+}
 
 
 /// Prefer to use either <c>TypeSystemDocument</c> or <c>ExecutableDocument</c>.
@@ -1069,14 +1036,12 @@ type ExecutableDefinition =
         | FragmentDefinition frag -> frag.Directives
 
 
-
 /// https://spec.graphql.org/October2021/#ExecutableDocument
-type ExecutableDocument =
-    {
-        Definitions: ExecutableDefinition list
-    }
-    member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)
+type ExecutableDocument = {
+    Definitions : ExecutableDefinition list
+} with
 
+    member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)
 
 
 /// 2.2 Document
@@ -1101,9 +1066,8 @@ type ExecutableDocument =
 ///
 /// https://spec.graphql.org/October2021/#sec-Document-Syntax
 /// https://spec.graphql.org/October2021/#Document
-type Document =
-    {
-        Definitions: Definition list
-    }
+type Document = {
+    Definitions : Definition list
+} with
 
     member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)

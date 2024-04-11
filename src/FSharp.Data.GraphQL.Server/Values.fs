@@ -1,4 +1,4 @@
-﻿/// The MIT License (MIT)
+/// The MIT License (MIT)
 /// Copyright (c) 2016 Bazinga Technologies Inc
 
 [<AutoOpen>]
@@ -14,23 +14,33 @@ open Microsoft.FSharp.Reflection
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
-    let rec convert isNullable (schema: ISchema) (ast: TypeReference) : TypeDef option =
+    let rec convert isNullable (schema : ISchema) (ast : TypeReference) : TypeDef option =
         match ast with
         | NamedType name ->
             match schema.TryFindType name with
-            | Some namedDef -> Some(if isNullable then upcast namedDef.MakeNullable() else upcast namedDef)
+            | Some namedDef ->
+                Some (
+                    if isNullable then
+                        upcast namedDef.MakeNullable ()
+                    else
+                        upcast namedDef
+                )
             | None -> None
         | ListType inner ->
             convert true schema inner
-            |> Option.map (fun i -> if isNullable then upcast i.MakeList().MakeNullable() else upcast i.MakeList())
+            |> Option.map (fun i ->
+                if isNullable then
+                    upcast i.MakeList().MakeNullable ()
+                else
+                    upcast i.MakeList ())
         | NonNullNameType inner -> convert false schema inner
 
     convert true schema ast
 
-let inline private notAssignableMsg (innerDef: InputDef) value : string =
+let inline private notAssignableMsg (innerDef : InputDef) value : string =
     sprintf "value of type %s is not assignable from %s" innerDef.Type.Name (value.GetType().Name)
 
-let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteInput =
+let rec internal compileByType (errMsg : string) (inputDef : InputDef) : ExecuteInput =
     match inputDef with
     | Scalar scalardef -> variableOrElse (scalardef.CoerceInput >> Option.toObj)
     | InputObject objdef ->
@@ -38,9 +48,12 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteIn
         let ctor = ReflectionHelper.matchConstructor objtype (objdef.Fields |> Array.map (fun x -> x.Name))
 
         let mapper =
-            ctor.GetParameters()
+            ctor.GetParameters ()
             |> Array.map (fun param ->
-                match objdef.Fields |> Array.tryFind (fun field -> field.Name = param.Name) with
+                match
+                    objdef.Fields
+                    |> Array.tryFind (fun field -> field.Name = param.Name)
+                with
                 | Some x -> x
                 | None ->
                     failwithf
@@ -59,7 +72,7 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteIn
                         | None -> null
                         | Some prop -> field.ExecuteInput prop variables)
 
-                let instance = ctor.Invoke(args)
+                let instance = ctor.Invoke (args)
                 instance
             | Variable variableName ->
                 match Map.tryFind variableName variables with
@@ -85,9 +98,12 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteIn
                 // try to construct a list from single element
                 let single = inner value variables
 
-                if single = null then null
-                else if isArray then ReflectionHelper.arrayOfList innerdef.Type [ single ]
-                else cons single nil
+                if single = null then
+                    null
+                else if isArray then
+                    ReflectionHelper.arrayOfList innerdef.Type [ single ]
+                else
+                    cons single nil
     | Nullable (Input innerdef) ->
         let inner = compileByType errMsg innerdef
         let some, none, _ = ReflectionHelper.optionOfType innerdef.Type
@@ -99,7 +115,10 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteIn
             | null -> none
             | coerced ->
                 let c = some coerced
-                if c <> null then c else raise (GraphQLException(errMsg + notAssignableMsg innerdef coerced))
+                if c <> null then
+                    c
+                else
+                    raise (GraphQLException (errMsg + notAssignableMsg innerdef coerced))
     | Enum enumdef ->
         fun value variables ->
             match value with
@@ -115,12 +134,17 @@ let rec internal compileByType (errMsg: string) (inputDef: InputDef) : ExecuteIn
                 | Some s -> ReflectionHelper.parseUnion enumdef.Type s
     | _ -> failwithf "Unexpected value of inputDef: %O" inputDef
 
-let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: obj) (errMsg: string) : obj =
+let rec private coerceVariableValue isNullable typedef (vardef : VarDef) (input : obj) (errMsg : string) : obj =
     match typedef with
     | Scalar scalardef ->
         match scalardef.CoerceValue input with
         | None when isNullable -> null
-        | None -> raise (GraphQLException <| errMsg + (sprintf "expected value of type %s but got None" scalardef.Name))
+        | None ->
+            raise (
+                GraphQLException
+                <| errMsg
+                   + (sprintf "expected value of type %s but got None" scalardef.Name)
+            )
         | Some res -> res
     | Nullable (Input innerdef) ->
         let some, none, innerValue = ReflectionHelper.optionOfType innerdef.Type
@@ -135,7 +159,8 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
             else
                 raise (
                     GraphQLException
-                    <| errMsg + (sprintf "value of type %O is not assignable from %O" innerdef.Type (coerced.GetType()))
+                    <| errMsg
+                       + (sprintf "value of type %O is not assignable from %O" innerdef.Type (coerced.GetType ()))
                 )
         else
             none
@@ -147,7 +172,8 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
         | null ->
             raise (
                 GraphQLException
-                <| errMsg + (sprintf "expected value of type %s, but no value was found." (vardef.TypeDef.ToString()))
+                <| errMsg
+                   + (sprintf "expected value of type %s, but no value was found." (vardef.TypeDef.ToString ()))
             )
         // special case - while single values should be wrapped with a list in this scenario,
         // string would be treat as IEnumerable and coerced into a list of chars
@@ -165,29 +191,43 @@ let rec private coerceVariableValue isNullable typedef (vardef: VarDef) (input: 
                 |> List.fold (fun acc coerced -> cons coerced acc) nil
 
             mapped
-        | other -> raise (GraphQLException <| errMsg + (sprintf "Cannot coerce value of type '%O' to list." (other.GetType())))
-    | InputObject objdef ->
-        coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
+        | other ->
+            raise (
+                GraphQLException
+                <| errMsg
+                   + (sprintf "Cannot coerce value of type '%O' to list." (other.GetType ()))
+            )
+    | InputObject objdef -> coerceVariableInputObject objdef vardef input (errMsg + (sprintf "in input object '%s': " objdef.Name))
     | Enum enumdef ->
         match input with
         | :? string as s -> ReflectionHelper.parseUnion enumdef.Type s
         | null when isNullable -> null
-        | null -> raise (GraphQLException <| errMsg + (sprintf "Expected Enum '%s', but no value was found." enumdef.Name))
-        | u when FSharpType.IsUnion(enumdef.Type) && enumdef.Type = input.GetType() -> u
-        | o when Enum.IsDefined(enumdef.Type, o) -> o
+        | null ->
+            raise (
+                GraphQLException
+                <| errMsg
+                   + (sprintf "Expected Enum '%s', but no value was found." enumdef.Name)
+            )
+        | u when
+            FSharpType.IsUnion (enumdef.Type)
+            && enumdef.Type = input.GetType ()
+            ->
+            u
+        | o when Enum.IsDefined (enumdef.Type, o) -> o
         | _ ->
             raise (
                 GraphQLException
                 <| errMsg
-                   + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType()) enumdef.Name)
+                   + (sprintf "Cannot coerce value of type '%O' to type Enum '%s'" (input.GetType ()) enumdef.Name)
             )
     | _ ->
         raise (
             GraphQLException
-            <| errMsg + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions."
+            <| errMsg
+               + "Only Scalars, Nullables, Lists and InputObjects are valid type definitions."
         )
 
-and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) errMsg =
+and private coerceVariableInputObject (objdef) (vardef : VarDef) (input : obj) errMsg =
     //TODO: this should be eventually coerced to complex object
     match input with
     | :? Map<string, obj> as map ->
@@ -196,14 +236,13 @@ and private coerceVariableInputObject (objdef) (vardef: VarDef) (input: obj) err
             |> Array.map (fun field ->
                 let valueFound = Map.tryFind field.Name map |> Option.toObj
 
-                (field.Name,
-                 coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
+                (field.Name, coerceVariableValue false field.TypeDef vardef valueFound (errMsg + (sprintf "in field '%s': " field.Name))))
             |> Map.ofArray
 
         upcast mapped
     | _ -> input
 
-let internal coerceVariable (vardef: VarDef) (inputs) =
+let internal coerceVariable (vardef : VarDef) (inputs) =
     let vname = vardef.Name
 
     match Map.tryFind vname inputs with
@@ -216,10 +255,5 @@ let internal coerceVariable (vardef: VarDef) (inputs) =
         | None ->
             match vardef.TypeDef with
             | Nullable _ -> null
-            | _ ->
-                raise (
-                    GraphQLException(
-                        sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString())
-                    )
-                )
+            | _ -> raise (GraphQLException (sprintf "Variable '$%s' of required type %s has no value provided." vname (vardef.TypeDef.ToString ())))
     | Some input -> coerceVariableValue false vardef.TypeDef vardef input (sprintf "Variable '$%s': " vname)

@@ -8,15 +8,15 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Ast.Extensions
 
 /// Converts line breaks to a single standard to avoid different SO line break termination issues.
-let normalize (str: string) = str.Replace("\r\n", "\n")
+let normalize (str : string) = str.Replace ("\r\n", "\n")
 
 /// Generates an Ast.Document from a query string, prints it to another
 /// query string and expects it to be equal. Input query must be formatted (with line breaks and identation).
 /// Indentation unit is two empty spaces.
-let private printAndAssert (query: string) =
+let private printAndAssert (query : string) =
     let document = parse query
     let expected = normalize query
-    let actual = normalize (document.ToQueryString())
+    let actual = normalize (document.ToQueryString ())
     actual |> equals expected
 
 [<Fact>]
@@ -305,7 +305,9 @@ let ``Should be able to print type name meta field`` () =
 
     let document = parse query
 
-    let actual = normalize <| document.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames)
+    let actual =
+        normalize
+        <| document.ToQueryString (QueryStringPrintingOptions.IncludeTypeNames)
 
     actual |> equals expected
 
@@ -331,63 +333,29 @@ let ``Should generate information map correctly`` () =
 
     let document = parse query
 
-    let actual = document.GetInfoMap() |> Map.toList
+    let actual = document.GetInfoMap () |> Map.toList
 
-    let expected =
-        [
-            (Some "q",
-             [
-                 TypeField
-                     {
-                         Name = "hero"
+    let expected = [
+        (Some "q",
+         [
+             TypeField {
+                 Name = "hero"
+                 Alias = None
+                 Fields = [
+                     TypeField {
+                         Name = "friends"
                          Alias = None
-                         Fields =
-                             [
-                                 TypeField
-                                     {
-                                         Name = "friends"
-                                         Alias = None
-                                         Fields =
-                                             [
-                                                 FragmentField
-                                                     {
-                                                         Name = "primaryFunction"
-                                                         Alias = None
-                                                         TypeCondition = "Droid"
-                                                         Fields = []
-                                                     }
-                                                 FragmentField
-                                                     {
-                                                         Name = "id"
-                                                         Alias = None
-                                                         TypeCondition = "Droid"
-                                                         Fields = []
-                                                     }
-                                                 FragmentField
-                                                     {
-                                                         Name = "homePlanet"
-                                                         Alias = None
-                                                         TypeCondition = "Human"
-                                                         Fields = []
-                                                     }
-                                                 FragmentField
-                                                     {
-                                                         Name = "id"
-                                                         Alias = None
-                                                         TypeCondition = "Human"
-                                                         Fields = []
-                                                     }
-                                             ]
-                                     }
-                                 TypeField
-                                     {
-                                         Name = "name"
-                                         Alias = None
-                                         Fields = []
-                                     }
-                             ]
+                         Fields = [
+                             FragmentField { Name = "primaryFunction"; Alias = None; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "homePlanet"; Alias = None; TypeCondition = "Human"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Human"; Fields = [] }
+                         ]
                      }
-             ])
-        ]
+                     TypeField { Name = "name"; Alias = None; Fields = [] }
+                 ]
+             }
+         ])
+    ]
 
     actual |> equals expected
