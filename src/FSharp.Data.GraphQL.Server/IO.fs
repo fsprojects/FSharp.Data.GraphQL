@@ -60,7 +60,7 @@ type GQLExecutionResult =
         GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create msg ], meta)
 
     static member ErrorFromException(documentId : int, ex : Exception, meta : Metadata) =
-        GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.CreateOfException (ex.Message, ex) ], meta)
+        GQLExecutionResult.RequestError(documentId, [ GQLProblemDetails.Create (ex.Message, ex) ], meta)
 
     static member Invalid(documentId, errors, meta) =
         GQLExecutionResult.RequestError(documentId, errors, meta)

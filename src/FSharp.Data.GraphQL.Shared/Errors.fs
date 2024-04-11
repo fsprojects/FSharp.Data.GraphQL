@@ -162,7 +162,7 @@ type GQLProblemDetails = {
         Extensions = extensions
     }
 
-    static member CreateOfException (message : string, ex : Exception, [<Optional>] path : FieldPath Skippable, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
+    static member Create (message : string, ex : Exception, [<Optional>] path : FieldPath Skippable, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
         Message = message
         Exception = ValueSome ex
         Path = path
@@ -170,7 +170,7 @@ type GQLProblemDetails = {
         Extensions = extensions
     }
 
-    static member CreateOfException (message : string, ex : Exception, path : FieldPath, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
+    static member Create (message : string, ex : Exception, path : FieldPath, [<Optional>] extensions : IReadOnlyDictionary<string, obj> Skippable) = {
         Message = message
         Exception = ValueSome ex
         Path = Include path
@@ -223,7 +223,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, extensions = extensions)
+            GQLProblemDetails.Create(exceptionError.Message, exceptionError.Exception, extensions = extensions)
         | _ ->
             GQLProblemDetails.Create (message, extensions)
 
@@ -240,7 +240,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions)
+            GQLProblemDetails.Create(exceptionError.Message, exceptionError.Exception, path, extensions)
         | _ ->
             GQLProblemDetails.Create (message, path, extensions)
 
@@ -260,7 +260,7 @@ type GQLProblemDetails = {
 
         match error with
         | :? IGQLExceptionError as exceptionError ->
-            GQLProblemDetails.CreateOfException(exceptionError.Message, exceptionError.Exception, path, extensions)
+            GQLProblemDetails.Create(exceptionError.Message, exceptionError.Exception, path, extensions)
         | _ ->
             GQLProblemDetails.Create (message, path, extensions)
 
