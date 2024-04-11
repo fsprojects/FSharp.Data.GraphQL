@@ -1,0 +1,264 @@
+root = true
+###############################
+# Core EditorConfig Options   #
+###############################
+# All files
+[*]                            # Do not apply to all files not to break something
+guidelines = 120 dashed, 150
+# Either crlf | lf, default is system-dependent (when not specified at all)
+# end_of_line=crlf
+# Remove whitespace at the end of any line
+
+# Code files
+[*.{cs,csx,fs,fsi,fsx}]
+trim_trailing_whitespace = true
+insert_final_newline     = true
+indent_style             = space # default=space
+indent_size              = 4     # default=4
+charset                  = utf-8
+
+# Project files and app specific XML files
+[*.{csproj,fsproj,shproj,projitems,props,xaml}]
+trim_trailing_whitespace = true
+insert_final_newline     = true
+indent_style             = space
+indent_size              = 2
+
+# XML configuration files
+[{app.config,nuget.config,packages.config,web.config}]
+trim_trailing_whitespace = true
+insert_final_newline     = true
+indent_style             = space
+indent_size              = 2
+
+# XML files
+[*.xml]
+trim_trailing_whitespace = false # do not trim as it affects CData
+insert_final_newline     = true
+indent_style             = space
+indent_size              = 2
+
+# JSON and YAML files
+[*.{json,yml,yaml}]
+trim_trailing_whitespace = true
+insert_final_newline     = true
+indent_style             = space
+indent_size              = 2
+
+# Proto files
+[*.proto]
+trim_trailing_whitespace = true
+insert_final_newline     = true
+indent_style             = space
+indent_size              = 4
+
+###############################
+# F# Coding Conventions       #
+###############################
+# filetypes that need to be formatted by Fantomas:
+[*.{fs,fsx}]
+
+# files to be ignored for Fantomas may go into this file, if present:
+# .fantomasignore
+
+# indentation size, default=4
+indent_size=4
+
+# line length before it gets broken down into multiple lines
+# default 120
+max_line_length=150
+
+# Either crlf | lf, default is system-dependent (when not specified at all)
+# end_of_line=crlf
+
+# Whether end-of-file has a newline, default=true
+insert_final_newline=true
+
+# false: someLineOfCode
+# true: someLineOfCode;
+# default false
+fsharp_semicolon_at_end_of_line=false
+
+# false: f(1,2)
+# true: f(1, 2)
+# default true
+fsharp_space_before_parameter=true
+
+# false: Option.map(fun x -> x)
+# true: Option.map (fun x -> x)
+# default true
+fsharp_space_before_lowercase_invocation=true
+
+# false: x.ToString()
+# true: x.ToString ()
+# default false
+fsharp_space_before_uppercase_invocation=true
+
+# false: new Ship(withBeans)
+# true: new Ship (withBeans)
+# default false
+fsharp_space_before_class_constructor=true
+
+# false: __.member Foo(x) = x
+# true: __.member Foo (x) = x
+# default false
+fsharp_space_before_member=true
+
+# false: type Point = { x: int; y: int }
+# true:  type Point = { x : int; y : int }
+# default false
+fsharp_space_before_colon=true
+
+# false: (a,b,c)
+# true: (a, b, c)
+# default true
+fsharp_space_after_comma=true
+
+# false: [a; b; 42]
+# true:  [a ; b ; 42]
+# default false
+fsharp_space_before_semicolon=false
+
+# false: [a;b;42]
+# true:  [a; b; 42]
+# default true
+fsharp_space_after_semicolon=true
+
+# false: let a = [1;2;3]
+# true: let a = [ 1;2;3 ]
+# default true
+fsharp_space_around_delimiter=true
+
+# breaks an if-then-else in smaller parts if it is on one line
+# default 40
+fsharp_max_if_then_else_short_width=60
+
+# breaks an infix operator expression if it is on one line
+# infix: a + b + c
+# default 50
+fsharp_max_infix_operator_expression=60
+
+# breaks a single-line record declaration
+# i.e. if this gets too wide: { X = 10; Y = 12 }
+# default 40
+fsharp_max_record_width=80
+
+# breaks a record into one item per line if items exceed this number
+# i.e. if set to 1, this will be on three lines: { X = 10; Y = 12 }
+# requires fsharp_record_multiline_formatter=number_of_items to take effect
+# default 1
+fsharp_max_record_number_of_items=1
+
+# whether to use line-length (by counting chars) or items (by counting fields)
+# for the record settings above
+# either number_of_items or character_width
+# default character_width
+fsharp_record_multiline_formatter=character_width
+
+# breaks a single line array or list if it exceeds this size
+# default 40
+fsharp_max_array_or_list_width=100
+
+# breaks an array or list into one item per line if items exceeds this number
+# i.e. if set to 1, this will be shown on three lines [1; 2; 3]
+# requires fsharp_array_or_list_multiline_formatter=number_of_items to take effect
+# default 1
+fsharp_max_array_or_list_number_of_items=1
+
+# whether to use line-length (by counting chars) or items (by counting fields)
+# for the list and array settings above
+# either number_of_items or character_width
+# default character_width
+fsharp_array_or_list_multiline_formatter=character_width
+
+# maximum with of a value binding, does not include keyword "let"
+# default 80
+fsharp_max_value_binding_width=100
+
+# maximum width for function and member binding (rh-side)
+# default 40
+fsharp_max_function_binding_width=80
+
+# maximum width for expressions like X.DoY().GetZ(10).Help()
+# default 50
+fsharp_max_dot_get_expression_width=80
+
+# whether open/close brackets go on the same column
+# cramped:    type Range =
+#               { From: float
+#                 To: float }
+# aligned:    type Range =
+#                 {
+#                     From: float
+#                     To: float
+#                 }
+# stroustrup: type Range = {
+#                 From: float
+#                 To: float
+#             }
+# default cramped
+fsharp_multiline_bracket_style=stroustrup
+
+# whether to move the beginning of compuitation expression to the new line
+# true:  let x =
+#            computation {
+#                ...
+#            }
+# false: let x = computation {
+#            ..
+#        }
+fsharp_newline_before_multiline_computation_expression=false
+
+# whether a newline should be placed before members
+# false: type Range =
+#            { From: float }
+#            member this.Length = this.To - this.From
+# true:  type Range =
+#            { From: float }
+#
+#            member this.Length = this.To - this.From
+# default false
+fsharp_newline_between_type_definition_and_members=true
+
+# if a function sign exceeds max_line_length, then:
+# false: do not place the equal-sign on a single line
+# true: place the equal-sign on a single line
+# default false
+fsharp_align_function_signature_to_indentation=false
+
+# see docs: https://github.com/fsprojects/fantomas/blob/master/docs/Documentation.md#fsharp_alternative_long_member_definitions
+# default false
+fsharp_alternative_long_member_definitions=false
+
+# places closing paren in lambda on a newline in multiline lambdas
+# default false
+fsharp_multi_line_lambda_closing_newline=false
+
+# allows the 'else'-branch to be aligned at same level as 'else' if the ret type allows it
+# false: match x with
+#        | null -> ()
+#        | _ -> ()
+# true:  match x with
+#        | null -> ()
+#        | _ ->
+#        ()
+# default false
+fsharp_keep_indent_in_branch=true
+
+# multiline, nested expressions must be surrounded by blank lines
+# default true
+fsharp_blank_lines_around_nested_multiline_expressions=false
+
+# whether a bar is placed before DU
+# false: type MyDU = Short of int
+# true:  type MyDU = | Short of int
+# default false
+fsharp_bar_before_discriminated_union_declaration=false
+
+# multiline, nested expressions must be surrounded by blank lines
+# default true
+fsharp_blank_lines_around_nested_multiline_expressions=false
+
+# set maximal number of consecutive blank lines to keep from original source
+# it doesn't change number of new blank lines generated by Fantomas
+fsharp_keep_max_number_of_blank_lines=2
