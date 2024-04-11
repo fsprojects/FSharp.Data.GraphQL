@@ -6,14 +6,15 @@ namespace FSharp.Data.GraphQL.Ast
 
 /// 2.2 Query Document
 type Document = {
-    Definitions: Definition list
-}
-with
+    Definitions : Definition list
+} with
+
     member doc.IsEmpty = doc.Definitions.IsEmpty
 
 and Definition =
     | OperationDefinition of OperationDefinition
     | FragmentDefinition of FragmentDefinition
+
     member x.Name =
         match x with
         | OperationDefinition op -> op.Name
@@ -28,16 +29,19 @@ and Definition =
         | FragmentDefinition frag -> frag.SelectionSet
 
 /// 2.2.1 Operations
-and OperationDefinition =
-    {
-        OperationType: OperationType
-        Name: string option
-        VariableDefinitions: VariableDefinition list
-        Directives: Directive list
-        SelectionSet: Selection list
-    }
+and OperationDefinition = {
+    OperationType : OperationType
+    Name : string option
+    VariableDefinitions : VariableDefinition list
+    Directives : Directive list
+    SelectionSet : Selection list
+} with
+
     member x.IsShortHandQuery =
-        x.OperationType = Query && x.Name.IsNone && x.VariableDefinitions.IsEmpty && x.Directives.IsEmpty
+        x.OperationType = Query
+        && x.Name.IsNone
+        && x.VariableDefinitions.IsEmpty
+        && x.Directives.IsEmpty
 
 and OperationType =
     | Query
@@ -50,6 +54,7 @@ and Selection =
     | FragmentSpread of FragmentSpread
     /// 2.2.6.2 Inline Fragments
     | InlineFragment of FragmentDefinition
+
     member x.Directives =
         match x with
         | Field f -> f.Directives
@@ -57,38 +62,32 @@ and Selection =
         | InlineFragment f -> f.Directives
 
 /// 2.2.3 Fields
-and Field =
-    {
-        /// 2.2.5 Field Alias
-        Alias: string option
-        Name: string
-        Arguments: Argument list
-        Directives: Directive list
-        SelectionSet: Selection list
-    }
+and Field = {
+    /// 2.2.5 Field Alias
+    Alias : string option
+    Name : string
+    Arguments : Argument list
+    Directives : Directive list
+    SelectionSet : Selection list
+} with
+
     member x.AliasOrName =
         match x.Alias with
         | Some alias -> alias
         | None -> x.Name
 
 /// 2.2.4 Arguments
-and Argument = {
-    Name: string
-    Value: InputValue
-}
+and Argument = { Name : string; Value : InputValue }
 
 /// 2.2.6 Fragments
-and FragmentSpread = {
-    Name: string
-    Directives: Directive list
-}
+and FragmentSpread = { Name : string; Directives : Directive list }
 
 and FragmentDefinition = {
-    Name: string option
+    Name : string option
     /// 2.2.6.1 Type Conditions
-    TypeCondition: string option
-    Directives: Directive list
-    SelectionSet: Selection list
+    TypeCondition : string option
+    Directives : Directive list
+    SelectionSet : Selection list
 }
 
 /// 2.9 Input Values
@@ -113,79 +112,49 @@ and InputValue =
     | VariableName of string
 
 /// 2.2.8 Variables
-and VariableDefinition =
-    { VariableName: string
-      Type: InputType
-      DefaultValue: InputValue option }
+and VariableDefinition = { VariableName : string; Type : InputType; DefaultValue : InputValue option }
 
 /// 2.2.9 Input Types
 and InputType =
     | NamedType of string
     | ListType of InputType
     | NonNullType of InputType
-    override x.ToString() =
-        let rec str = function
+
+    override x.ToString () =
+        let rec str =
+            function
             | NamedType name -> name
             | ListType inner -> "[" + (str inner) + "]"
             | NonNullType inner -> (str inner) + "!"
         str x
 
 /// 2.2.10 Directives
-and Directive =
-    {
-        Name: string
-        Arguments: Argument list
-    }
+and Directive = {
+    Name : string
+    Arguments : Argument list
+} with
+
     member x.If = x.Arguments |> List.find (fun arg -> arg.Name = "if")
 
 // Type System Definition
 
-and OperationTypeDefinition = {
-    Type: string
-    Operation: OperationType
-}
+and OperationTypeDefinition = { Type : string; Operation : OperationType }
 
-and SchemaDefintion = {
-    OperationTypes: OperationTypeDefinition
-}
+and SchemaDefintion = { OperationTypes : OperationTypeDefinition }
 
-and ObjectTypeDefinition = {
-    Name: string
-    Interfaces: string []
-    Fields: FieldDefinition []
-}
+and ObjectTypeDefinition = { Name : string; Interfaces : string[]; Fields : FieldDefinition[] }
 
-and FieldDefinition = {
-    Name: string
-    Arguments: InputValueDefinition []
-    Type: InputType
-}
+and FieldDefinition = { Name : string; Arguments : InputValueDefinition[]; Type : InputType }
 
-and InputValueDefinition = {
-    Name: string
-    Type: InputType
-    DefaultValue: InputValue option
-}
+and InputValueDefinition = { Name : string; Type : InputType; DefaultValue : InputValue option }
 
-and InterfaceTypeDefinition = {
-    Name: string
-    Fields: FieldDefinition []
-}
+and InterfaceTypeDefinition = { Name : string; Fields : FieldDefinition[] }
 
-and UnionTypeDefinition = {
-    Name: string
-    Types: string []
-}
+and UnionTypeDefinition = { Name : string; Types : string[] }
 
-and EnumTypeDefinition = {
-    Name: string
-    Values: string []
-}
+and EnumTypeDefinition = { Name : string; Values : string[] }
 
-and InputObjectTypeDefinition = {
-    Name: string
-    Fields: InputValueDefinition []
-}
+and InputObjectTypeDefinition = { Name : string; Fields : InputValueDefinition[] }
 
 and TypeDefinition =
     | ScalarTypeDefinition of string
@@ -194,4 +163,3 @@ and TypeDefinition =
     | UnionTypeDefinition of UnionTypeDefinition
     | EnumTypeDefinition of EnumTypeDefinition
     | InputObjectTypeDefinition of InputObjectTypeDefinition
-

@@ -304,7 +304,9 @@ let ``Can print type name meta field`` () =
 """
 
     let document = parse query
-    let actual = normalize <| document.ToQueryString (QueryStringPrintingOptions.IncludeTypeNames)
+    let actual =
+        normalize
+        <| document.ToQueryString (QueryStringPrintingOptions.IncludeTypeNames)
     actual |> equals expected
 
 [<Fact>]
@@ -330,20 +332,27 @@ let ``Should generate information map correctly`` () =
     let document = parse query
     let actual = document.GetInfoMap () |> Map.toList
 
-    let expected =
-        [ (Some "q",
-           [ TypeField
-                 { Name = "hero"
-                   Alias = None
-                   Fields =
-                     [ TypeField
-                           { Name = "friends"
-                             Alias = None
-                             Fields =
-                               [ FragmentField { Name = "primaryFunction"; Alias = None; TypeCondition = "Droid"; Fields = [] }
-                                 FragmentField { Name = "id";              Alias = None; TypeCondition = "Droid"; Fields = [] }
-                                 FragmentField { Name = "homePlanet";      Alias = None; TypeCondition = "Human"; Fields = [] }
-                                 FragmentField { Name = "id";              Alias = None; TypeCondition = "Human"; Fields = [] } ] }
-                       TypeField { Name = "name"; Alias = None; Fields = [] } ] } ]) ]
+    let expected = [
+        (Some "q",
+         [
+             TypeField {
+                 Name = "hero"
+                 Alias = None
+                 Fields = [
+                     TypeField {
+                         Name = "friends"
+                         Alias = None
+                         Fields = [
+                             FragmentField { Name = "primaryFunction"; Alias = None; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "homePlanet"; Alias = None; TypeCondition = "Human"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Human"; Fields = [] }
+                         ]
+                     }
+                     TypeField { Name = "name"; Alias = None; Fields = [] }
+                 ]
+             }
+         ])
+    ]
 
     actual |> equals expected
