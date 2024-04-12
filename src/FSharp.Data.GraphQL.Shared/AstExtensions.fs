@@ -87,10 +87,13 @@ type internal PaddedStringBuilder () =
     let mutable padCount = 0
     member _.Pad () = padCount <- padCount + 2
     member _.Unpad () = padCount <- padCount - 2
-    member _.AppendLine () =
-        sb.AppendLine().Append ("".PadLeft (padCount, ' '))
-        |> ignore
-    member _.Append (str : string) = sb.Append (str) |> ignore
+    member psb.AppendLineSB () =
+        sb.AppendLine().Append ("".PadLeft (padCount, ' ')) |> ignore ; psb
+    member psb.AppendLine () = psb.AppendLineSB () |> ignore
+    member psb.AppendSB (char : char) = sb.Append (char) |> ignore ; psb
+    member psb.Append (char : char) = psb.AppendSB (char) |> ignore
+    member psb.AppendSB (str : string) = sb.Append (str) |> ignore ; psb
+    member psb.Append (str : string) = psb.AppendSB (str) |> ignore
     override _.ToString () = sb.ToString ()
 
 /// Specify options when printing an Ast.Document to a query string.
@@ -114,8 +117,7 @@ type Document with
 
         let rec printValue x =
             let printObjectValue (name, value) =
-                sb.Append (name)
-                sb.Append (": ")
+                sb.AppendSB(name : string).Append(": ")
                 printValue value
 
             let printOne f n ov =
@@ -127,7 +129,7 @@ type Document with
 
             let printCompound braces f xs =
                 match xs with
-                | [] -> sb.Append (braces)
+                | [] -> sb.Append (braces : string)
                 | xs ->
                     sb.Append (braces.Substring (0, 1) + " ")
                     List.iteri (printOne f) xs
@@ -142,13 +144,14 @@ type Document with
             | NullValue -> sb.Append ("null")
             | ListValue x -> printCompound "[]" printValue x
             | ObjectValue x -> printCompound "{}" printObjectValue (Map.toList x)
-            | VariableName x -> sb.Append('$').Append(x)
+            | VariableName x -> sb.AppendSB('$').Append(x)
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
-                sb.Append ("$")
-                sb.Append (vdef.VariableName)
-                sb.Append (": ")
-                sb.Append (vdef.Type.ToString ())
+                sb
+                    .AppendSB('$')
+                    .AppendSB(vdef.VariableName)
+                    .AppendSB(": ")
+                    .Append(vdef.Type.ToString ())
 
                 vdef.DefaultValue
                 |> Option.iter (fun value ->
@@ -194,7 +197,7 @@ type Document with
 
         let printDirectives (directives : Directive list) =
             let printDirective (directive : Directive) =
-                sb.Append ("@" + directive.Name)
+                sb.AppendSB('@').Append(directive.Name)
                 printArguments directive.Arguments
 
             let rec helper directives =
@@ -265,7 +268,7 @@ type Document with
                     sb.Append ("... ")
 
                     frag.TypeCondition
-                    |> Option.iter (fun t -> sb.Append("on ").Append(t))
+                    |> Option.iter (fun t -> sb.AppendSB("on ").Append(t))
 
                     printDirectives frag.Directives
                     sb.Append (" ")
@@ -291,11 +294,11 @@ type Document with
 
             helper selectionSet
 
-        let rec printDefinitions (definitions : Definition list) =
+        let rec printDefinitions (definitions : ExecutableDefinition list) =
             let printDefinition =
                 function
-                | TypeSystemDefinition _ -> () // TODO: unit tests for printing https://spec.graphql.org/October2021/#TypeSystemDefinitionOrExtension
-                | TypeSystemExtension _ -> () // TODO: unit tests for printing https://spec.graphql.org/October2021/#TypeSystemDefinitionOrExtension
+                //| Definition.TypeSystemDefinition _ -> () // TODO: unit tests for printing https://spec.graphql.org/October2021/#TypeSystemDefinitionOrExtension
+                //| Definition.TypeSystemExtension _ -> () // TODO: unit tests for printing https://spec.graphql.org/October2021/#TypeSystemDefinitionOrExtension
                 | OperationDefinition odef ->
                     match odef.OperationType with
                     | Query when odef.IsShortHandQuery -> ()
@@ -306,7 +309,7 @@ type Document with
                     odef.Name
                     |> Option.iter (fun name ->
                         if odef.VariableDefinitions.Length = 0 then
-                            sb.Append (name + " ")
+                            sb.AppendSB(name).Append(' ')
                         else
                             sb.Append (name))
 
@@ -314,8 +317,12 @@ type Document with
                     printDirectives odef.Directives
                     printSelectionSet (setSelectionSetOptions odef.SelectionSet)
                 | FragmentDefinition fdef ->
-                    sb.Append ("fragment " + fdef.Name.Value + " ")
-                    sb.Append ("on " + fdef.TypeCondition.Value + " ")
+                    sb
+                        .AppendSB("fragment ")
+                        .AppendSB(fdef.Name)
+                        .AppendSB(" on ")
+                        .AppendSB(fdef.TypeCondition)
+                        .Append(' ')
                     printDirectives fdef.Directives
 
                     if fdef.Directives.Length > 0 then
@@ -342,11 +349,11 @@ type Document with
         let fragments =
             this.Definitions
             |> List.choose (function
-                | TypeSystemDefinition _
-                | TypeSystemExtension _
+                //| Definition.TypeSystemDefinition _
+                //| Definition.TypeSystemExtension _
                 | OperationDefinition _ -> None
                 | FragmentDefinition def -> Some def)
-            |> List.map (fun def -> def.Name.Value, def)
+            |> List.map (fun def -> def.Name, def)
             |> Map.ofList
 
         let findFragment name =
@@ -357,8 +364,8 @@ type Document with
         let operations =
             this.Definitions
             |> List.choose (function
-                | TypeSystemDefinition _ -> None
-                | TypeSystemExtension _ -> None
+                //| Definition.TypeSystemDefinition _ -> None
+                //| Definition.TypeSystemExtension _ -> None
                 | FragmentDefinition _ -> None
                 | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)
@@ -379,7 +386,7 @@ type Document with
                             finfo :: acc
                         | FragmentSpread f ->
                             let fdef = findFragment f.Name
-                            helper acc fdef.TypeCondition path fdef.SelectionSet
+                            helper acc (Some fdef.TypeCondition) path fdef.SelectionSet
                         | InlineFragment fdef -> helper acc fdef.TypeCondition path fdef.SelectionSet
 
                     helper acc typeCondition path tail

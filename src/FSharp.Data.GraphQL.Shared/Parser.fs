@@ -247,7 +247,12 @@ module internal Internal =
     let listType = betweenChars '[' ']' inputType |>> ListType <?> "ListType"
 
     let nonNullType =
-        (listType <|> namedType) .>> pchar '!' |>> NonNullNameType
+        (listType <|> namedType) .>> pchar '!'
+        |>> (function
+            | NamedType name -> NonNullNameType name
+            | ListType t -> NonNullListType t
+            | _ -> failwith "Unexpected NonNullType"
+            )
         <?> "NonNullType"
 
     inputTypeRef.Value <- choice [ attempt nonNullType; namedType; listType ]
@@ -290,8 +295,7 @@ module internal Internal =
     let selectionFragment =
         let inlineFragment =
             pipe3 (opt (stoken_ws "on" >>. token_ws name)) (opt (token_ws directives)) selectionSet (fun typeCondition directives selectionSet -> {
-                FragmentDefinition.Name = None
-                Directives = someOrEmpty directives
+                InlineFragment.Directives = someOrEmpty directives
                 SelectionSet = selectionSet
                 TypeCondition = typeCondition
             })
@@ -326,7 +330,12 @@ module internal Internal =
                 pipe2
                     (pairBetween ':' variable inputType)
                     (whitespaces >>. opt ((ctoken_ws '=') >>. inputValue))
-                    (fun (variableName, variableType) defaultVal -> { VariableName = variableName; Type = variableType; DefaultValue = defaultVal })
+                    (fun (variableName, variableType) defaultVal -> {
+                        VariableName = variableName;
+                        Type = variableType
+                        DefaultValue = defaultVal
+                        Directives = []
+                    })
 
             let variableDefinitions = betweenCharsMany '(' ')' variableDefinition
 
@@ -370,14 +379,10 @@ module internal Internal =
                 selectionSet
                 (fun name typeCond directives selSet ->
                     FragmentDefinition {
-                        Name = Some name
+                        Name = name
                         Directives = directives
                         SelectionSet = selSet
-                        TypeCondition =
-                            if String.IsNullOrEmpty typeCond then
-                                None
-                            else
-                                Some typeCond
+                        TypeCondition = typeCond
                     })
 
         // GraphQL documents can contain zero definitions

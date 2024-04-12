@@ -90,7 +90,10 @@ let inline tryConvertAst schema ast =
                     upcast i.MakeList().MakeNullable ()
                 else
                     upcast i.MakeList ())
-        | NonNullNameType inner -> convert false schema inner
+        | NonNullNameType typeName -> convert false schema (NamedType typeName)
+        | NonNullListType inner ->
+            convert false schema inner
+            |> Option.map (fun i -> upcast i.MakeList ())
 
     convert true schema ast
 
@@ -230,7 +233,7 @@ let rec internal compileByType
                         if
                             ty = objtype
                             || (ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1"
-                                && ty.GetGenericArguments ()[0] = objtype)
+                                && ty.GetGenericArguments().[0] = objtype)
                         then
                             return found
                         else

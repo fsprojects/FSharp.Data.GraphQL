@@ -4,6 +4,7 @@
 namespace FSharp.Data.GraphQL.Validation
 
 open System.Collections.Generic
+open System.Linq
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
@@ -152,6 +153,9 @@ module Ast =
                 x.TryGetInputType (inner)
                 |> Option.map IntrospectionTypeRef.List
             | NonNullNameType inner ->
+                x.TryGetInputType (NamedType inner)
+                |> Option.map IntrospectionTypeRef.NonNull
+            | NonNullListType inner ->
                 x.TryGetInputType (inner)
                 |> Option.map IntrospectionTypeRef.NonNull
 
@@ -216,7 +220,10 @@ module Ast =
             | FragmentDefinitionInfo x -> FragmentDefinition x.Definition
 
         /// Returns the name of the definition, if it does have a name.
-        member x.Name = x.Definition.Name
+        member x.Name =
+            match x with
+            | OperationDefinitionInfo x -> x.Definition.Name
+            | FragmentDefinitionInfo x -> Some x.Definition.Name
 
         /// Returns the selection information about the definition, with related GraphQL schema type information.
         member x.SelectionSet =
@@ -373,13 +380,14 @@ module Ast =
                 |> Option.defaultValue List.empty
             | FragmentSpread fragSpread ->
                 ctx.FragmentDefinitions
-                |> List.tryFind (fun def -> def.Name.IsSome && def.Name.Value = fragSpread.Name)
+                |> List.tryFind (fun def -> def.Name = fragSpread.Name)
                 |> Option.bind (fun fragDef ->
                     fragDef.TypeCondition
-                    |> Option.bind ctx.Schema.TryGetTypeByName
-                    |> Option.map (fun fragType ->
-                        let fragType = (Spread (fragSpread.Name, fragSpread.Directives, fragType))
-                        getFragSelectionSetInfo visitedFragments fragType fragDef.SelectionSet ctx))
+                    |> ctx.Schema.TryGetTypeByName
+                    |> Option.map
+                        (fun fragType ->
+                            let fragType = (Spread (fragSpread.Name, fragSpread.Directives, fragType))
+                            getFragSelectionSetInfo visitedFragments fragType fragDef.SelectionSet ctx))
                 |> Option.defaultValue List.empty)
 
     let private getOperationDefinitions (ast : Document) =
@@ -391,7 +399,7 @@ module Ast =
     let private getFragmentDefinitions (ast : Document) =
         ast.Definitions
         |> List.choose (function
-            | FragmentDefinition x when x.Name.IsSome -> Some x
+            | FragmentDefinition x -> Some x
             | _ -> None)
 
     /// Prepare a ValidationContext for the given Document and SchemaInfo to make validation operations easier.
@@ -401,19 +409,17 @@ module Ast =
         let fragmentInfos =
             fragmentDefinitions
             |> List.choose (fun def ->
-                def.TypeCondition
-                |> Option.bind (fun typeCondition ->
-                    schemaInfo.TryGetTypeByName (typeCondition)
-                    |> Option.map (fun fragType ->
-                        let fragCtx = {
-                            Schema = schemaInfo
-                            FragmentDefinitions = fragmentDefinitions
-                            ParentType = fragType
-                            FragmentType = Some (Spread (def.Name.Value, def.Directives, fragType))
-                            Path = [ def.Name.Value ]
-                            SelectionSet = def.SelectionSet
-                        }
-                        FragmentDefinitionInfo { Definition = def; SelectionSet = getSelectionSetInfo [] fragCtx })))
+                schemaInfo.TryGetTypeByName (def.TypeCondition)
+                |> Option.map (fun fragType ->
+                    let fragCtx = {
+                        Schema = schemaInfo
+                        FragmentDefinitions = fragmentDefinitions
+                        ParentType = fragType
+                        FragmentType = Some (Spread (def.Name, def.Directives, fragType))
+                        Path = [ def.Name ]
+                        SelectionSet = def.SelectionSet
+                    }
+                    FragmentDefinitionInfo { Definition = def; SelectionSet = getSelectionSetInfo [] fragCtx }))
 
         let operationInfos =
             getOperationDefinitions ast
@@ -443,8 +449,8 @@ module Ast =
     let internal validateOperationNameUniqueness (ctx : ValidationContext) =
         let names = ctx.Document.Definitions |> List.choose (fun x -> x.Name)
         names
-        |> List.map (fun name -> name, names |> List.filter (fun x -> x = name) |> List.length)
-        |> List.distinctBy fst
+        |> Seq.map (fun name -> name, names |> Seq.filter (fun x -> x = name) |> Seq.length)
+        |> Seq.distinctBy fst
         |> ValidationResult.collect (fun (name, count) ->
             if count <= 1 then
                 Success
@@ -473,7 +479,7 @@ module Ast =
                 | InlineFragment frag -> List.append (getFieldNames frag.SelectionSet) acc
                 | FragmentSpread spread ->
                     fragmentDefinitions
-                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> List.tryFind (fun x -> x.Name = spread.Name)
                     |> Option.unwrap acc (fun frag -> getFieldNames frag.SelectionSet))
         ctx.Document.Definitions
         |> ValidationResult.collect (function
@@ -730,8 +736,7 @@ module Ast =
         let counts = Dictionary<string, int> ()
         ctx.FragmentDefinitions
         |> List.iter (fun frag ->
-            frag.Definition.Name
-            |> Option.iter (fun name -> Dictionary.addWith (+) name 1 counts))
+            Dictionary.addWith (+) frag.Definition.Name 1 counts)
         counts
         |> ValidationResult.collect (fun (KeyValue (name, length)) ->
             if length > 1 then
@@ -744,7 +749,7 @@ module Ast =
         (fragmentDefinitions : FragmentDefinition list)
         (schemaInfo : SchemaInfo)
         (path : FieldPath)
-        (frag : FragmentDefinition)
+        (frag : IFragmentDefinition)
         =
         let typeConditionsValid =
             match
@@ -783,7 +788,7 @@ module Ast =
             //| TypeSystemExtension _ ->
             //    ()
             | FragmentDefinition frag ->
-                let path = frag.Name |> Option.map box |> Option.toList
+                let path = [ box frag.Name ]
                 checkFragmentTypeExistence fragmentDefinitions ctx.Schema path frag
             | OperationDefinition odef ->
                 let path = odef.Name |> Option.map box |> Option.toList
@@ -837,14 +842,12 @@ module Ast =
 
         getFragmentDefinitions ctx.Document
         |> ValidationResult.collect (fun def ->
-            if
-                def.Name.IsSome
-                && Set.contains def.Name.Value fragmentSpreadNames
+            if Set.contains def.Name fragmentSpreadNames
             then
                 Success
             else
                 AstError.AsResult
-                    $"Fragment '%s{def.Name.Value}' is not used in any operation in the document. Fragments must be used in at least one operation.")
+                    $"Fragment '%s{def.Name}' is not used in any operation in the document. Fragments must be used in at least one operation.")
 
     let rec private fragmentSpreadTargetDefinedInSelection (fragmentDefinitionNames : string list) (path : FieldPath) =
         function
@@ -862,7 +865,7 @@ module Ast =
                 AstError.AsResult ($"Fragment spread '%s{spread.Name}' refers to a non-existent fragment definition in the document.", path)
 
     let internal validateFragmentSpreadTargetDefined (ctx : ValidationContext) =
-        let fragmentDefinitionNames = ctx.FragmentDefinitions |> List.choose (fun def -> def.Name)
+        let fragmentDefinitionNames = ctx.FragmentDefinitions |> List.map (fun def -> def.Name)
 
         ctx.Document.Definitions
         |> ValidationResult.collect (function
@@ -872,7 +875,7 @@ module Ast =
             //| TypeSystemExtension _ ->
             //    ()
             | FragmentDefinition frag ->
-                let path = frag.Name |> Option.map box |> Option.toList
+                let path = [ box frag.Name ]
                 frag.SelectionSet
                 |> ValidationResult.collect (fragmentSpreadTargetDefinedInSelection fragmentDefinitionNames path)
             | OperationDefinition odef ->
@@ -907,7 +910,7 @@ module Ast =
         | FragmentSpread spread ->
             match
                 fragmentDefinitions
-                |> List.tryFind (fun f -> f.Name.IsSome && f.Name.Value = spread.Name)
+                |> List.tryFind (fun f -> f.Name = spread.Name)
             with
             | Some frag -> checkFragmentMustNotHaveCycles fragmentDefinitions visited spread.Name frag.SelectionSet
             | None -> Success
@@ -920,7 +923,7 @@ module Ast =
 
         let fragNamesAndSelections =
             fragmentDefinitions
-            |> List.choose (fun frag -> frag.Name |> Option.map (fun x -> x, frag.SelectionSet))
+            |> List.map (fun frag -> frag.Name, frag.SelectionSet)
 
         fragNamesAndSelections
         |> ValidationResult.collect (fun (name, selectionSet) -> checkFragmentMustNotHaveCycles fragmentDefinitions [] name selectionSet)
@@ -1076,7 +1079,7 @@ module Ast =
                 field.SelectionSet
                 |> List.collect (getDistinctDirectiveNamesInSelection path)
             fieldDirectives |> List.append selectionSetDirectives
-        | InlineFragment frag -> getDistinctDirectiveNamesInDefinition path (FragmentDefinition frag)
+        | InlineFragment frag -> getDistinctDirectiveNamesInInlineFragment path frag
         | FragmentSpread spread -> [
             path,
             spread.Directives
@@ -1084,7 +1087,14 @@ module Ast =
             |> Set.ofList
           ]
 
-    and private getDistinctDirectiveNamesInDefinition (path : FieldPath) (frag : Definition) : (FieldPath * Set<string>) list =
+    and private getDistinctDirectiveNamesInInlineFragment (path : FieldPath) (frag : InlineFragment) : (FieldPath * Set<string>) list =
+        let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
+        let selectionSetDirectives =
+            frag.SelectionSet
+            |> List.collect (getDistinctDirectiveNamesInSelection path)
+        fragDirectives |> List.append selectionSetDirectives
+
+    and private getDistinctDirectiveNamesInDefinition (path : FieldPath) (frag : ExecutableDefinition) : (FieldPath * Set<string>) list =
         let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) |> Set.ofList ]
         let selectionSetDirectives =
             frag.SelectionSet
@@ -1113,14 +1123,14 @@ module Ast =
     let private validateDirective
         (schemaInfo : SchemaInfo)
         (path : FieldPath)
-        (location : DirectiveLocation)
+        (location : ExecutableDirectiveLocation)
         (onError : Directive -> string)
         (directive : Directive)
         =
         schemaInfo.Directives
         |> ValidationResult.collect (fun d ->
             if d.Name = directive.Name then
-                if d.Locations |> Array.contains location then
+                if d.Locations |> Array.contains (ExecutableDirectiveLocation location) then
                     Success
                 else
                     AstError.AsResult (onError directive, path)
@@ -1139,7 +1149,7 @@ module Ast =
         let directivesValid =
             ctx.Directives
             |> ValidationResult.collect (
-                validateDirective ctx.Schema ctx.Path DirectiveLocation.INLINE_FRAGMENT (fun d ->
+                validateDirective ctx.Schema ctx.Path ExecutableDirectiveLocation.INLINE_FRAGMENT (fun d ->
                     $"An inline fragment has a directive '%s{d.Name}', but this directive location is not supported by the schema definition.")
             )
         let directivesValidInSelectionSet =
@@ -1158,7 +1168,7 @@ module Ast =
             let directivesValid =
                 field.Directives
                 |> ValidationResult.collect (
-                    validateDirective schemaInfo path DirectiveLocation.FIELD (fun directiveDef ->
+                    validateDirective schemaInfo path ExecutableDirectiveLocation.FIELD (fun directiveDef ->
                         $"Field or alias '%s{field.AliasOrName}' has a directive '%s{directiveDef.Name}', but this directive location is not supported by the schema definition.")
                 )
             let directivesValidInSelectionSet =
@@ -1189,7 +1199,7 @@ module Ast =
         let directivesValid =
             ctx.Directives
             |> ValidationResult.collect (
-                validateDirective ctx.Schema ctx.Path DirectiveLocation.FRAGMENT_SPREAD (fun d ->
+                validateDirective ctx.Schema ctx.Path ExecutableDirectiveLocation.FRAGMENT_SPREAD (fun d ->
                     $"Fragment '%s{ctx.FragmentName}' has a directive '%s{d.Name}', but this directive location is not supported by the schema definition.")
             )
         let directivesValidInSelectionSet =
@@ -1205,9 +1215,9 @@ module Ast =
         =
         let expectedLocation =
             match operation.OperationType with
-            | Query -> DirectiveLocation.QUERY
-            | Mutation -> DirectiveLocation.MUTATION
-            | Subscription -> DirectiveLocation.SUBSCRIPTION
+            | Query -> ExecutableDirectiveLocation.QUERY
+            | Mutation -> ExecutableDirectiveLocation.MUTATION
+            | Subscription -> ExecutableDirectiveLocation.SUBSCRIPTION
 
         let directivesValid =
             operation.Directives
@@ -1232,18 +1242,18 @@ module Ast =
             let path = def.Name |> Option.map box |> Option.toList
 
             match def with
-            | OperationDefinition odef -> checkDirectivesInOperation ctx.Schema fragmentDefinitions path odef
-            | FragmentDefinition frag when frag.Name.IsSome ->
+            | OperationDefinition odef ->
+                checkDirectivesInOperation ctx.Schema fragmentDefinitions path odef
+            | FragmentDefinition frag ->
                 let fragCtx = {
                     Schema = ctx.Schema
                     FragmentDefinitions = fragmentDefinitions
                     Path = path
-                    FragmentName = frag.Name.Value
+                    FragmentName = frag.Name
                     Directives = frag.Directives
                     SelectionSet = frag.SelectionSet
                 }
-                checkDirectivesInValidLocationOnFragmentSpread fragCtx
-            | _ -> Success)
+                checkDirectivesInValidLocationOnFragmentSpread fragCtx)
 
     let rec private getDirectiveNamesInSelection (path : FieldPath) (selection : Selection) : (FieldPath * string list) list =
         match selection with
@@ -1254,10 +1264,10 @@ module Ast =
                 field.SelectionSet
                 |> List.collect (getDirectiveNamesInSelection path)
             fieldDirectives |> List.append selectionSetDirectives
-        | InlineFragment frag -> getDirectiveNamesInDefinition path (FragmentDefinition frag)
+        | InlineFragment frag -> getDirectiveNamesInInlineFragment path frag
         | FragmentSpread spread -> [ path, spread.Directives |> List.map (fun x -> x.Name) ]
 
-    and private getDirectiveNamesInDefinition (path : FieldPath) (frag : Definition) : (FieldPath * string list) list =
+    and private getDirectiveNamesInInlineFragment (path : FieldPath) (frag : InlineFragment) : (FieldPath * string list) list =
         let fragDirectives = [ path, frag.Directives |> List.map (fun x -> x.Name) ]
         let selectionSetDirectives =
             frag.SelectionSet
@@ -1409,7 +1419,7 @@ module Ast =
             let usedInSpread =
                 match
                     fragmentDefinitions
-                    |> List.tryFind (fun x -> x.Name.IsSome && x.Name.Value = spread.Name)
+                    |> List.tryFind (fun x -> x.Name = spread.Name)
                 with
                 | Some frag ->
                     let usedInSelection =

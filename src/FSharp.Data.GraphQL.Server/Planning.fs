@@ -147,7 +147,7 @@ let private getIncluder (directives: Directive list) parentIncluder : Includer =
             }
         | _ -> acc) parentIncluder
 
-let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: ObjectDef) =
+let private doesFragmentTypeApply (schema: ISchema) (fragment : IFragmentDefinition) (objectType: ObjectDef) =
     match fragment.TypeCondition with
     | None -> true
     | Some typeCondition ->
@@ -275,7 +275,7 @@ and private planSelection (ctx: PlanningContext) (selectionSet: Selection list) 
                 then fields // Fragment already found
                 else
                     visitedFragments.Value <- spreadName :: visitedFragments.Value
-                    match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
+                    match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) when doesFragmentTypeApply ctx.Schema fragment parentDef ->
                         // Retrieve fragment data just as it was normal selection set
                         // TODO: Check if the path is correctly defined
@@ -317,10 +317,10 @@ and private planAbstraction (ctx:PlanningContext) (selectionSet: Selection list)
                 then fields // Fragment already found
                 else
                     visitedFragments.Value <- spreadName :: visitedFragments.Value
-                    match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name.Value = spreadName | _ -> false) with
+                    match ctx.Document.Definitions |> List.tryFind (function FragmentDefinition f -> f.Name = spreadName | _ -> false) with
                     | Some (FragmentDefinition fragment) ->
                         // Retrieve fragment data just as it was normal selection set
-                        let fragmentInfo = planAbstraction ctx fragment.SelectionSet innerData visitedFragments fragment.TypeCondition
+                        let fragmentInfo = planAbstraction ctx fragment.SelectionSet innerData visitedFragments (Some fragment.TypeCondition)
                         let fragmentFields = getAbstractionFrag fragmentInfo.Kind
                         // Filter out already existing fields
                         Map.merge (fun _ -> deepMerge) fields fragmentFields

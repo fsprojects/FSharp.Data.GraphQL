@@ -110,6 +110,12 @@ type FragmentSpread = {
     Directives : Directive list
 }
 
+type IFragmentDefinition =
+    abstract Name : string option
+    abstract TypeCondition : string option
+    abstract Directives : Directive list
+    abstract SelectionSet : Selection list
+
 /// <summary><para>
 /// 2.8 Fragments
 /// </para>
@@ -126,7 +132,7 @@ type FragmentSpread = {
 ///
 /// <para>https://spec.graphql.org/October2021/#FragmentDefinition</para>
 /// </summary>
-type FragmentDefinition = {
+and FragmentDefinition = {
     /// Name, but not the constant "on"
     Name : string
 
@@ -150,7 +156,14 @@ type FragmentDefinition = {
 
     /// May not be empty
     SelectionSet : Selection list
-}
+} with
+
+    interface IFragmentDefinition with
+        member x.Name = Some x.Name
+        member x.TypeCondition = Some x.TypeCondition
+        member x.Directives = x.Directives
+        member x.SelectionSet = x.SelectionSet
+
 
 /// Fragments can be defined inline within a selection set. This is done to conditionally include fields based on their runtime
 /// type. This feature of standard fragment inclusion was demonstrated in the query FragmentTyping example. We could accomplish
@@ -179,7 +192,13 @@ and InlineFragment = {
 
     /// May not be empty
     SelectionSet : Selection list
-}
+} with
+
+    interface IFragmentDefinition with
+        member x.Name = None
+        member x.TypeCondition = x.TypeCondition
+        member x.Directives = x.Directives
+        member x.SelectionSet = x.SelectionSet
 
 
 /// <summary><para>
@@ -265,20 +284,20 @@ type TypeReference =
     /// https://spec.graphql.org/October2021/#NamedType
     | NamedType of string
     /// https://spec.graphql.org/October2021/#ListType
-    | ListType of TypeReference list
+    | ListType of TypeReference
     /// https://spec.graphql.org/October2021/#NamedType
     /// https://spec.graphql.org/October2021/#NonNullType
     | NonNullNameType of string
     /// https://spec.graphql.org/October2021/#ListType
     /// https://spec.graphql.org/October2021/#NonNullType
-    | NonNullListType of TypeReference list
+    | NonNullListType of TypeReference
 
     override x.ToString () =
         let rec str =
             function
             | NamedType name -> name
-            | ListType inner -> String.Concat [ "["; String.concat ", " (List.map str inner); "]" ]
-            | NonNullNameType inner -> $"{inner}!"
+            | ListType inner -> $"[{str inner}]"
+            | NonNullNameType name -> $"{name}!"
             | NonNullListType inner -> $"{str (ListType inner)}!"
 
         str x
@@ -1027,6 +1046,16 @@ type ExecutableDefinition =
         | OperationDefinition op -> op.Directives
         | FragmentDefinition frag -> frag.Directives
 
+    member x.Name =
+        match x with
+        | OperationDefinition op -> op.Name
+        | FragmentDefinition frag -> Some frag.Name
+
+    member x.SelectionSet =
+        match x with
+        | OperationDefinition op -> op.SelectionSet
+        | FragmentDefinition frag -> frag.SelectionSet
+
 
 /// https://spec.graphql.org/October2021/#ExecutableDocument
 type ExecutableDocument = {
@@ -1062,4 +1091,6 @@ type Document = {
     Definitions : ExecutableDefinition list
 } with
 
-    member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)
+    member d.Directives = d.Definitions |> List.collect (fun y -> y.Directives)
+
+    member d.IsEmpty = d.Definitions.IsEmpty

@@ -288,12 +288,12 @@ let Subscription =
 
 let directives =
     [
-        { Name = "queryOnly" ; Description = None ; Locations = DirectiveLocation.QUERY ; Args = [||] }
-        { Name = "mutationOnly" ; Description = None ; Locations = DirectiveLocation.MUTATION ; Args = [||] }
-        { Name = "subscriptionOnly" ; Description = None ; Locations = DirectiveLocation.SUBSCRIPTION ; Args = [||] }
-        { Name = "fragSpreadOnly" ; Description = None ; Locations = DirectiveLocation.FRAGMENT_SPREAD ; Args = [||] }
-        { Name = "inlineFragOnly" ; Description = None ; Locations = DirectiveLocation.INLINE_FRAGMENT ; Args = [||] }
-        { Name = "fieldOnly" ; Description = None ; Locations = DirectiveLocation.FIELD ; Args = [||] }
+        { Name = "queryOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.QUERY ; Args = [||] }
+        { Name = "mutationOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.MUTATION ; Args = [||] }
+        { Name = "subscriptionOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.SUBSCRIPTION ; Args = [||] }
+        { Name = "fragSpreadOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.FRAGMENT_SPREAD ; Args = [||] }
+        { Name = "inlineFragOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.INLINE_FRAGMENT ; Args = [||] }
+        { Name = "fieldOnly" ; Description = None ; Locations = ExecutableDirectiveLocation ExecutableDirectiveLocation.FIELD ; Args = [||] }
     ]
     |> List.append SchemaConfig.Default.Directives
 

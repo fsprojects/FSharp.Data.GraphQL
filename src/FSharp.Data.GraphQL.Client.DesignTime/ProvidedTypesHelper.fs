@@ -302,7 +302,7 @@ module internal ProvidedOperation =
                 | Some introspectionType -> introspectionType.Kind = TypeKind.SCALAR
                 | None -> false
             let variables =
-                let rec mapVariable (variableName : string) (variableType : InputType) =
+                let rec mapVariable (variableName : string) (variableType : TypeReference) =
                     match variableType with
                     | NamedType typeName ->
                         match uploadInputTypeName with
@@ -319,7 +319,9 @@ module internal ProvidedOperation =
                     | ListType itype ->
                         let name, t = mapVariable variableName itype
                         name, t |> TypeMapping.makeArray |> TypeMapping.makeOption
-                    | NonNullType itype ->
+                    | NonNullNameType typeName ->
+                        mapVariable variableName (NamedType typeName)
+                    | NonNullListType itype ->
                         let name, t = mapVariable variableName itype
                         name, TypeMapping.unwrapOption t
                 operationDefinition.VariableDefinitions |> List.map (fun vdef -> mapVariable vdef.VariableName vdef.Type)

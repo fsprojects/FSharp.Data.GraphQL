@@ -2,6 +2,7 @@ module FSharp.Data.GraphQL.Server.AspNetCore.Ast
 
 open System.Collections.Immutable
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 
 let metaTypeFields =
     seq {
@@ -13,7 +14,7 @@ let metaTypeFields =
 
 let private getOperation astDef =
     match astDef with
-    | Ast.OperationDefinition odef -> Some odef
+    | OperationDefinition odef -> Some odef
     | _ -> None
 
 let findOperationByName operationName (astDoc: Ast.Document)  =

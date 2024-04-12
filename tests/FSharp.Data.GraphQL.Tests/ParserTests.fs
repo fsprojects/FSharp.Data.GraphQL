@@ -57,16 +57,15 @@ let withAlias alias x =
     | _ -> x
 
 let fragment name typeCondition selections =
-    FragmentDefinition { Name = Some name
-                         TypeCondition = Some typeCondition
+    FragmentDefinition { Name = name
+                         TypeCondition = typeCondition
                          Directives = []
                          SelectionSet = selections }
 
 let fragmentWithCondAndSelection name typeCondition selection = fragment name typeCondition [ selection ]
 
 let inlieFragment typeCondition selections =
-    InlineFragment { Name = None
-                     TypeCondition = Some typeCondition
+    InlineFragment { TypeCondition = Some typeCondition
                      Directives = []
                      SelectionSet = selections }
 
@@ -81,7 +80,7 @@ let valueType = varType false false
 let refType = varType false true
 let listType = varType true false
 
-let var vtype defaultValue name = { VariableName = name; Type = vtype; DefaultValue = defaultValue }
+let var vtype defaultValue name = { VariableName = name; Type = vtype; DefaultValue = defaultValue; Directives = [] }
 let directive name arguments = { Directive.Name = name; Arguments = arguments }
 let directive1 name argument = directive name [ argument ]
 

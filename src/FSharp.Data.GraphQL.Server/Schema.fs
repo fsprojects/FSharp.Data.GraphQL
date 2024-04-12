@@ -3,6 +3,7 @@
 
 namespace FSharp.Data.GraphQL
 
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
@@ -263,10 +264,25 @@ type Schema<'Root> (query: ObjectDef<'Root>, ?mutation: ObjectDef<'Root>, ?subsc
           DeprecationReason = enumVal.DeprecationReason }
 
     let locationToList location =
-        System.Enum.GetValues(typeof<DirectiveLocation>)
-        |> Seq.cast<DirectiveLocation>
-        |> Seq.filter (fun v -> int(location) &&& int(v) <> 0)
-        |> Seq.toArray
+
+        let executableLocationToList location =
+            System.Enum.GetValues(typeof<ExecutableDirectiveLocation>)
+            |> Seq.cast<ExecutableDirectiveLocation>
+            |> Seq.filter (fun d -> int(location) &&& int(d) <> 0)
+            |> Seq.map (fun d -> ExecutableDirectiveLocation d)
+            |> Seq.toArray
+
+
+        let typeSystemlocationToList location =
+            System.Enum.GetValues(typeof<TypeSystemDirectiveLocation>)
+            |> Seq.cast<TypeSystemDirectiveLocation>
+            |> Seq.filter (fun d -> int(location) &&& int(d) <> 0)
+            |> Seq.map (fun d -> TypeSystemDirectiveLocation d)
+            |> Seq.toArray
+
+        match location with
+        | ExecutableDirectiveLocation ed -> executableLocationToList (int ed)
+        | TypeSystemDirectiveLocation tsd -> typeSystemlocationToList (int tsd)
 
     let introspectDirective (namedTypes: Map<string, IntrospectionTypeRef>) (directive: DirectiveDef) : IntrospectionDirective =
         { Name = directive.Name
