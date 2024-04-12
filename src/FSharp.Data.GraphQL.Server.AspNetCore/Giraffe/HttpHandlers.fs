@@ -127,16 +127,17 @@ module HttpHandlers =
 
                 GQLResponse.Stream documentId
             | RequestError errs ->
-                if
+                let noExceptionsFound =
                     errs
-                    |> Seq.choose (fun x -> x.Exception |> Option.ofValueOption)
-                    |> (not << Seq.isEmpty)
-                then
-                    errs
-                    |> List.choose (fun x -> x.Exception |> Option.ofValueOption)
-                    |> List.iter (fun ex ->
-                        logger.LogError (ex, "Error while processing request that generated response with documentId '{documentId}'", documentId))
-                else
+                    |> Seq.map
+                        (fun x ->
+                            x.Exception |> ValueOption.iter (fun ex ->
+                                logger.LogError (ex, "Error while processing request that generated response with documentId '{documentId}'", documentId)
+                            )
+                            x.Exception.IsNone
+                        )
+                    |> Seq.forall id
+                if noExceptionsFound then
                     logger.LogWarning (
                         ("Produced request error GraphQL response with:\n"
                          + "- documentId: '{documentId}'\n"
