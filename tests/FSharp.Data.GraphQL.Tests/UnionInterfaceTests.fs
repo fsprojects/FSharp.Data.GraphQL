@@ -1,12 +1,12 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.UnionInterfaceTests
 
-open System
 open Xunit
+open System
+
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
@@ -38,7 +38,7 @@ type Person =
 let NamedType =
   Define.Interface<INamed>(
     name = "Named",
-    fields = [ Define.Field("name", String) ])
+    fields = [ Define.Field("name", StringType) ])
 
 let DogType =
   Define.Object<Dog>(
@@ -46,8 +46,8 @@ let DogType =
     isTypeOf = is<Dog>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("barks", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("barks", BooleanType)
     ])
 
 let CatType =
@@ -56,8 +56,8 @@ let CatType =
     isTypeOf = is<Cat>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
-        Define.AutoField("meows", Boolean)
+        Define.AutoField("name", StringType)
+        Define.AutoField("meows", BooleanType)
     ])
 
 let PetType =
@@ -79,7 +79,7 @@ let PersonType =
     isTypeOf = is<Person>,
     interfaces = [ NamedType ],
     fields = [
-        Define.AutoField("name", String)
+        Define.AutoField("name", StringType)
         Define.Field("pets", ListOf PetType, fun _ person -> person.Pets)
         Define.AutoField("friends", ListOf NamedType)
     ])
@@ -113,7 +113,7 @@ let ``Execute can introspect on union and intersection types`` () =
           inputFields { name }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast)
+    let result = sync <| Executor(schema).AsyncExecute(ast)
     let expected =
       NameValueLookup.ofList [
         "Named", upcast NameValueLookup.ofList [
@@ -138,11 +138,9 @@ let ``Execute can introspect on union and intersection types`` () =
                 upcast NameValueLookup.ofList ["name", box "Dog"]]
             "enumValues", null
             "inputFields", null]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes union types`` () =
@@ -157,7 +155,7 @@ let ``Executes union types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -171,11 +169,9 @@ let ``Executes union types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes union types with inline fragments`` () =
@@ -195,7 +191,7 @@ let ``Executes union types with inline fragments`` () =
           }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -209,11 +205,9 @@ let ``Executes union types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact(Skip = "This query is no longer executable because of validation system.")>]
 let ``Executes interface types`` () =
@@ -228,7 +222,7 @@ let ``Executes interface types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -241,11 +235,9 @@ let ``Executes interface types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true ]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Executes interface types with inline fragments`` () =
@@ -264,7 +256,7 @@ let ``Executes interface types with inline fragments`` () =
           }
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -277,11 +269,9 @@ let ``Executes interface types with inline fragments`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute allows fragment conditions to be abstract types`` () =
@@ -314,7 +304,7 @@ let ``Execute allows fragment conditions to be abstract types`` () =
           meows
         }
       }"""
-    let actual = sync <| Executor(schema).AsyncExecute(ast, john)
+    let result = sync <| Executor(schema).AsyncExecute(ast, john)
     let expected =
       NameValueLookup.ofList [
         "__typename", box "Person"
@@ -336,8 +326,6 @@ let ``Execute allows fragment conditions to be abstract types`` () =
                 "__typename", box "Dog"
                 "name", upcast "Odie"
                 "barks", upcast true]]]
-    match actual with
-    | Direct(data, errors) ->
-      empty errors
-      data.["data"] |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQResponse"
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)

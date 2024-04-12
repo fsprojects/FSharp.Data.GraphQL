@@ -1,21 +1,23 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
 open System
+open System.ComponentModel
 open System.Globalization
+open System.Net.Http
+open System.Text
+
 open FSharp.Core
 open FSharp.Data.GraphQL.Client
 open FSharp.Data.GraphQL.Client.ReflectionPatterns
 open FSharp.Data.GraphQL.Types.Introspection
-open System.Text
-open System.ComponentModel
 
 /// Contains information about a field on the query.
 type SchemaFieldInfo =
-      /// Gets the alias or the name of the field.
-    { AliasOrName : string
+    { /// Gets the alias or the name of the field.
+      AliasOrName : string
       /// Gets the introspection type information of the field.
       SchemaTypeRef : IntrospectionTypeRef
       /// Gets information about fields of this field, if it is an object type.
@@ -26,8 +28,8 @@ type TypeName = string
 
 /// Contains data about a GQL operation error.
 type OperationError =
-      /// The description of the error that happened in the operation.
-    { Message : string
+    { /// The description of the error that happened in the operation.
+      Message : string
       /// The path to the field that produced the error while resolving its value.
       Path : obj [] }
 
@@ -64,10 +66,10 @@ module HttpHeaders =
 /// The base type for all GraphQLProvider provided enum types.
 type EnumBase (name : string, value : string) =
     /// Gets the name of the provided enum type.
-    member __.GetName() = name
+    member _.GetName() = name
 
     /// Gets the value of the provided enum type.
-    member __.GetValue() = value
+    member _.GetValue() = value
 
     override x.ToString() = x.GetValue()
 
@@ -86,8 +88,8 @@ type EnumBase (name : string, value : string) =
 
 /// Contains information about a GraphQLProvider record property.
 type RecordProperty =
-      /// Gets the name of the record property.
-    { Name : string
+    { /// Gets the name of the record property.
+      Name : string
       /// Gets the value of the record property.
       Value : obj }
 
@@ -106,10 +108,10 @@ type RecordBase (name : string, properties : RecordProperty seq) =
         else []
 
     /// Gets the name of this provided record type.
-    member __.GetName() = name
+    member _.GetName() = name
 
     /// Gets a list of this provided record properties.
-    member __.GetProperties() = properties
+    member _.GetProperties() = properties
 
     /// Produces a dictionary containing all the properties of this provided record type.
     member x.ToDictionary() =
@@ -395,7 +397,7 @@ module internal JsonValueHelper =
         Array.map errorMapper errors
 
 /// The base type for all GraphQLProvider operation result provided types.
-type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
+type OperationResultBase (rawResponse: HttpResponseMessage, responseJson : JsonValue, operationFields : SchemaFieldInfo [], operationTypeName : string) =
     let rawData =
         let data = JsonValueHelper.getResponseDataFields responseJson
         match data with
@@ -415,18 +417,20 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
         JsonValueHelper.getResponseCustomFields responseJson
         |> Serialization.deserializeMap
 
-    member private __.ResponseJson = responseJson
+    member private _.ResponseJson = responseJson
 
     ///  <exclude />
     [<EditorBrowsableAttribute(EditorBrowsableState.Never)>]
     [<CompilerMessageAttribute("This property is intended for use in generated code only.", 10001, IsHidden=true, IsError=false)>]
-    member __.RawData = rawData
+    member _.RawData = rawData
 
     /// Gets all the errors returned by the operation on the server.
-    member __.Errors = errors
+    member _.Errors = errors
 
     /// Gets all the custom data returned by the operation on server as a map of names and values.
-    member __.CustomData = customData
+    member _.CustomData = customData
+
+    member _.Headers = rawResponse.Headers
 
     member x.Equals(other : OperationResultBase) =
         x.ResponseJson = other.ResponseJson
@@ -441,4 +445,4 @@ type OperationResultBase (responseJson : JsonValue, operationFields : SchemaFiel
 /// The base type for al GraphQLProvider operation provided types.
 type OperationBase (query : string) =
     /// Gets the query string of the operation.
-    member __.Query = query
+    member _.Query = query

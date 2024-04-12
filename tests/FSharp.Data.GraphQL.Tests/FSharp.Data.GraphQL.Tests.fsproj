@@ -17,54 +17,70 @@
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="Newtonsoft.Json" />
+    <PackageReference Include="Validus" />
     <PackageReference Include="xunit" />
     <PackageReference Include="xunit.runner.utility" />
     <PackageReference Include="xunit.runner.visualstudio" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="TestAttributes.fs" />
     <Compile Include="Helpers.fs" />
+    <Compile Include="ErrorHelpers.fs" />
     <Compile Include="Literals.fs" />
-    <Compile Include="PropertyTrackingTests.fs" />
-    <Compile Include="AsyncValTests.fs" />
     <Compile Include="Relay\NodeTests.fs" />
+    <Compile Include="Relay\CursorTests.fs" />
     <Compile Include="Relay\ConnectionTests.fs" />
     <Compile Include="Relay\MutationTests.fs" />
+    <Compile Include="Helpers and Extensions\AsyncValTests.fs" />
+    <Compile Include="Helpers and Extensions\NameValueLookupTests.fs" />
+    <Compile Include="Helpers and Extensions\ObservableExtensionsTests.fs" />
+    <Compile Include="PropertyTrackingTests.fs" />
     <Compile Include="AbstractionTests.fs" />
+    <Compile Include="UnionInterfaceTests.fs" />
     <Compile Include="DirectivesTests.fs" />
     <Compile Include="TypeValidationTests.fs" />
     <Compile Include="AstValidationTests.fs" />
     <Compile Include="ParserTests.fs" />
     <Compile Include="SchemaTests.fs" />
-    <Compile Include="CoercionTests.fs" />
     <Compile Include="IntrospectionTests.fs" />
-    <Compile Include="ObservableExtensionsTests.fs" />
+    <Compile Include="PlanningTests.fs" />
+    <Compile Include="PropertyTrackerTests.fs" />
     <Compile Include="ExecutionTests.fs" />
     <Compile Include="ExecutorMiddlewareTests.fs" />
     <Compile Include="MutationTests.fs" />
     <Compile Include="ResolveTests.fs" />
-    <Compile Include="UnionInterfaceTests.fs" />
-    <Compile Include="VariablesTests.fs" />
-    <Compile Include="PlanningTests.fs" />
-    <Compile Include="PropertyTrackerTests.fs" />
+    <Compile Include="Variables and Inputs\CoercionTests.fs" />
+    <Compile Include="Variables and Inputs\OptionalsNormalizationTests.ValidString.fs" />
+    <Compile Include="Variables and Inputs\OptionalsNormalizationTests.fs" />
+    <Compile Include="Variables and Inputs\InputRecordTests.fs" />
+    <Compile Include="Variables and Inputs\InputObjectValidatorTests.fs" />
+    <Compile Include="Variables and Inputs\InputScalarAndAutoFieldScalarTests.fs" />
+    <Compile Include="Variables and Inputs\InputComplexTests.fs" />
+    <Compile Include="Variables and Inputs\InputNestedTests.fs" />
+    <Compile Include="Variables and Inputs\InputNullableStringTests.fs" />
+    <Compile Include="Variables and Inputs\InputEnumTests.fs" />
+    <Compile Include="Variables and Inputs\InputListTests.fs" />
     <Compile Include="LinqTests.fs" />
     <Compile Include="DeferredTests.fs" />
-    <Compile Include="MiddlewareTests.fs" />
-    <Compile Include="NameValueLookupTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
+    <Compile Include="MiddlewareTests.fs" />
     <Compile Include="AstExtensionsTests.fs" />
+    <Compile Include="AspNetCore/TestSchema.fs" />
+    <Compile Include="AspNetCore/InvalidMessageTests.fs" />
+    <Compile Include="AspNetCore/SerializationTests.fs" />
     <Compile Include="Program.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <Content Condition="$(OS) != Unix" Include="xunit.runner.json" />
-    <Content Condition="$(OS) == Unix" Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="xunit.runner.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
   </ItemGroup>
 </Project>

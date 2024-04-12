@@ -2,9 +2,20 @@
 
 F# implementation of Facebook [GraphQL query language specification](https://facebook.github.io/graphql).
 
-[![Build and Test](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/dotnetcore.yml/badge.svg)](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/dotnetcore.yml)
+[![Publish to GitHub](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/publish_ci.yml/badge.svg)](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/publish_ci.yml)
+[![Publish to NuGet](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/publish_release.yml/badge.svg)](https://github.com/fsprojects/FSharp.Data.GraphQL/actions/workflows/publish_release.yml)
 
 [![Join the chat at https://gitter.im/FSharp-Data-GraphQL/community](https://badges.gitter.im/FSharp-Data-GraphQL/community.svg)](https://gitter.im/FSharp-Data-GraphQL/community?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
+
+## Installing project templates
+
+Type the following commands to install the template for creating web applications:
+
+From GitHub:
+`dotnet new -i "FSharp.Data.GraphQL::2.0.0-ci-*" --nuget-source "https://nuget.pkg.github.com/fsprojects/index.json"`
+
+From NuGet:
+`dotnet new -i "FSharp.Data.GraphQL::2.0.0"`
 
 ## Quick start
 
@@ -21,9 +32,9 @@ let PersonType = Define.Object(
     name = "Person",
     fields = [
         // Property resolver will be auto-generated
-        Define.AutoField("firstName", String)
+        Define.AutoField("firstName", StringType)
         // Asynchronous explicit member resolver
-        Define.AsyncField("lastName", String, resolve = fun context person -> async { return person.LastName })
+        Define.AsyncField("lastName", StringType, resolve = fun context person -> async { return person.LastName })
     ])
 
 // Include person as a root query of a schema
@@ -38,6 +49,10 @@ let reply = executor.AsyncExecute(Parser.parse "{ firstName, lastName }", johnSn
 ```
 
 It's type safe. Things like invalid fields or invalid return types will be checked at compile time.
+
+### ASP.NET / Giraffe / WebSocket (for GraphQL subscriptions) usage
+
+See the [AspNetCore/README.md](src/FSharp.Data.GraphQL.Server.AspNetCore/README.md)
 
 ## Demos
 
@@ -81,12 +96,12 @@ let customStreamDirective =
     let args = [|
         Define.Input(
             "interval",
-            Nullable Int,
+            Nullable IntType,
             defaultValue = Some 2000,
             description = "An optional argument used to buffer stream results. ")
         Define.Input(
             "preferredBatchSize",
-            Nullable Int,
+            Nullable IntType,
             defaultValue = None,
             description = "An optional argument used to buffer stream results. ") |]
     { StreamDirective with Args = args }
@@ -278,9 +293,9 @@ Optionally, for ease of implementation, concrete class to derive from can be use
 ```fsharp
 type ExecutorMiddleware(?compile, ?plan, ?execute) =
     interface IExecutorMiddleware with
-        member __.CompileSchema = compile
-        member __.PlanOperation = plan
-        member __.ExecuteOperationAsync = execute
+        member _.CompileSchema = compile
+        member _.PlanOperation = plan
+        member _.ExecuteOperationAsync = execute
 ```
 
 Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
@@ -414,7 +429,7 @@ As field definitions are immutable by default, generating copies of them with im
 
 ```fsharp
 let field : FieldDef<'Val> = // Search for field inside ISchema
-let arg : Define.Input("id", String)
+let arg : Define.Input("id", StringType)
 let fieldWithArg = field.WithArgs([ arg ])
 ```
 

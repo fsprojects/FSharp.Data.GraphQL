@@ -1,14 +1,12 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2015-Mar 2016 Kevin Thompson @kthompson
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2015-Mar 2016 Kevin Thompson @kthompson
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Parser
 
-#nowarn "3370" // https://github.com/fsharp/fslang-design/blob/main/FSharp-6.0/FS-1111-refcell-op-information-messages.md
-
-open FSharp.Data.GraphQL.Ast
 open System
 open FParsec
+open FSharp.Data.GraphQL.Ast
 
 [<AutoOpen>]
 module internal Internal =
@@ -40,7 +38,6 @@ module internal Internal =
 
     // lexical token are indivisible terminal symbols
     let token p = p .>> notFollowedBy (letter <|> digit <|> pchar '_')
-
     let stoken = pstring >> token
     let token_ws p = token p .>> whitespaces
     let stoken_ws = pstring >> token_ws
@@ -201,18 +198,18 @@ module internal Internal =
     // 2.9 Value
     //   Variable|IntValue|FloatValue|StringValue|
     //   BooleanValue|NullValue|EnumValue|ListValue|ObjectValue
-    inputValueRef
-    := choice [
-        variable |>> Variable <?> "Variable"
-        (attempt floatValue) |>> FloatValue <?> "Float"
-        integerValue |>> IntValue <?> "Integer"
-        stringValue |>> StringValue <?> "String"
-        (attempt booleanValue) |>> BooleanValue <?> "Boolean"
-        nullValue
-        enumValue |>> EnumValue <?> "Enum"
-        inputObject |>> ObjectValue <?> "InputObject"
-        listValue |>> ListValue <?> "ListValue"
-    ]
+    inputValueRef.Value <-
+        choice [
+            variable |>> VariableName <?> "Variable"
+            (attempt floatValue) |>> FloatValue <?> "Float"
+            integerValue |>> IntValue <?> "Integer"
+            stringValue |>> StringValue <?> "String"
+            (attempt booleanValue) |>> BooleanValue <?> "Boolean"
+            nullValue
+            enumValue |>> EnumValue <?> "Enum"
+            inputObject |>> ObjectValue <?> "InputObject"
+            listValue |>> ListValue <?> "ListValue"
+        ]
 
 
     // 2.6 Arguments
@@ -253,8 +250,7 @@ module internal Internal =
         (listType <|> namedType) .>> pchar '!' |>> NonNullNameType
         <?> "NonNullType"
 
-    inputTypeRef
-    := choice [ attempt nonNullType; namedType; listType ]
+    inputTypeRef.Value <- choice [ attempt nonNullType; namedType; listType ]
 
 
     // 2.4 Selection Sets
@@ -312,10 +308,9 @@ module internal Internal =
         >>. (inlineFragment <|> fragmentSpread)
         <?> "Fragment"
 
-    selectionRef := field <|> selectionFragment <?> "Selection"
+    selectionRef.Value <- field <|> selectionFragment <?> "Selection"
 
-    selectionSetRef
-    := betweenCharsMany1 '{' '}' selection <?> "SelectionSet"
+    selectionSetRef.Value <- betweenCharsMany1 '{' '}' selection <?> "SelectionSet"
 
 
     // 2.3 Operations
@@ -400,4 +395,10 @@ module internal Internal =
 let parse query =
     match run documents query with
     | Success (result, _, _) -> result
-    | Failure (errorMsg, _, _) -> raise (FormatException (errorMsg))
+    | Failure (errorMsg, _, _) -> raise (System.FormatException (errorMsg))
+
+/// Parses a GraphQL Document. Throws exception on invalid formats.
+let tryParse query =
+    match run documents query with
+    | Success (result, _, _) -> Result.Ok result
+    | Failure (errorMsg, _, _) -> Result.Error errorMsg

@@ -26,13 +26,13 @@ type MyProvider = GraphQLProvider<"http://localhost:8086">
 // at design time. Just provide a file in the path of the project or a literal containing
 // the introspection query result.
 // WARNING: the introspection query result must contain all fields requested by the
-// standard introspection query string in FSharp.Data.GraphQL.Introspection.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
+// standard introspection query string in FSharp.Data.GraphQL.IntrospectionQuery.IntrospectionQuery (FSharp.Data.GraphQL.Shared Assembly).
 //type MyProvider = GraphQLProvider<"swapi_schema.json">
 
 // The operation method can be used to make queries, mutations, and subscriptions.
 // Although subscription operations can be created, the client provider still
 // does not work with web sockets - only the immediate response will be known.
-let operation = 
+let operation =
     MyProvider.Operation<"""query q {
       hero (id: "1000") {
         name
@@ -49,17 +49,18 @@ let operation =
           }
         }
       }
-    }""">()
+    }""">
+        ()
 
 // To use different server address or custom HTTP headers at runtime, you need to specify a GraphQLProviderRuntimeContext.
 //let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8086")
 
 // You can specify a connection factory to manage your connection lifecycle if you want.
-let connection = new GraphQLClientConnection()
-let runtimeContext = MyProvider.GetContext(serverUrl = "http://localhost:8086", connectionFactory = fun () -> connection)
+let connection = new GraphQLClientConnection ()
+let runtimeContext = MyProvider.GetContext (serverUrl = "http://localhost:8086", connectionFactory = fun () -> connection)
 
 // To run an operation, you just need to call the Run or AsyncRun method.
-let result = operation.Run(runtimeContext)
+let result = operation.Run (runtimeContext)
 //let result = operation.AsyncRun() |> Async.RunSynchronously
 
 // If the operation runs without any error, result data will be on the Data property.
@@ -98,8 +99,8 @@ let friends = hero.Friends |> Array.choose id
 //let thisWillProduceAnError = friends |> Array.map (fun x -> x.AsDroid())
 
 // We can easily filter friends by using "TryAs" methods.
-let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman())
-let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid())
+let humanFriends = friends |> Array.choose (fun x -> x.TryAsHuman ())
+let droidFriends = friends |> Array.choose (fun x -> x.TryAsDroid ())
 
 // We can also use "Is" version methods to do some custom matching.
 let humanFriendsCount = friends |> Array.map (fun x -> if x.IsHuman() then 1 else 0) |> Array.reduce (+)

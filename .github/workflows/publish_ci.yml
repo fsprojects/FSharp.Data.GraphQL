@@ -1,0 +1,120 @@
+name: publish to GitHub
+
+on:
+  push:
+    branches:
+      - dev
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  publish:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set Build Version
+      run: |
+        $File = (
+          Select-Xml -XPath "/Project/PropertyGroup[@Label='NuGet']/Version" -Path "Directory.Build.props"
+        )[0].Node
+        $version = "$($File.InnerText)-ci-$Env:GITHUB_RUN_ID"
+        $File.InnerText = $version
+        $File.OwnerDocument.Save((Join-Path $PWD.ProviderPath Directory.Build.props))
+        echo "VERSION=$version" | Out-File -FilePath $Env:GITHUB_ENV -Encoding utf8 -Append
+      shell: pwsh
+
+    - name: Add version to global.json
+      run: |
+        $version = "7.0.406"
+        $globalJsonPath = "global.json"
+        $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
+        if ($null -eq $globalJson.sdk.version) {
+          $globalJson.sdk | Add-Member -Type NoteProperty -Name version -Value $version
+        } else {
+          $globalJson.sdk.version = $version
+        }
+        $globalJson | ConvertTo-Json -Depth 10 | Set-Content -Path $globalJsonPath
+      shell: pwsh
+
+    - name: Install .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: 7.0.406
+
+    - name: Add the GitHub source
+      run: dotnet nuget add source --username USERNAME --password ${{secrets.GITHUB_TOKEN}} --store-password-in-clear-text --name "github.com" "https://nuget.pkg.github.com/fsprojects/index.json"
+
+    - name: Install local tools
+      run: dotnet tool restore
+
+    - name: Run integration tests
+      run: dotnet run --project build/Build.fsproj
+
+    - name: Pack FSharp.Data.GraphQL.Shared project
+      run: |
+        cd src/FSharp.Data.GraphQL.Shared
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Shared project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Client project
+      run: |
+        cd src/FSharp.Data.GraphQL.Client
+        dotnet pack --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Client project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Server project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.AspNetCore
+        dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Server.Relay project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Relay
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Relay project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Server.Middleware project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Middleware
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Middleware project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Prepare the sample project to be packed as a project template
+      run: |
+        & "./Prepare template project for packing.ps1"
+      shell: pwsh
+
+    - name: Pack FSharp.Data.GraphQL.ProjectTemplates template project
+      run: |
+        cd samples
+        dotnet pack --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
+    - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
+      run: |
+        $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.nupkg"
+        dotnet nuget push $path -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+      shell: pwsh

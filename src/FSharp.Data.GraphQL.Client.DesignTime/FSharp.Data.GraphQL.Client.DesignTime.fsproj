@@ -3,27 +3,26 @@
   <PropertyGroup>
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
-    <DefineConstants>IS_DESIGNTIME; NO_GENERATIVE;$(DefineConstants)</DefineConstants>
+    <DefineConstants>IS_DESIGNTIME;NO_GENERATIVE;$(DefineConstants)</DefineConstants>
     <Optimize>true</Optimize>
     <Tailcalls>true</Tailcalls>
-    <RestoreProjectStyle>PackageReference</RestoreProjectStyle>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <GenerateDocumentationFile>false</GenerateDocumentationFile>
-    <OutputPath>..\FSharp.Data.GraphQL.Client\bin\$(Configuration)\typeproviders\fsharp41\</OutputPath>
+    <BaseOutputPath Condition="$(IsNuGet) == ''">..\FSharp.Data.GraphQL.Client\bin</BaseOutputPath>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Client)</Description>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Update="FSharp.Core">
-      <ExcludeAssets>all</ExcludeAssets>
+    <PackageReference Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>contentFiles;runtime</ExcludeAssets>
     </PackageReference>
-    <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2">
+    <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2" />
+    <PackageReference Include="FParsec" />
+    <PackageReference Include="Microsoft.Extensions.Http">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="FParsec" />
-    <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 
   <ItemGroup>
@@ -46,6 +45,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>

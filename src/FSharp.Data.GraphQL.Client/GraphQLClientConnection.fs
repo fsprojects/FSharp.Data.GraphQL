@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -28,7 +28,7 @@ type GraphQLClientConnection(invoker : HttpMessageInvoker, ownsInvoker : bool) =
     new() = new GraphQLClientConnection(new HttpClient(), true)
 
     /// The System.Net.Http.HttpMessageInvoker used by this connection.
-    member __.Invoker = invoker
+    member _.Invoker = invoker
 
     interface IDisposable with
-        member __.Dispose() = if ownsInvoker then invoker.Dispose()
+        member _.Dispose() = if ownsInvoker then invoker.Dispose()

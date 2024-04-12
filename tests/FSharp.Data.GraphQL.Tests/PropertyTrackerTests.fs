@@ -1,6 +1,8 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.PropertyTrackerTests
+
+open System.Collections.Immutable
 
 #nowarn "40"
 
@@ -8,7 +10,7 @@ open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Linq
-open FSharp.Data.GraphQL.Relay
+open FSharp.Data.GraphQL.Server.Relay
 
 type Person = { Id: int; FirstName: string; LastName: string; Friends: Person list }
 type Droid = { Id: int; Number: string; Function: string }
@@ -25,9 +27,9 @@ let rec Person =
         interfaces = [ Node ],
         fieldsFn = fun () ->
             [ Define.GlobalIdField(fun _ p -> string p.Id)
-              Define.Field("firstName", String, fun _ p -> p.FirstName)
-              Define.Field("lastName", String, fun _ p -> p.LastName)
-              Define.Field("fullName", String, fun _ p -> p.FirstName + " " + p.LastName)
+              Define.Field("firstName", StringType, fun _ p -> p.FirstName)
+              Define.Field("lastName", StringType, fun _ p -> p.LastName)
+              Define.Field("fullName", StringType, fun _ p -> p.FirstName + " " + p.LastName)
               Define.Field("friends", ConnectionOf Person, "", Connection.forwardArgs, fun ctx p ->
                   let data =
                       match ctx with
@@ -62,8 +64,8 @@ and Droid =
         interfaces = [ Node ],
         fieldsFn = fun () ->
             [ Define.GlobalIdField(fun _ d -> string d.Id)
-              Define.Field("number", String, fun _ d -> d.Number)
-              Define.Field("function", String, fun _ d -> d.Function) ])
+              Define.Field("number", StringType, fun _ d -> d.Number)
+              Define.Field("function", StringType, fun _ d -> d.Function) ])
 and Node = Define.Node<obj>(fun () -> [ Person; Droid ])
 and Query =
     Define.Object<obj list>("Query",
@@ -80,7 +82,7 @@ let schemaProcessor = Executor(schema)
 
 [<Fact>]
 let ``Property tracker can track indirect properties`` () =
-    let plan = schemaProcessor.CreateExecutionPlan("""
+    let plan = schemaProcessor.CreateExecutionPlanOrFail("""
     {
         people {
             fullName
@@ -92,12 +94,12 @@ let ``Property tracker can track indirect properties`` () =
         Compose(track null typeof<obj list> typeof<Person list>, [], Set.ofList
             [ Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, [])
               Tracker.Direct(track "LastName" typeof<Person> typeof<string>, []) ])
-    let actual = tracker Map.empty info
+    let actual = tracker ImmutableDictionary.Empty info
     actual |> equals expected
 
 [<Fact>]
 let ``Property tracker can correctly jump over properties not being part of the tracked chain`` () =
-    let plan = schemaProcessor.CreateExecutionPlan("""
+    let plan = schemaProcessor.CreateExecutionPlanOrFail("""
     {
         people {
             friends {
@@ -118,5 +120,5 @@ let ``Property tracker can correctly jump over properties not being part of the 
             [ Tracker.Direct(track "Id" typeof<Person> typeof<int>, [])
               Compose(track "Friends" typeof<Person> typeof<Person list>, [], Set.ofList
                   [ Tracker.Direct(track "FirstName" typeof<Person> typeof<string>, []) ]) ])
-    let actual = tracker Map.empty info
+    let actual = tracker ImmutableDictionary.Empty info
     actual |> equals expected

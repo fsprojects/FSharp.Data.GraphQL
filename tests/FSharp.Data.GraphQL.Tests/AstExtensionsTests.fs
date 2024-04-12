@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.AstExtensionsTests
 
@@ -16,11 +16,11 @@ let normalize (str : string) = str.Replace ("\r\n", "\n")
 let private printAndAssert (query : string) =
     let document = parse query
     let expected = normalize query
-    let actual = normalize (document.ToQueryString ())
+    let actual = normalize <| document.ToQueryString ()
     actual |> equals expected
 
 [<Fact>]
-let ``Should be able to print a simple query`` () =
+let ``Can print a simple query`` () =
     printAndAssert
         """query q {
   hero {
@@ -29,7 +29,7 @@ let ``Should be able to print a simple query`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a simple query with 2 fields`` () =
+let ``Can print a simple query with 2 fields`` () =
     printAndAssert
         """query q {
   hero {
@@ -39,7 +39,7 @@ let ``Should be able to print a simple query with 2 fields`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a query with variables`` () =
+let ``Can print a query with variables`` () =
     printAndAssert
         """query q($id: String!) {
   hero(id: $id) {
@@ -49,21 +49,21 @@ let ``Should be able to print a query with variables`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to parse a query with an object input in the internal method`` () =
+let ``Can parse a query with an object input in the internal method`` () =
     printAndAssert
         """mutation q($id: String!, $name: String!) {
   addHero(input: { id: $id, label: $name })
 }"""
 
 [<Fact>]
-let ``Should be able to parse a query with an object having array properties input in the internal method`` () =
+let ``Can parse a query with an object having array properties input in the internal method`` () =
     printAndAssert
         """mutation q($id: String!, $name: String!, $friend1: String!) {
   addHero(input: { friends: [ $friend1 ], id: $id, label: $name })
 }"""
 
 [<Fact>]
-let ``Should be able to parse a query with an object having multi-element array input in the internal method`` () =
+let ``Can parse a query with an object having multi-element array input in the internal method`` () =
     printAndAssert
         """mutation q($id: String!, $name: String!) {
   addHero(input: { friends: [ 7, 5, -3 ], id: $id, label: $name })
@@ -81,7 +81,7 @@ let ``Should be able print ObjectValue names properly`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a query with aliases`` () =
+let ``Can print a query with aliases`` () =
     printAndAssert
         """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
@@ -98,7 +98,7 @@ let ``Should be able to print a query with aliases`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a query with fragment spreads`` () =
+let ``Can print a query with fragment spreads`` () =
     printAndAssert
         """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
@@ -129,7 +129,7 @@ fragment friend on Character {
 }"""
 
 [<Fact>]
-let ``Should be able to print a short hand format query`` () =
+let ``Can print a short hand format query`` () =
     printAndAssert
         """{
   field1
@@ -147,7 +147,7 @@ let ``Should not print query without name in short hand format`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a query with inline fragments`` () =
+let ``Can print a query with inline fragments`` () =
     printAndAssert
         """query q($myId: String!, $hisId: String!) {
   myHero: hero(id: $myId) {
@@ -186,7 +186,7 @@ fragment friend on Character {
 }"""
 
 [<Fact>]
-let ``Should be able to print arguments inside fragment spreads and default variable values`` () =
+let ``Can print arguments inside fragment spreads and default variable values`` () =
     printAndAssert
         """query HeroComparison($first: Int = 3) {
   leftComparison: hero(episode: EMPIRE) {
@@ -210,7 +210,7 @@ fragment comparisonFields on Character {
 }"""
 
 [<Fact>]
-let ``Should be able to print directives`` () =
+let ``Can print directives`` () =
     printAndAssert
         """query Hero($episode: Episode, $withFriends: Boolean!) {
   hero(episode: $episode) {
@@ -222,7 +222,7 @@ let ``Should be able to print directives`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print multiple directives and arguments`` () =
+let ``Can print multiple directives and arguments`` () =
     printAndAssert
         """query q($skip: Boolean!) {
   hero(id: "1000") {
@@ -241,7 +241,7 @@ let ``Should be able to print multiple directives and arguments`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a mutation`` () =
+let ``Can print a mutation`` () =
     printAndAssert
         """mutation CreateReviewForEpisode($ep: Episode!, $review: ReviewInput!) {
   createReview(episode: $ep, review: $review) {
@@ -251,7 +251,7 @@ let ``Should be able to print a mutation`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print a subscription`` () =
+let ``Can print a subscription`` () =
     printAndAssert
         """subscription onCommentAdded($repoFullName: String!) {
   commentAdded(repoFullName: $repoFullName) {
@@ -261,7 +261,7 @@ let ``Should be able to print a subscription`` () =
 }"""
 
 [<Fact>]
-let ``Should be able to print type name meta field`` () =
+let ``Can print type name meta field`` () =
     let expected =
         normalize
             """query q {
@@ -304,11 +304,9 @@ let ``Should be able to print type name meta field`` () =
 """
 
     let document = parse query
-
     let actual =
         normalize
         <| document.ToQueryString (QueryStringPrintingOptions.IncludeTypeNames)
-
     actual |> equals expected
 
 [<Fact>]
@@ -332,7 +330,6 @@ let ``Should generate information map correctly`` () =
 """
 
     let document = parse query
-
     let actual = document.GetInfoMap () |> Map.toList
 
     let expected = [

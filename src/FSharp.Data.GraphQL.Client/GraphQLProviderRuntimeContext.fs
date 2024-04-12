@@ -1,5 +1,5 @@
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -12,8 +12,8 @@ type GraphQLRuntimeContextInfo =
 
 /// A context for running operations using the GraphQLProvider in runtime.
 type GraphQLProviderRuntimeContext =
-      /// Gets the URL of the server that this context refers to.
-    { ServerUrl : string
+    { /// Gets the URL of the server that this context refers to.
+      ServerUrl : string
       /// Gets the HTTP headers used for calls to the server that this context refers to.
       HttpHeaders : seq<string * string>
       /// Gets the connection component used to make calls to the server.

@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Tests.TypeValidationTests
 
 open FSharp.Data.GraphQL
@@ -22,16 +22,16 @@ type TestDataType =
 
 let TestInterface =
     Define.Interface<ITestInterface>("TestInterface",
-                                     [ Define.Field("property", String)
-                                       Define.Field("method", String, "Test method",
-                                                    [ Define.Input("x", Int)
-                                                      Define.Input("y", String) ], (fun _ _ -> "")) ])
+                                     [ Define.Field("property", StringType)
+                                       Define.Field("method", StringType, "Test method",
+                                                    [ Define.Input("x", IntType)
+                                                      Define.Input("y", StringType) ], (fun _ _ -> "")) ])
 
 [<Fact>]
-let ``Validation should inform about not implemented fields``() =
+let ``Validation must inform about not implemented fields``() =
     let TestData =
         Define.Object<TestDataType>
-            (name = "TestData", fields = [ Define.Field("property", String, (fun _ d -> d.TestProperty)) ],
+            (name = "TestData", fields = [ Define.Field("property", StringType, (fun _ d -> d.TestProperty)) ],
              interfaces = [ TestInterface ])
     let expected =
         ValidationError [ "'method' field is defined by interface TestInterface, but not implemented in object TestData" ]
@@ -39,12 +39,12 @@ let ``Validation should inform about not implemented fields``() =
     equals expected result
 
 [<Fact>]
-let ``Validation should inform about fields with not matching signatures``() =
+let ``Validation must inform about fields with not matching signatures``() =
     let TestData =
         Define.Object<TestDataType>
             (name = "TestData",
-             fields = [ Define.Field("property", Int, (fun _ d -> 1))
-                        Define.Field("method", String, "Test method", [ Define.Input("x", Int) ], (fun _ _ -> "res")) ],
+             fields = [ Define.Field("property", IntType, (fun _ d -> 1))
+                        Define.Field("method", StringType, "Test method", [ Define.Input("x", IntType) ], (fun _ _ -> "res")) ],
              interfaces = [ TestInterface ])
 
     let expected =
@@ -55,12 +55,12 @@ let ``Validation should inform about fields with not matching signatures``() =
     equals expected result
 
 [<Fact>]
-let ``Validation should succeed if object implements interface correctly``() =
+let ``Validation must succeed if object implements interface correctly``() =
     let TestData =
         Define.Object<TestDataType>
             (name = "TestData",
-             fields = [ Define.Field("property", String, (fun _ d -> d.TestProperty))
-                        Define.Field("method", String, "Test method", [ Define.Input("x", Int); Define.Input("y", String) ], (fun _ _ -> "res")) ],
+             fields = [ Define.Field("property", StringType, (fun _ d -> d.TestProperty))
+                        Define.Field("method", StringType, "Test method", [ Define.Input("x", IntType); Define.Input("y", StringType) ], (fun _ _ -> "res")) ],
              interfaces = [ TestInterface ])
 
     let result = validateImplements TestData TestInterface

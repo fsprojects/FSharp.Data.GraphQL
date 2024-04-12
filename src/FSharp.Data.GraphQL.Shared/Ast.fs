@@ -22,47 +22,39 @@ type OperationType =
 
 
 /// 2.9 Input Values
-///
-/// Field and directive arguments accept input values of various literal primitives; input values can be scalars, enumeration
-/// values, lists, or input objects.
-///
-/// If not defined as constant (for example, in DefaultValue), input values can be specified as a variable. List and inputs
-/// objects may also contain variables (unless defined to be constant).
-///
-/// https://spec.graphql.org/October2021/#sec-Input-Values
-type Value =
-    /// 2.9.1 Int Value
+and InputValue =
+    /// 2.9.1 Int InputValue
     /// https://spec.graphql.org/October2021/#sec-Int-Value
     | IntValue of int64
-    /// 2.9.2 Float Value
+    /// 2.9.2 Float InputValue
     /// https://spec.graphql.org/October2021/#sec-Float-Value
     | FloatValue of double
-    /// 2.9.3 Boolean Value
+    /// 2.9.3 Boolean InputValue
     /// https://spec.graphql.org/October2021/#sec-Boolean-Value
     | BooleanValue of bool
-    /// 2.9.4 String Value
+    /// 2.9.4 String InputValue
     /// https://spec.graphql.org/October2021/#sec-String-Value
     | StringValue of string
-    /// 2.9.5 Null Value
+    /// 2.9.5 Null InputValue
     /// https://spec.graphql.org/October2021/#sec-Null-Value
     | NullValue
-    /// 2.9.6 Enum Value
+    /// 2.9.6 Enum InputValue
     /// not "true", "false" or "null"
     /// https://spec.graphql.org/October2021/#sec-Enum-Value
     | EnumValue of string
-    /// 2.9.7 List Value
+    /// 2.9.7 List InputValue
     /// May be empty.
     /// https://spec.graphql.org/October2021/#sec-List-Value
-    | ListValue of Value list
+    | ListValue of InputValue list
     /// 2.9.8 Input Object Values
     /// May be empty.
     /// https://spec.graphql.org/October2021/#sec-Input-Object-Values
     /// Contains ObjectField: https://spec.graphql.org/October2021/#ObjectField
-    | ObjectValue of Map<string, Value>
+    | ObjectValue of Map<string, InputValue>
     /// 2.10 Variables
     /// if not Const
     /// https://spec.graphql.org/October2021/#Variable
-    | Variable of string
+    | VariableName of string
 
 /// 2.6 Arguments
 ///
@@ -71,7 +63,7 @@ type Value =
 ///
 /// https://spec.graphql.org/October2021/#sec-Language.Arguments
 /// https://spec.graphql.org/October2021/#Arguments
-type Argument = { Name : string; Value : Value }
+type Argument = { Name : string; Value : InputValue }
 
 /// 2.12 Directives
 ///
@@ -314,7 +306,7 @@ type VariableDefinition = {
     /// https://spec.graphql.org/October2021/#Type
     Type : TypeReference
     /// https://spec.graphql.org/October2021/#DefaultValue
-    DefaultValue : Value option
+    DefaultValue : InputValue option
     /// May be empty.
     /// https://spec.graphql.org/October2021/#Directives
     Directives : Directive list
@@ -376,7 +368,7 @@ type InputFieldDefinition = {
     /// GraphQL type definition of the input type.
     TypeDef : InputDefinition
     /// Optional default input value - used when no input was provided.
-    DefaultValue : Value option
+    DefaultValue : InputValue option
 }
 
 /// 3.3.1 Root Operation Types
@@ -467,7 +459,7 @@ type InputValueDefinition = {
     Type : TypeReference
 
     /// https://spec.graphql.org/October2021/#DefaultValue
-    DefaultValue : Value option
+    DefaultValue : InputValue option
 
     /// May be empty
     /// https://spec.graphql.org/October2021/#Directives
@@ -1067,7 +1059,7 @@ type ExecutableDocument = {
 /// https://spec.graphql.org/October2021/#sec-Document-Syntax
 /// https://spec.graphql.org/October2021/#Document
 type Document = {
-    Definitions : Definition list
+    Definitions : ExecutableDefinition list
 } with
 
     member x.Directives = x.Definitions |> List.collect (fun y -> y.Directives)

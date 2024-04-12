@@ -1,0 +1,134 @@
+{
+  "$schema": "http://json.schemastore.org/dotnetcli.host",
+  "symbolInfo": {
+    "Title": {
+      "longName": "title"
+    },
+    "TitleXmlEncoded": {
+      "isHidden": true
+    },
+    "Description": {
+      "longName": "description"
+    },
+    "DescriptionXmlEncoded": {
+      "isHidden": true
+    },
+    "Author": {
+      "longName": "author"
+    },
+    "AuthorXmlEncoded": {
+      "isHidden": true
+    },
+    "Contact": {
+      "longName": "contact"
+    },
+    "ContactXmlEncoded": {
+      "isHidden": true
+    },
+    "EditorConfig": {
+      "longName": "editorconfig"
+    },
+    "SourceControl": {
+      "longName": "source-control"
+    },
+    "GitHubUsername": {
+      "longName": "github-username"
+    },
+    "GitHubProject": {
+      "longName": "github-project"
+    },
+    "ReadMe": {
+      "longName": "readme"
+    },
+    "TreatWarningsAsErrors": {
+      "longName": "treat-warnings-as-errors"
+    },
+    "Mutations": {
+      "longName": "mutations"
+    },
+    "Subscriptions": {
+      "longName": "subscriptions"
+    },
+    "PersistedQueries": {
+      "longName": "persisted-queries"
+    },
+    "ForwardedHeaders": {
+      "longName": "forwarded-headers"
+    },
+    "HostFiltering": {
+      "longName": "host-filtering"
+    },
+    "ReverseProxyWebServer": {
+      "longName": "reverse-proxy"
+    },
+    "CloudProvider": {
+      "longName": "cloud-provider"
+    },
+    "OpenTelemetry": {
+      "longName": "open-telemetry"
+    },
+    "Logging": {
+      "longName": "logging"
+    },
+    "ApplicationInsights": {
+      "longName": "app-insights"
+    },
+    "ApplicationInsightsKey": {
+      "longName": "app-insights-key"
+    },
+    "HttpsEverywhere": {
+      "longName": "https-everywhere"
+    },
+    "HstsPreload": {
+      "longName": "hsts-preload"
+    },
+    "Authorization": {
+      "longName": "authorization"
+    },
+    "CORS": {
+      "longName": "cors"
+    },
+    "ResponseCompression": {
+      "longName": "response-compression"
+    },
+    "DistributedCache": {
+      "longName": "distributed-cache"
+    },
+    "HealthCheck": {
+      "longName": "health-check"
+    },
+    "RobotsTxt": {
+      "longName": "robots-txt"
+    },
+    "SecurityTxt": {
+      "longName": "security-txt"
+    },
+    "HumansTxt": {
+      "longName": "humans-txt"
+    },
+    "HttpPort": {
+      "longName": "http-port"
+    },
+    "HttpsPort": {
+      "longName": "https-port"
+    },
+    "IISExpressHttpPort": {
+      "longName": "iis-express-http-port"
+    },
+    "IISExpressHttpsPort": {
+      "longName": "iis-express-https-port"
+    },
+    "IntegrationTest": {
+      "longName": "integration-test"
+    },
+    "StyleCop": {
+      "longName": "style-cop"
+    },
+    "GitHubActions": {
+      "longName": "github-actions"
+    },
+    "SkipOpenToDo": {
+      "longName": "no-open-todo"
+    }
+  }
+}

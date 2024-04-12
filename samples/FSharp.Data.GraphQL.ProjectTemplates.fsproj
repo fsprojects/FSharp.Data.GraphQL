@@ -1,0 +1,26 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <PackageType>Template</PackageType>
+    <PackageId>FSharp.Data.GraphQL.ProjectTemplates</PackageId>
+    <Title>FSharp.Data.GraphQL project templates</Title>
+    <Description>Templates to use when creating a GraphQL API aplication in F#.</Description>
+    <PackageTags>dotnet-new;templates;graphql;giraffe;api;fsharp;f#</PackageTags>
+    <PackageReleaseNotes>https://github.com/fsprojects/FSharp.Data.GraphQL/releases</PackageReleaseNotes>
+
+    <TargetFramework>net6.0</TargetFramework>
+
+    <IncludeContentInPack>true</IncludeContentInPack>
+    <IncludeBuildOutput>false</IncludeBuildOutput>
+    <IncludeSymbols>false</IncludeSymbols>
+    <ContentTargetFolders>content</ContentTargetFolders>
+    <NoWarn>$(NoWarn);NU5128</NoWarn>
+    <NoDefaultExcludes>true</NoDefaultExcludes>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="samples/star-wars-api/**/*" Exclude="samples/star-wars-api/**/bin/**;samples/star-wars-api/**/obj/**" />
+    <Compile Remove="**/*" />
+  </ItemGroup>
+
+</Project>

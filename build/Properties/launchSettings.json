@@ -1,0 +1,15 @@
+{
+  "profiles": {
+    "BuildAndTest": {
+      "commandName": "Project"
+    },
+    "PackAndPush": {
+      "commandName": "Project",
+      "commandLineArgs": "--target PackAndPush"
+    },
+    "GenerateDocs": {
+      "commandName": "Project",
+      "commandLineArgs": "--target GenerateDocs"
+    }
+  }
+}

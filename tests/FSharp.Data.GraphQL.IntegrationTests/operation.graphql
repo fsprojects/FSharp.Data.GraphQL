@@ -1,16 +1,26 @@
 query fileOp {
-  hero(id: "1000") {
+  hero (id: "1000") {
     name
     appearsIn
     homePlanet
     friends {
-      ... on Human {
-        name
-        homePlanet
+      totalCount
+      pageInfo {
+        hasNextPage
+        hasPreviousPage
       }
-      ... on Droid {
-        name
-        primaryFunction
+      edges {
+        cursor
+        node {
+          ... on Human {
+            name
+            homePlanet
+          }
+          ... on Droid {
+            name
+            primaryFunction
+          }
+        }
       }
     }
   }

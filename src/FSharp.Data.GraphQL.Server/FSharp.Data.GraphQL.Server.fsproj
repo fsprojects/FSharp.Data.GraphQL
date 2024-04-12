@@ -1,8 +1,9 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>netstandard2.0</TargetFramework>
+    <TargetFrameworks>$(PackageTargetFrameworks)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
+    <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Server)</Description>
@@ -11,11 +12,6 @@
     <SignAssembly>true</SignAssembly>
     <PublicSign Condition=" '$(OS)' != 'Windows_NT' ">true</PublicSign>-->
   </PropertyGroup>
-
-  <ItemGroup>
-    <None Include="..\..\icon.png" Pack="true" PackagePath="" Visible="False" />
-    <None Include="..\..\README.md" Pack="true" PackagePath="" Visible="False" />
-  </ItemGroup>
 
   <ItemGroup Label="InternalsVisibleTo">
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
@@ -27,25 +23,31 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="FParsec" />
+    <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
   <ItemGroup>
     <Compile Include="ReflectionHelper.fs" />
+    <Compile Include="ErrorTypes.fs" />
+    <Compile Include="ErrorMessages.fs" />
+    <Compile Include="ErrorsProcessing.fs" />
+    <Compile Include="Exceptions.fs" />
+    <Compile Include="TypeSystem.fs" />
     <Compile Include="Values.fs" />
     <Compile Include="Planning.fs" />
     <Compile Include="ObservableExtensions.fs" />
+    <Compile Include="IO.fs" />
     <Compile Include="Execution.fs" />
     <Compile Include="Executor.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="Linq.fs" />
     <Compile Include="DefineExtensions.fs" />
-    <Compile Include="Relay/Node.fs" />
-    <Compile Include="Relay/Connections.fs" />
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="../FSharp.Data.GraphQL.Shared/FSharp.Data.GraphQL.Shared.fsproj" />
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
+
 </Project>

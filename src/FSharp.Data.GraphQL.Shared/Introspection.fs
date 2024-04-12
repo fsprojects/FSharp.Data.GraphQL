@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 module FSharp.Data.GraphQL.Introspection
 
 #nowarn "40"
@@ -13,108 +13,6 @@ open System.Reflection
 let internal getFieldValue name o =
     let property = o.GetType().GetTypeInfo().GetDeclaredProperty(name, ignoreCase=true)
     if isNull property then null else property.GetValue(o, null)
-
-/// Common GraphQL query that may be used to retrieve overall data
-/// about schema type system itself.
-let [<Literal>] IntrospectionQuery = """query IntrospectionQuery {
-__schema {
-  queryType {
-    name
-  }
-  mutationType {
-    name
-  }
-  subscriptionType {
-    name
-  }
-  types {
-    ...FullType
-  }
-  directives {
-    name
-    description
-    locations
-    args {
-      ...InputValue
-    }
-  }
-}
-}
-
-fragment FullType on __Type {
-kind
-name
-description
-fields(includeDeprecated: true) {
-  name
-  description
-  args {
-    ...InputValue
-  }
-  type {
-    ...TypeRef
-  }
-  isDeprecated
-  deprecationReason
-}
-inputFields {
-  ...InputValue
-}
-interfaces {
-  ...TypeRef
-}
-enumValues(includeDeprecated: true) {
-  name
-  description
-  isDeprecated
-  deprecationReason
-}
-possibleTypes {
-  ...TypeRef
-}
-}
-
-fragment InputValue on __InputValue {
-name
-description
-type {
-  ...TypeRef
-}
-defaultValue
-}
-
-fragment TypeRef on __Type {
-kind
-name
-ofType {
-  kind
-  name
-  ofType {
-    kind
-    name
-    ofType {
-      kind
-      name
-      ofType {
-        kind
-        name
-        ofType {
-          kind
-          name
-          ofType {
-            kind
-            name
-            ofType {
-              kind
-              name
-            }
-          }
-        }
-      }
-    }
-  }
-}
-}"""
 
 /// GraphQL enum describing kind of the GraphQL type definition.
 /// Can be one of: SCALAR, OBJECT, INTERFACE, UNION, ENUM, LIST,
@@ -146,24 +44,24 @@ let __DirectiveLocation =
     name = "__DirectiveLocation",
     description = "A Directive can be adjacent to many parts of the GraphQL language, a __DirectiveLocation describes one such possible adjacencies.",
     options = [
-        Define.EnumValue("QUERY", DirectiveLocation.QUERY, "Location adjacent to a query operation.")
-        Define.EnumValue("MUTATION", DirectiveLocation.MUTATION, "Location adjacent to a mutation operation.")
-        Define.EnumValue("SUBSCRIPTION", DirectiveLocation.SUBSCRIPTION, "Location adjacent to a subscription operation.")
-        Define.EnumValue("FIELD", DirectiveLocation.FIELD, "Location adjacent to a field.")
-        Define.EnumValue("FRAGMENT_DEFINITION", DirectiveLocation.FRAGMENT_DEFINITION, "Location adjacent to a fragment definition.")
-        Define.EnumValue("FRAGMENT_SPREAD", DirectiveLocation.FRAGMENT_SPREAD, "Location adjacent to a fragment spread.")
-        Define.EnumValue("INLINE_FRAGMENT", DirectiveLocation.INLINE_FRAGMENT, "Location adjacent to an inline fragment.")
-        Define.EnumValue("SCHEMA", DirectiveLocation.SCHEMA, "Location adjacent to a schema IDL definition.")
-        Define.EnumValue("SCALAR", DirectiveLocation.SCALAR, "Location adjacent to a scalar IDL definition.")
-        Define.EnumValue("OBJECT", DirectiveLocation.OBJECT, "Location adjacent to an object IDL definition.")
-        Define.EnumValue("FIELD_DEFINITION", DirectiveLocation.FIELD_DEFINITION, "Location adjacent to a field IDL definition.")
-        Define.EnumValue("ARGUMENT_DEFINITION", DirectiveLocation.ARGUMENT_DEFINITION, "Location adjacent to a field argument IDL definition.")
-        Define.EnumValue("INTERFACE", DirectiveLocation.INTERFACE, "Location adjacent to an interface IDL definition.")
-        Define.EnumValue("UNION", DirectiveLocation.UNION, "Location adjacent to an union IDL definition.")
-        Define.EnumValue("ENUM", DirectiveLocation.ENUM, "Location adjacent to an enum IDL definition.")
-        Define.EnumValue("ENUM_VALUE", DirectiveLocation.ENUM_VALUE, "Location adjacent to an enum value definition.")
-        Define.EnumValue("INPUT_OBJECT", DirectiveLocation.INPUT_OBJECT, "Location adjacent to an input object IDL definition.")
-        Define.EnumValue("INPUT_FIELD_DEFINITION", DirectiveLocation.INPUT_FIELD_DEFINITION, "Location adjacent to an input object field IDL definition.")
+        Define.EnumValue("QUERY", ExecutableDirectiveLocation ExecutableDirectiveLocation.QUERY, "Location adjacent to a query operation.")
+        Define.EnumValue("MUTATION", ExecutableDirectiveLocation ExecutableDirectiveLocation.MUTATION, "Location adjacent to a mutation operation.")
+        Define.EnumValue("SUBSCRIPTION", ExecutableDirectiveLocation ExecutableDirectiveLocation.SUBSCRIPTION, "Location adjacent to a subscription operation.")
+        Define.EnumValue("FIELD", ExecutableDirectiveLocation ExecutableDirectiveLocation.FIELD, "Location adjacent to a field.")
+        Define.EnumValue("FRAGMENT_DEFINITION", ExecutableDirectiveLocation ExecutableDirectiveLocation.FRAGMENT_DEFINITION, "Location adjacent to a fragment definition.")
+        Define.EnumValue("FRAGMENT_SPREAD", ExecutableDirectiveLocation ExecutableDirectiveLocation.FRAGMENT_SPREAD, "Location adjacent to a fragment spread.")
+        Define.EnumValue("INLINE_FRAGMENT", ExecutableDirectiveLocation ExecutableDirectiveLocation.INLINE_FRAGMENT, "Location adjacent to an inline fragment.")
+        Define.EnumValue("SCHEMA", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.SCHEMA, "Location adjacent to a schema IDL definition.")
+        Define.EnumValue("SCALAR", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.SCALAR, "Location adjacent to a scalar IDL definition.")
+        Define.EnumValue("OBJECT", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.OBJECT, "Location adjacent to an object IDL definition.")
+        Define.EnumValue("FIELD_DEFINITION", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.FIELD_DEFINITION, "Location adjacent to a field IDL definition.")
+        Define.EnumValue("ARGUMENT_DEFINITION", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ARGUMENT_DEFINITION, "Location adjacent to a field argument IDL definition.")
+        Define.EnumValue("INTERFACE", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INTERFACE, "Location adjacent to an interface IDL definition.")
+        Define.EnumValue("UNION", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.UNION, "Location adjacent to an union IDL definition.")
+        Define.EnumValue("ENUM", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ENUM, "Location adjacent to an enum IDL definition.")
+        Define.EnumValue("ENUM_VALUE", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ENUM_VALUE, "Location adjacent to an enum value definition.")
+        Define.EnumValue("INPUT_OBJECT", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INPUT_OBJECT, "Location adjacent to an input object IDL definition.")
+        Define.EnumValue("INPUT_FIELD_DEFINITION", TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INPUT_FIELD_DEFINITION, "Location adjacent to an input object field IDL definition.")
     ])
 
 let inline private findIntrospected (ctx: ResolveFieldContext) name = ctx.Schema.Introspected.Types |> Seq.find (fun x -> x.Name = name)
@@ -182,10 +80,10 @@ let rec __Type =
     fieldsFn = fun () ->
     [
         Define.Field("kind", __TypeKind, fun _ t -> t.Kind)
-        Define.Field("name", Nullable String, resolve = fun _ t -> t.Name)
-        Define.Field("description", Nullable String, resolve = fun _ t -> t.Description)
+        Define.Field("name", Nullable StringType, resolve = fun _ t -> t.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ t -> t.Description)
         Define.Field("fields", Nullable (ListOf __Field),
-            args = [Define.Input("includeDeprecated", Boolean, false) ],
+            args = [Define.Input("includeDeprecated", BooleanType, false) ],
             resolve = fun ctx t ->
                 match t.Name with
                 | None -> None
@@ -207,7 +105,7 @@ let rec __Type =
                 let found = findIntrospected ctx name
                 found.PossibleTypes |> Option.map Array.toSeq)
         Define.Field("enumValues", Nullable (ListOf __EnumValue),
-            args = [Define.Input("includeDeprecated", Boolean, false) ], resolve = fun ctx t ->
+            args = [Define.Input("includeDeprecated", BooleanType, false) ], resolve = fun ctx t ->
             match t.Name with
             | None -> None
             | Some name ->
@@ -233,10 +131,10 @@ and __InputValue =
     description = "Arguments provided to Fields or Directives and the input fields of an InputObject are represented as Input Values which describe their type and optionally a default value.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ f -> f.Name)
-        Define.Field("description", Nullable String, resolve = fun _ f -> f.Description)
+        Define.Field("name", StringType, resolve = fun _ f -> f.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ f -> f.Description)
         Define.Field("type", __Type, resolve = fun _ f -> f.Type)
-        Define.Field("defaultValue", Nullable String, fun _ f -> f.DefaultValue)
+        Define.Field("defaultValue", Nullable StringType, fun _ f -> f.DefaultValue)
     ])
 
 /// Object and Interface types are described by a list of Fields, each of
@@ -247,12 +145,12 @@ and __Field =
     description = "Object and Interface types are described by a list of Fields, each of which has a name, potentially a list of arguments, and a return type.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, fun _ f -> f.Name)
-        Define.Field("description", Nullable String, fun _ f -> f.Description)
+        Define.Field("name", StringType, fun _ f -> f.Name)
+        Define.Field("description", Nullable StringType, fun _ f -> f.Description)
         Define.Field("args", ListOf __InputValue, fun _ f -> f.Args)
         Define.Field("type", __Type, fun _ f -> f.Type)
-        Define.Field("isDeprecated", Boolean, resolve = fun _ f -> f.IsDeprecated)
-        Define.Field("deprecationReason", Nullable String, fun _ f -> f.DeprecationReason)
+        Define.Field("isDeprecated", BooleanType, resolve = fun _ f -> f.IsDeprecated)
+        Define.Field("deprecationReason", Nullable StringType, fun _ f -> f.DeprecationReason)
     ])
 
 /// One possible value for a given Enum. Enum values are unique values,
@@ -264,15 +162,22 @@ and __EnumValue =
     description = "One possible value for a given Enum. Enum values are unique values, not a placeholder for a string or numeric value. However an Enum value is returned in a JSON response as a string.",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ e -> e.Name)
-        Define.Field("description", Nullable String, resolve = fun _ e -> e.Description)
-        Define.Field("isDeprecated", Boolean, resolve = fun _ e -> Option.isSome e.DeprecationReason)
-        Define.Field("deprecationReason", Nullable String, resolve = fun _ e -> e.DeprecationReason)
+        Define.Field("name", StringType, resolve = fun _ e -> e.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ e -> e.Description)
+        Define.Field("isDeprecated", BooleanType, resolve = fun _ e -> Option.isSome e.DeprecationReason)
+        Define.Field("deprecationReason", Nullable StringType, resolve = fun _ e -> e.DeprecationReason)
     ])
 
+and private zeroExecutableDirectiveLocation = enum<ExecutableDirectiveLocation> 0
+and private zeroTypeSystemDirectiveLocation = enum<TypeSystemDirectiveLocation> 0
 and private oneOf (compared: DirectiveLocation []) (comparand: DirectiveLocation) =
-    let c = int comparand
-    compared |> Array.exists (fun cc -> c &&& (int cc) <> 0)
+    compared
+    |> Array.exists (
+        fun cc ->
+        match cc, comparand with
+        | ExecutableDirectiveLocation ed, ExecutableDirectiveLocation ed' -> (ed &&& ed') <> zeroExecutableDirectiveLocation
+        | TypeSystemDirectiveLocation td, TypeSystemDirectiveLocation td' -> (td &&& td') <> zeroTypeSystemDirectiveLocation
+        | _ -> false)
 
 /// A GraphQL Directive provides a way to describe alternate runtime execution
 /// and type validation behavior in a GraphQL document. In some cases, you need
@@ -285,13 +190,24 @@ and __Directive =
     description = """A Directive provides a way to describe alternate runtime execution and type validation behavior in a GraphQL document. In some cases, you need to provide options to alter GraphQL’s execution behavior in ways field arguments will not suffice, such as conditionally including or skipping a field. Directives provide this by describing additional information to the executor.""",
     fieldsFn = fun () ->
     [
-        Define.Field("name", String, resolve = fun _ directive -> directive.Name)
-        Define.Field("description", Nullable String, resolve = fun _ directive -> directive.Description)
+        Define.Field("name", StringType, resolve = fun _ directive -> directive.Name)
+        Define.Field("description", Nullable StringType, resolve = fun _ directive -> directive.Description)
         Define.Field("locations", ListOf __DirectiveLocation, resolve = fun _ directive -> directive.Locations)
         Define.Field("args", ListOf __InputValue, resolve = fun _ directive -> directive.Args)
-        Define.Field("onOperation", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.QUERY; DirectiveLocation.MUTATION; DirectiveLocation.SUBSCRIPTION |]))
-        Define.Field("onFragment", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FRAGMENT_SPREAD; DirectiveLocation.INLINE_FRAGMENT; DirectiveLocation.FRAGMENT_DEFINITION |]))
-        Define.Field("onField", Boolean, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| DirectiveLocation.FIELD |]))
+        Define.Field("onOperation", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| ExecutableDirectiveLocation ExecutableDirectiveLocation.QUERY; ExecutableDirectiveLocation ExecutableDirectiveLocation.MUTATION; ExecutableDirectiveLocation ExecutableDirectiveLocation.SUBSCRIPTION |]))
+        Define.Field("onFragment", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| ExecutableDirectiveLocation ExecutableDirectiveLocation.FRAGMENT_SPREAD; ExecutableDirectiveLocation ExecutableDirectiveLocation.INLINE_FRAGMENT; ExecutableDirectiveLocation ExecutableDirectiveLocation.FRAGMENT_DEFINITION |]))
+        Define.Field("onField", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| ExecutableDirectiveLocation ExecutableDirectiveLocation.FIELD |]))
+        Define.Field("onSchema", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.SCHEMA |]))
+        Define.Field("onScalar", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.SCALAR |]))
+        Define.Field("onObject", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.OBJECT |]))
+        Define.Field("onFieldDefinition", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.FIELD_DEFINITION |]))
+        Define.Field("onArgumentDefinition", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ARGUMENT_DEFINITION |]))
+        Define.Field("onInterface", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INTERFACE |]))
+        Define.Field("onUnion", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.UNION |]))
+        Define.Field("onEnum", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ENUM |]))
+        Define.Field("onEnumValue", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.ENUM_VALUE |]))
+        Define.Field("onInputObject", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INPUT_OBJECT |]))
+        Define.Field("onInputFieldDefinition", BooleanType, resolve = fun _ d -> d.Locations |> Seq.exists (oneOf [| TypeSystemDirectiveLocation TypeSystemDirectiveLocation.INPUT_FIELD_DEFINITION |]))
     ])
 
 /// GraphQL object defining capabilities of GraphQL server. It exposes

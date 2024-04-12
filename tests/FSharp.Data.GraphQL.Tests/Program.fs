@@ -15,7 +15,7 @@ module Program =
         runner.Start(null)
         finished.WaitOne() |> ignore
         finished.Dispose()
-        !result
+        result.Value
 
 [<assembly: CollectionBehavior(DisableTestParallelization = true)>]
 do()

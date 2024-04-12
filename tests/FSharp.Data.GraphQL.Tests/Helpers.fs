@@ -1,25 +1,26 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 [<AutoOpen>]
-module Helpers
+module internal Helpers
 
 open System
-open System.Linq
 open System.Collections.Generic
-open Xunit
-open FSharp.Data.GraphQL.Execution
+open System.Linq
+open System.Text.Json.Serialization
 open System.Threading
+open System.Threading.Tasks
+open Xunit
+open FSharp.Data.GraphQL
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
 let isDict<'k, 'v> actual = isSeq<KeyValuePair<'k, 'v>> actual
 let isNameValueDict actual = isDict<string, obj> actual
-let fail (message: string) =
-    Assert.True(false, message)
+let fail (message: string) = Assert.Fail message
 let equals (expected : 'x) (actual : 'x) =
-    Assert.True((actual = expected), sprintf "expected %O\nbut got %O" expected actual)
+    if not (actual = expected) then fail <| $"expected %A{expected}\nbut got %A{actual}"
 let notEquals (expected : 'x) (actual : 'x) =
-    Assert.True((actual <> expected), sprintf "unexpected %+A" expected)
+    if actual = expected then fail <| $"unexpected %+A{expected}"
 let noErrors (result: IDictionary<string, obj>) =
     match result.TryGetValue("errors") with
     | true, errors -> fail <| sprintf "expected ExecutionResult to have no errors but got %+A" errors
@@ -34,11 +35,24 @@ let single (xs : 'a seq) =
     then fail <| sprintf "Expected single item in sequence, but found %i items.\n%A" length xs
     Seq.head xs
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
+let throwsAsync<'e when 'e :> exn> (action : unit Async) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action))
+let throwsAsyncVal<'e when 'e :> exn> (action : unit AsyncVal) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action |> AsyncVal.toAsync))
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
-let hasError (errMsg : string) (errors: Error seq) =
-    let containsMessage = errors |> Seq.exists (fun (message, _) -> message.Contains(errMsg))
+
+let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
+    let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
+
+let hasErrorAtPath path (errMsg : string) (errors: GQLProblemDetails seq) =
+    match errors |> Seq.where (fun pd -> pd.Message.Contains(errMsg)) |> Seq.tryHead with
+    | Some error ->
+        error.Path
+        |> Skippable.filter (fun pathValue -> Assert.True((pathValue = path), $"Expected that message '%s{errMsg}' has path {path}, but path {pathValue} found."); true)
+        |> Skippable.defaultWith (fun () -> Assert.Fail($"Expected that message '%s{errMsg}' has path {path}, but no path found."); []) |> ignore
+    | None ->
+        Assert.Fail ($"Expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
+
 let (<??) opt other =
     match opt with
     | None -> Some other
@@ -58,63 +72,30 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
 let greaterThanOrEqual expected actual =
     Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
-let ensureDeferred (result : GQLResponse) (onDeferred : Output -> Error list -> IObservable<Output> -> unit) : unit =
-    match result with
-    | Deferred(data, errors, deferred) -> onDeferred data errors deferred
-    | _ -> fail <| sprintf "Expected Deferred GQLResponse but received '%O'" result
+open System.Text.Json
+open FSharp.Data.GraphQL.Types
+open FSharp.Data.GraphQL.Server.AspNetCore
 
-let ensureDirect (result : GQLResponse) (onDirect : Output -> Error list -> unit) : unit =
-    match result with
-    | Direct(data, errors) -> onDirect data errors
-    | _ -> fail <| sprintf "Expected Direct GQLResponse but received '%O'" result
+let stringifyArg name (ctx : ResolveFieldContext) () =
+    let arg = ctx.TryArg name |> Option.toObj
+    JsonSerializer.Serialize (arg, Json.serializerOptions)
 
-open Newtonsoft.Json
-open Newtonsoft.Json.Serialization
-open Microsoft.FSharp.Reflection
+let stringifyInput = stringifyArg "input"
+
+
 open FSharp.Data.GraphQL.Parser
-
-type internal OptionConverter() =
-    inherit JsonConverter()
-
-    override __.CanConvert(t) =
-        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>>
-    override __.WriteJson(writer, value, serializer) =
-        let value =
-            if isNull value then null
-            else
-                let _,fields = Microsoft.FSharp.Reflection.FSharpValue.GetUnionFields(value, value.GetType())
-                fields.[0]
-        serializer.Serialize(writer, value)
-
-    override __.ReadJson(reader, t, _, serializer) =
-        let innerType = t.GetGenericArguments().[0]
-        let innerType =
-            if innerType.IsValueType then (typedefof<Nullable<_>>).MakeGenericType([|innerType|])
-            else innerType
-        let value = serializer.Deserialize(reader, innerType)
-        let cases = FSharpType.GetUnionCases(t)
-        if isNull value then FSharpValue.MakeUnion(cases.[0], [||])
-        else FSharpValue.MakeUnion(cases.[1], [|value|])
-
-let internal settings = JsonSerializerSettings()
-settings.Converters <- [| OptionConverter() |]
-settings.ContractResolver <- CamelCasePropertyNamesContractResolver()
-
-let toJson (o: 't) : string = JsonConvert.SerializeObject(o, settings)
-
-let fromJson<'t> (json: string) : 't = JsonConvert.DeserializeObject<'t>(json, settings)
 
 let asts query =
     ["defer"; "stream"]
     |> Seq.map (query >> parse)
 
-let set (mre : ManualResetEvent) =
+let setEvent (mre : ManualResetEvent) =
     mre.Set() |> ignore
 
-let reset (mre : ManualResetEvent) =
+let resetEvent (mre : ManualResetEvent) =
     mre.Reset() |> ignore
 
-let wait (mre : ManualResetEvent) errorMsg =
+let waitEvent (mre : ManualResetEvent) errorMsg =
     if TimeSpan.FromSeconds(float 30) |> mre.WaitOne |> not
     then fail errorMsg
 
@@ -147,9 +128,9 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     let mre = new ManualResetEvent(false)
     let mutable subscription = Unchecked.defaultof<IDisposable>
     do subscription <- obs.Subscribe(this)
-    member __.Received
+    member _.Received
         with get() = received.AsEnumerable()
-    member __.WaitCompleted(?expectedItemCount, ?timeout) =
+    member _.WaitCompleted(?expectedItemCount, ?timeout) =
         let ms = defaultArg timeout 30
         if TimeSpan.FromSeconds(float ms) |> mre.WaitOne |> not
         then fail "Timeout waiting for OnCompleted"
@@ -158,22 +139,22 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
             if received.Count < x
             then failwithf "Expected to receive %i items, but received %i\nItems: %A" x received.Count received
         | None -> ()
-    member __.WaitForItems(expectedItemCount) =
+    member _.WaitForItems(expectedItemCount) =
         let errorMsg = sprintf "Expected to receive least %i items, but received %i\nItems: %A" expectedItemCount received.Count received
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
     member x.WaitForItem() = x.WaitForItems(1)
-    member __.IsCompleted
+    member _.IsCompleted
         with get() = isCompleted
     interface IObserver<'T> with
-        member __.OnCompleted() =
+        member _.OnCompleted() =
             isCompleted <- true
             mre.Set() |> ignore
-        member __.OnError(error) = raise error
-        member __.OnNext(value) =
+        member _.OnError(error) = error.Reraise()
+        member _.OnNext(value) =
             received.Add(value)
             onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
-        member __.Dispose() =
+        member _.Dispose() =
             subscription.Dispose()
             mre.Dispose()
 
@@ -184,3 +165,14 @@ module Observer =
 
     let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
         new TestObserver<'T>(sub, onReceive)
+
+open System.Runtime.CompilerServices
+
+[<Extension>]
+type ExecutorExtensions =
+
+    [<Extension>]
+    static member CreateExecutionPlanOrFail (executor: Executor<'Root>, queryOrMutation: string, ?operationName: string, ?meta : Metadata) =
+        match executor.CreateExecutionPlan(queryOrMutation, ?operationName = operationName, ?meta = meta) with
+        | Ok executionPlan -> executionPlan
+        | Error _ -> fail "invalid query"; Unchecked.defaultof<_>

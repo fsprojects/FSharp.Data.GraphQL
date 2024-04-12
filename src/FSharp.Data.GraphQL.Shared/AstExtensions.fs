@@ -2,11 +2,11 @@
 module FSharp.Data.GraphQL.Ast.Extensions
 
 open System
-open System.Text
-open FSharp.Data.GraphQL.Ast
 open System.Globalization
+open System.Text
+open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 
-type Path = string list
 type OperationName = string
 
 type AstTypeFieldInfo = {
@@ -30,13 +30,13 @@ and internal AstSelectionInfo = {
     TypeCondition : string option
     Name : string
     Alias : string option
-    Path : Path
+    Path : FieldPath
     mutable Fields : AstSelectionInfo list
 } with
 
     member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
 
-    static member Create (typeCondition : string option, path : Path, name : string, alias : string option, ?fields : AstSelectionInfo list) = {
+    static member Create (typeCondition : string option, path : FieldPath, name : string, alias : string option, ?fields : AstSelectionInfo list) = {
         TypeCondition = typeCondition
         Name = name
         Alias = alias
@@ -52,7 +52,6 @@ and AstFieldInfo =
 
     static member internal Create (info : AstSelectionInfo) =
         let fields = List.map AstFieldInfo.Create info.Fields
-
         match info.TypeCondition with
         | Some typeCondition ->
             FragmentField {
@@ -86,15 +85,13 @@ and AstFieldInfo =
 type internal PaddedStringBuilder () =
     let sb = StringBuilder ()
     let mutable padCount = 0
-    member __.Pad () = padCount <- padCount + 2
-    member __.Unpad () = padCount <- padCount - 2
-
-    member __.AppendLine () =
+    member _.Pad () = padCount <- padCount + 2
+    member _.Unpad () = padCount <- padCount - 2
+    member _.AppendLine () =
         sb.AppendLine().Append ("".PadLeft (padCount, ' '))
         |> ignore
-
-    member __.Append (str : string) = sb.Append (str) |> ignore
-    override __.ToString () = sb.ToString ()
+    member _.Append (str : string) = sb.Append (str) |> ignore
+    override _.ToString () = sb.ToString ()
 
 /// Specify options when printing an Ast.Document to a query string.
 [<Flags>]
@@ -112,9 +109,8 @@ type Document with
     /// <param name="options">Specify custom printing options for the query string.</param>
     member x.ToQueryString (?options : QueryStringPrintingOptions) =
         let options = defaultArg options QueryStringPrintingOptions.None
-
         let sb = PaddedStringBuilder ()
-        let withQuotes (s : string) = "\"" + s + "\""
+        let withQuotes (s : string) = $"\"{s}\""
 
         let rec printValue x =
             let printObjectValue (name, value) =
@@ -146,8 +142,7 @@ type Document with
             | NullValue -> sb.Append ("null")
             | ListValue x -> printCompound "[]" printValue x
             | ObjectValue x -> printCompound "{}" printObjectValue (Map.toList x)
-            | Variable x -> sb.Append ("$" + x)
-
+            | VariableName x -> sb.Append('$').Append(x)
         let printVariables (vdefs : VariableDefinition list) =
             let printVariable (vdef : VariableDefinition) =
                 sb.Append ("$")
@@ -263,14 +258,14 @@ type Document with
                     sb.Append ("..." + frag.Name)
 
                     if frag.Directives.Length > 0 then
-                        sb.Append (" ")
+                        sb.Append (' ')
 
                     printDirectives frag.Directives
                 | InlineFragment frag ->
                     sb.Append ("... ")
 
                     frag.TypeCondition
-                    |> Option.iter (fun t -> sb.Append ("on " + t))
+                    |> Option.iter (fun t -> sb.Append("on ").Append(t))
 
                     printDirectives frag.Directives
                     sb.Append (" ")
@@ -369,7 +364,7 @@ type Document with
             |> List.map (fun operation -> operation.Name, operation)
 
         let mapper (selectionSet : Selection list) =
-            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : string list) (selectionSet : Selection list) =
+            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : FieldPath) (selectionSet : Selection list) =
                 match selectionSet with
                 | [] -> acc
                 | selection :: tail ->

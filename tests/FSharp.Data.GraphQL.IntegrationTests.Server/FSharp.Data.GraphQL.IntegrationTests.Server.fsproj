@@ -26,4 +26,27 @@
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
+    <PackageReference Include="Giraffe" />
+    <PackageReference Include="GraphQL.Server.Ui.Playground" />
+    <PackageReference Include="GraphQL.Server.Ui.Voyager" />
+    <PackageReference Include="HotChocolate.AspNetCore" />
+    <PackageReference Include="Microsoft.Extensions.Http" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="ApplicationInsights.config" />
+    <Compile Include="CustomSchemaTypes.fs" />
+    <Compile Include="Schema.fs" />
+    <None Include="..\..\samples\star-wars-api\MultipartRequest.fs" Link="MultipartRequest.fs" />
+    <Compile Include="Startup.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+  </ItemGroup>
 </Project>

@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL
 
@@ -26,7 +26,7 @@ module internal ProviderDesignTimeCache =
 
 module internal QueryValidationDesignTimeCache =
     let cache : IValidationResultCache = upcast MemoryValidationResultCache()
-    let getOrAdd (key : ValidationResultKey) (resMaker : unit -> ValidationResult<AstError>) =
+    let getOrAdd (key : ValidationResultKey) (resMaker : unit -> ValidationResult<GQLProblemDetails>) =
         cache.GetOrAdd resMaker key
 
 #endif

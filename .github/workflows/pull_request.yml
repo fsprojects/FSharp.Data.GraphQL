@@ -1,0 +1,52 @@
+name: Build and Test
+
+on:
+  push:
+    branches:
+    - master
+    - dev
+  pull_request:
+    branches:
+    - master
+    - dev
+
+env:
+  DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
+  DOTNET_NOLOGO: true
+
+jobs:
+  build:
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macOS-latest]
+        dotnet: [7.0.406]
+    runs-on: ${{ matrix.os }}
+
+    steps:
+    - uses: actions/checkout@v4
+
+    - name: Setup .NET Core
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: ${{ matrix.dotnet }}
+
+    - name: Add version to global.json
+      run: |
+        $version = "${{ matrix.dotnet }}"
+        $globalJsonPath = "global.json"
+        $globalJson = Get-Content -Raw -Path $globalJsonPath | ConvertFrom-Json
+        if ($null -eq $globalJson.sdk.version) {
+          $globalJson.sdk | Add-Member -Type NoteProperty -Name version -Value $version
+        } else {
+          $globalJson.sdk.version = $version
+        }
+        $globalJson | ConvertTo-Json -Depth 10 | Set-Content -Path $globalJsonPath
+      shell: pwsh
+
+    - name: Install local tools
+      run: dotnet tool restore
+
+    - name: Build and run integration tests
+      run: dotnet run --project build/Build.fsproj --launch-profile BuildAndTest

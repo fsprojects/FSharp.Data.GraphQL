@@ -4,15 +4,18 @@
     <OutputType>Library</OutputType>
     <TargetFramework>netstandard2.0</TargetFramework>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
-    <GenerateAssemblyInfo>false</GenerateAssemblyInfo>
     <FSharpToolsDirectory>typeproviders</FSharpToolsDirectory>
     <PackagePath>typeproviders</PackagePath>
 
     <Description>FSharp implementation of Facebook GraphQL query language (Client)</Description>
+    <NoWarn>$(NoWarn);NU5100</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FParsec" />
+    <PackageReference Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)">
+      <PrivateAssets>all</PrivateAssets>
+      <ExcludeAssets>runtime</ExcludeAssets>
+    </PackageReference>
     <PackageReference Include="Microsoft.Extensions.Http" />
   </ItemGroup>
 
@@ -33,7 +36,25 @@
     <Compile Include="GraphQLProvider.Runtime.fs" />
   </ItemGroup>
 
+  <Target Name="RemoveUnnecessaryNuGetPackInput" BeforeTargets="GenerateNuspec">
+    <ItemGroup>
+      <FSharpCoreNuGetPackInput Include="@(NuGetPackInput)" Condition="$([System.String]::Copy( %(FullPath) ).EndsWith('FSharp.Core.resources.dll'))" />
+      <PdbNuGetPackInput Include="@(NuGetPackInput)" Condition="$([System.String]::Copy( %(FullPath) ).Contains('DesignTime')) And ('%(Extension)' == '.pdb' OR '%(Extension)' == '.xml')" />
+    </ItemGroup>
+    <ItemGroup>
+      <NuGetPackInput Remove="@(FSharpCoreNuGetPackInput)" />
+      <NuGetPackInput Remove="@(PdbNuGetPackInput)" />
+      <_PackageFiles Remove="@(FSharpCoreNuGetPackInput)" />
+      <_PackageFiles Remove="@(PdbNuGetPackInput)" />
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
-    <ProjectReference Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
+    <ProjectReference Condition="$(IsNuGet) != ''" Include="..\FSharp.Data.GraphQL.Client.DesignTime\FSharp.Data.GraphQL.Client.DesignTime.fsproj">
+      <IsFSharpDesignTimeProvider>true</IsFSharpDesignTimeProvider>
+      <PrivateAssets>all</PrivateAssets>
+    </ProjectReference>
+    <PackageReference Condition="$(IsNuGet) != ''" Include="FSharp.Data.GraphQL.Shared" VersionOverride="$(Version)" />
+    <ProjectReference Condition="$(IsNuGet) == ''" Include="..\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
   </ItemGroup>
 </Project>

@@ -1,4 +1,4 @@
-﻿// --------------------------------------------------------------------------------------
+// --------------------------------------------------------------------------------------
 // Copyright (c) Microsoft Corporation 2005-2012.
 // This sample code is provided "as is" without warranty of any kind.
 // We disclaim all warranties, either express or implied, including the
@@ -7,8 +7,8 @@
 // A simple F# portable parser for JSON data
 // --------------------------------------------------------------------------------------
 
-/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 namespace FSharp.Data.GraphQL.Client
 
@@ -276,7 +276,7 @@ type private JsonParser(jsonText:string) =
         i <- i + expected.Length
         r
 
-    member __.Parse() =
+    member _.Parse() =
         let value = parseRootValue()
         skipWhitespace()
         if i <> s.Length then

@@ -1,3 +1,4 @@
 {
-    "appDomain": "denied"
+  "appDomain": "denied",
+  "parallelizeAssembly": true
 }

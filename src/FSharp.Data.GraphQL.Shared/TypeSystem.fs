@@ -8,10 +8,12 @@ open System.Reflection
 open System.Collections
 open System.Collections.Concurrent
 open System.Collections.Generic
+open System.Collections.Immutable
+open System.Text.Json
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
+open FSharp.Data.GraphQL.Validation
 open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
@@ -271,9 +273,9 @@ module Introspection =
         SubscriptionType : IntrospectionTypeRef option
         /// Array of all introspection types defined within current schema.
         /// Includes types for queries, mutations and subscriptions.
-        Types : IntrospectionType[]
+        Types : IntrospectionType array
         /// Array of all directives supported by current schema.
-        Directives : IntrospectionDirective[]
+        Directives : IntrospectionDirective array
     }
 
 /// Represents a subscription as described in the schema.
@@ -402,7 +404,7 @@ and ISchema =
         abstract Subscription : SubscriptionObjectDef option
 
         /// List of all directives supported by the current schema.
-        abstract Directives : DirectiveDefinition[]
+        abstract Directives : DirectiveDefinition array
 
         /// Method which, given type name, returns Some if provided
         /// type has been defined in current schema. Otherwise None.
@@ -425,7 +427,7 @@ and ISchema =
         /// Returns a function called when errors occurred during query execution.
         /// It's used to retrieve messages shown as output to the client.
         /// May be also used to log messages before returning them.
-        abstract ParseError : exn -> string
+        abstract ParseError : FieldPath -> exn -> IGQLError list
 
         /// Returns the subscription provider implementation for this schema.
         abstract SubscriptionProvider : ISubscriptionProvider
@@ -466,7 +468,7 @@ and FieldExecuteMap (compiler : FieldExecuteCompiler) =
     /// If set to true, and an exists an entry with the <paramref name="typeName"/> and the name of the FieldDef,
     /// then it will be overwritten.
     /// </param>
-    member __.SetExecute (typeName : string, def : FieldDef, ?overwrite : bool) =
+    member _.SetExecute (typeName : string, def : FieldDef, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
         let key = typeName, def.Name
         let compiled = compiler def
@@ -493,7 +495,7 @@ and FieldExecuteMap (compiler : FieldExecuteCompiler) =
     /// </summary>
     /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
     /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
-    member __.GetExecute (typeName : string, fieldName : string) =
+    member _.GetExecute (typeName : string, fieldName : string) =
         let key = getKey typeName fieldName
         if map.ContainsKey (key) then
             fst map[key]
@@ -505,7 +507,7 @@ and FieldExecuteMap (compiler : FieldExecuteCompiler) =
     /// </summary>
     /// <param name="typeName">The type name of the parent object that has the field that needs to be executed.</param>
     /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
-    member __.GetArgs (typeName : string, fieldName : string) =
+    member _.GetArgs (typeName : string, fieldName : string) =
         let key = getKey typeName fieldName
         if map.ContainsKey (key) then
             snd map[key]
@@ -513,14 +515,14 @@ and FieldExecuteMap (compiler : FieldExecuteCompiler) =
             Unchecked.defaultof<InputFieldDef[]>
 
     interface IEnumerable<string * string * ExecuteField> with
-        member __.GetEnumerator () =
+        member _.GetEnumerator () =
             let seq =
                 map
                 |> Seq.map (fun kvp -> fst kvp.Key, snd kvp.Key, fst kvp.Value)
             seq.GetEnumerator ()
 
     interface IEnumerable with
-        member __.GetEnumerator () =
+        member _.GetEnumerator () =
             let seq = map |> Seq.map (fun kvp -> fst kvp.Value)
             upcast seq.GetEnumerator ()
 
@@ -632,7 +634,7 @@ and PlanningContext = {
 
 /// A function type, which upon execution returns true if related field should
 /// be included in result set for the query.
-and Includer = Map<string, obj> -> bool
+and Includer = ImmutableDictionary<string, obj> -> Result<bool, IGQLError list>
 
 /// A node representing part of the current GraphQL query execution plan.
 /// It contains info about both document AST fragment of incoming query as well,
@@ -693,17 +695,9 @@ and ExecutionInfo = {
         let nameAs info =
             match info.Ast.Alias with
             | Some alias ->
-                info.Ast.Name
-                + " as "
-                + alias
-                + " of "
-                + info.ReturnDef.ToString ()
-                + (if info.IsNullable then "" else "!")
+                $"{info.Ast.Name} as {alias} of {info.ReturnDef}{(if info.IsNullable then "" else "!")}"
             | None ->
-                info.Ast.Name
-                + " of "
-                + info.ReturnDef.ToString ()
-                + (if info.IsNullable then "" else "!")
+                $"{info.Ast.Name} of {info.ReturnDef}{(if info.IsNullable then "" else "!")}"
 
         let rec str indent sb info =
             match info.Kind with
@@ -787,6 +781,7 @@ and ExecutionInfoKind =
 
 /// Buffered stream options. Used to specify how the buffer will behavior in a stream.
 and BufferedStreamOptions = {
+    /// The maximum time in milliseconds that the buffer will be filled before being sent to the subscriber.
     Interval : int option
     /// The maximum number of items that will be buffered before being sent to the subscriber.
     PreferredBatchSize : int option
@@ -829,7 +824,7 @@ and Resolve =
         match x with
         | Sync (_, _, e) -> e
         | Async (_, _, e) -> e
-        | ResolveExpr e -> e
+        | ResolveExpr (e) -> e
         | Undefined -> failwith "Resolve function was not defined"
         | x -> failwith $"Unexpected resolve function %A{x}"
 
@@ -850,7 +845,7 @@ and VarDef = {
     /// Type definition in corresponding GraphQL schema.
     TypeDef : InputDef
     /// Optional default value.
-    DefaultValue : Value option
+    DefaultValue : InputValue option
 }
 
 
@@ -875,8 +870,6 @@ and ExecutionPlan = {
     Variables : VarDef list
     /// A dictionary of metadata associated with custom operations on the planning of this plan.
     Metadata : Metadata
-    /// The validation result for the document being processed.
-    ValidationResult : ValidationResult<AstError>
 } with
 
     member x.Item
@@ -893,9 +886,7 @@ and ExecutionContext = {
     /// Execution plan describing, what fiedls are going to be resolved.
     ExecutionPlan : ExecutionPlan
     /// Collection of variables provided to execute current operation.
-    Variables : Map<string, obj>
-    /// Collection of errors that occurred while executing current operation.
-    Errors : ConcurrentBag<exn>
+    Variables : ImmutableDictionary<string, obj>
     /// A map of all fields of the query and their respective execution operations.
     FieldExecuteMap : FieldExecuteMap
     /// A simple dictionary to hold metadata that can be used by execution customizations.
@@ -920,30 +911,16 @@ and ResolveFieldContext = {
     /// parametrized inputs.
     Args : Map<string, obj>
     /// Variables provided by the operation caller.
-    Variables : Map<string, obj>
+    Variables : ImmutableDictionary<string, obj>
     /// Field path
-    Path : obj list
+    Path : FieldPath
 } with
-
-    /// Remembers an exception, so it can be included in the final response.
-    member x.AddError (error : exn) = x.Context.Errors.Add error
 
     /// Tries to find an argument by provided name.
     member x.TryArg (name : string) : 't option =
         match Map.tryFind name x.Args with
-        | Some o -> Some (o :?> 't)
+        | Some o -> Some (o :?> 't) // TODO: Use Convert.ChangeType
         | None -> None
-
-    /// Returns an argument by provided name. If argument was not found
-    /// and exception will be thrown.
-    member x.Arg (name : string) : 't =
-        match Map.tryFind name x.Args with
-        | Some found -> downcast found
-        | None ->
-            raise (
-                KeyNotFoundException
-                    $"Argument '%s{name}' was not provided within context of a field '%s{x.ExecutionInfo.Identifier}'. Check if it was supplied within GraphQL query."
-            )
 
 /// Function type for the compiled field executor.
 and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
@@ -1032,6 +1009,10 @@ and [<CustomEquality; NoComparison>] internal FieldDefinition<'Val, 'Res> = {
         else
             x.Name + ": " + x.TypeDef.ToString ()
 
+and InputParameterValue =
+    | InlineConstant of InputValue
+    | Variable of JsonElement
+
 /// An untyped representation of GraphQL scalar type.
 and ScalarDef =
     interface
@@ -1039,13 +1020,10 @@ and ScalarDef =
         abstract Name : string
         /// Optional scalar type description.
         abstract Description : string option
-        /// A function used to retrieve a .NET object from provided GraphQL query.
-        abstract CoerceInput : Value -> obj option
-
-        /// A function used to set a surrogate representation to be
-        /// returned as a query result.
-        abstract CoerceValue : obj -> obj option
-
+        /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+        abstract CoerceInput : InputParameterValue -> Result<obj, IGQLError list>
+        /// A function used to serialize a .NET object and coerce its value to JSON compatible if needed.
+        abstract CoerceOutput : obj -> obj option
         inherit TypeDef
         inherit NamedDef
         inherit InputDef
@@ -1053,21 +1031,21 @@ and ScalarDef =
         inherit LeafDef
     end
 
-/// Concrete representation of the scalar types.
-and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> = {
+/// Concrete representation of the scalar types wrapped into a value object.
+and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
     /// Name of the scalar type.
     Name : string
     /// Optional type description.
     Description : string option
-    /// A function used to retrieve a .NET object from provided GraphQL query.
-    CoerceInput : Value -> 'Val option
+    /// A function used to retrieve a .NET object from provided GraphQL query or JsonElement variable.
+    CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
     /// A function used to set a surrogate representation to be
     /// returned as a query result.
-    CoerceValue : obj -> 'Val option
+    CoerceOutput : obj -> 'Primitive option
 } with
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1083,8 +1061,8 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> = {
     interface ScalarDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.CoerceInput input = x.CoerceInput input |> Option.map box
-        member x.CoerceValue value = (x.CoerceValue value) |> Option.map box
+        member x.CoerceInput input = x.CoerceInput input |> Result.map box
+        member x.CoerceOutput value = (x.CoerceOutput value) |> Option.map box
 
     interface InputDef<'Val>
     interface OutputDef<'Val>
@@ -1095,11 +1073,13 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Val> = {
 
     override x.Equals y =
         match y with
-        | :? ScalarDefinition<'Val> as s -> x.Name = s.Name
+        | :? ScalarDefinition<'Primitive, 'Val> as s -> x.Name = s.Name
         | _ -> false
 
     override x.GetHashCode () = x.Name.GetHashCode ()
     override x.ToString () = x.Name + "!"
+
+and ScalarDefinition<'Val> = ScalarDefinition<'Val, 'Val>
 
 /// A GraphQL representation of single case of the enum type.
 /// Enum value return value is always represented as string.
@@ -1180,7 +1160,7 @@ and internal EnumDefinition<'Val> = {
     interface OutputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1216,7 +1196,6 @@ and ObjectDef =
         abstract Fields : Map<string, FieldDef>
         /// Collection of interfaces implemented by the current object.
         abstract Implements : InterfaceDef[]
-
         /// Optional function used to recognize of provided
         /// .NET object is valid for this GraphQL object definition.
         abstract IsTypeOf : (obj -> bool) option
@@ -1255,7 +1234,7 @@ and [<CustomEquality; NoComparison>] internal ObjectDefinition<'Val> = {
 } with
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1303,7 +1282,6 @@ and InterfaceDef =
         /// List of fields to be defined by implementing object
         /// definition in order to satisfy current interface.
         abstract Fields : FieldDef[]
-
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// interface for provided .NET object.
@@ -1345,7 +1323,7 @@ and [<CustomEquality; NoComparison>] internal InterfaceDefinition<'Val> = {
 } with
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1390,7 +1368,6 @@ and UnionDef =
         abstract Description : string option
         /// Collection of object cases represented by this union.
         abstract Options : ObjectDef[]
-
         /// Optional funciton used to determine, which object
         /// definition is a concrete implementation of the current
         /// union for provided .NET object.
@@ -1443,7 +1420,7 @@ and [<CustomEquality; NoComparison>] internal UnionDefinition<'In, 'Out> = {
 } with
 
     interface TypeDef with
-        member __.Type = typeof<'Out>
+        member _.Type = typeof<'Out>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1512,12 +1489,10 @@ and internal ListOfDefinition<'Val, 'Seq when 'Seq :> 'Val seq> = {
     interface InputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Seq>
-
+        member _.Type = typeof<'Seq>
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
             upcast nullable
-
         member x.MakeList () =
             let list : ListOfDefinition<_, _> = { OfType = x }
             upcast list
@@ -1564,9 +1539,8 @@ and internal NullableDefinition<'Val> = {
     interface InputDef
 
     interface TypeDef with
-        member __.Type = typeof<'Val option>
+        member _.Type = typeof<'Val option>
         member x.MakeNullable () = upcast x
-
         member x.MakeList () =
             let list : ListOfDefinition<_, _> = { OfType = x }
             upcast list
@@ -1595,6 +1569,11 @@ and InputObjectDef =
         abstract Description : string option
         /// Collection of input object fields.
         abstract Fields : InputFieldDef[]
+        /// Validates if input object has a a valid combination of filed values.
+        abstract Validator : GQLValidator<obj>
+        /// INTERNAL API: input execution function -
+        /// compiled by the runtime.
+        abstract ExecuteInput : ExecuteInput with get, set
         inherit NamedDef
         inherit InputDef
     end
@@ -1606,9 +1585,14 @@ and InputObjectDefinition<'Val> = {
     Name : string
     /// Optional input object description.
     Description : string option
-    /// Function used to define field inputs. It must be lazy
-    /// in order to support self-referencing types.
-    FieldsFn : unit -> InputFieldDef[]
+    /// Lazy resolver for the input object fields. It must be lazy in
+    /// order to allow self-recursive type references.
+    Fields : Lazy<InputFieldDef[]>
+    /// Validates if input object has a a valid combination of filed values.
+    Validator : GQLValidator<'Val>
+    /// INTERNAL API: input execution function -
+    /// compiled by the runtime.
+    mutable ExecuteInput : ExecuteInput
 } with
 
     interface InputDef
@@ -1616,7 +1600,11 @@ and InputObjectDefinition<'Val> = {
     interface InputObjectDef with
         member x.Name = x.Name
         member x.Description = x.Description
-        member x.Fields = x.FieldsFn ()
+        member x.Fields = x.Fields.Force ()
+        member x.Validator = unbox >> x.Validator
+        member x.ExecuteInput
+            with get () = x.ExecuteInput
+            and set v = x.ExecuteInput <- v
 
     interface TypeDef<'Val>
     interface InputDef<'Val>
@@ -1625,7 +1613,7 @@ and InputObjectDefinition<'Val> = {
         member x.Name = x.Name
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1635,8 +1623,10 @@ and InputObjectDefinition<'Val> = {
             let list : ListOfDefinition<_, _> = { OfType = x }
             upcast list
 
+    override x.ToString () = x.Name + "!"
+
 /// Function type used for resolving input object field values.
-and ExecuteInput = Value -> Map<string, obj> -> obj
+and ExecuteInput = InputValue -> IReadOnlyDictionary<string, obj> -> Result<obj, IGQLError list>
 
 /// GraphQL field input definition. Can be used as fields for
 /// input objects or as arguments for any ordinary field definition.
@@ -1800,7 +1790,7 @@ and [<CustomEquality; NoComparison>] SubscriptionObjectDefinition<'Val> = {
 } with
 
     interface TypeDef with
-        member __.Type = typeof<'Val>
+        member _.Type = typeof<'Val>
 
         member x.MakeNullable () =
             let nullable : NullableDefinition<_> = { OfType = x }
@@ -1853,13 +1843,14 @@ and Metadata (data : Map<string, obj>) =
     /// </summary>
     /// <param name="key">The key to be used to search information for.</param>
     /// <param name="value">The value to be stored inside the metadata.</param>
-    member __.Add (key : string, value : obj) = Metadata (data.Add (key, value))
+    member _.Add (key : string, value : obj) = Metadata (data.Add (key, value))
 
     /// <summary>
     /// Generates a new Metadata instance, filled with items of a string * obj list.
     /// </summary>
     /// <param name="l">A list of string * obj tuples to be used to fill the Metadata object.</param>
     static member FromList (l : (string * obj) list) =
+
         let rec add (m : Metadata) (l : (string * obj) list) =
             match l with
             | [] -> m
@@ -1874,17 +1865,18 @@ and Metadata (data : Map<string, obj>) =
     /// Tries to find an value inside the metadata by it's key.
     /// </summary>
     /// <param name="key">The key to be used to search information for.</param>
-    member __.TryFind<'Value> (key : string) =
+    member _.TryFind<'Value> (key : string) =
         if data.ContainsKey key then
             data.Item key :?> 'Value |> Some
         else
             None
 
-    override __.ToString () = $"%A{data}"
+    override _.ToString () = $"%A{data}"
 
 /// Map of types of an ISchema.
 /// The map of types is used to plan and execute queries.
 and TypeMap () =
+
     let map = Dictionary<string, NamedDef> ()
 
     let isDefaultType name =
@@ -1913,7 +1905,7 @@ and TypeMap () =
     /// </summary>
     /// <param name="def">The NamedDef to be added to the type map. It's name will be used as the key.</param>
     /// <param name="overwrite">If set to true, and another NamedDef exists with the same name, it will be overwritten.</param>
-    member __.AddType (def : NamedDef, ?overwrite : bool) =
+    member _.AddType (def : NamedDef, ?overwrite : bool) =
         let overwrite = defaultArg overwrite false
 
         let add name def overwrite =
@@ -1996,7 +1988,7 @@ and TypeMap () =
         defs |> Seq.iter (fun def -> this.AddType (def, overwrite))
 
     /// Converts this type map to a sequence of string * NamedDef values, with the first item being the key.
-    member __.ToSeq (?includeDefaultTypes : bool) =
+    member _.ToSeq (?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes true
         let result = map |> Seq.map (fun kvp -> (kvp.Key, kvp.Value))
 
@@ -2015,7 +2007,7 @@ and TypeMap () =
     /// </summary>
     /// <param name="name">The name of the NamedDef to be searched for.</param>
     /// <param name="includeDefaultTypes">If set to true, it will search for the NamedDef among the default types.</param>
-    member __.TryFind (name : string, ?includeDefaultTypes : bool) =
+    member _.TryFind (name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
 
         if not includeDefaultTypes && isDefaultType name then

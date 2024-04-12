@@ -1,27 +1,65 @@
 {
   "iisSettings": {
+    //#if (WindowsAuth)
+    "windowsAuthentication": true,
+    "anonymousAuthentication": false,
+    //#else
     "windowsAuthentication": false,
     "anonymousAuthentication": true,
+    //#endif
     "iisExpress": {
-      "applicationUrl": "http://localhost:55802/",
-      "sslPort": 0
+      "applicationUrl": "http://localhost:44299",
+      //#if !(HasHttpsProfile)
+      "sslPort": 0,
+      //#else
+      "sslPort": 44300
+      //#endif
     }
   },
   "profiles": {
-    "IIS Express": {
-      "commandName": "IISExpress",
+    //#if (HasHttpProfile)
+    "http": {
+      "commandName": "Project",
+      "dotnetRunMessages": true,
       "launchBrowser": true,
+      //#if (EnableOpenAPI)
+      "launchUrl": "",
+      //#else
+      "launchUrl": "cakePop",
+      //#endif
+      "applicationUrl": "http://localhost:8086",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
       }
     },
-    "FSharp.Data.GraphQL.Samples.StarWarsApi": {
+    //#endif
+    //#if (HasHttpsProfile)
+    "https": {
       "commandName": "Project",
+      "dotnetRunMessages": true,
       "launchBrowser": true,
+      //#if (EnableOpenAPI)
+      "launchUrl": "",
+      //#else
+      "launchUrl": "cakePop",
+      //#endif
+      "applicationUrl": "https://localhost:8087;http://localhost:8086",
       "environmentVariables": {
         "ASPNETCORE_ENVIRONMENT": "Development"
-      },
-      "applicationUrl": "http://localhost:55803/"
+      }
+    },
+    //#endif
+    "IIS Express": {
+      "commandName": "IISExpress",
+      "launchBrowser": true,
+      //#if (EnableOpenAPI)
+      "launchUrl": "cakePop",
+      //#else
+      "launchUrl": "",
+      //#endif
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
     }
   }
 }

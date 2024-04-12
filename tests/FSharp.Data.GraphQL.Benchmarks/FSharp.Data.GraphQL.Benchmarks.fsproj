@@ -1,9 +1,8 @@
-<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
     <TargetFramework>net6.0</TargetFramework>
-    <EnableDefaultCompileItems>false</EnableDefaultCompileItems>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
     <Deterministic>false</Deterministic>
   </PropertyGroup>
@@ -18,6 +17,7 @@
   </ItemGroup>
 
   <ItemGroup>
+    <None Include="Properties\launchSettings.json" />
     <Compile Include="Prolog.fs" />
     <Compile Include="Schema.fs" />
     <Compile Include="AsyncSchema.fs" />

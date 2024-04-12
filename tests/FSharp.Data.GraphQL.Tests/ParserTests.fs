@@ -1,6 +1,6 @@
-﻿/// The MIT License (MIT)
+// The MIT License (MIT)
 /// Copyright (c) 2015-Mar 2016 Kevin Thompson @kthompson
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// Copyright (c) 2016 Bazinga Technologies Inc
 
 module FSharp.Data.GraphQL.Tests.ParserTests
 
@@ -86,18 +86,18 @@ let directive name arguments = { Directive.Name = name; Arguments = arguments }
 let directive1 name argument = directive name [ argument ]
 
 [<Fact>]
-let ``parser should parse empty query``() =
+let ``Parser must parse empty query``() =
     let expected = docN []
     test expected ""
 
 [<Fact>]
-let ``parser should parse empty query with whitespace``() =
+let ``Parser must parse empty query with whitespace``() =
     let expected = docN []
     test expected """
   """
 
 [<Fact>]
-let ``parser should parse simple query with single field``() =
+let ``Parser must parse simple query with single field``() =
     let expected =
         field "uri"
         |> queryWithSelection
@@ -105,7 +105,7 @@ let ``parser should parse simple query with single field``() =
     test expected """{uri}"""
 
 [<Fact>]
-let ``parser should parse simple query with operation identifier, but no operation name``() =
+let ``Parser must parse simple query with operation identifier, but no operation name``() =
     let expected =
         field "uri"
         |> queryWithSelection
@@ -113,7 +113,7 @@ let ``parser should parse simple query with operation identifier, but no operati
     test expected """query {uri}"""
 
 [<Fact>]
-let ``parser should parse simple query with single field with whitespace``() =
+let ``Parser must parse simple query with single field with whitespace``() =
     let expected =
         field "uri"
         |> queryWithSelection
@@ -123,7 +123,7 @@ let ``parser should parse simple query with single field with whitespace``() =
   }"""
 
 [<Fact>]
-let ``parser should parse simple fields``() =
+let ``Parser must parse simple fields``() =
     let expected =
         [ "uri"; "width"; "height" ]
         |> List.map field
@@ -132,7 +132,7 @@ let ``parser should parse simple fields``() =
     test expected """{uri,width,height}"""
 
 [<Fact>]
-let ``parser should parse simple fields with whitespace``() =
+let ``Parser must parse simple fields with whitespace``() =
     let expected =
         [ "uri"; "width"; "height" ]
         |> List.map field
@@ -145,7 +145,7 @@ let ``parser should parse simple fields with whitespace``() =
   }"""
 
 [<Fact>]
-let ``parser should parse simple fields without commas whitespace``() =
+let ``Parser must parse simple fields without commas whitespace``() =
     let expected =
         [ "uri"; "width"; "height" ]
         |> List.map field
@@ -158,7 +158,7 @@ let ``parser should parse simple fields without commas whitespace``() =
   }"""
 
 [<Fact>]
-let ``parser should parse nested field``() =
+let ``Parser must parse nested field``() =
     let expected =
         [ "phone"; "name" ]
         |> List.map field
@@ -173,7 +173,7 @@ let ``parser should parse nested field``() =
   }"""
 
 [<Fact>]
-let ``parser should parse nested field no commas``() =
+let ``Parser must parse nested field no commas``() =
     let expected =
         [ "phone"; "name" ]
         |> List.map field
@@ -188,7 +188,7 @@ let ``parser should parse nested field no commas``() =
   }"""
 
 [<Fact>]
-let ``parser should parse nested fields``() =
+let ``Parser must parse nested fields``() =
     let contact =
         [ "phone"; "name" ]
         |> List.map field
@@ -209,7 +209,7 @@ let ``parser should parse nested fields``() =
   }"""
 
 [<Fact>]
-let ``parser should parse nested fields no commas``() =
+let ``Parser must parse nested fields no commas``() =
     let contact =
         [ "phone"; "name" ]
         |> List.map field
@@ -230,7 +230,7 @@ let ``parser should parse nested fields no commas``() =
   }"""
 
 [<Fact>]
-let ``parser should parse multi level nested fields``() =
+let ``Parser must parse multi level nested fields``() =
     let profile = field "uri" |> fieldWithNameAndSelection "profile_picture"
 
     let author =
@@ -253,7 +253,7 @@ let ``parser should parse multi level nested fields``() =
       }"""
 
 [<Fact>]
-let ``parser should parse GraphQL``() =
+let ``Parser must parse GraphQL``() =
     let profile =
         [ field "uri"; field "width"; field "height" ]
         |> fieldWithNameAndArgsAndSelections "profilePicture" [ argInt "size" 50 ]
@@ -281,7 +281,7 @@ let ``parser should parse GraphQL``() =
   }"""
 
 [<Fact>]
-let ``parser should parse query with null arguments``() =
+let ``Parser must parse query with null arguments``() =
     let expected =
         [ field "name" ]
         |> fieldWithNameAndArgsAndSelections "user" [ argNull "id" ]
@@ -294,7 +294,7 @@ let ``parser should parse query with null arguments``() =
   }"""
 
 [<Fact>]
-let ``parser should parse query with quoted arguments``() =
+let ``Parser must parse query with quoted arguments``() =
     let expected =
         [ field "id" ]
         |> fieldWithNameAndArgsAndSelections "search" [ argString "query" "the cow said \"moo\"!" ]
@@ -307,7 +307,20 @@ let ``parser should parse query with quoted arguments``() =
   }"""
 
 [<Fact>]
-let ``parser should parse query with arguments``() =
+let ``Parser must parse query with single-quoted arguments``() =
+    let expected =
+        [ field "id" ]
+        |> fieldWithNameAndArgsAndSelections "search" [ argString "query" "It's working!" ]
+        |> queryWithSelection
+        |> doc1
+    test expected """{
+    search(query: "It's working!") {
+      id
+    }
+  }"""
+
+[<Fact>]
+let ``Parser must parse query with arguments``() =
     let expected =
         [ field "name" ]
         |> fieldWithNameAndArgsAndSelections "user" [ argInt "id" 4 ]
@@ -320,7 +333,7 @@ let ``parser should parse query with arguments``() =
   }"""
 
 [<Fact>]
-let ``parser should parse query with arguments 1``() =
+let ``Parser must parse query with arguments 1``() =
     let expected =
         [ field "id"; field "name"; fieldWithNameAndArgs "profilePic" [ argInt "size" 100 ] ]
         |> fieldWithNameAndArgsAndSelections "user" [ argInt "id" 4 ]
@@ -335,7 +348,7 @@ let ``parser should parse query with arguments 1``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with multiple arguments``() =
+let ``Parser must parse query with multiple arguments``() =
     let profilePic =
         [ argInt "width" 100; argInt "height" 50 ]
         |> fieldWithNameAndArgs "profilePic"
@@ -355,7 +368,7 @@ let ``parser should parse query with multiple arguments``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with field alias``() =
+let ``Parser must parse query with field alias``() =
     let profilePic alias size =
         [ argInt "size" size ]
         |> fieldWithNameAndArgs "profilePic"
@@ -377,7 +390,7 @@ let ``parser should parse query with field alias``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with top level field alias``() =
+let ``Parser must parse query with top level field alias``() =
     let expected =
         [ field "id"; field "name" ]
         |> fieldWithNameAndArgsAndSelections "user" [ argInt "id" 4 ]
@@ -392,7 +405,7 @@ let ``parser should parse query with top level field alias``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query without fragments``() =
+let ``Parser must parse query without fragments``() =
     let friends name =
         [ field "id"; field "name"; fieldWithNameAndArgs "profilePic" [ argInt "size" 50 ] ]
         |> fieldWithNameAndArgsAndSelections name [ argInt "first" 10 ]
@@ -419,7 +432,7 @@ let ``parser should parse query without fragments``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with fragments ``() =
+let ``Parser must parse query with fragments ``() =
     let friends name = spread "friendFields" |> fieldWithNameArgsAndSelection name [ argInt "first" 10 ]
 
     let withFragments =
@@ -449,7 +462,7 @@ let ``parser should parse query with fragments ``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with nested fragments ``() =
+let ``Parser must parse query with nested fragments ``() =
     let friends name = spread "friendFields" |> fieldWithNameArgsAndSelection name [ argInt "first" 10 ]
 
     let withFragments =
@@ -484,7 +497,7 @@ let ``parser should parse query with nested fragments ``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with type conditions``() =
+let ``Parser must parse query with type conditions``() =
     let nestedFrag name typ fieldName =
         field "count"
         |> fieldWithNameAndSelection fieldName
@@ -520,7 +533,7 @@ let ``parser should parse query with type conditions``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with inline fragments``() =
+let ``Parser must parse query with inline fragments``() =
     let nestedFragment typ fieldName =
         field "count"
         |> fieldWithNameAndSelection fieldName
@@ -552,7 +565,7 @@ let ``parser should parse query with inline fragments``() =
     }"""
 
 [<Fact>]
-let ``parser should parse query with fragment directives``() =
+let ``Parser must parse query with fragment directives``() =
     let maybeFragment =
         field "name"
         |> fieldWithNameAndSelection "me"
@@ -562,7 +575,7 @@ let ``parser should parse query with fragment directives``() =
     let v = var b None "condition"
 
     let hasConditionalFragment =
-        arg "if" (Variable "condition")
+        arg "if" (VariableName "condition")
         |> directive1 "include"
         |> spreadWithDirective "maybeFragment"
         |> namedQueryWithVariableAndSelection "hasConditionalFragment" v
@@ -638,5 +651,5 @@ fragment frag on Friend {
 }"""
 
 [<Fact>]
-let ``parser should parse kitchen sink``() =
+let ``Parser must parse kitchen sink``() =
     parse KitchenSink
