@@ -4,7 +4,7 @@
     <TargetFrameworks>$(DotNetVersion)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <Deterministic>true</Deterministic>
-    <Description>FSharp implementation of Facebook GraphQL query language (Application Infrastructure)</Description>
+    <Description>FSharp implementation of Facebook GraphQL query language (Giraffe integration)</Description>
   </PropertyGroup>
 
   <ItemGroup>
