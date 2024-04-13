@@ -44,8 +44,7 @@ type Startup private () =
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>() // STEP 2: using the GraphQL websocket middleware
-            .UseGiraffe
-                (HttpHandlers.handleGraphQL<Root>)
+            .UseGiraffe (HttpHandlers.handleGraphQL<Root>)
 
     member val Configuration : IConfiguration = null with get, set
 
