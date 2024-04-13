@@ -44,11 +44,7 @@ type Startup private () =
             .UseGiraffeErrorHandler(errorHandler)
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>() // STEP 2: using the GraphQL websocket middleware
-            .UseGiraffe
-                (HttpHandlers.handleGraphQL<Root>
-                    applicationLifetime.ApplicationStopping
-                    (loggerFactory.CreateLogger("FSharp.Data.GraphQL.Server.AspNetCore.HttpHandlers.handleGraphQL"))
-                )
+            .UseGiraffe (HttpHandlers.handleGraphQL<Root>)
 
     member val Configuration : IConfiguration = null with get, set
 
