@@ -35,7 +35,7 @@ type GraphQLWebSocketMiddleware<'Root>
     let serializerOptions = options.SerializerOptions
     let pingHandler = options.WebsocketOptions.CustomPingHandler
     let endpointUrl = PathString options.WebsocketOptions.EndpointUrl
-    let connectionInitTimeout = options.WebsocketOptions.ConnectionInitTimeoutInMs
+    let connectionInitTimeout = options.WebsocketOptions.ConnectionInitTimeout
 
     let serializeServerMessage (jsonSerializerOptions : JsonSerializerOptions) (serverMessage : ServerMessage) = task {
         let raw =
