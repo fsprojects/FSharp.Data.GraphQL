@@ -70,7 +70,6 @@ Target.create BuildTarget <| fun _ ->
     "FSharp.Data.GraphQL.sln"
     |> DotNet.build (fun options -> {
         options with
-            //Framework = Some DotNetMoniker
             Configuration = configuration
             MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
     })
@@ -79,7 +78,6 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     DotNet.build
         (fun options -> {
             options with
-                //Framework = Some DotNetMoniker
                 Configuration = configuration
                 MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
         })
