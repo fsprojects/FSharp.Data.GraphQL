@@ -21,16 +21,21 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest, macOS-latest]
-        dotnet: [7.0.406]
+        dotnet: [7.0.408]
     runs-on: ${{ matrix.os }}
 
     steps:
     - uses: actions/checkout@v4
 
-    - name: Setup .NET Core
+    - name: Install .NET Core 7
       uses: actions/setup-dotnet@v4
       with:
         dotnet-version: ${{ matrix.dotnet }}
+
+    - name: Install .NET Core 6
+      uses: actions/setup-dotnet@v4
+      with:
+        dotnet-version: "6.0.421"
 
     - name: Add version to global.json
       run: |

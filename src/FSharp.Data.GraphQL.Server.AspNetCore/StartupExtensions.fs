@@ -15,11 +15,11 @@ module ServiceCollectionExtensions =
     let createStandardOptions executor rootFactory endpointUrl = {
         SchemaExecutor = executor
         RootFactory = rootFactory
-        ReadBufferSize = 4096
+        ReadBufferSize = GraphQLOptionsDefaults.ReadBufferSize
         SerializerOptions = Json.serializerOptions
         WebsocketOptions = {
             EndpointUrl = endpointUrl
-            ConnectionInitTimeoutInMs = 3000
+            ConnectionInitTimeout = TimeSpan.FromMilliseconds (GraphQLOptionsDefaults.WebSocketConnectionInitTimeoutInMs)
             CustomPingHandler = ValueNone
         }
     }
@@ -31,16 +31,24 @@ module ServiceCollectionExtensions =
 
     type IServiceCollection with
 
+        /// <summary>
+        /// Adds GraphQL options to the service collection.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
         [<Extension; CompiledName "AddGraphQLOptions">]
         member services.AddGraphQLOptions<'Root>
             (
-                executor : Executor<'Root>,
+                executorFactory : Func<IServiceProvider, Executor<'Root>>,
                 rootFactory : HttpContext -> 'Root,
-                endpointUrl : string,
+                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointUrl : string,
                 [<Optional>] configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>
             ) =
-            let options =
-                let options = createStandardOptions executor rootFactory endpointUrl
+            let getOptions sp =
+                let executor = executorFactory.Invoke sp
+                let options = createStandardOptions executor rootFactory webSocketEndpointUrl
                 match configure with
                 | null -> options
                 | _ -> configure.Invoke options
@@ -54,9 +62,10 @@ module ServiceCollectionExtensions =
                     )
                 )
                 .AddSingleton<IOptionsFactory<GraphQLOptions<'Root>>>(
-                    { new IOptionsFactory<GraphQLOptions<'Root>> with
-                        member this.Create name = options
-                    }
+                    fun sp ->
+                        { new IOptionsFactory<GraphQLOptions<'Root>> with
+                            member this.Create name = (getOptions sp)
+                        }
                 )
                 .Configure<GraphQLOptions<'Root>>(Giraffe.HttpHandlers.IndentedOptionsName, (fun o -> o.SerializerOptions.WriteIndented <- true))
                 .AddSingleton<IOptionsFactory<IGraphQLOptions>>(fun sp ->
@@ -65,6 +74,44 @@ module ServiceCollectionExtensions =
                             sp.GetRequiredService<IOptionsMonitor<GraphQLOptions<'Root>>>().Get(name)
                     }
                 )
+
+        /// <summary>
+        /// Adds GraphQL options to the service collection. Requires an executor instance to be provided.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        [<Extension; CompiledName "AddGraphQLOptions">]
+        member services.AddGraphQLOptions<'Root>
+            (
+                executor : Executor<'Root>,
+                rootFactory : HttpContext -> 'Root,
+                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointUrl : string,
+                [<Optional>] configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>
+            ) =
+            services.AddGraphQLOptions ((fun _ -> executor), rootFactory, webSocketEndpointUrl, configure)
+
+        /// <summary>
+        /// Adds GraphQL options to the service collection. It gets the executor from the service provider.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        /// <remarks>
+        /// The executor must be registered as a singleton service.
+        /// </remarks>
+        [<Extension; CompiledName "AddGraphQLOptions">]
+        member services.AddGraphQLOptions<'Root>
+            (
+                rootFactory : HttpContext -> 'Root,
+                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointUrl : string,
+                [<Optional>] configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>
+            ) =
+            let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
+            services.AddGraphQLOptions (getExecutorService, rootFactory, webSocketEndpointUrl, configure)
+
 
 [<AutoOpen; Extension>]
 module ApplicationBuilderExtensions =

@@ -8,9 +8,16 @@ open Microsoft.AspNetCore.Http
 
 type PingHandler = IServiceProvider -> JsonDocument voption -> Task<JsonDocument voption>
 
+[<RequireQualifiedAccess>]
+module GraphQLOptionsDefaults =
+
+    let [<Literal>] ReadBufferSize = 4096
+    let [<Literal>] WebSocketEndpoint = "/ws"
+    let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000
+
 type GraphQLTransportWSOptions = {
     EndpointUrl : string
-    ConnectionInitTimeoutInMs : int
+    ConnectionInitTimeout : TimeSpan
     CustomPingHandler : PingHandler voption
 }
 
@@ -30,3 +37,4 @@ type GraphQLOptions<'Root> = {
     interface IGraphQLOptions with
         member this.SerializerOptions = this.SerializerOptions
         member this.WebsocketOptions = this.WebsocketOptions
+

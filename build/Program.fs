@@ -25,7 +25,7 @@ execContext
 |> Fake.Core.Context.setExecutionContext
 
 module DotNetCli =
-    let setVersion (o : DotNet.Options) = { o with Version = Some "7.0.401" }
+    let setVersion (o : DotNet.Options) = { o with Version = Some "7.0.408" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
@@ -68,10 +68,10 @@ Target.create RestoreTarget <| fun _ ->
 let [<Literal>] BuildTarget = "Build"
 Target.create BuildTarget <| fun _ ->
     "FSharp.Data.GraphQL.sln"
-    |> DotNet.build (fun o -> {
-        o with
+    |> DotNet.build (fun options -> {
+        options with
             Configuration = configuration
-            MSBuildParams = { o.MSBuildParams with DisableInternalBinLog = true }
+            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
     })
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
@@ -104,6 +104,7 @@ let runTests (project : string) (args : string) =
     DotNet.build
         (fun options -> {
             options with
+                Framework = Some DotNetMoniker
                 Configuration = configuration
                 MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
         })
@@ -115,8 +116,13 @@ let runTests (project : string) (args : string) =
         (fun options ->
             {
                 options with
+                    Framework = Some DotNetMoniker
                     Configuration = configuration
-                    MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+                    MSBuildParams = {
+                        options.MSBuildParams with
+                            DisableInternalBinLog = true
+                            Verbosity = Some Normal
+                    }
                     Common = { options.Common with CustomParams = Some customParams }
             }
                 .WithCommon
