@@ -27,8 +27,10 @@ let main args =
     let app = builder.Build ()
 
     if app.Environment.IsDevelopment () then
-        app.UseGraphQLPlayground ("/playground") |> ignore
-        app.UseGraphQLVoyager ("/voyager") |> ignore
+        app.UseGraphQLAltair "/altair" |> ignore
+        app.UseGraphQLGraphiQL "/graphiql" |> ignore
+        app.UseGraphQLPlayground "/playground" |> ignore
+        app.UseGraphQLVoyager "/voyager" |> ignore
         app.UseRouting () |> ignore
         app.UseEndpoints (fun endpoints -> endpoints.MapBananaCakePop (PathString "/cakePop") |> ignore)
         |> ignore

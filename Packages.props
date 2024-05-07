@@ -69,6 +69,8 @@
     <PackageReference Update="EntityFramework" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
     <PackageReference Update="Giraffe" Version="6.*" />
+    <PackageReference Update="GraphQL.Server.Ui.Altair" Version="7.*" />
+    <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="7.*" />
     <PackageReference Update="GraphQL.Server.Ui.Playground" Version="7.*"  />
     <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="7.*"  />
     <PackageReference Update="HotChocolate.AspNetCore" Version="13.*" />

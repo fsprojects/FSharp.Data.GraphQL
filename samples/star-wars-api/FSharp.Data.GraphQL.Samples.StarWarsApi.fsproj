@@ -8,6 +8,8 @@
 
   <ItemGroup Label="PackageReferences">
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
+    <PackageReference Include="GraphQL.Server.Ui.Altair" />
+    <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
     <PackageReference Include="GraphQL.Server.Ui.Playground" />
     <PackageReference Include="GraphQL.Server.Ui.Voyager" />
     <PackageReference Include="HotChocolate.AspNetCore" />
