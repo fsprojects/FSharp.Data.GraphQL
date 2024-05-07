@@ -8,6 +8,7 @@ on:
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
+  SLEEP_DURATION: 10
 
 jobs:
   publish:
@@ -62,6 +63,8 @@ jobs:
     - name: Publish FSharp.Data.GraphQL.Shared project to NuGet
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.{nupkg,snupkg} -s "nuget.org" -k ${{secrets.NUGET_SECRET}} --skip-duplicate
+        # wait for the package to be available
+        sleep ${{env.SLEEP_DURATION}}
 
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
