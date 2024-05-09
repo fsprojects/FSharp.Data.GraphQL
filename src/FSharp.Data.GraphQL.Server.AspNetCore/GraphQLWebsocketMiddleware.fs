@@ -17,6 +17,7 @@ open Microsoft.Extensions.Options
 
 open Collections.Pooled
 open FsToolkit.ErrorHandling
+open R3
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Execution
@@ -131,21 +132,19 @@ type GraphQLWebSocketMiddleware<'Root>
         (howToSendDataOnNext : SubscriptionId -> 'ResponseContent -> Task)
         (subscriptions : SubscriptionsDict,
          socket : WebSocket,
-         streamSource : IObservable<'ResponseContent>,
+         streamSource : Observable<'ResponseContent>,
          jsonSerializerOptions : JsonSerializerOptions)
         =
-        let observer =
-            new Reactive.AnonymousObserver<'ResponseContent> (
-                onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait ()),
-                onError = (fun ex -> logger.LogError (ex, "Error on subscription with Id = '{id}'", id)),
-                onCompleted =
-                    (fun () ->
-                        (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait ()
-                        subscriptions
-                        |> GraphQLSubscriptionsManagement.removeSubscription (id))
-            )
 
-        let unsubscriber = streamSource.Subscribe (observer)
+        let unsubscriber = streamSource.Subscribe (
+            onNext = (fun theOutput -> (howToSendDataOnNext id theOutput).Wait ()),
+            onErrorResume = (fun ex -> logger.LogError (ex, "Error on subscription with Id = '{id}'", id)),
+            onCompleted =
+                (fun _ ->
+                    (sendMessageViaSocket jsonSerializerOptions socket (Complete id)).Wait ()
+                    subscriptions
+                    |> GraphQLSubscriptionsManagement.removeSubscription (id))
+        )
 
         subscriptions
         |> GraphQLSubscriptionsManagement.addSubscription (id, unsubscriber, (fun _ -> ()))

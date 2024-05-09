@@ -15,8 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="FSharp.Control.Reactive" />
-    <PackageReference Include="System.Reactive" />
+    <PackageReference Include="R3" />
   </ItemGroup>
 
   <ItemGroup>

@@ -5,13 +5,14 @@ module internal ErrorHelpers
 
 open System
 open System.Text.Json.Serialization
+open R3
 open FSharp.Data.GraphQL
 
 type ErrorSource =
     | Variable of Name : string
     | Argument of Name : string
 
-let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> IObservable<GQLDeferredResponseContent> -> unit) : unit =
+let ensureDeferred (result : GQLExecutionResult) (onDeferred : Output -> GQLProblemDetails list -> Observable<GQLDeferredResponseContent> -> unit) : unit =
     match result.Content with
     | Deferred(data, errors, deferred) -> onDeferred data errors deferred
     | response -> fail $"Expected a 'Deferred' GQLResponse but got\n{response}"

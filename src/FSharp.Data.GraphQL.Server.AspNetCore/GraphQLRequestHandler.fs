@@ -82,6 +82,7 @@ type GraphQLRequestHandler<'Root> (
                                 errors,
                                 serializeIndented data
                             ))
+                |> ignore
 
             GQLResponse.Direct(documentId, data, errs)
         | Stream stream ->
@@ -116,6 +117,7 @@ type GraphQLRequestHandler<'Root> (
                                 errors,
                                 serializeIndented data
                             ))
+                |> ignore
 
             GQLResponse.Stream documentId
         | RequestError errs ->

@@ -9,6 +9,7 @@ open System.Linq
 open System.Text.Json.Serialization
 open System.Threading
 open System.Threading.Tasks
+open R3
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Server.AspNetCore
@@ -124,7 +125,8 @@ let ms x =
         | _ -> 20
     x * factor
 
-type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
+type TestObserver<'T>(obs : Observable<'T>, ?onReceived : TestObserver<'T> -> 'T -> unit) as this =
+    inherit Observer<'T>()
     let received = List<'T>()
     let mutable isCompleted = false
     let mre = new ManualResetEvent(false)
@@ -147,25 +149,25 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     member x.WaitForItem() = x.WaitForItems(1)
     member _.IsCompleted
         with get() = isCompleted
-    interface IObserver<'T> with
-        member _.OnCompleted() =
-            isCompleted <- true
-            mre.Set() |> ignore
-        member _.OnError(error) = error.Reraise()
-        member _.OnNext(value) =
-            received.Add(value)
-            onReceived |> Option.iter (fun evt -> evt this value)
+    override _.OnCompletedCore(result) =
+        isCompleted <- true
+        mre.Set() |> ignore
+    override _.OnErrorResumeCore(error) = error.Reraise()
+    override _.OnNextCore(value) =
+        received.Add(value)
+        onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
         member _.Dispose() =
-            subscription.Dispose()
+            subscription <- Unchecked.defaultof<IDisposable>
+            //subscription.Dispose()
             mre.Dispose()
 
 [<RequireQualifiedAccess>]
 module Observer =
-    let create (sub : IObservable<'T>) =
+    let create (sub : Observable<'T>) =
         new TestObserver<'T>(sub)
 
-    let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : IObservable<'T>) =
+    let createWithCallback (onReceive : TestObserver<'T> -> 'T -> unit) (sub : Observable<'T>) =
         new TestObserver<'T>(sub, onReceive)
 
 open System.Runtime.CompilerServices

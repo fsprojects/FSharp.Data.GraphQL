@@ -6,6 +6,7 @@ open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
+open R3
 
 type Output = IDictionary<string, obj>
 
@@ -73,8 +74,8 @@ type GQLExecutionResult =
 and GQLResponseContent =
     | RequestError of Errors: GQLProblemDetails list
     | Direct of Data : Output * Errors: GQLProblemDetails list
-    | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : IObservable<GQLDeferredResponseContent>
-    | Stream of Stream : IObservable<GQLSubscriptionResponseContent>
+    | Deferred of Data : Output * Errors : GQLProblemDetails list * Defer : Observable<GQLDeferredResponseContent>
+    | Stream of Stream : Observable<GQLSubscriptionResponseContent>
 
 and GQLDeferredResponseContent =
     | DeferredResult of Data : obj * Path : FieldPath

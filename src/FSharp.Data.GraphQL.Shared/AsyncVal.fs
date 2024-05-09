@@ -65,6 +65,21 @@ module AsyncVal =
         | Async a -> Async.StartAsTask (a)
         | Failure f -> Task.FromException<'T> (f)
 
+    /// Converts AsyncVal to Async computation.
+    let toValueTask (x : AsyncVal<'T>) =
+        match x with
+#if NETSTANDARD2_0
+        | Value v -> ValueTask<'T> (v)
+#else
+        | Value v -> ValueTask.FromResult<'T> (v)
+#endif
+        | Async a -> a |> Async.StartAsTask |> ValueTask<'T>
+#if NETSTANDARD2_0
+        | Failure f -> ValueTask<'T> (Task.FromException<'T> f)
+#else
+        | Failure f -> ValueTask.FromException<'T> (f)
+#endif
+
     /// Returns an empty AsyncVal with immediatelly executed value.
     let inline empty<'T> : AsyncVal<'T> = AsyncVal<'T>.Zero
 

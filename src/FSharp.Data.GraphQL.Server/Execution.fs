@@ -6,8 +6,8 @@ open System
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
-open FSharp.Control.Reactive
 open FsToolkit.ErrorHandling
+open R3
 
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
@@ -254,7 +254,7 @@ let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (par
         |> AsyncVal.map(fun v -> if isNull v then None else Some v)
 
 
-type ResolverResult<'T> = Result<'T * IObservable<GQLDeferredResponseContent> option * GQLProblemDetails list, GQLProblemDetails list>
+type ResolverResult<'T> = Result<'T * Observable<GQLDeferredResponseContent> option * GQLProblemDetails list, GQLProblemDetails list>
 
 [<RequireQualifiedAccess>]
 module ResolverResult =
@@ -287,7 +287,7 @@ let private streamListError name tyName path ctx = resolverError path ctx (GQLMe
 
 let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = KeyValuePair(name, box v) |> ResolverResult.data |> AsyncVal.wrap
 
-let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
+let deferResults path (res : ResolverResult<obj>) : Observable<GQLDeferredResponseContent> =
     let formattedPath = path |> List.rev
     match res with
     | Ok (data, deferred, errs) ->
@@ -408,8 +408,8 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
         | ResolveCollection innerPlan -> { ctx with ExecutionInfo = innerPlan }
         | kind -> failwithf "Unexpected value of ctx.ExecutionPlan.Kind: %A" kind
 
-    let collectBuffered : (int * ResolverResult<KeyValuePair<string, obj>>) list -> IObservable<GQLDeferredResponseContent> = function
-        | [] -> Observable.empty
+    let collectBuffered : (int * ResolverResult<KeyValuePair<string, obj>>) list -> Observable<GQLDeferredResponseContent> = function
+        | [] -> Observable.empty ()
         | [(index, result)] ->
             result
             |> ResolverResult.mapValue(fun d -> box [|d.Value|])
@@ -425,7 +425,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
             let (_, indicies, deferred, errs) = List.foldBack merge chunk (chunk.Length - 1, [], None, [])
             deferResults (box indicies :: path) (Ok (box data, deferred, errs))
 
-    let buffer (items : IObservable<int * ResolverResult<KeyValuePair<string, obj>>>) : IObservable<GQLDeferredResponseContent> =
+    let buffer (items : Observable<int * ResolverResult<KeyValuePair<string, obj>>>) : Observable<GQLDeferredResponseContent> =
         let buffered =
             match options.Interval, options.PreferredBatchSize with
             | Some i, None -> Observable.bufferMilliseconds i items |> Observable.map List.ofSeq
@@ -442,7 +442,7 @@ and private streamed (options : BufferedStreamOptions) (innerDef : OutputDef) (c
 
     match value with
     | :? System.Collections.IEnumerable as enumerable ->
-        let stream : IObservable<GQLDeferredResponseContent> =
+        let stream : Observable<GQLDeferredResponseContent> =
             enumerable
             |> Seq.cast<obj>
             |> Seq.toArray

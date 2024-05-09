@@ -8,20 +8,18 @@ open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Introspection
 open FSharp.Data.GraphQL.Helpers
-open FSharp.Control.Reactive
 open System.Collections.Generic
-open System.Reactive.Linq
-open System.Reactive.Subjects
 open System.Text.Json
 open System.Text.Json.Serialization
+open R3
 
-type private Channel = ISubject<obj>
+type private Channel = ReactiveProperty<obj>
 
 type private ChannelBag() =
     let untagged = List<Channel>()
     let tagged = Dictionary<Tag, List<Channel>>()
     member _.AddNew(tags : Tag seq) : Channel =
-        let channel = new Subject<obj>()
+        let channel = new Channel()
         untagged.Add(channel)
         let adder tag =
             match tagged.TryGetValue(tag) with
@@ -96,7 +94,7 @@ type SchemaConfig =
 
     /// Returns the default live field Subscription Provider, backed by Observable streams.
     static member DefaultLiveFieldSubscriptionProvider() =
-        let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Subject<obj>>()
+        let registeredSubscriptions = new Dictionary<string * string, ILiveFieldSubscription * Channel>()
         { new ILiveFieldSubscriptionProvider with
             member _.HasSubscribers (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName
@@ -108,7 +106,7 @@ type SchemaConfig =
                 registeredSubscriptions.ContainsKey(key)
             member _.AsyncRegister (subscription : ILiveFieldSubscription) = async {
                 let key = subscription.TypeName, subscription.FieldName
-                let value = subscription, new Subject<obj>()
+                let value = subscription, new Channel()
                 registeredSubscriptions.Add(key, value) }
             member _.TryFind (typeName : string) (fieldName : string) =
                 let key = typeName, fieldName

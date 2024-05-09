@@ -16,6 +16,7 @@ open FSharp.Quotations
 open FSharp.Quotations.Patterns
 open FSharp.Reflection
 open FSharp.Linq.RuntimeHelpers
+open R3
 
 /// Enum describing parts of the GraphQL query document AST, where
 /// related directive is valid to be used.
@@ -313,8 +314,8 @@ and ISubscriptionProvider =
     interface
         /// Registers a new subscription type, called at schema compilation time.
         abstract member AsyncRegister : Subscription -> Async<unit>
-        /// Creates an active subscription, and returns the IObservable stream of POCO objects that will be projected on.
-        abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> IObservable<obj>
+        /// Creates an active subscription, and returns the Observable stream of POCO objects that will be projected on.
+        abstract member Add : ResolveFieldContext -> obj -> SubscriptionFieldDef -> Observable<obj>
         /// Publishes an event to the subscription system given the identifier of the subscription type.
         abstract member AsyncPublish<'T> : string -> 'T -> Async<unit>
         /// Publishes an event to the subscription system given the identifier of the subscription type
@@ -395,8 +396,8 @@ and ILiveFieldSubscriptionProvider =
         abstract member AsyncRegister : ILiveFieldSubscription -> Async<unit>
         /// Tries to find a subscription based on the type name and field name.
         abstract member TryFind : string -> string -> ILiveFieldSubscription option
-        /// Creates an active subscription, and returns the IObservable stream of projected POCO objects
-        abstract member Add : (obj -> bool) -> string -> string -> IObservable<obj>
+        /// Creates an active subscription, and returns the Observable stream of projected POCO objects
+        abstract member Add : (obj -> bool) -> string -> string -> Observable<obj>
         /// Publishes an event to the subscription system, given the key of the subscription type.
         abstract member AsyncPublish<'T> : string -> string -> 'T -> Async<unit>
     end

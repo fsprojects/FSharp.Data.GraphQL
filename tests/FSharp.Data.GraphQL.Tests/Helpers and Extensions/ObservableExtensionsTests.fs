@@ -8,8 +8,8 @@ open FSharp.Data.GraphQL
 open Helpers
 
 open System
-open FSharp.Control.Reactive
-
+open System.Threading.Tasks
+open R3
 
 let delay time x = async {
     do! Async.Sleep(ms time)
@@ -49,11 +49,12 @@ let ``ofAsyncVal should call OnComplete and return items in expected order`` () 
     sub.Received |> seqEquals [ "test" ]
 
 [<Fact>]
-let ``toSeq on a finite sequence should generate a finite sequence`` () =
+let ``toSeq on a finite sequence should generate a finite sequence`` () : Task = task {
     let source = seq { for x in 1 .. 5 do yield x }
     let obs = Observable.ofSeq source
-    let result = Observable.toSeq obs
+    let! result = Observable.toArrayAsync obs
     result |> seqEquals source
+}
 
 [<Fact>]
 let ``ofSeq on an empty sequence should call OnComplete and return items in expected order`` () =
