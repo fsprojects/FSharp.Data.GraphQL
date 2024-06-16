@@ -9,7 +9,6 @@ let [<Literal>] UnionTag = "kind"
 #nowarn "0058"
 let configureSerializerOptions (jsonFSharpOptions: JsonFSharpOptions) (additionalConverters: JsonConverter seq) (options : JsonSerializerOptions) =
     options.PropertyNamingPolicy <- JsonNamingPolicy.CamelCase
-    options.PropertyNameCaseInsensitive <- true
     let converters = options.Converters
     converters.Add (new JsonStringEnumConverter ())
     //converters.Add (JsonSerializerOptionsState (options)) // Dahomey.Json
