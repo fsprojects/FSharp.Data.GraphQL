@@ -4,8 +4,8 @@
     <SystemVersion>7.0.*</SystemVersion>
     <MicrosoftExtensionsVersion>7.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>7.0.*</AspNetCoreVersion>
-    <FsToolkitVersion>4.9.*</FsToolkitVersion>
-    <XUnitVersion>2.6.6</XUnitVersion>
+    <FsToolkitVersion>4.15.*</FsToolkitVersion>
+    <XUnitVersion>2.8.1</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
@@ -51,7 +51,7 @@
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.13.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.9.0" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.10.0" />
     <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
     <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
@@ -62,7 +62,7 @@
     <PackageReference Update="xunit.extensibility.execution" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.visualstudio" Version="2.5.6" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="$(XUnitVersion)" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="CommandLineParser" Version="2.9.*" />
