@@ -8,7 +8,7 @@ on:
 env:
   DOTNET_SKIP_FIRST_TIME_EXPERIENCE: 1
   DOTNET_NOLOGO: true
-  SLEEP_DURATION: 10
+  SLEEP_DURATION: 30
 
 jobs:
   publish:
