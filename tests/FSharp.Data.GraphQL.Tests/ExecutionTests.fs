@@ -16,7 +16,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.AspNetCore
 
 type TestSubject = {
     a: string
@@ -131,7 +130,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
 
     let schema = Schema(DataType)
     let schemaProcessor = Executor(schema)
-    let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(Json.serializerOptions)
+    let params' = JsonDocument.Parse("""{"size":100}""").RootElement.Deserialize<ImmutableDictionary<string, JsonElement>>(serializerOptions)
     let result = sync <| schemaProcessor.AsyncExecute(ast, data, variables = params', operationName = "Example")
     ensureDirect result <| fun data errors ->
         empty errors

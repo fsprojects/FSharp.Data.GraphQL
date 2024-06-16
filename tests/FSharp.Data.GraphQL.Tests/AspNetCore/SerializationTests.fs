@@ -7,8 +7,6 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 open System.Text.Json.Serialization
 
-let serializerOptions = Json.serializerOptions
-
 [<Fact>]
 let ``Deserializes ConnectionInit correctly`` () =
 

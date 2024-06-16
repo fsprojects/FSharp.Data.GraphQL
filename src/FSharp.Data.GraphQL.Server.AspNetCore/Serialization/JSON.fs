@@ -49,4 +49,3 @@ let getWSSerializerOptions (additionalConverters: JsonConverter seq) =
     options |> configureDefaultWSSerializerOptions additionalConverters
     options
 
-let serializerOptions = getWSSerializerOptions Seq.empty
