@@ -11,7 +11,6 @@ open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
-open FSharp.Data.GraphQL.Server.AspNetCore
 
 type InputRecord = { a : string; b : string; c : string }
 
@@ -143,7 +142,7 @@ let variablesWithAllInputs (record, optRecord) =
 let paramsWithValues variables =
     JsonDocument
         .Parse(variables : string)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with all fields`` () =

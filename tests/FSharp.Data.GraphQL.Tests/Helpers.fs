@@ -11,6 +11,9 @@ open System.Threading
 open System.Threading.Tasks
 open Xunit
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Server.AspNetCore
+
+let serializerOptions = Json.getWSSerializerOptions Seq.empty
 
 let isType<'a> actual = Assert.IsAssignableFrom<'a>(actual)
 let isSeq<'a> actual = isType<'a seq> actual
@@ -74,11 +77,10 @@ let greaterThanOrEqual expected actual =
 
 open System.Text.Json
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Server.AspNetCore
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
-    JsonSerializer.Serialize (arg, Json.serializerOptions)
+    JsonSerializer.Serialize (arg, serializerOptions)
 
 let stringifyInput = stringifyArg "input"
 

@@ -15,6 +15,12 @@ type Startup private () =
 
     let rootFactory (ctx) : Root = Root (ctx)
 
+    /// Added for testing purposes because in .NET 8 JsonSerializerOptions become frozen after the first use
+    /// and using this function caused an exception.
+    let configure (options : GraphQLOptions<_>) =
+        options.SerializerOptions.Converters.Add (new System.Text.Json.Serialization.JsonStringEnumConverter ())
+        options
+
     new (configuration : IConfiguration) as this =
         Startup ()
         then this.Configuration <- configuration
@@ -22,7 +28,7 @@ type Startup private () =
     member _.ConfigureServices (services : IServiceCollection) =
         services
             .AddGiraffe()
-            .AddGraphQLOptions<Root> (Schema.executor, rootFactory)
+            .AddGraphQLOptions<Root> (Schema.executor, rootFactory, configure = configure)
         |> ignore
 
     member _.Configure

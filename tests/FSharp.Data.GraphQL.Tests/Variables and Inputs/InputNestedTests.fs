@@ -13,7 +13,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.AspNetCore
 
 let InputArrayOf (innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Val array> = ListOf innerDef
 
@@ -60,7 +59,7 @@ let rec TestRecursiveInputObject =
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
-    JsonSerializer.Serialize (arg, Json.serializerOptions)
+    JsonSerializer.Serialize (arg, serializerOptions)
 
 let stringifyInput = stringifyArg "input"
 

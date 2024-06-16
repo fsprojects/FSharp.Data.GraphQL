@@ -14,12 +14,11 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
-    JsonSerializer.Serialize (arg, Json.serializerOptions)
+    JsonSerializer.Serialize (arg, serializerOptions)
 
 let stringifyInput = stringifyArg "input"
 
@@ -41,7 +40,7 @@ let variablesWithInput inputName input = $"""{{"%s{inputName}":%s{input}}}"""
 let paramsWithValueInput input =
     JsonDocument
         .Parse(variablesWithInput "input" input)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 [<Fact>]
 let ``Execute handles list inputs and nullability and allows lists to be null`` () =

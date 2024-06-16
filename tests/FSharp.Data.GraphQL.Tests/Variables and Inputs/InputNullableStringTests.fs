@@ -14,12 +14,11 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
     let arg = ctx.TryArg name |> Option.toObj
-    JsonSerializer.Serialize (arg, Json.serializerOptions)
+    JsonSerializer.Serialize (arg, serializerOptions)
 
 let stringifyInput = stringifyArg "input"
 
@@ -46,7 +45,7 @@ let variablesWithInput inputName input = $"""{{"%s{inputName}":%s{input}}}"""
 let paramsWithValueInput input =
     JsonDocument
         .Parse(variablesWithInput "input" input)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 [<Fact>]
 let ``Execute handles variables and allows nullable inputs to be omitted`` () =
@@ -99,7 +98,7 @@ let ``Execute handles variables and allows nullable inputs to be set to a value 
     let paramsWithValueInput input =
         JsonDocument
             .Parse(variablesWithInput "value" input)
-            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
     let testInputValue = "\"a\""
     let params' = paramsWithValueInput testInputValue
@@ -130,7 +129,7 @@ let ``Execute handles non-nullable scalars and does not allow non-nullable input
     let paramsWithValueInput input =
         JsonDocument
             .Parse(variablesWithInput "value" input)
-            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
     let testInputValue = "null"
     let params' = paramsWithValueInput testInputValue
@@ -149,7 +148,7 @@ let ``Execute handles non-nullable scalars and allows non-nullable inputs to be 
     let paramsWithValueInput input =
         JsonDocument
             .Parse(variablesWithInput "value" input)
-            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+            .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
     let testInputValue = "\"a\""
     let params' = paramsWithValueInput testInputValue
@@ -181,7 +180,7 @@ let ``Execute uses argument default value when no argument was provided`` () =
 let paramsWithOptionalInput input =
     JsonDocument
         .Parse(variablesWithInput "optional" input)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 [<Fact>]
 let ``Execute uses argument default value when nullable variable provided`` () =

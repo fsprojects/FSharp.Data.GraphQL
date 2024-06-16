@@ -6,7 +6,6 @@ open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.WebSockets
 
 let toClientMessage (theInput : string) =
-    let serializerOptions = Json.serializerOptions
     JsonSerializer.Deserialize<ClientMessage> (theInput, serializerOptions)
 
 let willResultInInvalidMessage expectedExplanation input =

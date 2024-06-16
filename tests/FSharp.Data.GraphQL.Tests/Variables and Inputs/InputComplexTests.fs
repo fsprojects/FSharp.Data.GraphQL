@@ -16,7 +16,6 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
-open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 let TestComplexScalar =
@@ -113,7 +112,7 @@ let variablesWithInput inputName input = $"""{{"%s{inputName}":%s{input}}}"""
 let paramsWithValueInput input =
     JsonDocument
         .Parse(variablesWithInput "input" input)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 let testInputObject =
     """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":["bar"],"optArr":null,"voptArr":null}"""

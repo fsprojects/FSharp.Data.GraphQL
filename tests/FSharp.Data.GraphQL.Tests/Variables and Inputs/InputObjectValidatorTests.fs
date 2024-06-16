@@ -15,7 +15,6 @@ open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Validation
 open FSharp.Data.GraphQL.Validation.ValidationResult
-open FSharp.Data.GraphQL.Server.AspNetCore
 open ErrorHelpers
 
 type InputRecord = { Country : string; ZipCode : string; City : string }
@@ -158,7 +157,7 @@ let variablesWithAllInputs (record, record1, record2, record3) =
 let paramsWithValues variables =
     JsonDocument
         .Parse(variables : string)
-        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (Json.serializerOptions)
+        .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 [<Fact>]
 let ``Execute handles validation of valid input records from variables with all fields`` () =
