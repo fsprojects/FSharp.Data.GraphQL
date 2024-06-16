@@ -1,7 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFrameworks>netstandard2.0;$(PackageTargetFrameworks)</TargetFrameworks>
+    <TargetFrameworks>netstandard2.0;$(DotNetVersion)</TargetFrameworks>
     <GenerateDocumentationFile>true</GenerateDocumentationFile>
     <ProduceReferenceAssembly>true</ProduceReferenceAssembly>
     <Deterministic>true</Deterministic>
@@ -34,7 +34,7 @@
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="System.Collections.Immutable" />
     <PackageReference Include="System.Text.Json" />
-    <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Portable.System.DateTimeOnly" VersionOverride="7.*" />
+    <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Include="Portable.System.DateTimeOnly" VersionOverride="8.*" />
     <PackageReference Condition="'$(TargetFramework)' == 'netstandard2.0'" Update="FSharp.Core" VersionOverride="$(FSharpCoreVersion)" />
   </ItemGroup>
 

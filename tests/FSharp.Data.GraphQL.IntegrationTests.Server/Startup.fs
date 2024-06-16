@@ -6,12 +6,12 @@ open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
+open Microsoft.Extensions.Hosting
 open Giraffe
 
 open FSharp.Data.GraphQL.Server.AspNetCore
 open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 open FSharp.Data.GraphQL.Samples.StarWarsApi
-open Microsoft.Extensions.Hosting
 
 module Constants =
   let [<Literal>] Indented = "Indented"
