@@ -49,17 +49,17 @@ module ServiceCollectionExtensions =
                 [<Optional>] configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>
             ) =
 
+            let additionalConverters =
+                additionalConverters
+                |> ValueOption.ofObj
+                |> ValueOption.defaultValue Seq.empty
+
             let getOptions sp =
                 let executor = executorFactory.Invoke sp
                 let options = createStandardOptions executor rootFactory additionalConverters webSocketEndpointUrl
                 match configure with
                 | null -> options
                 | _ -> configure.Invoke options
-
-            let additionalConverters =
-                additionalConverters
-                |> ValueOption.ofObj
-                |> ValueOption.defaultValue Seq.empty
 
             services
                 // We need this for output serialization purposes as we use <see href="IResult" />
