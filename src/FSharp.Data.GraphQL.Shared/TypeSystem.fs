@@ -6,7 +6,6 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open System.Reflection
 open System.Collections
-open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
