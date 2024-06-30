@@ -6,6 +6,7 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Collections
 open System.Collections.Generic
+open System.Net.Http
 open System.Reflection
 open System.Text.Json.Serialization
 open FSharp.Core
@@ -19,7 +20,6 @@ open FSharp.Data.GraphQL.Validation
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
-open System.Net.Http
 
 type internal FieldStringPath = string list
 
