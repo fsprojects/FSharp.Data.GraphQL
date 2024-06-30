@@ -230,7 +230,7 @@ let rec internal compileByType
                         if
                             ty = objtype
                             || (ty.FullName.StartsWith "Microsoft.FSharp.Core.FSharpOption`1"
-                                && ty.GetGenericArguments ()[0] = objtype)
+                                && ty.GetGenericArguments().[0] = objtype)
                         then
                             return found
                         else
