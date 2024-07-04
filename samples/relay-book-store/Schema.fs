@@ -62,7 +62,7 @@ let booksField =
               (fun s ->
                 match BookCursor.tryDecode s with
                 | Some c -> c
-                | None -> raise (GQLMessageException("Invalid for cursor value for after")))
+                | None -> raise (GQLMessageException("Invalid cursor value for after")))
 
           let last = ctx.TryArg("last")
 
@@ -72,7 +72,7 @@ let booksField =
               (fun s ->
                 match BookCursor.tryDecode s with
                 | Some c -> c
-                | None -> raise (GQLMessageException("Invalid for cursor value for before")))
+                | None -> raise (GQLMessageException("Invalid cursor value for before")))
 
           match first, after, last, before with
           | Some first, _, None, None ->
