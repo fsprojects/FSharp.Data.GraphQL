@@ -1,0 +1,31 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="Prelude.fs" />
+    <Compile Include="Domain.fs" />
+    <Compile Include="DB.fs" />
+    <Compile Include="Schema.fs" />
+    <Compile Include="Program.fs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="Giraffe" />
+    <PackageReference Include="Thoth.Json.Net" />
+    <PackageReference Include="System.Data.Common" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="Donald" />
+    <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
+  </ItemGroup>
+
+</Project>

@@ -19,10 +19,10 @@ type Edge<'Node> =
 type PageInfo =
     { /// Should be true, if the next page is available.
       /// False if current page is the last page of results.
-      HasNextPage : bool
+      HasNextPage : Async<bool>
       /// Should be true, if the previous page is available.
       /// False if current page is the first page of results.
-      HasPreviousPage : bool
+      HasPreviousPage : Async<bool>
       /// Optional cursor used to identify begining of the results.
       StartCursor : string option
       /// Optional cursor used to identify the end of the results.
@@ -36,7 +36,7 @@ type PageInfo =
 type Connection<'Node> =
     { /// Optional value describing total number of results avaiable
       /// at the time.
-      TotalCount : int option
+      TotalCount : Async<int option>
       /// Information about current results page.
       PageInfo : PageInfo
       /// List of edges (Relay nodes with cursors) returned as results.
@@ -46,17 +46,25 @@ type Connection<'Node> =
 //        member x.GetEnumerator () : System.Collections.IEnumerator = upcast (x :> seq<'Node>).GetEnumerator()
 
 /// Slice info union describing Relay cursor progression.
-type SliceInfo =
+type SliceInfo<'Cursor> =
     /// Return page of `first` results `after` provided cursor value.
     /// If `after` value was not provided, start from the beginning of
     /// the result set.
-    | Forward of first:int * after:string option
+    | Forward of first:int * after:'Cursor option
     /// Return page of `last` results `before` provided cursor value.
     /// If `before` value was not provided, return `last` results of
     /// the result set.
-    | Backward of last:int * before:string option
+    | Backward of last:int * before:'Cursor option
 
-type SliceMetaInfo = { Start: int; Length: int }
+    member this.PageSize with get () =
+        match this with
+        | Forward (first, _) -> first
+        | Backward (last, _) -> last
+
+    member this.Cursor with get () =
+        match this with
+        | Forward (_, after) -> after
+        | Backward (_, before) -> before
 
 [<RequireQualifiedAccess>]
 module Cursor =
@@ -92,8 +100,8 @@ module Definitions =
         name = "PageInfo",
         description = "Information about pagination in a connection.",
         fields =
-            [ Define.Field("hasNextPage", BooleanType, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
-              Define.Field("hasPreviousPage", BooleanType, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
+            [ Define.AsyncField("hasNextPage", BooleanType, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
+              Define.AsyncField("hasPreviousPage", BooleanType, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
               Define.Field("startCursor", Nullable StringType, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
               Define.Field("endCursor", Nullable StringType, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor) ])
 
@@ -122,7 +130,8 @@ module Definitions =
             name = n.Name + "Connection",
             description = "A connection from an object to a list of objects of type " + n.Name,
             fields =
-                [ Define.Field("totalCount", Nullable IntType, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""", fun _ conn -> conn.TotalCount)
+                [ Define.AsyncField("totalCount", Nullable IntType, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""",
+                    fun _ conn -> conn.TotalCount)
                   Define.Field("pageInfo", PageInfo, "Information to aid in pagination.", fun _ conn -> conn.PageInfo)
                   Define.Field("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges) ])
 
@@ -152,10 +161,10 @@ module Connection =
             |> Array.mapi (fun idx elem -> { Cursor = Cursor.ofOffset idx; Node = elem })
         let first = if edges.Length = 0 then None else Some edges.[0].Cursor
         let last = if edges.Length = 0 then None else Some edges.[edges.Length-1].Cursor
-        { TotalCount = Array.length array |> Some
+        { TotalCount = async { return Array.length array |> Some }
           PageInfo =
-            { HasNextPage = false
-              HasPreviousPage = false
+            { HasNextPage = async { return false }
+              HasPreviousPage = async { return false }
               StartCursor = first
               EndCursor = last }
           Edges = edges }
