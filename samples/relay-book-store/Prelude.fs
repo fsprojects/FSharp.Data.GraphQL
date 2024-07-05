@@ -36,3 +36,23 @@ module internal Prelude =
 
     let encode (x : string) : byte array =
       Encoding.UTF8.GetBytes(x)
+
+  [<RequireQualifiedAccess>]
+  module Async =
+
+    open System.Threading
+    open System.Threading.Tasks
+
+    let memoize (workflow : Async<'t>) : Async<'t> =
+      let mutable count = 0
+      let tcs = TaskCompletionSource<_>()
+      async {
+        if Interlocked.Increment(&count) = 1 then
+          try
+            let! t = workflow
+            tcs.SetResult(t)
+          with exn ->
+            tcs.SetException(exn)
+
+        return! Async.AwaitTask tcs.Task
+      }

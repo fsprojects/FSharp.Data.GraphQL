@@ -24,9 +24,9 @@ type PageInfo =
       /// False if current page is the first page of results.
       HasPreviousPage : Async<bool>
       /// Optional cursor used to identify begining of the results.
-      StartCursor : string option
+      StartCursor : Async<string option>
       /// Optional cursor used to identify the end of the results.
-      EndCursor : string option }
+      EndCursor : Async<string option> }
 
 /// Record representing Relay connection object. Connection describes
 /// a set of results (Relay nodes) returned from the server. Instead
@@ -40,7 +40,7 @@ type Connection<'Node> =
       /// Information about current results page.
       PageInfo : PageInfo
       /// List of edges (Relay nodes with cursors) returned as results.
-      Edges : Edge<'Node> seq }
+      Edges : Async<Edge<'Node> seq> }
 //    interface seq<'Node> with
 //        member x.GetEnumerator () = (Seq.map (fun edge -> edge.Node) x.Edges).GetEnumerator()
 //        member x.GetEnumerator () : System.Collections.IEnumerator = upcast (x :> seq<'Node>).GetEnumerator()
@@ -102,8 +102,8 @@ module Definitions =
         fields =
             [ Define.AsyncField("hasNextPage", BooleanType, "When paginating forwards, are there more items?", fun _ pageInfo -> pageInfo.HasNextPage)
               Define.AsyncField("hasPreviousPage", BooleanType, "When paginating backwards, are there more items?", fun _ pageInfo -> pageInfo.HasPreviousPage)
-              Define.Field("startCursor", Nullable StringType, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
-              Define.Field("endCursor", Nullable StringType, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor) ])
+              Define.AsyncField("startCursor", Nullable StringType, "When paginating backwards, the cursor to continue.", fun _ pageInfo -> pageInfo.StartCursor)
+              Define.AsyncField("endCursor", Nullable StringType, "When paginating forwards, the cursor to continue.", fun _ pageInfo -> pageInfo.EndCursor) ])
 
     /// Converts existing output type defintion into an edge in a Relay connection.
     /// <paramref name="nodeType"/> must not be a List.
@@ -133,7 +133,7 @@ module Definitions =
                 [ Define.AsyncField("totalCount", Nullable IntType, """A count of the total number of objects in this connection, ignoring pagination. This allows a client to fetch the first five objects by passing \"5\" as the argument to `first`, then fetch the total count so it could display \"5 of 83\", for example. In cases where we employ infinite scrolling or don't have an exact count of entries, this field will return `null`.""",
                     fun _ conn -> conn.TotalCount)
                   Define.Field("pageInfo", PageInfo, "Information to aid in pagination.", fun _ conn -> conn.PageInfo)
-                  Define.Field("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges) ])
+                  Define.AsyncField("edges", ListOf(EdgeOf nodeType), "Information to aid in pagination.", fun _ conn -> conn.Edges) ])
 
 [<RequireQualifiedAccess>]
 module Connection =
@@ -165,6 +165,6 @@ module Connection =
           PageInfo =
             { HasNextPage = async { return false }
               HasPreviousPage = async { return false }
-              StartCursor = first
-              EndCursor = last }
-          Edges = edges }
+              StartCursor = async { return first }
+              EndCursor = async { return last } }
+          Edges = async { return edges } }

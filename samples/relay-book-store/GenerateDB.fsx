@@ -20,6 +20,7 @@ let books =
     "Stand on Zanzibar", 1968
     "The Sheep Look Up", 1972
     "The Mountain Trail and its Message", 1997
+    "We", 1924
   ]
 
 let db = new SqliteConnection("Data Source=app.db")

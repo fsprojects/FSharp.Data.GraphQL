@@ -10,7 +10,7 @@ open FSharp.Data.GraphQL.Server.Relay
 type Root(logger : ILogger, db : IDbConnection) =
   member this.TryFetchBook(id : string) =
     async {
-      logger.LogInformation($"fetchBooksPage id={id}")
+      logger.LogInformation($"tryFetchBook id={id}")
 
       return! DB.tryFetchBook id db
     }
@@ -46,138 +46,152 @@ and bookType =
   )
 
 let booksField =
-  Define.AsyncField(
+  Define.Field(
     "books",
     ConnectionOf bookType,
     "Pages through all books",
     Connection.allArgs,
     fun ctx (root : Root) ->
-      async {
-        let sliceInfo =
-          let first = ctx.TryArg("first")
+      let sliceInfo =
+        let first = ctx.TryArg("first")
 
-          let after =
-            ctx.TryArg("after")
-            |> Option.map
-              (fun s ->
-                match BookCursor.tryDecode s with
-                | Some c -> c
-                | None -> raise (GQLMessageException("Invalid cursor value for after")))
+        let after =
+          ctx.TryArg("after")
+          |> Option.map
+            (fun s ->
+              match BookCursor.tryDecode s with
+              | Some c -> c
+              | None -> raise (GQLMessageException("Invalid cursor value for after")))
 
-          let last = ctx.TryArg("last")
+        let last = ctx.TryArg("last")
 
-          let before =
-            ctx.TryArg("before")
-            |> Option.map
-              (fun s ->
-                match BookCursor.tryDecode s with
-                | Some c -> c
-                | None -> raise (GQLMessageException("Invalid cursor value for before")))
+        let before =
+          ctx.TryArg("before")
+          |> Option.map
+            (fun s ->
+              match BookCursor.tryDecode s with
+              | Some c -> c
+              | None -> raise (GQLMessageException("Invalid cursor value for before")))
 
-          match first, after, last, before with
-          | Some first, _, None, None ->
-            if first < 0 then
-              raise (GQLMessageException($"first must be at least 0"))
+        match first, after, last, before with
+        | Some first, _, None, None ->
+          if first < 0 then
+            raise (GQLMessageException($"first must be at least 0"))
 
-            Forward (first, after)
-          | None, None, Some last, _ ->
-            if last < 0 then
-              raise (GQLMessageException($"last must be at least 0"))
+          Forward (first, after)
+        | None, None, Some last, _ ->
+          if last < 0 then
+            raise (GQLMessageException($"last must be at least 0"))
 
-            Backward (last, before)
-          | None, _, None, _ ->
-            raise (GQLMessageException($"Must specify first or last"))
-          | Some _, _, _, _ ->
-            raise (GQLMessageException($"Must not combine first with last or before"))
-          | _, _, Some _, _ ->
-            raise (GQLMessageException($"Must not combine last with first or after"))
+          Backward (last, before)
+        | None, _, None, _ ->
+          raise (GQLMessageException($"Must specify first or last"))
+        | Some _, _, _, _ ->
+          raise (GQLMessageException($"Must not combine first with last or before"))
+        | _, _, Some _, _ ->
+          raise (GQLMessageException($"Must not combine last with first or after"))
 
-        let fetchTotalCount =
-          async {
-            let! count = root.FetchBooksTotalCount()
+      let totalCount =
+        async {
+          let! count = root.FetchBooksTotalCount()
 
-            return Some count
-          }
+          return Some count
+        }
 
-        let! hasPreviousPage, hasNextPage, nodes =
+      let fetchItems =
+        async {
           match sliceInfo with
           | Forward (first, after) ->
-            async {
-              let hasPreviousPage =
-                async {
-                  if Option.isSome after then
-                    let! items = root.FetchBooksPage(after, true, false, 1)
-
-                    return not (List.isEmpty items)
-                  else
-                    return false
-                }
-
-              let! items = root.FetchBooksPage(after, false, true, first + 1)
-
-              let hasNextPage = async { return List.length items > first }
-              let edges = List.truncate first items
-
-              return hasPreviousPage, hasNextPage, edges
-            }
+            return! root.FetchBooksPage(after, false, true, first + 1)
           | Backward (last, before) ->
-            async {
-              let hasNextPage =
-                async {
-                  if Option.isSome before then
-                    let! items = root.FetchBooksPage(before, true, true, 1)
+            return! root.FetchBooksPage(before, false, false, last + 1)
+        }
+        |> Async.memoize
 
-                    return List.isEmpty items |> not
-                  else
-                    return false
-                }
+      let hasPreviousPage =
+        async {
+          match sliceInfo with
+          | Forward (_, None) ->
+            return false
+          | Forward (_, after) ->
+            let! items = root.FetchBooksPage(after, true, false, 1)
 
-              let! items = root.FetchBooksPage(before, false, false, last + 1)
+            return not (List.isEmpty items)
+          | Backward (last, _) ->
+            let! items = fetchItems
 
-              let hasPreviousPage =
-                async {
-                  return List.length items > last
-                }
+            return List.length items > last
+        }
 
-              let edges =
-                items
-                |> List.truncate last
-                |> List.rev
+      let hasNextPage =
+        async {
+          match sliceInfo with
+          | Forward (first, _) ->
+            let! items = fetchItems
 
-              return hasPreviousPage, hasNextPage, edges
-            }
+            return List.length items > first
+          | Backward (_, None) ->
+            return false
+          | Backward (_, before) ->
+            let! items = root.FetchBooksPage(before, true, true, 1)
 
-        let edges =
-          nodes
-          |> List.map
-            (fun node ->
-              {
-                Node = node
-                Cursor = node |> BookCursor.ofBook |> BookCursor.encode
-              })
+            return List.isEmpty items |> not
+        }
 
-        let startCursor =
-          nodes
-          |> Seq.tryHead
-          |> Option.map (BookCursor.ofBook >> BookCursor.encode)
+      let edges =
+        async {
+          let! items = fetchItems
 
-        let endCursor =
-          nodes
-          |> Seq.tryLast
-          |> Option.map (BookCursor.ofBook >> BookCursor.encode)
+          let nodes =
+            match sliceInfo with
+            | Forward _ ->
+              items
+              |> List.truncate sliceInfo.PageSize
+            | Backward _ ->
+              items
+              |> List.truncate sliceInfo.PageSize
+              |> List.rev
 
-        return
+          return
+            nodes
+            |> Seq.map
+              (fun node ->
+                {
+                  Node = node
+                  Cursor = node |> BookCursor.ofBook |> BookCursor.encode
+                })
+        }
+
+      let startCursor =
+        async {
+          let! edges = edges
+
+          return
+            edges
+            |> Seq.tryHead
+            |> Option.map (fun x -> x.Cursor)
+        }
+
+      let endCursor =
+        async {
+          let! edges = edges
+
+          return
+            edges
+            |> Seq.tryLast
+            |> Option.map (fun x -> x.Cursor)
+        }
+
+      {
+        TotalCount = totalCount
+        PageInfo =
           {
-            TotalCount = fetchTotalCount
-            PageInfo =
-              {
-                HasNextPage = hasNextPage
-                HasPreviousPage = hasPreviousPage
-                StartCursor = startCursor
-                EndCursor = endCursor
-              }
-            Edges = edges
+            HasNextPage = hasNextPage
+            HasPreviousPage = hasPreviousPage
+            StartCursor = startCursor
+            EndCursor = endCursor
           }
+        Edges = edges
       }
   )
 
