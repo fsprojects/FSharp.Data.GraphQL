@@ -96,8 +96,4 @@ let fetchBooksPage (maybeCursor : BookCursor option) (isCursorInclusive : bool) 
             |> Async.AwaitTask
 
         return records
-    // if isForward then
-    //   records
-    // else
-    //   List.rev records
     }
