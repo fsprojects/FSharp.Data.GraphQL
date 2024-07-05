@@ -4,11 +4,9 @@
 open Microsoft.Data.Sqlite
 open Donald
 
-let slugify (x : string) =
-  x.Replace(' ', '-').Replace(''', '-').ToLowerInvariant()
+let slugify (x : string) = x.Replace(' ', '-').Replace(''', '-').ToLowerInvariant ()
 
-let books =
-  [
+let books = [
     "Accelerando", 2005
     "Consider Phlebas", 1987
     "Dune", 1965
@@ -21,9 +19,9 @@ let books =
     "The Sheep Look Up", 1972
     "The Mountain Trail and its Message", 1997
     "We", 1924
-  ]
+]
 
-let db = new SqliteConnection("Data Source=app.db")
+let db = new SqliteConnection ("Data Source=app.db")
 
 db
 |> Db.newCommand "CREATE TABLE books (id PRIMARY KEY, title, year); "
@@ -31,10 +29,9 @@ db
 
 db
 |> Db.newCommand "INSERT INTO books (id, title, year) VALUES (@id, @title, @year)"
-|> Db.execMany
-  [
+|> Db.execMany [
     for book in books do
-      let title, year = book
-      let id = slugify title
-      [ "id", SqlType.String id; "title", SqlType.String title; "year", SqlType.Int year ]
-  ]
+        let title, year = book
+        let id = slugify title
+        [ "id", SqlType.String id; "title", SqlType.String title; "year", SqlType.Int year ]
+]

@@ -13,36 +13,33 @@ open Microsoft.Extensions.Hosting
 open Microsoft.Extensions.Logging
 
 let errorHandler (ex : Exception) (log : ILogger) =
-  log.LogError (EventId (), ex, "An unhandled exception has occurred while executing this request.")
-  clearResponse >=> setStatusCode 500
+    log.LogError (EventId (), ex, "An unhandled exception has occurred while executing this request.")
+    clearResponse >=> setStatusCode 500
 
 [<EntryPoint>]
 let main argv =
-  use db = new SqliteConnection("Data Source=app.db")
+    use db = new SqliteConnection ("Data Source=app.db")
 
-  let schema = Schema(queryType)
-  let executor = Executor<Root>(schema)
+    let schema = Schema (queryType)
+    let executor = Executor<Root> (schema)
 
-  let rootFactory (ctx : HttpContext) : Root =
-    Root(ctx.GetLogger(), db)
+    let rootFactory (ctx : HttpContext) : Root = Root (ctx.GetLogger (), db)
 
-  let builder = WebApplication.CreateBuilder(argv)
+    let builder = WebApplication.CreateBuilder (argv)
 
-  builder.Services
-    .AddGiraffe()
-    .AddGraphQLOptions<Root> (executor, rootFactory)
-  |> ignore
+    builder.Services.AddGiraffe().AddGraphQLOptions<Root> (executor, rootFactory)
+    |> ignore
 
-  let app = builder.Build ()
+    let app = builder.Build ()
 
-  app
-    .UseGraphQLGraphiQL("/graphiql")
-    .UseRouting()
-    .UseGiraffeErrorHandler(errorHandler)
-    .UseWebSockets()
-    .UseWebSocketsForGraphQL<Root>()
-    .UseGiraffe (HttpHandlers.graphQL<Root>)
+    app
+        .UseGraphQLGraphiQL("/graphiql")
+        .UseRouting()
+        .UseGiraffeErrorHandler(errorHandler)
+        .UseWebSockets()
+        .UseWebSocketsForGraphQL<Root>()
+        .UseGiraffe (HttpHandlers.graphQL<Root>)
 
-  app.Run ()
+    app.Run ()
 
-  0
+    0
