@@ -21,7 +21,7 @@ let main args =
     let builder = WebApplication.CreateBuilder (args)
     builder.Services
         .AddGiraffe()
-        .AddGraphQLOptions<Root> (Schema.executor, rootFactory)
+        .AddGraphQL<Root> (Schema.executor, rootFactory)
     |> ignore
 
     let app = builder.Build ()

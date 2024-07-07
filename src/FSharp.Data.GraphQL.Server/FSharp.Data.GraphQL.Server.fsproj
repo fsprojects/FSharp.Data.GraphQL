@@ -24,10 +24,7 @@
 
   <ItemGroup Label="InternalsVisibleTo">
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Server.Giraffe</_Parameter1>
-    </AssemblyAttribute>
-    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
-      <_Parameter1>FSharp.Data.GraphQL.Server.Oxpecker</_Parameter1>
+      <_Parameter1>FSharp.Data.GraphQL.Server.AspNetCore</_Parameter1>
     </AssemblyAttribute>
   </ItemGroup>
 
