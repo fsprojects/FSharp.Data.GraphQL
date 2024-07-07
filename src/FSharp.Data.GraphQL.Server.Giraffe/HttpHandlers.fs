@@ -45,7 +45,7 @@ module HttpHandlers =
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
             let serializeIndented value =
-                let jsonSerializerOptions = options.Get(IndentedOptionsName).SerializerOptions
+                let jsonSerializerOptions = options.Get(GraphQLOptions.IndentedOptionsName).SerializerOptions
                 JsonSerializer.Serialize (value, jsonSerializerOptions)
 
             match content with

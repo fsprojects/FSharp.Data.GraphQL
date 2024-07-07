@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
 
 open System
 open System.IO
+open System.Runtime.InteropServices
 open System.Text.Json
 open System.Text.Json.Serialization
 open System.Threading.Tasks
@@ -17,7 +18,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Server
 open FSharp.Data.GraphQL.Server.AspNetCore
-open System.Runtime.InteropServices
 
 module HttpEndpoints =
 
@@ -38,7 +38,7 @@ module HttpEndpoints =
         let toResponse { DocumentId = documentId; Content = content; Metadata = metadata } =
 
             let serializeIndented value =
-                let jsonSerializerOptions = options.Get(IndentedOptionsName).SerializerOptions
+                let jsonSerializerOptions = options.Get(GraphQLOptions.IndentedOptionsName).SerializerOptions
                 JsonSerializer.Serialize(value, jsonSerializerOptions)
 
             match content with
