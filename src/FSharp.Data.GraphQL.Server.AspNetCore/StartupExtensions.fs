@@ -83,6 +83,7 @@ module ServiceCollectionExtensions =
                             sp.GetRequiredService<IOptionsMonitor<GraphQLOptions<'Root>>>().Get(name)
                     }
                 )
+                .AddHttpContextAccessor()
                 .AddScoped<GraphQLRequest<'Root>>()
 
         /// <summary>
