@@ -197,12 +197,12 @@ module Schema =
                                   |> Option.map (fun edge -> edge.Cursor)
 
                               let pi =
-                                  { HasNextPage = hasNextPage
-                                    EndCursor = headCursor
-                                    StartCursor = None
-                                    HasPreviousPage = false }
+                                  { HasNextPage = async { return hasNextPage }
+                                    EndCursor = async { return headCursor }
+                                    StartCursor = async { return None }
+                                    HasPreviousPage = async { return false } }
 
-                              let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
+                              let con = { TotalCount = async { return Some totalCount }; PageInfo = pi; Edges = async { return edges } }
                               con
                       )
                       Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))
