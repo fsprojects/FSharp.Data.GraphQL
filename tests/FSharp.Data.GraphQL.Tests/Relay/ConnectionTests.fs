@@ -28,17 +28,19 @@ let people = [
 let humanName { Name = n; Pets = _ } = n
 
 let inline toConnection cursor slice all = {
-    Edges =
-        slice
-        |> List.map (fun s -> { Node = s; Cursor = cursor s })
-        |> List.toSeq
-    PageInfo = {
-        HasNextPage = slice.Tail <> (all |> List.tail)
-        HasPreviousPage = slice.Head <> (all.Head)
-        StartCursor = Some (cursor all.Head)
-        EndCursor = Some (all |> List.last |> cursor)
+    Edges = async {
+        return
+            slice
+            |> List.map (fun s -> { Node = s; Cursor = cursor s })
+            |> List.toSeq
     }
-    TotalCount = Some (all.Length)
+    PageInfo = {
+        HasNextPage = async { return slice.Tail <> (all |> List.tail) }
+        HasPreviousPage = async { return slice.Head <> (all.Head) }
+        StartCursor = async { return Some (cursor all.Head) }
+        EndCursor = async { return Some (all |> List.last |> cursor) }
+    }
+    TotalCount = async { return Some (all.Length) }
 }
 
 let resolveSlice (cursor : 't -> string) (values : 't list) (SliceInfo slice) () : Connection<'t> =
@@ -48,11 +50,7 @@ let resolveSlice (cursor : 't -> string) (values : 't list) (SliceInfo slice) ()
             match after with
             | Some a -> 1 + (values |> List.findIndex (fun x -> (cursor x) = a))
             | None -> 0
-        let slice =
-            values
-            |> List.splitAt idx
-            |> snd
-            |> List.take first
+        let slice = values |> List.splitAt idx |> snd |> List.take first
         toConnection cursor slice values
     | Backward (last, before) ->
         let idx =
@@ -150,17 +148,13 @@ let ``Connection definition includes connection and edge fields for simple cases
     let result = sync <| Executor(schema).AsyncExecute (query)
     let expected =
         NameValueLookup.ofList [
-            "strings", upcast NameValueLookup.ofList [
-                "edges", upcast [ box <| NameValueLookup.ofList [
-                    "node", upcast "five" ]
-                ]
-            ]
+            "strings", upcast NameValueLookup.ofList [ "edges", upcast [ box <| NameValueLookup.ofList [ "node", upcast "five" ] ] ]
         ]
     match result with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ ->  fail "Expected a Direct GQLResponse"
+    | _ -> fail "Expected a Direct GQLResponse"
 
 [<Fact>]
 let ``Connection definition includes connection and edge fields for complex cases`` () =
@@ -191,28 +185,45 @@ let ``Connection definition includes connection and edge fields for complex case
     let result = sync <| Executor(schema).AsyncExecute (query)
     let expected =
         NameValueLookup.ofList [
-            "people", upcast NameValueLookup.ofList [
-                "edges", upcast [
-                    box <| NameValueLookup.ofList [
-                        "node", upcast NameValueLookup.ofList [
-                            "name", upcast "Chris"
-                            "pets", upcast NameValueLookup.ofList [
-                                "edges", upcast [
-                                    box <| NameValueLookup.ofList [
-                                        "node", upcast NameValueLookup.ofList [ "name", upcast "Felix"; "meows", upcast true ]
+            "people",
+            upcast
+                NameValueLookup.ofList [
+                    "edges",
+                    upcast
+                        [
+                            box
+                            <| NameValueLookup.ofList [
+                                "node",
+                                upcast
+                                    NameValueLookup.ofList [
+                                        "name", upcast "Chris"
+                                        "pets",
+                                        upcast
+                                            NameValueLookup.ofList [
+                                                "edges",
+                                                upcast
+                                                    [
+                                                        box
+                                                        <| NameValueLookup.ofList [
+                                                            "node", upcast NameValueLookup.ofList [ "name", upcast "Felix"; "meows", upcast true ]
+                                                        ]
+                                                        upcast
+                                                            NameValueLookup.ofList [
+                                                                "node", upcast NameValueLookup.ofList [ "name", upcast "Max"; "barks", upcast false ]
+                                                            ]
+                                                    ]
+                                            ]
                                     ]
-                                    upcast NameValueLookup.ofList [
-                                        "node", upcast NameValueLookup.ofList [ "name", upcast "Max"; "barks", upcast false ]
-                                    ]
-                                ]
-                            ]]]]]]
+                            ]
+                        ]
+                ]
+        ]
     match result with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ ->  fail "Expected a Direct GQLResponse"
+    | _ -> fail "Expected a Direct GQLResponse"
 
 
 [<Fact>]
-let ``Connection doesn't allow to use List node type`` () =
-    throws<Exception> (fun () -> ConnectionOf (ListOf StringType) |> ignore)
+let ``Connection doesn't allow to use List node type`` () = throws<Exception> (fun () -> ConnectionOf (ListOf StringType) |> ignore)
