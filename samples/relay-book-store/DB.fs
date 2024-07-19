@@ -69,13 +69,11 @@ let fetchBooksPage (maybeCursor : BookCursor option) (isCursorInclusive : bool) 
                 "ORDER BY title DESC, id DESC"
 
         let sql =
-            $"""
-      SELECT *
-      FROM books
-      %s{whereClause}
-      %s{orderByClause}
-      LIMIT %i{limit}
-      """
+            $"""SELECT *
+FROM books
+%s{whereClause}
+%s{orderByClause}
+LIMIT %i{limit}"""
 
         let parameters = [
             match maybeCursor with
