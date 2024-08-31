@@ -84,7 +84,7 @@ module ServiceCollectionExtensions =
                     }
                 )
                 .AddHttpContextAccessor()
-                .AddScoped<GraphQLRequest<'Root>>()
+                .AddScoped<GraphQLRequestHandler<'Root>>()
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.

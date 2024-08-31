@@ -23,7 +23,7 @@
     <Compile Include="GraphQLWebsocketMiddleware.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="HttpContext.fs" />
-    <Compile Include="GraphQLRequest.fs" />
+    <Compile Include="GraphQLRequestHandler.fs" />
     <Compile Include="StartupExtensions.fs" />
   </ItemGroup>
 

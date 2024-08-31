@@ -19,7 +19,7 @@ module HttpEndpoints =
 
     let private handleGraphQL<'Root> (ctx : HttpContext) : Task =
 
-        let request = ctx.RequestServices.GetRequiredService<GraphQLRequest<'Root>>()
+        let request = ctx.RequestServices.GetRequiredService<GraphQLRequestHandler<'Root>>()
         request.HandleAsync () |> writeIResult2 ctx
 
     let graphQL<'Root> (route, [<Optional>] configure) : Endpoint = SimpleEndpoint(Verbs [HttpVerb.GET; HttpVerb.POST], route, handleGraphQL<'Root>, configure)

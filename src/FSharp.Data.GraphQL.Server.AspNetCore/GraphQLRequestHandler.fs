@@ -15,10 +15,10 @@ open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL.Server
 
 /// Provides logic to parse and execute GraphQL request
-type GraphQLRequest<'Root> (
+type GraphQLRequestHandler<'Root> (
     httpContextAccessor : IHttpContextAccessor,
     options : IOptionsMonitor<GraphQLOptions<'Root>>,
-    logger : ILogger<GraphQLRequest<'Root>>
+    logger : ILogger<GraphQLRequestHandler<'Root>>
 ) =
 
     let ctx = httpContextAccessor.HttpContext

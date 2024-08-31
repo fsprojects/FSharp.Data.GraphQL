@@ -28,7 +28,7 @@ module HttpHandlers =
 
     let private handleGraphQL<'Root> (next : HttpFunc) (ctx : HttpContext) =
 
-        let request = ctx.RequestServices.GetRequiredService<GraphQLRequest<'Root>>()
+        let request = ctx.RequestServices.GetRequiredService<GraphQLRequestHandler<'Root>>()
         request.HandleAsync () |> ofTaskIResult2 ctx
 
     let graphQL<'Root> : HttpHandler = choose [ POST; GET ] >=> handleGraphQL<'Root>
