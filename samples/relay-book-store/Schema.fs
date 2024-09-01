@@ -151,7 +151,8 @@ let booksField =
 
                 return
                     nodes
-                    |> Seq.map (fun node -> { Node = node; Cursor = node |> BookCursor.ofBook |> BookCursor.encode })
+                    |> List.map (fun node -> { Node = node; Cursor = node |> BookCursor.ofBook |> BookCursor.encode })
+                    :> seq<_>
             }
 
             // The cursor of the first edge
