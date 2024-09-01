@@ -98,6 +98,7 @@ let booksField =
                     | Forward (first, after) -> return! root.FetchBooksPage (after, false, true, first + 1)
                     | Backward (last, before) -> return! root.FetchBooksPage (before, false, false, last + 1)
                 }
+                // Store the result similar to what Task does so that we don't go to DB multiple times for the same data
                 |> Async.memoize
 
             // Is there a previous page?
