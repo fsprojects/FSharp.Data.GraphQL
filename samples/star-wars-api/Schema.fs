@@ -175,14 +175,14 @@ module Schema =
                                   match ctx with
                                   | SliceInfo (Forward (n, after)) ->
                                       match after with
-                                      | Some (GlobalId ("Friend", id)) ->
+                                      | ValueSome (GlobalId ("Friend", id)) ->
                                           let i =
                                               human.Friends
                                               |> List.indexed
                                               |> List.pick (fun (i, e) -> if e = id then Some i else None)
 
                                           human.Friends |> List.skip (i + 1) |> List.take n, i + 1 + n < totalCount
-                                      | None -> human.Friends |> List.take n, n < totalCount
+                                      | ValueNone -> human.Friends |> List.take n, n < totalCount
                                       | _ -> failwithf "Cursor %A is not a Friend's global id" after
                                   | _ -> human.Friends, false
 

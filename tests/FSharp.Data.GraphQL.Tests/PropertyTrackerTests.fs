@@ -41,7 +41,7 @@ let rec Person =
                             match ctx with
                             | SliceInfo (Forward (first, after)) ->
                                 match after with
-                                | Some (GlobalId ("Person", id)) ->
+                                | ValueSome (GlobalId ("Person", id)) ->
                                     let friendId = int id
                                     p.Friends
                                     |> List.sortBy (fun f -> f.Id)
