@@ -5,7 +5,7 @@
     <MicrosoftExtensionsVersion>8.0.*</MicrosoftExtensionsVersion>
     <AspNetCoreVersion>8.0.*</AspNetCoreVersion>
     <FsToolkitVersion>4.15.*</FsToolkitVersion>
-    <XUnitVersion>2.8.1</XUnitVersion>
+    <XUnitVersion>2.9.0</XUnitVersion>
     <FAKEVersion>6.*</FAKEVersion>
   </PropertyGroup>
   <ItemGroup Label="Common">
@@ -19,11 +19,12 @@
     <PackageReference Update="FSharp.SystemTextJson" Version="1.*" />
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
+    <PackageReference Update="Giraffe" Version="7.*" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="$(SystemVersion)" />
     <PackageReference Update="NuGet.CommandLine" Version="1.*" />
-    <PackageReference Update="Oxpecker" Version="0.9.*" />
+    <PackageReference Update="Oxpecker" Version="0.14.*" />
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
     <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
     <PackageReference Update="System.Diagnostics.DiagnosticSource" Version="$(SystemVersion)" />
@@ -51,9 +52,9 @@
     </PackageReference>
   </ItemGroup>
   <ItemGroup Label="Test platform">
-    <PackageReference Update="BenchmarkDotNet" Version="0.13.*" />
+    <PackageReference Update="BenchmarkDotNet" Version="0.14.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.10.0" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.11.0" />
     <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
     <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
@@ -64,7 +65,7 @@
     <PackageReference Update="xunit.extensibility.execution" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.console" Version="$(XUnitVersion)" />
     <PackageReference Update="xunit.runner.utility" Version="$(XUnitVersion)" />
-    <PackageReference Update="xunit.runner.visualstudio" Version="$(XUnitVersion)" />
+    <PackageReference Update="xunit.runner.visualstudio" Version="2.8.2" />
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="CommandLineParser" Version="2.9.*" />
@@ -72,15 +73,14 @@
     <PackageReference Update="EntityFramework" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
     <PackageReference Update="FsToolkit.ErrorHandling" Version="4.15.3" />
-    <PackageReference Update="Giraffe" Version="6.*" />
-    <PackageReference Update="GraphQL.Server.Ui.Altair" Version="7.*" />
-    <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="7.*" />
-    <PackageReference Update="GraphQL.Server.Ui.Playground" Version="7.*"  />
-    <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="7.*"  />
+    <PackageReference Update="GraphQL.Server.Ui.Altair" Version="8.*" />
+    <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="8.*" />
+    <PackageReference Update="GraphQL.Server.Ui.Playground" Version="8.*"  />
+    <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="8.*"  />
     <PackageReference Update="HotChocolate.AspNetCore" Version="13.*" />
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
-    <PackageReference Update="Microsoft.Data.Sqlite" Version="8.0.6" />
+    <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Runtime" Version="2.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
