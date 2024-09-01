@@ -142,9 +142,7 @@ module Definitions =
         | Named n ->
             Define.Object<Edge<'Node>> (
                 name = n.Name + "Edge",
-                description =
-                    "An edge in a connection from an object to another object of type "
-                    + n.Name,
+                description = $"An edge in a connection from an object to another object of type {n.Name}",
                 fields = [
                     Define.Field ("cursor", StringType, "A cursor for use in pagination", (fun _ edge -> edge.Cursor))
                     Define.Field (
