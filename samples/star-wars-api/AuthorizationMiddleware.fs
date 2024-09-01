@@ -49,8 +49,13 @@ type internal CustomPolicyFieldDefinition<'Val, 'Res> (source : FieldDef<'Val, '
                                 ((%%expr : ResolveFieldContext -> 'Val -> 'Res) ctx input)
                                 |> async.Return)
                     @>
-                let compiledResolver = LeafExpressionConverter.EvaluateQuotation resolver
-                Expr.WithValue (compiledResolver, resolver.Type, resolver)
+                try
+                    let compiledResolver = LeafExpressionConverter.EvaluateQuotation resolver
+                    Expr.WithValue (compiledResolver, resolver.Type, resolver)
+                with :? NotSupportedException as ex ->
+                    let message =
+                        $"F# compiler cannot convert '{source.Name}' field resolver expression to LINQ, use function instead"
+                    raise (NotSupportedException (message, ex))
 
             match source.Resolve with
             | Sync (input, output, expr) -> Async (input, output, changeSyncResolver expr)
@@ -87,9 +92,10 @@ module TypeSystemExtensions =
             |> Seq.where (fun r -> not r.Succeeded)
             |> Seq.collect (fun r -> r.Failure.FailedRequirements)
 
-        if Seq.isEmpty requirements
-        then return Ok ()
-        else return Error "Forbidden"
+        if Seq.isEmpty requirements then
+            return Ok ()
+        else
+            return Error "Forbidden"
     }
 
     [<Literal>]

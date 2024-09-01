@@ -277,8 +277,8 @@ module Schema =
                 let setMoon (ctx : ResolveFieldContext) (_ : Root) = option {
                     let! planet = getPlanet (ctx.Arg ("id"))
                     ignore (planet.SetMoon (Some (ctx.Arg ("isMoon"))))
-                    schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" planet
-                    schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
+                    ctx.Schema.SubscriptionProvider.Publish<Planet> "watchMoon" planet
+                    ctx.Schema.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
                     return planet
                 }
                 Define.Field(
@@ -290,9 +290,9 @@ module Schema =
                     // Using complex lambda crashes
                     //(fun ctx _ -> option {
                     //    let! planet = getPlanet (ctx.Arg ("id"))
-                    //    ignore (planet.SetMoon (Some (ctx.Arg ("isMoon"))))
-                    //    schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" planet
-                    //    schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
+                    //    let planet = planet.SetMoon (Some (ctx.Arg ("isMoon")))
+                    //    ctx.Schema.SubscriptionProvider.Publish<Planet> "watchMoon" planet
+                    //    ctx.Schema.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
                     //    return planet
                     //})
                 ).WithAuthorizationPolicies(Policies.CanSetMoon)
