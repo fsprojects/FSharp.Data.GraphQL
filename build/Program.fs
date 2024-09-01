@@ -25,7 +25,7 @@ execContext
 |> Fake.Core.Context.setExecutionContext
 
 module DotNetCli =
-    let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.202" }
+    let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.400" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
