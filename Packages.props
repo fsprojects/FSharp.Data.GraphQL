@@ -30,6 +30,7 @@
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" NoWarn="NU1608" />
     <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
   <ItemGroup Label="Build">
     <PackageReference Update="BlackFox.VsWhere" Version="1.1.0" />

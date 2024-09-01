@@ -16,6 +16,7 @@
     <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="System.Data.Common" />
+    <PackageReference Include="System.Text.RegularExpressions" />
     <PackageReference Include="Thoth.Json.Net" />
   </ItemGroup>
 
