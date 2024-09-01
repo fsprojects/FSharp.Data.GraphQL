@@ -83,17 +83,7 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
         })
         project
 
-    let projectName = Path.GetFileNameWithoutExtension (project)
-    let projectPath = Path.GetDirectoryName (project)
-
-    let serverExe =
-        projectPath
-        </> "bin"
-        </> configurationString
-        </> DotNetMoniker
-        </> (projectName + ".dll")
-
-    CreateProcess.fromRawCommandLine "dotnet" $"{serverExe} --configuration {configurationString} --urls=http://localhost:%i{port}/"
+    CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --configuration {configurationString} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
     |> Proc.start
     |> ignore
