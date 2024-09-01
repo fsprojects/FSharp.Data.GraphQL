@@ -175,14 +175,14 @@ module Schema =
                                   match ctx with
                                   | SliceInfo (Forward (n, after)) ->
                                       match after with
-                                      | Some (GlobalId ("Friend", id)) ->
+                                      | ValueSome (GlobalId ("Friend", id)) ->
                                           let i =
                                               human.Friends
                                               |> List.indexed
                                               |> List.pick (fun (i, e) -> if e = id then Some i else None)
 
                                           human.Friends |> List.skip (i + 1) |> List.take n, i + 1 + n < totalCount
-                                      | None -> human.Friends |> List.take n, n < totalCount
+                                      | ValueNone -> human.Friends |> List.take n, n < totalCount
                                       | _ -> failwithf "Cursor %A is not a Friend's global id" after
                                   | _ -> human.Friends, false
 
@@ -197,12 +197,12 @@ module Schema =
                                   |> Option.map (fun edge -> edge.Cursor)
 
                               let pi =
-                                  { HasNextPage = hasNextPage
-                                    EndCursor = headCursor
-                                    StartCursor = None
-                                    HasPreviousPage = false }
+                                  { HasNextPage = async { return hasNextPage }
+                                    EndCursor = async { return headCursor }
+                                    StartCursor = async { return None }
+                                    HasPreviousPage = async { return false } }
 
-                              let con = { TotalCount = Some totalCount; PageInfo = pi; Edges = edges }
+                              let con = { TotalCount = async { return Some totalCount }; PageInfo = pi; Edges = async { return edges } }
                               con
                       )
                       Define.Field ("appearsIn", ListOf EpisodeType, "Which movies they appear in.", (fun _ (h : Human) -> h.AppearsIn))

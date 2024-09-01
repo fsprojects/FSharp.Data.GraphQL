@@ -27,7 +27,7 @@ type Person =
     { FirstName: string
       LastName: string }
 
-// Define GraphQL type 
+// Define GraphQL type
 let PersonType = Define.Object(
     name = "Person",
     fields = [
@@ -45,7 +45,7 @@ let executor = Executor(schema)
 // Retrieve person data
 let johnSnow = { FirstName = "John"; LastName = "Snow" }
 let reply = executor.AsyncExecute(Parser.parse "{ firstName, lastName }", johnSnow) |> Async.RunSynchronously
-// #> { data: { "firstName", "John", "lastName", "Snow" } } 
+// #> { data: { "firstName", "John", "lastName", "Snow" } }
 ```
 
 It's type safe. Things like invalid fields or invalid return types will be checked at compile time.
@@ -78,14 +78,6 @@ Go to the [GraphiQL sample directory](https://github.com/bazingatechnologies/FSh
   }
 }
 ```
-
-### Relay.js starter kit
-
-A [second sample](https://github.com/bazingatechnologies/FSharp.Data.GraphQL/tree/dev/samples/relay-starter-kit) is a F#-backed version of of popular Relay Starter Kit - an example application using React.js + Relay with Relay-compatible server API.
-
-To run it, build `FSharp.Data.GraphQL` and `FSharp.Data.GraphQL.Relay` projects using Debug settings. Then start server by running `server.fsx` script in your FSI - this will start a relay-compatible F# server on port 8083. Then build node.js frontend by getting all dependencies (`npm i`) and running it (`npm run serve | npm run dev`) - this will start webpack server running React application using Relay for managing application state. You can visit it on [http://localhost:8083/](http://localhost:8083/) .
-
-In order to update client schema, visit [http://localhost:8083/](http://localhost:8083/) and copy-paste the response (which is the introspection query result from the current F# server) into *data/schema.json*.
 
 ## Stream features
 
@@ -192,7 +184,7 @@ type MyProvider = GraphQLProvider<"swapi_schema.json">
 From now on, you can start running queries and mutations:
 
 ```fsharp
-let operation = 
+let operation =
     MyProvider.Operation<"""query q {
       hero (id: "1001") {
         name
@@ -393,7 +385,7 @@ And the value recovered by the filter in the query is usable in the `ResolveFiel
 
 ```fsharp
 Define.Field("friends", ListOf (Nullable CharacterType),
-    resolve = fun ctx (d : Droid) -> 
+    resolve = fun ctx (d : Droid) ->
         ctx.Filter |> printfn "Droid friends filter: %A"
         d.Friends |> List.map getCharacter |> List.toSeq)
 ```

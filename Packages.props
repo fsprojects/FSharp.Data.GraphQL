@@ -30,6 +30,7 @@
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" NoWarn="NU1608" />
     <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Text.RegularExpressions" Version="4.3.1" />
   </ItemGroup>
   <ItemGroup Label="Build">
     <PackageReference Update="BlackFox.VsWhere" Version="1.1.0" />
@@ -67,8 +68,10 @@
   </ItemGroup>
   <ItemGroup Label="Tests and Samples">
     <PackageReference Update="CommandLineParser" Version="2.9.*" />
+    <PackageReference Update="Donald" Version="10.1.0" />
     <PackageReference Update="EntityFramework" Version="1.*" />
     <PackageReference Update="FSharp.Data.TypeProviders" Version="1.*" />
+    <PackageReference Update="FsToolkit.ErrorHandling" Version="4.15.3" />
     <PackageReference Update="Giraffe" Version="6.*" />
     <PackageReference Update="GraphQL.Server.Ui.Altair" Version="7.*" />
     <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="7.*" />
@@ -77,11 +80,14 @@
     <PackageReference Update="HotChocolate.AspNetCore" Version="13.*" />
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
+    <PackageReference Update="Microsoft.Data.Sqlite" Version="8.0.6" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Runtime" Version="2.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="6.0.*" />
     <PackageReference Update="Newtonsoft.Json" Version="13.*" />
+    <PackageReference Update="System.Data.Common" Version="4.3.0" />
+    <PackageReference Update="Thoth.Json.Net" Version="12.0.0" />
     <PackageReference Update="Validus" Version="4.1.*" />
   </ItemGroup>
 </Project>

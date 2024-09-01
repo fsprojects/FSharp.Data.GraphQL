@@ -32,13 +32,14 @@ let inline toConnection cursor slice all = {
         slice
         |> List.map (fun s -> { Node = s; Cursor = cursor s })
         |> List.toSeq
+        |> async.Return
     PageInfo = {
-        HasNextPage = slice.Tail <> (all |> List.tail)
-        HasPreviousPage = slice.Head <> (all.Head)
-        StartCursor = Some (cursor all.Head)
-        EndCursor = Some (all |> List.last |> cursor)
+        HasNextPage = async { return slice.Tail <> (all |> List.tail) }
+        HasPreviousPage = async { return slice.Head <> (all.Head) }
+        StartCursor = async { return Some (cursor all.Head) }
+        EndCursor = async { return Some (all |> List.last |> cursor) }
     }
-    TotalCount = Some (all.Length)
+    TotalCount = async { return Some (all.Length) }
 }
 
 let resolveSlice (cursor : 't -> string) (values : 't list) (SliceInfo slice) () : Connection<'t> =
@@ -46,19 +47,15 @@ let resolveSlice (cursor : 't -> string) (values : 't list) (SliceInfo slice) ()
     | Forward (first, after) ->
         let idx =
             match after with
-            | Some a -> 1 + (values |> List.findIndex (fun x -> (cursor x) = a))
-            | None -> 0
-        let slice =
-            values
-            |> List.splitAt idx
-            |> snd
-            |> List.take first
+            | ValueSome a -> 1 + (values |> List.findIndex (fun x -> (cursor x) = a))
+            | ValueNone -> 0
+        let slice = values |> List.splitAt idx |> snd |> List.take first
         toConnection cursor slice values
     | Backward (last, before) ->
         let idx =
             match before with
-            | Some a -> values |> List.findIndexBack (fun x -> (cursor x) = a)
-            | None -> values.Length
+            | ValueSome a -> values |> List.findIndexBack (fun x -> (cursor x) = a)
+            | ValueNone -> values.Length
         let slice =
             values
             |> List.splitAt idx
@@ -160,7 +157,7 @@ let ``Connection definition includes connection and edge fields for simple cases
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ ->  fail "Expected a Direct GQLResponse"
+    | _ -> fail "Expected a Direct GQLResponse"
 
 [<Fact>]
 let ``Connection definition includes connection and edge fields for complex cases`` () =
@@ -205,14 +202,18 @@ let ``Connection definition includes connection and edge fields for complex case
                                         "node", upcast NameValueLookup.ofList [ "name", upcast "Max"; "barks", upcast false ]
                                     ]
                                 ]
-                            ]]]]]]
+                            ]
+                        ]
+                    ]
+                ]
+            ]
+        ]
     match result with
     | Direct (data, errors) ->
         empty errors
         data |> equals (upcast expected)
-    | _ ->  fail "Expected a Direct GQLResponse"
+    | _ -> fail "Expected a Direct GQLResponse"
 
 
 [<Fact>]
-let ``Connection doesn't allow to use List node type`` () =
-    throws<Exception> (fun () -> ConnectionOf (ListOf StringType) |> ignore)
+let ``Connection doesn't allow to use List node type`` () = throws<Exception> (fun () -> ConnectionOf (ListOf StringType) |> ignore)
