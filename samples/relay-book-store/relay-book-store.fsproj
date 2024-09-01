@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <AssemblyName>FSharp.Data.GraphQL.Samples.RelayBookStore</AssemblyName>
     <RootNamespace>FSharp.Data.GraphQL.Samples.RelayBookStore</RootNamespace>
   </PropertyGroup>
 

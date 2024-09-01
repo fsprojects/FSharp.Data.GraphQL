@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <AssemblyName>FSharp.Data.GraphQL.Samples.ChatApp</AssemblyName>
     <RootNamespace>FSharp.Data.GraphQL.Samples.ChatApp</RootNamespace>
   </PropertyGroup>
 
