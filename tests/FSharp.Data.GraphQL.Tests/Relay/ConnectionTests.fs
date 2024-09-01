@@ -28,12 +28,11 @@ let people = [
 let humanName { Name = n; Pets = _ } = n
 
 let inline toConnection cursor slice all = {
-    Edges = async {
-        return
-            slice
-            |> List.map (fun s -> { Node = s; Cursor = cursor s })
-            |> List.toSeq
-    }
+    Edges =
+        slice
+        |> List.map (fun s -> { Node = s; Cursor = cursor s })
+        |> List.toSeq
+        |> async.Result
     PageInfo = {
         HasNextPage = async { return slice.Tail <> (all |> List.tail) }
         HasPreviousPage = async { return slice.Head <> (all.Head) }
