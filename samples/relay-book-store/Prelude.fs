@@ -37,6 +37,8 @@ module internal Prelude =
         open System.Threading
         open System.Threading.Tasks
 
+        /// Takes an async workflow and returns a new workflow that only executes once
+        /// Subsequent and concurrent executions will reuse the result from the first execution
         let memoize (workflow : Async<'t>) : Async<'t> =
             let mutable count = 0
             let tcs = TaskCompletionSource<_> ()
