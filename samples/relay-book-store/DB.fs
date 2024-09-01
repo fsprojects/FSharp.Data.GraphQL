@@ -43,14 +43,14 @@ let tryFetchBook (id : string) (db : IDbConnection) = async {
     return maybeBook
 }
 
-let fetchBooksPage (maybeCursor : BookCursor option) (isCursorInclusive : bool) (isForward : bool) (limit : int) (db : IDbConnection) =
+let fetchBooksPage (maybeCursor : BookCursor voption) (isCursorInclusive : bool) (isForward : bool) (limit : int) (db : IDbConnection) =
     if limit < 0 then
         invalidArg (nameof limit) "must be non-negative"
 
     async {
         let whereClause =
             match maybeCursor with
-            | Some _ ->
+            | ValueSome _ ->
                 if isForward then
                     if isCursorInclusive then
                         "WHERE title > @cursor_title OR (title = @cursor_title AND id >= @cursor_id)"
@@ -60,7 +60,7 @@ let fetchBooksPage (maybeCursor : BookCursor option) (isCursorInclusive : bool) 
                     "WHERE title < @cursor_title OR (title = @cursor_title AND id <= @cursor_id)"
                 else
                     "WHERE title < @cursor_title OR (title = @cursor_title AND id  < @cursor_id)"
-            | None -> ""
+            | ValueNone -> ""
 
         let orderByClause =
             if isForward then
@@ -77,10 +77,10 @@ LIMIT %i{limit}"""
 
         let parameters = [
             match maybeCursor with
-            | Some cursor ->
+            | ValueSome cursor ->
                 "cursor_id", SqlType.String cursor.ID
                 "cursor_title", SqlType.String cursor.Title
-            | None -> ()
+            | ValueNone -> ()
         ]
 
         let! ct = Async.CancellationToken

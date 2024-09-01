@@ -3,6 +3,11 @@ namespace FSharp.Data.GraphQL.Samples.RelayBookStore
 [<AutoOpen>]
 module internal Prelude =
 
+    let vopt =
+        function
+        | Some x -> ValueSome x
+        | None -> ValueNone
+
     [<RequireQualifiedAccess>]
     module Base64 =
 

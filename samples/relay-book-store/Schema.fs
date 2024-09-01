@@ -20,7 +20,7 @@ type Root (logger : ILogger, db : IDbConnection) =
         return! DB.fetchBooksTotalCount db
     }
 
-    member this.FetchBooksPage (maybeCursor : BookCursor option, isCursorInclusive : bool, isForward : bool, limit : int) = async {
+    member this.FetchBooksPage (maybeCursor : BookCursor voption, isCursorInclusive : bool, isForward : bool, limit : int) = async {
         logger.LogInformation ($"fetchBooksPage maybeCursor={maybeCursor} isCursorInclusive={isCursorInclusive} isForward={isForward} limit={limit}")
 
         return! DB.fetchBooksPage maybeCursor isCursorInclusive isForward limit db
@@ -72,12 +72,12 @@ let booksField =
                     if first < 0 then
                         raise (GQLMessageException ($"first must be at least 0"))
 
-                    Forward (first, after)
+                    Forward (first, vopt after)
                 | None, None, Some last, _ ->
                     if last < 0 then
                         raise (GQLMessageException ($"last must be at least 0"))
 
-                    Backward (last, before)
+                    Backward (last, vopt before)
                 | None, _, None, _ -> raise (GQLMessageException ($"Must specify first or last"))
                 | Some _, _, _, _ -> raise (GQLMessageException ($"Must not combine first with last or before"))
                 | _, _, Some _, _ -> raise (GQLMessageException ($"Must not combine last with first or after"))
@@ -107,7 +107,7 @@ let booksField =
             // If we are paging backward, we can use the extra item to determine if there is a previous page
             let hasPreviousPage = async {
                 match sliceInfo with
-                | Forward (_, None) -> return false
+                | Forward (_, ValueNone) -> return false
                 | Forward (_, after) ->
                     let! items = root.FetchBooksPage (after, isCursorInclusive = true, isForward = false, limit = 1)
 
@@ -128,7 +128,7 @@ let booksField =
                     let! items = fetchItems
 
                     return List.length items > first
-                | Backward (_, None) -> return false
+                | Backward (_, ValueNone) -> return false
                 | Backward (_, before) ->
                     let! items = root.FetchBooksPage (before, isCursorInclusive = true, isForward = true, limit = 1)
 
