@@ -28,12 +28,11 @@ let people = [
 let humanName { Name = n; Pets = _ } = n
 
 let inline toConnection cursor slice all = {
-    Edges = async {
-        return
-            slice
-            |> List.map (fun s -> { Node = s; Cursor = cursor s })
-            |> List.toSeq
-    }
+    Edges =
+        slice
+        |> List.map (fun s -> { Node = s; Cursor = cursor s })
+        |> List.toSeq
+        |> async.Return
     PageInfo = {
         HasNextPage = async { return slice.Tail <> (all |> List.tail) }
         HasPreviousPage = async { return slice.Head <> (all.Head) }
@@ -189,38 +188,25 @@ let ``Connection definition includes connection and edge fields for complex case
     let result = sync <| Executor(schema).AsyncExecute (query)
     let expected =
         NameValueLookup.ofList [
-            "people",
-            upcast
-                NameValueLookup.ofList [
-                    "edges",
-                    upcast
-                        [
-                            box
-                            <| NameValueLookup.ofList [
-                                "node",
-                                upcast
-                                    NameValueLookup.ofList [
-                                        "name", upcast "Chris"
-                                        "pets",
-                                        upcast
-                                            NameValueLookup.ofList [
-                                                "edges",
-                                                upcast
-                                                    [
-                                                        box
-                                                        <| NameValueLookup.ofList [
-                                                            "node", upcast NameValueLookup.ofList [ "name", upcast "Felix"; "meows", upcast true ]
-                                                        ]
-                                                        upcast
-                                                            NameValueLookup.ofList [
-                                                                "node", upcast NameValueLookup.ofList [ "name", upcast "Max"; "barks", upcast false ]
-                                                            ]
-                                                    ]
-                                            ]
+            "people", upcast NameValueLookup.ofList [
+                "edges", upcast [
+                    box <| NameValueLookup.ofList [
+                        "node", upcast NameValueLookup.ofList [
+                            "name", upcast "Chris"
+                            "pets", upcast NameValueLookup.ofList [
+                                "edges", upcast [
+                                    box <| NameValueLookup.ofList [
+                                        "node", upcast NameValueLookup.ofList [ "name", upcast "Felix"; "meows", upcast true ]
                                     ]
+                                    upcast NameValueLookup.ofList [
+                                        "node", upcast NameValueLookup.ofList [ "name", upcast "Max"; "barks", upcast false ]
+                                    ]
+                                ]
                             ]
                         ]
+                    ]
                 ]
+            ]
         ]
     match result with
     | Direct (data, errors) ->
