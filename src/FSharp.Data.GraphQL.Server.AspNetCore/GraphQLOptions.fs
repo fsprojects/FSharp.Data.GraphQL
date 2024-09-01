@@ -15,6 +15,10 @@ module GraphQLOptionsDefaults =
     let [<Literal>] WebSocketEndpoint = "/ws"
     let [<Literal>] WebSocketConnectionInitTimeoutInMs = 3000
 
+module GraphQLOptions =
+
+    let [<Literal>] IndentedOptionsName = "Indented"
+
 type GraphQLTransportWSOptions = {
     EndpointUrl : string
     ConnectionInitTimeout : TimeSpan

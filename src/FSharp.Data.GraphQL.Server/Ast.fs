@@ -1,8 +1,10 @@
-module FSharp.Data.GraphQL.Server.AspNetCore.Ast
+module FSharp.Data.GraphQL.Server.Ast
 
 open System.Collections.Immutable
 open FSharp.Data.GraphQL
 
+/// A list of fields that are reserved for the GraphQL introspection system.
+[<CompiledName "MetaTypeFields">]
 let metaTypeFields =
     seq {
         "__type"
@@ -16,12 +18,17 @@ let private getOperation astDef =
     | Ast.OperationDefinition odef -> Some odef
     | _ -> None
 
-let findOperationByName operationName (astDoc: Ast.Document)  =
+/// Find an operation by its name.
+[<CompiledName "TryFindOperationByName">]
+let tryFindOperationByName operationName (astDoc: Ast.Document)  =
     match astDoc.Definitions |> List.choose getOperation, operationName with
     | [ def ], _ -> Some def
     | defs, name -> defs |> List.tryFind (fun def -> def.Name = name)
 
-let containsFieldsBeyond
+/// Determines if the operation contains fields beyond the allowed fields.
+/// And executes actions based on the result.
+[<CompiledName "ContainsFieldsBeyond">]
+let internal containsFieldsBeyond
     (allowedFields: ImmutableHashSet<_>)
     (whenContains: Ast.Field -> unit)
     (whenNotContains: unit -> unit)

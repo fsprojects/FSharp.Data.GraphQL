@@ -14,4 +14,3 @@ type ResolveFieldContext with
         match Map.tryFind name x.Args with
         | Some found -> downcast found
         | None -> raise (GQLMessageException $"Argument '%s{name}' was not provided within context of a field '%s{x.ExecutionInfo.Identifier}'. Check if it was supplied within GraphQL query.")
-

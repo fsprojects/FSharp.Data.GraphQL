@@ -28,7 +28,7 @@ type Startup private () =
     member __.ConfigureServices(services: IServiceCollection) =
         services
             .AddGiraffe()
-            .AddGraphQLOptions<Root>(
+            .AddGraphQL<Root>(
               Schema.executor,
               rootFactory,
               "/ws"

@@ -22,12 +22,19 @@
     </AssemblyAttribute>
   </ItemGroup>
 
+  <ItemGroup Label="InternalsVisibleTo">
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Server.AspNetCore</_Parameter1>
+    </AssemblyAttribute>
+  </ItemGroup>
+
   <ItemGroup>
     <PackageReference Include="FSharp.Control.Reactive" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
   <ItemGroup>
+    <Compile Include="Ast.fs" />
     <Compile Include="ReflectionHelper.fs" />
     <Compile Include="ErrorTypes.fs" />
     <Compile Include="ErrorMessages.fs" />

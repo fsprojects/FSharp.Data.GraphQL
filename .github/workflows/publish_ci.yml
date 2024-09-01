@@ -88,6 +88,22 @@ jobs:
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
+    - name: Pack FSharp.Data.GraphQL.Server.Giraffe project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Giraffe
+        dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Giraffe project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
+    - name: Pack FSharp.Data.GraphQL.Server.Oxpecker project
+      run: |
+        cd src/FSharp.Data.GraphQL.Server.Oxpecker
+        dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
+    - name: Publish FSharp.Data.GraphQL.Server.Oxpecker project to GitHub
+      run: |
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay

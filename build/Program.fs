@@ -308,6 +308,12 @@ Target.create PackServerTarget <| fun _ -> pack "Server"
 let [<Literal>] PackServerAspNetCore = "PackServerAspNetCore"
 Target.create "PackServerAspNetCore" <| fun _ -> pack "Server.AspNetCore"
 
+let [<Literal>] PackServerGiraffe = "PackServerGiraffe"
+Target.create "PackServerGiraffe" <| fun _ -> pack "Server.Giraffe"
+
+let [<Literal>] PackServerOxpecker = "PackServerOxpecker"
+Target.create "PackServerOxpecker" <| fun _ -> pack "Server.Oxpecker"
+
 let [<Literal>] PackClientTarget = "PackClient"
 Target.create PackClientTarget <| fun _ -> pack "Client"
 
@@ -325,6 +331,12 @@ Target.create PushServerTarget <| fun _ -> push "Server"
 
 let [<Literal>] PushServerAspNetCore = "PushServerAspNetCore"
 Target.create "PushServerAspNetCore" <| fun _ -> push "Server.AspNetCore"
+
+let [<Literal>] PushServerGiraffe = "PushServerGiraffe"
+Target.create "PushServerGiraffe" <| fun _ -> push "Server.Giraffe"
+
+let [<Literal>] PushServerOxpecker = "PushServerOxpecker"
+Target.create "PushServerOxpecker" <| fun _ -> push "Server.Oxpecker"
 
 let [<Literal>] PushClientTarget = "PushClient"
 Target.create PushClientTarget <| fun _ -> push "Client"
@@ -366,6 +378,10 @@ PackSharedTarget
     ==> PushServerTarget
     ==> PackServerAspNetCore
     ==> PushServerAspNetCore
+    ==> PackServerGiraffe
+    ==> PushServerGiraffe
+    ==> PackServerOxpecker
+    ==> PushServerOxpecker
     ==> PackMiddlewareTarget
     ==> PushMiddlewareTarget
     ==> PackRelayTarget

@@ -26,7 +26,7 @@ type HttpContext with
     /// if a body could not be deserialized.
     /// </returns>
     [<Extension>]
-    member ctx.TryBindJsonAsync<'T>(expectedJson) = taskResult {
+    member ctx.TryBindJsonAsync<'T>(expectedJson : string) = taskResult {
         let serializerOptions = ctx.RequestServices.GetRequiredService<IOptions<IGraphQLOptions>>().Value.SerializerOptions
         let request = ctx.Request
 
