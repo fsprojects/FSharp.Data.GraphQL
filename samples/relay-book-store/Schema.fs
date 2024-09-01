@@ -95,8 +95,8 @@ let booksField =
             let fetchItems =
                 async {
                     match sliceInfo with
-                    | Forward (first, after) -> return! root.FetchBooksPage (after, false, true, first + 1)
-                    | Backward (last, before) -> return! root.FetchBooksPage (before, false, false, last + 1)
+                    | Forward (first, after) -> return! root.FetchBooksPage (after, isCursorInclusive = false, isForward = true, limit = first + 1)
+                    | Backward (last, before) -> return! root.FetchBooksPage (before, isCursorInclusive = false, isForward = false, limit = last + 1)
                 }
                 // Store the result similar to what Task does so that we don't go to DB multiple times for the same data
                 |> Async.memoize
@@ -109,7 +109,7 @@ let booksField =
                 match sliceInfo with
                 | Forward (_, None) -> return false
                 | Forward (_, after) ->
-                    let! items = root.FetchBooksPage (after, true, false, 1)
+                    let! items = root.FetchBooksPage (after, isCursorInclusive = true, isForward = false, limit = 1)
 
                     return not (List.isEmpty items)
                 | Backward (last, _) ->
@@ -130,7 +130,7 @@ let booksField =
                     return List.length items > first
                 | Backward (_, None) -> return false
                 | Backward (_, before) ->
-                    let! items = root.FetchBooksPage (before, true, true, 1)
+                    let! items = root.FetchBooksPage (before, isCursorInclusive = true, isForward = true, limit = 1)
 
                     return List.isEmpty items |> not
             }
