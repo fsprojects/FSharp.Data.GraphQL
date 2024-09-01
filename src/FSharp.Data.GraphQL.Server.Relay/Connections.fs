@@ -53,11 +53,11 @@ type SliceInfo<'Cursor> =
     /// Return page of `first` results `after` provided cursor value.
     /// If `after` value was not provided, start from the beginning of
     /// the result set.
-    | Forward of first : int * after : 'Cursor option
+    | Forward of First : int * After : 'Cursor voption
     /// Return page of `last` results `before` provided cursor value.
     /// If `before` value was not provided, return `last` results of
     /// the result set.
-    | Backward of last : int * before : 'Cursor option
+    | Backward of Last : int * Before : 'Cursor option
 
     member this.PageSize =
         match this with
@@ -87,14 +87,15 @@ module Definitions =
 
     /// Active pattern used to match context arguments in order
     /// to construct Relay slice information.
+    [<return: Struct>]
     let (|SliceInfo|_|) (ctx : ResolveFieldContext) =
         match ctx.TryArg "first", ctx.TryArg "after" with
-        | Some (first), None -> Some (Forward (first, None))
-        | Some (first), (after) -> Some (Forward (first, after))
+        | ValueSome (first), None -> ValueSome (Forward (first, None))
+        | ValueSome (first), (after) -> ValueSome (Forward (first, after))
         | None, _ ->
             match ctx.TryArg "last", ctx.TryArg "before" with
-            | Some (last), None -> Some (Backward (last, None))
-            | Some (last), (before) -> Some (Backward (last, before))
+            | ValueSome (last), None -> ValueSome (Backward (last, None))
+            | ValueSome (last), (before) -> ValueSome (Backward (last, before))
             | _, _ -> None
 
     /// Object defintion representing information about pagination in context of Relay connection
