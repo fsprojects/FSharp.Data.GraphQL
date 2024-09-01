@@ -1,9 +1,23 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
-    <TargetFramework>net8.0</TargetFramework>
+    <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <RootNamespace>FSharp.Data.GraphQL.Samples.RelayBookStore</RootNamespace>
   </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Donald" />
+    <PackageReference Include="Giraffe" />
+    <PackageReference Include="GraphQL.Server.Ui.Altair" />
+    <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
+    <PackageReference Include="GraphQL.Server.Ui.Playground" />
+    <PackageReference Include="GraphQL.Server.Ui.Voyager" />
+    <PackageReference Include="HotChocolate.AspNetCore" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
+    <PackageReference Include="System.Data.Common" />
+    <PackageReference Include="Thoth.Json.Net" />
+  </ItemGroup>
 
   <ItemGroup>
     <Compile Include="Prelude.fs" />
@@ -14,18 +28,9 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <PackageReference Include="FsToolkit.ErrorHandling" />
-    <PackageReference Include="Giraffe" />
-    <PackageReference Include="Thoth.Json.Net" />
-    <PackageReference Include="System.Data.Common" />
-    <PackageReference Include="Microsoft.Data.Sqlite" />
-    <PackageReference Include="Donald" />
-    <PackageReference Include="GraphQL.Server.Ui.GraphiQL" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Giraffe\FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
   </ItemGroup>
 
 </Project>

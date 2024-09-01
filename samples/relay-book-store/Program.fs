@@ -1,4 +1,4 @@
-﻿module FSharp.Data.GraphQL.Samples.RelayBookStore.Entry
+module FSharp.Data.GraphQL.Samples.RelayBookStore.Entry
 
 open System
 open Microsoft.Data.Sqlite
@@ -27,14 +27,21 @@ let main argv =
 
     let builder = WebApplication.CreateBuilder (argv)
 
-    builder.Services.AddGiraffe().AddGraphQLOptions<Root> (executor, rootFactory)
+    builder.Services.AddGiraffe().AddGraphQL<Root> (executor, rootFactory)
     |> ignore
 
     let app = builder.Build ()
 
+    if app.Environment.IsDevelopment () then
+        app.UseGraphQLAltair "/altair" |> ignore
+        app.UseGraphQLGraphiQL "/graphiql" |> ignore
+        app.UseGraphQLPlayground "/playground" |> ignore
+        app.UseGraphQLVoyager "/voyager" |> ignore
+        app.UseRouting () |> ignore
+        app.UseEndpoints (fun endpoints -> endpoints.MapBananaCakePop (PathString "/cakePop") |> ignore)
+        |> ignore
+
     app
-        .UseGraphQLGraphiQL("/graphiql")
-        .UseRouting()
         .UseGiraffeErrorHandler(errorHandler)
         .UseWebSockets()
         .UseWebSocketsForGraphQL<Root>()
