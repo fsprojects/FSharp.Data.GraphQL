@@ -138,7 +138,7 @@ Target.create StartStarWarsServerTarget <| fun _ ->
     let project =
         "samples"
         </> "star-wars-api"
-        </> "FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
+        </> "star-wars-api.fsproj"
 
     startGraphQLServer project 8086 starWarsServerStream
 

@@ -2,6 +2,7 @@
 
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
+    <RootNamespace>FSharp.Data.GraphQL.Samples.StarWarsApi</RootNamespace>
   </PropertyGroup>
 
   <ItemGroup Label="PackageReferences">

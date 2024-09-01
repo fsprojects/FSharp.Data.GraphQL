@@ -1,4 +1,4 @@
-$starWarsApiProjPath = "samples/star-wars-api/FSharp.Data.GraphQL.Samples.StarWarsApi.fsproj"
+$starWarsApiProjPath = "samples/star-wars-api/star-wars-api.fsproj"
 [xml]$starWarsApiProj = Get-Content -Path $starWarsApiProjPath
 $starWarsApiProjRefNode = $starWarsApiProj.SelectSingleNode("//ItemGroup[@Label='ProjectReferences']")
 $starWarsApiProjRefNode.ParentNode.RemoveChild($starWarsApiProjRefNode) | Out-Null
