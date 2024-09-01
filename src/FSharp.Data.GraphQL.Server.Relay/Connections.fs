@@ -135,10 +135,7 @@ module Definitions =
     let EdgeOf (nodeType : #OutputDef<'Node>) =
         match nodeType with
         | List _ ->
-            failwith (
-                nodeType.ToString ()
-                + " cannot be used as a relay Edge or Connection - only non-list type defintions are allowed"
-            )
+            failwith $"{nodeType.ToString ()} cannot be used as a relay Edge or Connection - only non-list type definitions are allowed"
         | Named n ->
             Define.Object<Edge<'Node>> (
                 name = n.Name + "Edge",
