@@ -115,6 +115,7 @@ let booksField =
                 | Backward (last, _) ->
                     let! items = fetchItems
 
+                    // We requested `last + 1` items, so if the number of items is greater than `last` we know there is a previous page
                     return List.length items > last
             }
 
@@ -127,6 +128,7 @@ let booksField =
                 | Forward (first, _) ->
                     let! items = fetchItems
 
+                    // We requested `first + 1` items, so if the number of items is greater than `first` we know there is a next page
                     return List.length items > first
                 | Backward (_, ValueNone) -> return false
                 | Backward (_, before) ->
