@@ -148,7 +148,11 @@ let ``Connection definition includes connection and edge fields for simple cases
     let result = sync <| Executor(schema).AsyncExecute (query)
     let expected =
         NameValueLookup.ofList [
-            "strings", upcast NameValueLookup.ofList [ "edges", upcast [ box <| NameValueLookup.ofList [ "node", upcast "five" ] ] ]
+            "strings", upcast NameValueLookup.ofList [
+                "edges", upcast [ box <| NameValueLookup.ofList [
+                    "node", upcast "five" ]
+                ]
+            ]
         ]
     match result with
     | Direct (data, errors) ->
