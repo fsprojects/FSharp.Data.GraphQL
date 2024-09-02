@@ -515,9 +515,9 @@ and FieldExecuteMap (compiler : FieldExecuteCompiler) =
     /// <param name="fieldName">The field name of the object that has the field that needs to be executed.</param>
     member _.GetExecute (typeName : string, fieldName : string) =
         let key = getKey typeName fieldName
-        if map.ContainsKey (key) then
-            fst map.[key]
-        else
+        match map.TryGetValue key with
+        | true, mapv -> fst mapv
+        | false, _ ->
             Unchecked.defaultof<ExecuteField>
 
     /// <summary>

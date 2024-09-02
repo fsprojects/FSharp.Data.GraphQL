@@ -169,7 +169,7 @@ module SchemaDefinitions =
 
     /// Check if provided obj value is an Option and extract its wrapped value as object if possible
     let private (|Option|_|) (x : obj) =
-        if x = null then None
+        if isNull x then None
         else
             let t = x.GetType().GetTypeInfo()
             if t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<option<_>> then
