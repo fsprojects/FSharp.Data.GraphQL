@@ -79,7 +79,7 @@ module internal ReflectionHelper =
         let some =
             let createSome = optionType.GetDeclaredMethod "Some"
             fun value ->
-                if value <> null
+                if not (isNull value)
                 then
                     let valueType = value.GetType().GetTypeInfo()
                     if valueType = optionType
@@ -91,7 +91,7 @@ module internal ReflectionHelper =
         let value =
             let x = optionType.GetDeclaredProperty "Value"
             fun input ->
-                if input <> null
+                if not (isNull input)
                 then
                     let valueType = input.GetType().GetTypeInfo()
                     if valueType = optionType
@@ -113,7 +113,7 @@ module internal ReflectionHelper =
         let some =
             let createSome = optionType.GetDeclaredMethod "Some"
             fun value ->
-                if value <> null
+                if not (isNull value)
                 then
                     let valueType = value.GetType().GetTypeInfo()
                     if valueType = optionType
@@ -125,7 +125,7 @@ module internal ReflectionHelper =
         let value =
             let x = optionType.GetDeclaredProperty "Value"
             fun input ->
-                if input <> null
+                if not (isNull input)
                 then
                     let valueType = input.GetType().GetTypeInfo()
                     if valueType = optionType

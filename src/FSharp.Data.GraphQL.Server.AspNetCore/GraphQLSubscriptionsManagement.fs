@@ -19,9 +19,11 @@ let executeOnUnsubscribeAndDispose (id : SubscriptionId) (subscription : Subscri
             unsubscriber.Dispose ()
 
 let removeSubscription (id : SubscriptionId) (subscriptions : SubscriptionsDict) =
-    if subscriptions.ContainsKey (id) then
-        subscriptions.[id] |> executeOnUnsubscribeAndDispose id
+    match subscriptions.TryGetValue id with
+    | true, sub ->
+        sub |> executeOnUnsubscribeAndDispose id
         subscriptions.Remove (id) |> ignore
+    | false, _ -> ()
 
 let removeAllSubscriptions (subscriptions : SubscriptionsDict) =
     subscriptions

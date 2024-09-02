@@ -497,15 +497,15 @@ module internal Provider =
         let rootWrapper = generateWrapper "Types"
         wrappersByPath.Add([], rootWrapper)
         let rec getWrapper (path : FieldStringPath) =
-            if wrappersByPath.ContainsKey path
-            then wrappersByPath.[path]
-            else
+            match wrappersByPath.TryGetValue path with
+            | true, wrappedPath -> wrappedPath
+            | false, _ ->
                 let wrapper = generateWrapper (path.Head.FirstCharUpper() + "Fields")
                 let upperWrapper =
                     let path = path.Tail
-                    if wrappersByPath.ContainsKey(path)
-                    then wrappersByPath.[path]
-                    else getWrapper path
+                    match wrappersByPath.TryGetValue path with
+                    | true, wpath -> wpath
+                    | false, _ -> getWrapper path
                 upperWrapper.AddMember(wrapper)
                 wrappersByPath.Add(path, wrapper)
                 wrapper
@@ -528,9 +528,9 @@ module internal Provider =
                 then TypeMapping.makeOption providedTypes.[path, tref.Name.Value]
                 else
                     let getIntrospectionFields typeName =
-                        if schemaTypes.ContainsKey(typeName)
-                        then schemaTypes.[typeName].Fields |> Option.defaultValue [||]
-                        else failwith $"""Could not find a schema type based on a type reference. The reference is to a "%s{typeName}" type, but that type was not found in the schema types."""
+                        match schemaTypes.TryGetValue typeName with
+                        | true, schematype -> schematype.Fields |> Option.defaultValue [||]
+                        | false, _ -> failwith $"""Could not find a schema type based on a type reference. The reference is to a "%s{typeName}" type, but that type was not found in the schema types."""
                     let getPropertyMetadata typeName (info : AstFieldInfo) : RecordPropertyMetadata =
                         let ifield =
                             match getIntrospectionFields typeName |> Array.tryFind(fun f -> f.Name = info.Name) with
@@ -564,9 +564,9 @@ module internal Provider =
                         ProvidedRecord.makeProvidedType(tdef, baseProperties, explicitOptionalParameters)
                     let createFragmentType (typeName, properties) =
                         let itype =
-                            if schemaTypes.ContainsKey(typeName)
-                            then schemaTypes.[typeName]
-                            else failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
+                            match schemaTypes.TryGetValue typeName with
+                            | true, schematype -> schematype
+                            | false, _ -> failwithf "Could not find schema type based on the query. Type \"%s\" does not exist on the schema definition." typeName
                         let metadata : ProvidedTypeMetadata = { Name = itype.Name; Description = itype.Description }
                         let tdef = ProvidedRecord.preBuildProvidedType(metadata, Some (upcast baseType))
                         providedTypes.Add((path, typeName), tdef)
@@ -643,9 +643,9 @@ module internal Provider =
                 |> makeOption
             | _ -> failwith "Could not find a schema type based on a type reference. The reference has an invalid or unsupported combination of Name, Kind and OfType fields."
         and resolveProvidedType (itype : IntrospectionType) : ProvidedTypeDefinition =
-            if providedTypes.Value.ContainsKey(itype.Name)
-            then providedTypes.Value.[itype.Name]
-            else
+            match providedTypes.Value.TryGetValue itype.Name with
+            | true, ptval -> ptval
+            | false, _ ->
                 let metadata = { Name = itype.Name; Description = itype.Description }
                 match itype.Kind with
                 | TypeKind.OBJECT ->
