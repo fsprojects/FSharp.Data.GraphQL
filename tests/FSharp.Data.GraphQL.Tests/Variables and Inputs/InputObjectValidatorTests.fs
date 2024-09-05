@@ -76,9 +76,9 @@ type InputObjectNested (homeAddress : InputObject, workAddress : InputObject vop
 let InputObjectNestedType =
     Define.InputObject<InputObjectNested> (
         "InputObjectOptional",
-        [ Define.Input ("homeAddress", InputRecordType)
-          Define.Input ("workAddress", Nullable InputRecordType)
-          Define.Input ("mailingAddress", Nullable InputRecordType) ],
+        [ Define.Input ("homeAddress", InputObjectType)
+          Define.Input ("workAddress", Nullable InputObjectType)
+          Define.Input ("mailingAddress", Nullable InputObjectType) ],
         fun (inputObject: InputObjectNested) ->
             match inputObject.MailingAddress, inputObject.WorkAddress with
             | None, ValueNone -> ValidationError <| createSingleError "MailingAddress or WorkAddress must be provided"
