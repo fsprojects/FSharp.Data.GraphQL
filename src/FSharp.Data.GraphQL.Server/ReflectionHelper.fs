@@ -132,6 +132,10 @@ module internal ReflectionHelper =
 
     let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
     let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
+    let [<Literal>] ListTypeName = "Microsoft.FSharp.Collections.FSharpList`1"
+    let [<Literal>] ArrayTypeName = "System.Array`1"
+    let [<Literal>] IEnumerableTypeName = "System.Collections.IEnumerable"
+    let [<Literal>] IEnumerableGenericTypeName = "System.Collections.Generic.IEnumerable`1"
 
     let isParameterOptional (p: ParameterInfo) =
         p.IsOptional
@@ -146,20 +150,42 @@ module internal ReflectionHelper =
         else ty
 
     let isAssignableWithUnwrap (from: Type) (``to``: Type) =
+
+        let checkCollections (from: Type) (``to``: Type) =
+            if
+                // TODO: Implement support of other types of collections using collection initializers
+                (``to``.FullName.StartsWith ListTypeName || ``to``.FullName.StartsWith ArrayTypeName)
+                && (from.IsGenericType
+                    && from.GenericTypeArguments[0].IsAssignableTo(``to``.GenericTypeArguments[0])
+                    && from.GetInterfaces()
+                       |> Array.exists (
+                        fun i -> i.FullName.StartsWith IEnumerableGenericTypeName
+                                    || i.FullName = IEnumerableTypeName
+                       )
+                    )
+
+            then
+                let fromType = from.GetGenericArguments()[0]
+                let toType = ``to``.GetGenericArguments()[0]
+                fromType.IsAssignableTo toType
+            else
+                false
+
         let from =
             if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
-                from.GetGenericArguments().[0]
+                from.GetGenericArguments()[0]
             else from
         let ``to`` =
             if ``to``.FullName.StartsWith OptionTypeName || ``to``.FullName.StartsWith ValueOptionTypeName then
-                ``to``.GetGenericArguments().[0]
+                ``to``.GetGenericArguments()[0]
             else ``to``
 
-        let result = from.IsAssignableTo ``to``
+        let result = from.IsAssignableTo ``to`` || checkCollections from ``to``
         if result then result
         else
             if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
-                from.GetGenericArguments().[0].IsAssignableTo ``to``
+                let from = from.GetGenericArguments()[0]
+                from.IsAssignableTo ``to`` || checkCollections from ``to``
             else result
 
     let matchConstructor (t: Type) (fields: string []) =
