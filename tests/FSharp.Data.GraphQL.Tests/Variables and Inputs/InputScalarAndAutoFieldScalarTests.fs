@@ -6,6 +6,7 @@ module FSharp.Data.GraphQL.Tests.InputScalarAndAutoFieldScalarTests
 
 open Xunit
 open System
+open System.Text.Json.Serialization
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -210,3 +211,55 @@ let ``Execute handles nullable auto-fields in input and output object fields coe
         empty errors
         data |> equals (upcast expected)
 
+
+open FSharp.Data.GraphQL.Tests.OptionalsNormalizationTests
+
+[<RequireQualifiedAccess>]
+module ConsoleLoginProviders =
+
+    let [<Literal>] Microsoft365 = "microsoft365"
+    let [<Literal>] GoogleWorkspace = "google_workspace"
+
+type ConsoleLoginProvider =
+    | [<JsonName(ConsoleLoginProviders.Microsoft365)>] Microsoft365
+    | [<JsonName(ConsoleLoginProviders.GoogleWorkspace)>] GoogleWorkspace
+and ApplicationTenantId = ValidString<InputRecord>
+and WrongInput = {
+    Id : ApplicationTenantId
+    /// Legal entity name
+    Name : string
+    LoginProvider : ConsoleLoginProvider
+    AllowedDomains : string list
+    /// Tenants visible to a management company
+    AuthorizedTenants : ApplicationTenantId list
+}
+
+// Checks that IndexOutOfRangeException no longer happens in normalizeOptional
+[<Fact>]
+let ``Schema cannot be created for unmatched input field types on record`` () =
+
+    let ``InputRecord without proper scalars Type`` =
+        Define.InputObject<InputRecord> (
+            "InputRecordWithoutProperScalars",
+            [ Define.Input ("id", StringType)
+              Define.Input ("name", StringType)
+              Define.Input ("loginProvider", StringType)
+              Define.Input ("allowedDomains", ListOf StringType)
+              Define.Input ("authorizedTenants", ListOf GuidType) ]
+        )
+
+    Assert.Throws<InvalidInputTypeException> (fun () ->
+        Schema (
+            query =
+                Define.Object (
+                    "Query",
+                    fun () ->
+                        [ Define.Field (
+                                "wrongRecord",
+                                StringType,
+                                [ Define.Input ("record", ``InputRecord without proper scalars Type``) ],
+                                stringifyInput
+                            ) ]
+                )
+        ) |> Executor :> obj
+    )
