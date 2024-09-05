@@ -140,6 +140,28 @@ module internal ReflectionHelper =
 
     let isPrameterMandatory = not << isParameterOptional
 
+    let unwrapOptions (ty : Type) =
+        if ty.FullName.StartsWith OptionTypeName || ty.FullName.StartsWith ValueOptionTypeName then
+            ty.GetGenericArguments().[0]
+        else ty
+
+    let isAssignableWithUnwrap (from: Type) (``to``: Type) =
+        let from =
+            if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
+                from.GetGenericArguments().[0]
+            else from
+        let ``to`` =
+            if ``to``.FullName.StartsWith OptionTypeName || ``to``.FullName.StartsWith ValueOptionTypeName then
+                ``to``.GetGenericArguments().[0]
+            else ``to``
+
+        let result = from.IsAssignableTo ``to``
+        if result then result
+        else
+            if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
+                from.GetGenericArguments().[0].IsAssignableTo ``to``
+            else result
+
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
         else
