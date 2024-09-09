@@ -30,8 +30,8 @@ type GQLMessageExceptionBase (errorKind, msg, [<Optional>] extensions) =
             |> GQLProblemDetails.SetErrorKind errorKind
             |> ValueSome
 
-type GQLMessageException (msg) =
-    inherit GQLMessageExceptionBase (Execution, msg)
+type GQLMessageException (msg, [<Optional>] extensions) =
+    inherit GQLMessageExceptionBase (Execution, msg, extensions)
 
 type InvalidInputTypeException (msg, unmatchedOptionalFields) =
     inherit GQLMessageExceptionBase (InputCoercion, msg)
