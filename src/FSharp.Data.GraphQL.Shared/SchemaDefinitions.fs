@@ -908,14 +908,16 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?deprecationReason : string) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
-                     DeprecationReason = None
+                     DeprecationReason = deprecationReason
                      Metadata = Metadata.Empty }
 
         /// <summary>
@@ -925,14 +927,16 @@ module SchemaDefinitions =
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
+        /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?deprecationReason : string) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = [||]
-                     DeprecationReason = None
+                     DeprecationReason = deprecationReason
                      Metadata = Metadata.Empty }
 
         /// <summary>
@@ -940,18 +944,18 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
-        /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">List of field arguments used to parametrize resolve expression output.</param>
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
-        static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
-                                 args : InputFieldDef list,
-                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>) : FieldDef<'Val> =
+        /// <param name="deprecationReason">Deprecation reason.</param>
+        static member AsyncField(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
+                                 [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
+                                 ?deprecationReason : string) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
-                     Description = Some description
+                     Description = None
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
-                     DeprecationReason = None
+                     DeprecationReason = deprecationReason
                      Metadata = Metadata.Empty }
 
         /// <summary>
@@ -966,13 +970,13 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
                      Resolve = Async(typeof<'Val>, typeof<'Res>, resolve)
                      Args = args |> List.toArray
-                     DeprecationReason = Some deprecationReason
+                     DeprecationReason = deprecationReason
                      Metadata = Metadata.Empty }
 
         /// <summary>
