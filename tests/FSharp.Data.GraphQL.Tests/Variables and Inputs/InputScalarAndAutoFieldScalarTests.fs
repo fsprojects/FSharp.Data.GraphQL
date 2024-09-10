@@ -239,7 +239,7 @@ and WrongInput = {
 let ``Schema cannot be created for unmatched input field types on record`` () =
 
     let ``InputRecord without proper scalars Type`` =
-        Define.InputObject<InputRecord> (
+        Define.InputObject<WrongInput> (
             "InputRecordWithoutProperScalars",
             [ Define.Input ("id", StringType)
               Define.Input ("name", StringType)
@@ -253,13 +253,12 @@ let ``Schema cannot be created for unmatched input field types on record`` () =
             query =
                 Define.Object (
                     "Query",
-                    fun () ->
-                        [ Define.Field (
-                                "wrongRecord",
-                                StringType,
-                                [ Define.Input ("record", ``InputRecord without proper scalars Type``) ],
-                                stringifyInput
-                            ) ]
+                    [ Define.Field (
+                            "wrongRecord",
+                            StringType,
+                            [ Define.Input ("record", ``InputRecord without proper scalars Type``) ],
+                            stringifyInput
+                        ) ]
                 )
         ) |> Executor :> obj
     )

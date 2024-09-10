@@ -52,19 +52,19 @@ let private normalizeOptional (outputType : Type) value =
                 valuesome value
             else
                 // Use only when option or voption so must not be null
-                let realInputType = inputType.GenericTypeArguments.FirstOrDefault()
+                let actualInputType = inputType.GenericTypeArguments.FirstOrDefault()
                 if
                     inputType.FullName.StartsWith ReflectionHelper.OptionTypeName
-                    && outputType.IsAssignableFrom realInputType
+                    && outputType.IsAssignableFrom actualInputType
                 then
-                    let _, _, getValue = ReflectionHelper.optionOfType realInputType
+                    let _, _, getValue = ReflectionHelper.optionOfType actualInputType
                     // none is null so it is already covered above
                     getValue value
                 elif
                     inputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
-                    && outputType.IsAssignableFrom realInputType
+                    && outputType.IsAssignableFrom actualInputType
                 then
-                    let _, valueNone, getValue = ReflectionHelper.vOptionOfType realInputType
+                    let _, valueNone, getValue = ReflectionHelper.vOptionOfType actualInputType
                     if value = valueNone then null else getValue value
                 else
                     value
