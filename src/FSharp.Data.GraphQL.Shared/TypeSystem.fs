@@ -710,18 +710,8 @@ and ExecutionInfo = {
                 sb.Append '\t' |> ignore
         let nameAs info =
             match info.Ast.Alias with
-            | Some alias ->
-                info.Ast.Name
-                + " as "
-                + alias
-                + " of "
-                + info.ReturnDef.ToString ()
-                + (if info.IsNullable then "" else "!")
-            | None ->
-                info.Ast.Name
-                + " of "
-                + info.ReturnDef.ToString ()
-                + (if info.IsNullable then "" else "!")
+            | ValueSome alias -> $"""{info.Ast.Name} as {alias} of {info.ReturnDef}{(if info.IsNullable then "" else "!")}"""
+            | ValueNone -> $"""{info.Ast.Name} of {info.ReturnDef}{(if info.IsNullable then "" else "!")}"""
         let rec str indent sb info =
             match info.Kind with
             | ResolveValue ->

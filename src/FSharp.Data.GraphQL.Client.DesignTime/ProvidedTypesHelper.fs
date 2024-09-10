@@ -17,6 +17,7 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Ast.Extensions
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Validation
+open FsToolkit.ErrorHandling
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
@@ -117,14 +118,14 @@ module internal ProvidedInterface =
 
 type internal RecordPropertyMetadata =
     { Name : string
-      Alias : string option
+      Alias : string voption
       Description : string option
       DeprecationReason : string option
       Type : Type }
     member x.AliasOrName =
         match x.Alias with
-        | Some x -> x
-        | None -> x.Name
+        | ValueSome x -> x
+        | ValueNone -> x.Name
 
 type internal ProvidedRecordTypeDefinition(className, baseType) =
     inherit ProvidedTypeDefinition(className, baseType, nonNullable = true)
@@ -157,7 +158,7 @@ module internal ProvidedRecord =
                 metadata.Description |> Option.iter pdef.AddXmlDoc
                 metadata.DeprecationReason |> Option.iter pdef.AddObsoleteAttribute
                 pdef))
-        let addConstructorDelayed (propertiesGetter : unit -> (string * string option * Type) list) =
+        let addConstructorDelayed (propertiesGetter : unit -> (string * string voption * Type) list) =
             tdef.AddMembersDelayed(fun _ ->
                 // We need to build a constructor that takes all optional properties wrapped in another option.
                 // We need to do this because optional parameters have issues with non-nullable types
@@ -180,7 +181,7 @@ module internal ProvidedRecord =
                 let properties = propertiesGetter()
                 let optionalProperties, requiredProperties =
                     properties
-                    |> List.map (fun (name, alias, t) -> Option.defaultValue name alias, t)
+                    |> List.map (fun (name, alias, t) -> ValueOption.defaultValue name alias, t)
                     |> List.partition (fun (_, t) -> isOption t)
                 if explicitOptionalParameters then
                     let constructorProperties = requiredProperties @ optionalProperties
@@ -380,7 +381,7 @@ module internal ProvidedOperation =
                     | _ -> t = typeof<Upload>
                 variables |> Seq.exists (snd >> existsUploadType [])
             let runMethodOverloads : MemberInfo list =
-                let operationName = Option.toObj operationDefinition.Name
+                let operationName = ValueOption.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
                     let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
                     let invoker (args : Expr list) =
@@ -422,7 +423,7 @@ module internal ProvidedOperation =
                     methodDef.AddXmlDoc("Executes the operation on the server and fetch its results.")
                     upcast methodDef)
             let asyncRunMethodOverloads : MemberInfo list =
-                let operationName = Option.toObj operationDefinition.Name
+                let operationName = ValueOption.toObj operationDefinition.Name
                 methodOverloadDefinitions |> List.map (fun overloadParameters ->
                     let variableNames = overloadParameters |> List.map fst |> List.filter (fun name -> name <> "runtimeContext")
                     let invoker (args : Expr list) =
@@ -601,7 +602,7 @@ module internal Provider =
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType = TypeMapping.mapScalarType uploadInputTypeName field.Type.Name.Value
                 { Name = field.Name
-                  Alias = None
+                  Alias = ValueNone
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -613,7 +614,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
-                  Alias = None
+                  Alias = ValueNone
                   Description = field.Description
                   DeprecationReason = field.DeprecationReason
                   Type = providedType }
@@ -624,7 +625,7 @@ module internal Provider =
             | TypeKind.SCALAR when field.Type.Name.IsSome ->
                 let providedType = TypeMapping.mapScalarType uploadInputTypeName field.Type.Name.Value
                 { Name = field.Name
-                  Alias = None
+                  Alias = ValueNone
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -636,7 +637,7 @@ module internal Provider =
                 let itype = getSchemaType field.Type
                 let providedType = resolveProvidedType itype
                 { Name = field.Name
-                  Alias = None
+                  Alias = ValueNone
                   Description = field.Description
                   DeprecationReason = None
                   Type = providedType }
@@ -798,22 +799,22 @@ module internal Provider =
                                     |> QueryValidationDesignTimeCache.getOrAdd key
                                     |> throwExceptionIfValidationFailed
                                 #endif
-                                let operationName : OperationName option =
+                                let operationName : OperationName voption =
                                     match args.[2] :?> string with
                                     | null | "" ->
                                         let operationDefinitions = queryAst.Definitions |> List.filter (function OperationDefinition _ -> true | _ -> false)
                                         match operationDefinitions with
                                         | opdef :: _ -> opdef.Name
                                         | _ -> failwith "Error parsing query. Can not choose a default operation: query document has no operation definitions."
-                                    | x -> Some x
-                                let explicitOperationTypeName : TypeName option =
+                                    | x -> ValueSome x
+                                let explicitOperationTypeName : TypeName voption =
                                     match args.[3] :?> string with
-                                    | null | "" -> None
-                                    | x -> Some x
+                                    | null | "" -> ValueNone
+                                    | x -> ValueSome x
                                 let operationDefinition =
                                     queryAst.Definitions
-                                    |> List.choose (function OperationDefinition odef -> Some odef | _ -> None)
-                                    |> List.find (fun d -> d.Name = operationName)
+                                    |> Seq.vchoose (function OperationDefinition odef -> ValueSome odef | _ -> ValueNone)
+                                    |> Seq.find (fun d -> d.Name = operationName)
                                 let operationAstFields =
                                     let infoMap = queryAst.GetInfoMap()
                                     match infoMap.TryFind(operationName) with
@@ -843,9 +844,9 @@ module internal Provider =
                                 let actualQuery = queryAst.ToQueryString(QueryStringPrintingOptions.IncludeTypeNames).Replace("\r\n", "\n")
                                 let className =
                                     match explicitOperationTypeName, operationDefinition.Name with
-                                    | Some name, _ -> name.FirstCharUpper()
-                                    | None, Some name -> name.FirstCharUpper()
-                                    | None, None -> "Operation" + actualQuery.MD5Hash()
+                                    | ValueSome name, _ -> name.FirstCharUpper()
+                                    | ValueNone, ValueSome name -> name.FirstCharUpper()
+                                    | ValueNone, ValueNone -> "Operation" + actualQuery.MD5Hash()
                                 let metadata = getOperationMetadata(schemaTypes, uploadInputTypeName, enumProvidedTypes, operationAstFields, operationTypeRef, explicitOptionalParameters)
                                 let operationTypeName : TypeName =
                                     match operationTypeRef.Name with

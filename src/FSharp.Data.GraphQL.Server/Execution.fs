@@ -207,7 +207,7 @@ let internal findOperation doc opName =
     | [def], _ -> Some def
     | defs, name ->
         defs
-        |> List.tryFind (fun def -> def.Name = name)
+        |> List.tryFind (fun def -> def.Name = (name |> ValueOption.ofOption))
 
 let private defaultResolveType possibleTypesFn abstractDef : obj -> ObjectDef =
     let possibleTypes = possibleTypesFn abstractDef

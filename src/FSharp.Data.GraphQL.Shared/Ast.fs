@@ -31,7 +31,7 @@ and Definition =
 /// 2.2.1 Operations
 and OperationDefinition = {
     OperationType : OperationType
-    Name : string option
+    Name : string voption
     VariableDefinitions : VariableDefinition list
     Directives : Directive list
     SelectionSet : Selection list
@@ -64,7 +64,7 @@ and Selection =
 /// 2.2.3 Fields
 and Field = {
     /// 2.2.5 Field Alias
-    Alias : string option
+    Alias : string voption
     Name : string
     Arguments : Argument list
     Directives : Directive list
@@ -73,8 +73,8 @@ and Field = {
 
     member x.AliasOrName =
         match x.Alias with
-        | Some alias -> alias
-        | None -> x.Name
+        | ValueSome alias -> alias
+        | ValueNone -> x.Name
 
 /// 2.2.4 Arguments
 and Argument = { Name : string; Value : InputValue }
@@ -83,9 +83,9 @@ and Argument = { Name : string; Value : InputValue }
 and FragmentSpread = { Name : string; Directives : Directive list }
 
 and FragmentDefinition = {
-    Name : string option
+    Name : string voption
     /// 2.2.6.1 Type Conditions
-    TypeCondition : string option
+    TypeCondition : string voption
     Directives : Directive list
     SelectionSet : Selection list
 }
@@ -146,7 +146,7 @@ and ObjectTypeDefinition = { Name : string; Interfaces : string[]; Fields : Fiel
 
 and FieldDefinition = { Name : string; Arguments : InputValueDefinition[]; Type : InputType }
 
-and InputValueDefinition = { Name : string; Type : InputType; DefaultValue : InputValue option }
+and InputValueDefinition = { Name : string; Type : InputType; DefaultValue : InputValue voption }
 
 and InterfaceTypeDefinition = { Name : string; Fields : FieldDefinition[] }
 

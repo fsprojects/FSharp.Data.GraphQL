@@ -161,7 +161,7 @@ type GraphQLRequestHandler<'Root> (
         let checkAnonymousFieldsOnly (ctx: HttpContext) = taskResult {
             let! gqlRequest = ctx.TryBindJsonAsync<GQLRequestContent>(GQLRequestContent.expectedJSON)
             let! ast = Parser.parseOrIResult ctx.Request.Path.Value gqlRequest.Query
-            let operationName = gqlRequest.OperationName |> Skippable.toOption
+            let operationName = gqlRequest.OperationName |> Skippable.toValueOption
 
             let createParsedContent() = {
                 Query = gqlRequest.Query
