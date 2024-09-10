@@ -234,15 +234,15 @@ module Ast =
         /// Gets the information about all the operations in the original document, including related GraphQL schema type information for them.
         member x.OperationDefinitions =
             x.Definitions
-            |> List.choose (function
-                | OperationDefinitionInfo x -> Some x
-                | _ -> None)
+            |> List.vchoose (function
+                | OperationDefinitionInfo x -> ValueSome x
+                | _ -> ValueNone)
         /// Gets the information about all the fragments in the original document, including related GraphQL schema type information for them.
         member x.FragmentDefinitions =
             x.Definitions
-            |> List.choose (function
-                | FragmentDefinitionInfo x -> Some x
-                | _ -> None)
+            |> List.vchoose (function
+                | FragmentDefinitionInfo x -> ValueSome x
+                | _ -> ValueNone)
 
     /// Contains information about a fragment type and its related GraphQL schema type.
     type FragmentTypeInfo =
@@ -370,22 +370,22 @@ module Ast =
 
     let private getOperationDefinitions (ast : Document) =
         ast.Definitions
-        |> List.choose (function
-            | OperationDefinition x -> Some x
-            | _ -> None)
+        |> List.vchoose (function
+            | OperationDefinition x -> ValueSome x
+            | _ -> ValueNone)
 
     let private getFragmentDefinitions (ast : Document) =
         ast.Definitions
-        |> List.choose (function
-            | FragmentDefinition x when x.Name.IsSome -> Some x
-            | _ -> None)
+        |> List.vchoose (function
+            | FragmentDefinition x when x.Name.IsSome -> ValueSome x
+            | _ -> ValueNone)
 
     /// Prepare a ValidationContext for the given Document and SchemaInfo to make validation operations easier.
     let internal getValidationContext (schemaInfo : SchemaInfo) (ast : Document) =
         let fragmentDefinitions = getFragmentDefinitions ast
         let fragmentInfos =
             fragmentDefinitions
-            |> List.choose (fun def -> ValueOption.toOption <| voption {
+            |> List.vchoose (fun def -> voption {
                 let! typeCondition = def.TypeCondition
                 let! fragType = schemaInfo.TryGetTypeByName typeCondition
                 let fragCtx = {
@@ -400,22 +400,19 @@ module Ast =
             })
         let operationInfos =
             getOperationDefinitions ast
-            |> List.choose (fun def ->
-                schemaInfo.TryGetOperationType (def.OperationType)
-                |> Option.map (fun parentType ->
-                    let path =
-                        match def.Name with
-                        | ValueSome name -> [ box name ]
-                        | ValueNone -> []
-                    let opCtx = {
-                        Schema = schemaInfo
-                        FragmentDefinitions = fragmentDefinitions
-                        ParentType = parentType
-                        FragmentType = ValueNone
-                        Path = path
-                        SelectionSet = def.SelectionSet
-                    }
-                    OperationDefinitionInfo { Definition = def; SelectionSet = getSelectionSetInfo [] opCtx }))
+            |> List.vchoose (fun def -> voption {
+                let! parentType = schemaInfo.TryGetOperationType def.OperationType
+                let path = def.Name |> ValueOption.map box |> ValueOption.toList
+                let opCtx = {
+                    Schema = schemaInfo
+                    FragmentDefinitions = fragmentDefinitions
+                    ParentType = parentType
+                    FragmentType = ValueNone
+                    Path = path
+                    SelectionSet = def.SelectionSet
+                }
+                return OperationDefinitionInfo { Definition = def; SelectionSet = getSelectionSetInfo [] opCtx }
+            })
         {
             Definitions = fragmentInfos @ operationInfos
             Schema = schemaInfo
@@ -494,15 +491,15 @@ module Ast =
         let parentPossibleTypes =
             parentType.PossibleTypes
             |> Option.defaultValue [||]
-            |> Array.choose (fun x -> x.Name)
-            |> Array.append [| parentType.Name |]
-            |> Set.ofArray
+            |> Seq.choose _.Name
+            |> Seq.append (Seq.singleton parentType.Name)
+            |> Set.ofSeq
         let fragmentPossibleTypes =
             fragmentType.PossibleTypes
             |> Option.defaultValue [||]
-            |> Array.choose (fun x -> x.Name)
-            |> Array.append [| fragmentType.Name |]
-            |> Set.ofArray
+            |> Seq.choose _.Name
+            |> Seq.append (Seq.singleton fragmentType.Name)
+            |> Set.ofSeq
         let applicableTypes = Set.intersect parentPossibleTypes fragmentPossibleTypes
         applicableTypes.Count > 0
 
@@ -1518,9 +1515,10 @@ module Ast =
         |> ValidationResult.collect (fun def ->
             let varNamesAndTypeRefs =
                 def.Definition.VariableDefinitions
-                |> List.choose (fun varDef ->
-                    ctx.Schema.TryGetInputType (varDef.Type)
-                    |> Option.map (fun t -> varDef.VariableName, (varDef, t)))
+                |> List.vchoose (fun varDef -> voption {
+                    let! t = ctx.Schema.TryGetInputType (varDef.Type)
+                    return varDef.VariableName, (varDef, t)
+                })
                 |> Map.ofList
             def.SelectionSet
             |> ValidationResult.collect (checkVariableUsageAllowedOnSelection varNamesAndTypeRefs []))

@@ -91,7 +91,7 @@ type internal PaddedStringBuilder () =
 /// Specify voptions when printing an Ast.Document to a query string.
 [<Flags>]
 type QueryStringPrintingOptions =
-    /// No specific printing voption.
+    /// No specific printing option.
     | None = 0
     /// Includes type names on selections by adding "__typename" meta field to them.
     | IncludeTypeNames = 1
