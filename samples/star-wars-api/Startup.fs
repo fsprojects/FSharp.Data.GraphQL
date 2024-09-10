@@ -33,7 +33,7 @@ type Startup private () =
             .AddAuthorization(fun options ->
                 options.AddPolicy (
                     Policies.CanSetMoon,
-                    (fun policy -> policy.Requirements.Add (IsCharacterRequierment (List.singleton "droid"))))
+                    (fun policy -> policy.Requirements.Add (IsCharacterRequierment (Set.singleton "droid"))))
                 )
             .AddScoped<IAuthorizationHandler, IsCharacterHandler>()
             .AddOxpecker()
