@@ -171,21 +171,21 @@ module internal ReflectionHelper =
             else
                 false
 
-        let from =
+        let actualFrom =
             if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
                 from.GetGenericArguments()[0]
             else from
-        let ``to`` =
+        let actualTo =
             if ``to``.FullName.StartsWith OptionTypeName || ``to``.FullName.StartsWith ValueOptionTypeName then
                 ``to``.GetGenericArguments()[0]
             else ``to``
 
-        let result = from.IsAssignableTo ``to`` || checkCollections from ``to``
+        let result = actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
         if result then result
         else
-            if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
-                let from = from.GetGenericArguments()[0]
-                from.IsAssignableTo ``to`` || checkCollections from ``to``
+            if actualFrom.FullName.StartsWith OptionTypeName || actualFrom.FullName.StartsWith ValueOptionTypeName then
+                let actualFrom = actualFrom.GetGenericArguments()[0]
+                actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
             else result
 
     let matchConstructor (t: Type) (fields: string []) =
