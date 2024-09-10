@@ -4,9 +4,9 @@ open FsToolkit.ErrorHandling
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
-open FSharp.Data.GraphQL.Execution
 
 type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) =
+
     let middleware (threshold : float) (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let measureThreshold (threshold : float) (fields : ExecutionInfo list) =
             let getWeight f =
@@ -56,6 +56,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         if pass
         then next ctx
         else error ctx
+
     interface IExecutorMiddleware with
         member _.CompileSchema = None
         member _.PostCompileSchema = None
@@ -63,6 +64,7 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
         member _.ExecuteOperationAsync = Some (middleware threshold)
 
 type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadata : bool) =
+
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
             let args = [ Define.Input("filter", Nullable ObjectListFilter) ]
@@ -78,6 +80,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             |> Seq.cast<NamedDef>
         ctx.TypeMap.AddTypes(modifiedTypes, overwrite = true)
         next ctx
+
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
         let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
             let fieldArgs field =
@@ -133,6 +136,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
 type IdentityNameResolver = ObjectDef -> string
 
 type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
+
     let middleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let identity (identityName : string) (x : obj) =
             x.GetType().GetProperty(identityName).GetValue(x)
@@ -165,6 +169,7 @@ type internal LiveQueryMiddleware(identityNameResolver : IdentityNameResolver) =
             if not (ctx.Schema.LiveFieldSubscriptionProvider.IsRegistered x.TypeName x.FieldName)
             then ctx.Schema.LiveFieldSubscriptionProvider.Register x)
         next ctx
+
     interface IExecutorMiddleware with
         member _.CompileSchema = Some middleware
         member _.PostCompileSchema = None

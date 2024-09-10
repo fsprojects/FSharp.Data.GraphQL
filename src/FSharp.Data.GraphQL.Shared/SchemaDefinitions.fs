@@ -670,32 +670,6 @@ module SchemaDefinitions =
         /// (see <see cref="InputObject"/> for more details).
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of fields defined by the current object. Usefull, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional object description. Usefull for generating documentation.</param>
-        /// <param name="interfaces">
-        /// List of implemented interfaces. Object must explicitly define all fields from all interfaces it implements.
-        /// </param>
-        /// <param name="isTypeOf">
-        /// Optional function used to determine if provided .NET object instance matches current object definition.
-        /// </param>
-        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
-            upcast { ObjectDefinition.Name = name
-                     Description = description
-                     FieldsFn =
-                         lazy (fieldsFn()
-                               |> List.map (fun f -> f.Name, f)
-                               |> Map.ofList)
-                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
-                     IsTypeOf = isTypeOf }
-
-        /// <summary>
-        /// Creates GraphQL custom output object type. It can be used as a valid output but not an input object
-        /// (see <see cref="InputObject"/> for more details).
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of fields defined by the current object. </param>
         /// <param name="description">Optional object description. Usefull for generating documentation.</param>
         /// <param name="interfaces">
@@ -721,23 +695,6 @@ module SchemaDefinitions =
         /// .NET class or struct, or a F# record.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
-              Fields = lazy (fieldsFn () |> List.toArray)
-              Description = description
-              Validator = GQLValidator.empty
-              ExecuteInput = Unchecked.defaultof<_> }
-
-        /// <summary>
-        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
-        /// .NET class or struct, or a F# record.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of input fields defined by the current input object. </param>
         /// <param name="description">Optional input object description. Useful for generating documentation.</param>
         static member InputObject(name : string, fields : InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
@@ -745,24 +702,6 @@ module SchemaDefinitions =
               Description = description
               Fields = lazy (fields |> List.toArray)
               Validator = GQLValidator.empty
-              ExecuteInput = Unchecked.defaultof<_> }
-
-        /// <summary>
-        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
-        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
-        /// .NET class or struct, or a F# record.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="validator">Object validator.</param>
-        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
-        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
-            { Name = name
-              Fields = lazy (fieldsFn () |> List.toArray)
-              Description = description
-              Validator = validator
               ExecuteInput = Unchecked.defaultof<_> }
 
         /// <summary>
@@ -800,15 +739,14 @@ module SchemaDefinitions =
         /// <param name="description">Optional field description. Usefull for generating documentation.</param>
         /// <param name="args">Optional list of arguments used to parametrize field resolution.</param>
         /// <param name="deprecationReason">If set, marks current field as deprecated.</param>
-        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val> =
+        static member AutoField(name : string, typedef : #OutputDef<'Res>, ?description: string, ?args: InputFieldDef list, ?deprecationReason: string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = description
                      TypeDef = typedef
                      Resolve = Resolve.defaultResolve<'Val, 'Res> name
                      Args = defaultArg args [] |> Array.ofList
                      DeprecationReason = deprecationReason
-                     Metadata = Metadata.Empty
-                     }
+                     Metadata = Metadata.Empty }
 
         /// <summary>
         /// Creates field defined inside interfaces. When used for objects may cause runtime exceptions due to
@@ -817,7 +755,7 @@ module SchemaDefinitions =
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="typedef">GraphQL type definition of the current field's type.</param>
         /// <param name="deprecationReason">Deprecation reason.</param>
-        static member Field(name : string, typedef : #OutputDef<'Res>, ?deprecationReason : string) : FieldDef<'Val> =
+        static member Field(name : string, typedef : #OutputDef<'Res>, ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -835,7 +773,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -854,7 +792,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
 
             upcast { FieldDefinition.Name = name
                      Description = Some description
@@ -874,7 +812,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -893,7 +831,7 @@ module SchemaDefinitions =
         /// <param name="resolve">Expression used to resolve value from defining object.</param>
         static member Field(name : string, typedef : #OutputDef<'Res>, description : string, args : InputFieldDef list,
                             [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> 'Res>,
-                            ?deprecationReason : string) : FieldDef<'Val> =
+                            ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -911,7 +849,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -930,7 +868,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -949,7 +887,7 @@ module SchemaDefinitions =
         /// <param name="deprecationReason">Deprecation reason.</param>
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = typedef
@@ -970,7 +908,7 @@ module SchemaDefinitions =
         static member AsyncField(name : string, typedef : #OutputDef<'Res>, description : string,
                                  args : InputFieldDef list,
                                  [<ReflectedDefinition(true)>] resolve : Expr<ResolveFieldContext -> 'Val -> Async<'Res>>,
-                                 ?deprecationReason : string) : FieldDef<'Val> =
+                                 ?deprecationReason : string) : FieldDef<'Val, 'Res> =
             upcast { FieldDefinition.Name = name
                      Description = Some description
                      TypeDef = typedef
@@ -984,7 +922,7 @@ module SchemaDefinitions =
         /// </summary>
         /// <param name="name">Field name. Must be unique in scope of the defining object.</param>
         /// <param name="execField">Expression used to execute the field.</param>
-        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val> =
+        static member CustomField(name : string, [<ReflectedDefinition(true)>] execField : Expr<ExecuteField>) : FieldDef<'Val, obj> =
             upcast { FieldDefinition.Name = name
                      Description = None
                      TypeDef = ObjType
@@ -1383,22 +1321,6 @@ module SchemaDefinitions =
         /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
         /// </summary>
         /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
-        /// <param name="fieldsFn">
-        /// Function which generates a list of fields defined by the current interface. Usefull, when object defines recursive dependencies.
-        /// </param>
-        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
-        /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
-        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
-                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
-            upcast { InterfaceDefinition.Name = name
-                     Description = description
-                     FieldsFn = fun () -> fieldsFn() |> List.toArray
-                     ResolveType = resolveType }
-
-        /// <summary>
-        /// Creates a custom GraphQL interface type. It's needs to be implemented by object types and should not be used alone.
-        /// </summary>
-        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
         /// <param name="fields">List of fields defined by the current interface.</param>
         /// <param name="description">Optional input description. Usefull for generating documentation.</param>
         /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
@@ -1426,3 +1348,87 @@ module SchemaDefinitions =
                      Options = options |> List.toArray
                      ResolveType = resolveType
                      ResolveValue = resolveValue }
+
+    /// Common space for all definition helper that use the other definitions and must access them lazily.
+    [<AbstractClass; Sealed>]
+    type DefineRec =
+
+        /// <summary>
+        /// Creates a GraphQL custom output object type that has a field of a type that references this object type recursively.
+        /// It can be used as a valid output but not as an input object
+        /// (see <see cref="InputObject"/> for more details).
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fieldsFn">
+        /// Function which generates a list of fields defined by the current object. Usefull, when object defines recursive dependencies.
+        /// </param>
+        /// <param name="description">Optional object description. Usefull for generating documentation.</param>
+        /// <param name="interfaces">
+        /// List of implemented interfaces. Object must explicitly define all fields from all interfaces it implements.
+        /// </param>
+        /// <param name="isTypeOf">
+        /// Optional function used to determine if provided .NET object instance matches current object definition.
+        /// </param>
+        static member Object(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
+                             ?interfaces : InterfaceDef list, ?isTypeOf : obj -> bool) : ObjectDef<'Val> =
+            upcast { ObjectDefinition.Name = name
+                     Description = description
+                     FieldsFn =
+                         lazy (fieldsFn()
+                               |> List.map (fun f -> f.Name, f)
+                               |> Map.ofList)
+                     Implements = defaultArg (Option.map List.toArray interfaces) [||]
+                     IsTypeOf = isTypeOf }
+
+        /// <summary>
+        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
+        /// .NET class or struct, or a F# record.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fieldsFn">
+        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
+        /// </param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, ?description : string) : InputObjectDefinition<'Out> =
+            { Name = name
+              Fields = lazy (fieldsFn () |> List.toArray)
+              Description = description
+              Validator = GQLValidator.empty
+              ExecuteInput = Unchecked.defaultof<_> }
+
+        /// <summary>
+        /// Creates a custom GraphQL input object type. Unlike GraphQL objects, input objects are valid input types,
+        /// that can be included in GraphQL query strings. Input object maps to a .NET type, which can be standard
+        /// .NET class or struct, or a F# record.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fieldsFn">
+        /// Function which generates a list of input fields defined by the current input object. Useful, when object defines recursive dependencies.
+        /// </param>
+        /// <param name="validator">Object validator.</param>
+        /// <param name="description">Optional input object description. Useful for generating documentation.</param>
+        static member InputObject(name : string, fieldsFn : unit -> InputFieldDef list, validator: GQLValidator<'Out>, ?description : string) : InputObjectDefinition<'Out> =
+            { Name = name
+              Fields = lazy (fieldsFn () |> List.toArray)
+              Description = description
+              Validator = validator
+              ExecuteInput = Unchecked.defaultof<_> }
+
+        /// <summary>
+        /// Creates a custom GraphQL interface type that has a field of type that refernces this interface type recurively.
+        /// It's needs to be implemented by object types and should not be used alone.
+        /// </summary>
+        /// <param name="name">Type name. Must be unique in scope of the current schema.</param>
+        /// <param name="fieldsFn">
+        /// Function which generates a list of fields defined by the current interface. Usefull, when object defines recursive dependencies.
+        /// </param>
+        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
+        /// <param name="resolveType">Optional function used to resolve actual Object definition of the .NET object provided as an input.</param>
+        static member Interface(name : string, fieldsFn : unit -> FieldDef<'Val> list, ?description : string,
+                                ?resolveType : obj -> ObjectDef) : InterfaceDef<'Val> =
+            upcast { InterfaceDefinition.Name = name
+                     Description = description
+                     FieldsFn = fun () -> fieldsFn() |> List.toArray
+                     ResolveType = resolveType }
+

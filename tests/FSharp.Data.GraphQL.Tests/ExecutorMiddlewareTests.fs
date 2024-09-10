@@ -25,8 +25,7 @@ let data =
 let DataType =
     Define.Object<TestSubject>(
         "Data",
-        fieldsFn = fun () ->
-        [
+        fields = [
             Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
             Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
             Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
@@ -34,8 +33,7 @@ let DataType =
         ])
 let Query =
     Define.Object<TestSubject>(
-        "Query",
-        fieldsFn = fun () -> [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
+        "Query", [ Define.Field("testData", DataType, (fun _ _ -> data)) ] )
 
 let schema = Schema(Query)
 

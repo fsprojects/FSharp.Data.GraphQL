@@ -141,7 +141,7 @@ let UnionType =
             | B _ -> upcast BType))
 
 let rec InnerDataType =
-    Define.Object<InnerTestSubject>(
+    DefineRec.Object<InnerTestSubject>(
         name = "InnerData",
         fieldsFn = fun () ->
         [
@@ -152,15 +152,15 @@ let rec InnerDataType =
 let AsyncDataType =
     Define.Object<AsyncTestSubject>(
         name = "AsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", Nullable StringType, (fun _ d -> d.value )) ])
+        fields = [ Define.AsyncField("value", Nullable StringType, (fun _ d -> d.value )) ])
 
 let NonNullAsyncDataType =
     Define.Object<NonNullAsyncTestSubject>(
         name = "NonNullAsyncData",
-        fieldsFn = fun () -> [ Define.AsyncField("value", StringType, (fun _ d -> d.value )) ])
+        fields = [ Define.AsyncField("value", StringType, (fun _ d -> d.value )) ])
 
 let DataType =
-    Define.Object<TestSubject>(
+    DefineRec.Object<TestSubject>(
         name = "Data",
         fieldsFn = fun () ->
         [
@@ -231,7 +231,7 @@ let data = {
    }
 
 let Query =
-    Define.Object<TestSubject>(
+    DefineRec.Object<TestSubject>(
         name = "Query",
         fieldsFn = fun () ->
         [

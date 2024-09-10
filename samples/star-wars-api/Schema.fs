@@ -155,7 +155,7 @@ module Schema =
         )
 
     and HumanType : ObjectDef<Human> =
-        Define.Object<Human> (
+        DefineRec.Object<Human> (
             name = "Human",
             description = "A humanoid creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Human),
@@ -210,7 +210,7 @@ module Schema =
         )
 
     and DroidType =
-        Define.Object<Droid> (
+        DefineRec.Object<Droid> (
             name = "Droid",
             description = "A mechanical creature in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Droid),
@@ -235,11 +235,11 @@ module Schema =
             name = "Planet",
             description = "A planet in the Star Wars universe.",
             isTypeOf = (fun o -> o :? Planet),
-            fieldsFn =
-                fun () ->
-                    [ Define.Field ("id", StringType, "The id of the planet", (fun _ p -> p.Id))
-                      Define.Field ("name", Nullable StringType, "The name of the planet.", (fun _ p -> p.Name))
-                      Define.Field ("isMoon", Nullable BooleanType, "Is that a moon?", (fun _ p -> p.IsMoon)) ]
+            fields = [
+                Define.Field ("id", StringType, "The id of the planet", (fun _ p -> p.Id))
+                Define.Field ("name", Nullable StringType, "The name of the planet.", (fun _ p -> p.Name))
+                Define.Field ("isMoon", Nullable BooleanType, "Is that a moon?", (fun _ p -> p.IsMoon))
+            ]
         )
 
     and RootType =
@@ -247,7 +247,7 @@ module Schema =
             name = "Root",
             description = "The Root type to be passed to all our resolvers.",
             isTypeOf = (fun o -> o :? Root),
-            fieldsFn = fun () -> [ Define.Field ("requestId", StringType, "The ID of the client.", (fun _ (r : Root) -> r.RequestId)) ]
+            fields = [ Define.Field ("requestId", StringType, "The ID of the client.", (fun _ (r : Root) -> r.RequestId)) ]
         )
 
     let Query =
@@ -281,7 +281,7 @@ module Schema =
         Define.Object<Root> (
             name = "Mutation",
             fields =
-                [ Define.Field (
+                [ Define.Field(
                       "setMoon",
                       Nullable PlanetType,
                       "Defines if a planet is actually a moon or not.",
@@ -293,7 +293,8 @@ module Schema =
                               schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
                               schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
                               x)
-                  ) ]
+                  )
+                ]
         )
 
     let schema : ISchema<Root> = upcast Schema (Query, Mutation, Subscription, schemaConfig)

@@ -47,7 +47,7 @@ let TestNestedInputObject =
 type TestRecusiveInput = { r : string; ro : TestRecusiveInput option; rvo : TestRecusiveInput voption }
 
 let rec TestRecursiveInputObject =
-    Define.InputObject<TestRecusiveInput> (
+    DefineRec.InputObject<TestRecusiveInput> (
         name = "TestRecusiveInput",
         fieldsFn =
             fun () -> [
