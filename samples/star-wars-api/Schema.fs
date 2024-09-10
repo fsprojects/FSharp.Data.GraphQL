@@ -295,7 +295,10 @@ module Schema =
                     //    ctx.Schema.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
                     //    return planet
                     //})
-                ).WithAuthorizationPolicies(Policies.CanSetMoon)
+                // For demo purposes of authorization
+                //).WithAuthorizationPolicies(Policies.CanSetMoon)
+                // For build verification purposes
+                ).WithAuthorizationPolicies(Policies.Dummy)
             ]
         )
 

@@ -31,10 +31,12 @@ type Startup private () =
     member _.ConfigureServices (services : IServiceCollection) : unit =
         services
             .AddAuthorization(fun options ->
-                options.AddPolicy (
+                options.AddPolicy (Policies.Dummy, fun policy -> policy.Requirements.Add (DummyRequirement ()))
+                options.AddPolicy(
                     Policies.CanSetMoon,
                     (fun policy -> policy.Requirements.Add (IsCharacterRequierment (Set.singleton "droid"))))
                 )
+            .AddScoped<IAuthorizationHandler, DummyHandler>()
             .AddScoped<IAuthorizationHandler, IsCharacterHandler>()
             .AddOxpecker()
             .AddGraphQL<Root> (Schema.executor, rootFactory, configure = configure)
