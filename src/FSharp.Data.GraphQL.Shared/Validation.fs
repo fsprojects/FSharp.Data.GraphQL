@@ -714,7 +714,7 @@ module Ast =
         let typeConditionsValid =
             let fragType = voption {
                 let! typeCondition = frag.TypeCondition
-                return schemaInfo.TryGetTypeByName typeCondition
+                return! schemaInfo.TryGetTypeByName typeCondition
             }
             match fragType with
             | ValueSome _ -> Success
