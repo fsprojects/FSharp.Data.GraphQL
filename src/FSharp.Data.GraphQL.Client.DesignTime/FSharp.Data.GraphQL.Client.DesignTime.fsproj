@@ -19,6 +19,7 @@
       <ExcludeAssets>contentFiles;runtime</ExcludeAssets>
     </PackageReference>
     <PackageReference Include="FSharp.TypeProviders.SDK" VersionOverride="8.0.2" />
+    <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FParsec" />
     <PackageReference Include="Microsoft.Extensions.Http">
       <PrivateAssets>all</PrivateAssets>

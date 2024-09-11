@@ -17,7 +17,6 @@ open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Ast.Extensions
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Validation
-open FsToolkit.ErrorHandling
 open ProviderImplementation.ProvidedTypes
 open Microsoft.FSharp.Quotations
 open Microsoft.FSharp.Reflection
