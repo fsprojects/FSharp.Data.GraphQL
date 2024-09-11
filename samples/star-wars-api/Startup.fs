@@ -1,15 +1,16 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
+open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
 open Microsoft.Extensions.DependencyInjection
 open Microsoft.Extensions.Logging
 open Microsoft.Extensions.Hosting
-open Giraffe
+open Oxpecker
 open FSharp.Data.GraphQL.Server.AspNetCore
-open FSharp.Data.GraphQL.Server.AspNetCore.Giraffe
+open FSharp.Data.GraphQL.Server.AspNetCore.Oxpecker
 
 type Startup private () =
 
@@ -25,20 +26,13 @@ type Startup private () =
         Startup ()
         then this.Configuration <- configuration
 
-    member _.ConfigureServices (services : IServiceCollection) =
+    member _.ConfigureServices (services : IServiceCollection) : unit =
         services
-            .AddGiraffe()
+            .AddOxpecker()
             .AddGraphQL<Root> (Schema.executor, rootFactory, configure = configure)
         |> ignore
 
-    member _.Configure
-        (
-            app : IApplicationBuilder,
-            env : IHostEnvironment
-        ) =
-        let errorHandler (ex : Exception) (log : ILogger) =
-            log.LogError (EventId (), ex, "An unhandled exception has occurred while executing the request.")
-            clearResponse >=> setStatusCode 500
+    member _.Configure (app : IApplicationBuilder, env : IHostEnvironment) : unit =
 
         if env.IsDevelopment () then
             app.UseGraphQLAltair "/altair" |> ignore
@@ -50,15 +44,19 @@ type Startup private () =
             |> ignore
 
         app
-            .UseGiraffeErrorHandler(errorHandler)
+            //.UseGiraffeErrorHandler(errorHandler)
+            .UseRouting()
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>()
-            .UseGiraffe (
-                // Set CORS to allow external servers (React samples) to call this API
-                setHttpHeader "Access-Control-Allow-Origin" "*"
-                >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
-                >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
-                >=> HttpHandlers.graphQL<Root>
-            )
+            .UseEndpoints (fun endpoints ->
+                // Simple declaration
+                //endpoints.MapOxpeckerEndpoint (HttpEndpoints.graphQL<Root>("/", id))
+                let handler =
+                    setHttpHeader "Access-Control-Allow-Origin" "*"
+                    >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
+                    >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
+                    >=> HttpEndpointHandlers.graphQL<Root>
+                endpoints.MapOxpeckerEndpoint (route "/" handler))
+        |> ignore
 
     member val Configuration : IConfiguration = null with get, set

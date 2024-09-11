@@ -25,8 +25,8 @@
 
   <ItemGroup Label="ProjectReferences">
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.AspNetCore\FSharp.Data.GraphQL.Server.AspNetCore.fsproj" />
-    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Giraffe\FSharp.Data.GraphQL.Server.Giraffe.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Middleware\FSharp.Data.GraphQL.Server.Middleware.fsproj" />
+    <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Oxpecker\FSharp.Data.GraphQL.Server.Oxpecker.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server.Relay\FSharp.Data.GraphQL.Server.Relay.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Server\FSharp.Data.GraphQL.Server.fsproj" />
     <ProjectReference Include="..\..\src\FSharp.Data.GraphQL.Shared\FSharp.Data.GraphQL.Shared.fsproj" />
