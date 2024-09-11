@@ -1,6 +1,7 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
 open System
+open System.Threading.Tasks
 open Microsoft.AspNetCore.Builder
 open Microsoft.AspNetCore.Http
 open Microsoft.Extensions.Configuration
@@ -31,11 +32,7 @@ type Startup private () =
             .AddGraphQL<Root> (Schema.executor, rootFactory, configure = configure)
         |> ignore
 
-    member _.Configure
-        (
-            app : IApplicationBuilder,
-            env : IHostEnvironment
-        ) : unit =
+    member _.Configure (app : IApplicationBuilder, env : IHostEnvironment) : unit =
 
         if env.IsDevelopment () then
             app.UseGraphQLAltair "/altair" |> ignore
@@ -48,18 +45,18 @@ type Startup private () =
 
         app
             //.UseGiraffeErrorHandler(errorHandler)
+            .UseRouting()
             .UseWebSockets()
             .UseWebSocketsForGraphQL<Root>()
             .UseEndpoints (fun endpoints ->
                 // Simple declaration
-                //endpoints.MapOxpeckerEndpoints [ HttpEndpoints.graphQL<Root>("/", id) ]
+                //endpoints.MapOxpeckerEndpoint (HttpEndpoints.graphQL<Root>("/", id))
                 let handler =
                     setHttpHeader "Access-Control-Allow-Origin" "*"
                     >=> setHttpHeader "Access-Control-Allow-Headers" "content-type"
                     >=> (setHttpHeader "Request-Type" "Classic") // For integration testing purposes
                     >=> HttpEndpointHandlers.graphQL<Root>
-                endpoints.MapOxpeckerEndpoints [ route "/" handler ]
-            )
-            |> ignore
+                endpoints.MapOxpeckerEndpoint (route "/" handler))
+        |> ignore
 
     member val Configuration : IConfiguration = null with get, set
