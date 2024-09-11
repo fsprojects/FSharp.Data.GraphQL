@@ -1,20 +1,10 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
-open System
-open Microsoft.AspNetCore.Http
-open Microsoft.Extensions.DependencyInjection
-
-type Root(ctx : HttpContext) =
-
-    member _.RequestId = ctx.TraceIdentifier
-    member _.RequestAborted: System.Threading.CancellationToken = ctx.RequestAborted
-    member _.ServiceProvider: IServiceProvider = ctx.RequestServices
-    member root.GetRequiredService<'t>() = root.ServiceProvider.GetRequiredService<'t>()
-
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
 open FSharp.Data.GraphQL.Server.Middleware
+open FsToolkit.ErrorHandling
 
 #nowarn "40"
 
@@ -277,24 +267,39 @@ module Schema =
 
     let schemaConfig = SchemaConfig.Default
 
+    open FSharp.Data.GraphQL.Samples.StarWarsApi.Middleware
+    open FSharp.Data.GraphQL.Samples.StarWarsApi.Authorization
+
     let Mutation =
         Define.Object<Root> (
             name = "Mutation",
-            fields =
-                [ Define.Field(
-                      "setMoon",
-                      Nullable PlanetType,
-                      "Defines if a planet is actually a moon or not.",
-                      [ Define.Input ("id", StringType); Define.Input ("isMoon", BooleanType) ],
-                      fun ctx _ ->
-                          getPlanet (ctx.Arg ("id"))
-                          |> Option.map (fun x ->
-                              x.SetMoon (Some (ctx.Arg ("isMoon"))) |> ignore
-                              schemaConfig.SubscriptionProvider.Publish<Planet> "watchMoon" x
-                              schemaConfig.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" x
-                              x)
-                  )
-                ]
+            fields = [
+                let setMoon (ctx : ResolveFieldContext) (_ : Root) = option {
+                    let! planet = getPlanet (ctx.Arg ("id"))
+                    ignore (planet.SetMoon (Some (ctx.Arg ("isMoon"))))
+                    ctx.Schema.SubscriptionProvider.Publish<Planet> "watchMoon" planet
+                    ctx.Schema.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
+                    return planet
+                }
+                Define.Field(
+                    "setMoon",
+                    Nullable PlanetType,
+                    "Defines if a planet is actually a moon or not.",
+                    [ Define.Input ("id", StringType); Define.Input ("isMoon", BooleanType) ],
+                    setMoon
+                    // Using complex lambda crashes
+                    //(fun ctx _ -> option {
+                    //    let! planet = getPlanet (ctx.Arg ("id"))
+                    //    let planet = planet.SetMoon (Some (ctx.Arg ("isMoon")))
+                    //    ctx.Schema.SubscriptionProvider.Publish<Planet> "watchMoon" planet
+                    //    ctx.Schema.LiveFieldSubscriptionProvider.Publish<Planet> "Planet" "isMoon" planet
+                    //    return planet
+                    //})
+                // For demo purposes of authorization
+                //).WithAuthorizationPolicies(Policies.CanSetMoon)
+                // For build verification purposes
+                ).WithAuthorizationPolicies(Policies.Dummy)
+            ]
         )
 
     let schema : ISchema<Root> = upcast Schema (Query, Mutation, Subscription, schemaConfig)

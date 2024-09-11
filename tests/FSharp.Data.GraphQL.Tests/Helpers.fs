@@ -38,21 +38,21 @@ let single (xs : 'a seq) =
     then fail <| sprintf "Expected single item in sequence, but found %i items.\n%A" length xs
     Seq.head xs
 let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
-let throwsAsync<'e when 'e :> exn> (action : unit Async) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action))
-let throwsAsyncVal<'e when 'e :> exn> (action : unit AsyncVal) = Assert.ThrowsAsync<'e>(fun () -> Async.StartAsTask(action |> AsyncVal.toAsync))
+let throwsAsync<'e when 'e :> exn> (action : unit Async) = Assert.ThrowsAsync<'e>(fun () -> Async.StartImmediateAsTask action)
+let throwsAsyncVal<'e when 'e :> exn> (action : unit AsyncVal) = Assert.ThrowsAsync<'e>(fun () -> Async.StartImmediateAsTask (action |> AsyncVal.toAsync))
 let sync = Async.RunSynchronously
 let is<'t> (o: obj) = o :? 't
 
-let hasError (errMsg : string) (errors: GQLProblemDetails seq) =
+let hasError (errMsg : string) (errors : GQLProblemDetails seq) =
     let containsMessage = errors |> Seq.exists (fun pd -> pd.Message.Contains(errMsg))
     Assert.True (containsMessage, sprintf "Expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
 
 let hasErrorAtPath path (errMsg : string) (errors: GQLProblemDetails seq) =
-    match errors |> Seq.where (fun pd -> pd.Message.Contains(errMsg)) |> Seq.tryHead with
+    match errors |> Seq.where (fun pd -> pd.Message.Contains errMsg) |> Seq.tryHead with
     | Some error ->
         error.Path
-        |> Skippable.filter (fun pathValue -> Assert.True((pathValue = path), $"Expected that message '%s{errMsg}' has path {path}, but path {pathValue} found."); true)
-        |> Skippable.defaultWith (fun () -> Assert.Fail($"Expected that message '%s{errMsg}' has path {path}, but no path found."); []) |> ignore
+        |> Skippable.filter (fun pathValue -> Assert.True ((pathValue = path), $"Expected that message '%s{errMsg}' has path {path}, but path {pathValue} found."); true)
+        |> Skippable.defaultWith (fun () -> Assert.Fail ($"Expected that message '%s{errMsg}' has path {path}, but no path found."); []) |> ignore
     | None ->
         Assert.Fail ($"Expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
 
@@ -73,7 +73,7 @@ let seqEquals (expected : 'a seq) (actual : 'a seq) =
     Assert.Equal<'a>(expected, actual)
 
 let greaterThanOrEqual expected actual =
-    Assert.True(actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
+    Assert.True (actual >= expected, sprintf "Expected value to be greather than or equal to %A, but was: %A" expected actual)
 
 open System.Text.Json
 open FSharp.Data.GraphQL.Types
@@ -102,7 +102,7 @@ let waitEvent (mre : ManualResetEvent) errorMsg =
     then fail errorMsg
 
 let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
-    Thread.Sleep(100) // Wait a bit before checking condition
+    Thread.Sleep 100 // Wait a bit before checking condition
     if not (condition ())
     then
         if times = 0
@@ -110,7 +110,7 @@ let rec waitFor (condition : unit -> bool) (times : int) errorMsg =
         else waitFor condition (times - 1) errorMsg
 
 let rec ensureThat (condition : unit -> bool) (times : int) errorMsg =
-    Thread.Sleep(100) // Wait a bit before checking condition
+    Thread.Sleep 100 // Wait a bit before checking condition
     if not (condition ())
     then fail errorMsg
     elif times > 0
@@ -130,35 +130,34 @@ type TestObserver<'T>(obs : IObservable<'T>, ?onReceived : TestObserver<'T> -> '
     let mre = new ManualResetEvent(false)
     let mutable subscription = Unchecked.defaultof<IDisposable>
     do subscription <- obs.Subscribe(this)
-    member _.Received
-        with get() = received.AsEnumerable()
-    member _.WaitCompleted(?expectedItemCount, ?timeout) =
+    member _.Received = received.AsEnumerable()
+    member _.WaitCompleted (?expectedItemCount, ?timeout) =
         let ms = defaultArg timeout 30
-        if TimeSpan.FromSeconds(float ms) |> mre.WaitOne |> not
+        if TimeSpan.FromSeconds (float ms) |> mre.WaitOne |> not
         then fail "Timeout waiting for OnCompleted"
         match expectedItemCount with
         | Some x ->
             if received.Count < x
             then failwithf "Expected to receive %i items, but received %i\nItems: %A" x received.Count received
         | None -> ()
-    member _.WaitForItems(expectedItemCount) =
+    member _.WaitForItems (expectedItemCount) =
         let errorMsg = sprintf "Expected to receive least %i items, but received %i\nItems: %A" expectedItemCount received.Count received
         waitFor (fun () -> received.Count = expectedItemCount) (expectedItemCount * 100) errorMsg
-    member x.WaitForItem() = x.WaitForItems(1)
+    member x.WaitForItem () = x.WaitForItems(1)
     member _.IsCompleted
         with get() = isCompleted
     interface IObserver<'T> with
-        member _.OnCompleted() =
+        member _.OnCompleted () =
             isCompleted <- true
             mre.Set() |> ignore
-        member _.OnError(error) = error.Reraise()
-        member _.OnNext(value) =
-            received.Add(value)
+        member _.OnError (error) = error.Reraise()
+        member _.OnNext (value) =
+            received.Add (value)
             onReceived |> Option.iter (fun evt -> evt this value)
     interface IDisposable with
-        member _.Dispose() =
-            subscription.Dispose()
-            mre.Dispose()
+        member _.Dispose () =
+            subscription.Dispose ()
+            mre.Dispose ()
 
 [<RequireQualifiedAccess>]
 module Observer =

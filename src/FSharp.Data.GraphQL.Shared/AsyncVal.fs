@@ -62,7 +62,7 @@ module AsyncVal =
     let toTask (x : AsyncVal<'T>) =
         match x with
         | Value v -> Task.FromResult (v)
-        | Async a -> Async.StartAsTask (a)
+        | Async a -> Async.StartImmediateAsTask (a)
         | Failure f -> Task.FromException<'T> (f)
 
     /// Returns an empty AsyncVal with immediatelly executed value.

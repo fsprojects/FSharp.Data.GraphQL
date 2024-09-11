@@ -232,7 +232,7 @@ type GraphQLRequestHandler<'Root> (
         let root = options.CurrentValue.RootFactory ctx
 
         let! result =
-            Async.StartAsTask(
+            Async.StartImmediateAsTask(
                 executor.AsyncExecute(content.Ast, root, ?variables = variables, ?operationName = operationName),
                 cancellationToken = ctx.RequestAborted
             )

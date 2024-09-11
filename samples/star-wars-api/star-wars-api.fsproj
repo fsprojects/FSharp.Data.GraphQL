@@ -17,6 +17,9 @@
 
   <ItemGroup>
     <None Include="ApplicationInsights.config" />
+    <Compile Include="Root.fs" />
+    <Compile Include="Policies.fs" />
+    <Compile Include="AuthorizationMiddleware.fs" />
     <Compile Include="Schema.fs" />
     <None Include="MultipartRequest.fs" />
     <Compile Include="Startup.fs" />
