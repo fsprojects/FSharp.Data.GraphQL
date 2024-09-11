@@ -971,7 +971,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "SCALAR",
-                      "name": "String",
+                      "name": "ID",
                       "ofType": null
                     }
                   },
@@ -998,7 +998,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "SCALAR",
-                      "name": "String",
+                      "name": "ID",
                       "ofType": null
                     }
                   },
@@ -1025,7 +1025,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "SCALAR",
-                      "name": "String",
+                      "name": "ID",
                       "ofType": null
                     }
                   },
@@ -1174,7 +1174,7 @@
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "String",
+                  "name": "ID",
                   "ofType": null
                 }
               },
@@ -1470,7 +1470,7 @@
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "String",
+                  "name": "ID",
                   "ofType": null
                 }
               },
@@ -1521,7 +1521,7 @@
                 "name": null,
                 "ofType": {
                   "kind": "SCALAR",
-                  "name": "String",
+                  "name": "ID",
                   "ofType": null
                 }
               },
@@ -1575,7 +1575,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "SCALAR",
-                      "name": "String",
+                      "name": "ID",
                       "ofType": null
                     }
                   },
@@ -1617,7 +1617,7 @@
                     "name": null,
                     "ofType": {
                       "kind": "SCALAR",
-                      "name": "String",
+                      "name": "ID",
                       "ofType": null
                     }
                   },
