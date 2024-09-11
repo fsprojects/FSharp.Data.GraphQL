@@ -87,12 +87,12 @@ module TypeSystemExtensions =
             |> Task.WhenAll
             |> Async.AwaitTask
 
-        let requirements =
+        let failedRequirements =
             authorizationResults
             |> Seq.where (fun r -> not r.Succeeded)
             |> Seq.collect (fun r -> r.Failure.FailedRequirements)
 
-        if Seq.isEmpty requirements then
+        if Seq.isEmpty failedRequirements then
             return Ok ()
         else
             return Error "Forbidden"
@@ -103,8 +103,8 @@ module TypeSystemExtensions =
 
     type FieldDef<'Val, 'Res> with
 
-        member this.WithPolicyMiddleware<'Val, 'Res> (middleware : FieldPolicyMiddleware<'Val, 'Res>) : FieldDef<'Val, 'Res> =
-            upcast CustomPolicyFieldDefinition (this, middleware)
+        member field.WithPolicyMiddleware<'Val, 'Res> (middleware : FieldPolicyMiddleware<'Val, 'Res>) : FieldDef<'Val, 'Res> =
+            upcast CustomPolicyFieldDefinition (field, middleware)
 
         member field.WithAuthorizationPolicies<'Val, 'Res> ([<ParamArray>] policies : string array) : FieldDef<'Val, 'Res> =
 

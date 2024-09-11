@@ -34,7 +34,7 @@ type Startup private () =
                 options.AddPolicy (Policies.Dummy, fun policy -> policy.Requirements.Add (DummyRequirement ()))
                 options.AddPolicy(
                     Policies.CanSetMoon,
-                    (fun policy -> policy.Requirements.Add (IsCharacterRequierment (Set.singleton "droid"))))
+                    (fun policy -> policy.Requirements.Add (IsCharacterRequirement (Set.singleton "droid"))))
                 )
             .AddScoped<IAuthorizationHandler, DummyHandler>()
             .AddScoped<IAuthorizationHandler, IsCharacterHandler>()

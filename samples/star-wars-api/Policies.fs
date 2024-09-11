@@ -19,13 +19,13 @@ type DummyHandler () =
         context.Succeed requirement
         Task.CompletedTask
 
-type IsCharacterRequierment (character : string Set) =
+type IsCharacterRequirement (character : string Set) =
     member val Characters = character
     interface IAuthorizationRequirement
 
 type IsCharacterHandler () =
 
-    inherit AuthorizationHandler<IsCharacterRequierment> () // Inject services from DI
+    inherit AuthorizationHandler<IsCharacterRequirement> () // Inject services from DI
 
     override _.HandleRequirementAsync (context, requirement) =
         Async.StartImmediateAsTask(async {
