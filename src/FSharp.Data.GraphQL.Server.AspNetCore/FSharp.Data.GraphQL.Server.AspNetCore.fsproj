@@ -38,7 +38,6 @@
     <PackageReference Include="Collections.Pooled" />
     <PackageReference Include="FsToolkit.ErrorHandling" />
     <PackageReference Include="FsToolkit.ErrorHandling.TaskResult" />
-    <PackageReference Include="Giraffe" />
   </ItemGroup>
 
 </Project>
