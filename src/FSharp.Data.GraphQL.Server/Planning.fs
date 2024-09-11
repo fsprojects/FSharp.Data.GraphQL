@@ -79,7 +79,7 @@ let private objectInfo (ctx: PlanningContext) (parentDef: ObjectDef) field inclu
 let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef) field typeCondition includer =
     let objDefs = ctx.Schema.GetPossibleTypes parentDef
     match typeCondition with
-    | None ->
+    | ValueNone ->
         objDefs
         |> Array.choose (fun objDef ->
             match tryFindDef ctx.Schema objDef field with
@@ -96,7 +96,7 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
                 Some (objDef.Name, data)
             | None -> None)
         |> Map.ofArray
-    | Some typeName ->
+    | ValueSome typeName ->
         match objDefs |> Array.tryFind (fun o -> o.Name = typeName) with
         | Some objDef ->
             match tryFindDef ctx.Schema objDef field with
@@ -115,7 +115,7 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
         | None ->
             match ctx.Schema.TryFindType typeName with
             | Some (Abstract abstractDef) ->
-                abstractionInfo ctx abstractDef field None includer
+                abstractionInfo ctx abstractDef field ValueNone includer
             | _ ->
                 let pname = parentDef :?> NamedDef
                 Debug.Fail "Must be prevented by validation"
@@ -149,8 +149,8 @@ let private getIncluder (directives: Directive list) parentIncluder : Includer =
 
 let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: ObjectDef) =
     match fragment.TypeCondition with
-    | None -> true
-    | Some typeCondition ->
+    | ValueNone -> true
+    | ValueSome typeCondition ->
         match schema.TryFindType typeCondition with
         | None -> false
         | Some conditionalType when conditionalType.Name = objectType.Name -> true
@@ -243,7 +243,7 @@ let rec private plan (ctx : PlanningContext) (info : ExecutionInfo) : ExecutionI
         let inner = plan ctx { info with ParentDef = info.ReturnDef; ReturnDef = downcast returnDef; }
         { info with Kind = ResolveCollection inner }
     | Abstract _ ->
-        planAbstraction ctx info.Ast.SelectionSet info (ref []) None
+        planAbstraction ctx info.Ast.SelectionSet info (ref []) ValueNone
     | _ ->
         Debug.Fail "Must be prevented by validation"
         failwith "Invalid Return Type in Planning!"

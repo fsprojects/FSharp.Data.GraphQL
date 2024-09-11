@@ -18,7 +18,7 @@ let doc1 definition = docN [ definition ]
 
 let namedQueryWithVariablesAndSelections name variables selections =
     OperationDefinition { OperationType = Query
-                          Name = Some name
+                          Name = ValueSome name
                           Directives = []
                           VariableDefinitions = variables
                           SelectionSet = selections }
@@ -28,7 +28,7 @@ let namedQueryWithSelections name = namedQueryWithVariablesAndSelections name []
 let namedQuerWithSelection name selection = namedQueryWithSelections name [ selection ]
 let queryWithSelections selections =
     OperationDefinition { OperationType = Query
-                          Name = None
+                          Name = ValueNone
                           Directives = []
                           VariableDefinitions = []
                           SelectionSet = selections }
@@ -40,7 +40,7 @@ let argString name value = arg name (StringValue value)
 let argNull name = arg name NullValue
 let fieldWithNameAndArgsAndSelections name arguments selections =
     Field { Name = name
-            Alias = None
+            Alias = ValueNone
             Directives = []
             Arguments = arguments
             SelectionSet = selections }
@@ -53,20 +53,20 @@ let field name = fieldWithNameAndSelections name []
 
 let withAlias alias x =
     match x with
-    | Field f -> Field { f with Alias = Some alias }
+    | Field f -> Field { f with Alias = ValueSome alias }
     | _ -> x
 
 let fragment name typeCondition selections =
-    FragmentDefinition { Name = Some name
-                         TypeCondition = Some typeCondition
+    FragmentDefinition { Name = ValueSome name
+                         TypeCondition = ValueSome typeCondition
                          Directives = []
                          SelectionSet = selections }
 
 let fragmentWithCondAndSelection name typeCondition selection = fragment name typeCondition [ selection ]
 
 let inlieFragment typeCondition selections =
-    InlineFragment { Name = None
-                     TypeCondition = Some typeCondition
+    InlineFragment { Name = ValueNone
+                     TypeCondition = ValueSome typeCondition
                      Directives = []
                      SelectionSet = selections }
 

@@ -4,6 +4,7 @@ namespace FSharp.Data.GraphQL.Tests.OptionalsNormalizationTests
 
 open System
 open FSharp.Data.GraphQL
+open FsToolkit.ErrorHandling
 
 [<Struct>]
 type ValidString<'t> = internal ValidString of string

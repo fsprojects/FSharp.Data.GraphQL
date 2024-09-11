@@ -7,6 +7,7 @@ module FSharp.Data.GraphQL.Parser
 open System
 open FParsec
 open FSharp.Data.GraphQL.Ast
+open FsToolkit.ErrorHandling
 
 [<AutoOpen>]
 module internal Internal =
@@ -254,7 +255,7 @@ module internal Internal =
             (opt selectionSet)
             (fun oalias name oargs directives oselection ->
                 (Field {
-                    Alias = oalias
+                    Alias = oalias |> ValueOption.ofOption
                     Name = name
                     Arguments = someOrEmpty oargs
                     Directives = someOrEmpty directives
@@ -271,10 +272,10 @@ module internal Internal =
     let selectionFragment =
         let inlineFragment =
             pipe3 (opt (stoken_ws "on" >>. token_ws name)) (opt (token_ws directives)) selectionSet (fun typeCondition directives selectionSet -> {
-                FragmentDefinition.Name = None
+                FragmentDefinition.Name = ValueNone
                 Directives = someOrEmpty directives
                 SelectionSet = selectionSet
-                TypeCondition = typeCondition
+                TypeCondition = typeCondition |> ValueOption.ofOption
             })
             |>> InlineFragment
             <?> "InlineFragment"
@@ -318,7 +319,7 @@ module internal Internal =
                 (token_ws selectionSet)
                 (fun otype name ovars directives selection -> {
                     OperationType = otype
-                    Name = name
+                    Name = name |> ValueOption.ofOption
                     SelectionSet = selection
                     VariableDefinitions = someOrEmpty ovars
                     Directives = someOrEmpty directives
@@ -332,7 +333,7 @@ module internal Internal =
                 SelectionSet = selectionSet
                 VariableDefinitions = []
                 Directives = []
-                Name = None
+                Name = ValueNone
             })
 
         // SelectionSet |
@@ -350,14 +351,10 @@ module internal Internal =
                 selectionSet
                 (fun name typeCond directives selSet ->
                     FragmentDefinition {
-                        Name = Some name
+                        Name = ValueSome name
                         Directives = directives
                         SelectionSet = selSet
-                        TypeCondition =
-                            if String.IsNullOrEmpty typeCond then
-                                None
-                            else
-                                Some typeCond
+                        TypeCondition = typeCond |> ValueOption.ofObj |> ValueOption.filter (not << String.IsNullOrEmpty)
                     })
 
         // GraphQL documents can contain zero definitions

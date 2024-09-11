@@ -3,6 +3,7 @@ module FSharp.Data.GraphQL.Ast.Extensions
 
 open System
 open System.Globalization
+open System.Runtime.InteropServices
 open System.Text
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
@@ -11,36 +12,36 @@ type OperationName = string
 
 type AstTypeFieldInfo = {
     Name : string
-    Alias : string option
+    Alias : string voption
     Fields : AstFieldInfo list
 } with
 
-    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+    member x.AliasOrName = x.Alias |> ValueOption.defaultValue x.Name
 
 and AstFragmentFieldInfo = {
     Name : string
-    Alias : string option
+    Alias : string voption
     TypeCondition : string
     Fields : AstFieldInfo list
 } with
 
-    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
+    member x.AliasOrName = x.Alias |> ValueOption.defaultValue x.Name
 
 and internal AstSelectionInfo = {
-    TypeCondition : string option
+    TypeCondition : string voption
     Name : string
-    Alias : string option
+    Alias : string voption
     Path : FieldPath
     mutable Fields : AstSelectionInfo list
 } with
 
-    member x.AliasOrName = x.Alias |> Option.defaultValue x.Name
-    static member Create (typeCondition : string option, path : FieldPath, name : string, alias : string option, ?fields : AstSelectionInfo list) = {
+    member x.AliasOrName = x.Alias |> ValueOption.defaultValue x.Name
+    static member Create (typeCondition : string voption, path : FieldPath, name : string, alias : string voption, [<Optional>] fields : AstSelectionInfo list) = {
         TypeCondition = typeCondition
         Name = name
         Alias = alias
         Path = path
-        Fields = fields |> Option.defaultValue []
+        Fields = if obj.ReferenceEquals (fields, null) then [] else fields
     }
     member x.SetFields (fields : AstSelectionInfo list) = x.Fields <- fields
 
@@ -51,14 +52,14 @@ and AstFieldInfo =
     static member internal Create (info : AstSelectionInfo) =
         let fields = List.map AstFieldInfo.Create info.Fields
         match info.TypeCondition with
-        | Some typeCondition ->
+        | ValueSome typeCondition ->
             FragmentField {
                 Name = info.Name
                 Alias = info.Alias
                 TypeCondition = typeCondition
                 Fields = fields
             }
-        | None -> TypeField { Name = info.Name; Alias = info.Alias; Fields = fields }
+        | ValueNone -> TypeField { Name = info.Name; Alias = info.Alias; Fields = fields }
     member x.Name =
         match x with
         | TypeField info -> info.Name
@@ -69,8 +70,8 @@ and AstFieldInfo =
         | FragmentField info -> info.Alias
     member x.AliasOrName =
         match x with
-        | TypeField info -> info.Alias |> Option.defaultValue info.Name
-        | FragmentField info -> info.Alias |> Option.defaultValue info.Name
+        | TypeField info -> info.Alias |> ValueOption.defaultValue info.Name
+        | FragmentField info -> info.Alias |> ValueOption.defaultValue info.Name
     member x.Fields =
         match x with
         | TypeField info -> info.Fields
@@ -87,7 +88,7 @@ type internal PaddedStringBuilder () =
     member _.Append (str : string) = sb.Append (str) |> ignore
     override _.ToString () = sb.ToString ()
 
-/// Specify options when printing an Ast.Document to a query string.
+/// Specify voptions when printing an Ast.Document to a query string.
 [<Flags>]
 type QueryStringPrintingOptions =
     /// No specific printing option.
@@ -100,9 +101,8 @@ type Document with
     /// <summary>
     /// Generates a GraphQL query string from this document.
     /// </summary>
-    /// <param name="options">Specify custom printing options for the query string.</param>
-    member x.ToQueryString (?options : QueryStringPrintingOptions) =
-        let options = defaultArg options QueryStringPrintingOptions.None
+    /// <param name="options">Specify custom printing voptions for the query string.</param>
+    member x.ToQueryString ([<Optional; DefaultParameterValue (QueryStringPrintingOptions.None)>] options : QueryStringPrintingOptions) =
         let sb = PaddedStringBuilder ()
         let withQuotes (s : string) = "\"" + s + "\""
         let rec printValue x =
@@ -188,7 +188,7 @@ type Document with
             helper directives
         let setSelectionSetOptions (selectionSet : Selection list) =
             let typeNameMetaField = {
-                Alias = None
+                Alias = ValueNone
                 Name = "__typename"
                 Arguments = []
                 Directives = []
@@ -213,7 +213,7 @@ type Document with
                 function
                 | Field field ->
                     field.Alias
-                    |> Option.iter (fun alias -> sb.Append (alias + ": "))
+                    |> ValueOption.iter (fun alias -> sb.Append (alias + ": "))
                     sb.Append (field.Name)
                     printArguments field.Arguments
                     if field.Directives.Length > 0 then
@@ -230,7 +230,7 @@ type Document with
                 | InlineFragment frag ->
                     sb.Append ("... ")
                     frag.TypeCondition
-                    |> Option.iter (fun t -> sb.Append ("on " + t))
+                    |> ValueOption.iter (fun t -> sb.Append ("on " + t))
                     printDirectives frag.Directives
                     sb.Append (" ")
                     printSelectionSet (setSelectionSetOptions frag.SelectionSet)
@@ -261,7 +261,7 @@ type Document with
                     | Mutation -> sb.Append ("mutation ")
                     | Subscription -> sb.Append ("subscription ")
                     odef.Name
-                    |> Option.iter (fun name ->
+                    |> ValueOption.iter (fun name ->
                         if odef.VariableDefinitions.Length = 0 then
                             sb.Append (name + " ")
                         else
@@ -290,7 +290,7 @@ type Document with
     /// <summary>
     /// Gets a map containing general information for this Document.
     /// </summary>
-    member this.GetInfoMap () : Map<OperationName option, AstFieldInfo list> =
+    member this.GetInfoMap () : Map<OperationName voption, AstFieldInfo list> =
         let fragments =
             this.Definitions
             |> List.choose (function
@@ -309,7 +309,7 @@ type Document with
                 | OperationDefinition def -> Some def)
             |> List.map (fun operation -> operation.Name, operation)
         let mapper (selectionSet : Selection list) =
-            let rec helper (acc : AstSelectionInfo list) (typeCondition : string option) (path : FieldPath) (selectionSet : Selection list) =
+            let rec helper (acc : AstSelectionInfo list) (typeCondition : string voption) (path : FieldPath) (selectionSet : Selection list) =
                 match selectionSet with
                 | [] -> acc
                 | selection :: tail ->
@@ -317,7 +317,7 @@ type Document with
                         match selection with
                         | Field f ->
                             let finfo = AstSelectionInfo.Create (typeCondition, path, f.Name, f.Alias)
-                            let fields = helper [] None (f.AliasOrName :: path) f.SelectionSet
+                            let fields = helper [] ValueNone (f.AliasOrName :: path) f.SelectionSet
                             finfo.SetFields (fields)
                             finfo :: acc
                         | FragmentSpread f ->
@@ -325,7 +325,7 @@ type Document with
                             helper acc fdef.TypeCondition path fdef.SelectionSet
                         | InlineFragment fdef -> helper acc fdef.TypeCondition path fdef.SelectionSet
                     helper acc typeCondition path tail
-            helper [] None [] selectionSet
+            helper [] ValueNone [] selectionSet
             |> List.map AstFieldInfo.Create
         operations
         |> List.map (fun (n, o) -> n, mapper o.SelectionSet)

@@ -1,25 +1,29 @@
 namespace rec FSharp.Data.GraphQL
 
+open FsToolkit.ErrorHandling
+
 module internal ValueOption =
 
-    let toOption value =
-        match value with | ValueSome v -> Some v | _ -> None
-
-    let mapOption mapping option = Option.toVOption option |> ValueOption.map mapping
-
-    let ofOption value = Option.toVOption value
+    let mapOption mapping option = Option.toValueOption option |> ValueOption.map mapping
 
 module internal Option =
 
-    let toVOption voption =
-        match voption with | Some v -> ValueSome v | _ -> ValueNone
-
-    let mapVOption mapping voption = voption |> ValueOption.map mapping |> ValueOption.toOption
-
-    let ofVOption voption = voption |> ValueOption.toOption
+    let mapValueOption mapping voption = voption |> ValueOption.map mapping |> ValueOption.toOption
 
 [<AutoOpen>]
 module internal ValueTuple =
 
-    let fstv struct (a,_) =  a
-    let sndv struct (_,b) =  b
+    let fstv struct (a, _) = a
+    let sndv struct (_, b) = b
+
+module internal Seq =
+
+    let vchoose mapping seq =
+        seq
+        |> Seq.map mapping
+        |> Seq.where ValueOption.isSome
+        |> Seq.map ValueOption.get
+
+module internal List =
+
+    let vchoose mapping list = list |> Seq.vchoose mapping |> List.ofSeq

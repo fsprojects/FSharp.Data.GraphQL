@@ -333,23 +333,23 @@ let ``Should generate information map correctly`` () =
     let actual = document.GetInfoMap () |> Map.toList
 
     let expected = [
-        (Some "q",
+        (ValueSome "q",
          [
              TypeField {
                  Name = "hero"
-                 Alias = None
+                 Alias = ValueNone
                  Fields = [
                      TypeField {
                          Name = "friends"
-                         Alias = None
+                         Alias = ValueNone
                          Fields = [
-                             FragmentField { Name = "primaryFunction"; Alias = None; TypeCondition = "Droid"; Fields = [] }
-                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Droid"; Fields = [] }
-                             FragmentField { Name = "homePlanet"; Alias = None; TypeCondition = "Human"; Fields = [] }
-                             FragmentField { Name = "id"; Alias = None; TypeCondition = "Human"; Fields = [] }
+                             FragmentField { Name = "primaryFunction"; Alias = ValueNone; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = ValueNone; TypeCondition = "Droid"; Fields = [] }
+                             FragmentField { Name = "homePlanet"; Alias = ValueNone; TypeCondition = "Human"; Fields = [] }
+                             FragmentField { Name = "id"; Alias = ValueNone; TypeCondition = "Human"; Fields = [] }
                          ]
                      }
-                     TypeField { Name = "name"; Alias = None; Fields = [] }
+                     TypeField { Name = "name"; Alias = ValueNone; Fields = [] }
                  ]
              }
          ])
