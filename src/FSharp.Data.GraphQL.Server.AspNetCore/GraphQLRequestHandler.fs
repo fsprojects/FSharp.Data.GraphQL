@@ -14,11 +14,18 @@ open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL.Server
 
-/// Provides logic to parse and execute GraphQL request
-type GraphQLRequestHandler<'Root> (
+type DefaultGraphQLRequestHandler<'Root> (
     httpContextAccessor : IHttpContextAccessor,
     options : IOptionsMonitor<GraphQLOptions<'Root>>,
-    logger : ILogger<GraphQLRequestHandler<'Root>>
+    logger : ILogger<DefaultGraphQLRequestHandler<'Root>>
+) =
+    inherit GraphQLRequestHandler<'Root> (httpContextAccessor, options, logger)
+
+/// Provides logic to parse and execute GraphQL request
+and [<AbstractClass>] GraphQLRequestHandler<'Root> (
+    httpContextAccessor : IHttpContextAccessor,
+    options : IOptionsMonitor<GraphQLOptions<'Root>>,
+    logger : ILogger
 ) =
 
     let ctx = httpContextAccessor.HttpContext
@@ -213,10 +220,10 @@ type GraphQLRequestHandler<'Root> (
                 return! checkAnonymousFieldsOnly ctx
     }
 
-    abstract ExecuteOperation<'Root> : Executor<'Root> -> ParsedGQLQueryRequestContent -> Task<IResult>
+    abstract ExecuteOperation<'Root> : executor:Executor<'Root> * content:ParsedGQLQueryRequestContent -> Task<IResult>
 
     /// Execute the operation for given request
-    default _.ExecuteOperation<'Root> (executor: Executor<'Root>) content = task {
+    default _.ExecuteOperation<'Root> (executor: Executor<'Root>, content) = task {
 
         let operationName = content.OperationName |> Skippable.filter (not << isNull) |> Skippable.toOption
         let variables = content.Variables |> Skippable.filter (not << isNull) |> Skippable.toOption
@@ -241,12 +248,12 @@ type GraphQLRequestHandler<'Root> (
         return (TypedResults.Ok response) :> IResult
     }
 
-    member request.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
+    member handler.HandleAsync () : Task<Result<IResult, IResult>> = taskResult {
         if ctx.RequestAborted.IsCancellationRequested then
             return TypedResults.Empty
         else
             let executor = options.CurrentValue.SchemaExecutor
             match! checkOperationType () with
             | IntrospectionQuery optionalAstDocument -> return! executeIntrospectionQuery executor optionalAstDocument
-            | OperationQuery content -> return! request.ExecuteOperation executor content
+            | OperationQuery content -> return! handler.ExecuteOperation (executor, content)
     }
