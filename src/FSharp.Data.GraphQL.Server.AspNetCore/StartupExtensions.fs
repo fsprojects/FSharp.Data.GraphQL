@@ -40,7 +40,7 @@ module ServiceCollectionExtensions =
         /// </para>
         /// </summary>
         [<Extension; CompiledName "AddGraphQL">]
-        member internal services.AddGraphQL<'Root>
+        member internal services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
             (
                 executorFactory : Func<IServiceProvider, Executor<'Root>>,
                 rootFactory : HttpContext -> 'Root,
@@ -84,7 +84,41 @@ module ServiceCollectionExtensions =
                     }
                 )
                 .AddHttpContextAccessor()
-                .AddScoped<GraphQLRequestHandler<'Root>>()
+                .AddScoped<GraphQLRequestHandler<'Root>, 'Handler>()
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        [<Extension; CompiledName "AddGraphQL">]
+        member internal services.AddGraphQL<'Root>
+            (
+                executorFactory : Func<IServiceProvider, Executor<'Root>>,
+                rootFactory : HttpContext -> 'Root,
+                [<Optional>] additionalConverters : JsonConverter seq,
+                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointUrl : string,
+                [<Optional>] configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>
+            ) =
+            services.AddGraphQL<'Root, DefaultGraphQLRequestHandler<'Root>> (executorFactory, rootFactory, additionalConverters, webSocketEndpointUrl, configure)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                executor : Executor<'Root>,
+                rootFactory : HttpContext -> 'Root,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, null, null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -100,7 +134,24 @@ module ServiceCollectionExtensions =
                 rootFactory : HttpContext -> 'Root,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL ((fun _ -> executor), rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, null, null)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                executor : Executor<'Root>,
+                rootFactory : HttpContext -> 'Root,
+                webSocketEndpointUrl : string,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, webSocketEndpointUrl, null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -117,7 +168,24 @@ module ServiceCollectionExtensions =
                 webSocketEndpointUrl : string,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL ((fun _ -> executor), rootFactory, additionalConverters, webSocketEndpointUrl, null)
+            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, webSocketEndpointUrl, null)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                executor : Executor<'Root>,
+                rootFactory : HttpContext -> 'Root,
+                configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, null, configure)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -134,7 +202,26 @@ module ServiceCollectionExtensions =
                 configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL ((fun _ -> executor), rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, null, configure)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        /// <remarks>
+        /// The executor must be registered as a singleton service.
+        /// </remarks>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                rootFactory : HttpContext -> 'Root,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, null, null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -153,7 +240,27 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL (getExecutorService, rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, null, null)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        /// <remarks>
+        /// The executor must be registered as a singleton service.
+        /// </remarks>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                rootFactory : HttpContext -> 'Root,
+                [<Optional; DefaultParameterValue (GraphQLOptionsDefaults.WebSocketEndpoint)>] webSocketEndpointUrl : string,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, webSocketEndpointUrl, null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -173,7 +280,27 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL (getExecutorService, rootFactory, additionalConverters, webSocketEndpointUrl, null)
+            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, webSocketEndpointUrl, null)
+
+        /// <summary>
+        /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
+        /// <para>
+        /// It also adds converters to <see href="Microsoft.AspNetCore.Http.Json.JsonOptions" />
+        /// to support serialization of GraphQL responses.
+        /// </para>
+        /// </summary>
+        /// <remarks>
+        /// The executor must be registered as a singleton service.
+        /// </remarks>
+        [<Extension; CompiledName "AddGraphQL">]
+        member services.AddGraphQL<'Root, 'Handler when 'Handler :> GraphQLRequestHandler<'Root> and 'Handler : not struct>
+            (
+                rootFactory : HttpContext -> 'Root,
+                configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>,
+                [<Optional>] additionalConverters : JsonConverter seq
+            ) =
+            let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, null, configure)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -193,7 +320,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL (getExecutorService, rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, null, configure)
 
 
 [<AutoOpen; Extension>]
