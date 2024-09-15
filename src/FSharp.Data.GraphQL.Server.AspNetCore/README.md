@@ -29,10 +29,10 @@ type Startup private () =
 
     member _.ConfigureServices(services: IServiceCollection) =
         services.AddGiraffe()
-                .AddGraphQLOptions<Root>( // STEP 1: Setting the options
-                    Schema.executor, // --> Schema.executor is defined by you somewhere else (in another file)
+                .AddGraphQL<Root>( // STEP 1: Setting the options
+                    Schema.executor, // --> Schema.executor is defined by yourself somewhere else (in another file)
                     rootFactory,
-                    "/ws" // --> endpoint for websocket connections
+                    "/ws" // --> endpoint for websocket connections (optional. Default value: "/ws")
                 )
         |> ignore
 
@@ -62,7 +62,7 @@ In your schema, you'll want to define a subscription, like in (example taken fro
                     RootType,
                     PlanetType,
                     "Watches to see if a planet is a moon.",
-                    [ Define.Input("id", String) ],
+                    [ Define.Input("id", StringType) ],
                     (fun ctx _ p -> if ctx.Arg("id") = p.Id then Some p else None)) ])
 ```
 
@@ -77,7 +77,7 @@ Don't forget to notify subscribers about new values:
                     "setMoon",
                     Nullable PlanetType,
                     "Defines if a planet is actually a moon or not.",
-                    [ Define.Input("id", String); Define.Input("isMoon", Boolean) ],
+                    [ Define.Input("id", StringType); Define.Input("isMoon", BooleanType) ],
                     fun ctx _ ->
                         getPlanet (ctx.Arg("id"))
                         |> Option.map (fun x ->
