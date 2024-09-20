@@ -105,10 +105,35 @@ let rec internal compileByType
 
     | InputObject objDef ->
         let objtype = objDef.Type
-        let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
+        let (constructor : obj[] -> obj), (parameterInfos : Reflection.ParameterInfo[]) =
+            if typeof<IDictionary<string,obj>>.IsAssignableFrom(objtype) then
+                let parameterInfos = [|
+                    for f in objDef.Fields ->
+                        { new Reflection.ParameterInfo() with
+                            member _.Name = f.Name
+                            member _.ParameterType = f.TypeDef.Type
+                            member _.Attributes =
+                                match f.TypeDef with
+                                | Nullable _ -> Reflection.ParameterAttributes.Optional
+                                | _ -> Reflection.ParameterAttributes.None
+                        }
+                |]
+                let constructor (args:obj[]) =
+                    let o = Activator.CreateInstance(objtype)
+                    let dict = o :?> IDictionary<string, obj>
+                    for fld,arg in Seq.zip objDef.Fields args do
+                        match arg, fld.TypeDef with
+                        | null, Nullable _ -> () // skip populating Nullable fields with nulls
+                        | _, _ -> dict.Add(fld.Name, arg)
+                    box o
+                constructor, parameterInfos
+            else
+                let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
+                ctor.Invoke, ctor.GetParameters()
+
 
         let struct (mapper, nullableMismatchParameters, missingParameters) =
-            ctor.GetParameters ()
+            parameterInfos
             |> Array.fold
                 (fun struct (all : ResizeArray<_>, areNullable : HashSet<_>, missing : HashSet<_>) param ->
                     match
@@ -180,6 +205,19 @@ let rec internal compileByType
                             | None ->
                                 Ok
                                 <| wrapOptionalNone param.ParameterType field.TypeDef.Type
+                            | Some input when isNull (box field.ExecuteInput) ->
+                                // hack around the case where field.ExecuteInput is null
+                                let rec extract = function
+                                    | NullValue -> null
+                                    | IntValue i -> box i
+                                    | FloatValue f -> box f
+                                    | BooleanValue b -> box b
+                                    | StringValue s -> box s
+                                    | EnumValue e -> box e
+                                    | ListValue l -> box (l |> List.map extract)
+                                    | ObjectValue o -> o |> Map.map (fun k v -> extract v) |> box
+                                    | VariableName v -> failwithf "Todo: extract variable"
+                                extract input |> Ok
                             | Some prop ->
                                 field.ExecuteInput prop variables
                                 |> Result.map (normalizeOptional param.ParameterType)
@@ -188,7 +226,7 @@ let rec internal compileByType
 
                 let! args = argResults |> splitSeqErrorsList
 
-                let instance = ctor.Invoke args
+                let instance = constructor args
                 do!
                     objDef.Validator instance
                     |> ValidationResult.mapErrors (fun err ->
@@ -201,7 +239,6 @@ let rec internal compileByType
                 | true, found ->
                     match found with
                     | :? IReadOnlyDictionary<string, obj> as objectFields ->
-
                         let argResults =
                             mapper
                             |> Seq.map (fun struct (field, param) -> result {
@@ -217,7 +254,7 @@ let rec internal compileByType
 
                         let! args = argResults |> splitSeqErrorsList
 
-                        let instance = ctor.Invoke args
+                        let instance = constructor args
                         do!
                             objDef.Validator instance
                             |> ValidationResult.mapErrors (fun err ->
