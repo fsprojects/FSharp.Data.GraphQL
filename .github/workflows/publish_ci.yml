@@ -60,65 +60,73 @@ jobs:
       run: |
         cd src/FSharp.Data.GraphQL.Shared
         dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Shared project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Shared package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
         dotnet pack --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Client project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Client package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
         dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
       run: |
         cd src/FSharp.Data.GraphQL.Server.AspNetCore
         dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server.AspNetCore package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Giraffe project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Giraffe
         dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server.Giraffe project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server.Giraffe package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Oxpecker project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Oxpecker
         dotnet pack --no-build --configuration Release /p:IsNuget=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server.Oxpecker project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server.Oxpecker package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
         dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server.Relay project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server.Relay package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
         dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:ContinuousIntegrationBuild=true -o ../../nuget
-    - name: Publish FSharp.Data.GraphQL.Server.Middleware project to GitHub
+    - name: Publish FSharp.Data.GraphQL.Server.Middleware package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.snupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
 
     - name: Prepare the sample project to be packed as a project template
       run: |
@@ -129,8 +137,10 @@ jobs:
       run: |
         cd samples
         dotnet pack --configuration Release /p:ContinuousIntegrationBuild=true -o ../nuget
-    - name: Publish FSharp.Data.GraphQL.ProjectTemplates project to GitHub
+    - name: Publish FSharp.Data.GraphQL.ProjectTemplates package to GitHub
       run: |
         $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.nupkg"
+        dotnet nuget push $path -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
+        $path = "nuget/FSharp.Data.GraphQL.ProjectTemplates.${{env.VERSION}}.snupkg"
         dotnet nuget push $path -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
       shell: pwsh
