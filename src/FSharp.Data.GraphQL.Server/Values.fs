@@ -36,7 +36,8 @@ let private normalizeOptional (outputType : Type) value =
     | value ->
         let inputType = value.GetType ()
         if inputType.Name <> outputType.Name then
-            let expectedOutputType = outputType.GenericTypeArguments[0]
+            // Use only when option or voption so must not be null
+            let expectedOutputType = outputType.GenericTypeArguments.FirstOrDefault()
             if
                 outputType.FullName.StartsWith ReflectionHelper.OptionTypeName
                 && expectedOutputType.IsAssignableFrom inputType
@@ -50,19 +51,20 @@ let private normalizeOptional (outputType : Type) value =
                 let valuesome, _, _ = ReflectionHelper.vOptionOfType expectedOutputType
                 valuesome value
             else
-                let realInputType = inputType.GenericTypeArguments[0]
+                // Use only when option or voption so must not be null
+                let actualInputType = inputType.GenericTypeArguments.FirstOrDefault()
                 if
                     inputType.FullName.StartsWith ReflectionHelper.OptionTypeName
-                    && outputType.IsAssignableFrom realInputType
+                    && outputType.IsAssignableFrom actualInputType
                 then
-                    let _, _, getValue = ReflectionHelper.optionOfType realInputType
+                    let _, _, getValue = ReflectionHelper.optionOfType actualInputType
                     // none is null so it is already covered above
                     getValue value
                 elif
                     inputType.FullName.StartsWith ReflectionHelper.ValueOptionTypeName
-                    && outputType.IsAssignableFrom realInputType
+                    && outputType.IsAssignableFrom actualInputType
                 then
-                    let _, valueNone, getValue = ReflectionHelper.vOptionOfType realInputType
+                    let _, valueNone, getValue = ReflectionHelper.vOptionOfType actualInputType
                     if value = valueNone then null else getValue value
                 else
                     value
@@ -107,10 +109,17 @@ let rec internal compileByType
         let objtype = objDef.Type
         let ctor = ReflectionHelper.matchConstructor objtype (objDef.Fields |> Array.map (fun x -> x.Name))
 
-        let struct (mapper, nullableMismatchParameters, missingParameters) =
+        let struct (mapper, typeMismatchParameters, nullableMismatchParameters, missingParameters) =
             ctor.GetParameters ()
             |> Array.fold
-                (fun struct (all : ResizeArray<_>, areNullable : HashSet<_>, missing : HashSet<_>) param ->
+                (fun struct (
+                            all : ResizeArray<_>,
+                            mismatch : HashSet<_>,
+                            areNullable : HashSet<_>,
+                            missing : HashSet<_>
+                        )
+                        param
+                        ->
                     match
                         objDef.Fields
                         |> Array.tryFind (fun field -> field.Name = param.Name)
@@ -122,27 +131,41 @@ let rec internal compileByType
                             && field.DefaultValue.IsNone
                             ->
                             areNullable.Add param.Name |> ignore
-                        | _ -> all.Add (struct (ValueSome field, param)) |> ignore
+                        | inputDef ->
+                            if ReflectionHelper.isAssignableWithUnwrap inputDef.Type param.ParameterType then
+                                all.Add (struct (ValueSome field, param)) |> ignore
+                            else
+                                // TODO: Consider improving by specifying type mismatches
+                                mismatch.Add param.Name |> ignore
                     | None ->
                         if ReflectionHelper.isParameterOptional param then
                             all.Add <| struct (ValueNone, param) |> ignore
                         else
                             missing.Add param.Name |> ignore
-                    struct (all, areNullable, missing))
-                struct (ResizeArray (), HashSet (), HashSet ())
+                    struct (all, mismatch, areNullable, missing))
+                struct (ResizeArray (), HashSet (), HashSet (), HashSet ())
 
-        if missingParameters.Any () then
-            raise
-            <| InvalidInputTypeException (
-                $"Input object '%s{objDef.Name}' refers to type '%O{objtype}', but mandatory constructor parameters '%A{missingParameters}' don't match any of the defined input fields",
-                missingParameters.ToImmutableHashSet ()
-            )
-        if nullableMismatchParameters.Any () then
-            raise
-            <| InvalidInputTypeException (
-                $"Input object %s{objDef.Name} refers to type '%O{objtype}', but optional fields '%A{missingParameters}' are not optional parameters of the constructor",
-                nullableMismatchParameters.ToImmutableHashSet ()
-            )
+        let exceptions : exn list =  [
+            if missingParameters.Any () then
+                InvalidInputTypeException (
+                    $"Input object '%s{objDef.Name}' refers to type '%O{objtype}', but mandatory constructor parameters '%A{missingParameters}' don't match any of the defined input fields",
+                    missingParameters.ToImmutableHashSet ()
+                )
+            if nullableMismatchParameters.Any () then
+                InvalidInputTypeException (
+                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but optional fields '%A{missingParameters}' are not optional parameters of the constructor",
+                    nullableMismatchParameters.ToImmutableHashSet ()
+                )
+            if typeMismatchParameters.Any () then
+                InvalidInputTypeException (
+                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but fields '%A{typeMismatchParameters}' have different types than constructor parameters",
+                    typeMismatchParameters.ToImmutableHashSet ()
+                )
+        ]
+        match exceptions with
+        | [] -> ()
+        | [ ex ] -> raise ex
+        | _ -> raise (AggregateException ($"Invalid input object '%O{objtype}'", exceptions))
 
         let attachErrorExtensionsIfScalar inputSource path objDef (fieldDef : InputFieldDef) result =
 

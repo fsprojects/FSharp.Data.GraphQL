@@ -132,6 +132,10 @@ module internal ReflectionHelper =
 
     let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
     let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
+    let [<Literal>] ListTypeName = "Microsoft.FSharp.Collections.FSharpList`1"
+    let [<Literal>] ArrayTypeName = "System.Array`1"
+    let [<Literal>] IEnumerableTypeName = "System.Collections.IEnumerable"
+    let [<Literal>] IEnumerableGenericTypeName = "System.Collections.Generic.IEnumerable`1"
 
     let isParameterOptional (p: ParameterInfo) =
         p.IsOptional
@@ -139,6 +143,50 @@ module internal ReflectionHelper =
         || p.ParameterType.FullName.StartsWith ValueOptionTypeName
 
     let isPrameterMandatory = not << isParameterOptional
+
+    let unwrapOptions (ty : Type) =
+        if ty.FullName.StartsWith OptionTypeName || ty.FullName.StartsWith ValueOptionTypeName then
+            ty.GetGenericArguments().[0]
+        else ty
+
+    let isAssignableWithUnwrap (from: Type) (``to``: Type) =
+
+        let checkCollections (from: Type) (``to``: Type) =
+            if
+                // TODO: Implement support of other types of collections using collection initializers
+                (``to``.FullName.StartsWith ListTypeName || ``to``.FullName.StartsWith ArrayTypeName)
+                && (from.IsGenericType
+                    && from.GenericTypeArguments[0].IsAssignableTo(``to``.GenericTypeArguments[0])
+                    && from.GetInterfaces()
+                       |> Array.exists (
+                        fun i -> i.FullName.StartsWith IEnumerableGenericTypeName
+                                    || i.FullName = IEnumerableTypeName
+                       )
+                    )
+
+            then
+                let fromType = from.GetGenericArguments()[0]
+                let toType = ``to``.GetGenericArguments()[0]
+                fromType.IsAssignableTo toType
+            else
+                false
+
+        let actualFrom =
+            if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
+                from.GetGenericArguments()[0]
+            else from
+        let actualTo =
+            if ``to``.FullName.StartsWith OptionTypeName || ``to``.FullName.StartsWith ValueOptionTypeName then
+                ``to``.GetGenericArguments()[0]
+            else ``to``
+
+        let result = actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
+        if result then result
+        else
+            if actualFrom.FullName.StartsWith OptionTypeName || actualFrom.FullName.StartsWith ValueOptionTypeName then
+                let actualFrom = actualFrom.GetGenericArguments()[0]
+                actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
+            else result
 
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
