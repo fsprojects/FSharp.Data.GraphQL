@@ -34,7 +34,7 @@ let embedAll = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.Emb
 let ciBuild = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.CIBuild)
 
 module DotNetCli =
-    let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.400" }
+    let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.403" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
 
 let configurationString = Environment.environVarOrDefault "CONFIGURATION" "Release"
