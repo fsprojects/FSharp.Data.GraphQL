@@ -28,6 +28,7 @@
     <PackageReference Update="System.CodeDom" Version="$(SystemVersion)" />
     <PackageReference Update="System.Collections.Immutable" Version="$(SystemVersion)" />
     <PackageReference Update="System.Diagnostics.DiagnosticSource" Version="$(SystemVersion)" />
+    <PackageReference Update="System.Formats.Asn1" Version="$(SystemVersion)" />
     <PackageReference Update="System.Management" Version="6.*" />
     <PackageReference Update="System.Reactive" Version="6.*" NoWarn="NU1608" />
     <PackageReference Update="System.Text.Json" Version="$(SystemVersion)" />
