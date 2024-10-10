@@ -24,6 +24,15 @@ execContext
 |> Fake.Core.Context.RuntimeContext.Fake
 |> Fake.Core.Context.setExecutionContext
 
+module BuildArguments =
+    let [<Literal>] EmbedAll = "--embed-all"
+    let [<Literal>] CIBuild = "--ci-build"
+    let [<Literal>] SkipDuplicate = "--skip-duplicate"
+
+let ctx = Context.forceFakeContext ()
+let embedAll = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.EmbedAll)
+let ciBuild = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.CIBuild)
+
 module DotNetCli =
     let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.400" }
     let setRestoreOptions (o : DotNet.RestoreOptions) = o.WithCommon setVersion
@@ -71,7 +80,17 @@ Target.create BuildTarget <| fun _ ->
     |> DotNet.build (fun options -> {
         options with
             Configuration = configuration
-            MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
+            MSBuildParams = {
+                options.MSBuildParams with
+                    DisableInternalBinLog = true
+                    Properties = [
+                        if embedAll then
+                            ("DebugType", "Embedded")
+                            ("EmbedAllSources", "true")
+                        if ciBuild then
+                            ("ContinuousIntegrationBuild", "true")
+                    ]
+            }
     })
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
@@ -242,13 +261,20 @@ let pack id =
     Shell.cleanDir packageDir
 
     projectPath
-    |> DotNet.pack (fun p ->
+    |> DotNet.pack (fun options ->
         {
-            p with
-                Common = { p.Common with Version = Some release.NugetVersion }
+            options with
+                Common = { options.Common with Version = Some release.NugetVersion }
                 NoLogo = true
                 OutputPath = Some packageDir
-                MSBuildParams = { p.MSBuildParams with Properties = [("IsNuget", "true")] }
+                MSBuildParams = {
+                    options.MSBuildParams with
+                        Properties = [
+                            if embedAll then
+                                ("DebugType", "Embedded")
+                            ("IsNuget", "true")
+                        ]
+                }
         }
             .WithCommon
             DotNetCli.setVersion)
@@ -276,18 +302,19 @@ let push id =
 
     packageFile
     |> DotNet.nugetPush (fun p ->
+        let skipDuplicate = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.SkipDuplicate)
         {
             p with
                 Common = { p.Common with WorkingDirectory = packageDir }
                 PushParams = {
-                    p.PushParams
-                        with
-                            ApiKey = Some (Environment.GetEnvironmentVariable apiKeyVariableName)
-                            Source = source
-                            SkipDuplicate = true
+                    p.PushParams with
+                        ApiKey = Some (Environment.GetEnvironmentVariable apiKeyVariableName)
+                        Source = source
+                        SkipDuplicate = skipDuplicate
                 }
         }
-            .WithCommon DotNetCli.setVersion)
+            .WithCommon
+            DotNetCli.setVersion)
 
 let [<Literal>] PackSharedTarget = "PackShared"
 Target.create PackSharedTarget <| fun _ -> pack "Shared"
@@ -345,39 +372,37 @@ Target.create "All" ignore
 Target.create "PackAndPush" ignore
 
 "Clean"
-    ==> RestoreTarget
-    ==> BuildTarget
-    ==> RunUnitTestsTarget
-    ==> StartStarWarsServerTarget
-    ==> StartIntegrationServerTarget
-    ==> UpdateIntrospectionFileTarget
-    ==> RunIntegrationTestsTarget
-    ==> "All"
-    =?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
-    |> ignore
+==> RestoreTarget
+==> BuildTarget
+==> RunUnitTestsTarget
+==> StartStarWarsServerTarget
+==> StartIntegrationServerTarget
+==> UpdateIntrospectionFileTarget
+==> RunIntegrationTestsTarget
+==> "All"
+=?> (GenerateDocsTarget, Environment.environVar "GITHUB_ACTIONS" = "True")
+|> ignore
 
-"CleanDocs"
-    ==> GenerateDocsTarget
-    |> ignore
+"CleanDocs" ==> GenerateDocsTarget |> ignore
 
 PackSharedTarget
-    ==> PushSharedTarget
-    ==> PackClientTarget
-    ==> PushClientTarget
-    ==> PackServerTarget
-    ==> PushServerTarget
-    ==> PackServerAspNetCore
-    ==> PushServerAspNetCore
-    ==> PackServerGiraffe
-    ==> PushServerGiraffe
-    ==> PackServerOxpecker
-    ==> PushServerOxpecker
-    ==> PackMiddlewareTarget
-    ==> PushMiddlewareTarget
-    ==> PackRelayTarget
-    ==> PushRelayTarget
-    ==> "PackAndPush"
-    |> ignore
+==> PushSharedTarget
+==> PackClientTarget
+==> PushClientTarget
+==> PackServerTarget
+==> PushServerTarget
+==> PackServerAspNetCore
+==> PushServerAspNetCore
+==> PackServerGiraffe
+==> PushServerGiraffe
+==> PackServerOxpecker
+==> PushServerOxpecker
+==> PackMiddlewareTarget
+==> PushMiddlewareTarget
+==> PackRelayTarget
+==> PushRelayTarget
+==> "PackAndPush"
+|> ignore
 
 Target.runOrDefaultWithArguments "All"
 
