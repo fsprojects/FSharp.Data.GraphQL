@@ -90,15 +90,7 @@ Target.create BuildTarget <| fun _ ->
     })
 
 let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
-    DotNet.build
-        (fun options -> {
-            options with
-                Configuration = configuration
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-        })
-        project
-
-    CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --configuration {configurationString} --urls=http://localhost:%i{port}/"
+    CreateProcess.fromRawCommandLine "dotnet" $"run --project {project} --no-build --configuration {configurationString} --urls=http://localhost:%i{port}/"
     |> CreateProcess.withStandardInput (CreatePipe streamRef)
     |> Proc.start
     |> ignore
@@ -106,29 +98,23 @@ let startGraphQLServer (project : string) port (streamRef : DataRef<Stream>) =
     System.Threading.Thread.Sleep (2000)
 
 let runTests (project : string) (args : string) =
-    DotNet.build
-        (fun options -> {
-            options with
-                Framework = Some DotNetMoniker
-                Configuration = configuration
-                MSBuildParams = { options.MSBuildParams with DisableInternalBinLog = true }
-        })
-        project
-
-    let customParams = String.Join (' ', "--no-build -v=normal", args)
-
     DotNet.test
         (fun options ->
             {
                 options with
+                    NoBuild = true
                     Framework = Some DotNetMoniker
                     Configuration = configuration
                     MSBuildParams = {
                         options.MSBuildParams with
                             DisableInternalBinLog = true
                             Verbosity = Some Normal
+                            Properties = [
+                                if embedAll then
+                                    ("DebugType", "embedded")
+                                    ("EmbedAllSources", "true")
+                            ]
                     }
-                    Common = { options.Common with CustomParams = Some customParams }
             }
                 .WithCommon
                 DotNetCli.setVersion)
@@ -262,6 +248,7 @@ let pack id =
             options with
                 Common = { options.Common with Version = Some release.NugetVersion }
                 NoLogo = true
+                NoBuild = true
                 OutputPath = Some packageDir
                 MSBuildParams = {
                     options.MSBuildParams with
