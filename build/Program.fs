@@ -140,6 +140,26 @@ Target.createFinal StopStarWarsServerTarget <| fun _ ->
     with e ->
         printfn "%s" e.Message
 
+let integrationTestServerProjectPath =
+    "tests"
+    </> "FSharp.Data.GraphQL.IntegrationTests.Server"
+    </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj"
+
+
+let [<Literal>] BuildIntegrationTestServerTarget = "BuildIntegrationTestServer"
+Target.create BuildIntegrationTestServerTarget <| fun _ ->
+    integrationTestServerProjectPath
+    |> DotNet.build (fun options -> {
+        options with
+            Configuration = configuration
+            MSBuildParams = {
+                options.MSBuildParams with
+                    DisableInternalBinLog = true
+            }
+            Common = { options.Common with CustomParams = Some "--no-dependencies" }
+    })
+
+
 let integrationServerStream = StreamRef.Empty
 
 let [<Literal>] StopIntegrationServerTarget = "StopIntegrationServer"
@@ -147,11 +167,7 @@ let [<Literal>] StartIntegrationServerTarget = "StartIntegrationServer"
 Target.create StartIntegrationServerTarget <| fun _ ->
     Target.activateFinal StopIntegrationServerTarget
 
-    let project =
-        "tests"
-        </> "FSharp.Data.GraphQL.IntegrationTests.Server"
-        </> "FSharp.Data.GraphQL.IntegrationTests.Server.fsproj"
-
+    let project = integrationTestServerProjectPath
     startGraphQLServer project 8085 integrationServerStream
 
 Target.createFinal StopIntegrationServerTarget <| fun _ ->
@@ -359,6 +375,7 @@ Target.create "PackAndPush" ignore
 ==> BuildTarget
 ==> RunUnitTestsTarget
 ==> StartStarWarsServerTarget
+==> BuildIntegrationTestServerTarget
 ==> StartIntegrationServerTarget
 ==> UpdateIntrospectionFileTarget
 ==> RunIntegrationTestsTarget
