@@ -54,12 +54,12 @@ jobs:
       run: dotnet tool restore
 
     - name: Run integration tests
-      run: dotnet run --project build/Build.fsproj -- --embed-all --ci-build
+      run: dotnet run --project build/Build.fsproj -- --embed-all
 
     - name: Pack FSharp.Data.GraphQL.Shared project
       run: |
         cd src/FSharp.Data.GraphQL.Shared
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Shared package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Shared.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -67,7 +67,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Client project
       run: |
         cd src/FSharp.Data.GraphQL.Client
-        dotnet pack --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Client package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Client.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -75,7 +75,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server project
       run: |
         cd src/FSharp.Data.GraphQL.Server
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -83,7 +83,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.AspNetCore project
       run: |
         cd src/FSharp.Data.GraphQL.Server.AspNetCore
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.AspNetCore package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.AspNetCore.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -91,7 +91,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Giraffe project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Giraffe
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Giraffe package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Giraffe.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -99,7 +99,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Oxpecker project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Oxpecker
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Oxpecker package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Oxpecker.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -107,7 +107,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Relay project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Relay
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Relay package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Relay.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate
@@ -115,7 +115,7 @@ jobs:
     - name: Pack FSharp.Data.GraphQL.Server.Middleware project
       run: |
         cd src/FSharp.Data.GraphQL.Server.Middleware
-        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=Embedded -o ../../nuget
+        dotnet pack --no-build --configuration Release /p:IsNuGet=true /p:DebugType=embedded -o ../../nuget
     - name: Publish FSharp.Data.GraphQL.Server.Middleware package to GitHub
       run: |
         dotnet nuget push nuget/FSharp.Data.GraphQL.Server.Middleware.${{env.VERSION}}.nupkg -s "github.com" -k ${{secrets.GITHUB_TOKEN}} --skip-duplicate

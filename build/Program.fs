@@ -26,12 +26,10 @@ execContext
 
 module BuildArguments =
     let [<Literal>] EmbedAll = "--embed-all"
-    let [<Literal>] CIBuild = "--ci-build"
     let [<Literal>] SkipDuplicate = "--skip-duplicate"
 
 let ctx = Context.forceFakeContext ()
 let embedAll = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.EmbedAll)
-let ciBuild = ctx.Arguments |> List.exists (fun arg -> arg = BuildArguments.CIBuild)
 
 module DotNetCli =
     let setVersion (o : DotNet.Options) = { o with Version = Some "8.0.403" }
@@ -85,10 +83,8 @@ Target.create BuildTarget <| fun _ ->
                     DisableInternalBinLog = true
                     Properties = [
                         if embedAll then
-                            ("DebugType", "Embedded")
+                            ("DebugType", "embedded")
                             ("EmbedAllSources", "true")
-                        if ciBuild then
-                            ("ContinuousIntegrationBuild", "true")
                     ]
             }
     })
@@ -271,7 +267,7 @@ let pack id =
                     options.MSBuildParams with
                         Properties = [
                             if embedAll then
-                                ("DebugType", "Embedded")
+                                ("DebugType", "embedded")
                             ("IsNuget", "true")
                         ]
                 }

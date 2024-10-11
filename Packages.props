@@ -47,10 +47,7 @@
     <PackageReference Update="FSharp.Compiler.Service" Version="43.7.300" />
     <PackageReference Update="Mono.Posix.NETStandard" Version="1.0.0" />
     <PackageReference Update="MSBuild.StructuredLogger" Version="2.*" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0">
-      <PrivateAssets>all</PrivateAssets>
-      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
-    </PackageReference>
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="8.0.0" PrivateAssets="All" />
   </ItemGroup>
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.14.*" />
