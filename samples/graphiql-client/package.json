@@ -13,7 +13,7 @@
   "author": "Bazinga Technologies",
   "license": "MIT",
   "dependencies": {
-    "graphiql": "^0.7.1",
+    "graphiql": "^1.4.7",
     "graphql": "^0.6.0",
     "react": "^15.0.2",
     "react-dom": "^15.0.2"
