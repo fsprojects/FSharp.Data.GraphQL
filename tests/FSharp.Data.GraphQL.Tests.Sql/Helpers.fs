@@ -1,5 +1,5 @@
-﻿/// The MIT License (MIT)
-/// Copyright (c) 2016 Bazinga Technologies Inc
+// The MIT License (MIT)
+// Copyright (c) 2016 Bazinga Technologies Inc
 [<AutoOpen>]
 module Helpers
 
@@ -11,26 +11,23 @@ open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Types.Introspection
 open FSharp.Data.GraphQL.Execution
 
-let equals (expected : 'x) (actual : 'x) = 
-    Assert.True((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
-let noErrors (result: IDictionary<string, obj>) =
-    match result.TryGetValue("errors") with
+let equals (expected : 'x) (actual : 'x) =
+    Assert.True ((actual = expected), sprintf "expected %+A\nbut got %+A" expected actual)
+let noErrors (result : IDictionary<string, obj>) =
+    match result.TryGetValue ("errors") with
     | true, errors -> failwithf "expected ExecutionResult to have no errors but got %+A" errors
     | false, _ -> ()
-let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e>(action)
+let throws<'e when 'e :> exn> (action : unit -> unit) = Assert.Throws<'e> (action)
 let sync = Async.RunSynchronously
-let is<'t> (o: obj) = o :? 't
-let hasError errMsg (errors: string seq) =
-    let containsMessage = 
-        errors
-        |> Seq.exists (fun e -> e.Contains(errMsg))
-    Assert.True (containsMessage, sprintf "expected to contain message '%s', but no such message was found. Messages found: %A" errMsg errors)
+let is<'t> (o : obj) = o :? 't
+let hasError (errMsg : string) (errors : string seq) =
+    let containsMessage = errors |> Seq.exists (fun e -> e.Contains (errMsg))
+    Assert.True (containsMessage, $"expected to contain message '%s{errMsg}', but no such message was found. Messages found: %A{errors}")
 
-let (<??) opt other = 
+let (<??) opt other =
     match opt with
     | None -> Some other
     | _ -> opt
 
-let undefined (value: 't) = 
-    Assert.True((value = Unchecked.defaultof<'t>), sprintf "Expected value to be undefined, but was: %A" value)
-
+let undefined (value : 't) =
+    Assert.True ((value = Unchecked.defaultof<'t>), $"Expected value to be undefined, but was: %A{value}")

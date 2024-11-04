@@ -70,11 +70,11 @@ type Track =
 type Tracker =
     /// Leaf of the tree. Marks a direct field/property access with no sub-trees.
     /// Consists of <see cref="Track"/> record and (neglible in this case) list of arguments.
-    | Direct of Track * Arg list
+    | Direct of Track * Arg Set
     /// Marks branched field/property access - property value withh possible sub-trees.
     /// Consists of <see cref="Track"/> record list of arguments used to parametrize GraphQL
     /// field definition and set of subtrees.
-    | Compose of Track * Arg list * Set<Tracker>
+    | Compose of Track * Arg Set * Tracker Set
     member x.Track =
         match x with
         | Direct(track, _)     -> track
@@ -134,7 +134,7 @@ type CallableArg =
       Argument: Arg
       /// List of all other arguments resolved as part of other possible
       /// applications on the current property track.
-      AllArguments: Arg list
+      AllArguments: Arg Set
       /// Track describing field or property access.
       Track: Track
       /// Source type of the property - in case when track returns a collection or option,
@@ -219,7 +219,7 @@ let private applyFirst: ArgApplication = fun expression callable ->
     let orderBy = methods.OrderBy.MakeGenericMethod [| tSource; idAccess.ReturnType |]
     let ordered = Expression.Call(null, orderBy, expression, idAccess)
 
-    let afterOption = callable.AllArguments |> List.tryFind (fun a -> a.Name = "after")
+    let afterOption = callable.AllArguments |> Seq.tryFind (fun a -> a.Name = "after")
     let result =
         match afterOption with
         | Some(after) ->
@@ -244,7 +244,7 @@ let private applyLast: ArgApplication = fun expression callable ->
     let orderByDesc = methods.OrderByDesc.MakeGenericMethod [| tSource; idAccess.ReturnType |]
     let ordered = Expression.Call(null, orderByDesc, expression, idAccess)
 
-    let beforeOption = callable.AllArguments |> List.tryFind (fun a -> a.Name = "after")
+    let beforeOption = callable.AllArguments |> Seq.tryFind (fun a -> a.Name = "after")
     let result =
         match beforeOption with
         | Some(before) ->
@@ -262,13 +262,13 @@ let private applyLast: ArgApplication = fun expression callable ->
 /// from a given ExecutionInfo and variables collection
 let private linqArgs vars info =
     let argDefs = info.Definition.Args
-    if Array.isEmpty argDefs then []
+    if Array.isEmpty argDefs then Set.empty
     else
         let args = info.Ast.Arguments
         argDefs
-        |> Array.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
-        |> Array.choose (resolveLinqArg vars)
-        |> Array.toList
+        |> Seq.map (fun a -> (a.Name, a, args |> List.tryFind (fun x -> x.Name = a.Name)))
+        |> Seq.choose (resolveLinqArg vars)
+        |> Set.ofSeq
 
 let rec private track set e =
     match e with
@@ -388,7 +388,7 @@ let rec private infoComposer (root: Tracker) (allTracks: Set<Tracker>) : Set<Tra
             |> Set.filter (fun track ->
                 match track with
                 | Direct (track, _) -> canJoin grandpaType track.ParentType && isOwn track
-                | x -> failwith <| sprintf "Expected Direct Track, but got %A" x)
+                | x -> failwithf "Expected Direct Track, but got %A" x)
         if Set.isEmpty members
         then root |> Set.singleton
         else
@@ -426,7 +426,7 @@ let rec private getTracks alreadyFound info =
         | _ -> failwith <| sprintf "Unexpected Resolve Definition Expression!"
     let tracks =
         track Set.empty expr
-        |> Set.map(fun track -> Direct(track, []))
+        |> Set.map(fun track -> Direct(track, Set.empty))
         |> flip Set.difference alreadyFound
     match info.Kind with
     | ResolveDeferred inner -> getTracks alreadyFound inner
@@ -568,7 +568,7 @@ and private constructCollection argApplicators tracker (inParam: Expression) : E
             Expression.Convert(inParam, methods.Type.MakeGenericType [| tSource |]),
             // `mapFunc` param - (p0 => body )
             Expression.Lambda(body, p0))
-    let final = args |> List.fold (fun acc (arg: Arg) ->
+    let final = args |> Set.fold (fun acc (arg: Arg) ->
         match Map.tryFind (arg.Name.ToLowerInvariant()) argApplicators with
         | Some apply -> apply acc { AllArguments = args; Argument = arg; Track = track; Fields = fields; Type = tSource }
         | None -> acc) call

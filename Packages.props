@@ -83,6 +83,7 @@
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="6.0.*" />
     <PackageReference Update="Newtonsoft.Json" Version="13.*" />
+    <PackageReference Update="SQLProvider" Version="1.4.*" />
     <PackageReference Update="System.Data.Common" Version="4.3.0" />
     <PackageReference Update="Thoth.Json.Net" Version="12.0.0" />
     <PackageReference Update="Validus" Version="4.1.*" />
