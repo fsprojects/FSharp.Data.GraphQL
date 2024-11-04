@@ -128,10 +128,10 @@ let ``Property tracker can track indirect properties`` () =
     let expected =
         Compose (
             track null typeof<obj list> typeof<Person list>,
-            [],
+            Set.empty,
             Set.ofList [
-                Tracker.Direct (track "FirstName" typeof<Person> typeof<string>, [])
-                Tracker.Direct (track "LastName" typeof<Person> typeof<string>, [])
+                Tracker.Direct (track "FirstName" typeof<Person> typeof<string>, Set.empty)
+                Tracker.Direct (track "LastName" typeof<Person> typeof<string>, Set.empty)
             ]
         )
     let actual = tracker ImmutableDictionary.Empty info
@@ -161,7 +161,7 @@ let ``Property tracker can correctly jump over properties not being part of the 
     let expected =
         Compose (
             { Name = None; ParentType = typeof<obj list>; ReturnType = typeof<Person list> },
-            [],
+            Set.empty,
             set [
                 Direct (
                     {
@@ -169,9 +169,9 @@ let ``Property tracker can correctly jump over properties not being part of the 
                         ParentType = typeof<Person>
                         ReturnType = typeof<Person list>
                     },
-                    []
+                    Set.empty
                 )
-                Direct ({ Name = Some "Id"; ParentType = typeof<Person>; ReturnType = typeof<int> }, [])
+                Direct ({ Name = Some "Id"; ParentType = typeof<Person>; ReturnType = typeof<int> }, Set.empty)
             ]
         )
 
