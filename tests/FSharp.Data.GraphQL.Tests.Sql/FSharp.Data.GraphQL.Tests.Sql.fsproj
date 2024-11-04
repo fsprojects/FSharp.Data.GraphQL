@@ -3,13 +3,13 @@
   <PropertyGroup>
     <TargetFramework>$(DotNetVersion)</TargetFramework>
     <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects>
-    <GenerateProgramFile>false</GenerateProgramFile>
     <OutputType>Exe</OutputType>
   </PropertyGroup>
 
   <ItemGroup>
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
+    <PackageReference Include="Microsoft.Data.SqlClient" />
     <PackageReference Include="SQLProvider" />
     <PackageReference Include="Validus" />
     <PackageReference Include="xunit" />

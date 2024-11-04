@@ -78,6 +78,7 @@
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageReference Update="Microsoft.Data.SqlClient" Version="5.*" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Runtime" Version="2.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
