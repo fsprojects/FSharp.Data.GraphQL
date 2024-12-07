@@ -90,6 +90,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                         match x.Name with
                         | "filter" -> ObjectListFilter.CoerceInput (InlineConstant x.Value)
                         | _ -> Ok NoFilter)
+                    |> Seq.toList
                 match filterResults |> splitSeqErrorsList with
                 | Error errs -> Error errs
                 | Ok filters ->

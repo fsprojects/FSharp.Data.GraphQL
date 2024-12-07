@@ -69,7 +69,8 @@ module SchemaDefinitions =
 
         let rec mapFilter (name : string, value : InputValue) =
             let mapFilters fields =
-                let coerceResults = fields |> Seq.map coerceObjectListFilterInput |> splitSeqErrorsList
+                let coerceResults =
+                    fields |> Seq.map coerceObjectListFilterInput |> Seq.toList |> splitSeqErrorsList
                 match coerceResults with
                 | Error errs -> Error errs
                 | Ok coerced -> coerced |> removeNoFilter |> Seq.toList |> Ok
@@ -95,7 +96,8 @@ module SchemaDefinitions =
             | _ -> Ok NoFilter
 
         and mapInput value =
-            let filterResults = value |> Map.toSeq |> Seq.map mapFilter |> splitSeqErrorsList
+            let filterResults =
+                value |> Map.toSeq |> Seq.map mapFilter |> Seq.toList |> splitSeqErrorsList
             match filterResults with
             | Error errs -> Error errs
             | Ok filters ->

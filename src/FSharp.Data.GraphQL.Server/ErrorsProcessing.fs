@@ -11,10 +11,10 @@ open FsToolkit.ErrorHandling
 
 let getObjectErrors (object: IReadOnlyDictionary<string, Result<'t, IGQLError>>) =
     object
-    |> Seq.choose (fun kvp ->
+    |> Seq.vchoose (fun kvp ->
         match kvp.Value with
-        | Ok _ -> None
-        | Error err -> Some err)
+        | Ok _ -> ValueNone
+        | Error err -> ValueSome err)
     |> Seq.toList
 
 let getObjectValues (object: IReadOnlyDictionary<string, Result<'t, IGQLError>>) =
@@ -30,7 +30,7 @@ let getObjectValues (object: IReadOnlyDictionary<string, Result<'t, IGQLError>>)
 let splitObjectErrors (object: IReadOnlyDictionary<string, Result<'t, IGQLError>>) =
     let errors = object |> getObjectErrors
 
-    if not <| List.isEmpty errors then
+    if not errors.IsEmpty then
         Error errors
     else
         let values = object |> getObjectValues
@@ -38,10 +38,11 @@ let splitObjectErrors (object: IReadOnlyDictionary<string, Result<'t, IGQLError>
 
 let getObjectErrorsList (object: IReadOnlyDictionary<string, Result<'t, IGQLError list>>) =
     object
-    |> Seq.choose (fun kvp ->
+    |> Seq.vchoose (fun kvp ->
         match kvp.Value with
-        | Ok _ -> None
-        | Error err -> Some err)
+        | Ok _ -> ValueNone
+        | Error err -> ValueSome err)
+    |> Seq.collect id
     |> Seq.toList
 
 let getObjectValuesList (object: IReadOnlyDictionary<string, Result<'t, IGQLError list>>) =
@@ -57,18 +58,18 @@ let getObjectValuesList (object: IReadOnlyDictionary<string, Result<'t, IGQLErro
 let splitObjectErrorsList (object: IReadOnlyDictionary<string, Result<'t, IGQLError list>>) =
     let errors = object |> getObjectErrorsList
 
-    if not <| List.isEmpty errors then
-        Error (errors |> List.collect id)
+    if not errors.IsEmpty then
+        Error errors
     else
         let values = object |> getObjectValuesList
         Ok values
 
 let getSeqErrors (items: Result<'t, IGQLError> seq) =
     items
-    |> Seq.choose (fun result ->
+    |> Seq.vchoose (fun result ->
         match result with
-        | Ok _ -> None
-        | Error err -> Some err)
+        | Ok _ -> ValueNone
+        | Error err -> ValueSome err)
     |> Seq.toList
 
 let getSeqValues (items: Result<'t, IGQLError> seq) =
@@ -79,10 +80,10 @@ let getSeqValues (items: Result<'t, IGQLError> seq) =
         | Error _ -> raise <| ArgumentException())
     |> Seq.toArray
 
-let splitSeqErrors (items: Result<'t, IGQLError> seq) =
+let splitSeqErrors (items: Result<'t, IGQLError> list) =
     let errors = items |> getSeqErrors
 
-    if not <| List.isEmpty errors then
+    if not errors.IsEmpty then
         Error errors
     else
         let values = items |> getSeqValues
@@ -90,10 +91,11 @@ let splitSeqErrors (items: Result<'t, IGQLError> seq) =
 
 let getSeqErrorsList (items: Result<'t, IGQLError list> seq) =
     items
-    |> Seq.choose (fun result ->
+    |> Seq.vchoose (fun result ->
         match result with
-        | Ok _ -> None
-        | Error err -> Some err)
+        | Ok _ -> ValueNone
+        | Error err -> ValueSome err)
+    |> Seq.collect id
     |> Seq.toList
 
 let getSeqValuesList (items: Result<'t, IGQLError list> seq) =
@@ -104,11 +106,11 @@ let getSeqValuesList (items: Result<'t, IGQLError list> seq) =
         | Error _ -> raise <| ArgumentException())
     |> Seq.toArray
 
-let splitSeqErrorsList (items: Result<'t, IGQLError list> seq) =
+let splitSeqErrorsList (items: Result<'t, IGQLError list> list) =
     let errors = items |> getSeqErrorsList
 
-    if not <| List.isEmpty errors then
-        Error (errors |> List.collect id)
+    if not errors.IsEmpty then
+        Error errors
     else
         let values = items |> getSeqValuesList
         Ok values

@@ -208,6 +208,7 @@ let rec internal compileByType
                                 |> Result.map (normalizeOptional param.ParameterType)
                                 |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
                         | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
+                    |> Seq.toList
 
                 let! args = argResults |> splitSeqErrorsList
 
@@ -237,6 +238,7 @@ let rec internal compileByType
                                     return normalizeOptional param.ParameterType value
                                 | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                             })
+                            |> Seq.toList
 
                         let! args = argResults |> splitSeqErrorsList
 
@@ -280,6 +282,7 @@ let rec internal compileByType
                 let! mappedValues =
                     list
                     |> Seq.mapi (fun i value -> inner i value variables)
+                    |> Seq.toList
                     |> splitSeqErrorsList
                 let mappedValues =
                     mappedValues
@@ -430,6 +433,7 @@ let rec internal coerceVariableValue
                             input.EnumerateArray ()
                             |> Seq.mapi (fun i elem ->
                                 coerceVariableValue areItemsNullable ((box i) :: inputObjectPath) ValueNone (originalTypeDef, innerDef) varDef elem)
+                            |> Seq.toList
                             |> splitSeqErrorsList
                         if areItemsNullable then
                             let some, none, _ = ReflectionHelper.optionOfType innerDef.Type.GenericTypeArguments[0]

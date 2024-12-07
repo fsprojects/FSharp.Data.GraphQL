@@ -27,3 +27,7 @@ module internal Seq =
 module internal List =
 
     let vchoose mapping list = list |> Seq.vchoose mapping |> List.ofSeq
+
+module internal Array =
+
+    let vchoose mapping array = array |> Seq.vchoose mapping |> Array.ofSeq
