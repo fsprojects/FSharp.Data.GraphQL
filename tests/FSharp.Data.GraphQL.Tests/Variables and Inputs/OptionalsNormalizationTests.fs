@@ -99,11 +99,11 @@ module Address =
 
     open Scalars
 
-    let Line1Type = Define.ValidStringScalar<AddressLine1>("AddressLine1", createLine1, "Address line 1")
-    let Line2Type = Define.ValidStringScalar<AddressLine2>("AddressLine2", createLine2, "Address line 2")
-    let ZipCodeType = Define.ValidStringScalar<ZipCode>("AddressZipCode", createZipCode, "Address zip code")
-    let CityType = Define.ValidStringScalar<City>("City", createCity)
-    let StateType = Define.ValidStringScalar<State>("State", State.createOrWhitespace)
+    let Line1Type = Define.ValidStringScalar<AddressLine1>("AddressLine1", createLine1, ValidString.value, "Address line 1")
+    let Line2Type = Define.ValidStringScalar<AddressLine2>("AddressLine2", createLine2, ValidString.value, "Address line 2")
+    let ZipCodeType = Define.ValidStringScalar<ZipCode>("AddressZipCode", createZipCode, ValidString.value, "Address zip code")
+    let CityType = Define.ValidStringScalar<City>("City", createCity, ValidString.value)
+    let StateType = Define.ValidStringScalar<State>("State", State.createOrWhitespace, ValidString.value)
 
 let InputAddressRecordType =
     Define.InputObject<AddressRecord>(

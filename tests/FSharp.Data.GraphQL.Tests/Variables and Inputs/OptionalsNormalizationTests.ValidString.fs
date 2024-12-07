@@ -81,6 +81,7 @@ module String =
             Ok <| s
 
     open Validus.Operators
+    open System.Text.Json.Serialization
 
     let allowEmpty = ValueOption.ofObj >> ValueOption.filter (not << String.IsNullOrWhiteSpace)
 
@@ -146,7 +147,33 @@ module Scalars =
 
     type Define with
 
-        static member ValidStringScalar<'t>(typeName, createValid : Validator<string, 't voption>, ?description: string) =
+        static member ValidStringScalar<'t>
+            (typeName, createValid : Validator<string, 't>, toString : 't -> string, ?description : string)
+            =
+            let createValid : string -> ValidationResult<'t> = createValid typeName
+            Define.WrappedScalar (
+                name = typeName,
+                coerceInput =
+                    (function
+                    | Variable e when e.ValueKind = JsonValueKind.String ->
+                        e.GetString ()
+                        |> createValid
+                        |> Result.mapError ValidationErrors.toIGQLErrors
+                    | InlineConstant (StringValue s) ->
+                        s
+                        |> createValid
+                        |> Result.mapError ValidationErrors.toIGQLErrors
+                    | Variable e -> e.GetDeserializeError typeName
+                    | InlineConstant value -> value.GetCoerceError typeName),
+                coerceOutput =
+                    (function
+                    | :? 't as x -> Some (toString x)
+                    | :? string as s -> s |> Some
+                    | _ -> raise <| System.NotSupportedException ()),
+                ?description = description
+            )
+
+        static member ValidStringScalar<'t>(typeName, createValid : Validator<string, 't voption>, toString : 't -> string, ?description: string) =
             let createValid = createValid typeName
             Define.WrappedScalar
                 (name = typeName,
@@ -158,8 +185,8 @@ module Scalars =
                     | InlineConstant value -> value.GetCoerceError typeName),
                  coerceOutput =
                     (function
-                    | :? ('t voption) as x -> x |> string |> Some
-                    | :? 't as x -> Some (string x)
+                    | :? ('t voption) as x -> x |> ValueOption.map toString |> ValueOption.toOption
+                    | :? 't as x -> Some (toString x)
                     | :? string as s -> s |> Some
                     | null -> None
                     | _ -> raise <| System.NotSupportedException ()),
