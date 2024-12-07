@@ -147,20 +147,20 @@ let rec internal compileByType
 
         let exceptions : exn list =  [
             if missingParameters.Any () then
-                InvalidInputTypeException (
-                    $"Input object '%s{objDef.Name}' refers to type '%O{objtype}', but mandatory constructor parameters '%A{missingParameters}' don't match any of the defined input fields",
-                    missingParameters.ToImmutableHashSet ()
-                )
+                let message =
+                    let ``params`` = String.Join ("', '", missingParameters)
+                    $"Input object '%s{objDef.Name}' refers to type '%O{objtype}', but mandatory constructor parameters '%s{``params``}' don't match any of the defined GraphQL input fields"
+                InvalidInputTypeException (message, missingParameters.ToImmutableHashSet ())
             if nullableMismatchParameters.Any () then
-                InvalidInputTypeException (
-                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but optional fields '%A{missingParameters}' are not optional parameters of the constructor",
-                    nullableMismatchParameters.ToImmutableHashSet ()
-                )
+                let message =
+                    let ``params`` = String.Join ("', '", nullableMismatchParameters)
+                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but constructor parameters for optional GraphQL fields '%s{``params``}' are not optional"
+                InvalidInputTypeException (message, nullableMismatchParameters.ToImmutableHashSet ())
             if typeMismatchParameters.Any () then
-                InvalidInputTypeException (
-                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but fields '%A{typeMismatchParameters}' have different types than constructor parameters",
-                    typeMismatchParameters.ToImmutableHashSet ()
-                )
+                let message =
+                    let ``params`` = String.Join ("', '", typeMismatchParameters)
+                    $"Input object %s{objDef.Name} refers to type '%O{objtype}', but GraphQL fields '%s{``params``}' have different types than constructor parameters"
+                InvalidInputTypeException (message, typeMismatchParameters.ToImmutableHashSet ())
         ]
         match exceptions with
         | [] -> ()
