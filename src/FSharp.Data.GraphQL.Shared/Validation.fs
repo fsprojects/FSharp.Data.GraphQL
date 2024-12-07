@@ -274,7 +274,9 @@ module Ast =
             |> ValueOption.map _.TypeCondition
             |> ValueOption.defaultValue x.ParentType
 
-    let private tryFindInArrayOption (finder : 'T -> bool) = ValueOption.ofOption >> ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
+    let private tryFindInArrayOption (finder : 'T -> bool) =
+        ValueOption.ofOption
+        >> ValueOption.bind (Array.tryFind finder >> ValueOption.ofOption)
 
     let private onAllSelections (ctx : ValidationContext) (onSelection : SelectionInfo -> ValidationResult<GQLProblemDetails>) =
         let rec traverseSelections selection =
@@ -360,7 +362,9 @@ module Ast =
                 |> ValueOption.defaultValue List.empty
             | FragmentSpread fragSpread ->
                 voption {
-                    let! fragDef = ctx.FragmentDefinitions |> List.tryFind (fun def -> def.Name.IsSome && def.Name.Value = fragSpread.Name)
+                    let! fragDef =
+                        ctx.FragmentDefinitions
+                        |> List.tryFind (fun def -> def.Name.IsSome && def.Name.Value = fragSpread.Name)
                     let! typeCondition = fragDef.TypeCondition
                     let! fragType = ctx.Schema.TryGetTypeByName typeCondition
                     let fragType = Spread (fragSpread.Name, fragSpread.Directives, fragType)
@@ -898,10 +902,6 @@ module Ast =
             |> ValidationResult.collect (checkFragmentSpreadIsPossibleInSelection))
 
     let private checkInputValue (schemaInfo : SchemaInfo) (variables : VariableDefinition list option) (selection : SelectionInfo) =
-        let rec getFieldMap (fields : (string * IntrospectionTypeRef) seq) : Map<string, IntrospectionTypeRef> =
-            (Map.empty, fields)
-            ||> Seq.fold (fun acc (name, tref) -> Map.add name tref acc)
-
         let rec checkIsCoercible (tref : IntrospectionTypeRef) (argName : string) (value : InputValue) =
             let canNotCoerce =
                 AstError.AsResult (
@@ -954,8 +954,7 @@ module Ast =
                         let fieldMap =
                             itype.InputFields
                             |> Option.defaultValue [||]
-                            |> Array.map (fun x -> x.Name, x.Type)
-                            |> getFieldMap
+                            |> Array.fold (fun acc inputVal -> Map.add inputVal.Name inputVal.Type acc) Map.empty
                         let canCoerceFields =
                             fieldMap
                             |> ValidationResult.collect (fun kvp ->
@@ -1401,7 +1400,8 @@ module Ast =
                     | ValueSome operationName, _ ->
                         AstError.AsResult
                             $"A variable '$%s{varDef.VariableName}' is not used in operation '%s{operationName}'. Every variable must be used."
-                    | ValueNone, _ -> AstError.AsResult $"A variable '$%s{varDef.VariableName}' is not used in operation. Every variable must be used.")
+                    | ValueNone, _ ->
+                        AstError.AsResult $"A variable '$%s{varDef.VariableName}' is not used in operation. Every variable must be used.")
             | _ -> Success)
 
     let rec private areTypesCompatible (variableTypeRef : IntrospectionTypeRef) (locationTypeRef : IntrospectionTypeRef) =

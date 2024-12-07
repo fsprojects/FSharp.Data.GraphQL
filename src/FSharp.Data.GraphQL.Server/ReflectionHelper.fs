@@ -149,7 +149,7 @@ module internal ReflectionHelper =
             ty.GetGenericArguments().[0]
         else ty
 
-    let isAssignableWithUnwrap (from: Type) (``to``: Type) =
+    let rec isAssignableWithUnwrap (from: Type) (``to``: Type) =
 
         let checkCollections (from: Type) (``to``: Type) =
             if
@@ -176,17 +176,16 @@ module internal ReflectionHelper =
                 from.GetGenericArguments()[0]
             else from
         let actualTo =
-            if ``to``.FullName.StartsWith OptionTypeName || ``to``.FullName.StartsWith ValueOptionTypeName then
+            if ``to``.FullName.StartsWith OptionTypeName ||
+               ``to``.FullName.StartsWith ValueOptionTypeName
+            then
                 ``to``.GetGenericArguments()[0]
             else ``to``
 
         let result = actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
-        if result then result
-        else
-            if actualFrom.FullName.StartsWith OptionTypeName || actualFrom.FullName.StartsWith ValueOptionTypeName then
-                let actualFrom = actualFrom.GetGenericArguments()[0]
-                actualFrom.IsAssignableTo actualTo || checkCollections actualFrom actualTo
-            else result
+        if result then true
+        elif actualFrom <> from || actualTo <> ``to`` then isAssignableWithUnwrap actualFrom actualTo
+        else false
 
     let matchConstructor (t: Type) (fields: string []) =
         if FSharpType.IsRecord(t, true) then FSharpValue.PreComputeRecordConstructorInfo(t, true)
