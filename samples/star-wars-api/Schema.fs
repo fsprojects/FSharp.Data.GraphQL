@@ -1,5 +1,6 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
@@ -27,9 +28,15 @@ type Droid =
       AppearsIn : Episode list
       PrimaryFunction : string option }
 
+type PatchPlanet =
+    { Name : string option Skippable
+      SatelitesCount : int Skippable
+      IsMoon : bool option Skippable }
+
 type Planet =
     { Id : string
-      Name : string option
+      mutable Name : string option
+      mutable SatelitesCount : int
       mutable IsMoon : bool option }
 
     member x.SetMoon b =
@@ -94,12 +101,15 @@ module Schema =
     let planets =
         [ { Id = "1"
             Name = Some "Tatooine"
+            SatelitesCount = 2
             IsMoon = Some false}
           { Id = "2"
             Name = Some "Endor"
+            SatelitesCount = 1
             IsMoon = Some true}
           { Id = "3"
             Name = Some "Death Star"
+            SatelitesCount = 0
             IsMoon = Some false} ]
 
     let getHuman id = humans |> List.tryFind (fun h -> h.Id = id)
@@ -228,7 +238,19 @@ module Schema =
             fields = [
                 Define.Field ("id", StringType, "The id of the planet", (fun _ p -> p.Id))
                 Define.Field ("name", Nullable StringType, "The name of the planet.", (fun _ p -> p.Name))
+                Define.Field ("satelitesCount", IntType, "The number of satelites of the planet.", (fun _ p -> p.SatelitesCount))
                 Define.Field ("isMoon", Nullable BooleanType, "Is that a moon?", (fun _ p -> p.IsMoon))
+            ]
+        )
+
+    and PatchPlanetType =
+        Define.InputObject<PatchPlanet> (
+            name = "InputPatchPlanet",
+            description = "A planet in the Star Wars universe.",
+            fields = [
+                Define.SkippableInput ("name", Nullable StringType)
+                Define.SkippableInput ("satelitesCount", IntType)
+                Define.SkippableInput ("isMoon", Nullable BooleanType)
             ]
         )
 
@@ -299,6 +321,21 @@ module Schema =
                 //).WithAuthorizationPolicies(Policies.CanSetMoon)
                 // For build verification purposes
                 ).WithAuthorizationPolicies(Policies.Dummy)
+                Define.Field(
+                    "patchPlanet",
+                    PlanetType,
+                    [ Define.Input ("id", StringType); Define.Input ("planet", PatchPlanetType) ],
+                    resolve = (fun ctx _ ->
+                        match getPlanet (ctx.Arg ("id")) with
+                        | None -> raise (GQLMessageException "Planet not found")
+                        | Some planet ->
+                            let patch = ctx.Arg<PatchPlanet> "planet"
+                            patch.Name |> Skippable.iter (fun n -> planet.Name <- n)
+                            patch.SatelitesCount |> Skippable.iter (fun s -> planet.SatelitesCount <- s)
+                            patch.IsMoon |> Skippable.iter (fun m -> planet.IsMoon <- m)
+                            planet
+                    )
+                )
             ]
         )
 
