@@ -31,6 +31,7 @@ let TypeMetaFieldDef =
         args = [
             { Name = "name"
               Description = None
+              IsSkippable = false
               TypeDef = StringType
               DefaultValue = None
               ExecuteInput = variableOrElse(InlineConstant >> coerceStringInput >> Result.map box) }

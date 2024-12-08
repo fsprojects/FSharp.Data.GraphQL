@@ -4,9 +4,10 @@
 namespace FSharp.Data.GraphQL
 
 open System
-open System.Reflection
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Reflection
+open System.Text.Json.Serialization
 
 /// General helper functions and types.
 module Helpers =
@@ -133,3 +134,47 @@ module internal ReflectionHelper =
                     else input
                 else input
         (some, none, value)
+
+    /// <summary>
+    /// Returns pair of function constructors for `include(value)` and `skip`
+    /// used to create option of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">Type used for result option constructors as type param</param>
+    let ofSkippable (skippableType : Type) =
+        let skippableType = skippableType.GetTypeInfo ()
+        let skip =
+            let x = skippableType.GetDeclaredProperty "Skip"
+            x.GetValue(null)
+        let ``include`` =
+            let createInclude = skippableType.GetDeclaredMethod "NewInclude"
+            fun value ->
+                let valueType =
+                    match value with
+                    | null -> null
+                    | _ -> value.GetType().GetTypeInfo()
+                if valueType = skippableType
+                then value
+                else createInclude.Invoke(null, [| value |])
+        (``include``, skip)
+
+    /// <summary>
+    /// Returns pair of function constructors for `include(value)` and `skip`
+    /// used to create option of type <paramref name="t"/> given at runtime.
+    /// </summary>
+    /// <param name="t">Type used for result option constructors as type param</param>
+    let skippableOfType t =
+        let skippableType = typedefof<_ Skippable>.GetTypeInfo().MakeGenericType([|t|]).GetTypeInfo()
+        let skip =
+            let x = skippableType.GetDeclaredProperty "Skip"
+            x.GetValue(null)
+        let ``include`` =
+            let createInclude = skippableType.GetDeclaredMethod "NewInclude"
+            fun value ->
+                let valueType =
+                    match value with
+                    | null -> null
+                    | _ -> value.GetType().GetTypeInfo()
+                if valueType = skippableType
+                then value
+                else createInclude.Invoke(null, [| value |])
+        (``include``, skip)

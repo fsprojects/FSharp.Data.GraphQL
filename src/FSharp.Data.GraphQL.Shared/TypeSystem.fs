@@ -1637,6 +1637,8 @@ and InputFieldDef =
         abstract Name : string
         /// Optional input field / argument description.
         abstract Description : string option
+        /// Not applied to input object if field is missing but does not allow null.
+        abstract IsSkippable : bool
         /// GraphQL type definition of the input type.
         abstract TypeDef : InputDef
         /// Optional default input value - used when no input was provided.
@@ -1654,6 +1656,8 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
     Name : string
     /// Optional input field / argument description.
     Description : string option
+    /// Not applied to input object if field is missing but does not allow null.
+    IsSkippable : bool
     /// GraphQL type definition of the input type.
     TypeDef : InputDef<'In>
     /// Optional default input value - used when no input was provided.
@@ -1666,6 +1670,7 @@ and [<CustomEquality; NoComparison>] InputFieldDefinition<'In> = {
     interface InputFieldDef with
         member x.Name = x.Name
         member x.Description = x.Description
+        member x.IsSkippable = x.IsSkippable
         member x.TypeDef = upcast x.TypeDef
         member x.DefaultValue = x.DefaultValue |> Option.map (fun x -> upcast x)
 

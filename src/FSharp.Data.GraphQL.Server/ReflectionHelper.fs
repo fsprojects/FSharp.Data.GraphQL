@@ -132,17 +132,23 @@ module internal ReflectionHelper =
 
     let [<Literal>] OptionTypeName = "Microsoft.FSharp.Core.FSharpOption`1"
     let [<Literal>] ValueOptionTypeName = "Microsoft.FSharp.Core.FSharpValueOption`1"
+    let [<Literal>] SkippableTypeName = "System.Text.Json.Serialization.Skippable`1"
     let [<Literal>] ListTypeName = "Microsoft.FSharp.Collections.FSharpList`1"
     let [<Literal>] ArrayTypeName = "System.Array`1"
     let [<Literal>] IEnumerableTypeName = "System.Collections.IEnumerable"
     let [<Literal>] IEnumerableGenericTypeName = "System.Collections.Generic.IEnumerable`1"
 
+    let rec isTypeOptional (t: Type) =
+        t.FullName.StartsWith OptionTypeName
+        || t.FullName.StartsWith ValueOptionTypeName
+        || (t.FullName.StartsWith SkippableTypeName && isTypeOptional (t.GetGenericArguments().[0]))
+
     let isParameterOptional (p: ParameterInfo) =
-        p.IsOptional
-        || p.ParameterType.FullName.StartsWith OptionTypeName
-        || p.ParameterType.FullName.StartsWith ValueOptionTypeName
+        p.IsOptional || isTypeOptional p.ParameterType
 
     let isPrameterMandatory = not << isParameterOptional
+
+    let isParameterSkippable (p: ParameterInfo) = p.ParameterType.FullName.StartsWith SkippableTypeName
 
     let unwrapOptions (ty : Type) =
         if ty.FullName.StartsWith OptionTypeName || ty.FullName.StartsWith ValueOptionTypeName then
@@ -172,12 +178,15 @@ module internal ReflectionHelper =
                 false
 
         let actualFrom =
-            if from.FullName.StartsWith OptionTypeName || from.FullName.StartsWith ValueOptionTypeName then
+            if from.FullName.StartsWith OptionTypeName ||
+               from.FullName.StartsWith ValueOptionTypeName
+            then
                 from.GetGenericArguments()[0]
             else from
         let actualTo =
             if ``to``.FullName.StartsWith OptionTypeName ||
-               ``to``.FullName.StartsWith ValueOptionTypeName
+               ``to``.FullName.StartsWith ValueOptionTypeName ||
+               ``to``.FullName.StartsWith SkippableTypeName
             then
                 ``to``.GetGenericArguments()[0]
             else ``to``

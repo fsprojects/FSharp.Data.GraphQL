@@ -479,6 +479,7 @@ module SchemaDefinitions =
           Args =
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Included when true."
+                   IsSkippable = false
                    TypeDef = BooleanType
                    DefaultValue = None
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
@@ -492,6 +493,7 @@ module SchemaDefinitions =
           Args =
               [| { InputFieldDefinition.Name = "if"
                    Description = Some "Skipped when true."
+                   IsSkippable = false
                    TypeDef = BooleanType
                    DefaultValue = None
                    ExecuteInput = variableOrElse (InlineConstant >> coerceBoolInput >> Result.map box) } |] }
@@ -1313,8 +1315,30 @@ module SchemaDefinitions =
         static member Input(name : string, typedef : #InputDef<'In>, ?defaultValue : 'In, ?description : string) : InputFieldDef =
             upcast { InputFieldDefinition.Name = name
                      Description = description
+                     IsSkippable = false
                      TypeDef = typedef
                      DefaultValue = defaultValue
+                     ExecuteInput = Unchecked.defaultof<ExecuteInput> }
+
+        /// <summary>
+        /// Creates an input field. Input fields are used like ordinary fileds in case of <see cref="InputObject"/>s,
+        /// and can be used to define arguments to objects and interfaces fields.
+        /// </summary>
+        /// <param name="name">
+        /// Field name. Must be unique in scope of the defining input object or withing field's argument list.
+        /// </param>
+        /// <param name="typedef">GraphQL type definition of the current input type</param>
+        /// <param name="defaultValue">If defined, this value will be used when no matching input has been provided by the requester.</param>
+        /// <param name="description">Optional input description. Usefull for generating documentation.</param>
+        static member SkippableInput(name : string, typedef : #InputDef<'In>, ?description : string) : InputFieldDef =
+            upcast { InputFieldDefinition.Name = name
+                     Description = description |> Option.map (fun s -> s + " Skip this field if you want to avoid saving it")
+                     IsSkippable = true
+                     TypeDef =
+                        match (box typedef) with
+                        | :? NullableDef<'In> as n -> n
+                        | _ -> Nullable typedef
+                     DefaultValue = None
                      ExecuteInput = Unchecked.defaultof<ExecuteInput> }
 
         /// <summary>

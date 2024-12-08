@@ -53,6 +53,7 @@
     <Compile Include="Variables and Inputs\CoercionTests.fs" />
     <Compile Include="Variables and Inputs\OptionalsNormalizationTests.ValidString.fs" />
     <Compile Include="Variables and Inputs\OptionalsNormalizationTests.fs" />
+    <Compile Include="Variables and Inputs\SkippablesNormalizationTests.fs" />
     <Compile Include="Variables and Inputs\InputRecordTests.fs" />
     <Compile Include="Variables and Inputs\InputObjectValidatorTests.fs" />
     <Compile Include="Variables and Inputs\InputScalarAndAutoFieldScalarTests.fs" />

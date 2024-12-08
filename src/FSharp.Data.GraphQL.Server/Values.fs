@@ -111,6 +111,7 @@ let rec internal compileByType
 
         let parametersMap =
             let typeMismatchParameters = HashSet ()
+            let skippableMismatchParameters = HashSet ()
             let nullableMismatchParameters = HashSet ()
             let missingParameters = HashSet ()
 
@@ -123,22 +124,32 @@ let rec internal compileByType
                             |> Array.tryFind (fun field -> field.Name = param.Name)
                         with
                         | Some field ->
+                            let isParameterSkippable = ReflectionHelper.isParameterSkippable param
                             match field.TypeDef with
+                            | Nullable _ when field.IsSkippable <> isParameterSkippable ->
+                                skippableMismatchParameters.Add param.Name |> ignore
                             | Nullable _ when
-                                ReflectionHelper.isPrameterMandatory param
+                                not (isParameterSkippable)
+                                && ReflectionHelper.isPrameterMandatory param
                                 && field.DefaultValue.IsNone
                                 ->
                                 nullableMismatchParameters.Add param.Name |> ignore
                             | inputDef ->
-                                let inputType, paramType = inputDef.Type, param.ParameterType
+                                let inputType, paramType =
+                                    if isParameterSkippable then
+                                        inputDef.Type, param.ParameterType.GenericTypeArguments.[0]
+                                    else
+                                        inputDef.Type, param.ParameterType
                                 if ReflectionHelper.isAssignableWithUnwrap inputType paramType then
-                                    allParameters.Add (struct (ValueSome field, param))
-                                    |> ignore
+                                    allParameters.Add (struct (ValueSome field, param)) |> ignore
                                 else
                                     // TODO: Consider improving by specifying type mismatches
                                     typeMismatchParameters.Add param.Name |> ignore
                         | None ->
-                            if ReflectionHelper.isParameterOptional param then
+                            if
+                                ReflectionHelper.isParameterSkippable param
+                                || ReflectionHelper.isParameterOptional param
+                            then
                                 allParameters.Add <| struct (ValueNone, param) |> ignore
                             else
                                 missingParameters.Add param.Name |> ignore
@@ -157,6 +168,11 @@ let rec internal compileByType
                         let ``params`` = String.Join ("', '", nullableMismatchParameters)
                         $"Input object %s{objDef.Name} refers to type '%O{objtype}', but constructor parameters for optional GraphQL fields '%s{``params``}' are not optional"
                     InvalidInputTypeException (message, nullableMismatchParameters.ToImmutableHashSet ())
+                if skippableMismatchParameters.Any () then
+                    let message =
+                        let ``params`` = String.Join ("', '", skippableMismatchParameters)
+                        $"Input object %s{objDef.Name} refers to type '%O{objtype}', but skippable '%s{``params``}' GraphQL fields and constructor parameters do not match"
+                    InvalidInputTypeException (message, skippableMismatchParameters.ToImmutableHashSet ())
                 if typeMismatchParameters.Any () then
                     let message =
                         let ``params`` = String.Join ("', '", typeMismatchParameters)
@@ -204,15 +220,26 @@ let rec internal compileByType
                     parametersMap
                     |> Seq.map (fun struct (field, param) ->
                         match field with
-                        | ValueSome field ->
-                            match Map.tryFind field.Name props with
-                            | None ->
-                                Ok
-                                <| wrapOptionalNone param.ParameterType field.TypeDef.Type
-                            | Some prop ->
-                                field.ExecuteInput prop variables
-                                |> Result.map (normalizeOptional param.ParameterType)
-                                |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
+                        | ValueSome field -> result {
+                                match Map.tryFind field.Name props with
+                                | None when field.IsSkippable -> return Activator.CreateInstance param.ParameterType
+                                | None -> return wrapOptionalNone param.ParameterType field.TypeDef.Type
+                                | Some prop ->
+                                    let! value =
+                                        field.ExecuteInput prop variables
+                                        |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
+                                    if field.IsSkippable then
+                                        let innerType = param.ParameterType.GenericTypeArguments[0]
+                                        if not (ReflectionHelper.isTypeOptional innerType) &&
+                                           (value = null || (innerType.IsValueType && value = Activator.CreateInstance innerType))
+                                        then
+                                            return Activator.CreateInstance param.ParameterType
+                                        else
+                                            let ``include``, _ = ReflectionHelper.ofSkippable param.ParameterType
+                                            return normalizeOptional innerType value |> ``include``
+                                    else
+                                        return normalizeOptional param.ParameterType value
+                            }
                         | ValueNone -> Ok <| wrapOptionalNone param.ParameterType typeof<obj>)
                     |> Seq.toList
 
@@ -236,12 +263,25 @@ let rec internal compileByType
                             parametersMap
                             |> Seq.map (fun struct (field, param) -> result {
                                 match field with
+                                | ValueSome field when field.IsSkippable && not (objectFields.ContainsKey field.Name) ->
+                                    return (Activator.CreateInstance param.ParameterType)
                                 | ValueSome field ->
                                     let! value =
                                         field.ExecuteInput (VariableName field.Name) objectFields
                                         // TODO: Take into account variable name
                                         |> attachErrorExtensionsIfScalar inputSource inputObjectPath originalInputDef field
-                                    return normalizeOptional param.ParameterType value
+                                    if field.IsSkippable then
+                                        let innerType = param.ParameterType.GenericTypeArguments[0]
+                                        if not (ReflectionHelper.isTypeOptional innerType) &&
+                                            (value = null || (innerType.IsValueType && value = Activator.CreateInstance innerType))
+                                        then
+                                            return Activator.CreateInstance param.ParameterType
+                                        else
+                                            let normalizedValue = normalizeOptional innerType value
+                                            let ``include``, _ = ReflectionHelper.ofSkippable param.ParameterType
+                                            return ``include`` normalizedValue
+                                    else
+                                        return normalizeOptional param.ParameterType value
                                 | ValueNone -> return wrapOptionalNone param.ParameterType typeof<obj>
                             })
                             |> Seq.toList
@@ -506,6 +546,7 @@ and private coerceVariableInputObject inputObjectPath (originalObjDef, objDef) (
                     KeyValuePair (field.Name, value)
                 match input.TryGetProperty field.Name with
                 | true, value -> coerce value |> ValueSome
+                | false, _ when field.IsSkippable -> ValueNone
                 | false, _ ->
                     match field.DefaultValue with
                     | Some value -> KeyValuePair (field.Name, Ok value)
