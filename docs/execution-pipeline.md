@@ -50,7 +50,7 @@ The execution phase can be performed using one of the two strategies:
 - **Parallel**: in which asynchronous fields can be resolved in any order. This is the default mode for GraphQL queries due to the fact that they are readonly operations.
 - **Sequential**: in which asynchronous fields must be resolved in a specific order: as it was defined in the query. This is default mode for GraphQL mutations.
 
-The result of a GraphQL query execution is a dictionary with resolved values. This dictionary contains the following fields:
+The result of a GraphQL query execution is a `GQLResponse` object with the following fields:
 
 - `documentId`: which is the hash code of the query's AST document - it can be used to implement execution plan caching (persistent queries).
 - `data`: optional, a formatted GraphQL response matching the requested query (`KeyValuePair seq`). Absent in case of an error that does not allow continuing processing and returning any GraphQL results.
