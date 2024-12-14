@@ -53,7 +53,7 @@ The execution phase can be performed using one of the two strategies:
 The result of a GraphQL query execution is a dictionary with resolved values. This dictionary contains the following fields:
 
 - `documentId`: which is the hash code of the query's AST document - it can be used to implement execution plan caching (persistent queries).
-- `data`: with a formated GraphQL response matching the requested query.
-- `errors`: optional. If it has been provided, it will contain a list of errors that occured during query execution.
+- `data`: optional, a formatted GraphQL response matching the requested query (`KeyValuePair seq`). Absent in case of an error that does not allow continuing processing and returning any GraphQL results.
+- `errors`: optional, contains a list of errors (`GQLProblemDetails`) that occurred during query execution.
 
 This result can then be serialized and returned to the client.
