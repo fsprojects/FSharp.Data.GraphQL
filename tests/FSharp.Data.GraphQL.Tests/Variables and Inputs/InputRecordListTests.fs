@@ -23,16 +23,22 @@ let schema verify =
                     [ Define.Field (
                           "recordInputs",
                           StringType,
-                          [ Define.Input ("record", ListOf InputRecordType)
-                            Define.Input ("recordOptional",ListOf (Nullable InputRecordOptionalType))
-                            Define.Input ("recordNested",ListOf (Nullable InputRecordNestedType)) ],
+                          [ Define.Input ("records", ListOf InputRecordType)
+                            Define.Input ("recordsOptional", Nullable (ListOf (Nullable InputRecordOptionalType)))
+                            Define.Input ("recordsNested", ListOf (Nullable InputRecordNestedType)) ],
                             (fun ctx name ->
-                                let recordNested = ctx.Arg<InputRecordNested> "recordNested"
-                                match verify with
-                                | Nothing -> ()
-                                | AllInclude -> recordNested.s |> ValueOption.iter _.VerifyAllInclude
-                                | AllSkip -> recordNested.s |> ValueOption.iter _.VerifyAllSkip
-                                | SkipAndIncludeNull -> recordNested.s |> ValueOption.iter _.VerifySkipAndIncludeNull
+                                let _ = ctx.Arg<InputRecord list> "records"
+                                let _ = ctx.TryArg<list<InputRecordOptional option>> "recordsOptional"
+                                let recordNested =
+                                    ctx.Arg<list<InputRecordNested option>> "recordsNested"
+                                    |> List.tryHead
+                                    |> Option.flatten
+                                match verify, recordNested with
+                                | Nothing, _ -> ()
+                                | AllInclude, Some recordNested -> recordNested.s |> ValueOption.iter _.VerifyAllInclude
+                                | AllSkip, Some recordNested -> recordNested.s |> ValueOption.iter _.VerifyAllSkip
+                                | SkipAndIncludeNull, Some recordNested -> recordNested.s |> ValueOption.iter _.VerifySkipAndIncludeNull
+                                | _ -> ()
                                 stringifyInput ctx name
                             )
                       ) // TODO: add all args stringificaiton
@@ -53,9 +59,9 @@ let ``Execute handles creation of inline empty input records list`` () =
     let query =
         """{
       recordInputs(
-        record: [],
-        recordOptional: [],
-        recordNested: []       
+        records: [],
+        recordsOptional: [],
+        recordsNested: []
       )
     }"""
     let result = sync <| (schema AllInclude).AsyncExecute(parse query)
@@ -66,15 +72,15 @@ let ``Execute handles creation of inline input records list with all fields`` ()
     let query =
         """{
       recordInputs(
-        record: [{ a: "a", b: "b", c: "c" }],
-        recordOptional: [{ a: "a", b: "b", c: "c" }],
-        recordNested: [
+        records: [{ a: "a", b: "b", c: "c" }],
+        recordsOptional: [{ a: "a", b: "b", c: "c" }],
+        recordsNested: [{
           a: { a: "a", b: "b", c: "c" },
           b: { a: "a", b: "b", c: "c" },
           c: { a: "a", b: "b", c: "c" },
           s: { a: "a", b: "b", c: "c" },
           l: [{ a: "a", b: "b", c: "c" }]
-        ]
+        }]
       )
     }"""
     let result = sync <| (schema AllInclude).AsyncExecute(parse query)
@@ -85,9 +91,9 @@ let ``Execute handles creation of inline input records list with optional null f
     let query =
         """{
       recordInputs(
-        record: [{ a: "a", b: "b", c: "c" }],
-        recordOptional: [null],
-        recordNested: [{ a: { a: "a", b: "b", c: "c" }, b: null, c: null, s: null, l: [] }]
+        records: [{ a: "a", b: "b", c: "c" }],
+        recordsOptional: [null],
+        recordsNested: [{ a: { a: "a", b: "b", c: "c" }, b: null, c: null, s: null, l: [] }]
       )
     }"""
     let result = sync <| (schema Nothing).AsyncExecute(parse query)
@@ -98,8 +104,8 @@ let ``Execute handles creation of inline input records list with mandatory only 
     let query =
         """{
       recordInputs(
-        record: [{ a: "a", b: "b", c: "c" }],
-        recordNested: [{ a: { a: "a", b: "b", c: "c" }, l: [{ a: "a", b: "b", c: "c" }] }]
+        records: [{ a: "a", b: "b", c: "c" }],
+        recordsNested: [{ a: { a: "a", b: "b", c: "c" }, l: [{ a: "a", b: "b", c: "c" }] }]
       )
     }"""
     let result = sync <| (schema Nothing).AsyncExecute(parse query)
@@ -107,12 +113,11 @@ let ``Execute handles creation of inline input records list with mandatory only 
 
 let variablesWithAllInputs (record, optRecord, skippable) =
     $"""
-    [{{
-        "record":%s{record},
-        "optRecord":%s{optRecord},
-        "skippable": %s{skippable},
-        "list":[%s{record}]
-    }}]
+    {{
+        "records":[%s{record}],
+        "optRecords":[%s{optRecord}],
+        "nestedRecords":[ {{ "a": {record}, "b": {optRecord}, "c": {optRecord}, "s": {skippable}, "l": [{record}] }}]
+    }}
 """
 
 let paramsWithValues variables =
@@ -123,11 +128,15 @@ let paramsWithValues variables =
 [<Fact>]
 let ``Execute handles creation of input records list from variables with all fields`` () =
     let query =
-        """query ($record: InputRecord!, $optRecord: InputRecordOptional, $skippable: InputRecordSkippable, $list: [InputRecord!]!){
+        """query (
+            $records: [InputRecord!]!,
+            $optRecords: [InputRecordOptional],
+            $nestedRecords: [InputRecordNested]!
+      ) {
       recordInputs(
-        record: $record,
-        recordOptional: $optRecord,
-        recordNested: [{ a: $record, b: $optRecord, c: $optRecord, s: $skippable, l: $list }]
+        records: $records,
+        recordsOptional: $optRecords,
+        recordsNested: $nestedRecords
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
@@ -142,11 +151,15 @@ let ``Execute handles creation of input records list from variables with all fie
 [<Fact>]
 let ``Execute handles creation of input records list from variables with optional null fields`` () =
     let query =
-        """query ($record: InputRecord!, $optRecord: InputRecordOptional, $skippable: InputRecordSkippable, $list: [InputRecord!]!){
+        """query (
+            $records: [InputRecord!]!,
+            $optRecords: [InputRecordOptional],
+            $nestedRecords: [InputRecordNested]!
+      ) {
       recordInputs(
-        record: $record,
-        recordOptional: $optRecord,
-        recordNested: [{ a: $record, b: $optRecord, c: $optRecord, s: $skippable, l: $list }]
+        records: $records,
+        recordsOptional: $optRecords,
+        recordsNested: $nestedRecords
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
@@ -157,14 +170,22 @@ let ``Execute handles creation of input records list from variables with optiona
 
 [<Fact>]
 let ``Execute handles creation of input records from variables with mandatory only fields`` () =
+    let variablesWithAllInputs (record) =
+        $"""
+        {{
+            "record":%s{record},
+            "list":[%s{record}]
+        }}
+    """
+
     let query =
         """query ($record: InputRecord!, $list: [InputRecord!]!){
       recordInputs(
-        record: $record,
-        recordNested: [{ a: $record, l: $list }]
+        records: [$record],
+        recordsNested: [{ a: $record, l: $list }]
       )
     }"""
     let testInputObject = """{"a":"a","b":"b","c":"c"}"""
-    let params' = variablesWithAllInputs(testInputObject, "null", "{}") |> paramsWithValues
+    let params' = variablesWithAllInputs testInputObject |> paramsWithValues
     let result = sync <| (schema AllSkip).AsyncExecute(parse query, variables = params')
     ensureDirect result <| fun data errors -> empty errors

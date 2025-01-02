@@ -317,6 +317,13 @@ let rec internal compileByType
             | _ -> Ok null
 
     | List (Input innerDef) ->
+        match innerDef with
+        | InputObject inputObjDef
+        | Nullable (InputObject inputObjDef) ->
+            let inner = compileByType inputObjectPath inputSource (inputDef, innerDef)
+            inputObjDef.ExecuteInput <- inner
+        | _ -> ()
+
         let isArray = inputDef.Type.IsArray
         // TODO: Improve creation of inner
         let inner index = compileByType ((box index) :: inputObjectPath) inputSource (innerDef, innerDef)
