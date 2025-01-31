@@ -1560,6 +1560,46 @@ and internal NullableDefinition<'Val> = {
         | :? ListOfDef as list -> "[" + list.OfType.ToString () + "]"
         | other -> other.ToString ()
 
+/// GraphQL type definition for nullable/optional types.
+/// By default all GraphQL types in this library are considered
+/// to be NonNull. This definition applies reversed mechanics,
+/// allowing them to take null as a valid value.
+and StructNullableDef<'Val> =
+    interface
+        /// GraphQL type definition of the nested type.
+        abstract OfType : TypeDef<'Val>
+        inherit InputDef<'Val voption>
+        inherit OutputDef<'Val voption>
+        inherit NullableDef
+    end
+
+and internal StructNullableDefinition<'Val> = {
+    OfType : TypeDef<'Val>
+} with
+
+    interface InputDef
+
+    interface TypeDef with
+        member _.Type = typeof<'Val voption>
+        member x.MakeNullable () = upcast x
+        member x.MakeList () =
+            let list : ListOfDefinition<_, _> = { OfType = x }
+            upcast list
+
+    interface OutputDef
+
+    interface NullableDef with
+        member x.OfType = upcast x.OfType
+
+    interface StructNullableDef<'Val> with
+        member x.OfType = x.OfType
+
+    override x.ToString () =
+        match x.OfType with
+        | :? NamedDef as named -> named.Name
+        | :? ListOfDef as list -> "[" + list.OfType.ToString () + "]"
+        | other -> other.ToString ()
+
 /// GraphQL tye definition for input objects. They are different
 /// from object types (which can be used only as outputs).
 and InputObjectDef =

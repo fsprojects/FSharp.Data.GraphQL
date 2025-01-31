@@ -360,6 +360,10 @@ module SchemaDefinitions =
     let Nullable(innerDef : #TypeDef<'Val>) : NullableDef<'Val> = upcast { NullableDefinition.OfType = innerDef }
 
     /// Wraps a GraphQL type definition, allowing defining field/argument
+    /// to take voption of provided value.
+    let StructNullable(innerDef : #TypeDef<'Val>) : StructNullableDef<'Val> = upcast { StructNullableDefinition.OfType = innerDef }
+
+    /// Wraps a GraphQL type definition, allowing defining field/argument
     /// to take collection of provided value.
     let ListOf(innerDef : #TypeDef<'Val>) : ListOfDef<'Val, 'Seq> = upcast { ListOfDefinition.OfType = innerDef }
 

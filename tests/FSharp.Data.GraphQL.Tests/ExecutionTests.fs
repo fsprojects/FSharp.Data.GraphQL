@@ -33,7 +33,9 @@ type TestSubject = {
 and DeepTestSubject = {
     a: string
     b: string
-    c: string option list
+    c: string option
+    d: string voption
+    l: string option list
 }
 
 and DUArg =
@@ -62,7 +64,9 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
         {
             a = "Already Been Done"
             b = "Boring"
-            c = [Some "Contrived"; None; Some "Confusing"]
+            c = Some "Contrived"
+            d = ValueSome "Donut"
+            l = [Some "Contrived"; None; Some "Confusing"]
         }
 
     let ast = parse """query Example($size: Int) {
@@ -81,6 +85,8 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             a
             b
             c
+            d
+            l
           }
         }
 
@@ -102,7 +108,9 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             "deep", upcast NameValueLookup.ofList [
                "a", "Already Been Done" :> obj
                "b", upcast "Boring"
-               "c", upcast ["Contrived" :> obj; null; upcast "Confusing"]
+               "c", upcast "Contrived"
+               "d", upcast "Donut"
+               "l", upcast ["Contrived" :> obj; null; upcast "Confusing"]
             ]
         ]
 
@@ -111,8 +119,11 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             "DeepDataType", [
                 Define.Field("a", StringType, (fun _ dt -> dt.a))
                 Define.Field("b", StringType, (fun _ dt -> dt.b))
-                Define.Field("c", (ListOf (Nullable StringType)), (fun _ dt -> dt.c))
+                Define.Field("c", Nullable StringType, (fun _ dt -> dt.c))
+                Define.Field("d", StructNullable StringType, (fun _ dt -> dt.d))
+                Define.Field("l", (ListOf (Nullable StringType)), (fun _ dt -> dt.l))
             ])
+
     let rec DataType =
       DefineRec.Object<TestSubject>(
           "DataType",
@@ -121,7 +132,7 @@ let ``Execution handles basic tasks: executes arbitrary code`` () =
             Define.Field("a", StringType, resolve = fun _ dt -> dt.a)
             Define.Field("b", StringType, resolve = fun _ dt -> dt.b)
             Define.Field("c", StringType, resolve = fun _ dt -> dt.c)
-            Define.Field("d", StringType, fun _ dt -> dt.d)
+            Define.Field("d", StringType, resolve = fun _ dt -> dt.d)
             Define.Field("e", StringType, fun _ dt -> dt.e)
             Define.Field("f", StringType, fun _ dt -> dt.f)
             Define.Field("pic", StringType, "Picture resizer", [ Define.Input("size", Nullable IntType) ], fun ctx dt -> dt.pic(ctx.TryArg("size")))

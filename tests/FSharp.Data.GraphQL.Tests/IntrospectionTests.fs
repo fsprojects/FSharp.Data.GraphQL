@@ -433,6 +433,46 @@ let ``Nullabe field type definitions are considered nullable`` () =
         data |> equals (upcast expected)
 
 [<Fact>]
+let ``StructNullabe field type definitions are considered nullable`` () =
+    let root = Define.Object("Query", [ Define.Field("onlyField", StructNullable StringType) ])
+    let schema = Schema(root)
+    let query = """{ __type(name: "Query") {
+      fields {
+        name
+        type {
+          kind
+          name
+          ofType {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+              }
+            }
+          }
+        }
+      }
+    } }"""
+    let result = sync <| Executor(schema).AsyncExecute(query)
+    let expected =
+      NameValueLookup.ofList [
+        "__type", upcast NameValueLookup.ofList [
+            "fields", upcast [
+                box <| NameValueLookup.ofList [
+                    "name", upcast "onlyField"
+                    "type", upcast NameValueLookup.ofList [
+                        "kind", upcast "SCALAR"
+                        "name", upcast "String"
+                        "ofType", null]]]]]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
 let ``Default field args type definitions are considered non-null`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "", [ Define.Input("onlyArg", IntType) ], fun _ () -> null) ])
     let schema = Schema(root)
@@ -482,6 +522,50 @@ let ``Default field args type definitions are considered non-null`` () =
 [<Fact>]
 let ``Nullable field args type definitions are considered nullable`` () =
     let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "", [ Define.Input("onlyArg", Nullable IntType) ], fun _ () -> null) ])
+    let schema = Schema(root)
+    let query = """{ __type(name: "Query") {
+      fields {
+        args {
+          name
+          type {
+            kind
+            name
+            ofType {
+              kind
+              name
+              ofType {
+                kind
+                name
+                ofType {
+                  kind
+                  name
+                }
+              }
+            }
+          }
+        }
+      }
+    } }"""
+    let result = sync <| Executor(schema).AsyncExecute(query)
+    let expected =
+      NameValueLookup.ofList [
+        "__type", upcast NameValueLookup.ofList [
+            "fields", upcast [
+                box <| NameValueLookup.ofList [
+                    "args", upcast [
+                        box <| NameValueLookup.ofList [
+                            "name", upcast "onlyArg"
+                            "type", upcast NameValueLookup.ofList [
+                                "kind", upcast "SCALAR"
+                                "name", upcast "Int"
+                                "ofType", null ]]]]]]]
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+
+[<Fact>]
+let ``StructNullable field args type definitions are considered nullable`` () =
+    let root = Define.Object("Query", [ Define.Field("onlyField", StringType, "", [ Define.Input("onlyArg", StructNullable IntType) ], fun _ () -> null) ])
     let schema = Schema(root)
     let query = """{ __type(name: "Query") {
       fields {
