@@ -394,40 +394,66 @@ let ``Execution when querying returns unique document id with response`` () =
     | response -> fail $"Expected a 'Direct' GQLResponse but got\n{response}"
 
 type InnerNullableTest = { Kaboom : string }
-type NullableTest = { Inner : InnerNullableTest }
+type NullableTest = {
+    Inner : InnerNullableTest
+    InnerPartialSuccess : InnerNullableTest
+}
 
 [<Fact>]
 let ``Execution handles errors: properly propagates errors`` () =
-    let InnerObj =
+    let InnerObjType =
         Define.Object<InnerNullableTest>(
             "Inner", [
                 Define.Field("kaboom", StringType, fun _ x -> x.Kaboom)
             ])
+    let InnerPartialSuccessObjType =
+        let resolvePartialSuccess (ctx : ResolveFieldContext) (_ : InnerNullableTest) =
+            ctx.AddError { new IGQLError with member _.Message = "Some non-critical error" }
+            "Success"
+        Define.Object<InnerNullableTest>(
+            "InnerPartialSuccess", [
+                Define.Field("kaboom", StringType, resolvePartialSuccess)
+            ])
     let schema =
         Schema(Define.Object<NullableTest>(
-                 "Type", [
-                     Define.Field("inner", Nullable InnerObj, fun _ x -> Some x.Inner)
-                 ]))
+            "Type", [
+                Define.Field("inner", Nullable InnerObjType, fun _ x -> Some x.Inner)
+                Define.Field("partialSuccess", Nullable InnerPartialSuccessObjType, fun _ x -> Some x.InnerPartialSuccess)
+            ]))
     let expectedData =
         NameValueLookup.ofList [
             "inner", null
+            "partialSuccess", NameValueLookup.ofList [
+                "kaboom", "Success"
+            ]
         ]
     let expectedErrors = [
         GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", Execution, [ box "inner"; "kaboom" ])
+        GQLProblemDetails.CreateWithKind ("Some non-critical error", Execution, [ box "partialSuccess"; "kaboom" ])
     ]
-    let result = sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", { Inner = { Kaboom = null } })
+    let result =
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } partialSuccess { kaboom } }", variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
 
+// TODO: Add other tests with possible error cases
+// 1. Add additional error and raise an exception in a nullable GraphQL field resolver
+// 2. Add additional error and return None from a nullable GraphQL field resolver
+// 3. Add additional error and raise an exception in a non-nullable GraphQL field resolver
+// 4. Add additional error and return null from a non-nullable GraphQL field resolver
+// Covered // 5.1. Add additional error and return value from a non-nullable GraphQL field resolver
+// 5.2. Add additional error and raise an exception in a non-nullable GraphQL field resolver
+
 [<Fact>]
 let ``Execution handles errors: exceptions`` () =
     let schema =
         Schema(Define.Object<unit>(
-                 "Type", [
-                     Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
-                 ]))
+            "Type", [
+                Define.Field("a", StringType, fun _ _ -> failwith "Resolver Error!")
+            ]))
     let expectedError = GQLProblemDetails.CreateWithKind ("Resolver Error!", Execution, [ box "a" ])
     let result = sync <| Executor(schema).AsyncExecute("query Test { a }", ())
     ensureRequestError result <| fun [ error ] -> error |> equals expectedError

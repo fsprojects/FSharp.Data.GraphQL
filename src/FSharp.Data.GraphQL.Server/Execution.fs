@@ -364,12 +364,23 @@ and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (par
     /// This handles all null resolver errors/error propagation.
     let resolveWith (ctx : ResolveFieldContext) (onSuccess : ResolveFieldContext -> FieldPath -> obj -> obj -> AsyncVal<ResolverResult<KeyValuePair<string, obj>>>) : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = asyncVal {
         let! resolved = value |> AsyncVal.rescue path ctx.Schema.ParseError
+        let additionalErrs = 
+            match ctx.Context.Errors.TryGetValue ctx  with
+            | true, errors ->
+                errors
+                |> Seq.map (GQLProblemDetails.OfFieldExecutionError (path |> List.rev))
+                |> Seq.toList
+            | false, _ -> []
         match resolved with
-        | Error errs when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, errs)
-        | Ok None when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, [])
-        | Error errs -> return Error errs
+        | Error errs when ctx.ExecutionInfo.IsNullable -> return Ok (KeyValuePair(name, null), None, errs @ additionalErrs)
+        | Ok None when ctx.ExecutionInfo.IsNullable ->
+            return Ok (KeyValuePair(name, null), None, additionalErrs)
+        | Error errs -> return Error (errs @ additionalErrs)
         | Ok None -> return Error (nullResolverError name path ctx)
-        | Ok (Some v) -> return! onSuccess ctx path parent v
+        | Ok (Some v) ->
+            match! onSuccess ctx path parent v with
+            | Ok (res, deferred, errs) -> return Ok (res, deferred, errs @ additionalErrs)
+            | Error errs -> return Error (errs @ additionalErrs)
     }
 
     match info.Kind, returnDef with

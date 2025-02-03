@@ -5,9 +5,11 @@ namespace FSharp.Data.GraphQL.Types
 open System
 open System.Reflection
 open System.Collections
+open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Extensions
@@ -890,11 +892,22 @@ and ExecutionContext = {
     ExecutionPlan : ExecutionPlan
     /// Collection of variables provided to execute current operation.
     Variables : ImmutableDictionary<string, obj>
+    /// Collection of errors that occurred while executing current operation.
+    Errors : ConcurrentDictionary<ResolveFieldContext, ConcurrentBag<IGQLError>>
     /// A map of all fields of the query and their respective execution operations.
     FieldExecuteMap : FieldExecuteMap
     /// A simple dictionary to hold metadata that can be used by execution customizations.
     Metadata : Metadata
-}
+} with
+
+    /// Remembers an error, so it can be included in the final response.
+    member this.AddError (fieldContext, error : IGQLError) : unit =
+        this.Errors.AddOrUpdate(
+            fieldContext,
+            addValueFactory = (fun _ -> ConcurrentBag (Seq.singleton error)),
+            updateValueFactory = (fun _ (bag)-> bag.Add error; bag)
+        )
+        |> ignore
 
 /// An execution context for the particular field, applied as the first
 /// parameter for target resolve function.
@@ -919,9 +932,13 @@ and ResolveFieldContext = {
     Path : FieldPath
 } with
 
+    /// Remembers an error, so it can be included in the final response.
+    member this.AddError (error : IGQLError) =
+        this.Context.AddError (this, error)
+
     /// Tries to find an argument by provided name.
-    member x.TryArg (name : string) : 't option =
-        match Map.tryFind name x.Args with
+    member this.TryArg (name : string) : 't option =
+        match Map.tryFind name this.Args with
         | Some o -> Some (o :?> 't) // TODO: Use Convert.ChangeType
         | None -> None
 
