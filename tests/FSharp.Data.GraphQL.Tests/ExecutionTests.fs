@@ -407,6 +407,7 @@ let ``Execution handles errors: properly propagates errors`` () =
                 Define.Field("kaboom", StringType, fun _ x -> x.Kaboom)
             ])
     let InnerPartialSuccessObjType =
+        // executeResolvers/resolveWith, case 5
         let resolvePartialSuccess (ctx : ResolveFieldContext) (_ : InnerNullableTest) =
             ctx.AddError { new IGQLError with member _.Message = "Some non-critical error" }
             "Success"
@@ -438,14 +439,6 @@ let ``Execution handles errors: properly propagates errors`` () =
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
         errors |> equals expectedErrors
-
-// TODO: Add other tests with possible error cases
-// 1. Add additional error and raise an exception in a nullable GraphQL field resolver
-// 2. Add additional error and return None from a nullable GraphQL field resolver
-// 3. Add additional error and raise an exception in a non-nullable GraphQL field resolver
-// 4. Add additional error and return null from a non-nullable GraphQL field resolver
-// Covered // 5.1. Add additional error and return value from a non-nullable GraphQL field resolver
-// 5.2. Add additional error and raise an exception in a non-nullable GraphQL field resolver
 
 [<Fact>]
 let ``Execution handles errors: exceptions`` () =
@@ -483,4 +476,131 @@ let ``Execution handles errors: nullable list fields`` () =
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
         data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
+
+
+[<Fact>]
+let ``Execution handles errors: additional error added when exception is rised in a nullable field resolver`` () =
+    let InnerNullableExceptionObjType =
+        // executeResolvers/resolveWith, case 1
+        let resolveWithException (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string option =
+            ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
+            raise (System.Exception "Unexpected error")
+        Define.Object<InnerNullableTest>(
+            "InnerNullableException", [
+                Define.Field("kaboom", Nullable StringType, resolve = resolveWithException)
+            ])
+    let schema =
+        Schema(Define.Object<NullableTest>(
+            "Type", [
+                Define.Field("inner", Nullable InnerNullableExceptionObjType, fun _ x -> Some x.Inner)
+            ]))
+    let expectedData =
+        NameValueLookup.ofList [
+            "inner", NameValueLookup.ofList [
+                "kaboom", null
+            ]
+        ]
+    let expectedErrors =
+        [
+             GQLProblemDetails.CreateWithKind ("Unexpected error", Execution, [ box "inner"; "kaboom" ])
+             GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
+        ]
+    let result =
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+    ensureDirect result <| fun data errors ->
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
+
+[<Fact>]
+let ``Execution handles errors: additional error added when None returned from a nullable field resolver`` () =
+    let InnerNullableNoneObjType =
+        // executeResolvers/resolveWith, case 2
+        let resolveWithNone (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string option =
+            ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
+            None
+        Define.Object<InnerNullableTest>(
+            "InnerNullableException", [
+                Define.Field("kaboom", Nullable StringType, resolve = resolveWithNone)
+            ])
+    let schema =
+        Schema(Define.Object<NullableTest>(
+            "Type", [
+                Define.Field("inner", Nullable InnerNullableNoneObjType, fun _ x -> Some x.Inner)
+            ]))
+    let expectedData =
+        NameValueLookup.ofList [
+            "inner", NameValueLookup.ofList [
+                "kaboom", null
+            ]
+        ]
+    let expectedErrors =
+        [
+             GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
+        ]
+    let result =
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+    ensureDirect result <| fun data errors ->
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        data |> equals (upcast expectedData)
+        errors |> equals expectedErrors
+
+[<Fact>]
+let ``Execution handles errors: additional error added when exception is rised in a non-nullable field resolver`` () =
+    let InnerNonNullableExceptionObjType =
+        // executeResolvers/resolveWith, case 3
+        let resolveWithException (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string =
+            ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
+            raise (System.Exception "Fatal error")
+        Define.Object<InnerNullableTest>(
+            "InnerNonNullableException", [
+                Define.Field("kaboom", StringType, resolve = resolveWithException)
+            ])
+    let schema =
+        Schema(Define.Object<NullableTest>(
+            "Type", [
+                Define.Field("inner", InnerNonNullableExceptionObjType, fun _ x -> x.Inner)
+            ]))
+
+    let expectedErrors =
+        [
+             GQLProblemDetails.CreateWithKind ("Fatal error", Execution, [ box "inner"; "kaboom" ])
+             GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
+        ]
+    let result =
+        let variables = { Inner = { Kaboom = "Explosion" }; InnerPartialSuccess = { Kaboom = "Success" } }
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+    ensureRequestError result <| fun  errors ->
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
+        errors |> equals expectedErrors
+
+[<Fact>]
+let ``Execution handles errors: additional error added and when null returned from a non-nullable field resolver`` () =
+    let InnerNonNullableNullObjType =
+        // executeResolvers/resolveWith, case 4
+        let resolveWithNull (ctx : ResolveFieldContext) (_ : InnerNullableTest) : string =
+            ctx.AddError { new IGQLError with member _.Message = "Non-critical error" }
+            null
+        Define.Object<InnerNullableTest>(
+            "InnerNonNullableNull", [
+                Define.Field("kaboom", StringType, resolveWithNull)
+            ])
+    let schema =
+        Schema(Define.Object<NullableTest>(
+            "Type", [
+                Define.Field("inner", InnerNonNullableNullObjType, fun _ x -> x.Inner)
+            ]))
+    let expectedErrors =
+        [
+            GQLProblemDetails.CreateWithKind ("Non-Null field kaboom resolved as a null!", Execution, [ box "inner"; "kaboom" ])
+            GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
+        ]
+    let result =
+        let variables = { Inner = { Kaboom = "Explosion" }; InnerPartialSuccess = { Kaboom = "Success" } }
+        sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
+    ensureRequestError result <| fun errors ->
+        result.DocumentId |> notEquals Unchecked.defaultof<int>
         errors |> equals expectedErrors
