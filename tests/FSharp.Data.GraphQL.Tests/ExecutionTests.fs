@@ -410,7 +410,7 @@ let ``Execution handles errors: properly propagates errors`` () =
         // executeResolvers/resolveWith, case 5
         let resolvePartialSuccess (ctx : ResolveFieldContext) (_ : InnerNullableTest) =
             ctx.AddError { new IGQLError with member _.Message = "Some non-critical error" }
-            "Success"
+            "Yes, Rico, Kaboom"
         Define.Object<InnerNullableTest>(
             "InnerPartialSuccess", [
                 Define.Field("kaboom", StringType, resolvePartialSuccess)
@@ -425,7 +425,7 @@ let ``Execution handles errors: properly propagates errors`` () =
         NameValueLookup.ofList [
             "inner", null
             "partialSuccess", NameValueLookup.ofList [
-                "kaboom", "Success"
+                "kaboom", "Yes, Rico, Kaboom"
             ]
         ]
     let expectedErrors = [
@@ -433,7 +433,7 @@ let ``Execution handles errors: properly propagates errors`` () =
         GQLProblemDetails.CreateWithKind ("Some non-critical error", Execution, [ box "partialSuccess"; "kaboom" ])
     ]
     let result =
-        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } partialSuccess { kaboom } }", variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
@@ -507,7 +507,7 @@ let ``Execution handles errors: additional error added when exception is rised i
              GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
         ]
     let result =
-        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
@@ -541,7 +541,7 @@ let ``Execution handles errors: additional error added when None returned from a
              GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
         ]
     let result =
-        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Success" } }
+        let variables = { Inner = { Kaboom = null }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
     ensureDirect result <| fun data errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
@@ -571,7 +571,7 @@ let ``Execution handles errors: additional error added when exception is rised i
              GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
         ]
     let result =
-        let variables = { Inner = { Kaboom = "Explosion" }; InnerPartialSuccess = { Kaboom = "Success" } }
+        let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
     ensureRequestError result <| fun  errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>
@@ -599,7 +599,7 @@ let ``Execution handles errors: additional error added and when null returned fr
             GQLProblemDetails.CreateWithKind ("Non-critical error", Execution, [ box "inner"; "kaboom" ])
         ]
     let result =
-        let variables = { Inner = { Kaboom = "Explosion" }; InnerPartialSuccess = { Kaboom = "Success" } }
+        let variables = { Inner = { Kaboom = "Yes, Rico, Kaboom" }; InnerPartialSuccess = { Kaboom = "Yes, Rico, Kaboom" } }
         sync <| Executor(schema).AsyncExecute("query Example { inner { kaboom } }", variables)
     ensureRequestError result <| fun errors ->
         result.DocumentId |> notEquals Unchecked.defaultof<int>

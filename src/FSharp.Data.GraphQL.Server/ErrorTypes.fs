@@ -4,7 +4,9 @@ namespace FSharp.Data.GraphQL
 open System
 open System.Collections.Generic
 open FsToolkit.ErrorHandling
+open FSharp.Data.GraphQL.Errors
 open FSharp.Data.GraphQL.Types
+
 
 type InputSource =
     | Variable of VarDef : VarDef
@@ -38,7 +40,7 @@ type internal CoercionError = {
                 yield KeyValuePair (CustomErrorFields.Kind, this.ErrorKind |> box)
                 match this.Path with
                 | [] -> ()
-                | path -> yield KeyValuePair (CustomErrorFields.Path, path |> List.rev |> box)
+                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizedPathToObj(path))
 
                 match this.InputSource with
                 | Variable varDef ->
@@ -87,7 +89,7 @@ type internal CoercionErrorWrapper = {
                 yield KeyValuePair (CustomErrorFields.Kind, this.ErrorKind |> box)
                 match this.Path with
                 | [] -> ()
-                | path -> yield KeyValuePair (CustomErrorFields.Path, path |> List.rev |> box)
+                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizedPathToObj(path))
 
                 match this.InputSource with
                 | Variable varDef ->

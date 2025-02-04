@@ -114,3 +114,10 @@ let splitSeqErrorsList (items: Result<'t, IGQLError list> list) =
     else
         let values = items |> getSeqValuesList
         Ok values
+
+let internal normalizedPath(fieldPath : FieldPath) =
+    fieldPath |> List.rev
+
+let internal normalizedPathToObj(fieldPath : FieldPath) =
+    fieldPath |> List.rev |> box
+

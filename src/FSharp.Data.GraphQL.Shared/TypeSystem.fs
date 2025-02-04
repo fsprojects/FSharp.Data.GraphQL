@@ -936,6 +936,10 @@ and ResolveFieldContext = {
     member this.AddError (error : IGQLError) =
         this.Context.AddError (this, error)
 
+    /// Remembers an error, so it can be included in the final response.
+    member this.AddError (errorMessage : string) =
+        this.Context.AddError (this, { new IGQLError with member _.Message = errorMessage } )
+
     /// Tries to find an argument by provided name.
     member this.TryArg (name : string) : 't option =
         match Map.tryFind name this.Args with
