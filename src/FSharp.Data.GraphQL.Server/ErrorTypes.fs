@@ -40,7 +40,7 @@ type internal CoercionError = {
                 yield KeyValuePair (CustomErrorFields.Kind, this.ErrorKind |> box)
                 match this.Path with
                 | [] -> ()
-                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizedPathToObj(path))
+                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizeErrorPath path)
 
                 match this.InputSource with
                 | Variable varDef ->
@@ -89,7 +89,7 @@ type internal CoercionErrorWrapper = {
                 yield KeyValuePair (CustomErrorFields.Kind, this.ErrorKind |> box)
                 match this.Path with
                 | [] -> ()
-                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizedPathToObj(path))
+                | path -> yield KeyValuePair (CustomErrorFields.Path, normalizeErrorPath path)
 
                 match this.InputSource with
                 | Variable varDef ->

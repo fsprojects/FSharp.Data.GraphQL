@@ -101,7 +101,7 @@ let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : 
           Schema = ctx.Schema
           Args = args
           Variables = ctx.Variables
-          Path = normalizedPath path }
+          Path = normalizeErrorPath path }
 }
 
 let private resolveField (execute: ExecuteField) (ctx: ResolveFieldContext) (parentValue: obj) =
@@ -136,7 +136,7 @@ let private raiseErrors errs = AsyncVal.wrap <| Error errs
 /// Given an error e, call ParseError in the given context's Schema to convert it into
 /// a list of one or more <see href="IGQLErrors">IGQLErrors</see>, then convert those
 /// to a list of <see href="GQLProblemDetails">GQLProblemDetails</see>.
-let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (normalizedPath path))
+let private resolverError path ctx e = ctx.Schema.ParseError path e |> List.map (GQLProblemDetails.OfFieldExecutionError (normalizeErrorPath path))
 // Helper functions for generating more specific <see href="GQLProblemDetails">GQLProblemDetails</see>.
 let private nullResolverError name path ctx = resolverError path ctx (GQLMessageException <| sprintf "Non-Null field %s resolved as a null!" name)
 let private coercionError value tyName path ctx = resolverError path ctx (GQLMessageException <| sprintf "Value '%O' could not be coerced to scalar %s" value tyName)
@@ -148,7 +148,7 @@ let private streamListError name tyName path ctx = resolverError path ctx (GQLMe
 let private resolved name v : AsyncVal<ResolverResult<KeyValuePair<string, obj>>> = KeyValuePair(name, box v) |> ResolverResult.data |> AsyncVal.wrap
 
 let deferResults path (res : ResolverResult<obj>) : IObservable<GQLDeferredResponseContent> =
-    let formattedPath = normalizedPath path
+    let formattedPath = normalizeErrorPath path
     match res with
     | Ok (data, deferred, errs) ->
         let deferredData =
@@ -368,7 +368,7 @@ and private executeResolvers (ctx : ResolveFieldContext) (path : FieldPath) (par
             match ctx.Context.Errors.TryGetValue ctx  with
             | true, errors ->
                 errors
-                |> Seq.map (GQLProblemDetails.OfFieldExecutionError (normalizedPath path))
+                |> Seq.map (GQLProblemDetails.OfFieldExecutionError (normalizeErrorPath path))
                 |> Seq.toList
             | false, _ -> []
         match resolved with
@@ -462,7 +462,7 @@ let private executeQueryOrMutation (resultSet: (string * ExecutionInfo) []) (ctx
                   Schema = ctx.Schema
                   Args = args
                   Variables = ctx.Variables
-                  Path = normalizedPath path }
+                  Path = normalizeErrorPath path }
             let execute = ctx.FieldExecuteMap.GetExecute(ctx.ExecutionPlan.RootDef.Name, info.Definition.Name)
             asyncVal {
                 let! result =
