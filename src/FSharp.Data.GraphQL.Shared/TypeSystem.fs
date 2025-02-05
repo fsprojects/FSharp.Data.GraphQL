@@ -905,7 +905,7 @@ and ExecutionContext = {
         this.Errors.AddOrUpdate(
             fieldContext,
             addValueFactory = (fun _ -> ConcurrentBag (Seq.singleton error)),
-            updateValueFactory = (fun _ (bag)-> bag.Add error; bag)
+            updateValueFactory = (fun _ bag -> bag.Add error; bag)
         )
         |> ignore
 

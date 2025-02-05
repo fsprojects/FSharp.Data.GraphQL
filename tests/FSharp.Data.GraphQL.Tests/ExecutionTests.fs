@@ -564,7 +564,6 @@ let ``Execution handles errors: additional error added when exception is rised i
             "Type", [
                 Define.Field("inner", InnerNonNullableExceptionObjType, fun _ x -> x.Inner)
             ]))
-
     let expectedErrors =
         [
              GQLProblemDetails.CreateWithKind ("Fatal error", Execution, [ box "inner"; "kaboom" ])
