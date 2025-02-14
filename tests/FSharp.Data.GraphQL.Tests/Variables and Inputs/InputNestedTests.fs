@@ -110,7 +110,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
             upcast
-                """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":null,"nlvo":null}"""
+                """{"n":"optSeq","no":{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":null,"nlvo":null}"""
         ]
 
     ensureDirect result
@@ -127,7 +127,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
             upcast
-                """{"n":"optSeq","no":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":[],"nlvo":[]}"""
+                """{"n":"optSeq","no":{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nvo":{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null},"nl":[],"nlo":[],"nlvo":[]}"""
         ]
 
     ensureDirect result
@@ -144,7 +144,7 @@ let ``Execute handles nested input objects and nullability using inline structs 
         NameValueLookup.ofList [
             "fieldWithNestedInputObject",
             upcast
-                """{"n":"optSeq","no":null,"nvo":null,"nl":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlo":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlvo":[{"mand":"mand","opt1":null,"opt2":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}]}"""
+                """{"n":"optSeq","no":null,"nvo":null,"nl":[{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlo":[{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}],"nlvo":[{"mand":"mand","opt":null,"glCode":null,"optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}]}"""
         ]
 
     ensureDirect result
