@@ -121,7 +121,8 @@ let rec internal compileByType
                     (fun (allParameters : _ ResizeArray) param ->
                         match
                             objDef.Fields
-                            |> Array.tryFind (fun field -> field.Name = param.Name)
+                            // TODO: Improve parameter name matching logic  
+                            |> Array.tryFind (fun field -> String.Equals (field.Name, param.Name, StringComparison.InvariantCultureIgnoreCase))
                         with
                         | Some field ->
                             let isParameterSkippable = ReflectionHelper.isParameterSkippable param

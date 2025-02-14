@@ -38,9 +38,9 @@ let TestComplexScalar =
     )
 
 type TestInput =
-    { mand : string
-      opt1 : string option
-      opt2 : string option
+    { Mand : string
+      Opt : string option
+      GLCode : string option // for case-insensitive name match test
       optSeq : string option seq option
       voptSeq : string option seq voption // string voption seq voption is too hard to implement
       optArr : string option array option
@@ -53,8 +53,8 @@ let TestInputObject =
         name = "TestInputObject",
         fields =
             [ Define.Input ("mand", StringType)
-              Define.Input ("opt1", Nullable StringType)
-              Define.Input ("opt2", Nullable TestComplexScalar)
+              Define.Input ("opt", Nullable StringType)
+              Define.Input ("glCode", Nullable TestComplexScalar)
               Define.Input ("optSeq", Nullable (ListOf (Nullable StringType)))
               Define.Input ("voptSeq", Nullable (ListOf (Nullable StringType)))
               Define.Input ("optArr", Nullable (InputArrayOf (Nullable StringType)))
@@ -72,13 +72,13 @@ let schema = Schema (TestType)
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs with complex input`` () =
     let ast =
-        parse """{ fieldWithObjectInput(input: {mand: "baz", opt1: "foo", optSeq: ["bar"], optArr: ["baf"]}) }"""
+        parse """{ fieldWithObjectInput(input: {mand: "baz", opt: "foo", optSeq: ["bar"], optArr: ["baf"]}) }"""
     let result = sync <| Executor(schema).AsyncExecute (ast)
 
     let expected =
         NameValueLookup.ofList
             [ "fieldWithObjectInput",
-              upcast """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":null,"optArr":["baf"],"voptArr":null}""" ]
+              upcast """{"mand":"baz","opt":"foo","glCode":null,"optSeq":["bar"],"voptSeq":null,"optArr":["baf"],"voptArr":null}""" ]
 
     ensureDirect result <| fun data errors ->
         empty errors
@@ -87,22 +87,22 @@ let ``Execute handles objects and nullability using inline structs with complex 
 // See https://spec.graphql.org/October2021/#sec-List
 [<Fact(Skip = "Validation needs to be updated to allow")>]
 let ``Execute handles objects and nullability using inline structs and properly parses single value to list`` () =
-    let ast = parse """{ fieldWithObjectInput(input: {mand:"baz", opt1: "foo", optSeq: "bar"}) }"""
+    let ast = parse """{ fieldWithObjectInput(input: {mand:"baz", opt: "foo", optSeq: "bar"}) }"""
     let result = sync <| Executor(schema).AsyncExecute (ast)
     let expected =
-        NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"mand":"baz", "opt1":"foo", "optSeq":["bar"], "opt2":null, "optArr":null}""" ]
+        NameValueLookup.ofList [ "fieldWithObjectInput", upcast """{"mand":"baz", "opt":"foo", "optSeq":["bar"], "glCode":null, "optArr":null}""" ]
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
 
 [<Fact>]
 let ``Execute handles objects and nullability using inline structs and properly coerces complex scalar types`` () =
-    let ast = parse """{ fieldWithObjectInput(input: {mand: "foo", opt2: "SerializedValue"}) }"""
+    let ast = parse """{ fieldWithObjectInput(input: {mand: "foo", glCode: "SerializedValue"}) }"""
     let result = sync <| Executor(schema).AsyncExecute (ast)
     let expected =
         NameValueLookup.ofList
             [ "fieldWithObjectInput",
-              upcast """{"mand":"foo","opt1":null,"opt2":"DeserializedValue","optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}""" ]
+              upcast """{"mand":"foo","opt":null,"glCode":"DeserializedValue","optSeq":null,"voptSeq":null,"optArr":null,"voptArr":null}""" ]
 
     ensureDirect result <| fun data errors ->
         empty errors
@@ -116,7 +116,7 @@ let paramsWithValueInput input =
         .RootElement.Deserialize<ImmutableDictionary<string, JsonElement>> (serializerOptions)
 
 let testInputObject =
-    """{"mand":"baz","opt1":"foo","opt2":null,"optSeq":["bar"],"voptSeq":["bar"],"optArr":null,"voptArr":null}"""
+    """{"mand":"baz","opt":"foo","glCode":null,"optSeq":["bar"],"voptSeq":["bar"],"optArr":null,"voptArr":null}"""
 
 [<Fact>]
 let ``Execute handles variables with complex inputs`` () =
@@ -137,7 +137,7 @@ let ``Execute handles variables with complex inputs`` () =
 let ``Execute handles variables with default value when no value was provided`` () =
     let ast =
         parse
-            """query q($input: TestInputObject = {mand:"baz", opt1: "foo", optSeq: ["bar"], voptSeq:["bar"]}) {
+            """query q($input: TestInputObject = {mand:"baz", opt: "foo", optSeq: ["bar"], voptSeq:["bar"]}) {
             fieldWithObjectInput(input: $input)
           }"""
 
@@ -155,7 +155,7 @@ let ``Execute handles variables and errors on null for nested non-nulls`` () =
           fieldWithObjectInput(input: $input)
         }"""
 
-    let testInputObject = """{"mand":null, "opt1":"foo", "optSeq":["bar"], "voptSeq":["bar"]}"""
+    let testInputObject = """{"mand":null, "opt":"foo", "optSeq":["bar"], "voptSeq":["bar"]}"""
     let params' = paramsWithValueInput testInputObject
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     ensureRequestError result <| fun [ error ] ->
@@ -185,7 +185,7 @@ let ``Execute handles variables and errors on omission of nested non-nulls`` () 
           fieldWithObjectInput(input: $input)
         }"""
 
-    let testInputObject = """{"opt1":"foo","optSeq":["bar"]}"""
+    let testInputObject = """{"opt":"foo","optSeq":["bar"]}"""
     let params' = paramsWithValueInput testInputObject
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
     ensureRequestError result <| fun [ error ] ->
@@ -199,7 +199,7 @@ let ``Execute handles list inputs and nullability and does not allow invalid typ
             """query q($input: TestInputObject!) {
           fieldWithObjectInput(input: $input)
         }"""
-    // as that kind of an error inside of opt1 query is guaranteed to fail in every call, we're gonna to fail noisy here
+    // as that kind of an error inside of opt query is guaranteed to fail in every call, we're gonna to fail noisy here
     let testInputList = "[\"A\",\"B\"]"
     let params' = paramsWithValueInput testInputList
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
@@ -217,7 +217,7 @@ let ``Execute handles list inputs and nullability and does not allow unknown typ
             """query q($input: UnknownType!) {
           fieldWithObjectInput(input: $input)
         }"""
-    // as that kind of an error inside of opt1 query is guaranteed to fail in every call, we're gonna to fail noisy here
+    // as that kind of an error inside of opt query is guaranteed to fail in every call, we're gonna to fail noisy here
     let testInputValue = "\"whoknows\""
     let params' = paramsWithValueInput testInputValue
     let result = sync <| Executor(schema).AsyncExecute (ast, variables = params')
