@@ -100,7 +100,7 @@ type GQLProblemDetails = {
     /// The round-tripping behavior for <see cref="Extensions"/> is determined by the implementation of the Input \ Output formatters.
     /// In particular, complex types or collection types may not round-trip to the original type when using the built-in JSON or XML formatters.
     /// </remarks>
-    [<JsonExtensionData>]
+    [<JsonPropertyName("extensions")>]
     Extensions : IReadOnlyDictionary<string, obj> Skippable
 } with
 
