@@ -30,8 +30,8 @@ type IGraphQLOptions =
     abstract member WebsocketOptions : GraphQLTransportWSOptions
 
 type GraphQLOptions<'Root> = {
-    SchemaExecutor : Executor<'Root>
-    RootFactory : HttpContext -> 'Root
+    mutable SchemaExecutor : Executor<'Root>
+    mutable RootFactory : HttpContext -> 'Root
     /// The minimum rented array size to read a message from WebSocket
     ReadBufferSize : int
     SerializerOptions : JsonSerializerOptions
