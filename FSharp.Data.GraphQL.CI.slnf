@@ -1,0 +1,21 @@
+{
+  "solution": {
+    "path": "FSharp.Data.GraphQL.sln",
+    "projects": [
+      "samples\\chat-app\\server\\chat-app.fsproj",
+      "samples\\relay-book-store\\relay-book-store.fsproj",
+      "samples\\star-wars-api\\star-wars-api.fsproj",
+      "src\\FSharp.Data.GraphQL.Client.DesignTime\\FSharp.Data.GraphQL.Client.DesignTime.fsproj",
+      "src\\FSharp.Data.GraphQL.Client\\FSharp.Data.GraphQL.Client.fsproj",
+      "src\\FSharp.Data.GraphQL.Server.AspNetCore\\FSharp.Data.GraphQL.Server.AspNetCore.fsproj",
+      "src\\FSharp.Data.GraphQL.Server.Giraffe\\FSharp.Data.GraphQL.Server.Giraffe.fsproj",
+      "src\\FSharp.Data.GraphQL.Server.Middleware\\FSharp.Data.GraphQL.Server.Middleware.fsproj",
+      "src\\FSharp.Data.GraphQL.Server.Oxpecker\\FSharp.Data.GraphQL.Server.Oxpecker.fsproj",
+      "src\\FSharp.Data.GraphQL.Server.Relay\\FSharp.Data.GraphQL.Server.Relay.fsproj",
+      "src\\FSharp.Data.GraphQL.Server\\FSharp.Data.GraphQL.Server.fsproj",
+      "src\\FSharp.Data.GraphQL.Shared\\FSharp.Data.GraphQL.Shared.fsproj",
+      "tests\\FSharp.Data.GraphQL.Benchmarks\\FSharp.Data.GraphQL.Benchmarks.fsproj",
+      "tests\\FSharp.Data.GraphQL.Tests\\FSharp.Data.GraphQL.Tests.fsproj"
+    ]
+  }
+}

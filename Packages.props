@@ -78,11 +78,13 @@
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />
+    <PackageReference Update="Microsoft.Data.SqlClient" Version="5.*" />
     <PackageReference Update="Microsoft.Diagnostics.NETCore.Client" Version="0.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Runtime" Version="2.2.*" />
     <PackageReference Update="Microsoft.Diagnostics.Tracing.TraceEvent" Version="3.*" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="6.0.*" />
     <PackageReference Update="Newtonsoft.Json" Version="13.*" />
+    <PackageReference Update="SQLProvider" Version="1.4.*" />
     <PackageReference Update="System.Data.Common" Version="4.3.0" />
     <PackageReference Update="Thoth.Json.Net" Version="12.0.0" />
     <PackageReference Update="Validus" Version="4.1.*" />
