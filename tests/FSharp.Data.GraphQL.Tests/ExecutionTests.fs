@@ -26,7 +26,7 @@ type TestSubject = {
     e: string
     f: string
     deep: DeepTestSubject
-    pic: int option -> string
+    pic: int voption -> string
     promise: Async<TestSubject>
 }
 
@@ -206,18 +206,18 @@ let ``Execution handles basic tasks: threads root value context correctly`` () =
     equals "thing" data.Thing
 
 type TestTarget =
-    { mutable Num: int option
-      mutable Str: string option }
+    { mutable Num: int voption
+      mutable Str: string voption }
 
 [<Fact>]
 let ``Execution handles basic tasks: correctly threads arguments`` () =
     let query = """query Example {
         b(numArg: 123, stringArg: "foo")
       }"""
-    let data = { Num = None; Str = None }
+    let data = { Num = ValueNone; Str = ValueNone }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable StringType, "", [ Define.Input("numArg", IntType); Define.Input("stringArg", StringType) ],
+            [ Define.Field("b", StructNullable StringType, "", [ Define.Input("numArg", IntType); Define.Input("stringArg", StringType) ],
                  fun ctx value ->
                      value.Num <- ctx.TryArg("numArg")
                      value.Str <- ctx.TryArg("stringArg")
@@ -225,18 +225,18 @@ let ``Execution handles basic tasks: correctly threads arguments`` () =
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     ensureDirect result <| fun data errors -> empty errors
-    equals (Some 123) data.Num
-    equals (Some "foo") data.Str
+    equals (ValueSome 123) data.Num
+    equals (ValueSome "foo") data.Str
 
 [<Fact>]
 let ``Execution handles basic tasks: correctly handles null arguments`` () =
     let query = """query Example {
         b(numArg: null, stringArg: null)
       }"""
-    let data = { Num = None; Str = None }
+    let data = { Num = ValueNone; Str = ValueNone }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable StringType, "", [ Define.Input("numArg", Nullable IntType); Define.Input("stringArg", Nullable StringType) ],
+            [ Define.Field("b", StructNullable StringType, "", [ Define.Input("numArg", Nullable IntType); Define.Input("stringArg", Nullable StringType) ],
                  fun ctx value ->
                      value.Num <- ctx.TryArg("numArg")
                      value.Str <- ctx.TryArg("stringArg")
@@ -244,8 +244,8 @@ let ``Execution handles basic tasks: correctly handles null arguments`` () =
 
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     ensureDirect result <| fun data errors -> empty errors
-    equals None data.Num
-    equals None data.Str
+    equals ValueNone data.Num
+    equals ValueNone data.Str
 
 type InlineTest = { A: string }
 
@@ -260,22 +260,22 @@ let ``Execution handles basic tasks: correctly handles discriminated union argum
             options =
                 [ Define.EnumValue("Case1", DUArg.Case1, "Case 1")
                   Define.EnumValue("Case2", DUArg.Case2, "Case 2") ])
-    let data = { Num = None; Str = None }
+    let data = { Num = ValueNone; Str = ValueNone }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", StructNullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                  fun ctx value ->
                  let arg = ctx.TryArg("enumArg")
                  match arg with
-                 | Some (Case1) ->
-                     value.Str <- Some "foo"
-                     value.Num <- Some 123
+                 | ValueSome (Case1) ->
+                     value.Str <- ValueSome "foo"
+                     value.Num <- ValueSome 123
                      value.Str
-                 | _ -> None) ])
+                 | _ -> ValueNone) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     ensureDirect result <| fun data errors -> empty errors
-    equals (Some 123) data.Num
-    equals (Some "foo") data.Str
+    equals (ValueSome 123) data.Num
+    equals (ValueSome "foo") data.Str
 
 [<Fact>]
 let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
@@ -288,22 +288,22 @@ let ``Execution handles basic tasks: correctly handles Enum arguments`` () =
             options =
                 [ Define.EnumValue("Enum1", EnumArg.Enum1, "Enum 1")
                   Define.EnumValue("Enum2", EnumArg.Enum2, "Enum 2") ])
-    let data = { Num = None; Str = None }
+    let data = { Num = ValueNone; Str = ValueNone }
     let Type =
         Define.Object("Type",
-            [ Define.Field("b", Nullable StringType, "", [ Define.Input("enumArg", EnumType) ],
+            [ Define.Field("b", StructNullable StringType, "", [ Define.Input("enumArg", EnumType) ],
                   fun ctx value ->
                   let arg = ctx.TryArg("enumArg")
                   match arg with
-                  | Some _ ->
-                      value.Str <- Some "foo"
-                      value.Num <- Some 123
+                  | ValueSome _ ->
+                      value.Str <- ValueSome "foo"
+                      value.Num <- ValueSome 123
                       value.Str
-                  | _ -> None) ])
+                  | _ -> ValueNone) ])
     let result = sync <| Executor(Schema(Type)).AsyncExecute(parse query, data)
     ensureDirect result <| fun data errors -> empty errors
-    equals (Some 123) data.Num
-    equals (Some "foo") data.Str
+    equals (ValueSome 123) data.Num
+    equals (ValueSome "foo") data.Str
 
 
 [<Fact>]

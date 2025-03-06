@@ -1,6 +1,7 @@
 module FSharp.Data.GraphQL.Tests.MiddlewareTests
 
 open System
+open System.Collections.Generic
 open Xunit
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
@@ -136,8 +137,8 @@ let ``Simple query: Should pass when below threshold``() =
         empty errors
         data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
 
 [<Fact>]
 let ``Simple query: Should not pass when above threshold``() =
@@ -193,8 +194,8 @@ let ``Simple query: Should not pass when above threshold``() =
     let result = execute query
     result |> ensureRequestError <| fun errors ->
         errors |> equals expectedErrors
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0)
 
 [<Fact>]
 let ``Deferred queries : Should pass when below threshold``() =
@@ -246,8 +247,8 @@ let ``Deferred queries : Should pass when below threshold``() =
         use sub = Observer.create deferred
         sub.WaitCompleted()
         sub.Received |> single |> equals expectedDeferred
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 2.0)
 
 [<Fact>]
 let ``Streamed queries : Should pass when below threshold``() =
@@ -307,8 +308,8 @@ let ``Streamed queries : Should pass when below threshold``() =
         |> contains expectedDeferred1
         |> contains expectedDeferred2
         |> ignore
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 2.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 2.0)
 
 [<Fact>]
 let ``Deferred and Streamed queries : Should not pass when above threshold``() =
@@ -366,8 +367,8 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
     |> Seq.iter (fun result ->
         ensureRequestError result <| fun errors ->
             errors |> equals expectedErrors
-        result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-        result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0))
+        result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+        result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0))
 
 [<Fact>]
 let ``Inline fragment query : Should pass when below threshold``() =
@@ -407,8 +408,8 @@ let ``Inline fragment query : Should pass when below threshold``() =
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
 
 [<Fact>]
 let ``Inline fragment query : Should not pass when above threshold``() =
@@ -460,8 +461,8 @@ let ``Inline fragment query : Should not pass when above threshold``() =
 
     ensureRequestError result <| fun errors ->
         errors |> equals expectedErrors
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 3.0)
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0)
 
 [<Fact>]
 let ``Object list filter: should return filter information in Metadata``() =
@@ -470,7 +471,7 @@ let ``Object list filter: should return filter information in Metadata``() =
                 A (id : 1) {
                     id
                     value
-                    subjects (filter : { value_starts_with: "A", id : 2 }) { ...Value }
+                    s : subjects (filter : { value_starts_with: "A", id : 2 }) { ...Value }
                 }
         }
 
@@ -489,7 +490,7 @@ let ``Object list filter: should return filter information in Metadata``() =
             "A", upcast NameValueLookup.ofList [
                 "id", upcast 1
                 "value", upcast "A1"
-                "subjects", upcast [
+                "s", upcast [
                     NameValueLookup.ofList [
                         "id", upcast 2
                         "value", upcast "A2"
@@ -501,12 +502,12 @@ let ``Object list filter: should return filter information in Metadata``() =
                 ]
             ]
         ]
-    let expectedFilter =
-        "subjects", And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" })
+    let expectedFilter  : KeyValuePair<obj list, ObjectListFilter> =
+        KeyValuePair(["A"; "s"], And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" }))
     let result = execute query
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (Some 2.0)
-    result.Metadata.TryFind<float>("queryWeight") |> equals (Some 1.0)
-    result.Metadata.TryFind<(string * ObjectListFilter) list>("filters") |> equals (Some [ expectedFilter ])
+    result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
+    result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
+    result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]

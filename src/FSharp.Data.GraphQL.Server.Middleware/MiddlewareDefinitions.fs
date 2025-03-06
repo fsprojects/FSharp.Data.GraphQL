@@ -1,6 +1,9 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open System.Collections.Generic
+open System.Collections.Immutable
 open FsToolkit.ErrorHandling
+
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
@@ -14,8 +17,8 @@ type internal QueryWeightMiddleware(threshold : float, reportToMetadata : bool) 
                 then 0.0
                 else
                     match f.Definition.Metadata.TryFind<float>("queryWeight") with
-                    | Some w -> w
-                    | None -> 0.0
+                    | ValueSome w -> w
+                    | ValueNone -> 0.0
             // let rec getFields = function
             //     | ResolveValue -> []
             //     | SelectFields fields -> fields
@@ -82,7 +85,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         next ctx
 
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
-        let rec collectArgs (acc : (string * ObjectListFilter) list) (fields : ExecutionInfo list) =
+        let rec collectArgs (acc : KeyValuePair<string, ObjectListFilter> list) (fields : ExecutionInfo list) =
             let fieldArgs field =
                 let filterResults =
                     field.Ast.Arguments
@@ -96,7 +99,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 | Ok filters ->
                     filters
                     |> removeNoFilter
-                    |> Seq.map (fun x -> field.Ast.AliasOrName, x)
+                    |> Seq.map (fun x -> KeyValuePair (field.Ast.AliasOrName, x))
                     |> Seq.toList
                     |> Ok
             match fields with
@@ -119,7 +122,8 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
             match reportToMetadata with
             | true ->
                 let! args = collectArgs [] ctx.ExecutionPlan.Fields
-                return { ctx with Metadata = ctx.Metadata.Add("filters", args) }
+                let filters = ImmutableDictionary.CreateRange args
+                return { ctx with Metadata = ctx.Metadata.Add("filters", filters) }
             | false -> return ctx
         }
         match ctxResult with

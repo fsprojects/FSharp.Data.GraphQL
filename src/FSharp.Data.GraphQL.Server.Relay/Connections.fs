@@ -85,22 +85,17 @@ module Cursor =
 [<AutoOpen>]
 module Definitions =
 
-    let private vopt =
-        function
-        | Some x -> ValueSome x
-        | None -> ValueNone
-
     /// Active pattern used to match context arguments in order
     /// to construct Relay slice information.
     [<return: Struct>]
     let (|SliceInfo|_|) (ctx : ResolveFieldContext) =
         match ctx.TryArg "first", ctx.TryArg "after" with
-        | Some (first), None -> ValueSome (Forward (first, ValueNone))
-        | Some (first), (after) -> ValueSome (Forward (first, vopt after))
-        | None, _ ->
+        | ValueSome (first), ValueNone -> ValueSome (Forward (first, ValueNone))
+        | ValueSome (first), (after) -> ValueSome (Forward (first, after))
+        | ValueNone, _ ->
             match ctx.TryArg "last", ctx.TryArg "before" with
-            | Some (last), None -> ValueSome (Backward (last, ValueNone))
-            | Some (last), (before) -> ValueSome (Backward (last, vopt before))
+            | ValueSome (last), ValueNone -> ValueSome (Backward (last, ValueNone))
+            | ValueSome (last), (before) -> ValueSome (Backward (last, before))
             | _, _ -> ValueNone
 
     /// Object defintion representing information about pagination in context of Relay connection

@@ -122,5 +122,5 @@ let ``Executor middleware: change fields and measure planning time`` () =
         data |> equals (upcast expected)
     | _ -> fail "Expected Direct GQLResponse"
     match result.Metadata.TryFind<int64>("planningTime") with
-    | Some time -> time |> greaterThanOrEqual 5L
-    | None -> fail "Expected planning time on GQLResponse metadata, but it was not found"
+    | ValueSome time -> time |> greaterThanOrEqual 5L
+    | ValueNone -> fail "Expected planning time on GQLResponse metadata, but it was not found"

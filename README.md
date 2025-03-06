@@ -399,7 +399,7 @@ type ObjectListFilter =
     | FilterField of FieldFilter<ObjectListFilter>
 ```
 
-And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, wich returns an `ObjectListFilter option` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
+And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, which returns an `ObjectListFilter voption` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
 
 ```fsharp
 Define.Field("friends", ListOf (Nullable CharacterType),

@@ -20,7 +20,7 @@ module BookCursor =
             Title = get.Required.Field "t" Decode.string
         })
 
-    let tryDecode (x : string) : BookCursor option = option {
+    let tryDecode (x : string) : BookCursor voption = voption {
         let! bytes = Base64.tryDecode x
         let! json = Utf8.tryDecode bytes
 

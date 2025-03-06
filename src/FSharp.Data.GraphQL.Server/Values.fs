@@ -73,21 +73,19 @@ let private normalizeOptional (outputType : Type) value =
 
 /// Tries to convert type defined in AST into one of the type defs known in schema.
 let inline tryConvertAst schema ast =
-    let rec convert isNullable (schema : ISchema) (ast : InputType) : TypeDef option =
+    let rec convert isNullable (schema : ISchema) (ast : InputType) : TypeDef voption =
         match ast with
         | NamedType name ->
-            match schema.TryFindType name with
-            | Some namedDef ->
-                Some (
-                    if isNullable then
-                        upcast namedDef.MakeNullable ()
-                    else
-                        upcast namedDef
-                )
-            | None -> None
+            schema.TryFindType name
+            |> ValueOption.map (fun namedDef ->
+                if isNullable then
+                    upcast namedDef.MakeNullable ()
+                else
+                    upcast namedDef
+            )
         | ListType inner ->
             convert true schema inner
-            |> Option.map (fun i ->
+            |> ValueOption.map (fun i ->
                 if isNullable then
                     upcast i.MakeList().MakeNullable ()
                 else
@@ -121,7 +119,7 @@ let rec internal compileByType
                     (fun (allParameters : _ ResizeArray) param ->
                         match
                             objDef.Fields
-                            // TODO: Improve parameter name matching logic  
+                            // TODO: Improve parameter name matching logic
                             |> Array.tryFind (fun field -> String.Equals (field.Name, param.Name, StringComparison.InvariantCultureIgnoreCase))
                         with
                         | Some field ->
