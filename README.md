@@ -354,6 +354,24 @@ query TestQuery {
         appearsIn
         homePlanet
         friends (filter : { name_starts_with: "A" }) {
+        friends (filter : { or : { name_starts_with: "A", name_starts_with: "B" }}) {
+            id
+            name
+        }
+    }
+}
+```
+
+Also you can apply `not` operator and combine filters with `and` and `or` operators like this:
+
+```graphql
+query TestQuery {
+    hero(id:"1000") {
+        id
+        name
+        appearsIn
+        homePlanet
+        friends (filter : { or : { name_starts_with: "A", name_starts_with: "B" }}) {
             id
             name
         }
