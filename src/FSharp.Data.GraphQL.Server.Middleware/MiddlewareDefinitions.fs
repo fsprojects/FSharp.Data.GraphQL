@@ -76,7 +76,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         let typesWithListFields =
             ctx.TypeMap.GetTypesWithListFields<'ObjectType, 'ListType>()
         if Seq.isEmpty typesWithListFields
-        then failwith <| sprintf "No lists with specified type '%A' where found on object of type '%A'." typeof<'ObjectType> typeof<'ListType>
+        then failwith $"No lists with specified type '{typeof<'ObjectType>}' where found on object of type '{typeof<'ListType>}'."
         let modifiedTypes =
             typesWithListFields
             |> Seq.map (fun (object, fields) -> modifyFields object fields)
@@ -85,8 +85,8 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
         next ctx
 
     let reportMiddleware (ctx : ExecutionContext) (next : ExecutionContext -> AsyncVal<GQLExecutionResult>) =
-        let rec collectArgs (acc : KeyValuePair<string, ObjectListFilter> list) (fields : ExecutionInfo list) =
-            let fieldArgs field =
+        let rec collectArgs (path: obj list) (acc : KeyValuePair<obj list, ObjectListFilter> list) (fields : ExecutionInfo list) =
+            let fieldArgs currentPath field =
                 let filterResults =
                     field.Ast.Arguments
                     |> Seq.map (fun x ->
@@ -99,29 +99,30 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 | Ok filters ->
                     filters
                     |> removeNoFilter
-                    |> Seq.map (fun x -> KeyValuePair (field.Ast.AliasOrName, x))
+                    |> Seq.map (fun x -> KeyValuePair (currentPath |> List.rev, x))
                     |> Seq.toList
                     |> Ok
             match fields with
             | [] -> Ok acc
             | x :: xs ->
+                let currentPath = box x.Ast.AliasOrName :: path
                 let accResult =
                     match x.Kind with
                     | SelectFields fields ->
-                        collectArgs acc fields
+                        collectArgs currentPath acc fields
                     | ResolveCollection field ->
-                        fieldArgs field
+                        fieldArgs currentPath field
                     | ResolveAbstraction typeFields ->
                         let fields = typeFields |> Map.toList |> List.collect (fun (_, v) -> v)
-                        collectArgs acc fields
+                        collectArgs currentPath acc fields
                     | _ -> Ok acc
                 match accResult with
                 | Error errs -> Error errs
-                | Ok acc -> collectArgs acc xs
+                | Ok acc -> collectArgs path acc xs
         let ctxResult = result {
             match reportToMetadata with
             | true ->
-                let! args = collectArgs [] ctx.ExecutionPlan.Fields
+                let! args = collectArgs [] [] ctx.ExecutionPlan.Fields
                 let filters = ImmutableDictionary.CreateRange args
                 return { ctx with Metadata = ctx.Metadata.Add("filters", filters) }
             | false -> return ctx

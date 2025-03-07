@@ -4,6 +4,7 @@ open System
 open System.Collections.Immutable
 open FsToolkit.ErrorHandling
 
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 
 /// Contains extensions for the type system.
@@ -20,14 +21,7 @@ module TypeSystemExtensions =
         /// <param name="weight">A float value representing the weight that this field have on the query.</param>
         member this.WithQueryWeight (weight : float) : FieldDef<'Val> = this.WithMetadata (this.Metadata.Add ("queryWeight", weight))
 
-    type ObjectListFilters = ImmutableDictionary<string, ObjectListFilter>
-
-    type ExecutionContext with
-
-        /// <summary>
-        /// Gets the filters applied to the lists.
-        /// </summary>
-        member this.Filters = this.Metadata.TryFind<ObjectListFilters> "filters"
+    open ObjectListFilter.Operators
 
     type ResolveFieldContext with
 
@@ -40,3 +34,12 @@ module TypeSystemExtensions =
             | true, (:? ObjectListFilter as f) -> ValueSome f
             | false, _ -> ValueNone
             | true, _ -> raise (InvalidOperationException "Invalid filter argument type.")
+
+    type ObjectListFilters = ImmutableDictionary<obj list, ObjectListFilter>
+
+    type ExecutionContext with
+
+        /// <summary>
+        /// Gets the filters applied to the lists.
+        /// </summary>
+        member this.Filters = this.Metadata.TryFind<ObjectListFilters> "filters"
