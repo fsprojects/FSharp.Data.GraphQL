@@ -31,7 +31,17 @@ module TypeSystemExtensions =
         /// </summary>
         member this.Filter =
             match this.Args.TryGetValue "filter" with
-            | true, (:? ObjectListFilter as f) -> ValueSome f
+            | true, (:? ObjectListFilter as f) ->
+                match this.ExecutionInfo.Kind with
+                | ResolveAbstraction typeFields ->
+                    let getType name =
+                        match this.Context.Schema.TypeMap.TryFind name with
+                        | ValueSome tdef -> tdef.Type
+                        | ValueNone -> raise (MalformedGQLQueryException ($"Type '{name}' not found in schema."))
+                    match typeFields.Keys |> Seq.map getType |> Seq.toList with
+                    | [] -> ValueNone
+                    | filters -> f &&& (OfTypes { FieldName = "__typename"; Value = filters }) |> ValueSome
+                | _ -> ValueSome f
             | false, _ -> ValueNone
             | true, _ -> raise (InvalidOperationException "Invalid filter argument type.")
 

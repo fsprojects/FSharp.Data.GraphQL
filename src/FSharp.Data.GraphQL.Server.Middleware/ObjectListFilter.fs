@@ -1,5 +1,7 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
+open System
+
 /// A filter definition for a field value.
 type FieldFilter<'Val> =
     { FieldName : string
@@ -16,9 +18,9 @@ type ObjectListFilter =
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<string>
+    | OfTypes of FieldFilter<Type list>
     | FilterField of FieldFilter<ObjectListFilter>
     | NoFilter
-
 
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
