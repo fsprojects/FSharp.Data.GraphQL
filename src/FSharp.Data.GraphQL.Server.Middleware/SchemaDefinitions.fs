@@ -1,11 +1,13 @@
 namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System
+open System.Collections.Generic
+open System.Collections.Immutable
+open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Errors
-
 
 /// Contains customized schema definitions for extensibility features.
 [<AutoOpen>]
@@ -117,6 +119,18 @@ module SchemaDefinitions =
     //    | :? ObjectListFilter as x -> Ok x
     //    | _ -> Error [{ new IGQLError with member _.Message = $"Cannot coerce ObjectListFilter output. '%s{x.GetType().FullName}' is not 'ObjectListFilter'" }]
 
+    // TODO: Move to shared and make public
+    let rec private jsonElementToInputValue (element : JsonElement) =
+        match element.ValueKind with
+        | JsonValueKind.Null -> NullValue
+        | JsonValueKind.True -> BooleanValue true
+        | JsonValueKind.False -> BooleanValue false
+        | JsonValueKind.String -> StringValue (element.GetString ())
+        | JsonValueKind.Number -> FloatValue (element.GetDouble ())
+        | JsonValueKind.Array -> ListValue (element.EnumerateArray () |> Seq.map jsonElementToInputValue |> List.ofSeq)
+        | JsonValueKind.Object -> ObjectValue (element.EnumerateObject () |> Seq.map (fun p -> p.Name, jsonElementToInputValue p.Value) |> Map.ofSeq)
+        | _ -> raise (NotSupportedException "Unsupported JSON element type")
+
     /// Defines an object list filter for use as an argument for filter list of object fields.
     let ObjectListFilter : ScalarDefinition<ObjectListFilter> =
         { Name = "ObjectListFilter"
@@ -126,5 +140,5 @@ module SchemaDefinitions =
           CoerceInput =
               (function
                | InlineConstant c -> coerceObjectListFilterInput c
-               | Variable _ -> raise <| NotSupportedException "List filter cannot be a variable") // TODO: Investigate
+               | Variable json -> json |> jsonElementToInputValue |> coerceObjectListFilterInput)
           CoerceOutput = coerceObjectListFilterValue }
