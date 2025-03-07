@@ -40,7 +40,7 @@ module TypeSystemExtensions =
                         | ValueNone -> raise (MalformedGQLQueryException ($"Type '{name}' not found in schema."))
                     match typeFields.Keys |> Seq.map getType |> Seq.toList with
                     | [] -> ValueNone
-                    | filters -> f &&& (OfTypes { FieldName = "__typename"; Value = filters }) |> ValueSome
+                    | filters -> ValueSome (f &&& (OfTypes { FieldName = "__typename"; Value = filters }))
                 | _ -> ValueSome f
             | false, _ -> ValueNone
             | true, _ -> raise (InvalidOperationException "Invalid filter argument type.")
