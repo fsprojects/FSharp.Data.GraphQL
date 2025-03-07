@@ -2055,6 +2055,8 @@ and TypeMap () =
         let includeDefaultTypes = defaultArg includeDefaultTypes true
         this.ToSeq (includeDefaultTypes) |> List.ofSeq
 
+    member _.Item (name : string) = map[name]
+
     /// <summary>
     /// Tries to find a NamedDef in the map by it's key (the name).
     /// </summary>
