@@ -5,6 +5,7 @@ open System.Collections.Immutable
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
+open FSharp.Data.GraphQL.Ast
 open FSharp.Data.GraphQL.Types.Patterns
 open FSharp.Data.GraphQL.Types
 
@@ -90,8 +91,9 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                 let filterResults =
                     field.Ast.Arguments
                     |> Seq.map (fun x ->
-                        match x.Name with
-                        | "filter" -> ObjectListFilter.CoerceInput (InlineConstant x.Value)
+                        match x.Name, x.Value with
+                        | "filter", (VariableName variableName) -> Ok (ctx.Variables[variableName] :?> ObjectListFilter)
+                        | "filter", inlineConstant -> ObjectListFilter.CoerceInput (InlineConstant inlineConstant)
                         | _ -> Ok NoFilter)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with

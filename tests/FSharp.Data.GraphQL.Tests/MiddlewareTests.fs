@@ -10,6 +10,8 @@ open FSharp.Data.GraphQL.Shared
 open FSharp.Data.GraphQL.Parser
 open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Ast
+open System.Collections.Immutable
+open System.Text.Json
 
 #nowarn "40"
 
@@ -87,6 +89,8 @@ let executor =
           Define.ObjectListFilterMiddleware<B, Subject option>(true) ]
     Executor(schema, middleware)
 
+let executeWithVariables (query : Document , variables: ImmutableDictionary<string, JsonElement>) =
+    executor.AsyncExecute(ast = query, variables = variables) |> sync
 let execute (query : Document) =
     executor.AsyncExecute(query) |> sync
 
@@ -94,7 +98,7 @@ let expectedErrors : GQLProblemDetails list =
     [ GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.") ]
 
 [<Fact>]
-let ``Simple query: Should pass when below threshold``() =
+let ``Simple query: Must pass when below threshold``() =
     let query =
         parse """query testQuery {
                 A (id : 1) {
@@ -141,7 +145,7 @@ let ``Simple query: Should pass when below threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
 
 [<Fact>]
-let ``Simple query: Should not pass when above threshold``() =
+let ``Simple query: Must not pass when above threshold``() =
     let query =
         parse """query testQuery {
                     A (id : 1) {
@@ -198,7 +202,7 @@ let ``Simple query: Should not pass when above threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0)
 
 [<Fact>]
-let ``Deferred queries : Should pass when below threshold``() =
+let ``Deferred queries : Must pass when below threshold``() =
     let query =
         parse """query testQuery {
                 A (id : 1) {
@@ -251,7 +255,7 @@ let ``Deferred queries : Should pass when below threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 2.0)
 
 [<Fact>]
-let ``Streamed queries : Should pass when below threshold``() =
+let ``Streamed queries : Must pass when below threshold``() =
     let query =
         parse """query testQuery {
                 A (id : 1) {
@@ -312,7 +316,7 @@ let ``Streamed queries : Should pass when below threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 2.0)
 
 [<Fact>]
-let ``Deferred and Streamed queries : Should not pass when above threshold``() =
+let ``Deferred and Streamed queries : Must not pass when above threshold``() =
     let query =
         sprintf """query testQuery {
                 A (id : 1) {
@@ -371,7 +375,7 @@ let ``Deferred and Streamed queries : Should not pass when above threshold``() =
         result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0))
 
 [<Fact>]
-let ``Inline fragment query : Should pass when below threshold``() =
+let ``Inline fragment query : Must pass when below threshold``() =
     let query =
         parse """query testQuery {
             A (id : 1) {
@@ -412,7 +416,7 @@ let ``Inline fragment query : Should pass when below threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
 
 [<Fact>]
-let ``Inline fragment query : Should not pass when above threshold``() =
+let ``Inline fragment query : Must not pass when above threshold``() =
     let query =
         parse """query testQuery {
                 A (id : 1) {
@@ -465,7 +469,7 @@ let ``Inline fragment query : Should not pass when above threshold``() =
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 3.0)
 
 [<Fact>]
-let ``Object list filter: should return filter information in Metadata``() =
+let ``Object list filter: must return filter information in Metadata``() =
     let query =
         parse """query testQuery {
                 A (id : 1) {
@@ -510,4 +514,192 @@ let ``Object list filter: should return filter information in Metadata``() =
         data |> equals (upcast expected)
     result.Metadata.TryFind<float>("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float>("queryWeight") |> equals (ValueSome 1.0)
+    result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return AND filter information in Metadata``() =
+    let query =
+        parse """query testQuery {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { and : [{ value_starts_with: "3"}, {id : 6 }]}) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+                "subjects", upcast [
+                    NameValueLookup.ofList [
+                        "id", upcast 2
+                        "value", upcast "A2"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast 6
+                        "value", upcast "3000"
+                    ]
+                ]
+            ]
+        ]
+    let expectedFilter  : KeyValuePair<obj list, ObjectListFilter> =
+        KeyValuePair(["A"; "subjects"], And (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
+    let result = execute query
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return OR filter information in Metadata``() =
+    let query =
+        parse """query testQuery {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { or : [{value_starts_with: "3"}, {id : 6}] }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+                "subjects", upcast [
+                    NameValueLookup.ofList [
+                        "id", upcast 2
+                        "value", upcast "A2"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast 6
+                        "value", upcast "3000"
+                    ]
+                ]
+            ]
+        ]
+    let expectedFilter  : KeyValuePair<obj list, ObjectListFilter> =
+        KeyValuePair(["A"; "subjects"], Or (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
+    let result = execute query
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return NOT filter information in Metadata``() =
+    let query =
+        parse """query testQuery {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { not : {value_starts_with: "3"} }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+                "subjects", upcast [
+                    NameValueLookup.ofList [
+                        "id", upcast 2
+                        "value", upcast "A2"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast 6
+                        "value", upcast "3000"
+                    ]
+                ]
+            ]
+        ]
+    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+        KeyValuePair(["A"; "subjects"], Not (StartsWith { FieldName = "value"; Value = "3" }))
+    let result = execute query
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return filter information in Metadata when supplied as variable``() =
+    let jsonString = """{ "not": { "value_starts_with": "3" } }"""
+    let jsonElement = JsonDocument.Parse(jsonString).RootElement
+
+    let dict = ImmutableDictionary<string, JsonElement>.Empty.Add("filter", jsonElement)
+    let query =
+        parse """query testQuery($filter: ObjectListFilter!) {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : $filter) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A", upcast NameValueLookup.ofList [
+                "id", upcast 1
+                "value", upcast "A1"
+                "subjects", upcast [
+                    NameValueLookup.ofList [
+                        "id", upcast 2
+                        "value", upcast "A2"
+                    ]
+                    NameValueLookup.ofList [
+                        "id", upcast 6
+                        "value", upcast "3000"
+                    ]
+                ]
+            ]
+        ]
+    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+        KeyValuePair(["A"; "subjects"], Not (StartsWith { FieldName = "value"; Value = "3" }))
+    let result = executeWithVariables(query, dict)
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
     result.Metadata.TryFind<ObjectListFilters>("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
