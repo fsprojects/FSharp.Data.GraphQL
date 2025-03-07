@@ -60,116 +60,168 @@ module ObjectListFilter =
         /// Creates a new ObjectListFilter representing a NOT opreation for the existing one.
         let ( !!! ) filter = Not filter
 
-//[<AutoOpen>]
-//module ObjectListFilterExtensions =
+[<AutoOpen>]
+module ObjectListFilterExtensions =
 
-//    type ObjectListFilter with
+    //// discriminator custom condition
+    //let a () =
+    //    filter.Apply(
+    //        queryable,
+    //        <@ fun e d -> e.Discriminator.StartsWith d @>,
+    //        function
+    //        | t when Type.(=)(t, typeof<Complex>) -> ResidentialPropertiesConstants.Discriminators.Complex
+    //        | t when Type.(=)(t, typeof<Building>) -> ResidentialPropertiesConstants.Discriminators.Building
+    //    )
+    //// discriminator equals
+    //let b () =
+    //    filter.Apply(
+    //        queryable,
+    //        <@ fun e -> e.Discriminator @>,
+    //        function
+    //        | t when Type.(=)(t, typeof<Complex>) -> ResidentialPropertiesConstants.Discriminators.Complex
+    //        | t when Type.(=)(t, typeof<Building>) -> ResidentialPropertiesConstants.Discriminators.Building
+    //    )
 
-//        member filter.Apply<'T, 'D>(query : IQueryable<'T>,
-//                                   compareDiscriminator : Expr<'T -> 'D -> 'D> | null,
-//                                   getDiscriminatorValue : (Type -> 'D) | null) =
-//            filter.Apply(query, compareDiscriminator, getDiscriminatorValue)
+    // Helper to create parameter expression for the lambda
+    let param<'T> = Expression.Parameter(typeof<'T>, "x")
 
-//        member filter.Apply<'T, 'D>(query : IQueryable<'T>,
-//                                   [<Optional>] getDiscriminator : Expr<'T -> 'D> | null,
-//                                   [<Optional>] getDiscriminatorValue : (Type -> 'D) | null) =
-//            // Helper to create parameter expression for the lambda
-//            let param = Expression.Parameter(typeof<'T>, "x")
+    // Helper to get property value
+    let getPropertyExpr<'T> (param: ParameterExpression) fieldName =
+        Expression.PropertyOrField(param, fieldName)
 
-//            // Helper to get property value
-//            let getPropertyExpr fieldName =
-//                Expression.PropertyOrField(param, fieldName)
+    // Helper to create lambda from body expression
+    let makeLambda<'T> (param: ParameterExpression) (body: Expression) =
+        let delegateType = typedefof<Func<_,_>>.MakeGenericType([|typeof<'T>; body.Type|])
+        Expression.Lambda(delegateType, body, param)
 
-//            // Helper to create lambda from body expression
-//            let makeLambda (body: Expression) =
-//                let delegateType = typedefof<Func<_,_>>.MakeGenericType([|typeof<'T>; body.Type|])
-//                Expression.Lambda(delegateType, body, param)
+    // Helper to create Where expression
+    let whereExpr<'T> (query : IQueryable<'T>) (param: ParameterExpression) predicate =
+        let whereMethod =
+            typeof<Queryable>.GetMethods()
+            |> Seq.where (fun m -> m.Name = "Where")
+            |> Seq.find (fun m ->
+                let parameters = m.GetParameters()
+                parameters.Length = 2
+                && parameters[1].ParameterType.GetGenericTypeDefinition() = typedefof<Expression<Func<_,_>>>)
+            |> fun m -> m.MakeGenericMethod([|typeof<'T>|])
+        Expression.Call(whereMethod, [|query.Expression; makeLambda<'T> param predicate|])
 
-//            // Helper to create Where expression
-//            let whereExpr predicate =
-//                let whereMethod =
-//                    typeof<Queryable>.GetMethods()
-//                    |> Seq.where (fun m -> m.Name = "Where")
-//                    |> Seq.find (fun m ->
-//                        let parameters = m.GetParameters()
-//                        parameters.Length = 2
-//                        && parameters[1].ParameterType.GetGenericTypeDefinition() = typedefof<Expression<Func<_,_>>>)
-//                    |> fun m -> m.MakeGenericMethod([|typeof<'T>|])
-//                Expression.Call(whereMethod, [|query.Expression; makeLambda predicate|])
+    // Main filter logic
+    let rec buildFilterExpr<'T> (param: ParameterExpression) buildTypeDiscriminatorCheck filter (query : IQueryable<'T>) =
+        let buildFilterExpr = buildFilterExpr<'T> param buildTypeDiscriminatorCheck
+        match filter with
+        | NoFilter -> query.Expression
+        | And (f1, f2) ->
+            let q1 = buildFilterExpr f1 query |> Expression.Lambda<Func<IQueryable<'T>>> |> _.Compile().Invoke()
+            let q2 = buildFilterExpr f2 q1 |> Expression.Lambda<Func<IQueryable<'T>>> |> _.Compile().Invoke()
+            q2.Expression
+        //| Or (f1, f2) ->
+        //    let expr1 = buildFilterExpr f1 query
+        //    let expr2 = buildFilterExpr f2 query
+        //    Expression.OrElse(expr1, expr2) |> whereExpr<'T> query param :> Expression
+        //| Not f ->
+        //    let exceptMethod =
+        //        typeof<Queryable>.GetMethods()
+        //        |> Array.find (fun m -> m.Name = "Except")
+        //        |> fun m -> m.MakeGenericMethod([|typeof<'T>|])
+        //    Expression.Call(exceptMethod, [|query.Expression; buildFilterExpr f|])
+        //| OfTypes types ->
+        //    match types.Value with
+        //    | [] -> query.Expression // No types specified, return original query
+        //    | types ->
+        //        let typeChecks =
+        //            types
+        //            |> List.vchoose buildTypeDiscriminatorCheck
+        //            |> List.fold (fun acc expr ->
+        //                match acc with
+        //                | ValueNone -> ValueSome expr
+        //                | ValueSome prevExpr -> ValueSome (Expression.OrElse(prevExpr, expr))) ValueNone
 
-//            // Helper for discriminator comparison
-//            let buildTypeDiscriminatorCheck (t: Type) =
-//                match getDiscriminator, getDiscriminatorValue with
-//                | null, _ | _, null -> None
-//                | discExpr, discValueFn ->
-//                    let compiled = QuotationEvaluator.Eval(discExpr)
-//                    let discriminatorValue = discValueFn t
-//                    let discExpr = getPropertyExpr "__discriminator" // Assuming discriminator field name
-//                    let valueExpr = Expression.Constant(discriminatorValue)
-//                    Some(Expression.Equal(discExpr, valueExpr))
+        //        match typeChecks with
+        //        | ValueNone -> query.Expression
+        //        | ValueSome expr -> whereExpr  query expr :> Expression
+        | Equals f ->
+            Expression.Equal(getPropertyExpr<'T> param f.FieldName, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | GreaterThan f ->
+            Expression.GreaterThan(getPropertyExpr<'T> param f.FieldName, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | LessThan f ->
+            Expression.LessThan(getPropertyExpr<'T> param f.FieldName, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | StartsWith f ->
+            let methodInfo = typeof<string>.GetMethod("StartsWith", [|typeof<string>|])
+            Expression.Call(getPropertyExpr<'T> param f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | EndsWith f ->
+            let methodInfo = typeof<string>.GetMethod("EndsWith", [|typeof<string>|])
+            Expression.Call(getPropertyExpr<'T> param f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | Contains f ->
+            let methodInfo = typeof<string>.GetMethod("Contains", [|typeof<string>|])
+            Expression.Call(getPropertyExpr<'T> param f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr<'T> query param :> Expression
+        | FilterField f ->
+            let propExpr = getPropertyExpr<'T> param f.FieldName
+            match propExpr.Type.GetInterfaces()
+                    |> Array.tryFind (fun t ->
+                        t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<IQueryable<_>>) with
+            | Some queryableType ->
+                let elementType = queryableType.GetGenericArguments().[0]
+                let subFilter = f.Value
+                let subQuery = Expression.Convert(propExpr, queryableType)
+                Expression.Call(typeof<Queryable>, "Any", [|elementType|], subQuery) |> whereExpr<'T> query param :> Expression
+            | None -> query.Expression
 
-//            // Main filter logic
-//            let rec buildFilterExpr filter =
-//                match filter with
-//                | NoFilter -> query.Expression
-//                | And (f1, f2) ->
-//                    let q1 = buildFilterExpr f1 |> Expression.Lambda<Func<IQueryable<'T>>>|> _.Compile().Invoke()
-//                    buildFilterExpr f2 |> Expression.Lambda<Func<IQueryable<'T>>> |> _.Compile().Invoke(q1).Expression
-//                | Or (f1, f2) ->
-//                    let expr1 = buildFilterExpr f1
-//                    let expr2 = buildFilterExpr f2
-//                    let unionMethod =
-//                        typeof<Queryable>.GetMethods()
-//                        |> Array.find (fun m -> m.Name = "Union")
-//                        |> fun m -> m.MakeGenericMethod([|typeof<'T>|])
-//                    Expression.Call(unionMethod, [|expr1; expr2|])
-//                | Not f ->
-//                    let exceptMethod =
-//                        typeof<Queryable>.GetMethods()
-//                        |> Array.find (fun m -> m.Name = "Except")
-//                        |> fun m -> m.MakeGenericMethod([|typeof<'T>|])
-//                    Expression.Call(exceptMethod, [|query.Expression; buildFilterExpr f|])
-//                | Equals f ->
-//                    Expression.Equal(getPropertyExpr f.FieldName, Expression.Constant(f.Value)) |> whereExpr
-//                | GreaterThan f ->
-//                    Expression.GreaterThan(getPropertyExpr f.FieldName, Expression.Constant(f.Value)) |> whereExpr
-//                | LessThan f ->
-//                    Expression.LessThan(getPropertyExpr f.FieldName, Expression.Constant(f.Value)) |> whereExpr
-//                | StartsWith f ->
-//                    let methodInfo = typeof<string>.GetMethod("StartsWith", [|typeof<string>|])
-//                    Expression.Call(getPropertyExpr f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr
-//                | EndsWith f ->
-//                    let methodInfo = typeof<string>.GetMethod("EndsWith", [|typeof<string>|])
-//                    Expression.Call(getPropertyExpr f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr
-//                | Contains f ->
-//                    let methodInfo = typeof<string>.GetMethod("Contains", [|typeof<string>|])
-//                    Expression.Call(getPropertyExpr f.FieldName, methodInfo, Expression.Constant(f.Value)) |> whereExpr
-//                | OfTypes types ->
-//                    match types.Value with
-//                    | [] -> query.Expression // No types specified, return original query
-//                    | types ->
-//                        let typeChecks =
-//                            types
-//                            |> List.choose buildTypeDiscriminatorCheck
-//                            |> List.fold (fun acc expr ->
-//                                match acc with
-//                                | None -> Some expr
-//                                | Some prevExpr -> Some(Expression.OrElse(prevExpr, expr))) None
+type ObjectListFilter with
 
-//                        match typeChecks with
-//                        | None -> query.Expression
-//                        | Some expr -> whereExpr expr
-//                | FilterField f ->
-//                    let propExpr = getPropertyExpr f.FieldName
-//                    match propExpr.Type.GetInterfaces()
-//                          |> Array.tryFind (fun t ->
-//                              t.IsGenericType && t.GetGenericTypeDefinition() = typedefof<IQueryable<_>>) with
-//                    | Some queryableType ->
-//                        let elementType = queryableType.GetGenericArguments().[0]
-//                        let subFilter = f.Value
-//                        let subQuery = Expression.Convert(propExpr, queryableType)
-//                        Expression.Call(typeof<Queryable>, "Any", [|elementType|], subQuery) |> whereExpr
-//                    | None -> query.Expression
+    member filter.Apply<'T, 'D>(query : IQueryable<'T>,
+                               compareDiscriminator : Expression<Func<'T, 'D, bool>>,
+                               getDiscriminatorValue : (Type -> 'D)) =
 
-//            // Create and execute the final expression
-//            query.Provider.CreateQuery<'T>(buildFilterExpr filter)
+        // Helper for discriminator comparison
+        let buildTypeDiscriminatorCheck (t: Type) =
+            match compareDiscriminator, getDiscriminatorValue with
+            | null, discValueFn when obj.Equals(discValueFn, null) ->
+                // use __typename from filter and do type.ToSting() for values
+                ValueNone
+            | discExpr, discValueFn when obj.Equals(discValueFn, null) ->
+                // use discriminator and do type.ToSting() for values
+                ValueNone
+            | null, discValueFn ->
+                // use __typename from filter and execute discValueFn for values
+                ValueNone
+            | discExpr, discValueFn ->
+                // use discriminator and execute discValueFn for values
+
+                let discriminatorValue = discValueFn t
+                let param = Expression.Parameter(typeof<'T>, "x")
+                let discExpr = getPropertyExpr<'T> param "__discriminator" // Assuming discriminator field name
+                let valueExpr = Expression.Constant(discriminatorValue)
+                ValueSome(Expression.Equal(discExpr, valueExpr))
+
+        // Create and execute the final expression
+        let param = Expression.Parameter(typeof<'T>, "x")
+        query.Provider.CreateQuery<'T>(buildFilterExpr<'T> param buildTypeDiscriminatorCheck filter query)
+
+    member filter.Apply<'T, 'D>(query : IQueryable<'T>,
+                               [<Optional>] getDiscriminator : Expression<Func<'T, 'D>> | null,
+                               [<Optional>] getDiscriminatorValue : Type -> 'D) =
+
+        // Helper for discriminator comparison
+        let buildTypeDiscriminatorCheck (t: Type) =
+            match getDiscriminator, getDiscriminatorValue with
+            | null, discValueFn when obj.Equals(discValueFn, null) ->
+                // use __typename from filter and do type.ToSting() for values
+                ValueNone
+            | discExpr, discValueFn when obj.Equals(discValueFn, null) ->
+                // use discriminator and do type.ToSting() for values
+                ValueNone
+            | null, discValueFn ->
+                // use __typename from filter and execute discValueFn for values
+                ValueNone
+            | discExpr, discValueFn ->
+                // use discriminator and execute discValueFn for values
+                let discriminatorValue = discValueFn t
+                let param = Expression.Parameter(typeof<'T>, "x")
+                let discExpr = getPropertyExpr<'T> param "__discriminator" // Assuming discriminator field name
+                let valueExpr = Expression.Constant(discriminatorValue)
+                ValueSome(Expression.Equal(discExpr, valueExpr))
+
+        // Create and execute the final expression
+        let param = Expression.Parameter(typeof<'T>, "x")
+        query.Provider.CreateQuery<'T>(buildFilterExpr<'T> param buildTypeDiscriminatorCheck filter query)

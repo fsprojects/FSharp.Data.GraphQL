@@ -9,6 +9,9 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Linq
 open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Server.Middleware
+open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilter
+open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilterExtensions
 
 type Contact =
     { Email : string }
@@ -285,4 +288,130 @@ let ``LINQ interpreter works with orderByDesc arg``() =
     result |> equals [ (2, "Jonathan")
                        (7, "Jeneffer")
                        (4, "Ben") ]
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator``() =
+    let filter =  Equals { FieldName = "firstName"; Value = "Jonathan"  } // :> IComparable
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+    result.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result.Friends |> equals []
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThan operator``() =
+    let filter =  GreaterThan { FieldName = "id"; Value = 4  } // :> IComparable
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 7
+    result.FirstName |> equals "Jeneffer"
+    result.LastName |> equals "Trif"
+    result.Contact |> equals { Email = "j.trif@gmail.com" }
+    result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+
+[<Fact>]
+let ``ObjectListFilter works with LessThan operator``() =
+    let filter =  LessThan { FieldName = "id"; Value = 4  } // :> IComparable
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+    result.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result.Friends |> equals []
+
+[<Fact>]
+let ``ObjectListFilter works with StartsWith operator``() =
+    let filter =  StartsWith { FieldName = "firstName"; Value = "J"  }
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+    result.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result.Friends |> equals []
+
+[<Fact>]
+let ``ObjectListFilter works with Contains operator``() =
+    let filter =  Contains { FieldName = "firstName"; Value = "en"  }
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ] 
+
+[<Fact>]
+let ``ObjectListFilter works with EndsWith operator``() =
+    let filter =  EndsWith { FieldName = "lastName"; Value = "ams"  }
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ] 
+
+[<Fact>]
+let ``ObjectListFilter works with AND operator``() =
+    let filter = 
+        And (
+            Contains { FieldName = "firstName"; Value = "en" },
+            Equals { FieldName = "lastName"; Value = "Adams" }
+        )
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 1
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+//[<Fact>]
+//let ``ObjectListFilter works with OR operator``() =
+//    let filter = 
+//        Or (
+//            GreaterThan { FieldName = "id"; Value = 4 },
+//            Equals { FieldName = "lastName"; Value = "Adams" }
+//        )
+//    let queryable = data.AsQueryable()
+//    let filteredData = filter.Apply(queryable) |> Seq.toList
+//    List.length filteredData |> equals 2
+//    let result = List.head filteredData
+//    result.ID |> equals 4
+//    result.FirstName |> equals "Ben"
+//    result.LastName |> equals "Adams"
+//    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+//    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+//[<Fact>]
+//let ``ObjectListFilter works with FilterField operator``() =
+//    let filter = 
+//        FilterField { FieldName = "Friends"; Value = Contains { FieldName = "Email"; Value = "l.trif@gmail.com" } }
+//    let queryable = data.AsQueryable()
+//    let filteredData = filter.Apply(queryable) |> Seq.toList
+//    List.length filteredData |> equals 1
+//    let result = List.head filteredData
+//    result.ID |> equals 4
+//    result.FirstName |> equals "Ben"
+//    result.LastName |> equals "Adams"
+//    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+//    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
