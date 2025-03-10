@@ -384,22 +384,22 @@ let ``ObjectListFilter works with AND operator``() =
     result.Contact  |> equals { Email = "b.adams@gmail.com" }
     result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
-//[<Fact>]
-//let ``ObjectListFilter works with OR operator``() =
-//    let filter = 
-//        Or (
-//            GreaterThan { FieldName = "id"; Value = 4 },
-//            Equals { FieldName = "lastName"; Value = "Adams" }
-//        )
-//    let queryable = data.AsQueryable()
-//    let filteredData = filter.Apply(queryable) |> Seq.toList
-//    List.length filteredData |> equals 2
-//    let result = List.head filteredData
-//    result.ID |> equals 4
-//    result.FirstName |> equals "Ben"
-//    result.LastName |> equals "Adams"
-//    result.Contact  |> equals { Email = "b.adams@gmail.com" }
-//    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+[<Fact>]
+let ``ObjectListFilter works with OR operator``() =
+    let filter = 
+        Or (
+            GreaterThan { FieldName = "id"; Value = 4 },
+            Equals { FieldName = "lastName"; Value = "Adams" }
+        )
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
 //[<Fact>]
 //let ``ObjectListFilter works with FilterField operator``() =
@@ -414,4 +414,18 @@ let ``ObjectListFilter works with AND operator``() =
 //    result.LastName |> equals "Adams"
 //    result.Contact  |> equals { Email = "b.adams@gmail.com" }
 //    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+[<Fact>]
+let ``ObjectListFilter works with NOT operator``() =
+    let filter = 
+        Not (Equals { FieldName = "lastName"; Value = "Adams" })
+    let queryable = data.AsQueryable()
+    let filteredData = filter.Apply(queryable) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    result1.ID |> equals 2
+    result1.FirstName |> equals "Jonathan"
+    result1.LastName |> equals "Abrams"
+    result1.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result1.Friends |> equals []
 
