@@ -12,6 +12,7 @@ open FSharp.Data.GraphQL.Execution
 open FSharp.Data.GraphQL.Server.Middleware
 open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilter
 open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilterExtensions
+open System.Linq.Expressions
 
 type Contact =
     { Email : string }
@@ -53,6 +54,7 @@ let data =
         LastName = "Trif"
         Contact = { Email = "j.trif@gmail.com" }
         Friends = [ { Email = "j.abrams@gmail.com" } ] } ]
+
 
 let internal undefined<'t> = Unchecked.defaultof<'t>
 
@@ -352,7 +354,7 @@ let ``ObjectListFilter works with Contains operator``() =
     result.FirstName |> equals "Ben"
     result.LastName |> equals "Adams"
     result.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ] 
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with EndsWith operator``() =
@@ -365,11 +367,11 @@ let ``ObjectListFilter works with EndsWith operator``() =
     result.FirstName |> equals "Ben"
     result.LastName |> equals "Adams"
     result.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ] 
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with AND operator``() =
-    let filter = 
+    let filter =
         And (
             Contains { FieldName = "firstName"; Value = "en" },
             Equals { FieldName = "lastName"; Value = "Adams" }
@@ -386,7 +388,7 @@ let ``ObjectListFilter works with AND operator``() =
 
 [<Fact>]
 let ``ObjectListFilter works with OR operator``() =
-    let filter = 
+    let filter =
         Or (
             GreaterThan { FieldName = "id"; Value = 4 },
             Equals { FieldName = "lastName"; Value = "Adams" }
@@ -403,7 +405,7 @@ let ``ObjectListFilter works with OR operator``() =
 
 //[<Fact>]
 //let ``ObjectListFilter works with FilterField operator``() =
-//    let filter = 
+//    let filter =
 //        FilterField { FieldName = "Friends"; Value = Contains { FieldName = "Email"; Value = "l.trif@gmail.com" } }
 //    let queryable = data.AsQueryable()
 //    let filteredData = filter.Apply(queryable) |> Seq.toList
@@ -417,7 +419,7 @@ let ``ObjectListFilter works with OR operator``() =
 
 [<Fact>]
 let ``ObjectListFilter works with NOT operator``() =
-    let filter = 
+    let filter =
         Not (Equals { FieldName = "lastName"; Value = "Adams" })
     let queryable = data.AsQueryable()
     let filteredData = filter.Apply(queryable) |> Seq.toList
@@ -429,3 +431,140 @@ let ``ObjectListFilter works with NOT operator``() =
     result1.Contact |> equals { Email = "j.abrams@gmail.com" }
     result1.Friends |> equals []
 
+type Complex =
+    { ID : int
+      Name : string
+      Discriminator : string }
+
+type Building =
+    { ID : int
+      Name : string
+      Discriminator : string }
+
+type Community =
+    { ID : int
+      Name : string
+      Discriminator : string
+      Complexes : int list
+      Buildings : int list }
+
+type Property =
+    | Complex of Complex
+    | Building of Building
+    | Community of Community
+
+[<Fact>]
+let ``ObjectListFilter works with getDiscriminator for Complex``() =
+    let propertyData: Property list =
+        [
+            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.FullName}
+            Building { ID = 2; Name = "Building B"; Discriminator = typeof<Building>.FullName }
+            Community { ID = 3; Name = "Community C"; Discriminator = typeof<Community>.FullName; Complexes = [1]; Buildings = [2] }
+            Complex { ID = 4; Name = "Complex AA"; Discriminator =  typeof<Complex>.FullName }
+            Building { ID = 5; Name = "Building BB"; Discriminator =  typeof<Building>.FullName }
+            Community { ID = 6; Name = "Community CC"; Discriminator = typeof<Community>.FullName; Complexes = [4]; Buildings = [5] }
+        ]
+    let queryable = propertyData.AsQueryable()
+    let filter = OfTypes [typeof<Complex>]
+    let filteredData =
+        filter.Apply(
+            queryable,
+            getDiscriminator =
+                fun p ->
+                    match p with
+                    | Complex c -> c.Discriminator
+                    | Building b -> b.Discriminator
+                    | Community c -> c.Discriminator
+        )
+        |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    match result1 with
+    | Complex c ->
+        c.ID |> equals 1
+        c.Name |> equals "Complex A"
+    | _ -> failwith "Expected Complex"
+    let result2 = List.last filteredData
+    match result2 with
+    | Complex c ->
+        c.ID |> equals 4
+        c.Name |> equals "Complex AA"
+    | _ -> failwith "Expected Complex"
+
+
+[<Fact>]
+let ``ObjectListFilter works with getDiscriminator and getDiscriminatorValue for Complex``() =
+    let propertyData: Property list =
+        [
+            Complex { ID = 1; Name = "Complex A"; Discriminator = "Complex" }
+            Building { ID = 2; Name = "Building B"; Discriminator = "Building" }
+            Community { ID = 3; Name = "Community C"; Discriminator = "Community"; Complexes = [1]; Buildings = [2] }
+            Complex { ID = 4; Name = "Complex AA"; Discriminator =  "Complex" }
+            Building { ID = 5; Name = "Building BB"; Discriminator =  "Building" }
+            Community { ID = 6; Name = "Community CC"; Discriminator = "Community"; Complexes = [4]; Buildings = [5] }
+        ]
+    let queryable = propertyData.AsQueryable()
+    let filter = OfTypes [typeof<Complex>]
+    let filteredData =
+        filter.Apply(
+            queryable,
+            (fun p ->
+                match p with
+                | Complex c -> c.Discriminator
+                | Building b -> b.Discriminator
+                | Community c -> c.Discriminator),
+            (function
+            | t when t = typeof<Complex> -> "Complex"
+            | t when t = typeof<Building> -> "Building"
+            | t when t = typeof<Community> -> "Community"
+            | _ -> raise (NotSupportedException "Type not supported"))
+        )
+        |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    match result1 with
+    | Complex c ->
+        c.ID |> equals 1
+        c.Name |> equals "Complex A"
+    | _ -> failwith "Expected Complex"
+    let result2 = List.last filteredData
+    match result2 with
+    | Complex c ->
+        c.ID |> equals 4
+        c.Name |> equals "Complex AA"
+    | _ -> failwith "Expected Complex"
+
+
+
+[<Fact>]
+let ``ObjectListFilter works with getDiscriminatorValue for Complex``() =
+    let propertyData: Property list =
+        [
+            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.FullName}
+            Building { ID = 2; Name = "Building B"; Discriminator = typeof<Building>.FullName }
+            Community { ID = 3; Name = "Community C"; Discriminator = typeof<Community>.FullName; Complexes = [1]; Buildings = [2] }
+            Complex { ID = 4; Name = "Complex AA"; Discriminator =  typeof<Complex>.FullName }
+            Building { ID = 5; Name = "Building BB"; Discriminator =  typeof<Building>.FullName }
+            Community { ID = 6; Name = "Community CC"; Discriminator = typeof<Community>.FullName; Complexes = [4]; Buildings = [5] }
+        ]
+    let queryable = propertyData.AsQueryable()
+    let filter = OfTypes [typeof<Complex>]
+    let filteredData =
+        filter.Apply(
+            queryable,
+            getDiscriminatorValue = (fun t -> t.FullName)
+        )
+        |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    match result1 with
+    | Complex c ->
+        c.ID |> equals 1
+        c.Name |> equals "Complex A"
+    | _ -> failwith "Expected Complex"
+    let result2 = List.last filteredData
+    match result2 with
+    | Complex c ->
+        c.ID |> equals 4
+        c.Name |> equals "Complex AA"
+    | _ -> failwith "Expected Complex"
