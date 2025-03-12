@@ -23,6 +23,21 @@ module TypeSystemExtensions =
 
     open ObjectListFilter.Operators
 
+    type ExecutionInfo with
+
+        member this.ResolveAbstractionFilter (typeMap : TypeMap) =
+            match this.Kind with
+            | ResolveAbstraction typeFields ->
+                let getType name =
+                    match typeMap.TryFind name with
+                    | ValueSome tdef -> tdef.Type
+                    | ValueNone -> raise (MalformedGQLQueryException ($"Type '{name}' not found in schema."))
+                match typeFields.Keys |> Seq.map getType |> Seq.toList with
+                | [] -> ValueNone
+                | filters -> ValueSome (OfTypes filters)
+            | _ -> ValueNone
+
+
     type ResolveFieldContext with
 
         /// <summary>
@@ -32,16 +47,9 @@ module TypeSystemExtensions =
         member this.Filter =
             match this.Args.TryGetValue "filter" with
             | true, (:? ObjectListFilter as f) ->
-                match this.ExecutionInfo.Kind with
-                | ResolveAbstraction typeFields ->
-                    let getType name =
-                        match this.Context.Schema.TypeMap.TryFind name with
-                        | ValueSome tdef -> tdef.Type
-                        | ValueNone -> raise (MalformedGQLQueryException ($"Type '{name}' not found in schema."))
-                    match typeFields.Keys |> Seq.map getType |> Seq.toList with
-                    | [] -> ValueNone
-                    | filters -> ValueSome (f &&& (OfTypes filters))
-                | _ -> ValueSome f
+                match this.ExecutionInfo.ResolveAbstractionFilter (this.Context.Schema.TypeMap) with
+                | ValueSome ofTypes -> ValueSome (ofTypes &&& f)
+                | ValueNone -> ValueSome f
             | false, _ -> ValueNone
             | true, _ -> raise (InvalidOperationException "Invalid filter argument type.")
 

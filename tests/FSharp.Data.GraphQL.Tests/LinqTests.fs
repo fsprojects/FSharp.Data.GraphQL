@@ -453,11 +453,12 @@ type Property =
     | Building of Building
     | Community of Community
 
+
 [<Fact>]
 let ``ObjectListFilter works with getDiscriminator for Complex``() =
     let propertyData: Property list =
         [
-            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.FullName}
+            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.FullName }
             Building { ID = 2; Name = "Building B"; Discriminator = typeof<Building>.FullName }
             Community { ID = 3; Name = "Community C"; Discriminator = typeof<Community>.FullName; Complexes = [1]; Buildings = [2] }
             Complex { ID = 4; Name = "Complex AA"; Discriminator =  typeof<Complex>.FullName }
@@ -466,17 +467,13 @@ let ``ObjectListFilter works with getDiscriminator for Complex``() =
         ]
     let queryable = propertyData.AsQueryable()
     let filter = OfTypes [typeof<Complex>]
-    let filteredData =
-        filter.Apply(
-            queryable,
-            getDiscriminator =
-                fun p ->
-                    match p with
-                    | Complex c -> c.Discriminator
-                    | Building b -> b.Discriminator
-                    | Community c -> c.Discriminator
-        )
-        |> Seq.toList
+    let options =
+        ObjectListFilterLinqOptions(
+            (function
+            | Complex c -> c.Discriminator
+            | Building b -> b.Discriminator
+            | Community c -> c.Discriminator))
+    let filteredData = filter.Apply(queryable,options) |> Seq.toList
     List.length filteredData |> equals 2
     let result1 = List.head filteredData
     match result1 with
@@ -496,30 +493,28 @@ let ``ObjectListFilter works with getDiscriminator for Complex``() =
 let ``ObjectListFilter works with getDiscriminator and getDiscriminatorValue for Complex``() =
     let propertyData: Property list =
         [
-            Complex { ID = 1; Name = "Complex A"; Discriminator = "Complex" }
-            Building { ID = 2; Name = "Building B"; Discriminator = "Building" }
-            Community { ID = 3; Name = "Community C"; Discriminator = "Community"; Complexes = [1]; Buildings = [2] }
-            Complex { ID = 4; Name = "Complex AA"; Discriminator =  "Complex" }
-            Building { ID = 5; Name = "Building BB"; Discriminator =  "Building" }
-            Community { ID = 6; Name = "Community CC"; Discriminator = "Community"; Complexes = [4]; Buildings = [5] }
+            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.Name}
+            Building { ID = 2; Name = "Building B"; Discriminator = typeof<Building>.Name }
+            Community { ID = 3; Name = "Community C"; Discriminator = typeof<Community>.Name; Complexes = [1]; Buildings = [2] }
+            Complex { ID = 4; Name = "Complex AA"; Discriminator =  typeof<Complex>.Name }
+            Building { ID = 5; Name = "Building BB"; Discriminator =  typeof<Building>.Name }
+            Community { ID = 6; Name = "Community CC"; Discriminator = typeof<Community>.Name; Complexes = [4]; Buildings = [5] }
         ]
     let queryable = propertyData.AsQueryable()
     let filter = OfTypes [typeof<Complex>]
-    let filteredData =
-        filter.Apply(
-            queryable,
-            (fun p ->
-                match p with
-                | Complex c -> c.Discriminator
-                | Building b -> b.Discriminator
-                | Community c -> c.Discriminator),
+    let options =
+        ObjectListFilterLinqOptions(
+            (function
+            | Complex c -> c.Discriminator
+            | Building b -> b.Discriminator
+            | Community c -> c.Discriminator),
             (function
             | t when t = typeof<Complex> -> "Complex"
             | t when t = typeof<Building> -> "Building"
             | t when t = typeof<Community> -> "Community"
             | _ -> raise (NotSupportedException "Type not supported"))
         )
-        |> Seq.toList
+    let filteredData = filter.Apply(queryable,options) |> Seq.toList
     List.length filteredData |> equals 2
     let result1 = List.head filteredData
     match result1 with
@@ -534,37 +529,45 @@ let ``ObjectListFilter works with getDiscriminator and getDiscriminatorValue for
         c.Name |> equals "Complex AA"
     | _ -> failwith "Expected Complex"
 
+type Cow =
+    { ID : int
+      Name : string
+      __typename : string }
 
+type Horse =
+    { ID : int
+      Name : string
+      __typename : string }
+
+let animalData =
+    [
+        { ID = 1; Name = "Cow A"; __typename = typeof<Cow>.Name }
+        { ID = 2; Name = "Horse B"; __typename = typeof<Horse>.Name }
+        { ID = 3; Name = "Cow C"; __typename = typeof<Cow>.Name }
+        { ID = 4; Name = "Horse D"; __typename = typeof<Horse>.Name }
+    ]
 
 [<Fact>]
-let ``ObjectListFilter works with getDiscriminatorValue for Complex``() =
-    let propertyData: Property list =
-        [
-            Complex { ID = 1; Name = "Complex A"; Discriminator = typeof<Complex>.FullName}
-            Building { ID = 2; Name = "Building B"; Discriminator = typeof<Building>.FullName }
-            Community { ID = 3; Name = "Community C"; Discriminator = typeof<Community>.FullName; Complexes = [1]; Buildings = [2] }
-            Complex { ID = 4; Name = "Complex AA"; Discriminator =  typeof<Complex>.FullName }
-            Building { ID = 5; Name = "Building BB"; Discriminator =  typeof<Building>.FullName }
-            Community { ID = 6; Name = "Community CC"; Discriminator = typeof<Community>.FullName; Complexes = [4]; Buildings = [5] }
-        ]
-    let queryable = propertyData.AsQueryable()
-    let filter = OfTypes [typeof<Complex>]
-    let filteredData =
-        filter.Apply(
-            queryable,
-            getDiscriminatorValue = (fun t -> t.FullName)
-        )
-        |> Seq.toList
+let ``ObjectListFilter works with getDiscriminatorValue for Horse``() =
+    let queryable = animalData.AsQueryable()
+    let filter = OfTypes [typeof<Horse>]
+    let options =
+        ObjectListFilterLinqOptions(
+            getDiscriminatorValue = (function
+            | t when t = typeof<Cow> -> t.Name
+            | t when t = typeof<Horse> -> t.Name
+            | _ -> raise (NotSupportedException "Type not supported"))
+    )
+    let filteredData = filter.Apply(queryable, options) |> Seq.toList
     List.length filteredData |> equals 2
     let result1 = List.head filteredData
     match result1 with
-    | Complex c ->
-        c.ID |> equals 1
-        c.Name |> equals "Complex A"
-    | _ -> failwith "Expected Complex"
+    | h ->
+        h.ID |> equals 2
+        h.Name |> equals "Horse B"
+    | _ -> failwith "Expected Horse"
     let result2 = List.last filteredData
     match result2 with
-    | Complex c ->
-        c.ID |> equals 4
-        c.Name |> equals "Complex AA"
-    | _ -> failwith "Expected Complex"
+    | h ->
+        h.ID |> equals 4
+        h.Name |> equals "Horse D"
