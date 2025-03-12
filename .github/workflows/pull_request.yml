@@ -20,8 +20,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-latest, windows-latest, macOS-latest]
-        dotnet: [8.0.403]
+        os: [ubuntu-22.04, windows-latest, macOS-latest]
+        dotnet: [9.0.200]
     runs-on: ${{ matrix.os }}
 
     steps:

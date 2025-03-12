@@ -2,8 +2,8 @@
 
   <PropertyGroup>
     <DotNetVersion>net8.0</DotNetVersion>
-    <LangVersion>8.0</LangVersion>
-    <FSharpCoreVersion>8.0.*</FSharpCoreVersion>
+    <LangVersion>9.0</LangVersion>
+    <FSharpCoreVersion>9.0.*</FSharpCoreVersion>
     <AccelerateBuildsInVisualStudio>true</AccelerateBuildsInVisualStudio>
     <DisableImplicitFSharpCoreReference>true</DisableImplicitFSharpCoreReference>
     <NoWarn>$(NoWarn);NU1504;NU1701</NoWarn>
