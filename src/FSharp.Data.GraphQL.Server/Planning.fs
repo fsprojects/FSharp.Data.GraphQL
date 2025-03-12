@@ -115,7 +115,7 @@ let rec private abstractionInfo (ctx : PlanningContext) (parentDef : AbstractDef
             | None -> Map.empty
         | None ->
             match ctx.Schema.TryFindType typeName with
-            | Some (Abstract abstractDef) ->
+            | ValueSome (Abstract abstractDef) ->
                 abstractionInfo ctx abstractDef field ValueNone includer
             | _ ->
                 let pname = parentDef :?> NamedDef
@@ -153,9 +153,9 @@ let private doesFragmentTypeApply (schema: ISchema) fragment (objectType: Object
     | ValueNone -> true
     | ValueSome typeCondition ->
         match schema.TryFindType typeCondition with
-        | None -> false
-        | Some conditionalType when conditionalType.Name = objectType.Name -> true
-        | Some (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
+        | ValueNone -> false
+        | ValueSome conditionalType when conditionalType.Name = objectType.Name -> true
+        | ValueSome (Abstract conditionalType) -> schema.IsPossibleType conditionalType objectType
         | _ -> false
 
 let private isDeferredField (field: Field) =
@@ -342,16 +342,14 @@ let private planVariables (schema: ISchema) (operation: OperationDefinition) =
     |> List.map (fun vdef ->
         let vname = vdef.VariableName
         match Values.tryConvertAst schema vdef.Type with
-        | None ->
+        | ValueNone ->
             Debug.Fail "Must be prevented by validation"
             raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{vdef.Type.ToString()}' which is not known in the current schema")
-        | Some tdef ->
-            match tdef with
-            | :? InputDef as idef ->
-                { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
-            | _ ->
-                Debug.Fail "Must be prevented by validation"
-                raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{tdef.ToString()}' which is not an input type definition"))
+        | ValueSome (:? InputDef as idef) ->
+            { VarDef.Name = vname; TypeDef = idef; DefaultValue = vdef.DefaultValue }
+        | ValueSome tdef ->
+            Debug.Fail "Must be prevented by validation"
+            raise (MalformedGQLQueryException $"GraphQL query defined variable '$%s{vname}' of type '%s{tdef.ToString()}' which is not an input type definition"))
 
 let internal planOperation (ctx: PlanningContext) : ExecutionPlan =
     // Create artificial plan info to start with

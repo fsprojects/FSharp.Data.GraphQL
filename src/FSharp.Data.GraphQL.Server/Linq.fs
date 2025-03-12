@@ -68,12 +68,16 @@ type Track =
 /// of all properties and subproperties accessed in provided
 /// ExecutionInfo with top level argument given as a root.
 type Tracker =
+    /// <summary>
     /// Leaf of the tree. Marks a direct field/property access with no sub-trees.
     /// Consists of <see cref="Track"/> record and (neglible in this case) list of arguments.
+    /// </summary>
     | Direct of Track * Arg list
-    /// Marks branched field/property access - property value withh possible sub-trees.
+    /// <summary>
+    /// Marks branched field/property access - property value with possible sub-trees.
     /// Consists of <see cref="Track"/> record list of arguments used to parametrize GraphQL
     /// field definition and set of subtrees.
+    /// </summary>
     | Compose of Track * Arg list * Set<Tracker>
     member x.Track =
         match x with

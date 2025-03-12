@@ -224,11 +224,11 @@ let schema verify =
                                 | Nothing -> ()
                                 | Skip ->
                                     record.VerifyAllSkip
-                                    recordOptional |> Option.iter _.VerifyAllSkip
+                                    recordOptional |> ValueOption.iter _.VerifyAllSkip
                                     recordNested.HomeAddress.VerifyAllSkip
                                 | SkipAndIncludeNull ->
                                     record.VerifySkipAndIncludeNull
-                                    recordOptional |> Option.iter _.VerifySkipAndIncludeNull
+                                    recordOptional |> ValueOption.iter _.VerifySkipAndIncludeNull
                                     recordNested.HomeAddress.VerifySkipAndIncludeNull
                                 stringifyInput ctx name
                             )
@@ -245,10 +245,10 @@ let schema verify =
                                 | Nothing -> ()
                                 | Skip ->
                                     obj.VerifyAllSkip
-                                    objOptional |> Option.iter _.VerifyAllSkip
+                                    objOptional |> ValueOption.iter _.VerifyAllSkip
                                 | SkipAndIncludeNull ->
                                     obj.VerifySkipAndIncludeNull
-                                    objOptional |> Option.iter _.VerifySkipAndIncludeNull
+                                    objOptional |> ValueOption.iter _.VerifySkipAndIncludeNull
                                 stringifyInput ctx name
                             )
                       ) // TODO: add all args stringificaiton
@@ -264,10 +264,10 @@ let schema verify =
                                 | Nothing -> ()
                                 | Skip ->
                                     obj.VerifyAllSkip
-                                    objOptional |> Option.iter _.VerifyAllSkip
+                                    objOptional |> ValueOption.iter _.VerifyAllSkip
                                 | SkipAndIncludeNull ->
                                     obj.VerifySkipAndIncludeNull
-                                    objOptional |> Option.iter _.VerifySkipAndIncludeNull
+                                    objOptional |> ValueOption.iter _.VerifySkipAndIncludeNull
                                 stringifyInput ctx name
                             )
                       ) ] // TODO: add all args stringificaiton

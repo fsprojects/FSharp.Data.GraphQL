@@ -103,7 +103,7 @@ let rec __Type =
                             | Some name ->
                                 let found = findIntrospected ctx name
                                 match ctx.TryArg "includeDeprecated" with
-                                | Some true -> found.Fields |> Option.map Array.toSeq
+                                | ValueSome true -> found.Fields |> Option.map Array.toSeq
                                 | _ ->
                                     found.Fields
                                     |> Option.map (fun x -> upcast Array.filter (fun f -> not f.IsDeprecated) x)
@@ -141,9 +141,9 @@ let rec __Type =
                             | Some name ->
                                 let found = findIntrospected ctx name
                                 match ctx.TryArg "includeDeprecated" with
-                                | None
-                                | Some false -> found.EnumValues |> Option.map Array.toSeq
-                                | Some true ->
+                                | ValueNone
+                                | ValueSome false -> found.EnumValues |> Option.map Array.toSeq
+                                | ValueSome true ->
                                     found.EnumValues
                                     |> Option.map (fun x -> upcast (x |> Array.filter (fun f -> not f.IsDeprecated)))
                 )

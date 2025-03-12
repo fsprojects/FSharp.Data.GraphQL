@@ -125,7 +125,7 @@ module Schema =
             fields =
                 [ Define.Field(
                     name = "echo",
-                    typedef = Nullable OutputType,
+                    typedef = StructNullable OutputType,
                     description = "Enters an input type and get it back.",
                     args = [ Define.Input("input", Nullable InputType, description = "The input to be echoed as an output.") ],
                     resolve = fun ctx _ -> ctx.TryArg("input")) ])
@@ -152,10 +152,10 @@ module Schema =
                     resolve = fun ctx _ -> mapUploadToOutput (ctx.Arg("file")))
                   Define.Field(
                     name = "nullableSingleUpload",
-                    typedef = Nullable UploadedFileType,
+                    typedef = StructNullable UploadedFileType,
                     description = "Uploads (maybe) a single file to the server and get it back (maybe).",
                     args = [ Define.Input("file", Nullable Upload, description = "The file to be uploaded.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("file") |> Option.flatten |> Option.map mapUploadToOutput)
+                    resolve = fun ctx _ -> ctx.TryArg("file") |> ValueOption.flatten |> ValueOption.map mapUploadToOutput)
                   Define.Field(
                     name = "multipleUpload",
                     typedef = ListOf UploadedFileType,
@@ -164,16 +164,16 @@ module Schema =
                     resolve = fun ctx _ -> ctx.Arg("files") |> Seq.map mapUploadToOutput)
                   Define.Field(
                     name = "nullableMultipleUpload",
-                    typedef = Nullable (ListOf UploadedFileType),
+                    typedef = StructNullable (ListOf UploadedFileType),
                     description = "Uploads (maybe) a list of files to the server and get them back (maybe).",
                     args = [ Define.Input("files", Nullable (ListOf Upload), description = "The files to upload.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map mapUploadToOutput))
+                    resolve = fun ctx _ -> ctx.TryArg("files") |> ValueOption.flatten |> ValueOption.map (Seq.map mapUploadToOutput))
                   Define.Field(
                     name = "nullableMultipleNullableUpload",
-                    typedef = Nullable (ListOf (Nullable UploadedFileType)),
+                    typedef = StructNullable (ListOf (Nullable UploadedFileType)),
                     description = "Uploads (maybe) a list of files (maybe) to the server and get them back (maybe).",
                     args = [ Define.Input("files", Nullable (ListOf (Nullable Upload)), description = "The files to upload.") ],
-                    resolve = fun ctx _ -> ctx.TryArg("files") |> Option.flatten |> Option.map (Seq.map (Option.map mapUploadToOutput)))
+                    resolve = fun ctx _ -> ctx.TryArg("files") |> ValueOption.flatten |> ValueOption.map (Seq.map (Option.map mapUploadToOutput)))
                   Define.Field(
                     name = "uploadRequest",
                     typedef = UploadResponseType,

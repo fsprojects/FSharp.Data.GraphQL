@@ -17,7 +17,7 @@ open FSharp.Data.GraphQL.Shared
 open ErrorHelpers
 
 let stringifyArg name (ctx : ResolveFieldContext) () =
-    let arg = ctx.TryArg name |> Option.toObj
+    let arg = ctx.TryArg name |> ValueOption.toObj
     JsonSerializer.Serialize (arg, serializerOptions)
 
 let stringifyInput = stringifyArg "input"

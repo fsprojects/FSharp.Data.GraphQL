@@ -53,34 +53,34 @@ let booksField =
 
                 let after =
                     ctx.TryArg ("after")
-                    |> Option.map (fun s ->
+                    |> ValueOption.map (fun s ->
                         match BookCursor.tryDecode s with
-                        | Some c -> c
-                        | None -> raise (GQLMessageException ("Invalid cursor value for after")))
+                        | ValueSome c -> c
+                        | ValueNone -> raise (GQLMessageException ("Invalid cursor value for after")))
 
                 let last = ctx.TryArg ("last")
 
                 let before =
                     ctx.TryArg ("before")
-                    |> Option.map (fun s ->
+                    |> ValueOption.map (fun s ->
                         match BookCursor.tryDecode s with
-                        | Some c -> c
-                        | None -> raise (GQLMessageException ("Invalid cursor value for before")))
+                        | ValueSome c -> c
+                        | ValueNone -> raise (GQLMessageException ("Invalid cursor value for before")))
 
                 match first, after, last, before with
-                | Some first, _, None, None ->
+                | ValueSome first, _, ValueNone, ValueNone ->
                     if first < 0 then
                         raise (GQLMessageException ($"first must be at least 0"))
 
-                    Forward (first, vopt after)
-                | None, None, Some last, _ ->
+                    Forward (first, after)
+                | ValueNone, ValueNone, ValueSome last, _ ->
                     if last < 0 then
                         raise (GQLMessageException ($"last must be at least 0"))
 
-                    Backward (last, vopt before)
-                | None, _, None, _ -> raise (GQLMessageException ($"Must specify first or last"))
-                | Some _, _, _, _ -> raise (GQLMessageException ($"Must not combine first with last or before"))
-                | _, _, Some _, _ -> raise (GQLMessageException ($"Must not combine last with first or after"))
+                    Backward (last, before)
+                | ValueNone, _, ValueNone, _ -> raise (GQLMessageException ($"Must specify first or last"))
+                | ValueSome _, _, _, _ -> raise (GQLMessageException ($"Must not combine first with last or before"))
+                | _, _, ValueSome _, _ -> raise (GQLMessageException ($"Must not combine last with first or after"))
 
             // The total number of edges in the data-store, not the number of edges in the page!
             let totalCount = async {

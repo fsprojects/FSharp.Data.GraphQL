@@ -332,7 +332,7 @@ type User = { FirstName: string; LastName: string }
 type UserInput = { Name: string }
 
 [<Fact>]
-let ``Introspection works with query and mutation sharing same generic param`` =
+let ``Introspection works with query and mutation sharing same generic param`` () =
     let user =
         Define.Object<User>("User",
             [ Define.AutoField("firstName", StringType)

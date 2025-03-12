@@ -8,7 +8,10 @@ open System.Collections
 open System.Collections.Concurrent
 open System.Collections.Generic
 open System.Collections.Immutable
+open System.Runtime.InteropServices
 open System.Text.Json
+
+open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Ast
@@ -429,7 +432,7 @@ and ISchema =
 
         /// Method which, given type name, returns Some if provided
         /// type has been defined in current schema. Otherwise None.
-        abstract TryFindType : string -> NamedDef option
+        abstract TryFindType : string -> NamedDef voption
 
         /// Returns array of all possible types for provided abstract
         /// type. For Union types, it's the array of all union options.
@@ -679,31 +682,31 @@ and ExecutionInfo = {
 } with
 
     /// Get a nested info recognized by path provided as parameter. Path may consist of fields names or aliases.
-    member this.GetPath (keys : string list) : ExecutionInfo option =
+    member this.GetPath (keys : string list) : ExecutionInfo voption =
         let rec path info segments =
             match segments with
             | [] ->
                 match info.Kind with
-                | ResolveCollection inner -> Some inner
-                | _ -> Some info
+                | ResolveCollection inner -> ValueSome inner
+                | _ -> ValueSome info
             | head :: tail ->
                 match info.Kind with
                 | ResolveDeferred inner -> path inner segments
                 | ResolveLive inner -> path inner segments
                 | ResolveStreamed (inner, _) -> path inner segments
-                | ResolveValue -> None
+                | ResolveValue -> ValueNone
                 | ResolveCollection inner -> path inner segments
                 | SelectFields fields ->
                     fields
-                    |> List.tryFind (fun f -> f.Identifier = head)
-                    |> Option.bind (fun f -> path f tail)
+                    |> List.vtryFind (fun f -> f.Identifier = head)
+                    |> ValueOption.bind (fun f -> path f tail)
                 | ResolveAbstraction typeMap ->
                     typeMap
                     |> Map.toSeq
                     |> Seq.map snd
                     |> Seq.collect id
-                    |> Seq.tryFind (fun f -> f.Identifier = head)
-                    |> Option.bind (fun f -> path f tail)
+                    |> Seq.vtryFind (fun f -> f.Identifier = head)
+                    |> ValueOption.bind (fun f -> path f tail)
         path this keys
 
     override this.ToString () =
@@ -941,10 +944,10 @@ and ResolveFieldContext = {
         this.Context.AddError (this, { new IGQLError with member _.Message = errorMessage } )
 
     /// Tries to find an argument by provided name.
-    member this.TryArg (name : string) : 't option =
+    member this.TryArg (name : string) : 't voption =
         match Map.tryFind name this.Args with
-        | Some o -> Some (o :?> 't) // TODO: Use Convert.ChangeType
-        | None -> None
+        | Some o -> ValueSome (o :?> 't) // TODO: Use Convert.ChangeType
+        | None -> ValueNone
 
 /// Function type for the compiled field executor.
 and ExecuteField = ResolveFieldContext -> obj -> AsyncVal<obj>
@@ -1931,11 +1934,16 @@ and Metadata (data : Map<string, obj>) =
     /// Tries to find an value inside the metadata by it's key.
     /// </summary>
     /// <param name="key">The key to be used to search information for.</param>
+    member _.Contains (key : string) = data.ContainsKey key
+
+    /// <summary>
+    /// Tries to find an value inside the metadata by it's key.
+    /// </summary>
+    /// <param name="key">The key to be used to search information for.</param>
     member _.TryFind<'Value> (key : string) =
-        if data.ContainsKey key then
-            data.Item key :?> 'Value |> Some
-        else
-            None
+        match data.TryGetValue key with
+        | true, v -> ValueSome (v :?> 'Value)
+        | _ -> ValueNone
 
     override _.ToString () = sprintf "%A" data
 
@@ -1958,10 +1966,10 @@ and TypeMap () =
 
     let rec named (tdef : TypeDef) =
         match tdef with
-        | :? NamedDef as n -> Some n
+        | :? NamedDef as n -> ValueSome n
         | :? NullableDef as n -> named n.OfType
         | :? ListOfDef as l -> named l.OfType
-        | _ -> None
+        | _ -> ValueNone
 
     /// <summary>
     /// Adds (or optionally overwrites) a type to the type map.
@@ -1977,7 +1985,7 @@ and TypeMap () =
                 map.[name] <- def
         let asNamed x =
             match named x with
-            | Some n -> n
+            | ValueSome n -> n
             | _ -> failwith "Expected a Named type!"
         let rec insert (def : NamedDef) =
             match def with
@@ -2013,19 +2021,19 @@ and TypeMap () =
                 udef.Options |> Seq.iter insert
             | :? ListOfDef as ldef ->
                 match named ldef.OfType with
-                | Some innerdef -> insert innerdef
-                | None -> ()
+                | ValueSome innerdef -> insert innerdef
+                | ValueNone -> ()
             | :? NullableDef as ndef ->
                 match named ndef.OfType with
-                | Some innerdef -> insert innerdef
-                | None -> ()
+                | ValueSome innerdef -> insert innerdef
+                | ValueNone -> ()
             | :? InputObjectDef as iodef ->
                 add iodef.Name def overwrite
                 iodef.Fields
                 |> Seq.collect (fun x -> (x.TypeDef :> TypeDef) |> Seq.singleton)
                 |> Seq.map (fun x ->
                     match named x with
-                    | Some n -> n
+                    | ValueSome n -> n
                     | _ -> failwith "Expected a Named type!")
                 |> Seq.filter (fun x -> not (map.ContainsKey (x.Name)))
                 |> Seq.iter insert
@@ -2051,9 +2059,10 @@ and TypeMap () =
             result
 
     /// Converts this type map to a list of string * NamedDef values, with the first item being the key.
-    member this.ToList (?includeDefaultTypes : bool) =
-        let includeDefaultTypes = defaultArg includeDefaultTypes true
+    member this.ToList ([<Optional; DefaultParameterValue true>]includeDefaultTypes : bool) =
         this.ToSeq (includeDefaultTypes) |> List.ofSeq
+
+    member _.Item (name : string) = map[name]
 
     /// <summary>
     /// Tries to find a NamedDef in the map by it's key (the name).
@@ -2063,11 +2072,11 @@ and TypeMap () =
     member _.TryFind (name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         if not includeDefaultTypes && isDefaultType name then
-            None
+            ValueNone
         else
             match map.TryGetValue (name) with
-            | (true, item) -> Some item
-            | _ -> None
+            | (true, item) -> ValueSome item
+            | _ -> ValueNone
 
     /// <summary>
     /// Tries to find a NamedDef of a specific type in the map by it's key (the name).
@@ -2077,11 +2086,11 @@ and TypeMap () =
     member this.TryFind<'Type when 'Type :> NamedDef> (name : string, ?includeDefaultTypes : bool) =
         let includeDefaultTypes = defaultArg includeDefaultTypes false
         match this.TryFind (name, includeDefaultTypes) with
-        | Some item ->
+        | ValueSome item ->
             match item with
-            | :? 'Type as item -> Some item
-            | _ -> None
-        | _ -> None
+            | :? 'Type as item -> ValueSome item
+            | _ -> ValueNone
+        | _ -> ValueNone
 
     /// <summary>
     /// Gets all NamedDef's inside the map that are, or implements the specified type.
@@ -2095,10 +2104,10 @@ and TypeMap () =
             snd
             >> (fun x ->
                 match x with
-                | :? 'Type as x -> Some x
-                | _ -> None)
+                | :? 'Type as x -> ValueSome x
+                | _ -> ValueNone)
         )
-        |> Seq.choose id
+        |> Seq.vchoose id
         |> List.ofSeq
 
     /// <summary>
@@ -2107,23 +2116,22 @@ and TypeMap () =
     /// </summary>
     /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
     /// <param name="fname">The name of the FieldDef to be searched for.</param>
-    member this.TryFindField (objname : string, fname : string) =
-        match this.TryFind<ObjectDef> (objname) with
-        | Some odef -> odef.Fields |> Map.tryFind fname
-        | None -> None
+    member this.TryFindField (objname : string, fname : string) = voption {
+        let! odef = this.TryFind<ObjectDef> (objname)
+        return! odef.Fields |> Map.vtryFind fname
+    }
 
     /// <summary>
     /// Tries to find a FieldDef inside an ObjectDef by its type, the object name and the field name.
     /// </summary>
     /// <param name="objname">The name of the ObjectDef that has the field that are being searched.</param>
     /// <param name="fname">The name of the FieldDef to be searched for.</param>
-    member this.TryFindField<'Type when 'Type :> OutputDef> (objname : string, fname : string) =
-        match this.TryFindField (objname, fname) with
-        | Some fdef ->
-            match fdef.TypeDef with
-            | :? 'Type -> Some fdef
-            | _ -> None
-        | _ -> None
+    member this.TryFindField<'Type when 'Type :> OutputDef> (objname : string, fname : string) = voption {
+        let! fdef = this.TryFindField (objname, fname)
+        match fdef.TypeDef with
+        | :? 'Type as x -> return x
+        | _ -> return! ValueNone
+    }
 
     /// <summary>
     /// Tries to find ObjectDef&lt;&apos;Val&gt; types inside the map, that have fields that are lists of &apos;Res type.
@@ -2293,28 +2301,28 @@ module Resolve =
 
     let (|BoxedSync|_|) =
         function
-        | Sync (d, c, expr) -> Some (d, c, boxifyExpr expr)
-        | _ -> None
+        | Sync (d, c, expr) -> ValueSome (d, c, boxifyExpr expr)
+        | _ -> ValueNone
 
     let (|BoxedAsync|_|) =
         function
-        | Async (d, c, expr) -> Some (d, c, boxifyExprAsync expr)
-        | _ -> None
+        | Async (d, c, expr) -> ValueSome (d, c, boxifyExprAsync expr)
+        | _ -> ValueNone
 
     let (|BoxedExpr|_|) =
         function
-        | ResolveExpr (e) -> Some (boxifyExpr e)
-        | _ -> None
+        | ResolveExpr (e) -> ValueSome (boxifyExpr e)
+        | _ -> ValueNone
 
     let (|BoxedFilterExpr|_|) =
         function
-        | Filter (r, i, o, expr) -> Some (r, i, o, boxifyFilterExpr expr)
-        | _ -> None
+        | Filter (r, i, o, expr) -> ValueSome (r, i, o, boxifyFilterExpr expr)
+        | _ -> ValueNone
 
     let (|BoxedAsyncFilterExpr|_|) =
         function
-        | AsyncFilter (r, i, o, expr) -> Some (r, i, o, boxifyAsyncFilterExpr expr)
-        | _ -> None
+        | AsyncFilter (r, i, o, expr) -> ValueSome (r, i, o, boxifyAsyncFilterExpr expr)
+        | _ -> ValueNone
 
     let private genMethodResolve<'Val, 'Res> (typeInfo : TypeInfo) (methodInfo : MethodInfo) =
         let argInfo = typeof<ResolveFieldContext>.GetTypeInfo().GetDeclaredMethod ("Arg")
@@ -2363,103 +2371,103 @@ module Patterns =
     /// Active pattern to match GraphQL type defintion with Scalar.
     let (|Scalar|_|) (tdef : TypeDef) =
         match tdef with
-        | :? ScalarDef as x -> Some x
-        | _ -> None
+        | :? ScalarDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with Object.
     let (|Object|_|) (tdef : TypeDef) =
         match tdef with
-        | :? ObjectDef as x -> Some x
-        | _ -> None
+        | :? ObjectDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with Interface.
     let (|Interface|_|) (tdef : TypeDef) =
         match tdef with
-        | :? InterfaceDef as x -> Some x
-        | _ -> None
+        | :? InterfaceDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with Union.
     let (|Union|_|) (tdef : TypeDef) =
         match tdef with
-        | :? UnionDef as x -> Some x
-        | _ -> None
+        | :? UnionDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with Enum.
     let (|Enum|_|) (tdef : TypeDef) =
         match tdef with
-        | :? EnumDef as x -> Some x
-        | _ -> None
+        | :? EnumDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with input object.
     let (|InputObject|_|) (tdef : TypeDef) =
         match tdef with
-        | :? InputObjectDef as x -> Some x
-        | _ -> None
+        | :? InputObjectDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active patter to match GraphQL subscription object definitions
 
     let (|SubscriptionObject|_|) (tdef : TypeDef) =
         match tdef with
-        | :? SubscriptionObjectDef as x -> Some x
-        | _ -> None
+        | :? SubscriptionObjectDef as x -> ValueSome x
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with List.
     let (|List|_|) (tdef : TypeDef) =
         match tdef with
-        | :? ListOfDef as x -> Some x.OfType
-        | _ -> None
+        | :? ListOfDef as x -> ValueSome x.OfType
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with nullable / optional types.
     let (|Nullable|_|) (tdef : TypeDef) =
         match tdef with
-        | :? NullableDef as x -> Some x.OfType
-        | _ -> None
+        | :? NullableDef as x -> ValueSome x.OfType
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with non-null types.
     let (|NonNull|_|) (tdef : TypeDef) =
         match tdef with
-        | :? NullableDef -> None
-        | other -> Some other
+        | :? NullableDef -> ValueNone
+        | other -> ValueSome other
 
     /// Active pattern to match GraphQL type defintion with valid input types.
     let (|Input|_|) (tdef : TypeDef) =
         match tdef with
-        | :? InputDef as i -> Some i
-        | _ -> None
+        | :? InputDef as i -> ValueSome i
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with valid output types.
     let (|Output|_|) (tdef : TypeDef) =
         match tdef with
-        | :? OutputDef as o -> Some o
-        | _ -> None
+        | :? OutputDef as o -> ValueSome o
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with valid leaf types.
     let (|Leaf|_|) (tdef : TypeDef) =
         match tdef with
-        | :? LeafDef as ldef -> Some ldef
-        | _ -> None
+        | :? LeafDef as ldef -> ValueSome ldef
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with valid composite types.
     let (|Composite|_|) (tdef : TypeDef) =
         match tdef with
         | :? ObjectDef
         | :? InterfaceDef
-        | :? UnionDef -> Some tdef
-        | _ -> None
+        | :? UnionDef -> ValueSome tdef
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with valid abstract types.
     let (|Abstract|_|) (tdef : TypeDef) =
         match tdef with
         | :? InterfaceDef
-        | :? UnionDef -> Some (tdef :?> AbstractDef)
-        | _ -> None
+        | :? UnionDef -> ValueSome (tdef :?> AbstractDef)
+        | _ -> ValueNone
 
     let rec private named (tdef : TypeDef) =
         match tdef with
-        | :? NamedDef as n -> Some n
+        | :? NamedDef as n -> ValueSome n
         | Nullable inner -> named inner
         | List inner -> named inner
-        | _ -> None
+        | _ -> ValueNone
 
     /// Active pattern to match GraphQL type defintion with named types.
     let rec (|Named|_|) (tdef : TypeDef) = named tdef

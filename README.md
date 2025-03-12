@@ -361,6 +361,40 @@ query TestQuery {
 }
 ```
 
+Also you can apply `not` operator like this:
+
+```graphql
+query TestQuery {
+    hero(id:"1000") {
+        id
+        name
+        appearsIn
+        homePlanet
+        friends (filter : { not : { name_starts_with: "A" } }) {
+            id
+            name
+        }
+    }
+}
+```
+
+And combine filters with `and` and `or` operators like this:
+
+```graphql
+query TestQuery {
+    hero(id:"1000") {
+        id
+        name
+        appearsIn
+        homePlanet
+        friends (filter : { or : [{ name_starts_with: "A"}, { name_starts_with: "B" }]}) {
+            id
+            name
+        }
+    }
+}
+```
+
 This filter is mapped by the middleware inside an `ObjectListFilter` definition:
 
 ```fsharp
@@ -381,7 +415,7 @@ type ObjectListFilter =
     | FilterField of FieldFilter<ObjectListFilter>
 ```
 
-And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, wich returns an `ObjectListFilter option` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
+And the value recovered by the filter in the query is usable in the `ResolveFieldContext` of the resolve function of the field. To easily access it, you can use the extension method `Filter`, which returns an `ObjectListFilter voption` (it does not have a value if the object doesn't implement a list with the middleware generic definition, or if the user didn't provide a filter input).
 
 ```fsharp
 Define.Field("friends", ListOf (Nullable CharacterType),

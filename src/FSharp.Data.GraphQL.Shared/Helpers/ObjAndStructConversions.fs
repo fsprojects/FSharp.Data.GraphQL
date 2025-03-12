@@ -1,5 +1,6 @@
 namespace rec FSharp.Data.GraphQL
 
+open System.Linq
 open FsToolkit.ErrorHandling
 
 module internal ValueOption =
@@ -24,10 +25,25 @@ module internal Seq =
         |> Seq.where ValueOption.isSome
         |> Seq.map ValueOption.get
 
+    let vtryFind predicate seq =
+        seq
+        |> Seq.where predicate
+        |> Seq.map ValueSome
+        |> _.FirstOrDefault()
+
 module internal List =
 
-    let vchoose mapping list = list |> Seq.vchoose mapping |> List.ofSeq
+    let vchoose mapping list = list |> Seq.ofList |> Seq.vchoose mapping |> List.ofSeq
+
+    let vtryFind predicate list = list |> Seq.ofList |> Seq.vtryFind predicate
 
 module internal Array =
 
     let vchoose mapping array = array |> Seq.vchoose mapping |> Array.ofSeq
+
+module internal Map =
+
+    let vtryFind key (map : Map<_, _>) =
+        match map.TryGetValue key with
+        | true, value -> ValueSome value
+        | false, _ -> ValueNone
