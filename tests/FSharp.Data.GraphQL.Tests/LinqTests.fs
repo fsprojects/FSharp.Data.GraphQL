@@ -565,7 +565,6 @@ let ``ObjectListFilter works with getDiscriminatorValue for Horse``() =
     | h ->
         h.ID |> equals 2
         h.Name |> equals "Horse B"
-    | _ -> failwith "Expected Horse"
     let result2 = List.last filteredData
     match result2 with
     | h ->
