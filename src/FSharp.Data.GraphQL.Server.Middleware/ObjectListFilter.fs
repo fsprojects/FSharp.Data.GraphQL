@@ -20,6 +20,75 @@ type ObjectListFilter =
     | FilterField of FieldFilter<ObjectListFilter>
     | NoFilter
 
+open System.Linq
+open System.Linq.Expressions
+open System.Runtime.InteropServices
+open System.Reflection
+
+/// <remarks>
+/// Represents a value that can be either None or Some.
+/// </remarks>
+
+/// <summary>
+/// Allows to specify discriminator comparison or discriminator getter
+/// and a function that return discriminator value depending on entity type
+/// </summary>
+/// <example id="item-1"><code lang="fsharp">
+/// // discriminator custom condition
+/// let result () =
+///    queryable.Apply(
+///        filter,
+///        ObjectListFilterLinqOptions (
+///            (fun entity discriminator -> entity.Discriminator.StartsWith discriminator),
+///            (function
+///            | t when Type.(=)(t, typeof<Cat>) -> "cat+v1"
+///            | t when Type.(=)(t, typeof<Dog>) -> "dog+v1")
+///        )
+///    )
+/// </code></example>
+/// <example id="item-2"><code lang="fsharp">
+/// // discriminator equals
+/// let result () =
+///     queryable.Apply(
+///         filter,
+///         ObjectListFilterLinqOptions (
+///            (fun entity -> entity.Discriminator),
+///            (function
+///            | t when Type.(=)(t, typeof<Cat>) -> "cat"
+///            | t when Type.(=)(t, typeof<Dog>) -> "dog")
+///         )
+///     )
+/// </code></example>
+[<Struct>]
+type ObjectListFilterLinqOptions<'T, 'D> (
+    [<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null,
+    [<Optional>] getDiscriminatorValue : (Type -> 'D) | null,
+    [<Optional>] serializeMemberName : (MemberInfo -> string) | null
+) =
+
+    member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
+    member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
+    //member _.SerializeMemberName = serializeMemberName |> ValueOption.ofObj
+
+    static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null, null)
+
+    static member GetCompareDiscriminator (getDiscriminatorValue : Expression<Func<'T, 'D>>) =
+        let tParam = Expression.Parameter (typeof<'T>, "x")
+        let dParam = Expression.Parameter (typeof<'D>, "d")
+        let body = Expression.Equal(Expression.Invoke(getDiscriminatorValue, tParam), dParam)
+        Expression.Lambda<Func<'T, 'D, bool>> (body, tParam, dParam)
+
+    new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, null)
+    new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, null)
+    new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, null)
+    //new (serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, null, serializeMemberName)
+
+    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue, null)
+
+    //new (getDiscriminator : Expression<Func<'T, 'D>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, serializeMemberName)
+    //new (compareDiscriminator : Expression<Func<'T, 'D, bool>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, serializeMemberName)
+    //new (getDiscriminatorValue : Type -> 'D, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, serializeMemberName)
+
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
     /// Contains operators for building and comparing ObjectListFilter values.
@@ -54,34 +123,6 @@ module ObjectListFilter =
         /// Creates a new ObjectListFilter representing a NOT opreation for the existing one.
         let ( !!! ) filter = Not filter
 
-open System.Linq
-open System.Linq.Expressions
-open System.Runtime.InteropServices
-open System.Reflection
-
-[<AutoOpen>]
-module ObjectListFilterExtensions =
-
-
-    //// discriminator custom condition
-    //let a () =
-    //    filter.Apply(
-    //        queryable,
-    //        <@ fun e d -> e.Discriminator.StartsWith d @>,
-    //        function
-    //        | t when Type.(=)(t, typeof<Complex>) -> ResidentialPropertiesConstants.Discriminators.Complex
-    //        | t when Type.(=)(t, typeof<Building>) -> ResidentialPropertiesConstants.Discriminators.Building
-    //    )
-    //// discriminator equals
-    //let b () =
-    //    filter.Apply(
-    //        queryable,
-    //        <@ fun e -> e.Discriminator @>,
-    //        function
-    //        | t when Type.(=)(t, typeof<Complex>) -> ResidentialPropertiesConstants.Discriminators.Complex
-    //        | t when Type.(=)(t, typeof<Building>) -> ResidentialPropertiesConstants.Discriminators.Building
-    //    )
-
     let private genericWhereMethod =
         typeof<Queryable>.GetMethods ()
         |> Seq.where (fun m -> m.Name = "Where")
@@ -98,6 +139,18 @@ module ObjectListFilterExtensions =
     let private StringStartsWithMethod = typeof<string>.GetMethod ("StartsWith", [| typeof<string> |])
     let private StringEndsWithMethod = typeof<string>.GetMethod ("EndsWith", [| typeof<string> |])
     let private StringContainsMethod = typeof<string>.GetMethod ("Contains", [| typeof<string> |])
+    let private getEnumerableContainsMethod (memberType : Type) =
+        match memberType.GetMethods(BindingFlags.Instance &&& BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
+        | null ->
+            match typeof<Enumerable>.GetMethods(BindingFlags.Static ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
+            | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
+            | containsGenericStaticMethod ->
+                if memberType.IsGenericType && memberType.GenericTypeArguments.Length = 1 then
+                    containsGenericStaticMethod.MakeGenericMethod(memberType.GenericTypeArguments)
+                else
+                    let ienumerable = memberType.GetType().GetInterfaces().First(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+                    containsGenericStaticMethod.MakeGenericMethod([| ienumerable.GenericTypeArguments[0] |])
+        | instanceContainsMethod -> instanceContainsMethod
 
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
@@ -125,7 +178,18 @@ module ObjectListFilterExtensions =
         | EndsWith f ->
             Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringEndsWithMethod, Expression.Constant (f.Value))
         | Contains f ->
-            Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringContainsMethod, Expression.Constant (f.Value))
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            let isEnumerable (memberType: Type) =
+                not (Type.(=)(memberType, typeof<string>))
+                && typeof<System.Collections.IEnumerable>.IsAssignableFrom(memberType)
+                && memberType.GetInterfaces().Any(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+            match ``member``.Member  with
+            | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable ->
+                Expression.Call (getEnumerableContainsMethod prop.PropertyType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+            | :? FieldInfo as field when field.FieldType |> isEnumerable ->
+                Expression.Call (getEnumerableContainsMethod field.FieldType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+            | _ ->
+                Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
@@ -134,39 +198,7 @@ module ObjectListFilterExtensions =
             let paramExpr = Expression.PropertyOrField (param, f.FieldName)
             buildFilterExpr (SourceExpression paramExpr) buildTypeDiscriminatorCheck f.Value
 
-    [<Struct>]
-    type ObjectListFilterLinqOptions<'T, 'D> (
-        [<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null,
-        [<Optional>] getDiscriminatorValue : (Type -> 'D) | null,
-        [<Optional>] serializeMemberName : (MemberInfo -> string) | null) =
-
-        member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
-        member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
-        //member _.SerializeMemberName = serializeMemberName |> ValueOption.ofObj
-
-        static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null, null)
-
-        static member GetCompareDiscriminator (getDiscriminatorValue : Expression<Func<'T, 'D>>) =
-            let tParam = Expression.Parameter (typeof<'T>, "x")
-            let dParam = Expression.Parameter (typeof<'D>, "d")
-            let body = Expression.Equal(Expression.Invoke(getDiscriminatorValue, tParam), dParam)
-            Expression.Lambda<Func<'T, 'D, bool>> (body, tParam, dParam)
-
-        new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, null)
-        new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, null)
-        new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, null)
-        //new (serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, null, serializeMemberName)
-
-        new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue, null)
-
-        //new (getDiscriminator : Expression<Func<'T, 'D>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, serializeMemberName)
-        //new (compareDiscriminator : Expression<Func<'T, 'D, bool>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, serializeMemberName)
-        //new (getDiscriminatorValue : Type -> 'D, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, serializeMemberName)
-
-type ObjectListFilter with
-
-    member filter.Apply<'T, 'D> (query : IQueryable<'T>, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
-
+    let apply (options : ObjectListFilterLinqOptions<'T, 'D>) (filter : ObjectListFilter) (query : IQueryable<'T>) =
         match filter with
         | NoFilter -> query
         | _ ->
@@ -196,3 +228,18 @@ type ObjectListFilter with
                 whereExpr<'T> query param body
             // Create and execute the final expression
             query.Provider.CreateQuery<'T> (queryExpr)
+
+[<AutoOpen>]
+module ObjectListFilterExtensions =
+
+    open ObjectListFilter
+
+    type ObjectListFilter with
+
+        member inline filter.ApplyTo<'T, 'D> (query : IQueryable<'T>, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
+            apply options filter query
+
+    type IQueryable<'T> with
+
+        member inline query.Apply (filter : ObjectListFilter, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
+            apply options filter query
