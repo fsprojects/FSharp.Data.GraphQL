@@ -122,16 +122,16 @@ let ``ObjectListFilter works with OR operator``() =
 [<Fact>]
 let ``ObjectListFilter works with FilterField operator``() =
     let filter =
-        FilterField { FieldName = "Friends"; Value = Contains { FieldName = "Email"; Value = "l.trif@gmail.com" } }
+        FilterField { FieldName = "Contact"; Value = Contains { FieldName = "Email"; Value = "j.trif@gmail.com" } }
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 1
     let result = List.head filteredData
-    result.ID |> equals 4
-    result.FirstName |> equals "Ben"
-    result.LastName |> equals "Adams"
-    result.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    result.ID |> equals 7
+    result.FirstName |> equals "Jeneffer"
+    result.LastName |> equals "Trif"
+    result.Contact  |> equals { Email = "j.trif@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with NOT operator``() =
@@ -360,4 +360,3 @@ let ``ObjectListFilter works with Contains operator collection type properties w
     result1.Name |> equals "Product B"
     let result2 = List.last filteredData
     result2.Name |> equals "Product C"
-
