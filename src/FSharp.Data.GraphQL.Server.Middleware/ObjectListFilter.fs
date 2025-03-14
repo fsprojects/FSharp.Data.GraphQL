@@ -129,17 +129,15 @@ module ObjectListFilter =
     let private StringEndsWithMethod = typeof<string>.GetMethod ("EndsWith", [| typeof<string> |])
     let private StringContainsMethod = typeof<string>.GetMethod ("Contains", [| typeof<string> |])
     let private getEnumerableContainsMethod (memberType : Type) =
-        match memberType.GetMethods(BindingFlags.Instance &&& BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
-        | null ->
-            match typeof<Enumerable>.GetMethods(BindingFlags.Static ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
-            | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
-            | containsGenericStaticMethod ->
-                if memberType.IsGenericType && memberType.GenericTypeArguments.Length = 1 then
-                    containsGenericStaticMethod.MakeGenericMethod(memberType.GenericTypeArguments)
-                else
-                    let ienumerable = memberType.GetType().GetInterfaces().First(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
-                    containsGenericStaticMethod.MakeGenericMethod([| ienumerable.GenericTypeArguments[0] |])
-        | instanceContainsMethod -> instanceContainsMethod
+        match typeof<Enumerable>.GetMethods(BindingFlags.Static ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
+        | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
+        | containsGenericStaticMethod ->
+            if memberType.IsGenericType && memberType.GenericTypeArguments.Length = 1 then
+                containsGenericStaticMethod.MakeGenericMethod(memberType.GenericTypeArguments)
+            else
+                let ienumerable = memberType.GetInterfaces().First(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+                containsGenericStaticMethod.MakeGenericMethod([| ienumerable.GenericTypeArguments[0] |])
+        
 
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
@@ -174,7 +172,9 @@ module ObjectListFilter =
                 && memberType.GetInterfaces().Any(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
             match ``member``.Member  with
             | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable ->
-                Expression.Call (getEnumerableContainsMethod prop.PropertyType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+                match prop.PropertyType.GetMethods(BindingFlags.Instance ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 1) with
+                | null -> Expression.Call (getEnumerableContainsMethod prop.PropertyType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+                | instanceContainsMethod -> Expression.Call (Expression.PropertyOrField (param, f.FieldName),instanceContainsMethod, Expression.Constant (f.Value))    
             | :? FieldInfo as field when field.FieldType |> isEnumerable ->
                 Expression.Call (getEnumerableContainsMethod field.FieldType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
             | _ ->

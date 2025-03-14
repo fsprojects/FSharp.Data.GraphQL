@@ -324,22 +324,20 @@ let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and
         c.ID |> equals 5
         c.Name |> equals "Hamster E"
 
-type Product = {
+type ListTagsProduct = {
     Name : string
     Tags : string list
 }
 
-let productList =
-    [
-        { Name = "Product A"; Tags = ["Tag1"; "Tag2"] }
-        { Name = "Product B"; Tags = ["Tag2"; "Tag3"] }
-        { Name = "Product C"; Tags = ["Tag3"; "Tag4"] }
-        { Name = "Product D"; Tags = ["Tag4"; "Tag5"] }
-    ]
-let productArray = productList.ToArray()
-
 [<Fact>]
-let ``ObjectListFilter works with Contains operator collection type properties``() =
+let ``ObjectListFilter works with Contains operator on list collection properties``() =
+    let productList =
+        [
+            { Name = "Product A"; Tags = ["Tag1"; "Tag2"] }
+            { Name = "Product B"; Tags = ["Tag2"; "Tag3"] }
+            { Name = "Product C"; Tags = ["Tag3"; "Tag4"] }
+            { Name = "Product D"; Tags = ["Tag4"; "Tag5"] }
+        ]
     let queryable = productList.AsQueryable()
     let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
     let filteredData = queryable.Apply(filter) |> Seq.toList
@@ -349,9 +347,45 @@ let ``ObjectListFilter works with Contains operator collection type properties``
     let result2 = List.last filteredData
     result2.Name |> equals "Product C"
 
+type ArrayTagsProduct = {
+        Name : string
+        Tags : string array
+}
 
 [<Fact>]
-let ``ObjectListFilter works with Contains operator collection type properties with array``() =
+let ``ObjectListFilter works with Contains operator on array collection properties``() =
+
+    let productArray =
+        [
+           { Name = "Product A"; Tags = [|"Tag1"; "Tag2"|] }
+           { Name = "Product B"; Tags = [|"Tag2"; "Tag3"|] }
+           { Name = "Product C"; Tags = [|"Tag3"; "Tag4"|] }
+           { Name = "Product D"; Tags = [|"Tag4"; "Tag5"|] }
+    ]
+    let queryable = productArray.AsQueryable()
+    let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    result1.Name |> equals "Product B"
+    let result2 = List.last filteredData
+    result2.Name |> equals "Product C"
+
+type SetTagsProduct = {
+        Name : string
+        Tags : string Set
+}
+
+[<Fact>]
+let ``ObjectListFilter works with Contains operator on set collection properties``() =
+
+    let productArray =
+        [
+           { Name = "Product A"; Tags = [|"Tag1"; "Tag2"|] |> Set.ofArray}
+           { Name = "Product B"; Tags = [|"Tag2"; "Tag3"|] |> Set.ofArray}
+           { Name = "Product C"; Tags = [|"Tag3"; "Tag4"|] |> Set.ofArray}
+           { Name = "Product D"; Tags = [|"Tag4"; "Tag5"|] |> Set.ofArray}
+    ]
     let queryable = productArray.AsQueryable()
     let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
     let filteredData = queryable.Apply(filter) |> Seq.toList
