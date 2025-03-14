@@ -13,6 +13,7 @@ type ObjectListFilter =
     | Equals of FieldFilter<System.IComparable>
     | GreaterThan of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
+    | In of FieldFilter<System.IComparable list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<string>
@@ -24,10 +25,6 @@ open System.Linq
 open System.Linq.Expressions
 open System.Runtime.InteropServices
 open System.Reflection
-
-/// <remarks>
-/// Represents a value that can be either None or Some.
-/// </remarks>
 
 /// <summary>
 /// Allows to specify discriminator comparison or discriminator getter
@@ -62,15 +59,13 @@ open System.Reflection
 [<Struct>]
 type ObjectListFilterLinqOptions<'T, 'D> (
     [<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null,
-    [<Optional>] getDiscriminatorValue : (Type -> 'D) | null,
-    [<Optional>] serializeMemberName : (MemberInfo -> string) | null
+    [<Optional>] getDiscriminatorValue : (Type -> 'D) | null
 ) =
 
     member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
     member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
-    //member _.SerializeMemberName = serializeMemberName |> ValueOption.ofObj
 
-    static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null, null)
+    static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null)
 
     static member GetCompareDiscriminator (getDiscriminatorValue : Expression<Func<'T, 'D>>) =
         let tParam = Expression.Parameter (typeof<'T>, "x")
@@ -78,16 +73,11 @@ type ObjectListFilterLinqOptions<'T, 'D> (
         let body = Expression.Equal(Expression.Invoke(getDiscriminatorValue, tParam), dParam)
         Expression.Lambda<Func<'T, 'D, bool>> (body, tParam, dParam)
 
-    new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, null)
-    new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, null)
-    new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, null)
-    //new (serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, null, serializeMemberName)
+    new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null)
+    new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null)
+    new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null , getDiscriminatorValue = getDiscriminatorValue)
 
-    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue, null)
-
-    //new (getDiscriminator : Expression<Func<'T, 'D>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, serializeMemberName)
-    //new (compareDiscriminator : Expression<Func<'T, 'D, bool>>, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, serializeMemberName)
-    //new (getDiscriminatorValue : Type -> 'D, serializeMemberName : MemberInfo -> string) = ObjectListFilterLinqOptions<'T, 'D> (null, getDiscriminatorValue, serializeMemberName)
+    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue)
 
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
@@ -190,6 +180,11 @@ module ObjectListFilter =
                 Expression.Call (getEnumerableContainsMethod field.FieldType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
             | _ ->
                 Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
+        | In f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            let values = f.Value |> List.map (fun v -> Expression.Equal(``member``, Expression.Constant(v)))
+            (values |> List.reduce (fun acc expr -> Expression.OrElse(acc, expr))) :> Expression
+
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
@@ -208,19 +203,19 @@ module ObjectListFilter =
                 | ValueNone, ValueNone ->
                     // use __typename from filter and do type.ToSting() for values
                     let typename = t.FullName
-                    Expression.Equal(Expression.PropertyOrField(param, "__typename"), Expression.Constant(typename)) :> Expression
+                    Expression.Equal (Expression.PropertyOrField (param, "__typename"), Expression.Constant (typename)) :> Expression
                 | ValueSome discExpr, ValueNone ->
                     // use discriminator and do type.ToSting() for values
                     let typename = t.FullName
-                    Expression.Invoke(discExpr, param, Expression.Constant(typename)) :> Expression
+                    Expression.Invoke (discExpr, param, Expression.Constant (typename)) :> Expression
                 | ValueNone, ValueSome discValueFn ->
                     // use __typename from filter and execute discValueFn for values
                     let discriminatorValue = discValueFn t
-                    Expression.Equal(Expression.PropertyOrField(param, "__typename"), Expression.Constant(discriminatorValue)) :> Expression
+                    Expression.Equal (Expression.PropertyOrField (param, "__typename"), Expression.Constant (discriminatorValue)) :> Expression
                 | ValueSome discExpr, ValueSome discValueFn ->
                     // use discriminator and execute discValueFn for values
                     let discriminatorValue = discValueFn t
-                    Expression.Invoke(discExpr, param, Expression.Constant (discriminatorValue))
+                    Expression.Invoke (discExpr, param, Expression.Constant (discriminatorValue))
 
             let queryExpr =
                 let param = Expression.Parameter (typeof<'T>, "x")

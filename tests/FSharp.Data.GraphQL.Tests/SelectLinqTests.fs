@@ -71,13 +71,24 @@ let linqArgs =
       Define.Input("after", Nullable StringType) ]
 
 let schema =
-    Schema(Define.Object("RootQuery",
-    [ Define.Field("people", ListOf Person, "", linqArgs,
-                fun ctx () ->
-                    let info = ctx.ExecutionInfo
-                    let queryable = data.AsQueryable()
-                    let result = queryable.Apply(info) |> Seq.toList
-                    result) ]))
+    Schema (
+        Define.Object (
+            "RootQuery",
+            [
+                Define.Field (
+                    "people",
+                    ListOf Person,
+                    "",
+                    linqArgs,
+                    fun ctx () ->
+                        let info = ctx.ExecutionInfo
+                        let queryable = data.AsQueryable ()
+                        let result = queryable.Apply (info) |> Seq.toList
+                        result
+                )
+            ]
+        )
+    )
 
 let schemaProcessor = Executor(schema)
 
