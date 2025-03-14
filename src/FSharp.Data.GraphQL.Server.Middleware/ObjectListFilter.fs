@@ -13,6 +13,7 @@ type ObjectListFilter =
     | Equals of FieldFilter<System.IComparable>
     | GreaterThan of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
+    | In of FieldFilter<System.IComparable list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<string>
@@ -177,6 +178,11 @@ module ObjectListFilter =
                 Expression.Call (getEnumerableContainsMethod field.FieldType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
             | _ ->
                 Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
+        | In f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            let values = f.Value |> List.map (fun v -> Expression.Equal(``member``, Expression.Constant(v)))
+            (values |> List.reduce (fun acc expr -> Expression.OrElse(acc, expr))) :> Expression
+
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)

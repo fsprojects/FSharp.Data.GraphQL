@@ -120,6 +120,40 @@ let ``ObjectListFilter works with OR operator``() =
     result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
 [<Fact>]
+let ``ObjectListFilter works with IN operator for string type field``() =
+    let filter =
+        In { FieldName = "firstName"; Value = ["Jeneffer"; "Ben"] }
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    let result2 = List.last filteredData
+    result2.ID |> equals 7
+    result2.FirstName |> equals "Jeneffer"
+    result2.LastName |> equals "Trif"
+    result2.Contact |> equals { Email = "j.trif@gmail.com" }
+    result2.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+
+[<Fact>]
+let ``ObjectListFilter works with IN operator for int type field``() =
+    let filter =
+        In { FieldName = "id"; Value = [4; 2; 7] }
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 3
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+[<Fact>]
 let ``ObjectListFilter works with FilterField operator``() =
     let filter =
         FilterField { FieldName = "Contact"; Value = Contains { FieldName = "Email"; Value = "j.trif@gmail.com" } }
