@@ -37,7 +37,6 @@ module TypeSystemExtensions =
                 | filters -> ValueSome (OfTypes filters)
             | _ -> ValueNone
 
-
     type ResolveFieldContext with
 
         /// <summary>

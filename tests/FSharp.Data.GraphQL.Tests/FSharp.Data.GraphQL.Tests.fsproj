@@ -63,7 +63,8 @@
     <Compile Include="Variables and Inputs\InputNullableStringTests.fs" />
     <Compile Include="Variables and Inputs\InputEnumTests.fs" />
     <Compile Include="Variables and Inputs\InputListTests.fs" />
-    <Compile Include="LinqTests.fs" />
+    <Compile Include="SelectLinqTests.fs" />
+    <Compile Include="ObjectListFilterLinqTests.fs" />
     <Compile Include="DeferredTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
     <Compile Include="MiddlewareTests.fs" />
