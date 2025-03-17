@@ -13,14 +13,14 @@ open FSharp.Data.GraphQL.Ast
 let internal removeNoFilter = Seq.where (fun filter -> filter <> NoFilter)
 
 type private ComparisonOperator =
-| EndsWith of string
-| StartsWith of string
-| Contains of string
-| Equals of string
-| GreaterThan of string
-| GreaterThanOrEqual of string
-| LessThan of string
-| LessThanOrEqual of string
+    | EndsWith of string
+    | StartsWith of string
+    | Contains of string
+    | Equals of string
+    | GreaterThan of string
+    | GreaterThanOrEqual of string
+    | LessThan of string
+    | LessThanOrEqual of string
 
 let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLError list> =
 

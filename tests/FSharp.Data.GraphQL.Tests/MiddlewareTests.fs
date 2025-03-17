@@ -71,9 +71,11 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                         .Field(
                             "subjects",
                             Nullable (ListOf (Nullable SubjectType)),
-                            resolve = fun ctx (a : A) ->
-                                expectedFilter |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
-                                a.subjects |> List.map getSubject |> List.toSeq |> Some
+                            resolve =
+                                fun ctx (a : A) ->
+                                    expectedFilter
+                                    |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
+                                    a.subjects |> List.map getSubject |> List.toSeq |> Some
                         )
                         .WithQueryWeight (1.0)
                 ]
@@ -90,9 +92,11 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                         .Field(
                             "subjects",
                             Nullable (ListOf (Nullable SubjectType)),
-                            resolve = fun ctx (b : B) ->
-                                expectedFilter |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
-                                b.subjects |> List.map getSubject |> List.toSeq |> Some
+                            resolve =
+                                fun ctx (b : B) ->
+                                    expectedFilter
+                                    |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
+                                    b.subjects |> List.map getSubject |> List.toSeq |> Some
                         )
                         .WithQueryWeight (1.0)
                 ]
@@ -100,8 +104,7 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
     let Query =
         Define.Object<Root> (
             name = "Query",
-            fields = [ // Перетворити executor на getExecutor(ValueOption filter) *** executor = getExecutor(ValueNone) *** Перевіряти ValueSome на 99 і 100 рядках, дістаючи фільтри з контексту
-                              // Приклад - тести на інпутОбжекти - InputRecordTests: 122 - 150
+            fields = [
                 Define.Field ("A", Nullable AType, "A Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getA (ctx.Arg ("id"))))
                 Define.Field ("B", Nullable BType, "B Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getB (ctx.Arg ("id"))))
             ]
@@ -114,16 +117,17 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
     ]
     Executor (schema, middleware)
 
-let executor = getExecutor(ValueNone)
+let executor = getExecutor (ValueNone)
 
 let execute (query : Document) = executor.AsyncExecute (query) |> sync
 
 let executeWithVariables (query : Document, variables : ImmutableDictionary<string, JsonElement>) =
-    executor.AsyncExecute (ast = query, variables = variables) |> sync
+    executor.AsyncExecute (ast = query, variables = variables)
+    |> sync
 
-let executeWithCustomFilter (query: Document,variables : ImmutableDictionary<string, JsonElement>, customFilter : ObjectListFilter) =
-    let ex = getExecutor(ValueSome customFilter)
-    ex.AsyncExecute(ast = query, variables = variables) |> sync
+let executeWithCustomFilter (query : Document, variables : ImmutableDictionary<string, JsonElement>, customFilter : ObjectListFilter) =
+    let ex = getExecutor (ValueSome customFilter)
+    ex.AsyncExecute (ast = query, variables = variables) |> sync
 
 let expectedErrors : GQLProblemDetails list = [
     GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.")
@@ -506,7 +510,7 @@ let ``Object list filter: must return filter information in Metadata`` () =
                         ]
                 ]
         ]
-    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+    let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "s" ]) (And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" }))
     let result = execute query
     ensureDirect result <| fun data errors ->
@@ -555,7 +559,7 @@ let ``Object list filter: Must return AND filter information in Metadata`` () =
                         ]
                 ]
         ]
-    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+    let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (And (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
     let result = execute query
     ensureDirect result <| fun data errors ->
@@ -602,7 +606,7 @@ let ``Object list filter: Must return OR filter information in Metadata`` () =
                         ]
                 ]
         ]
-    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+    let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (Or (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
     let result = execute query
     ensureDirect result <| fun data errors ->
@@ -649,7 +653,7 @@ let ``Object list filter: Must return NOT filter information in Metadata`` () =
                         ]
                 ]
         ]
-    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+    let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (Not (StartsWith { FieldName = "value"; Value = "3" }))
     let result = execute query
     ensureDirect result <| fun data errors ->
@@ -660,7 +664,6 @@ let ``Object list filter: Must return NOT filter information in Metadata`` () =
     |> seqEquals [ expectedFilter ]
 
 [<Fact>]
-// Перевірити всі кейси в одному тесті, якщо не вдасться обробити - поміняти Choice на Discriminated Union
 let ``Object list filter: Must parse all filter operators`` () =
     let query =
         parse
@@ -698,12 +701,11 @@ let ``Object list filter: Must parse all filter operators`` () =
                 ]
         ]
 
-    let notStartsFilter = """{ "not": { "value_starts_with": "3" } }"""
-    let notStartsFilterJsonElement = JsonDocument.Parse(notStartsFilter).RootElement
-    let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilterJsonElement)
-    let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (StartsWith { FieldName = "value"; Value = "3" }))
-    let result = executeWithCustomFilter (query, dict, Not (StartsWith { FieldName = "value"; Value = "3" }))
+    let notStartsFilter = """{ "not": { "value_starts_with": "3" } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
+    let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
+    let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+    let result = executeWithCustomFilter (query, dict, filter)
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -711,12 +713,11 @@ let ``Object list filter: Must parse all filter operators`` () =
     |> wantValueSome
     |> seqEquals [ expectedFilter ]
 
-    let notEndsFilter = """{ "not": { "value_ends_with": "2" } }"""
-    let notEndsFilterJsonElement = JsonDocument.Parse(notEndsFilter).RootElement
-    let dict1 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilterJsonElement)
-    let expectedFilter1 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (EndsWith { FieldName = "value"; Value = "2" }))
-    let result1 = executeWithCustomFilter (query, dict1, Not (EndsWith { FieldName = "value"; Value = "2" }))
+    let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict1 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
+    let filter1 = Not (EndsWith { FieldName = "value"; Value = "2" })
+    let expectedFilter1 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter1)
+    let result1 = executeWithCustomFilter (query, dict1, filter1)
     ensureDirect result1 <| fun data errors1 ->
         empty errors1
         data |> equals (upcast expected)
@@ -724,12 +725,11 @@ let ``Object list filter: Must parse all filter operators`` () =
     |> wantValueSome
     |> seqEquals [ expectedFilter1 ]
 
-    let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }"""
-    let notGreaterThanOrEqualFilterJsonElement = JsonDocument.Parse(notGreaterThanOrEqualFilter).RootElement
-    let dict2 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilterJsonElement)
-    let expectedFilter2 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 }))
-    let result2 = executeWithCustomFilter (query, dict2, Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 }))
+    let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict2 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
+    let filter2 = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
+    let expectedFilter2 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter2)
+    let result2 = executeWithCustomFilter (query, dict2,filter2)
     ensureDirect result2 <| fun data errors2 ->
         empty errors2
         data |> equals (upcast expected)
@@ -737,12 +737,11 @@ let ``Object list filter: Must parse all filter operators`` () =
     |> wantValueSome
     |> seqEquals [ expectedFilter2 ]
 
-    let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }"""
-    let notLessThanOrEqualFilterJsonElement = JsonDocument.Parse(notLessThanOrEqualFilter).RootElement
-    let dict3 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilterJsonElement)
-    let expectedFilter3 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 }))
-    let result3 = executeWithCustomFilter (query, dict3, Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 }))
+    let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict3 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
+    let filter3 = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
+    let expectedFilter3 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter3)
+    let result3 = executeWithCustomFilter (query, dict3, filter3)
     ensureDirect result3 <| fun data errors3 ->
         empty errors3
         data |> equals (upcast expected)
@@ -750,42 +749,36 @@ let ``Object list filter: Must parse all filter operators`` () =
     |> wantValueSome
     |> seqEquals [ expectedFilter3 ]
 
-    let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }"""
-    let notGreaterThanFilterJsonElement = JsonDocument.Parse(notGreaterThanFilter).RootElement
-    let dict4 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilterJsonElement)
-    let expectedFilter4 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (GreaterThan { FieldName = "id"; Value = 2.0 }))
-    let result4 =
-        executeWithCustomFilter (query, dict4, Not (GreaterThan { FieldName = "id"; Value = 2.0 }))
-    ensureDirect result4
-    <| fun data errors2 ->
+    let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict4 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
+    let filter4 = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
+    let expectedFilter4 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter4)
+    let result4 = executeWithCustomFilter (query, dict4, filter4)
+    ensureDirect result4 <| fun data errors2 ->
         empty errors2
         data |> equals (upcast expected)
     result4.Metadata.TryFind<ObjectListFilters> ("filters")
     |> wantValueSome
     |> seqEquals [ expectedFilter4 ]
 
-    let notLessThanFilter = """{ "not": { "id_lt": 4 } }"""
-    let notLessThanFilterJsonElement = JsonDocument.Parse(notLessThanFilter).RootElement
-    let dict5 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilterJsonElement)
-
-    let expectedFilter5 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (LessThan { FieldName = "id"; Value = 4.0 }))
-    let result5 = executeWithCustomFilter (query, dict5, Not (LessThan { FieldName = "id"; Value = 4.0 }))
-    ensureDirect result5 <| fun data errors5 ->
+    let notLessThanFilter = """{ "not": { "id_lt": 4 } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict5 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
+    let filter5 = Not (LessThan { FieldName = "id"; Value = 4.0 })
+    let expectedFilter5 : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter5)
+    let result5 = executeWithCustomFilter (query, dict5, filter5)
+    ensureDirect result5
+    <| fun data errors5 ->
         empty errors5
         data |> equals (upcast expected)
     result5.Metadata.TryFind<ObjectListFilters> ("filters")
     |> wantValueSome
     |> seqEquals [ expectedFilter5 ]
 
-    let notContainsFilter = """{ "not": { "value_contains": "A" } }"""
-    let notContainsFilterJsonElement = JsonDocument.Parse(notContainsFilter).RootElement
-    let dict6 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilterJsonElement)
-
-    let expectedFilter6 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (Contains { FieldName = "value"; Value = "A" }))
-    let result6 = executeWithCustomFilter (query, dict6, Not (Contains { FieldName = "value"; Value = "A" }))
+    let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict6 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
+    let filter6 = Not (Contains { FieldName = "value"; Value = "A" })
+    let expectedFilter6 : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter6)
+    let result6 = executeWithCustomFilter (query, dict6, filter6)
     ensureDirect result6 <| fun data errors6 ->
         empty errors6
         data |> equals (upcast expected)
@@ -793,13 +786,12 @@ let ``Object list filter: Must parse all filter operators`` () =
     |> wantValueSome
     |> seqEquals [ expectedFilter6 ]
 
-    let notEqualsFilter = """{ "not": { "value": "A2" } }"""
-    let notEqualsFilterJsonElement = JsonDocument.Parse(notEqualsFilter).RootElement
-    let dict7 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilterJsonElement)
-
+    let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
+    let dict7 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
+    let filter7 = Not (Equals { FieldName = "value"; Value = "A2" })
     let expectedFilter7 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (Not (Equals { FieldName = "value"; Value = "A2" }))
-    let result7 = executeWithCustomFilter (query, dict7, Not (Equals { FieldName = "value"; Value = "A2" }))
+        kvp ([ "A"; "subjects" ]) (filter7)
+    let result7 = executeWithCustomFilter (query, dict7, filter7)
     ensureDirect result7 <| fun data errors7 ->
         empty errors7
         data |> equals (upcast expected)

@@ -217,11 +217,9 @@ module ObjectListFilter =
             | _ -> Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
         | In f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let values =
-                f.Value
-                |> List.map (fun v -> Expression.Equal (``member``, Expression.Constant (v)))
-            (values
-             |> List.reduce (fun acc expr -> Expression.OrElse (acc, expr)))
+            f.Value
+            |> Seq.map (fun v -> Expression.Equal (``member``, Expression.Constant (v)))
+            |> Seq.reduce (fun acc expr -> Expression.OrElse (acc, expr))
             :> Expression
         | OfTypes types ->
             types
