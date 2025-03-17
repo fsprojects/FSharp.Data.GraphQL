@@ -34,12 +34,50 @@ let ``ObjectListFilter works with GreaterThan operator``() =
     result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
 
 [<Fact>]
+let ``ObjectListFilter works with GreaterThanOrEqual operator``() =
+    let filter =  GreaterThanOrEqual { FieldName = "id"; Value = 4  } // :> IComparable
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    let result1 = List.last filteredData
+    result1.ID |> equals 7
+    result1.FirstName |> equals "Jeneffer"
+    result1.LastName |> equals "Trif"
+    result1.Contact |> equals { Email = "j.trif@gmail.com" }
+    result1.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+
+[<Fact>]
 let ``ObjectListFilter works with LessThan operator``() =
     let filter =  LessThan { FieldName = "id"; Value = 4  } // :> IComparable
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 1
     let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+    result.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result.Friends |> equals []
+
+[<Fact>]
+let ``ObjectListFilter works with LessThanOrEqual operator``() =
+    let filter =  LessThanOrEqual { FieldName = "id"; Value = 4  } // :> IComparable
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result1 = List.head filteredData
+    result1.ID |> equals 4
+    result1.FirstName |> equals "Ben"
+    result1.LastName |> equals "Adams"
+    result1.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result1.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    let result = List.last filteredData
     result.ID |> equals 2
     result.FirstName |> equals "Jonathan"
     result.LastName |> equals "Abrams"
@@ -112,6 +150,40 @@ let ``ObjectListFilter works with OR operator``() =
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+[<Fact>]
+let ``ObjectListFilter works with IN operator for string type field``() =
+    let filter =
+        In { FieldName = "firstName"; Value = ["Jeneffer"; "Ben"] }
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    let result = List.head filteredData
+    result.ID |> equals 4
+    result.FirstName |> equals "Ben"
+    result.LastName |> equals "Adams"
+    result.Contact  |> equals { Email = "b.adams@gmail.com" }
+    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    let result2 = List.last filteredData
+    result2.ID |> equals 7
+    result2.FirstName |> equals "Jeneffer"
+    result2.LastName |> equals "Trif"
+    result2.Contact |> equals { Email = "j.trif@gmail.com" }
+    result2.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+
+[<Fact>]
+let ``ObjectListFilter works with IN operator for int type field``() =
+    let filter =
+        In { FieldName = "id"; Value = [4; 2; 7] }
+    let queryable = data.AsQueryable()
+    let filteredData = queryable.Apply(filter) |> Seq.toList
+    List.length filteredData |> equals 3
     let result = List.head filteredData
     result.ID |> equals 4
     result.FirstName |> equals "Ben"

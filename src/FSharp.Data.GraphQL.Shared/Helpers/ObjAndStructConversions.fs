@@ -1,6 +1,7 @@
 namespace rec FSharp.Data.GraphQL
 
 open System.Linq
+open System.Collections.Generic
 open FsToolkit.ErrorHandling
 
 module internal ValueOption =
@@ -10,6 +11,12 @@ module internal ValueOption =
 module internal Option =
 
     let mapValueOption mapping voption = voption |> ValueOption.map mapping |> ValueOption.toOption
+
+[<AutoOpen>]
+module KeyValuePair =
+
+    let inline kvp key value = KeyValuePair (key, value)
+    let inline kvpObj key (value : obj) = KeyValuePair (key, value)
 
 [<AutoOpen>]
 module internal ValueTuple =
