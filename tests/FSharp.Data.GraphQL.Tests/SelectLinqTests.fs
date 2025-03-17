@@ -6,9 +6,8 @@ open Xunit
 open System
 open System.Linq
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Linq
-open FSharp.Data.GraphQL.Execution
+open FSharp.Data.GraphQL.Types
 
 type Contact =
     { Email : string }
@@ -51,6 +50,7 @@ let data =
         Contact = { Email = "j.trif@gmail.com" }
         Friends = [ { Email = "j.abrams@gmail.com" } ] } ]
 
+
 let internal undefined<'t> = Unchecked.defaultof<'t>
 
 let resolveRoot ctx () =
@@ -71,13 +71,24 @@ let linqArgs =
       Define.Input("after", Nullable StringType) ]
 
 let schema =
-    Schema(Define.Object("RootQuery",
-                         [ Define.Field("people", ListOf Person, "", linqArgs,
-                                        fun ctx () ->
-                                            let info = ctx.ExecutionInfo
-                                            let queryable = data.AsQueryable()
-                                            let result = queryable.Apply(info) |> Seq.toList
-                                            result) ]))
+    Schema (
+        Define.Object (
+            "RootQuery",
+            [
+                Define.Field (
+                    "people",
+                    ListOf Person,
+                    "",
+                    linqArgs,
+                    fun ctx () ->
+                        let info = ctx.ExecutionInfo
+                        let queryable = data.AsQueryable ()
+                        let result = queryable.Apply (info) |> Seq.toList
+                        result
+                )
+            ]
+        )
+    )
 
 let schemaProcessor = Executor(schema)
 
