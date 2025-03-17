@@ -193,22 +193,37 @@ module ObjectListFilter =
             let buildTypeDiscriminatorCheck (param : SourceExpression) (t : Type) =
                 match options.CompareDiscriminator, options.GetDiscriminatorValue with
                 | ValueNone, ValueNone ->
-                    // use __typename from filter and do type.ToSting() for values
-                    let typename = t.FullName
-                    Expression.Equal (Expression.PropertyOrField (param, "__typename"), Expression.Constant (typename)) :> Expression
+                    Expression.Equal (
+                        // Default discriminator property
+                        Expression.PropertyOrField (param, "__typename"),
+                        // Default discriminator value
+                        Expression.Constant (t.FullName)
+                    ) :> Expression
                 | ValueSome discExpr, ValueNone ->
-                    // use discriminator and do type.ToSting() for values
-                    let typename = t.FullName
-                    Expression.Invoke (discExpr, param, Expression.Constant (typename)) :> Expression
+                    Expression.Invoke (
+                        // Provided discriminator comparison
+                        discExpr,
+                        param,
+                        // Default discriminator value gathered from type
+                        Expression.Constant(t.FullName)
+                    ) :> Expression
                 | ValueNone, ValueSome discValueFn ->
-                    // use __typename from filter and execute discValueFn for values
                     let discriminatorValue = discValueFn t
-                    Expression.Equal (Expression.PropertyOrField (param, "__typename"), Expression.Constant (discriminatorValue)) :> Expression
+                    Expression.Equal (
+                        // Default discriminator property
+                        Expression.PropertyOrField (param, "__typename"),
+                        // Provided discriminator value gathered from type
+                        Expression.Constant (discriminatorValue)
+                    ) :> Expression
                 | ValueSome discExpr, ValueSome discValueFn ->
-                    // use discriminator and execute discValueFn for values
                     let discriminatorValue = discValueFn t
-                    Expression.Invoke (discExpr, param, Expression.Constant (discriminatorValue))
-
+                    Expression.Invoke (
+                        // Provided discriminator comparison
+                        discExpr,
+                        param,
+                        // Provided discriminator value gathered from type
+                        Expression.Constant (discriminatorValue)
+                    )
             let queryExpr =
                 let param = Expression.Parameter (typeof<'T>, "x")
                 let body = buildFilterExpr (SourceExpression param) buildTypeDiscriminatorCheck filter
