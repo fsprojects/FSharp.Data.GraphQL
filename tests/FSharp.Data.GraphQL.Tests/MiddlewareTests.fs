@@ -755,8 +755,10 @@ let ``Object list filter: Must parse all filter operators`` () =
     let dict4 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilterJsonElement)
     let expectedFilter4 : KeyValuePair<obj list, ObjectListFilter> =
         kvp ([ "A"; "subjects" ]) (Not (GreaterThan { FieldName = "id"; Value = 2.0 }))
-    let result4 = executeWithCustomFilter (query, dict4, Not (GreaterThan { FieldName = "id"; Value = 2.0 }))
-    ensureDirect result4 <| fun data errors2 ->
+    let result4 =
+        executeWithCustomFilter (query, dict4, Not (GreaterThan { FieldName = "id"; Value = 2.0 }))
+    ensureDirect result4
+    <| fun data errors2 ->
         empty errors2
         data |> equals (upcast expected)
     result4.Metadata.TryFind<ObjectListFilters> ("filters")
