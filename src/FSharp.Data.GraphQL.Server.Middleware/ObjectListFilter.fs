@@ -75,7 +75,6 @@ type ObjectListFilterLinqOptions<'T, 'D> (
     new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null)
     new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null)
     new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null , getDiscriminatorValue = getDiscriminatorValue)
-
     new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue)
 
 /// Contains tooling for working with ObjectListFilter.
@@ -138,7 +137,6 @@ module ObjectListFilter =
                 let ienumerable = memberType.GetInterfaces().First(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
                 containsGenericStaticMethod.MakeGenericMethod([| ienumerable.GenericTypeArguments[0] |])
         
-
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
     [<Struct>]

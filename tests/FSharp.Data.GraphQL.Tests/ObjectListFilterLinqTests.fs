@@ -372,8 +372,8 @@ let ``ObjectListFilter works with Contains operator on array collection properti
     result2.Name |> equals "Product C"
 
 type SetTagsProduct = {
-        Name : string
-        Tags : string Set
+    Name : string
+    Tags : string Set
 }
 
 [<Fact>]
