@@ -56,10 +56,8 @@ open System.Reflection
 ///     )
 /// </code></example>
 [<Struct>]
-type ObjectListFilterLinqOptions<'T, 'D> (
-    [<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null,
-    [<Optional>] getDiscriminatorValue : (Type -> 'D) | null
-) =
+type ObjectListFilterLinqOptions<'T, 'D>
+    ([<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null, [<Optional>] getDiscriminatorValue : (Type -> 'D) | null) =
 
     member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
     member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
@@ -69,13 +67,16 @@ type ObjectListFilterLinqOptions<'T, 'D> (
     static member GetCompareDiscriminator (getDiscriminatorValue : Expression<Func<'T, 'D>>) =
         let tParam = Expression.Parameter (typeof<'T>, "x")
         let dParam = Expression.Parameter (typeof<'D>, "d")
-        let body = Expression.Equal(Expression.Invoke(getDiscriminatorValue, tParam), dParam)
+        let body = Expression.Equal (Expression.Invoke (getDiscriminatorValue, tParam), dParam)
         Expression.Lambda<Func<'T, 'D, bool>> (body, tParam, dParam)
 
-    new (getDiscriminator : Expression<Func<'T, 'D>>) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null)
+    new (getDiscriminator : Expression<Func<'T, 'D>>) =
+        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null)
     new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null)
-    new (getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null , getDiscriminatorValue = getDiscriminatorValue)
-    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) = ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue)
+    new (getDiscriminatorValue : Type -> 'D) =
+        ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null, getDiscriminatorValue = getDiscriminatorValue)
+    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) =
+        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue)
 
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
@@ -128,15 +129,25 @@ module ObjectListFilter =
     let private StringEndsWithMethod = typeof<string>.GetMethod ("EndsWith", [| typeof<string> |])
     let private StringContainsMethod = typeof<string>.GetMethod ("Contains", [| typeof<string> |])
     let private getEnumerableContainsMethod (memberType : Type) =
-        match typeof<Enumerable>.GetMethods(BindingFlags.Static ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 2) with
+        match
+            typeof<Enumerable>
+                .GetMethods(BindingFlags.Static ||| BindingFlags.Public)
+                .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 2)
+        with
         | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
         | containsGenericStaticMethod ->
-            if memberType.IsGenericType && memberType.GenericTypeArguments.Length = 1 then
-                containsGenericStaticMethod.MakeGenericMethod(memberType.GenericTypeArguments)
+            if
+                memberType.IsGenericType
+                && memberType.GenericTypeArguments.Length = 1
+            then
+                containsGenericStaticMethod.MakeGenericMethod (memberType.GenericTypeArguments)
             else
-                let ienumerable = memberType.GetInterfaces().First(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
-                containsGenericStaticMethod.MakeGenericMethod([| ienumerable.GenericTypeArguments[0] |])
-        
+                let ienumerable =
+                    memberType
+                        .GetInterfaces()
+                        .First (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+                containsGenericStaticMethod.MakeGenericMethod ([| ienumerable.GenericTypeArguments[0] |])
+
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
     [<Struct>]
@@ -158,25 +169,38 @@ module ObjectListFilter =
         | Equals f -> Expression.Equal (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | GreaterThan f -> Expression.GreaterThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | LessThan f -> Expression.LessThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
-        | StartsWith f ->
-            Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringStartsWithMethod, Expression.Constant (f.Value))
-        | EndsWith f ->
-            Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringEndsWithMethod, Expression.Constant (f.Value))
+        | StartsWith f -> Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringStartsWithMethod, Expression.Constant (f.Value))
+        | EndsWith f -> Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringEndsWithMethod, Expression.Constant (f.Value))
         | Contains f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let isEnumerable (memberType: Type) =
-                not (Type.(=)(memberType, typeof<string>))
-                && typeof<System.Collections.IEnumerable>.IsAssignableFrom(memberType)
-                && memberType.GetInterfaces().Any(fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
-            match ``member``.Member  with
+            let isEnumerable (memberType : Type) =
+                not (Type.(=) (memberType, typeof<string>))
+                && typeof<System.Collections.IEnumerable>.IsAssignableFrom (memberType)
+                && memberType
+                    .GetInterfaces()
+                    .Any (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+            match ``member``.Member with
             | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable ->
-                match prop.PropertyType.GetMethods(BindingFlags.Instance ||| BindingFlags.Public).FirstOrDefault(fun m -> m.Name = "Contains" && m.GetParameters().Length = 1) with
-                | null -> Expression.Call (getEnumerableContainsMethod prop.PropertyType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
-                | instanceContainsMethod -> Expression.Call (Expression.PropertyOrField (param, f.FieldName),instanceContainsMethod, Expression.Constant (f.Value))    
+                match
+                    prop.PropertyType
+                        .GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
+                        .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 1)
+                with
+                | null ->
+                    Expression.Call (
+                        getEnumerableContainsMethod prop.PropertyType,
+                        Expression.PropertyOrField (param, f.FieldName),
+                        Expression.Constant (f.Value)
+                    )
+                | instanceContainsMethod ->
+                    Expression.Call (Expression.PropertyOrField (param, f.FieldName), instanceContainsMethod, Expression.Constant (f.Value))
             | :? FieldInfo as field when field.FieldType |> isEnumerable ->
-                Expression.Call (getEnumerableContainsMethod field.FieldType, Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
-            | _ ->
-                Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
+                Expression.Call (
+                    getEnumerableContainsMethod field.FieldType,
+                    Expression.PropertyOrField (param, f.FieldName),
+                    Expression.Constant (f.Value)
+                )
+            | _ -> Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
@@ -198,15 +222,17 @@ module ObjectListFilter =
                         Expression.PropertyOrField (param, "__typename"),
                         // Default discriminator value
                         Expression.Constant (t.FullName)
-                    ) :> Expression
+                    )
+                    :> Expression
                 | ValueSome discExpr, ValueNone ->
                     Expression.Invoke (
                         // Provided discriminator comparison
                         discExpr,
                         param,
                         // Default discriminator value gathered from type
-                        Expression.Constant(t.FullName)
-                    ) :> Expression
+                        Expression.Constant (t.FullName)
+                    )
+                    :> Expression
                 | ValueNone, ValueSome discValueFn ->
                     let discriminatorValue = discValueFn t
                     Expression.Equal (
@@ -214,7 +240,8 @@ module ObjectListFilter =
                         Expression.PropertyOrField (param, "__typename"),
                         // Provided discriminator value gathered from type
                         Expression.Constant (discriminatorValue)
-                    ) :> Expression
+                    )
+                    :> Expression
                 | ValueSome discExpr, ValueSome discValueFn ->
                     let discriminatorValue = discValueFn t
                     Expression.Invoke (
@@ -243,5 +270,4 @@ module ObjectListFilterExtensions =
 
     type IQueryable<'T> with
 
-        member inline query.Apply (filter : ObjectListFilter, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
-            apply options filter query
+        member inline query.Apply (filter : ObjectListFilter, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) = apply options filter query
