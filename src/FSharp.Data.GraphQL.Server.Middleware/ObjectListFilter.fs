@@ -12,7 +12,9 @@ type ObjectListFilter =
     | Not of ObjectListFilter
     | Equals of FieldFilter<System.IComparable>
     | GreaterThan of FieldFilter<System.IComparable>
+    | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
+    | LessThanOrEqual of FieldFilter<System.IComparable>
     | In of FieldFilter<System.IComparable list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
@@ -159,6 +161,8 @@ module ObjectListFilter =
         | Equals f -> Expression.Equal (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | GreaterThan f -> Expression.GreaterThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | LessThan f -> Expression.LessThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+        | GreaterThanOrEqual f -> Expression.GreaterThanOrEqual(Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+        | LessThanOrEqual f -> Expression.LessThanOrEqual (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | StartsWith f ->
             Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringStartsWithMethod, Expression.Constant (f.Value))
         | EndsWith f ->
@@ -182,7 +186,6 @@ module ObjectListFilter =
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let values = f.Value |> List.map (fun v -> Expression.Equal(``member``, Expression.Constant(v)))
             (values |> List.reduce (fun acc expr -> Expression.OrElse(acc, expr))) :> Expression
-
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
