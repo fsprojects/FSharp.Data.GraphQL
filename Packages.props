@@ -52,7 +52,7 @@
   <ItemGroup Label="Test platform">
     <PackageReference Update="BenchmarkDotNet" Version="0.14.*" />
     <PackageReference Update="BenchmarkDotNet.Annotations" Version="0.*" />
-    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.12.0" />
+    <PackageReference Update="Microsoft.NET.Test.Sdk" Version="17.13.0" />
     <PackageReference Update="Microsoft.TestPlatform.TestHost" Version="17.7.*" />
     <PackageReference Update="Microsoft.TestPlatform.ObjectModel" Version="17.7.*" />
     <PackageReference Update="xunit" Version="$(XUnitVersion)" />
@@ -74,7 +74,7 @@
     <PackageReference Update="GraphQL.Server.Ui.Altair" Version="8.*" />
     <PackageReference Update="GraphQL.Server.Ui.GraphiQL" Version="8.*" />
     <PackageReference Update="GraphQL.Server.Ui.Voyager" Version="8.*"  />
-    <PackageReference Update="HotChocolate.AspNetCore" Version="14.*" />
+    <PackageReference Update="HotChocolate.AspNetCore" Version="15.*" />
     <PackageReference Update="Iced" Version="1.17.*" />
     <PackageReference Update="Microsoft.CodeCoverage" Version="17.3.*" />
     <PackageReference Update="Microsoft.Data.Sqlite" Version="$(MicrosoftExtensionsVersion)" />
