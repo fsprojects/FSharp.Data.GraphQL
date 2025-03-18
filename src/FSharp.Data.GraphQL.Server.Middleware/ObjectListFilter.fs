@@ -12,7 +12,10 @@ type ObjectListFilter =
     | Not of ObjectListFilter
     | Equals of FieldFilter<System.IComparable>
     | GreaterThan of FieldFilter<System.IComparable>
+    | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
+    | LessThanOrEqual of FieldFilter<System.IComparable>
+    | In of FieldFilter<System.IComparable list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<string>
@@ -92,10 +95,16 @@ module ObjectListFilter =
         let ( === ) fname value = Equals { FieldName = fname; Value = value }
 
         /// Creates a new ObjectListFilter representing a GREATER THAN operation of a comparable value.
-        let ( ==> ) fname value = GreaterThan { FieldName = fname; Value = value }
+        let ( >>> ) fname value = GreaterThan { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a GREATER THAN OR EQUAL operation of a comparable value.
+        let ( ==> ) fname value = GreaterThanOrEqual { FieldName = fname; Value = value }
 
         /// Creates a new ObjectListFilter representing a LESS THAN operation of a comparable value.
-        let ( <== ) fname value = LessThan { FieldName = fname; Value = value }
+        let ( <<< ) fname value = LessThan { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a LESS THAN OR EQUAL operation of a comparable value.
+        let ( <== ) fname value = LessThanOrEqual { FieldName = fname; Value = value }
 
         /// Creates a new ObjectListFilter representing a STARTS WITH operation of a string value.
         let ( =@@ ) fname value = StartsWith { FieldName = fname; Value = value }
@@ -105,6 +114,9 @@ module ObjectListFilter =
 
         /// Creates a new ObjectListFilter representing a CONTAINS operation.
         let ( @=@ ) fname value = Contains { FieldName = fname; Value = value }
+
+        /// Creates a new ObjectListFilter representing a IN operation.
+        let ( =~= ) fname value = In { FieldName = fname; Value = value }
 
         /// Creates a new ObjectListFilter representing a field sub comparison.
         let ( --> ) fname filter = FilterField { FieldName = fname; Value = filter }
@@ -169,6 +181,8 @@ module ObjectListFilter =
         | Equals f -> Expression.Equal (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | GreaterThan f -> Expression.GreaterThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | LessThan f -> Expression.LessThan (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+        | GreaterThanOrEqual f -> Expression.GreaterThanOrEqual (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
+        | LessThanOrEqual f -> Expression.LessThanOrEqual (Expression.PropertyOrField (param, f.FieldName), Expression.Constant (f.Value))
         | StartsWith f -> Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringStartsWithMethod, Expression.Constant (f.Value))
         | EndsWith f -> Expression.Call (Expression.PropertyOrField (param, f.FieldName), StringEndsWithMethod, Expression.Constant (f.Value))
         | Contains f ->
@@ -201,6 +215,12 @@ module ObjectListFilter =
                     Expression.Constant (f.Value)
                 )
             | _ -> Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
+        | In f ->
+            let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            f.Value
+            |> Seq.map (fun v -> Expression.Equal (``member``, Expression.Constant (v)))
+            |> Seq.reduce (fun acc expr -> Expression.OrElse (acc, expr))
+            :> Expression
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
@@ -222,17 +242,15 @@ module ObjectListFilter =
                         Expression.PropertyOrField (param, "__typename"),
                         // Default discriminator value
                         Expression.Constant (t.FullName)
-                    )
-                    :> Expression
+                    ) :> Expression
                 | ValueSome discExpr, ValueNone ->
                     Expression.Invoke (
                         // Provided discriminator comparison
                         discExpr,
                         param,
                         // Default discriminator value gathered from type
-                        Expression.Constant (t.FullName)
-                    )
-                    :> Expression
+                        Expression.Constant(t.FullName)
+                    ) :> Expression
                 | ValueNone, ValueSome discValueFn ->
                     let discriminatorValue = discValueFn t
                     Expression.Equal (
@@ -240,8 +258,7 @@ module ObjectListFilter =
                         Expression.PropertyOrField (param, "__typename"),
                         // Provided discriminator value gathered from type
                         Expression.Constant (discriminatorValue)
-                    )
-                    :> Expression
+                    ) :> Expression
                 | ValueSome discExpr, ValueSome discValueFn ->
                     let discriminatorValue = discValueFn t
                     Expression.Invoke (

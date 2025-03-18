@@ -12,9 +12,19 @@ open FSharp.Data.GraphQL.Ast
 
 let internal removeNoFilter = Seq.where (fun filter -> filter <> NoFilter)
 
+type private ComparisonOperator =
+    | EndsWith of string
+    | StartsWith of string
+    | Contains of string
+    | Equals of string
+    | GreaterThan of string
+    | GreaterThanOrEqual of string
+    | LessThan of string
+    | LessThanOrEqual of string
+
 let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLError list> =
 
-    let (|EndsWith|StartsWith|GreaterThan|LessThan|Contains|Equals|) (s : string) =
+    let parseFieldCondition (s : string) =
         let s = s.ToLowerInvariant ()
         let prefix (suffix : string) (s : string) = s.Substring (0, s.Length - suffix.Length)
         match s with
@@ -22,11 +32,15 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
         | s when s.EndsWith ("_ew") && s.Length > "_ew".Length -> EndsWith (prefix "_ew" s)
         | s when s.EndsWith ("_starts_with") && s.Length > "_starts_with".Length -> StartsWith (prefix "_starts_with" s)
         | s when s.EndsWith ("_sw") && s.Length > "_sw".Length -> StartsWith (prefix "_sw" s)
+        | s when s.EndsWith ("_contains") && s.Length > "_contains".Length -> Contains (prefix "_contains" s)
         | s when s.EndsWith ("_greater_than") && s.Length > "_greater_than".Length -> GreaterThan (prefix "_greater_than" s)
         | s when s.EndsWith ("_gt") && s.Length > "_gt".Length -> GreaterThan (prefix "_gt" s)
+        | s when s.EndsWith ("_greater_than_or_equal") && s.Length > "_greater_than_or_equal".Length -> GreaterThanOrEqual (prefix "_greater_than_or_equal" s)
+        | s when s.EndsWith ("_gte") && s.Length > "_gte".Length -> GreaterThanOrEqual (prefix "_gte" s)
         | s when s.EndsWith ("_less_than") && s.Length > "_less_than".Length -> LessThan (prefix "_less_than" s)
         | s when s.EndsWith ("_lt") && s.Length > "_lt".Length -> LessThan (prefix "_lt" s)
-        | s when s.EndsWith ("_contains") && s.Length > "_contains".Length -> Contains (prefix "_contains" s)
+        | s when s.EndsWith ("_less_than_or_equal") && s.Length > "_less_than_or_equal".Length -> LessThanOrEqual (prefix "_less_than_or_equal" s)
+        | s when s.EndsWith ("_lte") && s.Length > "_lte".Length -> LessThanOrEqual (prefix "_lte" s)
         | s -> Equals s
 
     let (|EquatableValue|Other|) v =
@@ -76,7 +90,7 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
             match coerceResults with
             | Error errs -> Error errs
             | Ok coerced -> coerced |> removeNoFilter |> Seq.toList |> Ok
-        match name, value with
+        match parseFieldCondition name, value with
         | Equals "and", ListValue fields -> fields |> mapFilters |> Result.map buildAnd
         | Equals "or", ListValue fields -> fields |> mapFilters |> Result.map buildOr
         | Equals "not", ObjectValue value ->
@@ -84,17 +98,19 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
             | Error errs -> Error errs
             | Ok NoFilter -> Ok NoFilter
             | Ok filter -> Ok (Not filter)
-        | EndsWith fname, StringValue value -> Ok (EndsWith { FieldName = fname; Value = value })
-        | StartsWith fname, StringValue value -> Ok (StartsWith { FieldName = fname; Value = value })
-        | Contains fname, StringValue value -> Ok (Contains { FieldName = fname; Value = value })
+        | EndsWith fname, StringValue value -> Ok (ObjectListFilter.EndsWith { FieldName = fname; Value = value })
+        | StartsWith fname, StringValue value -> Ok (ObjectListFilter.StartsWith { FieldName = fname; Value = value })
+        | Contains fname, StringValue value -> Ok (ObjectListFilter.Contains { FieldName = fname; Value = value })
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
             | Ok NoFilter -> Ok NoFilter
             | Ok filter -> Ok (FilterField { FieldName = fname; Value = filter })
-        | Equals fname, EquatableValue value -> Ok (Equals { FieldName = fname; Value = value })
-        | GreaterThan fname, ComparableValue value -> Ok (GreaterThan { FieldName = fname; Value = value })
-        | LessThan fname, ComparableValue value -> Ok (LessThan { FieldName = fname; Value = value })
+        | Equals fname, EquatableValue value -> Ok (ObjectListFilter.Equals { FieldName = fname; Value = value })
+        | GreaterThan fname, ComparableValue value -> Ok (ObjectListFilter.GreaterThan { FieldName = fname; Value = value })
+        | GreaterThanOrEqual fname, ComparableValue value -> Ok (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value })
+        | LessThan fname, ComparableValue value -> Ok (ObjectListFilter.LessThan { FieldName = fname; Value = value })
+        | LessThanOrEqual fname, ComparableValue value -> Ok (ObjectListFilter.LessThanOrEqual { FieldName = fname; Value = value })
         | _ -> Ok NoFilter
 
     and mapInput value =
