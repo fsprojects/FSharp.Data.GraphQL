@@ -20,6 +20,7 @@
     <PackageReference Update="FsToolkit.ErrorHandling" Version="$(FsToolkitVersion)" />
     <PackageReference Update="FsToolkit.ErrorHandling.TaskResult" Version="$(FsToolkitVersion)" />
     <PackageReference Update="Giraffe" Version="7.*" />
+    <PackageReference Update="Linq.Expression.Optimizer" Version="1.0.*" />
     <PackageReference Update="Microsoft.Extensions.Http" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.Extensions.Logging.Abstractions" Version="$(MicrosoftExtensionsVersion)" />
     <PackageReference Update="Microsoft.NETCore.Platforms" Version="$(SystemVersion)" />

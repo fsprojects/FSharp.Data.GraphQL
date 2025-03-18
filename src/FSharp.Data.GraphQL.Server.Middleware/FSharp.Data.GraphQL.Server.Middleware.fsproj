@@ -16,6 +16,7 @@
 
   <ItemGroup>
     <PackageReference Include="FSharp.Control.Reactive" />
+    <PackageReference Include="Linq.Expression.Optimizer" />
     <PackageReference Include="System.Reactive" />
   </ItemGroup>
 
