@@ -702,10 +702,10 @@ let ``Object list filter: Must parse all filter operators`` () =
         ]
     do
         let notStartsFilter = """{ "not": { "value_starts_with": "3" } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
         let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -715,10 +715,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
         let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -728,10 +728,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
         let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict,filter)
+        let result = executeWithCustomFilter (query, variables,filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -741,10 +741,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
         let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -754,10 +754,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
         let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -767,10 +767,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notLessThanFilter = """{ "not": { "id_lt": 4 } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
         let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
-        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result
         <| fun data errors ->
             empty errors
@@ -781,10 +781,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
         let filter = Not (Contains { FieldName = "value"; Value = "A" })
-        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -794,11 +794,10 @@ let ``Object list filter: Must parse all filter operators`` () =
 
     do
         let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
-        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
+        let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
         let filter = Not (Equals { FieldName = "value"; Value = "A2" })
-        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
-            kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, dict, filter)
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)

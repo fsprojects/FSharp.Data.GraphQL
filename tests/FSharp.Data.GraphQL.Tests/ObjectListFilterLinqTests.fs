@@ -39,18 +39,20 @@ let ``ObjectListFilter works with GreaterThanOrEqual operator``() =
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result = List.head filteredData
-    result.ID |> equals 4
-    result.FirstName |> equals "Ben"
-    result.LastName |> equals "Adams"
-    result.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
-    let result1 = List.last filteredData
-    result1.ID |> equals 7
-    result1.FirstName |> equals "Jeneffer"
-    result1.LastName |> equals "Trif"
-    result1.Contact |> equals { Email = "j.trif@gmail.com" }
-    result1.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+    do 
+        let result = List.head filteredData
+        result.ID |> equals 4
+        result.FirstName |> equals "Ben"
+        result.LastName |> equals "Adams"
+        result.Contact  |> equals { Email = "b.adams@gmail.com" }
+        result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    do
+        let result = List.last filteredData
+        result.ID |> equals 7
+        result.FirstName |> equals "Jeneffer"
+        result.LastName |> equals "Trif"
+        result.Contact |> equals { Email = "j.trif@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with LessThan operator``() =
@@ -71,18 +73,20 @@ let ``ObjectListFilter works with LessThanOrEqual operator``() =
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    result1.ID |> equals 4
-    result1.FirstName |> equals "Ben"
-    result1.LastName |> equals "Adams"
-    result1.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result1.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
-    let result = List.last filteredData
-    result.ID |> equals 2
-    result.FirstName |> equals "Jonathan"
-    result.LastName |> equals "Abrams"
-    result.Contact |> equals { Email = "j.abrams@gmail.com" }
-    result.Friends |> equals []
+    do
+        let result = List.head filteredData
+        result.ID |> equals 4
+        result.FirstName |> equals "Ben"
+        result.LastName |> equals "Adams"
+        result.Contact  |> equals { Email = "b.adams@gmail.com" }
+        result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    do
+        let result = List.last filteredData
+        result.ID |> equals 2
+        result.FirstName |> equals "Jonathan"
+        result.LastName |> equals "Abrams"
+        result.Contact |> equals { Email = "j.abrams@gmail.com" }
+        result.Friends |> equals []
 
 [<Fact>]
 let ``ObjectListFilter works with StartsWith operator``() =
@@ -164,18 +168,20 @@ let ``ObjectListFilter works with IN operator for string type field``() =
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result = List.head filteredData
-    result.ID |> equals 4
-    result.FirstName |> equals "Ben"
-    result.LastName |> equals "Adams"
-    result.Contact  |> equals { Email = "b.adams@gmail.com" }
-    result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
-    let result2 = List.last filteredData
-    result2.ID |> equals 7
-    result2.FirstName |> equals "Jeneffer"
-    result2.LastName |> equals "Trif"
-    result2.Contact |> equals { Email = "j.trif@gmail.com" }
-    result2.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+    do
+        let result = List.head filteredData
+        result.ID |> equals 4
+        result.FirstName |> equals "Ben"
+        result.LastName |> equals "Adams"
+        result.Contact  |> equals { Email = "b.adams@gmail.com" }
+        result.Friends  |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    do
+        let result = List.last filteredData
+        result.ID |> equals 7
+        result.FirstName |> equals "Jeneffer"
+        result.LastName |> equals "Trif"
+        result.Contact |> equals { Email = "j.trif@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with IN operator for int type field``() =
@@ -212,12 +218,12 @@ let ``ObjectListFilter works with NOT operator``() =
     let queryable = data.AsQueryable()
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    result1.ID |> equals 2
-    result1.FirstName |> equals "Jonathan"
-    result1.LastName |> equals "Abrams"
-    result1.Contact |> equals { Email = "j.abrams@gmail.com" }
-    result1.Friends |> equals []
+    let result = List.head filteredData
+    result.ID |> equals 2
+    result.FirstName |> equals "Jonathan"
+    result.LastName |> equals "Abrams"
+    result.Contact |> equals { Email = "j.abrams@gmail.com" }
+    result.Friends |> equals []
 
 type Complex =
     { ID : int
@@ -263,18 +269,20 @@ let ``ObjectListFilter works with getDiscriminator for Complex``() =
             | Community c -> c.Discriminator))
     let filteredData = queryable.Apply(filter, options) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    match result1 with
-    | Complex c ->
-        c.ID |> equals 1
-        c.Name |> equals "Complex A"
-    | _ -> failwith "Expected Complex"
-    let result2 = List.last filteredData
-    match result2 with
-    | Complex c ->
-        c.ID |> equals 4
-        c.Name |> equals "Complex AA"
-    | _ -> failwith "Expected Complex"
+    do
+        let result = List.head filteredData
+        match result with
+        | Complex c ->
+            c.ID |> equals 1
+            c.Name |> equals "Complex A"
+        | _ -> failwith "Expected Complex"
+    do
+        let result = List.last filteredData
+        match result with
+        | Complex c ->
+            c.ID |> equals 4
+            c.Name |> equals "Complex AA"
+        | _ -> failwith "Expected Complex"
 
 
 [<Fact>]
@@ -304,18 +312,20 @@ let ``ObjectListFilter works with getDiscriminator and getDiscriminatorValue for
         )
     let filteredData = queryable.Apply(filter, options) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    match result1 with
-    | Complex c ->
-        c.ID |> equals 1
-        c.Name |> equals "Complex A"
-    | _ -> failwith "Expected Complex"
-    let result2 = List.last filteredData
-    match result2 with
-    | Complex c ->
-        c.ID |> equals 4
-        c.Name |> equals "Complex AA"
-    | _ -> failwith "Expected Complex"
+    do
+        let result = List.head filteredData
+        match result with
+        | Complex c ->
+            c.ID |> equals 1
+            c.Name |> equals "Complex A"
+        | _ -> failwith "Expected Complex"
+    do
+        let result = List.last filteredData
+        match result with
+        | Complex c ->
+            c.ID |> equals 4
+            c.Name |> equals "Complex AA"
+        | _ -> failwith "Expected Complex"
 
 type Cow =
     { ID : int
@@ -357,16 +367,18 @@ let ``ObjectListFilter works with getDiscriminatorValue for Horse``() =
     )
     let filteredData = queryable.Apply(filter, options) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    match result1 with
-    | h ->
-        h.ID |> equals 2
-        h.Name |> equals "Horse B"
-    let result2 = List.last filteredData
-    match result2 with
-    | h ->
-        h.ID |> equals 4
-        h.Name |> equals "Horse D"
+    do
+        let result = List.head filteredData
+        match result with
+        | h ->
+            h.ID |> equals 2
+            h.Name |> equals "Horse B"
+    do
+        let result = List.last filteredData
+        match result with
+        | h ->
+            h.ID |> equals 4
+            h.Name |> equals "Horse D"
 
 [<Fact>]
 let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and Hamster``() =
@@ -385,16 +397,18 @@ let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and
         )
     let filteredData = queryable.Apply(filter, options) |> Seq.toList
     List.length filteredData |> equals 3
-    let result1 = List.head filteredData
-    match result1 with
-    | c ->
-        c.ID |> equals 2
-        c.Name |> equals "Horse B"
-    let result2 = List.last filteredData
-    match result2 with
-    | c ->
-        c.ID |> equals 5
-        c.Name |> equals "Hamster E"
+    do
+        let result = List.head filteredData
+        match result with
+        | c ->
+            c.ID |> equals 2
+            c.Name |> equals "Horse B"
+    do
+        let result = List.last filteredData
+        match result with
+        | c ->
+            c.ID |> equals 5
+            c.Name |> equals "Hamster E"
 
 type ListTagsProduct = {
     Name : string
@@ -414,10 +428,12 @@ let ``ObjectListFilter works with Contains operator on list collection propertie
     let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    result1.Name |> equals "Product B"
-    let result2 = List.last filteredData
-    result2.Name |> equals "Product C"
+    do
+        let result = List.head filteredData
+        result.Name |> equals "Product B"
+    do
+        let result = List.last filteredData
+        result.Name |> equals "Product C"
 
 type ArrayTagsProduct = {
         Name : string
@@ -438,10 +454,12 @@ let ``ObjectListFilter works with Contains operator on array collection properti
     let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    result1.Name |> equals "Product B"
-    let result2 = List.last filteredData
-    result2.Name |> equals "Product C"
+    do
+        let result = List.head filteredData
+        result.Name |> equals "Product B"
+    do
+        let result = List.last filteredData
+        result.Name |> equals "Product C"
 
 type SetTagsProduct = {
     Name : string
@@ -462,7 +480,9 @@ let ``ObjectListFilter works with Contains operator on set collection properties
     let filter = Contains { FieldName = "Tags"; Value = "Tag3" }
     let filteredData = queryable.Apply(filter) |> Seq.toList
     List.length filteredData |> equals 2
-    let result1 = List.head filteredData
-    result1.Name |> equals "Product B"
-    let result2 = List.last filteredData
-    result2.Name |> equals "Product C"
+    do
+        let result = List.head filteredData
+        result.Name |> equals "Product B"
+    do
+        let result = List.last filteredData
+        result.Name |> equals "Product C"
