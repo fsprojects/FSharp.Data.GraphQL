@@ -700,101 +700,108 @@ let ``Object list filter: Must parse all filter operators`` () =
                         ]
                 ]
         ]
+    do
+        let notStartsFilter = """{ "not": { "value_starts_with": "3" } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
+        let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notStartsFilter = """{ "not": { "value_starts_with": "3" } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
-    let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
-    let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-    let result = executeWithCustomFilter (query, dict, filter)
-    ensureDirect result <| fun data errors ->
-        empty errors
-        data |> equals (upcast expected)
-    result.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter ]
+    do
+        let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
+        let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict1 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
-    let filter1 = Not (EndsWith { FieldName = "value"; Value = "2" })
-    let expectedFilter1 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter1)
-    let result1 = executeWithCustomFilter (query, dict1, filter1)
-    ensureDirect result1 <| fun data errors1 ->
-        empty errors1
-        data |> equals (upcast expected)
-    result1.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter1 ]
+    do
+        let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
+        let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict,filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict2 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
-    let filter2 = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
-    let expectedFilter2 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter2)
-    let result2 = executeWithCustomFilter (query, dict2,filter2)
-    ensureDirect result2 <| fun data errors2 ->
-        empty errors2
-        data |> equals (upcast expected)
-    result2.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter2 ]
+    do
+        let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
+        let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict3 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
-    let filter3 = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
-    let expectedFilter3 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter3)
-    let result3 = executeWithCustomFilter (query, dict3, filter3)
-    ensureDirect result3 <| fun data errors3 ->
-        empty errors3
-        data |> equals (upcast expected)
-    result3.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter3 ]
+    do
+        let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
+        let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
+        let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict4 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
-    let filter4 = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
-    let expectedFilter4 : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter4)
-    let result4 = executeWithCustomFilter (query, dict4, filter4)
-    ensureDirect result4 <| fun data errors2 ->
-        empty errors2
-        data |> equals (upcast expected)
-    result4.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter4 ]
+    do
+        let notLessThanFilter = """{ "not": { "id_lt": 4 } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
+        let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
+        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result
+        <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notLessThanFilter = """{ "not": { "id_lt": 4 } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict5 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
-    let filter5 = Not (LessThan { FieldName = "id"; Value = 4.0 })
-    let expectedFilter5 : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter5)
-    let result5 = executeWithCustomFilter (query, dict5, filter5)
-    ensureDirect result5
-    <| fun data errors5 ->
-        empty errors5
-        data |> equals (upcast expected)
-    result5.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter5 ]
+    do
+        let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
+        let filter = Not (Contains { FieldName = "value"; Value = "A" })
+        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
 
-    let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict6 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
-    let filter6 = Not (Contains { FieldName = "value"; Value = "A" })
-    let expectedFilter6 : KeyValuePair<obj list, ObjectListFilter> = kvp ([ "A"; "subjects" ]) (filter6)
-    let result6 = executeWithCustomFilter (query, dict6, filter6)
-    ensureDirect result6 <| fun data errors6 ->
-        empty errors6
-        data |> equals (upcast expected)
-    result6.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter6 ]
-
-    let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
-    let dict7 = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
-    let filter7 = Not (Equals { FieldName = "value"; Value = "A2" })
-    let expectedFilter7 : KeyValuePair<obj list, ObjectListFilter> =
-        kvp ([ "A"; "subjects" ]) (filter7)
-    let result7 = executeWithCustomFilter (query, dict7, filter7)
-    ensureDirect result7 <| fun data errors7 ->
-        empty errors7
-        data |> equals (upcast expected)
-    result7.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter7 ]
+    do
+        let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
+        let dict = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
+        let filter = Not (Equals { FieldName = "value"; Value = "A2" })
+        let expectedFilter : KeyValuePair<obj list, ObjectListFilter> =
+            kvp ([ "A"; "subjects" ]) (filter)
+        let result = executeWithCustomFilter (query, dict, filter)
+        ensureDirect result <| fun data errors ->
+            empty errors
+            data |> equals (upcast expected)
+        result.Metadata.TryFind<ObjectListFilters> ("filters")
+        |> wantValueSome
+        |> seqEquals [ expectedFilter ]
