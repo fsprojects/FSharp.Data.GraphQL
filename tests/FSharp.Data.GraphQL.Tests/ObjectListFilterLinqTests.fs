@@ -5,11 +5,12 @@ open System
 open System.Linq
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Middleware
+open FSharp.Data.GraphQL.Server.Middleware.ObjectListFilter.Operators
 open FSharp.Data.GraphQL.Tests.LinqTests
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator`` () =
-    let filter = Equals { FieldName = "firstName"; Value = "Jonathan" } // :> IComparable
+    let filter = Equals { FieldName = "firstName"; Value = "Jonathan" } 
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -22,7 +23,7 @@ let ``ObjectListFilter works with Equals operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator`` () =
-    let filter = GreaterThan { FieldName = "id"; Value = 4 } // :> IComparable
+    let filter = GreaterThan { FieldName = "id"; Value = 4 } 
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -35,7 +36,7 @@ let ``ObjectListFilter works with GreaterThan operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThanOrEqual operator`` () =
-    let filter = GreaterThanOrEqual { FieldName = "id"; Value = 4 } // :> IComparable
+    let filter = GreaterThanOrEqual { FieldName = "id"; Value = 4 } 
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -56,7 +57,7 @@ let ``ObjectListFilter works with GreaterThanOrEqual operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with LessThan operator`` () =
-    let filter = LessThan { FieldName = "id"; Value = 4 } // :> IComparable
+    let filter = LessThan { FieldName = "id"; Value = 4 } 
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 1
@@ -69,7 +70,7 @@ let ``ObjectListFilter works with LessThan operator`` () =
 
 [<Fact>]
 let ``ObjectListFilter works with LessThanOrEqual operator`` () =
-    let filter = LessThanOrEqual { FieldName = "id"; Value = 4 } // :> IComparable
+    let filter = LessThanOrEqual { FieldName = "id"; Value = 4 } 
     let queryable = data.AsQueryable ()
     let filteredData = queryable.Apply (filter) |> Seq.toList
     List.length filteredData |> equals 2
@@ -154,6 +155,34 @@ let ``ObjectListFilter works with OR operator`` () =
     result.LastName |> equals "Adams"
     result.Contact |> equals { Email = "b.adams@gmail.com" }
     result.Friends |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+
+[<Fact>]
+let ``LINQ tree is balanced after multiple usings of OR operator`` () =
+    let filter =
+        ("firstName" =@@ "J")
+        ||| (("id" ==> 2)
+        ||| (("id" >>> 4)
+        ||| (("lastName" === "Adams")
+        ||| (("lastName" @=@ "e")
+        ||| (("firstName" @=@ "a")
+        ||| ("lastName" @=@ "a"))))))
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter, ObjectListFilterLinqOptions(optimize = true)) |> Seq.toList
+    List.length filteredData |> equals 3
+    do
+        let result = List.head filteredData
+        result.ID |> equals 4
+        result.FirstName |> equals "Ben"
+        result.LastName |> equals "Adams"
+        result.Contact |> equals { Email = "b.adams@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    do
+        let result = List.last filteredData
+        result.ID |> equals 7
+        result.FirstName |> equals "Jeneffer"
+        result.LastName |> equals "Trif"
+        result.Contact |> equals { Email = "j.trif@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
 
 [<Fact>]
 let ``ObjectListFilter works with IN operator for string type field`` () =
@@ -378,7 +407,8 @@ let ``ObjectListFilter works with getDiscriminatorValue for Horse`` () =
                 (function
                 | t when t = typeof<Cow> -> t.Name
                 | t when t = typeof<Horse> -> t.Name
-                | _ -> raise (NotSupportedException "Type not supported"))
+                | _ -> raise (NotSupportedException "Type not supported")),
+            optimize = true
         )
     let filteredData = queryable.Apply (filter, options) |> Seq.toList
     List.length filteredData |> equals 2

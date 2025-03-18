@@ -60,12 +60,15 @@ open System.Reflection
 /// </code></example>
 [<Struct>]
 type ObjectListFilterLinqOptions<'T, 'D>
-    ([<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null, [<Optional>] getDiscriminatorValue : (Type -> 'D) | null) =
+    ([<Optional>] compareDiscriminator : Expression<Func<'T, 'D, bool>> | null, [<Optional>] getDiscriminatorValue : (Type -> 'D) | null, [<Optional; DefaultParameterValue true>] optimize: bool) =
 
     member _.CompareDiscriminator = compareDiscriminator |> ValueOption.ofObj
     member _.GetDiscriminatorValue = getDiscriminatorValue |> ValueOption.ofObj
+    /// Whether perform optimization of a LINQ expression
+    member _.Optimize = optimize
 
-    static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null)
+    /// Empty options with optimization enabled
+    static member None = ObjectListFilterLinqOptions<'T, 'D> (null, null, true)
 
     static member GetCompareDiscriminator (getDiscriminatorValue : Expression<Func<'T, 'D>>) =
         let tParam = Expression.Parameter (typeof<'T>, "x")
@@ -73,13 +76,13 @@ type ObjectListFilterLinqOptions<'T, 'D>
         let body = Expression.Equal (Expression.Invoke (getDiscriminatorValue, tParam), dParam)
         Expression.Lambda<Func<'T, 'D, bool>> (body, tParam, dParam)
 
-    new (getDiscriminator : Expression<Func<'T, 'D>>) =
-        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null)
-    new (compareDiscriminator : Expression<Func<'T, 'D, bool>>) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null)
-    new (getDiscriminatorValue : Type -> 'D) =
-        ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null, getDiscriminatorValue = getDiscriminatorValue)
-    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D) =
-        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue)
+    new (getDiscriminator : Expression<Func<'T, 'D>>, [<Optional; DefaultParameterValue true>] optimize: bool) =
+        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, null, optimize)
+    new (compareDiscriminator : Expression<Func<'T, 'D, bool>>, [<Optional; DefaultParameterValue true>] optimize: bool) = ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator, null, optimize)
+    new (getDiscriminatorValue : Type -> 'D, [<Optional; DefaultParameterValue true>] optimize: bool) =
+        ObjectListFilterLinqOptions<'T, 'D> (compareDiscriminator = null, getDiscriminatorValue = getDiscriminatorValue, optimize = optimize)
+    new (getDiscriminator : Expression<Func<'T, 'D>>, getDiscriminatorValue : Type -> 'D, [<Optional; DefaultParameterValue true>] optimize: bool) =
+        ObjectListFilterLinqOptions<'T, 'D> (ObjectListFilterLinqOptions.GetCompareDiscriminator getDiscriminator, getDiscriminatorValue, optimize)
 
 /// Contains tooling for working with ObjectListFilter.
 module ObjectListFilter =
@@ -270,8 +273,12 @@ module ObjectListFilter =
                     )
             let queryExpr =
                 let param = Expression.Parameter (typeof<'T>, "x")
-                let body = buildFilterExpr (SourceExpression param) buildTypeDiscriminatorCheck filter
-                whereExpr<'T> query param body
+                if options.Optimize then
+                    let body = ExpressionOptimizer.visit(buildFilterExpr (SourceExpression param) buildTypeDiscriminatorCheck filter)
+                    whereExpr<'T> query param body
+                else
+                    let body = buildFilterExpr (SourceExpression param) buildTypeDiscriminatorCheck filter
+                    whereExpr<'T> query param body
             // Create and execute the final expression
             query.Provider.CreateQuery<'T> (queryExpr)
 
@@ -282,9 +289,14 @@ module ObjectListFilterExtensions =
 
     type ObjectListFilter with
 
-        member inline filter.ApplyTo<'T, 'D> (query : IQueryable<'T>, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
+        member inline filter.Apply<'T, 'D> (query : IQueryable<'T>) =
+            apply ObjectListFilterLinqOptions<'T, 'D>.None filter query
+
+        member inline filter.Apply<'T, 'D> (query : IQueryable<'T>, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) =
             apply options filter query
 
     type IQueryable<'T> with
 
-        member inline query.Apply (filter : ObjectListFilter, [<Optional>] options : ObjectListFilterLinqOptions<'T, 'D>) = apply options filter query
+        member inline query.Apply (filter : ObjectListFilter) = apply ObjectListFilterLinqOptions.None filter query
+
+        member inline query.Apply (filter : ObjectListFilter, options : ObjectListFilterLinqOptions<'T, 'D>) = apply options filter query
