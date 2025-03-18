@@ -664,7 +664,7 @@ let ``Object list filter: Must return NOT filter information in Metadata`` () =
     |> seqEquals [ expectedFilter ]
 
 [<Fact>]
-let ``Object list filter: Must parse all filter operators`` () =
+let ``Object list filter: Must return filter information in Metadata when supplied as variable and parse all filter operators`` () =
     let query =
         parse
             """query testQuery($filter: ObjectListFilter!) {
