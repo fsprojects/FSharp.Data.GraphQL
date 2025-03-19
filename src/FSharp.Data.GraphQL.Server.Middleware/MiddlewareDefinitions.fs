@@ -92,15 +92,15 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                     field.Ast.Arguments
                     |> Seq.map (fun x ->
                         match x.Name, x.Value with
-                        | "filter", (VariableName variableName) -> Ok (ctx.Variables[variableName] :?> ObjectListFilter)
-                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant)
-                        | _ -> Ok NoFilter)
+                        | "filter", (VariableName variableName) -> Ok (ValueSome (ctx.Variables[variableName] :?> ObjectListFilter))
+                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant) |> Result.map ValueOption.ofObj
+                        | _ -> Ok ValueNone)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with
                 | Error errs -> Error errs
                 | Ok filters ->
                     filters
-                    |> removeNoFilter
+                    |> Seq.vchoose id
                     |> Seq.map (fun x -> KeyValuePair (currentPath |> List.rev, x))
                     |> Seq.toList
                     |> Ok

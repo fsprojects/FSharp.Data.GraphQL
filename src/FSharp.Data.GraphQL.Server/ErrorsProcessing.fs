@@ -80,7 +80,7 @@ let getSeqValues (items: Result<'t, IGQLError> seq) =
         | Error _ -> raise <| ArgumentException())
     |> Seq.toArray
 
-let splitSeqErrors (items: Result<'t, IGQLError> list) =
+let splitSeqErrors (items: Result<'t, IGQLError> seq) =
     let errors = items |> getSeqErrors
 
     if not errors.IsEmpty then

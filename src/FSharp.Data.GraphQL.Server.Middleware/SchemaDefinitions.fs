@@ -10,8 +10,6 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
 
-let internal removeNoFilter = Seq.where (fun filter -> filter <> NoFilter)
-
 type private ComparisonOperator =
     | EndsWith of string
     | StartsWith of string
@@ -22,7 +20,7 @@ type private ComparisonOperator =
     | LessThan of string
     | LessThanOrEqual of string
 
-let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLError list> =
+let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption, IGQLError list> =
 
     let parseFieldCondition (s : string) =
         let s = s.ToLowerInvariant ()
@@ -66,9 +64,9 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
             | [] -> acc
             | x :: xs ->
                 match acc with
-                | NoFilter -> build (x) xs
-                | acc -> build ((And (acc, x))) xs
-        build NoFilter x
+                | ValueNone -> build (ValueSome x) xs
+                | ValueSome acc -> build (ValueSome (And (acc, x))) xs
+        build ValueNone x
 
     let buildOr x =
         let rec build acc x =
@@ -76,9 +74,9 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
             | [] -> acc
             | x :: xs ->
                 match acc with
-                | NoFilter -> build (x) xs
-                | acc -> build ((Or (acc, x))) xs
-        build NoFilter x
+                | ValueNone -> build (ValueSome x) xs
+                | ValueSome acc -> build (ValueSome (Or (acc, x))) xs
+        build ValueNone x
 
     let rec mapFilter (name : string, value : InputValue) =
         let mapFilters fields =
@@ -89,29 +87,29 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
                 |> splitSeqErrorsList
             match coerceResults with
             | Error errs -> Error errs
-            | Ok coerced -> coerced |> removeNoFilter |> Seq.toList |> Ok
+            | Ok coerced -> coerced |> Seq.vchoose id |> Seq.toList |> Ok
         match parseFieldCondition name, value with
         | Equals "and", ListValue fields -> fields |> mapFilters |> Result.map buildAnd
         | Equals "or", ListValue fields -> fields |> mapFilters |> Result.map buildOr
         | Equals "not", ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
-            | Ok NoFilter -> Ok NoFilter
-            | Ok filter -> Ok (Not filter)
-        | EndsWith fname, StringValue value -> Ok (ObjectListFilter.EndsWith { FieldName = fname; Value = value })
-        | StartsWith fname, StringValue value -> Ok (ObjectListFilter.StartsWith { FieldName = fname; Value = value })
-        | Contains fname, StringValue value -> Ok (ObjectListFilter.Contains { FieldName = fname; Value = value })
+            | Ok ValueNone -> Ok ValueNone
+            | Ok (ValueSome filter) -> Ok (ValueSome (Not filter))
+        | EndsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith { FieldName = fname; Value = value }))
+        | StartsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith { FieldName = fname; Value = value }))
+        | Contains fname, StringValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
-            | Ok NoFilter -> Ok NoFilter
-            | Ok filter -> Ok (FilterField { FieldName = fname; Value = filter })
-        | Equals fname, EquatableValue value -> Ok (ObjectListFilter.Equals { FieldName = fname; Value = value })
-        | GreaterThan fname, ComparableValue value -> Ok (ObjectListFilter.GreaterThan { FieldName = fname; Value = value })
-        | GreaterThanOrEqual fname, ComparableValue value -> Ok (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value })
-        | LessThan fname, ComparableValue value -> Ok (ObjectListFilter.LessThan { FieldName = fname; Value = value })
-        | LessThanOrEqual fname, ComparableValue value -> Ok (ObjectListFilter.LessThanOrEqual { FieldName = fname; Value = value })
-        | _ -> Ok NoFilter
+            | Ok ValueNone -> Ok ValueNone
+            | Ok (ValueSome filter) -> Ok (ValueSome (FilterField { FieldName = fname; Value = filter }))
+        | Equals fname, EquatableValue value -> Ok (ValueSome (ObjectListFilter.Equals { FieldName = fname; Value = value }))
+        | GreaterThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThan { FieldName = fname; Value = value }))
+        | GreaterThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value }))
+        | LessThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThan { FieldName = fname; Value = value }))
+        | LessThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThanOrEqual { FieldName = fname; Value = value }))
+        | _ -> Ok ValueNone
 
     and mapInput value =
         let filterResults =
@@ -122,10 +120,11 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter, IGQLErr
             |> splitSeqErrorsList
         match filterResults with
         | Error errs -> Error errs
-        | Ok filters -> filters |> removeNoFilter |> List.ofSeq |> buildAnd |> Ok
+        | Ok filters -> filters |> Seq.vchoose id |> List.ofSeq |> buildAnd |> Ok
+
     match x with
     | ObjectValue x -> mapInput x
-    | NullValue -> NoFilter |> Ok
+    | NullValue -> ValueNone |> Ok
     // TODO: Get union case
     | _ ->
         Error [
@@ -173,7 +172,7 @@ let ObjectListFilterType : ScalarDefinition<ObjectListFilter> = {
             "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
     CoerceInput =
         (function
-        | InlineConstant c -> coerceObjectListFilterInput c
-        | Variable json -> json |> jsonElementToInputValue |> coerceObjectListFilterInput)
+        | InlineConstant c -> coerceObjectListFilterInput c |> Result.map ValueOption.toObj
+        | Variable json -> json |> jsonElementToInputValue |> coerceObjectListFilterInput |> Result.map ValueOption.toObj)
     CoerceOutput = coerceObjectListFilterValue
 }

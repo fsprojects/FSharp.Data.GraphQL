@@ -6,6 +6,7 @@ open FSharp.Data.GraphQL
 /// Contains extensions for the Define module.
 [<AutoOpen>]
 module DefineExtensions =
+
     type Define with
         /// <summary>
         /// Creates a query weight middleware, with the specified query weight threshold.
