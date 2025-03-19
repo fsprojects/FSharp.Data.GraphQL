@@ -2,6 +2,7 @@ namespace FSharp.Data.GraphQL.Server.Middleware
 
 open System
 open System.Collections.Immutable
+open System.Linq
 open FsToolkit.ErrorHandling
 
 open FSharp.Data.GraphQL
@@ -28,13 +29,21 @@ module TypeSystemExtensions =
         member this.ResolveAbstractionFilter (typeMap : TypeMap) =
             match this.Kind with
             | ResolveAbstraction typeFields ->
-                let getType name =
-                    match typeMap.TryFind name with
-                    | ValueSome tdef -> tdef.Type
-                    | ValueNone -> raise (MalformedGQLQueryException ($"Type '{name}' not found in schema."))
-                match typeFields.Keys |> Seq.map getType |> Seq.toList with
-                | [] -> ValueNone
-                | filters -> ValueSome (OfTypes filters)
+                match this.ReturnDef with
+                | :? UnionDef as union when
+                    union.Options
+                    |> Seq.map _.Name
+                    |> Seq.sort
+                    |> _.SequenceEqual(typeFields.Keys |> Seq.sort)
+                    ->
+                    ValueNone
+                | _ ->
+                    let getType name = typeMap[name].Type
+                    typeFields.Keys
+                    |> Seq.map getType
+                    |> Seq.toList
+                    |> OfTypes
+                    |> ValueSome
             | _ -> ValueNone
 
     type ResolveFieldContext with
