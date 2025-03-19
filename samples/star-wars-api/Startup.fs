@@ -32,7 +32,7 @@ type Startup private () =
         services
             .AddAuthorization(fun options ->
                 options.AddPolicy (Policies.Dummy, fun policy -> policy.Requirements.Add (DummyRequirement ()))
-                options.AddPolicy(
+                options.AddPolicy (
                     Policies.CanSetMoon,
                     (fun policy -> policy.Requirements.Add (IsCharacterRequirement (Set.singleton "droid"))))
                 )

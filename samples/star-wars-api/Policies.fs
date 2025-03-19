@@ -9,7 +9,8 @@ module Policies =
     let [<Literal>] Dummy = "Dummy"
     let [<Literal>] CanSetMoon = "CanSetMoon"
 
-type DummyRequirement () = interface IAuthorizationRequirement
+type DummyRequirement () =
+    interface IAuthorizationRequirement
 
 type DummyHandler () =
 
@@ -28,11 +29,14 @@ type IsCharacterHandler () =
     inherit AuthorizationHandler<IsCharacterRequirement> () // Inject services from DI
 
     override _.HandleRequirementAsync (context, requirement) =
-        Async.StartImmediateAsTask(async {
+        Async.StartImmediateAsTask (async {
             let allowedCharacters = requirement.Characters
-            if context.User.Claims
+            if
+                context.User.Claims
                 |> Seq.where (fun c -> c.Type = "character")
                 |> Seq.exists (fun c -> allowedCharacters |> Set.contains c.Value)
-            then context.Succeed requirement
-            else () // Go to the next handler if registered
+            then
+                context.Succeed requirement
+            else
+                () // Go to the next handler if registered
         }) :> _
