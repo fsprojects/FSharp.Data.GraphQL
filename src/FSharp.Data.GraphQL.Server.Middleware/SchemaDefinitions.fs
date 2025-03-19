@@ -166,7 +166,7 @@ let rec private jsonElementToInputValue (element : JsonElement) =
     | _ -> raise (NotSupportedException "Unsupported JSON element type")
 
 /// Defines an object list filter for use as an argument for filter list of object fields.
-let ObjectListFilter : ScalarDefinition<ObjectListFilter> = {
+let ObjectListFilterType : ScalarDefinition<ObjectListFilter> = {
     Name = "ObjectListFilter"
     Description =
         Some

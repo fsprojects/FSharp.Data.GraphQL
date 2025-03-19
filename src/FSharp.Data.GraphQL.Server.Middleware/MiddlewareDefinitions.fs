@@ -71,7 +71,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
 
     let compileMiddleware (ctx : SchemaCompileContext) (next : SchemaCompileContext -> unit) =
         let modifyFields (object : ObjectDef<'ObjectType>) (fields : FieldDef<'ObjectType> seq) =
-            let args = [ Define.Input("filter", Nullable ObjectListFilter) ]
+            let args = [ Define.Input("filter", Nullable ObjectListFilterType) ]
             let fields = fields |> Seq.map (fun x -> x.WithArgs(args)) |> List.ofSeq
             object.WithFields(fields)
         let typesWithListFields =
@@ -93,7 +93,7 @@ type internal ObjectListFilterMiddleware<'ObjectType, 'ListType>(reportToMetadat
                     |> Seq.map (fun x ->
                         match x.Name, x.Value with
                         | "filter", (VariableName variableName) -> Ok (ctx.Variables[variableName] :?> ObjectListFilter)
-                        | "filter", inlineConstant -> ObjectListFilter.CoerceInput (InlineConstant inlineConstant)
+                        | "filter", inlineConstant -> ObjectListFilterType.CoerceInput (InlineConstant inlineConstant)
                         | _ -> Ok NoFilter)
                     |> Seq.toList
                 match filterResults |> splitSeqErrorsList with
