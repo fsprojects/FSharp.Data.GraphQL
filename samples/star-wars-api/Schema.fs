@@ -1,6 +1,8 @@
 namespace FSharp.Data.GraphQL.Samples.StarWarsApi
 
+open System.Linq
 open System.Text.Json.Serialization
+open Microsoft.FSharp.Reflection
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Server.Relay
@@ -292,7 +294,27 @@ module Schema =
                 Define.Field ("hero", Nullable HumanType, "Gets human hero", inputs, fun ctx _ -> getHuman (ctx.Arg ("id")))
                 Define.Field ("droid", Nullable DroidType, "Gets droid", inputs, (fun ctx _ -> getDroid (ctx.Arg ("id"))))
                 Define.Field ("planet", Nullable PlanetType, "Gets planet", inputs, fun ctx _ -> getPlanet (ctx.Arg ("id")))
-                Define.Field ("characters", ListOf CharacterType, "Gets characters", (fun _ _ -> characters))
+                // Define discriminator expression for filtering
+                let typeFilterOptions =
+                    let getUnionCaseName (c : Character) =
+                        match FSharpValue.GetUnionFields (c, typeof<Character>) with
+                        | case, _ -> case.Name
+                    ObjectListFilterLinqOptions<Character, string> ((fun c -> getUnionCaseName c), _.Name)
+                // The default to compare is the full type name
+                //ObjectListFilterLinqOptions<Character, string> (getDiscriminator = _.GetType().FullName)
+                Define.Field (
+                    "characters",
+                    ListOf CharacterType,
+                    "Gets characters",
+                    (fun ctx _ ->
+                        let filter =
+                            match ctx.ExecutionInfo.Kind with
+                            | ResolveCollection element -> element.ResolveAbstractionFilter ctx.Schema.TypeMap
+                            | _ -> invalidOp "Invalid execution info kind"
+                        characters.AsQueryable ()
+                        // Apply filter if less then all union cases are requested
+                        |> ValueOption.foldBack (fun f q -> q.Apply (f, typeFilterOptions)) filter)
+                )
             ]
         )
 
