@@ -1,6 +1,7 @@
 module FSharp.Data.GraphQL.Tests.MiddlewareTests
 
 open System
+open System.Linq
 open System.Collections.Generic
 open System.Collections.Immutable
 open System.Text.Json
@@ -22,28 +23,57 @@ and Subject =
     | A of A
     | B of B
 
-and A = { id : int; value : string; subjects : int list }
+and A = { Id : int; Value : string; Subjects : int list }
 
-and B = { id : int; value : string; subjects : int list }
+and B = { Id : int; Value : string; Subjects : int list }
+
+type Complex = {
+    Id : int
+    Name : string
+    Discriminator : string
+    Communities : int list
+    Buildings : int list
+}
+and Building = { Id : int; Name : string; Discriminator : string }
+and Community = { Id : int; Name : string; Discriminator : string }
+
+type Property =
+    | Complex of Complex
+    | Building of Building
+    | Community of Community
 
 let getExecutor (expectedFilter : ObjectListFilter voption) =
-    let a1 : A = { id = 1; value = "A1"; subjects = [ 2; 6 ] }
-    let a2 : A = { id = 2; value = "A2"; subjects = [ 1; 3; 5 ] }
-    let a3 : A = { id = 3; value = "A3"; subjects = [ 1; 2; 4 ] }
-    let b1 = { id = 4; value = "1000"; subjects = [ 1; 5 ] }
-    let b2 = { id = 5; value = "2000"; subjects = [ 3; 4; 6 ] }
-    let b3 = { id = 6; value = "3000"; subjects = [ 1; 3; 5 ] }
+    let a1 : A = { Id = 1; Value = "A1"; Subjects = [ 2; 6 ] }
+    let a2 : A = { Id = 2; Value = "A2"; Subjects = [ 1; 3; 5 ] }
+    let a3 : A = { Id = 3; Value = "A3"; Subjects = [ 1; 2; 4 ] }
+    let b1 = { Id = 4; Value = "1000"; Subjects = [ 1; 5 ] }
+    let b2 = { Id = 5; Value = "2000"; Subjects = [ 3; 4; 6 ] }
+    let b3 = { Id = 6; Value = "3000"; Subjects = [ 1; 3; 5 ] }
     let al = [ a1; a2; a3 ]
     let bl = [ b1; b2; b3 ]
-    let getA id = al |> List.tryFind (fun a -> a.id = id)
-    let getB id = bl |> List.tryFind (fun b -> b.id = id)
+    let p1 = Complex{ Id = 1; Name = "Complex 1"; Discriminator = "Complex"; Communities = [ 5 ]; Buildings = [ 3 ] }
+    let p2 = Complex{ Id = 2; Name = "Complex 2"; Discriminator = "Complex"; Communities = [ 6 ]; Buildings = [ 4 ] }
+    let p3 = Building { Id = 3; Name = "Building 1"; Discriminator = "Building" }
+    let p4 = Building { Id = 4; Name = "Building 2"; Discriminator = "Building" }
+    let p5 = Community { Id = 5; Name = "Community 1"; Discriminator = "Community" }
+    let p6 = Community { Id = 6; Name = "Community 2"; Discriminator = "Community" }
+    let pl = [ p1; p2; p3; p4; p5; p6 ]
+    let getA id = al |> List.tryFind (fun a -> a.Id = id)
+    let getB id = bl |> List.tryFind (fun b -> b.Id = id)
     let subjects = (al |> List.map A) @ (bl |> List.map B)
     let getSubject id =
         let matchesId id =
             function
-            | A a -> a.id = id
-            | B b -> b.id = id
+            | A a -> a.Id = id
+            | B b -> b.Id = id
         subjects |> List.tryFind (matchesId id)
+    let getProperty id =
+        let matchesId id =
+            function
+            | Complex c -> c.Id = id
+            | Building b -> b.Id = id
+            | Community c -> c.Id = id
+        pl |> List.vtryFind (matchesId id)
     let rec SubjectType =
         Define.Union (
             name = "Subject",
@@ -65,8 +95,8 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             isTypeOf = (fun o -> o :? A),
             fieldsFn =
                 fun () -> [
-                    Define.Field ("id", IntType, resolve = (fun _ a -> a.id))
-                    Define.Field ("value", StringType, resolve = (fun _ a -> a.value))
+                    Define.Field ("id", IntType, resolve = (fun _ a -> a.Id))
+                    Define.Field ("value", StringType, resolve = (fun _ a -> a.Value))
                     Define
                         .Field(
                             "subjects",
@@ -75,7 +105,7 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                                 fun ctx (a : A) ->
                                     expectedFilter
                                     |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
-                                    a.subjects |> List.map getSubject |> List.toSeq |> Some
+                                    a.Subjects |> List.map getSubject |> List.toSeq |> Some
                         )
                         .WithQueryWeight (1.0)
                 ]
@@ -86,8 +116,8 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             isTypeOf = (fun o -> o :? B),
             fieldsFn =
                 fun () -> [
-                    Define.Field ("id", IntType, resolve = (fun _ b -> b.id))
-                    Define.Field ("value", StringType, resolve = (fun _ b -> b.value))
+                    Define.Field ("id", IntType, resolve = (fun _ b -> b.Id))
+                    Define.Field ("value", StringType, resolve = (fun _ b -> b.Value))
                     Define
                         .Field(
                             "subjects",
@@ -96,10 +126,60 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
                                 fun ctx (b : B) ->
                                     expectedFilter
                                     |> ValueOption.iter (fun _ -> equals expectedFilter ctx.Filter)
-                                    b.subjects |> List.map getSubject |> List.toSeq |> Some
+                                    b.Subjects |> List.map getSubject |> List.toSeq |> Some
                         )
                         .WithQueryWeight (1.0)
                 ]
+        )
+    and ComplexType =
+        DefineRec.Object<Complex> (
+            name = "Complex",
+            isTypeOf = (fun o -> o :? Complex),
+            fieldsFn =
+                fun () -> [
+                    Define.Field ("id", IntType, resolve = (fun _ c -> c.Id))
+                    Define.Field ("name", StringType, resolve = (fun _ c -> c.Name))
+                    Define.Field ("discriminator", StringType, resolve = (fun _ c -> c.Discriminator))
+                    Define.Field ("communities", ListOf IntType, resolve = (fun _ c -> c.Communities))
+                    Define.Field ("buildings", ListOf IntType, resolve = (fun _ c -> c.Buildings))
+                ]
+        )
+    and BuildingType =
+        Define.Object<Building> (
+            name = "Building",
+            isTypeOf = (fun o -> o :? Building),
+            fields = [
+                    Define.Field ("id", IntType, resolve = (fun _ b -> b.Id))
+                    Define.Field ("name", StringType, resolve = (fun _ b -> b.Name))
+                    Define.Field ("discriminator", StringType, resolve = (fun _ b -> b.Discriminator))
+                ]
+        )
+    and CommunityType =
+        Define.Object<Community> (
+            name = "Community",
+            isTypeOf = (fun o -> o :? Community),
+            fields = [
+                    Define.Field ("id", IntType, resolve = (fun _ c -> c.Id))
+                    Define.Field ("name", StringType, resolve = (fun _ c -> c.Name))
+                    Define.Field ("discriminator", StringType, resolve = (fun _ c -> c.Discriminator))
+                ]
+        )
+    and PropertyType =
+        Define.Union<_,_> (
+            name = "Property",
+            options = [ ComplexType; BuildingType; CommunityType ],
+            resolveValue =
+                (fun u ->
+                    match u with
+                    | Complex c -> box c
+                    | Building b -> box b
+                    | Community c -> box c),
+            resolveType =
+                (fun u ->
+                    match u with
+                    | Complex _ -> upcast ComplexType
+                    | Building _ -> upcast BuildingType
+                    | Community _ -> upcast CommunityType)
         )
     let Query =
         Define.Object<Root> (
@@ -107,6 +187,16 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             fields = [
                 Define.Field ("A", Nullable AType, "A Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getA (ctx.Arg ("id"))))
                 Define.Field ("B", Nullable BType, "B Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getB (ctx.Arg ("id"))))
+                Define.Field ("Properties", ListOf PropertyType, description = "Properties Field",
+                resolve =
+                    (fun ctx _ ->
+                        // The main task here is to check if the filter is empty
+                        // when all union cases are specified or no union case is specified
+                        Assert.True (ctx.Filter.IsNone)
+                        Assert.True (ctx.ExecutionInfo.ResolveAbstractionFilter(ctx.Schema.TypeMap).IsNone)
+                        pl
+                    )
+                )
             ]
         )
     let schema = Schema (Query)
@@ -125,13 +215,14 @@ let executeWithVariables (query : Document, variables : ImmutableDictionary<stri
     executor.AsyncExecute (ast = query, variables = variables)
     |> sync
 
-let executeWithCustomFilter (query : Document, variables : ImmutableDictionary<string, JsonElement>, customFilter : ObjectListFilter) =
-    let ex = getExecutor (ValueSome customFilter)
+let executeAndVerifyFilter (query : Document, variables : ImmutableDictionary<string, JsonElement>, filterToVerify : ObjectListFilter) =
+    let ex = getExecutor (ValueSome filterToVerify)
     ex.AsyncExecute (ast = query, variables = variables) |> sync
 
-let expectedErrors : GQLProblemDetails list = [
+let expectedThresholdErrors : GQLProblemDetails list = [
     GQLProblemDetails.Create ("Query complexity exceeds maximum threshold. Please reduce query complexity and try again.")
 ]
+
 
 [<Fact>]
 let ``Simple query: Must pass when below threshold`` () =
@@ -232,7 +323,7 @@ let ``Simple query: Must not pass when above threshold`` () =
                     ...on B { ...AllB }
         }"""
     let result = execute query
-    result |> ensureRequestError <| fun errors -> errors |> equals expectedErrors
+    result |> ensureRequestError <| fun errors -> errors |> equals expectedThresholdErrors
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 3.0)
 
@@ -379,7 +470,7 @@ let ``Deferred and Streamed queries : Must not pass when above threshold`` () =
     asts query
     |> Seq.map execute
     |> Seq.iter (fun result ->
-        ensureRequestError result <| fun errors -> errors |> equals expectedErrors
+        ensureRequestError result <| fun errors -> errors |> equals expectedThresholdErrors
         result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
         result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 3.0))
 
@@ -469,7 +560,7 @@ let ``Inline fragment query : Must not pass when above threshold`` () =
                 }
         }"""
     let result = execute query
-    ensureRequestError result <| fun errors -> errors |> equals expectedErrors
+    ensureRequestError result <| fun errors -> errors |> equals expectedThresholdErrors
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 3.0)
 
@@ -705,7 +796,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
         let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -718,7 +809,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
         let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -731,7 +822,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notStartsFilter)
         let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -744,7 +835,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEndsFilter)
         let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -757,7 +848,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
         let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables,filter)
+        let result = executeAndVerifyFilter (query, variables,filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -770,7 +861,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
         let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -783,7 +874,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
         let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -796,7 +887,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
         let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result
         <| fun data errors ->
             empty errors
@@ -810,7 +901,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
         let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables,filter)
+        let result = executeAndVerifyFilter (query, variables,filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -823,7 +914,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanOrEqualFilter)
         let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -836,7 +927,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanFilter)
         let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -849,7 +940,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notLessThanFilter)
         let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result
         <| fun data errors ->
             empty errors
@@ -863,7 +954,7 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notContainsFilter)
         let filter = Not (Contains { FieldName = "value"; Value = "A" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
@@ -876,10 +967,43 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notEqualsFilter)
         let filter = Not (Equals { FieldName = "value"; Value = "A2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeWithCustomFilter (query, variables, filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
         result.Metadata.TryFind<ObjectListFilters> ("filters")
         |> wantValueSome
         |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return empty filter when all discriminated union types are specified `` () =
+    let query =
+        parse
+            """query testQuery() { Properties { ...Value } }
+
+        fragment Value on Property {
+                ...on Complex {
+                    id
+                    name
+                    discriminator
+                }
+                ...on Building {
+                    id
+                    name
+                    discriminator
+                }
+                ...on Community {
+                    id
+                    name
+                    discriminator
+                }
+        }"""
+
+    let result = execute query
+    ensureDirect result <| fun _ errors -> empty errors
+
+[<Fact>]
+let ``Object list filter: Must return empty filter when no discriminated union types are specified `` () =
+    let query = parse """query testQuery() { Properties { __typename } }"""
+    let result = execute query
+    ensureDirect result <| fun _ errors -> empty errors

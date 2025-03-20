@@ -488,3 +488,31 @@ let ``ObjectListFilter works with Contains operator on set collection properties
     do
         let result = List.last filteredData
         result.Name |> equals "Product C"
+
+[<Fact>]
+let ``ObjectListFilter OfTypes works with two or more types`` () =
+
+    let queryable = animalData.AsQueryable ()
+    let filter = OfTypes [ typeof<Cow>; typeof<Horse> ]
+    let options =
+        ObjectListFilterLinqOptions (
+            getDiscriminatorValue =
+                (function
+                | t when t = typeof<Cow> -> t.Name
+                | t when t = typeof<Horse> -> t.Name
+                | _ -> raise (NotSupportedException "Type not supported"))
+        )
+    let filteredData = queryable.Apply (filter, options) |> Seq.toList
+    List.length filteredData |> equals 4
+    do
+        let result = List.head filteredData
+        match result with
+        | c ->
+            c.ID |> equals 1
+            c.Name |> equals "Cow A"
+    do
+        let result = List.last filteredData
+        match result with
+        | h ->
+            h.ID |> equals 4
+            h.Name |> equals "Horse D"
