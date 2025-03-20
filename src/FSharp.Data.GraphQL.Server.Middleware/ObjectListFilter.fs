@@ -224,7 +224,7 @@ module ObjectListFilter =
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
-            |> Seq.reduce (fun acc expr -> Expression.Or (acc, expr))
+            |> Seq.reduce (fun acc expr -> Expression.OrElse (acc, expr))
         | FilterField f ->
             let paramExpr = Expression.PropertyOrField (param, f.FieldName)
             buildFilterExpr (SourceExpression paramExpr) buildTypeDiscriminatorCheck f.Value
