@@ -161,12 +161,16 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
         Define.Union<_, _> (
             name = "Property",
             options = [ ComplexType; BuildingType; CommunityType ],
-            resolveValue = id,
+            resolveValue =
+                (function
+                | Complex c -> box c
+                | Building b -> box b
+                | Community c -> box c),
             resolveType =
                 (function
-                | Complex _ -> ComplexType
-                | Building _ -> BuildingType
-                | Community _ -> CommunityType)
+                | Complex _ -> upcast ComplexType
+                | Building _ -> upcast BuildingType
+                | Community _ -> upcast CommunityType)
         )
     let Query =
         Define.Object<Root> (

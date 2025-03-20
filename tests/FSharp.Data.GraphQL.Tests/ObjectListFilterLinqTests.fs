@@ -339,32 +339,33 @@ let ``ObjectListFilter works with getDiscriminator and getDiscriminatorValue for
             c.Name |> equals "Complex AA"
         | _ -> failwith "Expected Complex"
 
-type Cow = { ID : int; Name : string; Discriminator : string; __typename : string }
+// Dummy types to be used in OfType filter
+type Cow = class end
+type Horse = class end
+type Hamster = class end
 
-type Horse = { ID : int; Name : string; Discriminator : string; __typename : string }
-
-type Hamster = { ID : int; Name : string; Discriminator : string; __typename : string }
+type Animal = { ID : int; Name : string; Discriminator : string; __typename : string }
 
 let animalData = [
-    { ID = 1; Discriminator = "Cow"; Name = "Cow A"; __typename = typeof<Cow>.Name }
+    { ID = 1; Discriminator = "Cow"; Name = "Cow A"; __typename = "Cow" }
     {
         ID = 2
         Discriminator = "Horse"
         Name = "Horse B"
-        __typename = typeof<Horse>.Name
+        __typename = "Horse"
     }
-    { ID = 3; Discriminator = "Cow"; Name = "Cow C"; __typename = typeof<Cow>.Name }
+    { ID = 3; Discriminator = "Cow"; Name = "Cow C"; __typename = "Cow" }
     {
         ID = 4
         Discriminator = "Horse"
         Name = "Horse D"
-        __typename = typeof<Horse>.Name
+        __typename = "Horse"
     }
     {
         ID = 5
         Discriminator = "Hamster"
         Name = "Hamster E"
-        __typename = typeof<Hamster>.Name
+        __typename = "Hamster"
     }
 ]
 
@@ -383,17 +384,13 @@ let ``ObjectListFilter works with getDiscriminatorValue for Horse`` () =
     let filteredData = queryable.Apply (filter, options) |> Seq.toList
     List.length filteredData |> equals 2
     do
-        let result = List.head filteredData
-        match result with
-        | h ->
-            h.ID |> equals 2
-            h.Name |> equals "Horse B"
+        let animal = List.head filteredData
+        animal.ID |> equals 2
+        animal.Name |> equals "Horse B"
     do
-        let result = List.last filteredData
-        match result with
-        | h ->
-            h.ID |> equals 4
-            h.Name |> equals "Horse D"
+        let animal = List.last filteredData
+        animal.ID |> equals 4
+        animal.Name |> equals "Horse D"
 
 [<Fact>]
 let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and Hamster`` () =
@@ -406,23 +403,19 @@ let ``ObjectListFilter works with getDiscriminatorValue startsWith for Horse and
                 (function
                 | t when t = typeof<Cow> -> t.Name
                 | t when t = typeof<Horse> -> t.Name
-                | t when t = typeof<Hamster> -> t.Name
+                | t when t = typeof<Animal> -> t.Name
                 | _ -> raise (NotSupportedException "Type not supported"))
         )
     let filteredData = queryable.Apply (filter, options) |> Seq.toList
     List.length filteredData |> equals 3
     do
-        let result = List.head filteredData
-        match result with
-        | c ->
-            c.ID |> equals 2
-            c.Name |> equals "Horse B"
+        let animal = List.head filteredData
+        animal.ID |> equals 2
+        animal.Name |> equals "Horse B"
     do
-        let result = List.last filteredData
-        match result with
-        | c ->
-            c.ID |> equals 5
-            c.Name |> equals "Hamster E"
+        let animal = List.last filteredData
+        animal.ID |> equals 5
+        animal.Name |> equals "Hamster E"
 
 type ListTagsProduct = { Name : string; Tags : string list }
 
@@ -505,14 +498,10 @@ let ``ObjectListFilter OfTypes works with two or more types`` () =
     let filteredData = queryable.Apply (filter, options) |> Seq.toList
     List.length filteredData |> equals 4
     do
-        let result = List.head filteredData
-        match result with
-        | c ->
-            c.ID |> equals 1
-            c.Name |> equals "Cow A"
+        let animal = List.head filteredData
+        animal.ID |> equals 1
+        animal.Name |> equals "Cow A"
     do
-        let result = List.last filteredData
-        match result with
-        | h ->
-            h.ID |> equals 4
-            h.Name |> equals "Horse D"
+        let animal = List.last filteredData
+        animal.ID |> equals 4
+        animal.Name |> equals "Horse D"
