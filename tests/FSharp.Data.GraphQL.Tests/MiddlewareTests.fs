@@ -67,13 +67,6 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             | A a -> a.Id = id
             | B b -> b.Id = id
         subjects |> List.tryFind (matchesId id)
-    let getProperty id =
-        let matchesId id =
-            function
-            | Complex c -> c.Id = id
-            | Building b -> b.Id = id
-            | Community c -> c.Id = id
-        pl |> List.vtryFind (matchesId id)
     let rec SubjectType =
         Define.Union (
             name = "Subject",
@@ -149,37 +142,31 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             name = "Building",
             isTypeOf = (fun o -> o :? Building),
             fields = [
-                    Define.Field ("id", IntType, resolve = (fun _ b -> b.Id))
-                    Define.Field ("name", StringType, resolve = (fun _ b -> b.Name))
-                    Define.Field ("discriminator", StringType, resolve = (fun _ b -> b.Discriminator))
-                ]
+                Define.Field ("id", IntType, resolve = (fun _ b -> b.Id))
+                Define.Field ("name", StringType, resolve = (fun _ b -> b.Name))
+                Define.Field ("discriminator", StringType, resolve = (fun _ b -> b.Discriminator))
+            ]
         )
     and CommunityType =
         Define.Object<Community> (
             name = "Community",
             isTypeOf = (fun o -> o :? Community),
             fields = [
-                    Define.Field ("id", IntType, resolve = (fun _ c -> c.Id))
-                    Define.Field ("name", StringType, resolve = (fun _ c -> c.Name))
-                    Define.Field ("discriminator", StringType, resolve = (fun _ c -> c.Discriminator))
-                ]
+                Define.Field ("id", IntType, resolve = (fun _ c -> c.Id))
+                Define.Field ("name", StringType, resolve = (fun _ c -> c.Name))
+                Define.Field ("discriminator", StringType, resolve = (fun _ c -> c.Discriminator))
+            ]
         )
     and PropertyType =
-        Define.Union<_,_> (
+        Define.Union<_, _> (
             name = "Property",
             options = [ ComplexType; BuildingType; CommunityType ],
-            resolveValue =
-                (fun u ->
-                    match u with
-                    | Complex c -> box c
-                    | Building b -> box b
-                    | Community c -> box c),
+            resolveValue = id,
             resolveType =
-                (fun u ->
-                    match u with
-                    | Complex _ -> upcast ComplexType
-                    | Building _ -> upcast BuildingType
-                    | Community _ -> upcast CommunityType)
+                (function
+                | Complex _ -> ComplexType
+                | Building _ -> BuildingType
+                | Community _ -> CommunityType)
         )
     let Query =
         Define.Object<Root> (
@@ -187,15 +174,17 @@ let getExecutor (expectedFilter : ObjectListFilter voption) =
             fields = [
                 Define.Field ("A", Nullable AType, "A Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getA (ctx.Arg ("id"))))
                 Define.Field ("B", Nullable BType, "B Field", [ Define.Input ("id", IntType) ], resolve = (fun ctx _ -> getB (ctx.Arg ("id"))))
-                Define.Field ("Properties", ListOf PropertyType, description = "Properties Field",
-                resolve =
-                    (fun ctx _ ->
-                        // The main task here is to check if the filter is empty
-                        // when all union cases are specified or no union case is specified
-                        Assert.True (ctx.Filter.IsNone)
-                        Assert.True (ctx.ExecutionInfo.ResolveAbstractionFilter(ctx.Schema.TypeMap).IsNone)
-                        pl
-                    )
+                Define.Field (
+                    "Properties",
+                    ListOf PropertyType,
+                    description = "Properties Field",
+                    resolve =
+                        (fun ctx _ ->
+                            // The main task here is to check if the filter is empty
+                            // when all union cases are specified or no union case is specified
+                            Assert.True (ctx.Filter.IsNone)
+                            Assert.True (ctx.ExecutionInfo.ResolveAbstractionFilter(ctx.Schema.TypeMap).IsNone)
+                            pl)
                 )
             ]
         )
@@ -262,11 +251,10 @@ let ``Simple query: Must pass when below threshold`` () =
                 ]
         ]
     let result = execute query
-    match result with
-    | Direct (data, errors) ->
+
+    ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    | _ -> fail "Expected Direct GQLResponse"
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 1.0)
 
@@ -323,7 +311,8 @@ let ``Simple query: Must not pass when above threshold`` () =
                     ...on B { ...AllB }
         }"""
     let result = execute query
-    result |> ensureRequestError <| fun errors -> errors |> equals expectedThresholdErrors
+
+    ensureRequestError result <| fun errors -> errors |> equals expectedThresholdErrors
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 3.0)
 
@@ -362,6 +351,7 @@ let ``Deferred queries : Must pass when below threshold`` () =
             [ "A"; "subjects" ]
         )
     let result = execute query
+
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expected)
@@ -402,6 +392,7 @@ let ``Streamed queries : Must pass when below threshold`` () =
     let expectedDeferred2 =
         DeferredResult ([| NameValueLookup.ofList [ "id", upcast 6; "value", upcast "3000" ] |], [ "A"; "subjects"; 1 ])
     let result = execute query
+
     ensureDeferred result <| fun data errors deferred ->
         empty errors
         data |> equals (upcast expected)
@@ -509,6 +500,7 @@ let ``Inline fragment query : Must pass when below threshold`` () =
                 ]
         ]
     let result = execute query
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
@@ -560,6 +552,7 @@ let ``Inline fragment query : Must not pass when above threshold`` () =
                 }
         }"""
     let result = execute query
+
     ensureRequestError result <| fun errors -> errors |> equals expectedThresholdErrors
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 3.0)
@@ -604,14 +597,13 @@ let ``Object list filter: must return filter information in Metadata`` () =
     let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "s" ]) (And (Equals { FieldName = "id"; Value = 2L }, StartsWith { FieldName = "value"; Value = "A" }))
     let result = execute query
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
     result.Metadata.TryFind<float> ("queryWeightThreshold") |> equals (ValueSome 2.0)
     result.Metadata.TryFind<float> ("queryWeight") |> equals (ValueSome 1.0)
-    result.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter ]
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
 let ``Object list filter: Must return AND filter information in Metadata`` () =
@@ -653,12 +645,11 @@ let ``Object list filter: Must return AND filter information in Metadata`` () =
     let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (And (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
     let result = execute query
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    result.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter ]
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
 let ``Object list filter: Must return OR filter information in Metadata`` () =
@@ -700,12 +691,11 @@ let ``Object list filter: Must return OR filter information in Metadata`` () =
     let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (Or (StartsWith { FieldName = "value"; Value = "3" }, Equals { FieldName = "id"; Value = 6L }))
     let result = execute query
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    result.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter ]
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
 let ``Object list filter: Must return NOT filter information in Metadata`` () =
@@ -747,12 +737,11 @@ let ``Object list filter: Must return NOT filter information in Metadata`` () =
     let expectedFilter : KeyValuePair<obj list, _> =
         kvp ([ "A"; "subjects" ]) (Not (StartsWith { FieldName = "value"; Value = "3" }))
     let result = execute query
+
     ensureDirect result <| fun data errors ->
         empty errors
         data |> equals (upcast expected)
-    result.Metadata.TryFind<ObjectListFilters> ("filters")
-    |> wantValueSome
-    |> seqEquals [ expectedFilter ]
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
 let ``Object list filter: Must return filter information in Metadata when supplied as variable and parse all filter operators`` () =
@@ -797,12 +786,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notEndsFilter = """{ "not": { "value_ends_with": "2" } }""" |> JsonDocument.Parse |> _.RootElement
@@ -810,12 +798,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notStartsFilter = """{ "not": { "value_sw": "3" } }""" |> JsonDocument.Parse |> _.RootElement
@@ -823,12 +810,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (StartsWith { FieldName = "value"; Value = "3" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notEndsFilter = """{ "not": { "value_ew": "2" } }""" |> JsonDocument.Parse |> _.RootElement
@@ -836,25 +822,23 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (EndsWith { FieldName = "value"; Value = "2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notGreaterThanOrEqualFilter = """{ "not": { "id_greater_than_or_equal": 2 } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
         let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeAndVerifyFilter (query, variables,filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notLessThanOrEqualFilter = """{ "not": { "id_less_than_or_equal": 4 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -862,12 +846,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notGreaterThanFilter = """{ "not": { "id_greater_than": 2 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -875,12 +858,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notLessThanFilter = """{ "not": { "id_less_than": 4 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -888,26 +870,23 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
-        ensureDirect result
-        <| fun data errors ->
+
+        ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notGreaterThanOrEqualFilter = """{ "not": { "id_gte": 2 } }""" |> JsonDocument.Parse |> _.RootElement
         let variables = ImmutableDictionary<string, JsonElement>.Empty.Add ("filter", notGreaterThanOrEqualFilter)
         let filter = Not (GreaterThanOrEqual { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
-        let result = executeAndVerifyFilter (query, variables,filter)
+        let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notLessThanOrEqualFilter = """{ "not": { "id_lte": 4 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -915,12 +894,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (LessThanOrEqual { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notGreaterThanFilter = """{ "not": { "id_gt": 2 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -928,12 +906,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (GreaterThan { FieldName = "id"; Value = 2.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notLessThanFilter = """{ "not": { "id_lt": 4 } }""" |> JsonDocument.Parse |> _.RootElement
@@ -941,13 +918,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (LessThan { FieldName = "id"; Value = 4.0 })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
-        ensureDirect result
-        <| fun data errors ->
+
+        ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notContainsFilter = """{ "not": { "value_contains": "A" } }""" |> JsonDocument.Parse |> _.RootElement
@@ -955,12 +930,11 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (Contains { FieldName = "value"; Value = "A" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
     do
         let notEqualsFilter = """{ "not": { "value": "A2" } }""" |> JsonDocument.Parse |> _.RootElement
@@ -968,15 +942,14 @@ let ``Object list filter: Must return filter information in Metadata when suppli
         let filter = Not (Equals { FieldName = "value"; Value = "A2" })
         let expectedFilter : KeyValuePair<obj list, _> = kvp ([ "A"; "subjects" ]) (filter)
         let result = executeAndVerifyFilter (query, variables, filter)
+
         ensureDirect result <| fun data errors ->
             empty errors
             data |> equals (upcast expected)
-        result.Metadata.TryFind<ObjectListFilters> ("filters")
-        |> wantValueSome
-        |> seqEquals [ expectedFilter ]
+        result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
-let ``Object list filter: Must return empty filter when all discriminated union types are specified `` () =
+let ``Object list filter: Must return empty filter when all discriminated union types are specified`` () =
     let query =
         parse
             """query testQuery() { Properties { ...Value } }
@@ -998,12 +971,11 @@ let ``Object list filter: Must return empty filter when all discriminated union 
                     discriminator
                 }
         }"""
-
     let result = execute query
     ensureDirect result <| fun _ errors -> empty errors
 
 [<Fact>]
-let ``Object list filter: Must return empty filter when no discriminated union types are specified `` () =
+let ``Object list filter: Must return empty filter when no discriminated union types are specified`` () =
     let query = parse """query testQuery() { Properties { __typename } }"""
     let result = execute query
     ensureDirect result <| fun _ errors -> empty errors
