@@ -142,20 +142,17 @@ module ObjectListFilter =
     let private StringEndsWithMethod = typeof<string>.GetMethod ("EndsWith", [| typeof<string> |])
     let private StringContainsMethod = typeof<string>.GetMethod ("Contains", [| typeof<string> |])
     let private MemberStartsWithMethod (memberType : Type) =
-        let method = memberType.GetMethod ("StartsWith", [| memberType |])
-        match method with
+        match memberType.GetMethod ("StartsWith", [| memberType |]) with
         | null -> raise (MissingMemberException "Method 'StartsWith' not found on member type")
-        | _ -> method
+        | method -> method
     let private MemberEndsWithMethod (memberType : Type) =
-        let method = memberType.GetMethod ("EndsWith", [| memberType |])
-        match method with
+        match memberType.GetMethod ("EndsWith", [| memberType |]) with
         | null -> raise (MissingMemberException "Method 'EndsWith' not found on member type")
-        | _ -> method
+        | method -> method
     let private MemberContainsMethod (memberType : Type) =
-        let method = memberType.GetMethod ("Contains", [| memberType |])
-        match method with
+        match memberType.GetMethod ("Contains", [| memberType |]) with
         | null -> raise (MissingMemberException "Method 'Contains' not found on member type")
-        | _ -> method
+        | method -> method
     let private getEnumerableContainsMethod (memberType : Type) =
         match
             typeof<Enumerable>

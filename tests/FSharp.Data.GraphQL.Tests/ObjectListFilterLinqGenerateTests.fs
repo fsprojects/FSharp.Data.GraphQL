@@ -21,15 +21,16 @@ type ValidStringStruct =
     static member internal op_GreaterThanOrEqual (ValidStringStruct left, right) = left >= right
     static member internal op_LessThan (ValidStringStruct left, right) = left < right
     static member internal op_LessThanOrEqual (ValidStringStruct left, right) = left <= right
-        // Just for demo purposes
-    interface IEqualityOperators<ValidStringStruct, string, bool> with
-        static member op_Equality (ValidStringStruct left, right) = left = right
-        static member op_Inequality (ValidStringStruct left, right) = left <> right
-    interface IComparisonOperators<ValidStringStruct, string, bool> with
-        static member op_GreaterThan (ValidStringStruct left, right) = left > right
-        static member op_GreaterThanOrEqual (ValidStringStruct left, right) = left >= right
-        static member op_LessThan (ValidStringStruct left, right) = left < right
-        static member op_LessThanOrEqual (ValidStringStruct left, right) = left <= right
+
+    // Just for demo purposes
+    interface IEqualityOperators<ValidStringStruct, ValidStringStruct, bool> with
+        static member op_Equality (ValidStringStruct left, ValidStringStruct right) = left = right
+        static member op_Inequality (ValidStringStruct left, ValidStringStruct right) = left <> right
+    interface IComparisonOperators<ValidStringStruct, ValidStringStruct, bool> with
+        static member op_GreaterThan (ValidStringStruct left, ValidStringStruct right) = left > right
+        static member op_GreaterThanOrEqual (ValidStringStruct left, ValidStringStruct right) = left >= right
+        static member op_LessThan (ValidStringStruct left, ValidStringStruct right) = left < right
+        static member op_LessThanOrEqual (ValidStringStruct left, ValidStringStruct right) = left <= right
 
 type ValidStringObject =
     internal
@@ -42,15 +43,16 @@ type ValidStringObject =
     static member internal op_GreaterThanOrEqual (ValidStringObject left, right) = left >= right
     static member internal op_LessThan (ValidStringObject left, right) = left < right
     static member internal op_LessThanOrEqual (ValidStringObject left, right) = left <= right
-        // Just for demo purposes
-    interface IEqualityOperators<ValidStringObject, string, bool> with
-        static member op_Equality (ValidStringObject left, right) = left = right
-        static member op_Inequality (ValidStringObject left, right) = left <> right
-    interface IComparisonOperators<ValidStringObject, string, bool> with
-        static member op_GreaterThan (ValidStringObject left, right) = left > right
-        static member op_GreaterThanOrEqual (ValidStringObject left, right) = left >= right
-        static member op_LessThan (ValidStringObject left, right) = left < right
-        static member op_LessThanOrEqual (ValidStringObject left, right) = left <= right
+
+    // Just for demo purposes
+    interface IEqualityOperators<ValidStringObject, ValidStringObject, bool> with
+        static member op_Equality (ValidStringObject left, ValidStringObject right) = left = right
+        static member op_Inequality (ValidStringObject left, ValidStringObject right) = left <> right
+    interface IComparisonOperators<ValidStringObject, ValidStringObject, bool> with
+        static member op_GreaterThan (ValidStringObject left, ValidStringObject right) = left > right
+        static member op_GreaterThanOrEqual (ValidStringObject left, ValidStringObject right) = left >= right
+        static member op_LessThan (ValidStringObject left, ValidStringObject right) = left < right
+        static member op_LessThanOrEqual (ValidStringObject left, ValidStringObject right) = left <= right
 
 [<Struct>]
 type ValidIntStruct =
@@ -67,7 +69,7 @@ type ValidIntObject =
     static member internal op_Inequality (ValidIntObject left, ValidIntObject right) = left <> right
     static member internal op_GreaterThan (ValidIntObject left, right : Int64) = left > right
 
-type Butafor = {
+type FakeEntity = {
     ValidStringStruct : ValidStringStruct
     ValidStringObject : ValidStringObject
     string : string
@@ -82,11 +84,11 @@ let cosmosClient =
     new CosmosClient ("https://localhost:8081/", "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==", options)
 let container = cosmosClient.GetContainer("database", "container")
 let filterOptions =
-    ObjectListFilterLinqOptions<Butafor, obj>.None
+    ObjectListFilterLinqOptions<FakeEntity, obj>.None
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringStruct`` () =
-    let queryable = container.GetItemLinqQueryable<Butafor> ()
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = Equals { FieldName = "validStringStruct"; Value = "Jonathan"}
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
@@ -95,14 +97,14 @@ let ``ObjectListFilter works with Equals operator for ValidStringStruct`` () =
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let filter = Equals { FieldName = "validStringObject"; Value = ValidStringObject "Jonathan" }
-    let queryable = container.GetItemLinqQueryable<Butafor> ()
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     ()
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
-    let queryable = container.GetItemLinqQueryable<Butafor> ()
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = GreaterThan { FieldName = "validIntStruct"; Value = 6L }
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
@@ -111,7 +113,7 @@ let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntObject`` () =
     let filter = GreaterThan { FieldName = "validIntObject"; Value = 6L }
-    let queryable = container.GetItemLinqQueryable<Butafor> ()
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     ()
