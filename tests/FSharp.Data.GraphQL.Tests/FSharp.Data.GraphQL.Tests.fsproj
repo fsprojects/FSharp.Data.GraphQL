@@ -15,6 +15,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Azure.Cosmos" />
     <PackageReference Include="Microsoft.NET.Test.Sdk" />
     <PackageReference Include="BenchmarkDotNet" />
     <PackageReference Include="Validus" />
@@ -65,6 +66,7 @@
     <Compile Include="Variables and Inputs\InputListTests.fs" />
     <Compile Include="SelectLinqTests.fs" />
     <Compile Include="ObjectListFilterLinqTests.fs" />
+    <Compile Include="ObjectListFilterLinqGenerateTests.fs" />
     <Compile Include="DeferredTests.fs" />
     <Compile Include="SubscriptionTests.fs" />
     <Compile Include="MiddlewareTests.fs" />
