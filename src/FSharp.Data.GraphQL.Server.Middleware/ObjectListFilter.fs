@@ -18,7 +18,7 @@ type ObjectListFilter =
     | In of FieldFilter<System.IComparable list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
-    | Contains of FieldFilter<string>
+    | Contains of FieldFilter<System.IComparable>
     | OfTypes of Type list
     | FilterField of FieldFilter<ObjectListFilter>
 
@@ -142,25 +142,27 @@ module ObjectListFilter =
     let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
     let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
     let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
-    let private getEnumerableContainsMethod (memberType : Type) =
+    let private getCollectionInstanceContainsMethod (memberType : Type)  =
+        memberType
+            .GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
+            .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 1)
+            |> ValueOption.ofObj
+    let private getEnumerableContainsMethod (itemType : Type) =
         match
             typeof<Enumerable>
                 .GetMethods(BindingFlags.Static ||| BindingFlags.Public)
                 .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 2)
         with
         | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
-        | containsGenericStaticMethod ->
-            if
-                memberType.IsGenericType
-                && memberType.GenericTypeArguments.Length = 1
-            then
-                containsGenericStaticMethod.MakeGenericMethod (memberType.GenericTypeArguments)
-            else
-                let ienumerable =
-                    memberType
-                        .GetInterfaces()
-                        .First (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
-                containsGenericStaticMethod.MakeGenericMethod ([| ienumerable.GenericTypeArguments[0] |])
+        | containsGenericStaticMethod -> containsGenericStaticMethod.MakeGenericMethod ([| itemType |])
+    let private getEnumerableCastMethod (itemType : Type) =
+        match
+            typeof<Enumerable>
+                .GetMethods(BindingFlags.Static ||| BindingFlags.Public)
+                .FirstOrDefault (fun m -> m.Name = "Cast" && m.GetParameters().Length = 1)
+        with
+        | null -> raise (MissingMemberException "Static 'Cast' method with 1 parameter not found on 'Enumerable' class")
+        | castGenericStaticMethod -> castGenericStaticMethod.MakeGenericMethod ([| itemType |])
 
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
@@ -204,38 +206,38 @@ module ObjectListFilter =
                 && memberType
                     .GetInterfaces()
                     .Any (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+            let callContains memberType =
+                let itemType =
+                    if ``member``.Type.IsArray then ``member``.Type.GetElementType()
+                    else ``member``.Type.GetGenericArguments()[0]
+                let valueType =
+                    match f.Value with
+                    | null -> itemType
+                    | value -> value.GetType()
+                let castedMember =
+                    if itemType = valueType then ``member`` :> Expression
+                    else
+                        let castMethod = getEnumerableCastMethod valueType
+                        Expression.Call (castMethod, ``member``)
+                match getCollectionInstanceContainsMethod memberType with
+                | ValueNone ->
+                    let enumerableContains = getEnumerableContainsMethod valueType
+                    Expression.Call (enumerableContains, castedMember, Expression.Constant (f.Value))
+                | ValueSome instanceContainsMethod ->
+                    Expression.Call (castedMember, instanceContainsMethod, Expression.Constant (f.Value))
             match ``member``.Member with
-            | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable ->
-                match
-                    prop.PropertyType
-                        .GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
-                        .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 1)
-                with
-                | null ->
-                    Expression.Call (
-                        getEnumerableContainsMethod prop.PropertyType,
-                        Expression.PropertyOrField (param, f.FieldName),
-                        Expression.Constant (f.Value)
-                    )
-                | instanceContainsMethod ->
-                    Expression.Call (Expression.PropertyOrField (param, f.FieldName), instanceContainsMethod, Expression.Constant (f.Value))
-            | :? FieldInfo as field when field.FieldType |> isEnumerable ->
-                Expression.Call (
-                    getEnumerableContainsMethod field.FieldType,
-                    Expression.PropertyOrField (param, f.FieldName),
-                    Expression.Constant (f.Value)
-                )
+            | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable -> callContains prop.PropertyType
+            | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
             | _ ->
                 if ``member``.Type = stringType then
                     Expression.Call (``member``, StringContainsMethod, Expression.Constant (f.Value))
                 else
                     Expression.Call (Expression.Convert (``member``, stringType), StringContainsMethod, Expression.Constant (f.Value))
-        | In f ->
+        | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            f.Value
-            |> Seq.map (fun v -> Expression.Equal (``member``, Expression.Constant (v)))
-            |> Seq.reduce (fun acc expr -> Expression.OrElse (acc, expr))
-            :> Expression
+            let enumerableContains = getEnumerableContainsMethod typeof<IComparable>
+            Expression.Call (enumerableContains, Expression.Constant (f.Value), Expression.Convert (``member``, typeof<IComparable>))
+        | In f -> Expression.Constant (true)
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
