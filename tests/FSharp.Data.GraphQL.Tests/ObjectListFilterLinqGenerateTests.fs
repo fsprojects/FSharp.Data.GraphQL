@@ -117,3 +117,4 @@ let ``ObjectListFilter works with GreaterThan operator for ValidIntObject`` () =
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] > 6)"""
+
