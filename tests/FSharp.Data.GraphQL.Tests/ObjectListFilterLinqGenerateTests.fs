@@ -12,15 +12,16 @@ open FSharp.Data.GraphQL.Server.Middleware
 type ValidStringStruct =
     internal
     | ValidStringStruct of string
-    static member op_Equality (ValidStringStruct left, ValidStringStruct right) = left = right
-    static member op_Inequality (ValidStringStruct left, ValidStringStruct right) = left <> right
+    static member internal op_Equality (ValidStringStruct left, ValidStringStruct right) = left = right
+    static member internal op_Inequality (ValidStringStruct left, ValidStringStruct right) = left <> right
 
-    static member op_Equality (ValidStringStruct left, right) = left = right
-    static member op_Inequality (ValidStringStruct left, right) = left <> right
-    static member op_GreaterThan (ValidStringStruct left, right) = left > right
-    static member op_GreaterThanOrEqual (ValidStringStruct left, right) = left >= right
-    static member op_LessThan (ValidStringStruct left, right) = left < right
-    static member op_LessThanOrEqual (ValidStringStruct left, right) = left <= right
+    static member internal op_Equality (ValidStringStruct left, right) = left = right
+    static member internal op_Inequality (ValidStringStruct left, right) = left <> right
+    static member internal op_GreaterThan (ValidStringStruct left, right) = left > right
+    static member internal op_GreaterThanOrEqual (ValidStringStruct left, right) = left >= right
+    static member internal op_LessThan (ValidStringStruct left, right) = left < right
+    static member internal op_LessThanOrEqual (ValidStringStruct left, right) = left <= right
+        // Just for demo purposes
     interface IEqualityOperators<ValidStringStruct, string, bool> with
         static member op_Equality (ValidStringStruct left, right) = left = right
         static member op_Inequality (ValidStringStruct left, right) = left <> right
@@ -33,23 +34,15 @@ type ValidStringStruct =
 type ValidStringObject =
     internal
     | ValidStringObject of string
-    static member op_Equality (ValidStringObject left, ValidStringObject right) = left = right
-    static member op_Inequality (ValidStringObject left, ValidStringObject right) = left <> right
-
-    static member op_Equality (ValidStringObject left, right) = left = right
-    static member op_Inequality (ValidStringObject left, right) = left <> right
-    static member op_GreaterThan (ValidStringObject left, right) = left > right
-    static member op_GreaterThanOrEqual (ValidStringObject left, right) = left >= right
-    static member op_LessThan (ValidStringObject left, right) = left < right
-    static member op_LessThanOrEqual (ValidStringObject left, right) = left <= right
-    //interface IEqualityOperators<ValidStringObject, ValidStringObject, bool> with
-    //    static member op_Equality (ValidStringObject left, ValidStringObject right) = left = right
-    //    static member op_Inequality (ValidStringObject left, ValidStringObject right) = left <> right
-    //interface IComparisonOperators<ValidStringObject, ValidStringObject, bool> with
-    //    static member op_GreaterThan (ValidStringObject left, ValidStringObject right) = left > right
-    //    static member op_GreaterThanOrEqual (ValidStringObject left, ValidStringObject right) = left >= right
-    //    static member op_LessThan (ValidStringObject left, ValidStringObject right) = left < right
-    //    static member op_LessThanOrEqual (ValidStringObject left, ValidStringObject right) = left <= right
+    static member internal op_Equality (ValidStringObject left, ValidStringObject right) = left = right
+    static member internal op_Inequality (ValidStringObject left, ValidStringObject right) = left <> right
+    static member internal op_Equality (ValidStringObject left, right) = left = right
+    static member internal op_Inequality (ValidStringObject left, right) = left <> right
+    static member internal op_GreaterThan (ValidStringObject left, right) = left > right
+    static member internal op_GreaterThanOrEqual (ValidStringObject left, right) = left >= right
+    static member internal op_LessThan (ValidStringObject left, right) = left < right
+    static member internal op_LessThanOrEqual (ValidStringObject left, right) = left <= right
+        // Just for demo purposes
     interface IEqualityOperators<ValidStringObject, string, bool> with
         static member op_Equality (ValidStringObject left, right) = left = right
         static member op_Inequality (ValidStringObject left, right) = left <> right
@@ -63,16 +56,16 @@ type ValidStringObject =
 type ValidIntStruct =
     internal
     | ValidIntStruct of Int64
-    static member op_Equality (ValidIntStruct left, ValidIntStruct right) = left = right
-    static member op_Inequality (ValidIntStruct left, ValidIntStruct right) = left <> right
-    static member op_GreaterThan (ValidIntStruct left, right : Int64) = left > right
+    static member internal op_Equality (ValidIntStruct left, ValidIntStruct right) = left = right
+    static member internal op_Inequality (ValidIntStruct left, ValidIntStruct right) = left <> right
+    static member internal op_GreaterThan (ValidIntStruct left, right : Int64) = left > right
 
 type ValidIntObject =
     internal
     | ValidIntObject of Int64
-    static member op_Equality (ValidIntObject left, ValidIntObject right) = left = right
-    static member op_Inequality (ValidIntObject left, ValidIntObject right) = left <> right
-    static member op_GreaterThan (ValidIntObject left, right : Int64) = left > right
+    static member internal op_Equality (ValidIntObject left, ValidIntObject right) = left = right
+    static member internal op_Inequality (ValidIntObject left, ValidIntObject right) = left <> right
+    static member internal op_GreaterThan (ValidIntObject left, right : Int64) = left > right
 
 type Butafor = {
     ValidStringStruct : ValidStringStruct
