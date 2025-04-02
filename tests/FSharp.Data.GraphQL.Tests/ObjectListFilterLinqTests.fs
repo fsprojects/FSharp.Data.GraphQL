@@ -190,6 +190,27 @@ let ``ObjectListFilter works with IN operator for int type field`` () =
     result.Friends |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
 
 [<Fact>]
+let ``ObjectListFilter works with Contains operator for array type field`` () =
+    let filter = Contains { FieldName = "friends"; Value = { Email = "j.abrams@gmail.com" } }
+    let queryable = data.AsQueryable ()
+    let filteredData = queryable.Apply (filter) |> Seq.toList
+    List.length filteredData |> equals 2
+    do
+        let result = List.head filteredData
+        result.ID |> equals 4
+        result.FirstName |> equals "Ben"
+        result.LastName |> equals "Adams"
+        result.Contact |> equals { Email = "b.adams@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" }; { Email = "l.trif@gmail.com" } ]
+    do
+        let result = List.last filteredData
+        result.ID |> equals 7
+        result.FirstName |> equals "Jeneffer"
+        result.LastName |> equals "Trif"
+        result.Contact |> equals { Email = "j.trif@gmail.com" }
+        result.Friends |> equals [ { Email = "j.abrams@gmail.com" } ]
+
+[<Fact>]
 let ``ObjectListFilter works with FilterField operator`` () =
     let filter =
         FilterField {

@@ -79,6 +79,8 @@ type ValidIntObject =
 type FakeEntity = {
     ValidStringStruct : ValidStringStruct
     ValidStringObject : ValidStringObject
+    ValidStringStructList : ValidStringStruct list
+    ValidStringObjectList : ValidStringObject list
     string : string
     ValidIntStruct : ValidIntStruct
     ValidIntObject : ValidIntObject
@@ -125,6 +127,23 @@ let ``ObjectListFilter works with Contains operator for ValidStringStruct`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE CONTAINS(root["validStringStruct"], "athan")"""
 
+[<Fact (Skip = "Cast not supported in Cosmos LINQ")>]
+let ``ObjectListFilter works with Contains operator for ValidStringStruct list`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Contains { FieldName = "validStringStructList"; Value = "athan" }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ARRAY_CONTAINS(root["validStringStructList"], "athan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with In operator for ValidStringStruct list`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = In { FieldName = "validStringStruct"; Value = [ "athan"; "gaja" ] }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ARRAY_CONTAINS([ "athan", "gaja" ], root["validStringStruct"])"""
+
+
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let filter = Equals { FieldName = "validStringObject"; Value = ValidStringObject "Jonathan" }
@@ -132,6 +151,7 @@ let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringObject"] = "Jonathan")"""
+
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
