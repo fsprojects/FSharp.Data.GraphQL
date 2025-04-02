@@ -92,8 +92,7 @@ let ``ObjectListFilter works with Equals operator for ValidStringStruct`` () =
     let filter = Equals { FieldName = "validStringStruct"; Value = "Jonathan"}
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
-    Assert.Equal (queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringStruct"] = "Jonathan")""")
-    ()
+    equals queryDefinition.QueryText  """SELECT VALUE root FROM root WHERE (root["validStringStruct"] = "Jonathan")"""
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
@@ -101,8 +100,7 @@ let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
-    Assert.Equal (queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringObject"] = "Jonathan")""")
-    ()
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringObject"] = "Jonathan")"""
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
@@ -110,8 +108,7 @@ let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
     let filter = GreaterThan { FieldName = "validIntStruct"; Value = 6L }
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
-    Assert.Equal (queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntStruct"] > 6)""")
-    ()
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntStruct"] > 6)"""
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntObject`` () =
@@ -119,7 +116,6 @@ let ``ObjectListFilter works with GreaterThan operator for ValidIntObject`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filterQuery = queryable.Apply (filter)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
-    Assert.Equal (queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] > 6)""")
-    ()
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] > 6)"""
 
 
