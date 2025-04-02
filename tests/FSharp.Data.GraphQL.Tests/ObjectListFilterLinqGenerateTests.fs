@@ -127,7 +127,7 @@ let ``ObjectListFilter works with Contains operator for ValidStringStruct`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE CONTAINS(root["validStringStruct"], "athan")"""
 
-[<Fact>]
+[<Fact (Skip = "Cast not supported in Cosmos LINQ")>]
 let ``ObjectListFilter works with Contains operator for ValidStringStruct list`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = Contains { FieldName = "validStringStructList"; Value = "athan" }
