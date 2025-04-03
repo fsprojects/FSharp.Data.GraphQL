@@ -44,22 +44,22 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
         | s when s.EndsWith ("_in") && s.Length > "_in".Length -> In (prefix "_in" s)
         | s -> Equals s
 
-    let (|EquatableValue|Other|) v =
+    let (|EquatableValue|NonEquatableValue|) v =
         match v with
         | IntValue v -> EquatableValue (v :> System.IComparable)
         | FloatValue v -> EquatableValue (v :> System.IComparable)
         | BooleanValue v -> EquatableValue (v :> System.IComparable)
         | StringValue v -> EquatableValue (v :> System.IComparable)
         | EnumValue v -> EquatableValue (v :> System.IComparable)
-        | v -> Other v
+        | v -> NonEquatableValue v
 
-    let (|ComparableValue|Other|) v =
+    let (|ComparableValue|NonComparableValue|) v =
         match v with
         | IntValue v -> ComparableValue (v :> System.IComparable)
         | FloatValue v -> ComparableValue (v :> System.IComparable)
         | BooleanValue v -> ComparableValue (v :> System.IComparable)
         | StringValue v -> ComparableValue (v :> System.IComparable)
-        | v -> Other v
+        | v -> NonComparableValue v
 
     let buildAnd x =
         let rec build acc x =
@@ -117,7 +117,7 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
                 values
                 |> Seq.map (function
                     | EquatableValue v -> Ok v
-                    | Other v ->
+                    | NonEquatableValue v ->
                         Error
                             { new IGQLError with
                                 member _.Message = $"Cannot coerce '{v.GetType ()}' to 'System.IComparable'"
