@@ -702,6 +702,98 @@ let ``Object list filter: Must return OR filter information in Metadata`` () =
     result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
 
 [<Fact>]
+let ``Object list filter: Must return IN filter information in Metadata`` () =
+    let query =
+        parse
+            """query testQuery {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { value_in : ["3000", "A2"] }) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A",
+            upcast
+                NameValueLookup.ofList [
+                    "id", upcast 1
+                    "value", upcast "A1"
+                    "subjects",
+                    upcast
+                        [
+                            NameValueLookup.ofList [ "id", upcast 2; "value", upcast "A2" ]
+                            NameValueLookup.ofList [ "id", upcast 6; "value", upcast "3000" ]
+                        ]
+                ]
+        ]
+    let expectedFilter : KeyValuePair<obj list, _> =
+        kvp ([ "A"; "subjects" ]) (In { FieldName = "value"; Value = [ "3000"; "A2" ] })
+    let result = execute query
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
+let ``Object list filter: Must return Contains filter information in Metadata`` () =
+    let query =
+        parse
+            """query testQuery {
+                A (id : 1) {
+                    id
+                    value
+                    subjects (filter : { value_contains : "3"}) { ...Value }
+                }
+        }
+
+        fragment Value on Subject {
+                ...on A {
+                    id
+                    value
+                }
+                ...on B {
+                    id
+                    value
+                }
+        }"""
+    let expected =
+        NameValueLookup.ofList [
+            "A",
+            upcast
+                NameValueLookup.ofList [
+                    "id", upcast 1
+                    "value", upcast "A1"
+                    "subjects",
+                    upcast
+                        [
+                            NameValueLookup.ofList [ "id", upcast 2; "value", upcast "A2" ]
+                            NameValueLookup.ofList [ "id", upcast 6; "value", upcast "3000" ]
+                        ]
+                ]
+        ]
+    let expectedFilter : KeyValuePair<obj list, _> =
+        kvp ([ "A"; "subjects" ]) (Contains { FieldName = "value"; Value = "3" })
+    let result = execute query
+
+    ensureDirect result <| fun data errors ->
+        empty errors
+        data |> equals (upcast expected)
+    result.Metadata.TryFind<ObjectListFilters> ("filters") |> wantValueSome |> seqEquals [ expectedFilter ]
+
+[<Fact>]
 let ``Object list filter: Must return NOT filter information in Metadata`` () =
     let query =
         parse
