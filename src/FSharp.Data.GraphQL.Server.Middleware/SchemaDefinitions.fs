@@ -9,6 +9,7 @@ open System.Text.Json
 open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Types
 open FSharp.Data.GraphQL.Ast
+open FsToolkit.ErrorHandling
 
 type private ComparisonOperator =
     | EndsWith of string
@@ -19,6 +20,7 @@ type private ComparisonOperator =
     | GreaterThanOrEqual of string
     | LessThan of string
     | LessThanOrEqual of string
+    | In of string
 
 let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption, IGQLError list> =
 
@@ -39,6 +41,7 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
         | s when s.EndsWith ("_lt") && s.Length > "_lt".Length -> LessThan (prefix "_lt" s)
         | s when s.EndsWith ("_less_than_or_equal") && s.Length > "_less_than_or_equal".Length -> LessThanOrEqual (prefix "_less_than_or_equal" s)
         | s when s.EndsWith ("_lte") && s.Length > "_lte".Length -> LessThanOrEqual (prefix "_lte" s)
+        | s when s.EndsWith ("_in") && s.Length > "_in".Length -> In (prefix "_in" s)
         | s -> Equals s
 
     let (|EquatableValue|Other|) v =
@@ -98,7 +101,7 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
             | Ok (ValueSome filter) -> Ok (ValueSome (Not filter))
         | EndsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.EndsWith { FieldName = fname; Value = value }))
         | StartsWith fname, StringValue value -> Ok (ValueSome (ObjectListFilter.StartsWith { FieldName = fname; Value = value }))
-        | Contains fname, StringValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
+        | Contains fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.Contains { FieldName = fname; Value = value }))
         | Equals fname, ObjectValue value ->
             match mapInput value with
             | Error errs -> Error errs
@@ -109,6 +112,20 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
         | GreaterThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.GreaterThanOrEqual { FieldName = fname; Value = value }))
         | LessThan fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThan { FieldName = fname; Value = value }))
         | LessThanOrEqual fname, ComparableValue value -> Ok (ValueSome (ObjectListFilter.LessThanOrEqual { FieldName = fname; Value = value }))
+        | In fname, ListValue values -> result {
+            let! parsedValues =
+                values
+                |> Seq.map (function
+                    | EquatableValue v -> Ok v
+                    | Other v ->
+                        Error
+                            { new IGQLError with
+                                member _.Message = $"Cannot coerce '{v.GetType ()}' to 'System.IComparable'"
+                            })
+                |> Seq.toList
+                |> splitSeqErrors
+            return ValueSome (ObjectListFilter.In { FieldName = fname; Value = parsedValues |> Array.toList })
+          }
         | _ -> Ok ValueNone
 
     and mapInput value =
@@ -172,7 +189,13 @@ let ObjectListFilterType : ScalarDefinition<ObjectListFilter> = {
             "The `Filter` scalar type represents a filter on one or more fields of an object in an object list. The filter is represented by a JSON object where the fields are the complemented by specific suffixes to represent a query."
     CoerceInput =
         (function
-        | InlineConstant c -> coerceObjectListFilterInput c |> Result.map ValueOption.toObj
-        | Variable json -> json |> jsonElementToInputValue |> coerceObjectListFilterInput |> Result.map ValueOption.toObj)
+        | InlineConstant c ->
+            coerceObjectListFilterInput c
+            |> Result.map ValueOption.toObj
+        | Variable json ->
+            json
+            |> jsonElementToInputValue
+            |> coerceObjectListFilterInput
+            |> Result.map ValueOption.toObj)
     CoerceOutput = coerceObjectListFilterValue
 }
