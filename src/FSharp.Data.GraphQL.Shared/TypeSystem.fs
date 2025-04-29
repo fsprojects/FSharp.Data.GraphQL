@@ -1073,7 +1073,7 @@ and [<CustomEquality; NoComparison>] ScalarDefinition<'Primitive, 'Val> = {
     CoerceInput : InputParameterValue -> Result<'Val, IGQLError list>
     /// A function used to set a surrogate representation to be
     /// returned as a query result.
-    CoerceOutput : obj -> 'Primitive option
+    CoerceOutput : objnull -> 'Primitive option
 } with
 
     interface TypeDef with
