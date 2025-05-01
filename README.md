@@ -175,7 +175,7 @@ Our client library now has a completely redesigned type provider. To start using
 type MyProvider = GraphQLProvider<"http://some.graphqlserver.development.org">
 ```
 
-2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/files/introspection_query.graphql) on the desired server and saving it into a file on the same path as the project using the provider:
+2. Provide an introspection json file to be used by the provider. Beware though that the introspection json should have all fields required by the provider. You can get the correct fields by running [our standard introspection query](docs/introspection_query.graphql) on the desired server and saving it into a file on the same path as the project using the provider:
 
 ```fsharp
 type MyProvider = GraphQLProvider<"swapi_schema.json">
@@ -260,7 +260,7 @@ let internal executeOperation (ctx : ExecutionContext) : AsyncVal<GQLResponse> =
   // ...
 ```
 
-That way, in the compile schema phase, the schema is modified and execution maps are generated inside the `SchemaCompileContext` object. During the operation planning phase, values of the `PlanningContext` object are used to generate an execution plan, and finally, this plan is passed alongside other values in the `ExecutionContext` object to the operation execution phase, wich finally uses them to execute the query and generate a `GQLResponse`.
+That way, in the compile schema phase, the schema is modified and execution maps are generated inside the `SchemaCompileContext` object. During the operation planning phase, values of the `PlanningContext` object are used to generate an execution plan, and finally, this plan is passed alongside other values in the `ExecutionContext` object to the operation execution phase, which finally uses them to execute the query and generate a `GQLResponse`.
 
 With that being said, a middleware can be used to intercept each phase and customize them as necessary. Each middleware must be implemented as a function with a specific signature, and wrapped inside an `IExecutorMiddleware` interface:
 
@@ -290,7 +290,7 @@ type ExecutorMiddleware(?compile, ?plan, ?execute) =
         member _.ExecuteOperationAsync = execute
 ```
 
-Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, wich is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
+Each of the middleware functions act like an intercept function, with two parameters: the context of the phase, the function of the next middleware (or the actual phase itself, which is the last to run), and the return value. Those functions can be passed as an argument to the constructor of the `Executor<'Root>` object:
 
 ```fsharp
 let middleware = [ ExecutorMiddleware(compileFn, planningFn, executionFn) ]
@@ -315,7 +315,7 @@ There are some built-in middleware inside `FSharp.Data.GraphQL.Server.Middleware
 
 #### QueryWeightMiddleware
 
-This middleware can be used to place weights on fields of the schema. Those weightened fields can now be used to protect the server from complex queries that could otherwise be used in DDOS attacks.
+This middleware can be used to place weights on fields of the schema. Those weighted fields can now be used to protect the server from complex queries that could otherwise be used in DDOS attacks.
 
 When defining a field, we use the extension method `WithQueryWeight` to place a weight on it:
 
