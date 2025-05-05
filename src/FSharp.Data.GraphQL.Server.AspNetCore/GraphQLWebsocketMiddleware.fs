@@ -259,22 +259,26 @@ type GraphQLWebSocketMiddleware<'Root>
                             | ValueNone -> do! ServerPong p |> sendMsg
                         | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
                         | Subscribe (id, query) ->
-                            nameof Subscribe |> logMsgWithIdReceived id
-                            if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
-                                do!
-                                    let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
-                                    logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
-                                    socket.CloseAsync (
-                                        enum CustomWebSocketStatus.SubscriberAlreadyExists,
-                                        warningMsg.ToString (),
-                                        CancellationToken.None
-                                    )
-                            else
-                                let variables = query.Variables |> Skippable.toOption
-                                let! planExecutionResult =
-                                    let root = options.RootFactory httpContext
-                                    options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
-                                do! planExecutionResult |> applyPlanExecutionResult id socket
+                            try
+                                nameof Subscribe |> logMsgWithIdReceived id
+                                if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                                    do!
+                                        let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
+                                        logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
+                                        socket.CloseAsync (
+                                            enum CustomWebSocketStatus.SubscriberAlreadyExists,
+                                            warningMsg.ToString (),
+                                            CancellationToken.None
+                                        )
+                                else
+                                    let variables = query.Variables |> Skippable.toOption
+                                    let! planExecutionResult =
+                                        let root = options.RootFactory httpContext
+                                        options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
+                                    do! planExecutionResult |> applyPlanExecutionResult id socket
+                            with ex ->
+                                logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
+                                do! sendMsg (Error (id, [new Shared.NameValueLookup ([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions
