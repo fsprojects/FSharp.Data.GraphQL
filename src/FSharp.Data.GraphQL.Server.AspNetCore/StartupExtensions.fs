@@ -118,7 +118,7 @@ module ServiceCollectionExtensions =
                 rootFactory : HttpContext -> 'Root,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, configure = null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -134,7 +134,7 @@ module ServiceCollectionExtensions =
                 rootFactory : HttpContext -> 'Root,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, configure = null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -185,7 +185,7 @@ module ServiceCollectionExtensions =
                 configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root, 'Handler> ((fun _ -> executor), rootFactory, additionalConverters, configure = configure)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. Requires an executor instance to be provided.
@@ -202,7 +202,7 @@ module ServiceCollectionExtensions =
                 configure : Func<GraphQLOptions<'Root>, GraphQLOptions<'Root>>,
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
-            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root> ((fun _ -> executor), rootFactory, additionalConverters, configure = configure)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -221,7 +221,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, configure = null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -240,7 +240,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, null, null)
+            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, configure = null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -300,7 +300,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root, 'Handler> (getExecutorService, rootFactory, additionalConverters, configure = null)
 
         /// <summary>
         /// Adds GraphQL options and services to the service collection. It gets the executor from the service provider.
@@ -320,7 +320,7 @@ module ServiceCollectionExtensions =
                 [<Optional>] additionalConverters : JsonConverter seq
             ) =
             let getExecutorService (sp : IServiceProvider) = sp.GetRequiredService<Executor<'Root>>()
-            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, null, configure)
+            services.AddGraphQL<'Root> (getExecutorService, rootFactory, additionalConverters, configure = configure)
 
 
 [<AutoOpen; Extension>]
