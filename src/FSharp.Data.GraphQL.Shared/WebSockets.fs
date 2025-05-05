@@ -3,6 +3,7 @@ namespace FSharp.Data.GraphQL.Shared.WebSockets
 open System
 open System.Collections.Generic
 open System.Text.Json
+open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Shared
 
 type InvalidWebsocketMessageException (explanation : string) =
@@ -15,8 +16,10 @@ type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * 
 
 type RawMessage = { Id : string voption; Type : string; Payload : JsonDocument voption }
 
+type SubscriptionExecutionResult = { Data : Output voption; Errors : GQLProblemDetails list }
+
 type ServerRawPayload =
-    | ExecutionResult of Output
+    | ExecutionResult of SubscriptionExecutionResult
     | ErrorMessages of NameValueLookup list
     | CustomResponse of JsonDocument
 
@@ -35,7 +38,7 @@ type ServerMessage =
     | ConnectionAck
     | ServerPing
     | ServerPong of JsonDocument voption
-    | Next of id : string * payload : Output
+    | Next of id : string * payload : SubscriptionExecutionResult
     | Error of id : string * err : NameValueLookup list
     | Complete of id : string
 
