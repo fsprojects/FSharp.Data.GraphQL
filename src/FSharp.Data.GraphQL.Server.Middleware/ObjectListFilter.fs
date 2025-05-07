@@ -16,7 +16,7 @@ type ObjectListFilter =
     | GreaterThanOrEqual of FieldFilter<System.IComparable>
     | LessThan of FieldFilter<System.IComparable>
     | LessThanOrEqual of FieldFilter<System.IComparable>
-    | In of FieldFilter<System.IComparable list>
+    | In of FieldFilter<obj list>
     | StartsWith of FieldFilter<string>
     | EndsWith of FieldFilter<string>
     | Contains of FieldFilter<System.IComparable>
@@ -141,16 +141,22 @@ module ObjectListFilter =
         let whereMethod = genericWhereMethod.MakeGenericMethod ([| typeof<'T> |])
         Expression.Call (whereMethod, [| query.Expression; Expression.Lambda<Func<'T, bool>> (predicate, param) |])
 
+    let private objectType = typeof<obj>
     let private stringType = typeof<string>
+    let private iComparableType = typeof<IComparable>
     let private genericIEnumerableType = typedefof<IEnumerable<_>>
+
     let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
     let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
     let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
-    let private getCollectionInstanceContainsMethod (memberType : Type)  =
+    let private unwrapOptionMethod = FSharp.Data.GraphQL.Helpers.moduleType.GetMethod (nameof Helpers.unwrap)
+
+    let private getCollectionInstanceContainsMethod (memberType : Type) =
         memberType
             .GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
             .FirstOrDefault (fun m -> m.Name = "Contains" && m.GetParameters().Length = 1)
-            |> ValueOption.ofObj
+        |> ValueOption.ofObj
+
     let private getEnumerableContainsMethod (itemType : Type) =
         match
             typeof<Enumerable>
@@ -159,6 +165,7 @@ module ObjectListFilter =
         with
         | null -> raise (MissingMemberException "Static 'Contains' method with 2 parameters not found on 'Enumerable' class")
         | containsGenericStaticMethod -> containsGenericStaticMethod.MakeGenericMethod ([| itemType |])
+
     let private getEnumerableCastMethod (itemType : Type) =
         match
             typeof<Enumerable>
@@ -179,22 +186,30 @@ module ObjectListFilter =
         static member op_Implicit (parameter : ParameterExpression) = SourceExpression (parameter :> Expression)
         static member op_Implicit (``member`` : MemberExpression) = SourceExpression (``member`` :> Expression)
 
-    //let iequtableType = typedefof<IEquatable<_>>
     let equalsMethod =
-        typeof<obj>
+        objectType
         |> _.GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
         |> Seq.where (fun m -> m.Name = "Equals")
         |> Seq.head
 
     let rec buildFilterExpr isEnumerableQuery (param : SourceExpression) buildTypeDiscriminatorCheck filter : Expression =
+
         let build = buildFilterExpr isEnumerableQuery param buildTypeDiscriminatorCheck
+
         let (|NoCast|Enumerable|NonEnumerableCast|) value =
-            if obj.ReferenceEquals (value, null) then
-                NoCast
-            else
-                if isEnumerableQuery then Enumerable
-                else NonEnumerableCast (value.GetType ())
-        let unsafeConvertTo ``type`` ``member`` = Expression.Convert (Expression.Convert(``member``, typeof<obj>), ``type``)
+            if obj.ReferenceEquals (value, null) then NoCast
+            else if isEnumerableQuery then Enumerable
+            else NonEnumerableCast (value.GetType ())
+
+        let unsafeConvertTo ``type`` ``member`` = Expression.Convert (Expression.Convert (``member``, objectType), ``type``)
+
+        let normalizeStringMemberExpr (``member`` : MemberExpression) : Expression =
+            match ``member``.Type with
+            | t when t = stringType -> ``member``
+            | _ when not isEnumerableQuery -> unsafeConvertTo stringType ``member``
+            | _ when isEnumerableQuery -> Expression.Convert(Expression.Call(unwrapOptionMethod, ``member``), stringType)
+            | _ -> Expression.Convert(``member``, stringType)
+
 
         match filter with
         | Not (Equals f) ->
@@ -210,76 +225,60 @@ module ObjectListFilter =
         | Equals f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
-            | NoCast ->
-                Expression.Equal (``member``, Expression.Constant f.Value)
-            | Enumerable ->
-                Expression.Equal (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            | NonEnumerableCast ``type`` ->
-                Expression.Equal ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NoCast -> Expression.Equal (``member``, Expression.Constant f.Value)
+            | Enumerable -> Expression.Equal (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            | NonEnumerableCast ``type`` -> Expression.Equal ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | GreaterThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-            if isEnumerableQuery then
-                    Expression.GreaterThan (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            else
-                Expression.GreaterThan (Expression.Convert (Expression.Convert(``member``, typeof<obj>), f.Value.GetType ()), Expression.Constant f.Value)
+            match f.Value with
+            | NoCast -> Expression.GreaterThan (``member``, Expression.Constant f.Value)
+            | Enumerable -> Expression.GreaterThan (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            | NonEnumerableCast ``type`` -> Expression.GreaterThan ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | LessThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
-            | NoCast ->
-                Expression.LessThan (``member``, Expression.Constant f.Value)
-            | Enumerable ->
-                Expression.LessThan (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            | NonEnumerableCast ``type`` ->
-                Expression.LessThan ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NoCast -> Expression.LessThan (``member``, Expression.Constant f.Value)
+            | Enumerable -> Expression.LessThan (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            | NonEnumerableCast ``type`` -> Expression.LessThan ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | GreaterThanOrEqual f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
-            | NoCast ->
-                Expression.GreaterThanOrEqual (``member``, Expression.Constant f.Value)
-            | Enumerable ->
-                Expression.GreaterThanOrEqual (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            | NonEnumerableCast ``type`` ->
-                Expression.GreaterThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NoCast -> Expression.GreaterThanOrEqual (``member``, Expression.Constant f.Value)
+            | Enumerable -> Expression.GreaterThanOrEqual (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            | NonEnumerableCast ``type`` -> Expression.GreaterThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | LessThanOrEqual f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
-            | NoCast ->
-                Expression.LessThanOrEqual (``member``, Expression.Constant f.Value)
-            | Enumerable ->
-                Expression.LessThanOrEqual (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            | NonEnumerableCast ``type`` ->
-                Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NoCast -> Expression.LessThanOrEqual (``member``, Expression.Constant f.Value)
+            | Enumerable -> Expression.LessThanOrEqual (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            | NonEnumerableCast ``type`` -> Expression.LessThanOrEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
         | StartsWith f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            if ``member``.Type = stringType then
-                Expression.Call (``member``, StringStartsWithMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            else
-                Expression.Call (Expression.Convert (``member``, stringType), StringStartsWithMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            Expression.Call (normalizeStringMemberExpr ``member``, StringStartsWithMethod, Expression.Constant f.Value)
         | EndsWith f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            if ``member``.Type = stringType then
-                Expression.Call (``member``, StringEndsWithMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            else
-                Expression.Call (Expression.Convert (``member``, stringType), StringEndsWithMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+            Expression.Call (normalizeStringMemberExpr ``member``, StringEndsWithMethod, Expression.Constant f.Value)
+
         | Contains f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let isEnumerable (memberType : Type) =
                 not (Type.(=) (memberType, stringType))
                 && typeof<System.Collections.IEnumerable>.IsAssignableFrom (memberType)
-                && memberType
-                    .GetInterfaces()
-                    .Any (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+                && memberType.GetInterfaces().Any (fun i -> i.FullName.StartsWith "System.Collections.Generic.IEnumerable`1")
+            let normalizedValue = Values.normalizeOptional ``member``.Type f.Value
             let callContains memberType =
                 let itemType =
-                    if ``member``.Type.IsArray then ``member``.Type.GetElementType()
-                    else ``member``.Type.GetGenericArguments()[0]
+                    if ``member``.Type.IsArray then
+                        ``member``.Type.GetElementType ()
+                    else
+                        ``member``.Type.GetGenericArguments()[0]
                 let valueType =
-                    match f.Value with
+                    match normalizedValue with
                     | null -> itemType
-                    | value -> value.GetType()
+                    | value -> value.GetType ()
                 let castedMember =
-                    if itemType = valueType then ``member`` :> Expression
+                    if itemType = valueType then
+                        ``member`` :> Expression
                     elif isEnumerableQuery then
                         let castMethod = getEnumerableCastMethod valueType
                         Expression.Call (castMethod, ``member``)
@@ -289,22 +288,24 @@ module ObjectListFilter =
                 match getCollectionInstanceContainsMethod memberType with
                 | ValueNone ->
                     let enumerableContains = getEnumerableContainsMethod valueType
-                    Expression.Call (enumerableContains, castedMember, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+                    Expression.Call (enumerableContains, castedMember, Expression.Constant (normalizedValue))
                 | ValueSome instanceContainsMethod ->
-                    Expression.Call (castedMember, instanceContainsMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+                    Expression.Call (castedMember, instanceContainsMethod, Expression.Constant (normalizedValue))
             match ``member``.Member with
             | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable -> callContains prop.PropertyType
             | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
             | _ ->
-                if ``member``.Type = stringType then
-                    Expression.Call (``member``, StringContainsMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-                else
-                    Expression.Call (Expression.Convert (``member``, stringType), StringContainsMethod, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
+                let unwrappedValue = Helpers.unwrap f.Value
+                Expression.Call (normalizeStringMemberExpr ``member``, StringContainsMethod, Expression.Constant unwrappedValue)
         | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let enumerableContains = getEnumerableContainsMethod typeof<IComparable>
-            Expression.Call (enumerableContains, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value), Expression.Convert (``member``, typeof<IComparable>))
-        | In f -> Expression.Constant (true)
+            let enumerableContains = getEnumerableContainsMethod objectType
+            Expression.Call (
+                enumerableContains,
+                (Expression.Constant f.Value),
+                Expression.Convert (``member``, objectType)
+            )
+        | In f -> Expression.Constant (false)
         | OfTypes types ->
             types
             |> Seq.map (fun t -> buildTypeDiscriminatorCheck param t)
@@ -313,24 +314,21 @@ module ObjectListFilter =
             let paramExpr = Expression.PropertyOrField (param, f.FieldName)
             buildFilterExpr isEnumerableQuery (SourceExpression paramExpr) buildTypeDiscriminatorCheck f.Value
 
-    type private CompareDiscriminatorExpressionVisitor<'T, 'D> (
-        compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>,
-        param : SourceExpression,
-        value : obj
-    ) =
+    type private CompareDiscriminatorExpressionVisitor<'T, 'D>
+        (compareDiscriminator : CompareDiscriminatorExpression<'T, 'D>, param : SourceExpression, value : obj) =
         inherit ExpressionVisitor ()
-        override _.VisitParameter(node) =
+        override _.VisitParameter (node) =
             if node = compareDiscriminator.Parameters.[0] then
                 param.Value
             elif node = compareDiscriminator.Parameters.[1] then
-                Expression.Constant(value) :> Expression
+                Expression.Constant (value) :> Expression
             else
                 node :> Expression
 
     let enumerableQueryType = typedefof<EnumerableQuery<_>>
 
     let apply (options : ObjectListFilterLinqOptions<'T, 'D>) (filter : ObjectListFilter) (query : IQueryable<'T>) =
-        let isEnumerableQuery = query.GetType().GetGenericTypeDefinition() = enumerableQueryType
+        let isEnumerableQuery = query.GetType().GetGenericTypeDefinition () = enumerableQueryType
         // Helper for discriminator comparison
         let buildTypeDiscriminatorCheck (param : SourceExpression) (t : Type) =
             match options.CompareDiscriminator, options.GetDiscriminatorValue with
@@ -340,7 +338,8 @@ module ObjectListFilter =
                     Expression.PropertyOrField (param, "__typename"),
                     // Default discriminator value
                     Expression.Constant (t.FullName)
-                ) :> Expression
+                )
+                :> Expression
             | ValueSome discExpr, ValueNone ->
                 // Replace parameters from the original expression with our new ones
                 let replacer = CompareDiscriminatorExpressionVisitor (discExpr, param, t.FullName)
@@ -352,7 +351,8 @@ module ObjectListFilter =
                     Expression.PropertyOrField (param, "__typename"),
                     // Provided discriminator value gathered from type
                     Expression.Constant (discriminatorValue)
-                ) :> Expression
+                )
+                :> Expression
             | ValueSome discExpr, ValueSome discValueFn ->
                 let discriminatorValue = discValueFn t
                 // Replace parameters from the original expression with our new ones
