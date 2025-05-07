@@ -27,7 +27,6 @@ open System.Linq
 open System.Linq.Expressions
 open System.Runtime.InteropServices
 open System.Reflection
-open System.Collections
 open System.Collections.Generic
 
 type private CompareDiscriminatorExpression<'T, 'D> = Expression<Func<'T, 'D, bool>>
@@ -143,7 +142,6 @@ module ObjectListFilter =
 
     let private objectType = typeof<obj>
     let private stringType = typeof<string>
-    let private iComparableType = typeof<IComparable>
     let private genericIEnumerableType = typedefof<IEnumerable<_>>
 
     let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
@@ -177,6 +175,14 @@ module ObjectListFilter =
 
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
+    let hasEqualityOperator (``type`` : Type) =
+        ``type``.GetMethods(BindingFlags.Public ||| BindingFlags.Static)
+        |> Seq.exists (fun m -> m.Name = " op_Equality")
+
+    let hasInequalityOperator (``type`` : Type) =
+        ``type``.GetMethods(BindingFlags.Public ||| BindingFlags.Static)
+        |> Seq.exists (fun m -> m.Name = "op_Inequality")
+
     [<Struct>]
     type SourceExpression private (expression : Expression) =
         new (parameter : ParameterExpression) = SourceExpression (parameter :> Expression)
@@ -189,6 +195,12 @@ module ObjectListFilter =
     let equalsMethod =
         objectType
         |> _.GetMethods(BindingFlags.Instance ||| BindingFlags.Public)
+        |> Seq.where (fun m -> m.Name = "Equals")
+        |> Seq.head
+
+    let staticEqualsMethod =
+        objectType
+        |> _.GetMethods(BindingFlags.Static ||| BindingFlags.Public)
         |> Seq.where (fun m -> m.Name = "Equals")
         |> Seq.head
 
@@ -210,24 +222,34 @@ module ObjectListFilter =
             | _ when isEnumerableQuery -> Expression.Convert(Expression.Call(unwrapOptionMethod, ``member``), stringType)
             | _ -> Expression.Convert(``member``, stringType)
 
-
         match filter with
         | Not (Equals f) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
-            let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
-            if isEnumerableQuery && f.Value <> null then
+            let hasEqualityOperator = hasEqualityOperator ``member``.Type
+            match f.Value with
+            | NoCast when hasEqualityOperator -> Expression.NotEqual (``member``, Expression.Constant f.Value)
+            | NoCast -> Expression.Not (Expression.Call (staticEqualsMethod, ``member``, Expression.Constant f.Value))
+            | Enumerable ->
+                let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
                 Expression.Not (Expression.Call (``const``, equalsMethod, ``member``))
-            else
-                Expression.NotEqual (``member``, ``const``)
+            | NonEnumerableCast ``type`` when hasEqualityOperator -> Expression.NotEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NonEnumerableCast ``type`` ->
+                Expression.Not (Expression.Call ((unsafeConvertTo ``type`` ``member``), equalsMethod, Expression.Constant f.Value))
         | Not f -> f |> build |> Expression.Not :> Expression
         | And (f1, f2) -> Expression.AndAlso (build f1, build f2)
         | Or (f1, f2) -> Expression.OrElse (build f1, build f2)
         | Equals f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
+            let hasEqualityOperator = hasEqualityOperator ``member``.Type
             match f.Value with
-            | NoCast -> Expression.Equal (``member``, Expression.Constant f.Value)
-            | Enumerable -> Expression.Equal (``member``, Expression.Constant (Values.normalizeOptional ``member``.Type f.Value))
-            | NonEnumerableCast ``type`` -> Expression.Equal ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NoCast when hasEqualityOperator -> Expression.Equal (``member``, Expression.Constant f.Value)
+            | NoCast -> Expression.Call (staticEqualsMethod, ``member``, Expression.Constant f.Value)
+            | Enumerable ->
+                let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
+                Expression.Call (``const``, equalsMethod, ``member``)
+            | NonEnumerableCast ``type`` when hasEqualityOperator -> Expression.Equal ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
+            | NonEnumerableCast ``type`` ->
+                Expression.Call ((unsafeConvertTo ``type`` ``member``), equalsMethod, Expression.Constant f.Value)
         | GreaterThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with

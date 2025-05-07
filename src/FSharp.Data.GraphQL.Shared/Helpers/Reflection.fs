@@ -9,10 +9,7 @@ open System.Collections.Immutable
 open System.Reflection
 open System.Text.Json.Serialization
 
-
 /// General helper functions and types.
-
-
 module internal ReflectionHelper =
 
     open Microsoft.FSharp.Quotations.Patterns
@@ -173,7 +170,10 @@ module internal ReflectionHelper =
 module Helpers =
 
     let rec internal moduleType = ReflectionHelper.getModuleType <@ moduleType @>
-    /// Casts a System.Object to a System.Object option.
+
+    /// <summary>
+    /// Casts a <see cref="System.Object"/> to a <see cref="option{System.Object}"/>.
+    /// </summary>
     let optionCast (value: obj) =
         if isNull value then None
         else
@@ -188,17 +188,25 @@ module Helpers =
                     Some (p.GetValue(value, [||]))
             else None
 
+    /// <summary>
     /// Matches a System.Object with an option.
-    /// If the object is an Option, returns it as Some, otherwise, return None.
+    /// If the object is an <see cref="Option{T}", returns it as Some, otherwise, return <see cref="None"/>.
+    /// </summary>
     let (|ObjectOption|_|) = optionCast
 
-    /// Lifts a System.Object to an option, unless it is already an option.
+    /// <summary>
+    /// Lifts a <see cref="System.Object"/> to an <see cref="option{System.Object}"/>, unless it is already an <see cref="option{System.Object}"/>.
+    /// </summary>
     let toOption x =
         match x with
         | null -> None
         | ObjectOption v
         | v -> Some v
 
+    /// <summary>
+    /// Unwraps a <see cref="System.Object"/> from an <see cref="option{System.Object}"/> or <see cref="voption{System.Object}"/>,
+    /// unless it is not wrapped.
+    /// </summary>
     let unwrap (value : objnull) =
         match value with
         | null -> null
