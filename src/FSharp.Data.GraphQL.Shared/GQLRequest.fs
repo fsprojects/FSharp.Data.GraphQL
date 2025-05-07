@@ -1,4 +1,4 @@
-namespace FSharp.Data.GraphQL.Shared
+namespace FSharp.Data.GraphQL
 
 open System.Collections.Immutable
 open System.Text.Json

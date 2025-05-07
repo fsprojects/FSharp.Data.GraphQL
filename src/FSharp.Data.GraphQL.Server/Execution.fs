@@ -90,7 +90,7 @@ let private resolveUnionType possibleTypesFn (uniondef: UnionDef) =
     | Some resolveType -> resolveType
     | None -> defaultResolveType possibleTypesFn uniondef
 
-let private createFieldContext objdef argDefs ctx (info: ExecutionInfo) (path : FieldPath) = result {
+let private createFieldContext objdef argDefs (ctx : ResolveFieldContext) (info: ExecutionInfo) (path : FieldPath) = result {
     let fdef = info.Definition
     let! args = getArgumentValues argDefs info.Ast.Arguments ctx.Variables
     return

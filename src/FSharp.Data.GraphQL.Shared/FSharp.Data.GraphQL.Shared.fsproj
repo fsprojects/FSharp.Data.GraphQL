@@ -18,6 +18,9 @@
       <_Parameter1>FSharp.Data.GraphQL.Server</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
+      <_Parameter1>FSharp.Data.GraphQL.Server.AspNetCore</_Parameter1>
+    </AssemblyAttribute>
+    <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
       <_Parameter1>FSharp.Data.GraphQL.Server.Middleware</_Parameter1>
     </AssemblyAttribute>
     <AssemblyAttribute Include="System.Runtime.CompilerServices.InternalsVisibleToAttribute">
@@ -63,8 +66,9 @@
     <Compile Include="ValidationResultCache.fs" />
     <Compile Include="Parser.fs" />
     <Compile Include="GQLRequest.fs" />
+    <Compile Include="GQLResponse.fs" />
     <Compile Include="WebSockets.fs" />
-    <Compile Include="Serialization/JsonConverters.fs" />
+    <None Include="Serialization/JsonConverters.fs" />
     <Compile Include="Serialization/JSON.fs" />
   </ItemGroup>
 

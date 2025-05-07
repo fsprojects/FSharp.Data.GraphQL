@@ -3,8 +3,8 @@ namespace FSharp.Data.GraphQL.Shared.WebSockets
 open System
 open System.Collections.Generic
 open System.Text.Json
+open System.Text.Json.Serialization
 open FSharp.Data.GraphQL
-open FSharp.Data.GraphQL.Shared
 
 type InvalidWebsocketMessageException (explanation : string) =
     inherit System.Exception (explanation)
@@ -14,33 +14,24 @@ type SubscriptionUnsubscriber = IDisposable
 type OnUnsubscribeAction = SubscriptionId -> unit
 type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>
 
-type RawMessage = { Id : string voption; Type : string; Payload : JsonDocument voption }
-
-type SubscriptionExecutionResult = { Data : Output voption; Errors : GQLProblemDetails list }
-
-type ServerRawPayload =
-    | ExecutionResult of SubscriptionExecutionResult
-    | ErrorMessages of NameValueLookup list
-    | CustomResponse of JsonDocument
-
-type RawServerMessage = { Id : string voption; Type : string; Payload : ServerRawPayload voption }
-
+[<JsonFSharpConverter(unionTagName = "type", SkippableOptionFields = SkippableOptionFields.Always)>]
 type ClientMessage =
-    | ConnectionInit of payload : JsonDocument voption
-    | ClientPing of payload : JsonDocument voption
-    | ClientPong of payload : JsonDocument voption
-    | Subscribe of id : string * query : GQLRequestContent
-    | ClientComplete of id : string
+    | [<JsonName "connection_init">] ConnectionInit of Payload : JsonDocument voption
+    | [<JsonName "ping">] ClientPing of Payload : JsonDocument voption
+    | [<JsonName "pong">] ClientPong of Payload : JsonDocument voption
+    | [<JsonName "subscribe">] Subscribe of Id : string * Payload : GQLRequestContent
+    | [<JsonName "complete">] ClientComplete of Id : string
 
-type ClientMessageProtocolFailure = InvalidMessage of code : int * explanation : string
+type ClientMessageProtocolFailure = InvalidMessage of Code : int * Explanation : string
 
+[<JsonFSharpConverter(unionTagName = "type", SkippableOptionFields = SkippableOptionFields.Always)>]
 type ServerMessage =
-    | ConnectionAck
-    | ServerPing
-    | ServerPong of JsonDocument voption
-    | Next of id : string * payload : SubscriptionExecutionResult
-    | Error of id : string * err : NameValueLookup list
-    | Complete of id : string
+    | [<JsonName "connection_ack">] ConnectionAck
+    | [<JsonName "ping">] ServerPing
+    | [<JsonName "pong">] ServerPong of JsonDocument voption
+    | [<JsonName "next">] Next of Id : string * Payload : GQLWebSocketResponse
+    | [<JsonName "error">] Error of Id : string * Err : GQLProblemDetails list
+    | [<JsonName "complete">] Complete of Id : string
 
 module CustomWebSocketStatus =
 

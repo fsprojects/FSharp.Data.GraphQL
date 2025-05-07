@@ -16,11 +16,7 @@ let configureSerializerOptions (jsonFSharpOptions: JsonFSharpOptions) (additiona
     jsonFSharpOptions.AddToJsonSerializerOptions options
 
 let configureWSSerializerOptions (jsonFSharpOptions: JsonFSharpOptions) (additionalConverters: JsonConverter seq) (options : JsonSerializerOptions) =
-    let additionalConverters = seq {
-        yield new ClientMessageConverter () :> JsonConverter
-        yield new RawServerMessageConverter ()
-        yield! additionalConverters
-    }
+    let jsonFSharpOptions = jsonFSharpOptions.WithSkippableOptionFields (SkippableOptionFields.Always, true)
     configureSerializerOptions jsonFSharpOptions additionalConverters options
 
 let defaultJsonFSharpOptions =

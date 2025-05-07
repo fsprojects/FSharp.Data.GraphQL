@@ -7,24 +7,23 @@ open FSharp.Data.GraphQL
 open FSharp.Data.GraphQL.Extensions
 open FSharp.Data.GraphQL.Types
 
-type Output = IDictionary<string, obj>
+[<AutoOpen>]
+module GQLResponseExtensions =
 
-type GQLResponse =
-    { DocumentId: int
-      Data : Output Skippable
-      Errors : GQLProblemDetails list Skippable }
-    static member Direct(documentId, data, errors) =
-        { DocumentId = documentId
-          Data = Include data
-          Errors = Skippable.ofList errors }
-    static member Stream(documentId) =
-        { DocumentId = documentId
-          Data = Include null
-          Errors = Skip }
-    static member RequestError(documentId, errors) =
-        { DocumentId = documentId
-          Data = Skip
-          Errors = Include errors }
+    type GQLResponse with
+
+        static member Direct (documentId, data, errors) =
+            { Data = Include data
+              Errors = Skippable.ofList errors
+              Extensions = Skip }
+        static member Stream (documentId) =
+            { Data = Include null
+              Errors = Skip
+              Extensions = Skip }
+        static member RequestError (documentId, errors) =
+            { Data = Skip
+              Errors = Include errors
+              Extensions = Skip }
 
 type GQLExecutionResult =
     { DocumentId: int
