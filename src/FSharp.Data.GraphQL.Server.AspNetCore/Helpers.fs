@@ -43,7 +43,9 @@ module ReflectionHelpers =
 
     open Microsoft.FSharp.Quotations.Patterns
 
-    let getModuleType = function
+    let getModuleType quotation =
+        match quotation with
         | PropertyGet (_, propertyInfo, _) -> propertyInfo.DeclaringType
+        | FieldGet (_, fieldInfo) -> fieldInfo.DeclaringType
         | _ -> failwith "Expression is no property."
 

@@ -30,7 +30,7 @@ let private wrapOptionalNone (outputType : Type) (inputType : Type) =
     else
         null
 
-let private normalizeOptional (outputType : Type) value =
+let normalizeOptional (outputType : Type) value =
     match value with
     | null -> wrapOptionalNone outputType typeof<obj>
     | value ->

@@ -23,9 +23,9 @@ type ValidStringStruct =
     static member internal op_GreaterThanOrEqual (ValidStringStruct left, right) = left >= right
     static member internal op_LessThan (ValidStringStruct left, right) = left < right
     static member internal op_LessThanOrEqual (ValidStringStruct left, right) = left <= right
-    member str.StartsWith (value : string) = let (ValidStringStruct str) = str in str.StartsWith(value)
-    member str.EndsWith (value : string) = let (ValidStringStruct str) = str in str.EndsWith(value)
-    member str.Contains (value : string) = let (ValidStringStruct str) = str in str.Contains(value)
+    member str.StartsWith (value : string) = let (ValidStringStruct str) = str in str.StartsWith (value)
+    member str.EndsWith (value : string) = let (ValidStringStruct str) = str in str.EndsWith (value)
+    member str.Contains (value : string) = let (ValidStringStruct str) = str in str.Contains (value)
     // Just for demo purposes
     interface IEqualityOperators<ValidStringStruct, ValidStringStruct, bool> with
         static member op_Equality (ValidStringStruct left, ValidStringStruct right) = left = right
@@ -65,6 +65,7 @@ type ValidStringObject =
 type ValidIntStruct =
     internal
     | ValidIntStruct of Int64
+
     static member internal op_Equality (ValidIntStruct left, ValidIntStruct right) = left = right
     static member internal op_Inequality (ValidIntStruct left, ValidIntStruct right) = left <> right
     static member internal op_GreaterThan (ValidIntStruct left, right : Int64) = left > right
@@ -72,11 +73,16 @@ type ValidIntStruct =
 type ValidIntObject =
     internal
     | ValidIntObject of Int64
+
     static member internal op_Equality (ValidIntObject left, ValidIntObject right) = left = right
     static member internal op_Inequality (ValidIntObject left, ValidIntObject right) = left <> right
     static member internal op_GreaterThan (ValidIntObject left, right : Int64) = left > right
 
 type FakeEntity = {
+    ValueOptionString : string voption
+    OptionString : string option
+    ValueOptionInt : int voption
+    OptionInt : int option
     ValidStringStruct : ValidStringStruct
     ValidStringObject : ValidStringObject
     ValidStringStructList : ValidStringStruct list
@@ -89,19 +95,98 @@ type FakeEntity = {
 
 let jsonOptions = Json.getSerializerOptions Seq.empty
 let cosmosClient =
-    let options = CosmosClientOptions(UseSystemTextJsonSerializerWithOptions = jsonOptions)
+    let options = CosmosClientOptions (UseSystemTextJsonSerializerWithOptions = jsonOptions)
     new CosmosClient ("https://localhost:8081/", "C2y6yDjf5/R+ob0N8A7Cgv30VRDJIWEHLM+4QDU5DE2nQ9nDuVTqobD4b8mGGyPMbIZnqyMsEcaGQy67XIw/Jw==", options)
-let container = cosmosClient.GetContainer("database", "container")
-let filterOptions =
-    ObjectListFilterLinqOptions<FakeEntity, obj>.None
+let container = cosmosClient.GetContainer ("database", "container")
+let filterOptions = ObjectListFilterLinqOptions<FakeEntity, obj>.None
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringStruct`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
-    let filter = Equals { FieldName = "validStringStruct"; Value = "Jonathan"}
+    let filter = Equals { FieldName = "validStringStruct"; Value = "Jonathan" }
     let filterQuery = queryable.Apply (filter, filterOptions)
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
-    equals queryDefinition.QueryText  """SELECT VALUE root FROM root WHERE (root["validStringStruct"] = "Jonathan")"""
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["validStringStruct"] = "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for ValidStringStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals { FieldName = "validStringStruct"; Value = "Jonathan" })
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["validStringStruct"] != "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for ValueOptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals { FieldName = "valueOptionString"; Value = "Jonathan" }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["valueOptionString"] = "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for ValueOptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals { FieldName = "valueOptionString"; Value = "Jonathan" })
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["valueOptionString"] != "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for null ValueOptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals { FieldName = "valueOptionString"; Value = null }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionString"] = null)"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for ValueNone ValueOptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals { FieldName = "valueOptionString"; Value = (ValueNone : voption<string>) }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionString"] = null)"""
+
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for ValueNone ValueOptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals { FieldName = "valueOptionString"; Value = (ValueNone : voption<string>) })
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionString"] != null)"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for OptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals { FieldName = "optionString"; Value = "Jonathan" }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["optionString"] = "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for OptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals { FieldName = "optionString"; Value = "Jonathan" })
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText """SELECT VALUE root FROM root WHERE (root["optionString"] != "Jonathan")"""
+
+[<Fact>]
+let ``ObjectListFilter works with Equals operator for null OptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Equals { FieldName = "optionString"; Value = null }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionString"] = null)"""
+
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for null OptionString`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = Not (Equals { FieldName = "optionString"; Value = null })
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionString"] = null)"""
 
 [<Fact>]
 let ``ObjectListFilter works with StartsWith operator for ValidStringStruct`` () =
@@ -127,7 +212,7 @@ let ``ObjectListFilter works with Contains operator for ValidStringStruct`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE CONTAINS(root["validStringStruct"], "athan")"""
 
-[<Fact (Skip = "Cast not supported in Cosmos LINQ")>]
+[<Fact>]
 let ``ObjectListFilter works with Contains operator for ValidStringStruct list`` () =
     let queryable = container.GetItemLinqQueryable<FakeEntity> ()
     let filter = Contains { FieldName = "validStringStructList"; Value = "athan" }
@@ -143,6 +228,13 @@ let ``ObjectListFilter works with In operator for ValidStringStruct list`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE ARRAY_CONTAINS([ "athan", "gaja" ], root["validStringStruct"])"""
 
+[<Fact>]
+let ``ObjectListFilter works with In operator for empty ValidStringStruct list`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = In { FieldName = "validStringStruct"; Value = [ ] }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE false"""
 
 [<Fact>]
 let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
@@ -152,6 +244,13 @@ let ``ObjectListFilter works with Equals operator for ValidStringObject`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringObject"] = "Jonathan")"""
 
+[<Fact>]
+let ``ObjectListFilter works with not Equals operator for ValidStringObject`` () =
+    let filter = Not (Equals { FieldName = "validStringObject"; Value = ValidStringObject "Jonathan" })
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validStringObject"] = "Jonathan")"""
 
 [<Fact>]
 let ``ObjectListFilter works with GreaterThan operator for ValidIntStruct`` () =
@@ -169,3 +268,114 @@ let ``ObjectListFilter works with GreaterThan operator for ValidIntObject`` () =
     let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
     equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] > 6)"""
 
+[<Fact>]
+let ``ObjectListFilter works with GreaterThan operator for ValueOptionInt`` () =
+    let filter = GreaterThan { FieldName = "valueOptionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionInt"] > 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThan operator for OptionInt`` () =
+    let filter = GreaterThan { FieldName = "optionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionInt"] > 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThan operator for ValidIntStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = LessThan { FieldName = "validIntStruct"; Value = 6L }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntStruct"] < 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThan operator for ValidIntObject`` () =
+    let filter = LessThan { FieldName = "validIntObject"; Value = 6L }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] < 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThan operator for ValueOptionInt`` () =
+    let filter = LessThan { FieldName = "valueOptionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionInt"] < 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThan operator for OptionInt`` () =
+    let filter = LessThan { FieldName = "optionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionInt"] < 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThanOrEqual operator for ValidIntStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = GreaterThanOrEqual { FieldName = "validIntStruct"; Value = 6L }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntStruct"] >= 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThanOrEqual operator for ValidIntObject`` () =
+    let filter = GreaterThanOrEqual { FieldName = "validIntObject"; Value = 6L }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] >= 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThanOrEqual operator for ValueOptionInt`` () =
+    let filter = GreaterThanOrEqual { FieldName = "valueOptionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionInt"] >= 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with GreaterThanOrEqual operator for OptionInt`` () =
+    let filter = GreaterThanOrEqual { FieldName = "optionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionInt"] >= 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThanOrEqual operator for ValidIntStruct`` () =
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filter = LessThanOrEqual { FieldName = "validIntStruct"; Value = 6L }
+    let filterQuery = queryable.Apply (filter, filterOptions)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntStruct"] <= 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThanOrEqual operator for ValidIntObject`` () =
+    let filter = LessThanOrEqual { FieldName = "validIntObject"; Value = 6L }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["validIntObject"] <= 6)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThanOrEqual operator for ValueOptionInt`` () =
+    let filter = LessThanOrEqual { FieldName = "valueOptionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["valueOptionInt"] <= 1)"""
+
+[<Fact>]
+let ``ObjectListFilter works with LessThanOrEqual operator for OptionInt`` () =
+    let filter = LessThanOrEqual { FieldName = "optionInt"; Value = 1 }
+    let queryable = container.GetItemLinqQueryable<FakeEntity> ()
+    let filterQuery = queryable.Apply (filter)
+    let queryDefinition = CosmosLinqExtensions.ToQueryDefinition filterQuery
+    equals queryDefinition.QueryText, """SELECT VALUE root FROM root WHERE (root["optionInt"] <= 1)"""

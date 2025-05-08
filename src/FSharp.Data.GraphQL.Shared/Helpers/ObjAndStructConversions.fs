@@ -38,6 +38,27 @@ module internal Seq =
         |> Seq.map ValueSome
         |> _.FirstOrDefault()
 
+    let vtryHead (source : 'T seq) =
+        use enumerator = source.GetEnumerator ()
+        if not (enumerator.MoveNext ()) then
+            ValueNone
+        else
+            match enumerator.Current with
+            | null -> ValueNone
+            | head -> ValueSome head
+
+    let vtryLast (source : 'T seq) =
+        use enumerator = source.GetEnumerator ()
+        if not (enumerator.MoveNext ()) then
+            ValueNone
+        else
+            let mutable last = enumerator.Current
+            while enumerator.MoveNext () do
+                last <- enumerator.Current
+            match last with
+            | null -> ValueNone
+            | last -> ValueSome last
+
 module internal List =
 
     let vchoose mapping list = list |> Seq.ofList |> Seq.vchoose mapping |> List.ofSeq

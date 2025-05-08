@@ -116,7 +116,7 @@ let rec private coerceObjectListFilterInput x : Result<ObjectListFilter voption,
             let! parsedValues =
                 values
                 |> Seq.map (function
-                    | EquatableValue v -> Ok v
+                    | EquatableValue v -> Ok (box v)
                     | NonEquatableValue v ->
                         Error
                             { new IGQLError with
