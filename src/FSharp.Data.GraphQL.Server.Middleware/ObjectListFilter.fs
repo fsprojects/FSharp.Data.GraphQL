@@ -147,7 +147,8 @@ module ObjectListFilter =
     let private StringStartsWithMethod = stringType.GetMethod ("StartsWith", [| stringType |])
     let private StringEndsWithMethod = stringType.GetMethod ("EndsWith", [| stringType |])
     let private StringContainsMethod = stringType.GetMethod ("Contains", [| stringType |])
-    let private unwrapOptionMethod = FSharp.Data.GraphQL.Helpers.moduleType.GetMethod (nameof Helpers.unwrap)
+    let private unwrapOptionMethod =
+        FSharp.Data.GraphQL.Helpers.moduleType.GetMethod (nameof Helpers.unwrap)
 
     let private getCollectionInstanceContainsMethod (memberType : Type) =
         memberType
@@ -176,11 +177,11 @@ module ObjectListFilter =
     let getField (param : ParameterExpression) fieldName = Expression.PropertyOrField (param, fieldName)
 
     let hasEqualityOperator (``type`` : Type) =
-        ``type``.GetMethods(BindingFlags.Public ||| BindingFlags.Static)
+        ``type``.GetMethods (BindingFlags.Public ||| BindingFlags.Static)
         |> Seq.exists (fun m -> m.Name = " op_Equality")
 
     let hasInequalityOperator (``type`` : Type) =
-        ``type``.GetMethods(BindingFlags.Public ||| BindingFlags.Static)
+        ``type``.GetMethods (BindingFlags.Public ||| BindingFlags.Static)
         |> Seq.exists (fun m -> m.Name = "op_Inequality")
 
     [<Struct>]
@@ -219,8 +220,8 @@ module ObjectListFilter =
             match ``member``.Type with
             | t when t = stringType -> ``member``
             | _ when not isEnumerableQuery -> unsafeConvertTo stringType ``member``
-            | _ when isEnumerableQuery -> Expression.Convert(Expression.Call(unwrapOptionMethod, ``member``), stringType)
-            | _ -> Expression.Convert(``member``, stringType)
+            | _ when isEnumerableQuery -> Expression.Convert (Expression.Call (unwrapOptionMethod, ``member``), stringType)
+            | _ -> Expression.Convert (``member``, stringType)
 
         match filter with
         | Not (Equals f) ->
@@ -228,13 +229,12 @@ module ObjectListFilter =
             let hasEqualityOperator = hasEqualityOperator ``member``.Type
             match f.Value with
             | NoCast when hasEqualityOperator -> Expression.NotEqual (``member``, Expression.Constant f.Value)
-            | NoCast -> Expression.Not (Expression.Call (staticEqualsMethod, ``member``, Expression.Constant f.Value))
+            | NoCast
+            | NonEnumerableCast _ ->
+                Expression.NotEqual (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
             | Enumerable ->
                 let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
                 Expression.Not (Expression.Call (``const``, equalsMethod, ``member``))
-            | NonEnumerableCast ``type`` when hasEqualityOperator -> Expression.NotEqual ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
-            | NonEnumerableCast ``type`` ->
-                Expression.Not (Expression.Call ((unsafeConvertTo ``type`` ``member``), equalsMethod, Expression.Constant f.Value))
         | Not f -> f |> build |> Expression.Not :> Expression
         | And (f1, f2) -> Expression.AndAlso (build f1, build f2)
         | Or (f1, f2) -> Expression.OrElse (build f1, build f2)
@@ -243,13 +243,12 @@ module ObjectListFilter =
             let hasEqualityOperator = hasEqualityOperator ``member``.Type
             match f.Value with
             | NoCast when hasEqualityOperator -> Expression.Equal (``member``, Expression.Constant f.Value)
-            | NoCast -> Expression.Call (staticEqualsMethod, ``member``, Expression.Constant f.Value)
+            | NoCast
+            | NonEnumerableCast _ ->
+                Expression.Equal (Expression.Convert (``member``, objectType), Expression.Convert ((Expression.Constant f.Value), objectType))
             | Enumerable ->
                 let ``const`` = Expression.Constant (Values.normalizeOptional ``member``.Type f.Value)
                 Expression.Call (``const``, equalsMethod, ``member``)
-            | NonEnumerableCast ``type`` when hasEqualityOperator -> Expression.Equal ((unsafeConvertTo ``type`` ``member``), Expression.Constant f.Value)
-            | NonEnumerableCast ``type`` ->
-                Expression.Call ((unsafeConvertTo ``type`` ``member``), equalsMethod, Expression.Constant f.Value)
         | GreaterThan f ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             match f.Value with
@@ -311,8 +310,7 @@ module ObjectListFilter =
                 | ValueNone ->
                     let enumerableContains = getEnumerableContainsMethod valueType
                     Expression.Call (enumerableContains, castedMember, Expression.Constant (normalizedValue))
-                | ValueSome instanceContainsMethod ->
-                    Expression.Call (castedMember, instanceContainsMethod, Expression.Constant (normalizedValue))
+                | ValueSome instanceContainsMethod -> Expression.Call (castedMember, instanceContainsMethod, Expression.Constant (normalizedValue))
             match ``member``.Member with
             | :? PropertyInfo as prop when prop.PropertyType |> isEnumerable -> callContains prop.PropertyType
             | :? FieldInfo as field when field.FieldType |> isEnumerable -> callContains field.FieldType
@@ -322,11 +320,7 @@ module ObjectListFilter =
         | In f when not (f.Value.IsEmpty) ->
             let ``member`` = Expression.PropertyOrField (param, f.FieldName)
             let enumerableContains = getEnumerableContainsMethod objectType
-            Expression.Call (
-                enumerableContains,
-                (Expression.Constant f.Value),
-                Expression.Convert (``member``, objectType)
-            )
+            Expression.Call (enumerableContains, (Expression.Constant f.Value), Expression.Convert (``member``, objectType))
         | In f -> Expression.Constant (false)
         | OfTypes types ->
             types
