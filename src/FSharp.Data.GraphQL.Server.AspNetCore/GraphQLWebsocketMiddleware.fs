@@ -169,33 +169,27 @@ type GraphQLWebSocketMiddleware<'Root>
         let sendMsg = sendMessageViaSocket serializerOptions socket
         let rcv () = socket |> rcvMsgViaSocket serializerOptions
 
-        let sendOutput id (output : Output) =
-            match output.TryGetValue "errors" with
-            | true, theValue ->
-                // The specification says: "This message terminates the operation and no further messages will be sent."
-                subscriptions
-                |> GraphQLSubscriptionsManagement.removeSubscription (id)
-                sendMsg (Error (id, unbox theValue))
-            | false, _ -> sendMsg (Next (id, output))
+        let sendOutput id (output : SubscriptionExecutionResult) =
+            sendMsg (Next (id, output))
 
         let sendSubscriptionResponseOutput id subscriptionResult =
             match subscriptionResult with
-            | SubscriptionResult output -> output |> sendOutput id
+            | SubscriptionResult output -> { Data = ValueSome output; Errors = [] } |> sendOutput id
             | SubscriptionErrors (output, errors) ->
                 logger.LogWarning ("Subscription errors: {subscriptionErrors}", (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}"))))
-                Task.FromResult ()
+                { Data = ValueNone; Errors = errors } |> sendOutput id
 
         let sendDeferredResponseOutput id deferredResult =
             match deferredResult with
             | DeferredResult (obj, path) ->
                 let output = obj :?> Dictionary<string, obj>
-                output |> sendOutput id
+                { Data = ValueSome output; Errors = [] } |> sendOutput id
             | DeferredErrors (obj, errors, _) ->
                 logger.LogWarning (
                     "Deferred response errors: {deferredErrors}",
                     (String.Join ('\n', errors |> Seq.map (fun x -> $"- %s{x.Message}")))
                 )
-                Task.FromResult ()
+                { Data = ValueNone; Errors = errors } |> sendOutput id
 
         let sendDeferredResultDelayedBy (ct : CancellationToken) (ms : int) id deferredResult : Task = task {
             do! Task.Delay (ms, ct)
@@ -208,16 +202,16 @@ type GraphQLWebSocketMiddleware<'Root>
                 (subscriptions, socket, observableOutput, serializerOptions)
                 |> addClientSubscription id sendSubscriptionResponseOutput
             | Deferred (data, errors, observableOutput) ->
-                do! data |> sendOutput id
+                do! { Data = ValueSome data; Errors = [] } |> sendOutput id
                 if errors.IsEmpty then
                     (subscriptions, socket, observableOutput, serializerOptions)
                     |> addClientSubscription id (sendDeferredResultDelayedBy cancellationToken 5000)
                 else
                     ()
-            | Direct (data, _) -> do! data |> sendOutput id
+            | Direct (data, _) -> do! { Data = ValueSome data; Errors = [] } |> sendOutput id
             | RequestError problemDetails ->
                 logger.LogWarning("Request errors:\n{errors}", problemDetails)
-
+                do! { Data = ValueNone; Errors = problemDetails } |> sendOutput id
         }
 
         let logMsgReceivedWithOptionalPayload optionalPayload (msgAsStr : string) =
@@ -265,22 +259,26 @@ type GraphQLWebSocketMiddleware<'Root>
                             | ValueNone -> do! ServerPong p |> sendMsg
                         | ClientPong p -> nameof ClientPong |> logMsgReceivedWithOptionalPayload p
                         | Subscribe (id, query) ->
-                            nameof Subscribe |> logMsgWithIdReceived id
-                            if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
-                                do!
-                                    let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
-                                    logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
-                                    socket.CloseAsync (
-                                        enum CustomWebSocketStatus.SubscriberAlreadyExists,
-                                        warningMsg.ToString (),
-                                        CancellationToken.None
-                                    )
-                            else
-                                let variables = query.Variables |> Skippable.toOption
-                                let! planExecutionResult =
-                                    let root = options.RootFactory httpContext
-                                    options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
-                                do! planExecutionResult |> applyPlanExecutionResult id socket
+                            try
+                                nameof Subscribe |> logMsgWithIdReceived id
+                                if subscriptions |> GraphQLSubscriptionsManagement.isIdTaken id then
+                                    do!
+                                        let warningMsg : FormattableString = $"Subscriber for Id = '{id}' already exists"
+                                        logger.LogWarning (String.Format (warningMsg.Format, "id"), id)
+                                        socket.CloseAsync (
+                                            enum CustomWebSocketStatus.SubscriberAlreadyExists,
+                                            warningMsg.ToString (),
+                                            CancellationToken.None
+                                        )
+                                else
+                                    let variables = query.Variables |> Skippable.toOption
+                                    let! planExecutionResult =
+                                        let root = options.RootFactory httpContext
+                                        options.SchemaExecutor.AsyncExecute (query.Query, root, ?variables = variables)
+                                    do! planExecutionResult |> applyPlanExecutionResult id socket
+                            with ex ->
+                                logger.LogError (ex, "Unexpected error during subscription with id '{id}'", id)
+                                do! sendMsg (Error (id, [new Shared.NameValueLookup ([ ("subscription", "Unexpected error during subscription" :> obj) ])]))
                         | ClientComplete id ->
                             "ClientComplete" |> logMsgWithIdReceived id
                             subscriptions
