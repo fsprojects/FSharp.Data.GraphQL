@@ -10,7 +10,7 @@ let toClientMessage (theInput : string) =
 let willResultInInvalidMessage expectedExplanation input =
     try
         let result = input |> toClientMessage
-        Assert.Fail (sprintf "should have failed, but succeeded with result: '%A'" result)
+        Assert.Fail $"should have failed, but succeeded with result: '%A{result}'"
     with
     | :? JsonException as ex -> Assert.Equal (expectedExplanation, ex.Message)
     | :? InvalidWebsocketMessageException as ex -> Assert.Equal (expectedExplanation, ex.Message)
@@ -18,7 +18,7 @@ let willResultInInvalidMessage expectedExplanation input =
 let willResultInJsonException input =
     try
         input |> toClientMessage |> ignore
-        Assert.Fail ("Expected that a JsonException would have already been thrown at this point")
+        Assert.Fail "Expected that a JsonException would have already been thrown at this point"
     with :? JsonException as ex ->
         Assert.True (true)
 

@@ -14,7 +14,17 @@ type SubscriptionUnsubscriber = IDisposable
 type OnUnsubscribeAction = SubscriptionId -> unit
 type SubscriptionsDict = IDictionary<SubscriptionId, SubscriptionUnsubscriber * OnUnsubscribeAction>
 
-[<JsonFSharpConverter(unionTagName = "type", SkippableOptionFields = SkippableOptionFields.Always)>]
+type internal GraphQLWebSocketMessageConverter () =
+    inherit
+        JsonFSharpConverterAttribute (
+            unionTagName = "type",
+            UnionUnwrapFieldlessTags = false,
+            UnionUnwrapSingleCaseUnions = false,
+            UnionUnwrapSingleFieldCases = false,
+            SkippableOptionFields = SkippableOptionFields.Always
+        )
+
+[<GraphQLWebSocketMessageConverter>]
 type ClientMessage =
     | [<JsonName "connection_init">] ConnectionInit of Payload : JsonDocument voption
     | [<JsonName "ping">] ClientPing of Payload : JsonDocument voption
@@ -24,7 +34,7 @@ type ClientMessage =
 
 type ClientMessageProtocolFailure = InvalidMessage of Code : int * Explanation : string
 
-[<JsonFSharpConverter(unionTagName = "type", SkippableOptionFields = SkippableOptionFields.Always)>]
+[<GraphQLWebSocketMessageConverter>]
 type ServerMessage =
     | [<JsonName "connection_ack">] ConnectionAck
     | [<JsonName "ping">] ServerPing
